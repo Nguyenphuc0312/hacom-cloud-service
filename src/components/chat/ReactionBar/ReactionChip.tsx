@@ -100,7 +100,7 @@ export const ReactionChip: React.FC<ReactionChipProps> = ({
           "hover:scale-105 hover:shadow-xs active:scale-100",
           reactedByMe
             ? "bg-[#EBF4FF] border-[#B5D4F4] hover:bg-[#D6E8FA]"
-            : "bg-white border-[hsl(var(--border-secondary))] hover:bg-[hsl(var(--surface-hover))]",
+            : "bg-surface border-border hover:bg-surface-hover",
           className,
         )}
         aria-label={`${reaction.emoji} reaction, ${reaction.count} ${

@@ -35,17 +35,17 @@ const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
     <div className="mb-3">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-1"
+        className="flex items-center gap-2 text-xs text-text-muted hover:text-text-secondary transition-colors mb-1"
       >
         <div className="flex gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0s' }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
         </div>
         <span className="font-medium">Đang suy nghĩ...</span>
       </button>
       {isOpen && content && (
-        <div className="pl-4 border-l-2 border-gray-200 text-sm text-gray-400 italic leading-relaxed">
+        <div className="pl-4 border-l-2 border-border text-sm text-text-muted italic leading-relaxed">
           {content}
         </div>
       )}
@@ -90,7 +90,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
           key={message.id}
           className={clsx(
             "group w-full animate-fade-in-up",
-            message.role === "user" ? "bg-white" : "bg-gray-50/50",
+            message.role === "user" ? "bg-surface" : "bg-surface-overlay/50",
           )}
         >
           <div className="max-w-[768px] mx-auto px-4 py-6">
@@ -106,9 +106,9 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
                   message.role === "assistant"
                     ? message.isError
-                      ? "bg-red-100 text-red-600"
-                      : "bg-gray-900 text-white"
-                    : "bg-blue-600 text-white",
+                      ? "bg-danger/10 text-danger"
+                      : "bg-primary text-white"
+                    : "bg-primary/80 text-white",
                 )}
               >
                 {message.role === "assistant" ? (
@@ -130,7 +130,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 )}
               >
                 {/* Label */}
-                <span className="text-xs font-semibold text-gray-500 mb-1">
+                <span className="text-xs font-semibold text-text-muted mb-1">
                   {message.role === "user" ? "Bạn" : (selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân")}
                 </span>
 
@@ -144,7 +144,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   className={clsx(
                     "max-w-full",
                     message.role === "user"
-                      ? "bg-gray-100 rounded-2xl rounded-tr-sm px-5 py-3.5 text-gray-900"
+                      ? "bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary"
                       : "",
                   )}
                 >
@@ -154,7 +154,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   !message.thinking ? (
                     /* Loading dots */
                     <div className="flex items-center gap-1.5 py-1">
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s]" />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s]" />
                       <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
                       <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
                     </div>
@@ -181,7 +181,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
 
                   {/* Streaming cursor */}
                   {message.isStreaming && message.content && (
-                    <span className="inline-block w-[3px] h-5 bg-gray-900 ml-0.5 translate-y-1 animate-typing-cursor rounded-sm" />
+                    <span className="inline-block w-[3px] h-5 bg-text-primary ml-0.5 translate-y-1 animate-typing-cursor rounded-sm" />
                   )}
                 </div>
 
@@ -190,7 +190,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleCopy(message)}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
                       title="Sao chép"
                     >
                       {copiedId === message.id ? (
@@ -200,20 +200,20 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                       )}
                     </button>
                     <button
-                      className="flex items-center p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="flex items-center p-1 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
                       title="Thích"
                     >
                       <ThumbsUpIcon size={14} />
                     </button>
                     <button
-                      className="flex items-center p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="flex items-center p-1 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
                       title="Không thích"
                     >
                       <ThumbsDownIcon size={14} />
                     </button>
                     {index === messages.length - 1 && (
                       <button
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
                         title="Tạo lại"
                       >
                         <RotateCcwIcon size={14} />
@@ -229,7 +229,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   !message.isStreaming && (
                     <button
                       onClick={() => handleSourceClick(message.sources!)}
-                      className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-500 hover:bg-gray-100 hover:border-gray-300 transition-all"
+                      className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg border border-border bg-surface-overlay text-xs text-text-muted hover:bg-surface-hover hover:border-border-strong transition-all"
                     >
                       <FileTextIcon size={14} />
                       <span>
@@ -248,20 +248,20 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
       {isLoading &&
         messages.length > 0 &&
         messages[messages.length - 1].role === "user" && (
-          <div className="w-full bg-gray-50/50">
+          <div className="w-full bg-surface-overlay/50">
             <div className="max-w-[768px] mx-auto px-4 py-6">
               <div className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white mt-0.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white mt-0.5">
                   <SparklesIcon size={16} strokeWidth={2.5} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-gray-500 mb-1">
+                  <span className="text-xs font-semibold text-text-muted mb-1">
                     {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
                   </span>
                     <div className="flex items-center gap-1.5 py-1">
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0s' }} />
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0s' }} />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
                     </div>
                 </div>
               </div>

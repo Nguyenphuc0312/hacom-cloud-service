@@ -107,12 +107,12 @@ export const AiSidebar: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#f9f9f9] border-r border-gray-200 select-none">
+    <div className="flex h-full w-full flex-col bg-surface-overlay border-r border-border select-none">
       {/* ── Header: New chat + Collapse ── */}
       <div className="flex items-center justify-between p-3">
         <button
           onClick={toggleSidebar}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 transition-colors"
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
           aria-label="Thu gọn sidebar"
         >
           <PanelLeftCloseIcon size={20} strokeWidth={1.8} />
@@ -121,7 +121,7 @@ export const AiSidebar: React.FC = () => {
           onClick={() => {
             createNewConversation(activeTab);
           }}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 transition-colors"
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
           aria-label="Tạo cuộc trò chuyện mới"
         >
           <PlusIcon size={20} strokeWidth={1.8} />
@@ -130,7 +130,7 @@ export const AiSidebar: React.FC = () => {
 
       {/* ── Mode tabs: Công ty / Cá nhân ── */}
       <div className="px-3 mb-2">
-        <div className="flex bg-gray-200/60 rounded-lg p-0.5">
+        <div className="flex bg-surface-active/60 rounded-lg p-0.5">
           <button
             onClick={() => {
               setSelectedEndpoint("company");
@@ -139,8 +139,8 @@ export const AiSidebar: React.FC = () => {
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "company"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700",
+                ? "bg-surface text-text-primary shadow-sm"
+                : "text-text-muted hover:text-text-secondary",
             )}
           >
             <Building2Icon size={14} strokeWidth={2} />
@@ -154,8 +154,8 @@ export const AiSidebar: React.FC = () => {
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "personal"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700",
+                ? "bg-surface text-text-primary shadow-sm"
+                : "text-text-muted hover:text-text-secondary",
             )}
           >
             <UserCircle2Icon size={14} strokeWidth={2} />
@@ -170,14 +170,14 @@ export const AiSidebar: React.FC = () => {
           <SearchIcon
             size={14}
             strokeWidth={2}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
           />
           <input
             type="text"
             placeholder="Tìm kiếm..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 transition-all"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong transition-all"
           />
         </div>
       </div>
@@ -187,7 +187,7 @@ export const AiSidebar: React.FC = () => {
         <div className="space-y-4">
           {groupedConversations.map((group) => (
             <div key={group.label}>
-              <h3 className="px-2 mb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+              <h3 className="px-2 mb-1 text-[11px] font-semibold text-text-disabled uppercase tracking-wide">
                 {group.label}
               </h3>
               <div className="space-y-0.5">
@@ -198,14 +198,14 @@ export const AiSidebar: React.FC = () => {
                     className={clsx(
                       "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer",
                       activeConversationId === conv.id
-                        ? "bg-gray-200/80 text-gray-900"
-                        : "text-gray-600 hover:bg-gray-200/40",
+                        ? "bg-surface-active/80 text-text-primary"
+                        : "text-text-secondary hover:bg-surface-hover/40",
                     )}
                   >
                     <MessageSquareIcon
                       size={16}
                       strokeWidth={1.8}
-                      className="shrink-0 text-gray-400"
+                      className="shrink-0 text-text-muted"
                     />
 
                     {editingId === conv.id ? (
@@ -217,7 +217,7 @@ export const AiSidebar: React.FC = () => {
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleSaveRename(conv.id)
                         }
-                        className="flex-1 bg-transparent text-sm outline-none border-b border-gray-400 py-0"
+                        className="flex-1 bg-transparent text-sm outline-none border-b border-border-strong py-0"
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
@@ -233,7 +233,7 @@ export const AiSidebar: React.FC = () => {
                           e.stopPropagation();
                           togglePinConversation(conv.id);
                         }}
-                        className="p-1 rounded hover:bg-gray-300/60 text-gray-400 hover:text-gray-700 transition-colors"
+                        className="p-1 rounded hover:bg-surface-active/60 text-text-muted hover:text-text-secondary transition-colors"
                         title={conv.isPinned ? "Bỏ ghim" : "Ghim"}
                       >
                         {conv.isPinned ? (
@@ -246,7 +246,7 @@ export const AiSidebar: React.FC = () => {
                         onClick={(e) =>
                           handleStartRename(e, conv.id, conv.title)
                         }
-                        className="p-1 rounded hover:bg-gray-300/60 text-gray-400 hover:text-gray-700 transition-colors"
+                        className="p-1 rounded hover:bg-surface-active/60 text-text-muted hover:text-text-secondary transition-colors"
                         title="Đổi tên"
                       >
                         <Edit2Icon size={12} strokeWidth={2} />
@@ -256,7 +256,7 @@ export const AiSidebar: React.FC = () => {
                           e.stopPropagation();
                           deleteConversation(conv.id);
                         }}
-                        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                        className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"
                         title="Xóa"
                       >
                         <Trash2Icon size={12} strokeWidth={2} />
@@ -274,12 +274,12 @@ export const AiSidebar: React.FC = () => {
             <MessageSquareIcon
               size={32}
               strokeWidth={1}
-              className="text-gray-300 mb-3"
+              className="text-text-disabled mb-3"
             />
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-sm font-medium text-text-muted">
               Chưa có hội thoại
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-text-disabled mt-1">
               Bắt đầu bằng cách tạo cuộc trò chuyện mới
             </p>
           </div>
@@ -287,7 +287,7 @@ export const AiSidebar: React.FC = () => {
       </div>
 
       {/* ── Footer ── */}
-      <div className="p-3 border-t border-gray-200">
+      <div className="p-3 border-t border-border">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 shrink-0">
             <img
@@ -297,10 +297,10 @@ export const AiSidebar: React.FC = () => {
             />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-xs font-semibold text-gray-800 truncate">
+            <span className="text-xs font-semibold text-text-primary truncate">
               Hacom Holdings
             </span>
-            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+            <span className="text-[10px] text-text-muted flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
               Sẵn sàng
             </span>

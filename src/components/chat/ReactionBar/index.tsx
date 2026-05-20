@@ -128,7 +128,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             className={clsx(
               "inline-flex items-center rounded-full",
               "px-2 py-0.5 text-xs",
-              "border border-[hsl(var(--border-secondary))] bg-[hsl(var(--surface-primary))]",
+              "border border-border bg-surface",
               "text-text-secondary hover:bg-[hsl(var(--surface-hover))]",
               "transition-all duration-100 hover:scale-105 active:scale-100",
               overflowOpen && "bg-[hsl(var(--surface-hover))]",
@@ -144,7 +144,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
                 isOutgoing ? "right-0" : "left-0",
                 "flex flex-wrap gap-1 p-2",
                 "min-w-max max-w-[200px]",
-                "rounded-xl border border-border bg-[hsl(var(--surface-primary))] shadow-elev3",
+                "rounded-xl border border-border bg-surface shadow-elev3",
                 "animate-scale-in-emoji",
               )}
             >
