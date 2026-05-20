@@ -163,6 +163,16 @@ export function getMessagePreview(
     case MessageType.STICKER:
       preview = i18n.t("chat:preview.sticker");
       break;
+    case MessageType.CONTACT: {
+      const meta = (message as Message).metadata;
+      const att = (meta?.attachment ?? meta?.contact) as Record<string, unknown> | undefined;
+      const name = typeof att?.displayName === "string" && att.displayName.trim()
+        ? att.displayName.trim()
+        : "";
+      const label = i18n.t("chat:preview.contact", { defaultValue: "[Danh thiếp]" });
+      preview = name ? `${label} ${name}` : label;
+      break;
+    }
     case MessageType.SYSTEM:
       return message.content;
     default:

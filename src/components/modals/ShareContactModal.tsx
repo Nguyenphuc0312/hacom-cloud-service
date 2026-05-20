@@ -283,6 +283,7 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
               <p className="py-4 text-center text-sm text-text-muted">
                 {debouncedQuery.trim().length < 2
                   ? t("chat:contactShare.searchHint", {
+                      min: 2,
                       defaultValue: "Enter at least 2 characters",
                     })
                   : t("chat:contactShare.noResults", {

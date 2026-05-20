@@ -107,7 +107,7 @@ const ContactCard: React.FC<{
   const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
-  const { getRelationshipState, sendFriendRequest } = useFriendship();
+  const { getRelationshipState, sendFriendRequest, acceptFriendRequest } = useFriendship();
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
 
   const hasDispatchableContactUserId = Boolean(
@@ -144,6 +144,19 @@ const ContactCard: React.FC<{
     setActionLoading("add");
     try {
       const success = await sendFriendRequest(payload.contactUserId);
+      if (!success) {
+        toast.error(t("friends:actionFailed"));
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (relationship?.kind !== "incoming_request") return;
+    setActionLoading("accept");
+    try {
+      const success = await acceptFriendRequest(relationship.requestId);
       if (!success) {
         toast.error(t("friends:actionFailed"));
       }
@@ -206,6 +219,27 @@ const ContactCard: React.FC<{
             {actionLoading === "message"
               ? "..."
               : t("friends:message")}
+          </button>
+          {viewProfileBtn}
+        </div>
+      );
+    }
+
+    if (relationship.kind === "incoming_request") {
+      return (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={actionLoading === "accept"}
+            onClick={() => void handleAcceptFriend()}
+            className={clsx(
+              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+              isOwn
+                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                : "bg-success/10 text-success hover:bg-success/20",
+            )}
+          >
+            {actionLoading === "accept" ? "..." : t("friends:accept", { defaultValue: "Chấp nhận" })}
           </button>
           {viewProfileBtn}
         </div>
