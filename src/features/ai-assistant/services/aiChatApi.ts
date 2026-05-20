@@ -94,8 +94,9 @@ export async function sendAiChatMessage(
         } else if (eventType === "done") {
           try {
             finalResponse = JSON.parse(data);
-          } catch (e) {
-            console.error("Failed to parse SSE done data", e);
+          } catch {
+            // Malformed SSE done payload — finalResponse stays null,
+            // fallback regex parse below will attempt recovery.
           }
         }
       }
@@ -107,8 +108,8 @@ export async function sendAiChatMessage(
       if (doneMatch && doneMatch[1]) {
         try {
           finalResponse = JSON.parse(doneMatch[1]);
-        } catch (e) {
-          console.error("Failed to parse SSE done data from fallback match", e);
+        } catch {
+          // Unrecoverable — caller will throw "No final response received"
         }
       }
     }
