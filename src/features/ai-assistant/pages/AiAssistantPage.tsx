@@ -1,223 +1,254 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { AiAssistantHero } from "../components/AiAssistantHero";
 import { AiPromptBox } from "../components/AiPromptBox";
 import { AiSuggestionChips } from "../components/AiSuggestionChips";
 import { AiChatPreview } from "../components/AiChatPreview";
-import type { AiChatMessage } from "../components/AiChatPreview";
 import { sendAiChatMessage, AiApiError } from "../services/aiChatApi";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { useAiAssistantStore } from "../state/aiAssistantStore";
+import { useChatUiStore } from "../../chat/state/chatUiStore";
+import { AiLayout } from "../components/AiLayout";
+import { AiChatHeader } from "../components/AiChatHeader";
+import type { AiMessage } from "../types";
 
-const SESSION_STORAGE_KEY = "ai_assistant_session_id";
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2);
-}
-
-function generateSessionId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function readOrCreateSessionId(): string {
-  try {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) return stored;
-    const newId = generateSessionId();
-    localStorage.setItem(SESSION_STORAGE_KEY, newId);
-    return newId;
-  } catch {
-    return generateSessionId();
-  }
-}
-
-function persistSessionId(id: string): void {
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, id);
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function clearSessionId(): string {
-  const newId = generateSessionId();
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, newId);
-  } catch {
-    // ignore
-  }
-  return newId;
-}
-
+/**
+ * Trang AI Assistant chính – layout kiểu ChatGPT.
+ * Empty state: Hero + Input + Suggestions ở giữa.
+ * Chat state: Messages scrollable + Input sticky bottom.
+ */
 export const AiAssistantPage: React.FC = () => {
   const { t } = useTranslation("aiAssistant");
   const user = useAuthStore((s) => s.user);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string>(readOrCreateSessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Global state
+  const {
+    conversations,
+    activeConversationId,
+    addMessage,
+    updateLastMessage,
+    setThinking,
+    createNewConversation,
+  } = useAiAssistantStore();
+  const { selectedEndpoint } = useChatUiStore();
+
+  const activeConversation = conversations.find(
+    (c) => c.id === activeConversationId && c.endpoint === selectedEndpoint,
+  );
+  const messages = activeConversation?.messages || [];
 
   const userDisplayName = user
-    ? (user.effectiveDisplayName || user.displayName || user.fullName || user.firstName || user.username)
+    ? user.effectiveDisplayName ||
+    user.displayName ||
+    user.fullName ||
+    user.firstName ||
+    user.username
     : undefined;
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setInputValue("");
-    setIsLoading(false);
-    setSessionId(clearSessionId());
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
-
-  const getErrorMessage = useCallback(
-    (err: unknown): string => {
-      if (err instanceof AiApiError) {
-        if (err.kind === "timeout") return t("chat.errorTimeout");
-        if (err.kind === "network") return t("chat.errorNetwork");
-        if (err.status === 422) return t("chat.error422");
-        if (err.status === 405) return t("chat.error405");
-        if (err.status >= 500) return t("chat.error500");
-      }
-      return t("chat.errorNetwork");
-    },
-    [t],
-  );
-
+  /** Gửi tin nhắn đến AI API */
   const handleSubmit = useCallback(
-    async (prompt: string) => {
-      const trimmed = prompt.trim();
+    async (promptText: string) => {
+      const trimmed = promptText.trim();
       if (!trimmed || isLoading) return;
 
-      const userMessage: AiChatMessage = {
-        id: generateId(),
+      let currentId = activeConversationId;
+
+      // Tạo conversation mới nếu chưa có hoặc endpoint không khớp
+      if (
+        !currentId ||
+        conversations.find((c) => c.id === currentId)?.endpoint !==
+        selectedEndpoint
+      ) {
+        currentId = createNewConversation(selectedEndpoint);
+      }
+
+      const userMessage: AiMessage = {
+        id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessage]);
+      addMessage(currentId, userMessage);
       setInputValue("");
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-
       setIsLoading(true);
 
-      try {
-        const response = await sendAiChatMessage(trimmed, sessionId);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
-        if (response.session_id && response.session_id !== sessionId) {
-          setSessionId(response.session_id);
-          persistSessionId(response.session_id);
+      // Tạo placeholder message cho AI
+      const assistantMessageId = crypto.randomUUID();
+      const assistantMessage: AiMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        isStreaming: true,
+      };
+      addMessage(currentId, assistantMessage);
+
+      try {
+        const isCompany = selectedEndpoint === "company";
+        const request: any = {
+          question: trimmed,
+          session_id: currentId || "",
+          department: user?.departmentName || "",
+        };
+
+        if (isCompany) {
+          // Schema cho Công ty
+          request.user_id = user?.id || "";
+          request.user_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
+        } else {
+          // Schema cho Cá nhân
+          request.employee_code = user?.employeeCode || user?.employee_code || "";
+          request.employee_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
         }
 
-        const assistantMessage: AiChatMessage = {
-          id: generateId(),
-          role: "assistant",
-          content: response.answer,
-          timestamp: new Date(),
-          sources: response.sources?.length > 0 ? response.sources : undefined,
-        };
+        const response = await sendAiChatMessage(request, selectedEndpoint, {
+          onToken: (token) => {
+            updateLastMessage(currentId!, token, true);
+          },
+          onThinking: (thinking) => {
+            setThinking(currentId!, thinking);
+          },
+        });
 
-        setMessages((prev) => [...prev, assistantMessage]);
+        // Finalize message
+        updateLastMessage(currentId, response.answer, false);
+
+        useAiAssistantStore.setState((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === currentId
+              ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantMessageId
+                    ? {
+                      ...m,
+                      content: response.answer,
+                      sources: response.sources,
+                      isStreaming: false,
+                    }
+                    : m,
+                ),
+              }
+              : c,
+          ),
+        }));
       } catch (err) {
-        const errorMessage: AiChatMessage = {
-          id: generateId(),
-          role: "assistant",
-          content: getErrorMessage(err),
-          timestamp: new Date(),
-          error: true,
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+        let content = t("chat.errorNetwork");
+        if (err instanceof AiApiError) {
+          if (err.kind === "timeout") content = t("chat.errorTimeout");
+          if (err.status === 422) content = t("chat.error422");
+        }
+
+        updateLastMessage(currentId, content, false);
+        useAiAssistantStore.setState((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === currentId
+              ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, isError: true, isStreaming: false }
+                    : m,
+                ),
+              }
+              : c,
+          ),
+        }));
       } finally {
         setIsLoading(false);
         setTimeout(() => textareaRef.current?.focus(), 0);
       }
     },
-    [isLoading, sessionId, getErrorMessage],
+    [
+      isLoading,
+      activeConversationId,
+      conversations,
+      selectedEndpoint,
+      user,
+      addMessage,
+      updateLastMessage,
+      setThinking,
+      createNewConversation,
+      t,
+    ],
   );
 
   const hasMessages = messages.length > 0;
 
+  // Auto focus input
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [activeConversationId]);
+
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-shell-bg)]">
-      {/* Mini header — shown only when chat is active */}
-      {hasMessages && (
-        <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-body-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
-            aria-label={t("chat.newChat")}
-          >
-            <ArrowLeftIcon className="h-4 w-4" strokeWidth={1.5} />
-            <span>{t("chat.newChat")}</span>
-          </button>
+    <AiLayout>
+      <div className="flex h-full flex-col overflow-hidden bg-white">
+        <AiChatHeader />
 
-          <div className="h-4 w-px bg-border" />
+        {/* ── Empty state: Hero + Input + Suggestions căn giữa ── */}
+        {!hasMessages && (
+          <div className="flex flex-1 items-center justify-center overflow-y-auto px-4">
+            <div className="flex w-full max-w-[680px] flex-col items-center gap-8 py-16">
+              <AiAssistantHero displayName={userDisplayName} />
 
-          <span className="text-body-sm font-medium text-text-primary">
-            {t("page.title")}
-          </span>
-        </header>
-      )}
+              <div className="w-full">
+                <AiPromptBox
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                />
+              </div>
 
-      {/* Empty state */}
-      {!hasMessages && (
-        <div className="flex flex-1 items-center justify-center overflow-y-auto px-4">
-          <div className="flex w-full max-w-[680px] flex-col items-center gap-8 py-12">
-            <AiAssistantHero displayName={userDisplayName} />
-
-            <div className="w-full">
-              <AiPromptBox
-                ref={textareaRef}
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-              />
-            </div>
-
-            <div className="w-full">
-              <AiSuggestionChips
-                onSelect={(prompt) => {
-                  setInputValue(prompt);
-                  setTimeout(() => textareaRef.current?.focus(), 0);
-                }}
-              />
+              <div className="w-full">
+                <AiSuggestionChips
+                  onSelect={(prompt) => {
+                    setInputValue(prompt);
+                    setTimeout(() => textareaRef.current?.focus(), 0);
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Chat state — messages scroll independently, input fixed at bottom */}
-      {hasMessages && (
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto flex max-w-[680px] flex-col gap-6 px-4 py-8">
+        {/* ── Chat state: Messages + Input sticky bottom ── */}
+        {hasMessages && (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* Scrollable messages */}
+            <div className="flex-1 overflow-y-auto ai-scrollbar">
               <AiChatPreview messages={messages} isLoading={isLoading} />
             </div>
-          </div>
 
-          <div className="flex-shrink-0 border-t border-border bg-[var(--chat-shell-bg)] px-4 pb-4 pt-3">
-            <div className="mx-auto max-w-[680px]">
-              <AiPromptBox
-                ref={textareaRef}
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-              />
+            {/* Input sticky bottom */}
+            <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-4">
+              <div className="mx-auto max-w-[768px]">
+                <AiPromptBox
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                />
+                <p className="mt-2 text-center text-[11px] text-gray-400">
+                  AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng
+                  các thông tin quan trọng.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AiLayout>
   );
 };
 

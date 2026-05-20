@@ -1,22 +1,27 @@
 import React, { forwardRef, useCallback } from "react";
-import { useTranslation } from "react-i18next";
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import clsx from "clsx";
+import { ArrowUpIcon, SquareIcon, PaperclipIcon } from "lucide-react";
+import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 
 interface AiPromptBoxProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
+  onStop?: () => void;
   isLoading?: boolean;
 }
 
-const LINE_HEIGHT = 24; // approx line-height in px
-const MAX_LINES = 6;
+const LINE_HEIGHT = 24;
+const MAX_LINES = 8;
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
+/**
+ * Thanh nhập liệu kiểu ChatGPT – bo tròn capsule, auto resize,
+ * nút gửi tròn đen ở góc phải, nút attach file bên trái.
+ */
 export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
-  ({ value, onChange, onSubmit, isLoading = false }, ref) => {
-    const { t } = useTranslation("aiAssistant");
-
+  ({ value, onChange, onSubmit, onStop, isLoading = false }, ref) => {
+    /** Tự điều chỉnh chiều cao textarea */
     const adjustHeight = useCallback((textarea: HTMLTextAreaElement) => {
       textarea.style.height = "auto";
       const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
@@ -34,58 +39,84 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (value.trim()) {
+        if (value.trim() && !isLoading) {
           onSubmit(value.trim());
-          // Reset height after submit
           if (ref && "current" in ref && ref.current) {
-            ref.current.style.height = "auto";
+            ref.current.style.height = "52px";
           }
         }
       }
     };
 
     const hasText = value.trim().length > 0;
+    const { selectedEndpoint } = useChatUiStore();
+    const isCompany = selectedEndpoint === "company";
 
     return (
       <div className="relative w-full">
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={t("prompt.placeholder")}
-          rows={1}
-          disabled={isLoading}
-          className="focus:border-primary/60 focus:shadow-[0_0_0_2px_hsl(var(--color-primary)/0.15)] w-full resize-none rounded-2xl border border-border bg-surface px-4 py-3 pr-12 text-body text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-0"
-          style={{ minHeight: "56px", maxHeight: `${MAX_HEIGHT}px` }}
-          onLoad={(e) => adjustHeight(e.currentTarget)}
-        />
+        <div className="relative flex items-end rounded-3xl border border-gray-300 bg-white shadow-sm transition-all focus-within:border-gray-400 focus-within:shadow-md">
+          {/* Attach button */}
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Tải lên tài liệu"
+          >
+            <PaperclipIcon size={18} strokeWidth={2} />
+          </button>
 
-        {/* Send button — only visible when there's text */}
-        <button
-          type="button"
-          onClick={() => {
-            if (value.trim()) {
-              onSubmit(value.trim());
-              if (ref && "current" in ref && ref.current) {
-                ref.current.style.height = "auto";
-              }
+          {/* Textarea */}
+          <textarea
+            ref={ref}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isCompany
+                ? "Hỏi về quy trình & tài liệu công ty..."
+                : "Hỏi bất cứ điều gì..."
             }
-          }}
-          disabled={!hasText || isLoading}
-          className={`
-            absolute bottom-2.5 right-2.5 flex h-9 w-9 shrink-0 items-center justify-center
-            rounded-xl bg-primary text-text-inverse
-            transition-all duration-150
-            ${hasText && !isLoading
-              ? "opacity-100 hover:bg-primary-hover cursor-pointer"
-              : "opacity-0 pointer-events-none"
-            }
-          `}
-          aria-label={t("prompt.send")}
-        >
-          <PaperAirplaneIcon className="h-4 w-4" strokeWidth={1.5} />
-        </button>
+            rows={1}
+            disabled={isLoading}
+            className="flex-1 resize-none bg-transparent py-4 px-2 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
+          />
+
+          {/* Send / Stop button */}
+          <div className="flex items-center pr-2 pb-1.5">
+            {isLoading ? (
+              <button
+                type="button"
+                onClick={onStop}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white hover:bg-gray-700 transition-colors"
+                aria-label="Dừng phản hồi"
+              >
+                <SquareIcon size={14} fill="white" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (value.trim()) {
+                    onSubmit(value.trim());
+                    if (ref && "current" in ref && ref.current) {
+                      ref.current.style.height = "52px";
+                    }
+                  }
+                }}
+                disabled={!hasText}
+                className={clsx(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all",
+                  hasText
+                    ? "bg-gray-900 text-white hover:bg-gray-700 cursor-pointer"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed",
+                )}
+                aria-label="Gửi tin nhắn"
+              >
+                <ArrowUpIcon size={18} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     );
   },

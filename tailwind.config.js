@@ -239,6 +239,8 @@ export default {
         "bounce-subtle": "bounceSubtle 1.5s ease-in-out infinite",
         "message-insert":
           "messageInsert var(--motion-duration-message-insert, 140ms) var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1)) both",
+        shimmer: "shimmer 2s linear infinite",
+        scan: "scan 3s ease-in-out infinite",
       },
       keyframes: {
         typing: {
@@ -323,6 +325,14 @@ export default {
             opacity: "1",
             transform: "translateY(0) scale(1)",
           },
+        },
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        scan: {
+          "0%, 100%": { transform: "translateY(-100%)" },
+          "50%": { transform: "translateY(100%)" },
         },
       },
       maxWidth: {
