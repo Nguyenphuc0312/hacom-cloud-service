@@ -25,6 +25,7 @@ import {
   isGroupMemberEligible,
   type ChatSearchUser,
   useChatUserSearch,
+  useFriendSuggestions,
 } from "../../features/chat/hooks/useChatUserSearch";
 import { sendFriendRequestUseCase } from "../../features/chat/usecases/sendFriendRequest";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
@@ -68,20 +69,31 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     () => Object.values(selectedUsersById),
     [selectedUsersById],
   );
-  const { results, isLoading, errorMessage, debouncedQuery } = useChatUserSearch(
+  const { results, isLoading: isSearchLoading, errorMessage, debouncedQuery } = useChatUserSearch(
     searchQuery,
     {
       enabled: isOpen,
       limit: isGroupMode ? 20 : 10,
     },
   );
+  const { suggestions, isLoading: isSuggestionsLoading } = useFriendSuggestions({
+    query: searchQuery,
+    enabled: isOpen,
+    limit: isGroupMode ? 50 : 20,
+  });
+
+  const isSearchActive = debouncedQuery.trim().length >= 2;
+  const isLoading = isSearchActive ? isSearchLoading : isSuggestionsLoading;
+
   const users = useMemo(
     () =>
-      results.map((user) => ({
-        ...user,
-        ...(searchUserOverridesById[user.id] ?? {}),
-      })),
-    [results, searchUserOverridesById],
+      isSearchActive
+        ? results.map((user) => ({
+            ...user,
+            ...(searchUserOverridesById[user.id] ?? {}),
+          }))
+        : suggestions,
+    [isSearchActive, results, suggestions, searchUserOverridesById],
   );
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
@@ -315,16 +327,25 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         <div className="-mx-4 min-h-[18rem] max-h-[22rem] overflow-y-auto px-4 sm:-mx-5 sm:px-5">
           {isLoading ? (
             <DirectorySkeleton count={5} />
-          ) : searchQuery.length > 0 && searchQuery.trim().length < 2 ? (
-            <p className="py-8 text-center text-sm text-text-muted">
-              {t("profile:newChatModal.searchMinChars", { count: 2 })}
-            </p>
-          ) : errorMessage ? (
+          ) : errorMessage && isSearchActive ? (
             <p className="py-8 text-center text-sm text-danger">{errorMessage}</p>
-          ) : results.length === 0 && debouncedQuery.trim().length >= 2 ? (
+          ) : users.length === 0 && isSearchActive ? (
             <EmptySearchResults query={debouncedQuery} />
+          ) : users.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-muted">
+              {t("profile:newChatModal.noFriendsYet", {
+                defaultValue: "You have no friends to add yet.",
+              })}
+            </p>
           ) : (
             <div className="space-y-1">
+              {!isSearchActive && (
+                <p className="pb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
+                  {t("profile:newChatModal.friendsSectionLabel", {
+                    defaultValue: "Friends",
+                  })}
+                </p>
+              )}
               {users.map((user) => {
                 const isSelected = Boolean(selectedUsersById[user.id]);
                 const isPending = pendingUserId === user.id;
