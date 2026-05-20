@@ -600,6 +600,9 @@ export const CalendarPage: React.FC = () => {
         if (data.reason === "EMPLOYEE_NOT_LINKED") {
           setAttendanceError("Tài khoản chưa liên kết hồ sơ nhân sự.");
           setAttendanceData([]);
+        } else if (data.reason === "NO_ATTENDANCE_DATA") {
+          setAttendanceError("Chưa có dữ liệu chấm công trong khoảng thời gian này.");
+          setAttendanceData([]);
         } else {
           setAttendanceData(data.items ?? []);
         }
