@@ -1058,7 +1058,7 @@ const mergeConversationSummary = (
     localReadIsAhead ||
     ((current.unreadCount ?? 0) === 0 &&
       (incoming.unreadCount ?? 0) > 0 &&
-      incomingLastReadSeq <= currentLastReadSeq);
+      incomingLastReadSeq < currentLastReadSeq);
 
   return (normalizeConversation({
     ...current,
