@@ -146,14 +146,10 @@ export const storeTokens = (
     return;
   }
 
-  if (rememberMe) {
-    localStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
-    sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
-    return;
-  }
-
-  sessionStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
-  localStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  // Always persist refresh token to localStorage so the session survives
+  // browser close/reopen. Product requirement: stay logged in until explicit logout.
+  localStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+  sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
 };
 
 export const clearTokens = (): void => {

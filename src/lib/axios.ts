@@ -161,6 +161,29 @@ const notifyAuthFailure = (reason: AuthFailureReason): void => {
   }
 };
 
+/**
+ * Returns true only when the refresh attempt was definitively rejected by the
+ * server (HTTP 401/403) or when there is no local token to begin with.
+ * Network errors (no HTTP response), 5xx server errors, and timeouts are NOT
+ * definitive auth failures — the session may still be valid and should be
+ * preserved so the user can recover once connectivity is restored.
+ */
+const isDefiniteAuthRefreshFailure = (error: unknown): boolean => {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) return false; // network error, not a server rejection
+    const status = error.response.status;
+    return status === 401 || status === 403;
+  }
+  if (error instanceof Error) {
+    return (
+      error.message.includes("Missing refresh token") ||
+      error.message.includes("No refresh token available") ||
+      error.message.includes("Auth session is inactive")
+    );
+  }
+  return false;
+};
+
 const refreshAccessToken = async (): Promise<string> => {
   if (!isAuthSessionActive()) {
     notifyAuthFailure("refresh_failed");
@@ -182,7 +205,11 @@ const refreshAccessToken = async (): Promise<string> => {
     authFailureNotified = false;
     return accessToken;
   } catch (error) {
-    notifyAuthFailure("refresh_failed");
+    // Only clear the session for definitive server-side rejections (401/403).
+    // Network errors and 5xx should not permanently invalidate the local session.
+    if (isDefiniteAuthRefreshFailure(error)) {
+      notifyAuthFailure("refresh_failed");
+    }
     throw error;
   }
 };

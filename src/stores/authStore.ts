@@ -804,22 +804,29 @@ export const useAuthStore = create<AuthState>()(
               registrationStatus: "idle",
             });
             resetAuthFailureState();
-          } catch {
-            runClientLogoutCleanup("refresh_user_failed");
-            set({
-              user: null,
-              authStatus: "anonymous",
-              isBootstrappingAuth: false,
-              activationContext: null,
-              lockedAccount: null,
-              pendingVerificationEmail: null,
-              pendingVerificationSource: null,
-              emailVerificationChallenge: null,
-              isAuthenticated: false,
-              isLoading: false,
-              isInitialized: true,
-              registrationStatus: "idle",
-            });
+          } catch (refreshUserErr: unknown) {
+            const apiErr = extractApiError(refreshUserErr);
+            if (apiErr.statusCode === 401 || apiErr.statusCode === 403) {
+              // Genuine auth rejection — log out and clear session.
+              runClientLogoutCleanup("refresh_user_auth_failure");
+              set({
+                user: null,
+                authStatus: "anonymous",
+                isBootstrappingAuth: false,
+                activationContext: null,
+                lockedAccount: null,
+                pendingVerificationEmail: null,
+                pendingVerificationSource: null,
+                emailVerificationChallenge: null,
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+              });
+            } else {
+              // Network / server error — keep session, just stop the loading state.
+              set({ isLoading: false, isBootstrappingAuth: false });
+            }
           }
         },
 
@@ -997,28 +1004,116 @@ export const useAuthStore = create<AuthState>()(
             }
 
             if (isRefreshTokenCookieMode() || getRefreshToken()) {
-              try {
-                const newAccessToken =
-                  await refreshAccessTokenShared("bootstrap");
-                const user = await fetchCurrentUser(newAccessToken);
-                const blockedStatus = resolveBlockedStatusFromUser(user);
+              // Split refresh and profile-fetch into separate try-catch blocks so
+              // that a network/server error on the profile endpoint doesn't cause
+              // the session to be cleared when we just successfully refreshed.
+              let bootstrapToken: string | null = null;
+              let bootstrapRefreshError: unknown = null;
 
-                if (blockedStatus) {
-                  const blockedMessage =
-                    resolveBlockedAuthMessage(blockedStatus);
-                  runClientLogoutCleanup(
-                    "bootstrap_refresh_blocked_account_state",
-                  );
+              try {
+                bootstrapToken = await refreshAccessTokenShared("bootstrap");
+              } catch (err) {
+                bootstrapRefreshError = err;
+              }
+
+              if (bootstrapToken) {
+                try {
+                  const user = await fetchCurrentUser(bootstrapToken);
+                  const blockedStatus = resolveBlockedStatusFromUser(user);
+
+                  if (blockedStatus) {
+                    const blockedMessage =
+                      resolveBlockedAuthMessage(blockedStatus);
+                    runClientLogoutCleanup(
+                      "bootstrap_refresh_blocked_account_state",
+                    );
+                    set({
+                      user: null,
+                      authStatus: blockedStatus,
+                      isBootstrappingAuth: false,
+                      activationContext: null,
+                      lockedAccount: {
+                        status: blockedStatus,
+                        code: resolveBlockedAuthCode(blockedStatus),
+                        message: blockedMessage,
+                      },
+                      pendingVerificationEmail: null,
+                      pendingVerificationSource: null,
+                      emailVerificationChallenge: null,
+                      isAuthenticated: false,
+                      isLoading: false,
+                      isInitialized: true,
+                      registrationStatus: "idle",
+                      error: blockedMessage,
+                    });
+                    return;
+                  }
+
                   set({
-                    user: null,
-                    authStatus: blockedStatus,
+                    user,
+                    authStatus: "authenticated",
                     isBootstrappingAuth: false,
                     activationContext: null,
-                    lockedAccount: {
-                      status: blockedStatus,
-                      code: resolveBlockedAuthCode(blockedStatus),
-                      message: blockedMessage,
-                    },
+                    lockedAccount: null,
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: true,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: null,
+                  });
+                  resetAuthFailureState();
+                  return;
+                } catch (profileErr: unknown) {
+                  const profileApiErr = extractApiError(profileErr);
+                  if (
+                    profileApiErr.statusCode !== 401 &&
+                    profileApiErr.statusCode !== 403
+                  ) {
+                    // Network/server error on profile fetch, but we have a fresh
+                    // token — restore from persisted user rather than logging out.
+                    const cachedUser = get().user;
+                    set({
+                      user: cachedUser,
+                      authStatus: "authenticated",
+                      isBootstrappingAuth: false,
+                      activationContext: null,
+                      lockedAccount: null,
+                      pendingVerificationEmail: null,
+                      pendingVerificationSource: null,
+                      emailVerificationChallenge: null,
+                      isAuthenticated: true,
+                      isLoading: false,
+                      isInitialized: true,
+                      registrationStatus: "idle",
+                      error: null,
+                    });
+                    resetAuthFailureState();
+                    return;
+                  }
+                  // 401/403 with a fresh token = genuine session invalidation,
+                  // fall through to logout below.
+                }
+              }
+
+              // If the refresh itself failed due to a network/server error,
+              // do NOT clear the stored refresh token — the session may still be
+              // valid and will be retried on the next page load.
+              if (bootstrapRefreshError !== null) {
+                const refreshApiErr = extractApiError(bootstrapRefreshError);
+                if (
+                  refreshApiErr.isNetworkError ||
+                  refreshApiErr.statusCode === 0 ||
+                  refreshApiErr.statusCode >= 500
+                ) {
+                  set({
+                    user: null,
+                    authStatus: "anonymous",
+                    isBootstrappingAuth: false,
+                    activationContext: null,
+                    lockedAccount: null,
                     pendingVerificationEmail: null,
                     pendingVerificationSource: null,
                     emailVerificationChallenge: null,
@@ -1026,33 +1121,14 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                     isInitialized: true,
                     registrationStatus: "idle",
-                    error: blockedMessage,
+                    error: null,
                   });
                   return;
                 }
-
-                set({
-                  user,
-                  authStatus: "authenticated",
-                  isBootstrappingAuth: false,
-                  activationContext: null,
-                  lockedAccount: null,
-                  pendingVerificationEmail: null,
-                  pendingVerificationSource: null,
-                  emailVerificationChallenge: null,
-                  isAuthenticated: true,
-                  isLoading: false,
-                  isInitialized: true,
-                  registrationStatus: "idle",
-                  error: null,
-                });
-                resetAuthFailureState();
-                return;
-              } catch {
-                // Fallback to local logout below.
               }
             }
 
+            // Definitive auth failure — clear everything and redirect to login.
             runClientLogoutCleanup("bootstrap_auth_failed");
             set({
               user: null,
