@@ -465,6 +465,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
             });
             applyServerConversationRead(data);
           }
+          pendingRollbackSnapshot.delete(conversationId);
           return undefined;
         },
         (error: unknown) => {

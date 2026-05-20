@@ -2,7 +2,7 @@
 export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
 
 /** All available quick reactions (alias for backwards compatibility) */
-export const reactionEmojis = [...QUICK_REACTIONS] as unknown as string[];
+export const reactionEmojis: string[] = [...QUICK_REACTIONS];
 
 /** Extended reactions — shown when user taps "+" in the picker */
 export const EXTENDED_REACTIONS = [

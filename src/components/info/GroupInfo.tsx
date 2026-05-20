@@ -366,12 +366,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
   const removeJoinRequest = useGroupStore((state) => state.removeJoinRequest);
 
-  const createdBy = React.useMemo(() => {
-    if (!isRecord(conversation)) return undefined;
-    return asString(
-      (conversation as unknown as Record<string, unknown>).createdBy,
-    );
-  }, [conversation]);
+  const createdBy = React.useMemo(() => conversation.createdBy, [conversation]);
 
   const members = React.useMemo<GroupMember[]>(() => {
     const merged = new Map<string, GroupMember>();

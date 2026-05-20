@@ -211,7 +211,7 @@ const normalizeLastMessageStatus = (
   }
 
   const messageRecord = lastMessage && isRecord(lastMessage)
-    ? (lastMessage as unknown as UnknownRecord)
+    ? lastMessage as UnknownRecord
     : null;
   const sendState = asString(messageRecord?.sendState)?.toLowerCase();
   const status = asString(messageRecord?.status)?.toLowerCase();
