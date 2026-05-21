@@ -6,6 +6,10 @@ import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
 import { PersistentNavigationRail } from "../shared/layout";
 import { GlobalWebSocketProvider } from "../features/realtime/GlobalWebSocketProvider";
+import {
+  dispatchNotificationClick,
+  listenForOpenConversation,
+} from "../features/chat/events/chatUiEvents";
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
@@ -15,6 +19,13 @@ export const AuthenticatedLayout: React.FC = () => {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    return listenForOpenConversation(({ conversationId, messageId }) => {
+      dispatchNotificationClick({ conversationId, messageId });
+      navigate(ROUTE_PATHS.CHAT);
+    });
+  }, [navigate]);
 
   React.useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {

@@ -32,10 +32,12 @@ import {
 } from "../services/authRefreshCoordinator";
 import { isTokenExpiringSoon } from "../utils/jwtHelpers";
 import {
+  isMessageModule,
   notifyGlobalToast,
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
+import { showSingletonMessageToast } from "../utils/messageToast";
 import {
   broadcastUnreadSnapshot,
   emitBrowserNotification,
@@ -392,6 +394,22 @@ export const useWebSocket = (
     syncDocumentTitleBadge(totalUnreadCount);
     void syncAppBadge(totalUnreadCount);
   }, [totalUnreadCount]);
+
+  // Re-sync badge counts from backend when the browser tab regains focus so
+  // that counts stay accurate across multi-tab and multi-device scenarios.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshUnreadSummarySnapshot();
+        void useFriendshipStore.getState().fetchPendingCount();
+        logMessageDebug("useWebSocket", "badge_synced_on_tab_focus", {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshUnreadSummarySnapshot]);
 
   useEffect(() => {
     if (suppressUnreadBroadcastRef.current) {
@@ -769,26 +787,36 @@ export const useWebSocket = (
         isRead: false,
       });
 
+      // If user is on the Messages module, the UI is already updating in realtime —
+      // no toast needed. The sidebar badge still updates via store.
+      if (isMessageModule(window.location.pathname)) {
+        logMessageDebug("useWebSocket", "toast_skipped_messages_module", {
+          conversationId: input.conversationId,
+          senderId: input.senderId,
+        });
+        return;
+      }
+
       if (isActiveConversation && visibleAndFocused && !hasMention) {
         return;
       }
+      const notificationId =
+        input.eventId ||
+        `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
       const preview = notificationSettings.messagePreview
         ? input.content || "Sent an attachment"
         : hasMention
           ? "You were mentioned."
           : "New message";
-      const notificationId =
-        input.eventId ||
-        `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
-      const toastMessage = hasMention
-        ? `${input.senderName || "Someone"} mentioned you in ${conversationLabel}`
-        : `${input.senderName || conversationLabel}: ${preview}`;
 
-      notifyGlobalToast({
-        level: "info",
-        message: toastMessage,
-        dedupeKey: notificationId,
-        cooldownMs: 20_000,
+      // Singleton toast: new message replaces old one instead of stacking.
+      showSingletonMessageToast({
+        senderName: input.senderName || conversationLabel,
+        conversationName:
+          conversation?.displayName || conversation?.name || undefined,
+        preview,
+        conversationId: input.conversationId,
+        messageId: input.messageId,
       });
 
       if (!visibleAndFocused) {
@@ -1007,6 +1035,11 @@ export const useWebSocket = (
 
     const handleConnect = () => {
       connectionLifecycleRef.current?.handleSocketConnected();
+      // Sync badge counts from backend on every connect/reconnect so the
+      // sidebar never shows stale counts after a disconnection.
+      void refreshUnreadSummarySnapshot();
+      void useFriendshipStore.getState().fetchPendingCount();
+      logMessageDebug("useWebSocket", "badge_synced_on_connect", {});
     };
 
     const handleDisconnect = (data: unknown) => {
@@ -2216,6 +2249,7 @@ export const useWebSocket = (
     shouldProcessRealtimeEvent,
     upsertInviteLink,
     updateConversation,
+    refreshUnreadSummarySnapshot,
   ]);
 
   const connectionLifecycle = useMemo(

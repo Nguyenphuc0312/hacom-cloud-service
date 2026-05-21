@@ -1448,6 +1448,24 @@ a:focus-visible {
     transition: opacity 160ms ease;
   }
 
+  .hc-side-rail__badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: hsl(var(--color-danger, 0 84% 60%));
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+    z-index: 2;
+  }
+
   .hc-side-rail__avatar {
     display: flex;
     height: 38px;
