@@ -1283,6 +1283,14 @@ export const messageApi = {
     return response.data;
   },
 
+  forwardMessages: async (items: Array<{ sourceMessageId: string; targetConversationId: string }>) => {
+    const response = await apiClient.post<ApiResponse<{ messages: Message[] }>>(
+      `/messages/forward`,
+      { items },
+    );
+    return response.data;
+  },
+
   getMessageById: async (messageId: string) => {
     const response = await apiClient.get<ApiResponse<Message>>(
       `/messages/${messageId}`,

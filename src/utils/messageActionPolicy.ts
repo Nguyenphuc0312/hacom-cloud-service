@@ -5,6 +5,7 @@ import { isFailedMessage, isPendingMessage } from "./messageTimeline";
 export type MessageActionId =
   | "react"
   | "reply"
+  | "forward"
   | "copy"
   | "edit"
   | "deleteForMe"
@@ -33,6 +34,8 @@ export interface MessageActionPolicyInput {
   canPin?: boolean;
   /** Tin nhắn đã được ghim chưa. */
   isPinned?: boolean;
+  /** Có cho phép chuyển tiếp tin nhắn hay không. */
+  canForward?: boolean;
 }
 
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -89,6 +92,12 @@ const canPinMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
+const canForwardMessage = (message: Message): boolean =>
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
+
 const getActionCandidates = ({
   message,
   isOwn,
@@ -98,6 +107,7 @@ const getActionCandidates = ({
   canRetry = false,
   canPin = false,
   isPinned = false,
+  canForward = true,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -116,6 +126,15 @@ const getActionCandidates = ({
       id: "reply",
       score: isOwn ? 66 : 82,
       railEligible: true,
+      menuEligible: true,
+    });
+  }
+
+  if (canForward && canForwardMessage(message)) {
+    candidates.push({
+      id: "forward",
+      score: isOwn ? 62 : 78,
+      railEligible: false,
       menuEligible: true,
     });
   }

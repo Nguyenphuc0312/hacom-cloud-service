@@ -752,6 +752,20 @@ export const chatApi = createApi({
         }
       },
     }),
+
+    forwardMessages: build.mutation<
+      { messages: Message[] },
+      { items: Array<{ sourceMessageId: string; targetConversationId: string }> }
+    >({
+      async queryFn(input) {
+        try {
+          const response = await messageApi.forwardMessages(input.items);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+    }),
   }),
 });
 
@@ -769,4 +783,5 @@ export const {
   useRemoveReactionMutation,
   useSearchMessagesQuery,
   useSendMessageMutation,
+  useForwardMessagesMutation,
 } = chatApi;

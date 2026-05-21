@@ -38,6 +38,7 @@ interface MessageGroupProps {
   row: ConversationThreadGroupRow;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
@@ -149,6 +150,7 @@ const MessageGroupItem: React.FC<{
   senderDisplayName?: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -175,6 +177,7 @@ const MessageGroupItem: React.FC<{
   senderDisplayName,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -278,6 +281,7 @@ const MessageGroupItem: React.FC<{
               ? true
               : undefined,
           canRetry: isFailedMessage(message),
+          canForward: Boolean(onForward),
         }),
       [
         coarsePointer,
@@ -286,6 +290,7 @@ const MessageGroupItem: React.FC<{
         message,
         onDelete,
         onEdit,
+        onForward,
         viewerCanRecallOthers,
       ],
     );
@@ -345,6 +350,11 @@ const MessageGroupItem: React.FC<{
           case "reply":
             onReply(message);
             break;
+          case "forward":
+            if (onForward) {
+              onForward(message);
+            }
+            break;
           case "copy":
             void navigator.clipboard.writeText(message.content || "");
             break;
@@ -383,7 +393,7 @@ const MessageGroupItem: React.FC<{
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
+      [message, onDelete, onEdit, onForward, onReact, onReply, resendMessage, isOwn],
     );
 
     const actionRail =
@@ -633,6 +643,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   row,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -699,6 +710,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               senderDisplayName={senderDisplayName}
               onReply={onReply}
               onReact={onReact}
+              onForward={onForward}
               onEdit={onEdit}
               onDelete={onDelete}
               onImageClick={onImageClick}

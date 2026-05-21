@@ -60,6 +60,9 @@ const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
   () => import("../chat/PinnedMessagesPanel"),
 );
+const ForwardModal = React.lazy(
+  () => import("../chat/ForwardModal").then((m) => ({ default: m.ForwardModal })),
+);
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -285,6 +288,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
+  const [forwardMessages, setForwardMessages] = React.useState<
+    Message[] | null
+  >(null);
   const draftBeforeEditRef = React.useRef<string>(composerSeed);
   // Ref so handleSend (declared before mentionCandidates useMemo) always reads the latest value.
   const mentionCandidatesRef = React.useRef<MentionCandidate[]>([]);
@@ -399,6 +405,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setEditingMessage(undefined);
     setInputMode("reply");
   }, []);
+
+  const handleForward = React.useCallback((message: Message) => {
+    setForwardMessages([message]);
+  }, []);
+
+  const handleForwardSelected = React.useCallback(() => {
+    const messages = Array.from(selectedMessageIds)
+      .map((id) => useChatStore.getState().messageById?.[id])
+      .filter((m): m is Message => Boolean(m));
+    if (messages.length > 0) {
+      setForwardMessages(messages);
+    }
+  }, [selectedMessageIds]);
 
   const handleCancelReply = React.useCallback(() => {
     setReplyToMessage(undefined);
@@ -1095,6 +1114,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
+        onForward={handleForward}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onInspect={handleInspectMessage}
@@ -1147,6 +1167,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <SelectionToolbar
             selectedCount={selectedMessageIds.size}
             onDelete={handleSelectionDelete}
+            onForward={handleForwardSelected}
             onCopy={handleSelectionCopy}
             onCancel={exitSelectionMode}
           />
@@ -1214,6 +1235,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         name={callDisplayName}
         onClose={() => setCallMode(null)}
       />
+
+      {forwardMessages && (
+        <React.Suspense fallback={null}>
+          <ForwardModal
+            messages={forwardMessages}
+            onClose={() => setForwardMessages(null)}
+          />
+        </React.Suspense>
+      )}
     </section>
   );
 };
