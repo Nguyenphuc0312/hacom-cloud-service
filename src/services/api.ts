@@ -1311,9 +1311,11 @@ export const fileApi = {
   reserveFileUpload: async (payload: ReserveFileUploadPayload) => { 
     const response = await apiClient.post<ApiResponse<UploadSignedUrlResponse>>( 
       "/files/upload-url", 
-      { 
+      {
         ...(payload.uploadId ? { uploadId: payload.uploadId } : {}),
-        conversationId: payload.conversationId || "",
+        purpose: payload.purpose,
+        ...(payload.conversationId ? { conversationId: payload.conversationId } : {}),
+        ...(payload.groupId ? { groupId: payload.groupId } : {}),
         fileName: payload.filename,
         mimeType: payload.mimeType,
         fileSize: payload.sizeBytes,
