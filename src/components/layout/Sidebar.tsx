@@ -6,7 +6,7 @@ import React, {
 } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { SegmentedControl, SkeletonButton } from "../ui";
+import { SegmentedControl } from "../ui";
 import { usePresence, useNotifications } from "../../hooks";
 import { useAuthStore } from "../../stores";
 import { useChatStore } from "../../stores";
@@ -25,7 +25,7 @@ interface SidebarProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
   selectedId: string | null;
-  isLoadingConversations?: boolean;
+
   isLoadingMoreConversations?: boolean;
   hasMoreConversations?: boolean;
   showConversationSkeleton?: boolean;
@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   layoutState,
   currentUser,
   selectedId,
-  isLoadingConversations = false,
+
   isLoadingMoreConversations = false,
   hasMoreConversations = false,
   showConversationSkeleton = false,
@@ -133,16 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ]}
           />
 
-          {isLoadingConversations && conversationIds.length > 0 && (
-            <div
-              className="mt-2 flex items-center gap-2 px-1"
-              aria-busy="true"
-              aria-label={t("common:loading.default")}
-              role="status"
-            >
-              <SkeletonButton width={128} height={12} />
-            </div>
-          )}
+
         </div>
 
         <div

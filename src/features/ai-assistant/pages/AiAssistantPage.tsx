@@ -239,7 +239,7 @@ export const AiAssistantPage: React.FC = () => {
                   onSubmit={handleSubmit}
                   isLoading={isLoading}
                 />
-                <p className="mt-2 text-center text-[11px] text-gray-400">
+                <p className="mt-2 text-center text-[11px] text-red-500">
                   AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng
                   các thông tin quan trọng.
                 </p>

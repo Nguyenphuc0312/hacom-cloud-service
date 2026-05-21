@@ -27,7 +27,6 @@
     "addMember": "Thêm thành viên",
     "addMemberEligibilityHint": "Chỉ những liên hệ đủ điều kiện mới có thể được thêm vào nhóm này.",
     "searchMemberPlaceholder": "Tìm theo tên hoặc username",
-    "searchHint": "Tìm theo tên hoặc username.",
     "noSearchResult": "Không tìm thấy kết quả phù hợp",
     "noMembers": "Không có thành viên",
     "youSuffix": "(Bạn)",
@@ -106,13 +105,13 @@
     "sending": "Đang gửi...",
     "friendRequestSent": "Đã gửi lời mời kết bạn.",
     "friendRequestFailed": "Không thể gửi lời mời kết bạn.",
-      "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
-      "groupNamePlaceholder": "Nhập tên nhóm...",
-      "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
-      "createGroupButton": "Tạo nhóm ({{count}} người)",
-      "selectMember": "Chọn liên hệ",
-      "unselectMember": "Bỏ chọn liên hệ"
-    },
+    "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
+    "groupNamePlaceholder": "Nhập tên nhóm...",
+    "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
+    "createGroupButton": "Tạo nhóm ({{count}} người)",
+    "selectMember": "Chọn liên hệ",
+    "unselectMember": "Bỏ chọn liên hệ"
+  },
   "editProfileModal": {
     "title": "Chỉnh sửa hồ sơ",
     "fullDescription": "Cập nhật những thông tin mọi người dùng để nhận ra bạn trong ứng dụng.",

@@ -1400,13 +1400,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         <p className="px-3 py-3 text-sm text-text-muted">
                           {t("profile:groupInfo.noSearchResult")}
                         </p>
-                      ) : searchResults.length === 0 ? (
-                        <p className="px-3 py-3 text-sm text-text-muted">
-                          {t("profile:groupInfo.searchHint", {
-                            defaultValue: "Search by name or username.",
-                          })}
-                        </p>
-                      ) : (
+                      ) : searchResults.length === 0 ? null : (
                         searchResults.map((user) => (
                           <UserSearchResultItem
                             key={user.id}
