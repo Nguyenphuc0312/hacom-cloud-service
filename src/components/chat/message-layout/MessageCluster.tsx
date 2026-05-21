@@ -134,6 +134,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [showReactionPicker, setShowReactionPicker] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -200,6 +201,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (force = false) => {
       if (force || !isActionsOpen) {
         setIsHovered(false);
+        setShowReactionPicker(false);
       }
     },
     [isActionsOpen],
@@ -432,6 +434,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 isOutgoing={isOwn}
                 onReplyClick={() => onReply(message)}
                 onMoreClick={openActions}
+                onForwardClick={onForward ? () => { onForward(message); hideRail(true); } : undefined}
+                onReactClick={() => setShowReactionPicker((v) => !v)}
               />
             </div>
           ) : null
@@ -516,10 +520,14 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
 
             <div className="relative w-full">
               <QuickReactBar
-                visible={isHovered && !isSelectionMode}
+                visible={showReactionPicker && !isSelectionMode}
                 isMine={isOwn}
                 currentUserReaction={myReactionEmoji}
-                onReact={handleReactionSelect}
+                onReact={(emoji) => {
+                  handleReactionSelect(emoji);
+                  setShowReactionPicker(false);
+                }}
+                onClose={() => setShowReactionPicker(false)}
                 onMouseEnter={handleClusterMouseEnter}
                 onMouseLeave={handleClusterMouseLeave}
               />
