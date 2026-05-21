@@ -37,7 +37,11 @@ import {
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
-import { showSingletonMessageToast } from "../utils/messageToast";
+import {
+  formatMessagePreview,
+  showSingletonMessageToast,
+} from "../utils/messageToast";
+import { RoomType } from "../types";
 import {
   broadcastUnreadSnapshot,
   emitBrowserNotification,
@@ -728,6 +732,7 @@ export const useWebSocket = (
       senderId: string | null;
       senderName: string | null;
       content: string;
+      messageType?: string | null;
       mentions: string[];
       kind?: "message" | "mention" | "group_activity" | "system";
       eventId?: string | null;
@@ -805,16 +810,21 @@ export const useWebSocket = (
         input.eventId ||
         `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
       const preview = notificationSettings.messagePreview
-        ? input.content || "Sent an attachment"
+        ? formatMessagePreview(input.content, input.messageType ?? undefined)
         : hasMention
-          ? "You were mentioned."
-          : "New message";
+          ? "Đã nhắc đến bạn."
+          : "Tin nhắn mới";
+
+      const isGroup = conversation?.type !== RoomType.DIRECT;
 
       // Singleton toast: new message replaces old one instead of stacking.
       showSingletonMessageToast({
         senderName: input.senderName || conversationLabel,
         conversationName:
           conversation?.displayName || conversation?.name || undefined,
+        isGroup,
+        avatarUrl: conversation?.displayAvatar ?? null,
+        messageType: input.messageType ?? undefined,
         preview,
         conversationId: input.conversationId,
         messageId: input.messageId,
@@ -1248,6 +1258,7 @@ export const useWebSocket = (
             typeof messagePayload.content === "string"
               ? messagePayload.content
               : "",
+          messageType: asString(messagePayload.type) ?? null,
           mentions: Array.isArray(messagePayload.mentions)
             ? messagePayload.mentions.filter(
                 (item): item is string => typeof item === "string",
