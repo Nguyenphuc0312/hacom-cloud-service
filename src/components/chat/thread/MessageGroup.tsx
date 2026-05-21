@@ -196,6 +196,7 @@ const MessageGroupItem: React.FC<{
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
+    const [showReactionPicker, setShowReactionPicker] = React.useState(false);
     const [showMobileReact, setShowMobileReact] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,6 +330,7 @@ const MessageGroupItem: React.FC<{
     const handleItemMouseLeave = React.useCallback(() => {
       leaveTimerRef.current = setTimeout(() => {
         setIsHovered(false);
+        setShowReactionPicker(false);
       }, 150);
     }, []);
 
@@ -413,6 +415,15 @@ const MessageGroupItem: React.FC<{
             isOutgoing={isOwn}
             onReplyClick={() => onReply(message)}
             onMoreClick={() => setIsActionSheetOpen(true)}
+            onForwardClick={
+              onForward
+                ? () => {
+                    onForward(message);
+                    setIsHovered(false);
+                  }
+                : undefined
+            }
+            onReactClick={() => setShowReactionPicker((v) => !v)}
           />
         </div>
       ) : null;
@@ -464,10 +475,14 @@ const MessageGroupItem: React.FC<{
           )}>
             <div className="relative">
               <QuickReactBar
-                visible={isHovered && !isSelectionMode}
+                visible={showReactionPicker && !isSelectionMode}
                 isMine={isOwn}
                 currentUserReaction={myReactionEmoji}
-                onReact={handleReactionSelect}
+                onReact={(emoji) => {
+                  handleReactionSelect(emoji);
+                  setShowReactionPicker(false);
+                }}
+                onClose={() => setShowReactionPicker(false)}
                 onMouseEnter={handleItemMouseEnter}
                 onMouseLeave={handleItemMouseLeave}
               />
