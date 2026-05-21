@@ -19,6 +19,10 @@ import { logSimpleTimeline } from "./simpleTimelineDebug";
  *     keep bottom. Detached → no-op.
  *  7. jumpToLatest → scroll to bottom + clear badge.
  *  8. onScroll → only updates refs/state. Never re-pulls the user.
+ *  9. Virtualizer totalSize grew after initial scroll → re-anchor to bottom.
+ *     Called imperatively via notifyTotalSizeChanged() to avoid the circular
+ *     dependency that would arise from passing totalSize as a prop (virtualizer
+ *     needs scrollRef, scrollRef comes from this hook).
  *
  * Avoids: ResizeObserver-triggered scrolls, setTimeout chains, state
  * machines, priority queues, anchor reservoirs.
@@ -50,6 +54,18 @@ export interface UseSimpleChatScrollResult {
   handleScroll: () => void;
   handleMediaLoad: () => void;
   jumpToLatest: () => void;
+  /**
+   * Rule 9: called by the component when the virtualizer's totalSize changes.
+   * Returns a cleanup function (cancel any pending RAF) — wire it as the
+   * return value of a useLayoutEffect([totalSize]) in the component.
+   *
+   * Background: after Rule 1 scrolls to the estimated bottom, @tanstack/
+   * react-virtual's ResizeObserver measures items and can expand totalSize
+   * significantly (real heights > coarse estimates). Without this re-anchor,
+   * the user lands somewhere in the middle of the conversation instead of at
+   * the latest message.
+   */
+  notifyTotalSizeChanged: (totalSize: number) => () => void;
   /** Imperative hooks for tests. */
   __scrollToBottomForTest: () => void;
 }
@@ -96,6 +112,9 @@ export function useSimpleChatScroll(
     scrollHeight: number;
     scrollTop: number;
   } | null>(null);
+  // Mirrors isInitialSettled state so Rule 9's stable callback can read it
+  // without capturing a stale closure.
+  const isInitialSettledRef = React.useRef(false);
 
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
@@ -106,6 +125,7 @@ export function useSimpleChatScroll(
   // BEFORE it tries to react to "messages length changed".
   React.useLayoutEffect(() => {
     initialSettledConversationRef.current = null;
+    isInitialSettledRef.current = false;
     prevMessagesRef.current = [];
     pendingPrependRestoreRef.current = null;
     isLoadingOlderRef.current = false;
@@ -124,9 +144,13 @@ export function useSimpleChatScroll(
     if (messages.length === 0) return;
     if (initialSettledConversationRef.current === conversationId) return;
 
-    initialSettledConversationRef.current = conversationId;
-
+    // Intentionally NOT setting initialSettledConversationRef here.
+    // If a WebSocket message arrives before this RAF fires, cleanup cancels
+    // the RAF. Keeping the ref unset lets Rule 1 retry on the next render
+    // instead of being permanently blocked by a stale guard.
     const raf = requestAnimationFrame(() => {
+      initialSettledConversationRef.current = conversationId;
+      isInitialSettledRef.current = true;
       scrollElementToBottom(el, "auto");
       wasAtBottomRef.current = true;
       setIsAtBottom(true);
@@ -222,7 +246,7 @@ export function useSimpleChatScroll(
     if (wasAtBottom !== atBottom) {
       wasAtBottomRef.current = atBottom;
       setIsAtBottom(atBottom);
-      // Rule 9: bottom sentinel — fire callback when user reaches the bottom.
+      // Bottom sentinel — fire callback when user reaches the bottom.
       // This enables auto mark-read when the user scrolls to the latest message.
       if (atBottom && !wasAtBottom && typeof onBottomVisible === "function") {
         onBottomVisible();
@@ -295,6 +319,48 @@ export function useSimpleChatScroll(
     logSimpleTimeline("jump_to_latest", {});
   }, []);
 
+  // Rule 9: re-anchor to bottom when virtualizer measurements grow totalSize.
+  //
+  // After Rule 1 fires scrollToBottom, @tanstack/react-virtual's ResizeObserver
+  // measures actual item heights asynchronously (after paint). Real heights are
+  // often larger than the coarse estimates (`56 + items * 56`), so totalSize
+  // grows and scrollHeight increases. The raw scrollTop set in the RAF ends up
+  // somewhere in the middle of the conversation — the user sees old messages.
+  //
+  // Called imperatively by the component via useLayoutEffect([totalSize]) to
+  // avoid the circular dependency that would arise if totalSize were passed as a
+  // prop (virtualizer.getScrollElement needs scrollRef from this hook).
+  //
+  // Guards:
+  //   • isInitialSettledRef — prevents firing before Rule 1 completes.
+  //   • wasAtBottomRef      — respects the user having scrolled away.
+  //   • userScrollingRef    — prevents fighting an active user scroll.
+  //   • distanceToBottom    — skips the RAF if we're already at the bottom.
+  const notifyTotalSizeChanged = React.useCallback(
+    (totalSize: number): (() => void) => {
+      if (!isInitialSettledRef.current) return () => undefined;
+      if (!wasAtBottomRef.current) return () => undefined;
+      if (userScrollingRef.current) return () => undefined;
+      const el = scrollRef.current;
+      if (!el) return () => undefined;
+      const distanceToBottom = getDistanceToBottom(el);
+      if (distanceToBottom <= BOTTOM_THRESHOLD_PX) return () => undefined;
+      const raf = requestAnimationFrame(() => {
+        if (!wasAtBottomRef.current || userScrollingRef.current) return;
+        const elNow = scrollRef.current;
+        if (!elNow) return;
+        if (getDistanceToBottom(elNow) <= BOTTOM_THRESHOLD_PX) return;
+        scrollElementToBottom(elNow, "auto");
+        logSimpleTimeline("measurement_grow_recorrect_bottom", {
+          totalSize,
+          distanceToBottom,
+        });
+      });
+      return () => cancelAnimationFrame(raf);
+    },
+    [], // stable — uses only mutable refs
+  );
+
   // Cleanup.
   React.useEffect(() => {
     return () => {
@@ -312,6 +378,7 @@ export function useSimpleChatScroll(
     handleScroll,
     handleMediaLoad,
     jumpToLatest,
+    notifyTotalSizeChanged,
     __scrollToBottomForTest: () => {
       const el = scrollRef.current;
       if (el) scrollElementToBottom(el);
