@@ -395,6 +395,10 @@ export const useWebSocket = (
     void syncAppBadge(totalUnreadCount);
   }, [totalUnreadCount]);
 
+  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
+    await refreshUnreadSummarySnapshotAction();
+  }, [refreshUnreadSummarySnapshotAction]);
+
   // Re-sync badge counts from backend when the browser tab regains focus so
   // that counts stay accurate across multi-tab and multi-device scenarios.
   useEffect(() => {
@@ -674,9 +678,6 @@ export const useWebSocket = (
     },
     [emit],
   );
-  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
-    await refreshUnreadSummarySnapshotAction();
-  }, [refreshUnreadSummarySnapshotAction]);
 
   const resyncCoordinator = useMemo(
     () =>
