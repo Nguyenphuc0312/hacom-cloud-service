@@ -442,8 +442,6 @@ const MessageGroupItem: React.FC<{
           </div>
         )}
 
-        {actionRail}
-
         <div
           className={clsx(
             "flex min-w-0 flex-1 items-start",
@@ -463,6 +461,7 @@ const MessageGroupItem: React.FC<{
                 onMouseEnter={handleItemMouseEnter}
                 onMouseLeave={handleItemMouseLeave}
               />
+              {actionRail}
             <MessageBubble
               isOwn={isOwn}
               position={bubblePosition}
