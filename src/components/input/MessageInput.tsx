@@ -1293,6 +1293,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   }
                 }}
                 onInterceptKeydown={handleTipTapInterceptKeydown}
+                onPasteFiles={(files) => {
+                  if (onAddFiles && !disabled && !attachmentsDisabled) {
+                    const result = onAddFiles(files);
+                    const errors = result?.errors;
+                    if (Array.isArray(errors) && errors.length > 0) {
+                      Array.from(new Set(errors))
+                        .slice(0, 2)
+                        .forEach((msg) => toast.error(msg));
+                    }
+                  }
+                }}
                 onFocus={() => setIsComposerFocused(true)}
                 onBlur={() => {
                   setIsComposerFocused(false);
