@@ -13,6 +13,8 @@ import {
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
 import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
+import { useChatStore } from "../../stores";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 
 type SideRailItem = {
   id: string;
@@ -112,14 +114,29 @@ const SideRailAvatar: React.FC<{
   );
 };
 
+const BadgeCount: React.FC<{ count: number }> = ({ count }) => {
+  if (count <= 0) return null;
+  return (
+    <span className="hc-side-rail__badge" aria-hidden="true">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+};
+
 const SideRailButton: React.FC<{
   item: SideRailItem;
   isActive?: boolean;
+  badge?: number;
   onClick?: () => void;
-}> = ({ item, isActive = false, onClick }) => {
+}> = ({ item, isActive = false, badge, onClick }) => {
   const { t } = useTranslation();
   const Icon = item.icon;
   const translatedLabel = t(item.label);
+  const badgeCount = badge ?? 0;
+  const labelWithBadge =
+    badgeCount > 0
+      ? `${translatedLabel} (${badgeCount > 99 ? "99+" : badgeCount})`
+      : translatedLabel;
   const getItemClassName = (active: boolean) =>
     clsx("hc-side-rail__item", active && "hc-side-rail__item--active");
   const renderIndicator = (active: boolean) => (
@@ -138,13 +155,14 @@ const SideRailButton: React.FC<{
         className={({ isActive: routeActive }) =>
           getItemClassName(routeActive || isActive)
         }
-        aria-label={translatedLabel}
-        title={translatedLabel}
+        aria-label={labelWithBadge}
+        title={labelWithBadge}
       >
         {({ isActive: routeActive }) => (
           <>
             {renderIndicator(routeActive || isActive)}
             <Icon className="hc-side-rail__item-icon" aria-hidden="true" />
+            <BadgeCount count={badgeCount} />
           </>
         )}
       </NavLink>
@@ -155,12 +173,13 @@ const SideRailButton: React.FC<{
     <button
       type="button"
       className={getItemClassName(isActive)}
-      aria-label={translatedLabel}
-      title={translatedLabel}
+      aria-label={labelWithBadge}
+      title={labelWithBadge}
       onClick={onClick || item.onClick}
     >
       {renderIndicator(isActive)}
       <Icon className="hc-side-rail__item-icon" aria-hidden="true" />
+      <BadgeCount count={badgeCount} />
     </button>
   );
 };
@@ -172,8 +191,16 @@ export const SideRail: React.FC<SideRailProps> = ({
 }) => {
   const { t } = useTranslation();
   const { pathname } = useLocation();
+  const messagesUnreadCount = useChatStore((s) => s.totalUnreadCount);
+  const friendRequestPendingCount = useFriendshipStore(
+    (s) => s.pendingCount,
+  );
 
-  const mainRailItems: SideRailItem[] = railItems;
+  const getBadge = (itemId: string): number | undefined => {
+    if (itemId === "messages") return messagesUnreadCount;
+    if (itemId === "contacts") return friendRequestPendingCount;
+    return undefined;
+  };
 
   return (
     <aside className="hc-side-rail" aria-label={t("sidebar:rail.navAria")}>
@@ -191,13 +218,14 @@ export const SideRail: React.FC<SideRailProps> = ({
       </NavLink>
 
       <nav className="hc-side-rail__nav" aria-label={t("sidebar:rail.moduleNavAria")}>
-        {mainRailItems.map((item) => (
+        {railItems.map((item) => (
           <SideRailButton
             key={item.id}
             item={item}
             isActive={
               activeModule === item.id || Boolean(item.activeWhen?.(pathname))
             }
+            badge={getBadge(item.id)}
           />
         ))}
       </nav>
