@@ -17,7 +17,8 @@ export type SimpleTimelineDebugEvent =
   | "load_older_restore_delta"
   | "media_load_keep_bottom"
   | "media_load_detached_noop"
-  | "jump_to_latest";
+  | "jump_to_latest"
+  | "measurement_grow_recorrect_bottom";
 
 const isDebugEnabled = (): boolean => {
   if (typeof globalThis === "undefined") return false;
