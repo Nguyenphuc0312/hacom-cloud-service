@@ -30,6 +30,7 @@
     "unreadDivider": "Tin nhắn chưa đọc",
     "edited": "đã chỉnh sửa",
     "forwardedFrom": "Chuyển tiếp từ {{name}}",
+    "forwardedLabel": "Tin nhắn được chuyển tiếp",
     "bubbleAria": "{{name}} lúc {{time}}",
     "status": {
       "uploading": "Đang tải lên",
