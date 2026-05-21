@@ -551,25 +551,6 @@ const MessageGroupItem: React.FC<{
                 </button>
               )}
 
-              {message.forwardedFrom && (
-                <div
-                  className={clsx(
-                    "mb-2 text-[11px] font-medium leading-4",
-                    isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
-                  )}
-                >
-                  {t("chat:message.forwardedFrom", {
-                    defaultValue: "Forwarded from {{name}}",
-                    name: resolveUserDisplayName({
-                      displayName:
-                        (message.forwardedFrom as { displayName?: string | null })
-                          .displayName || message.forwardedFrom.username,
-                      username: message.forwardedFrom.username,
-                    }),
-                  })}
-                </div>
-              )}
-
               <MessageBodyRenderer
                 message={message}
                 isOwn={isOwn}
