@@ -127,6 +127,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     handleScroll,
     handleMediaLoad,
     jumpToLatest,
+    notifyTotalSizeChanged,
   } = useSimpleChatScroll({
     conversationId,
     currentUserId,
@@ -153,6 +154,13 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
+
+  // Rule 9: notify the scroll hook whenever totalSize changes so it can
+  // re-anchor to the real bottom after ResizeObserver expands measurements.
+  React.useLayoutEffect(
+    () => notifyTotalSizeChanged(totalSize),
+    [totalSize, notifyTotalSizeChanged],
+  );
 
   const selectedIds = selectedMessageIds ?? EMPTY_SELECTED;
 
