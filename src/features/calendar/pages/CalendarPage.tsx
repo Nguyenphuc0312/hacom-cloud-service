@@ -26,6 +26,7 @@ import {
   type AttendanceCalendarDay,
   type ClassificationColor,
 } from "../../api/hrApi";
+import { taskApi } from "../../tasks/api/taskApi";
 
 /**
  * Calendar view types.
@@ -585,6 +586,9 @@ export const CalendarPage: React.FC = () => {
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
 
+  // Task events state
+  const [taskEvents, setTaskEvents] = useState<CalendarEvent[]>([]);
+
   // Fetch attendance data when month changes
   useEffect(() => {
     const fetchAttendance = async () => {
@@ -628,16 +632,47 @@ export const CalendarPage: React.FC = () => {
     fetchAttendance();
   }, [currentYear, currentMonth]);
 
+  // Fetch tasks with dueDate in current month range
+  useEffect(() => {
+    const fetchTaskEvents = async () => {
+      try {
+        const from = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
+        const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const to = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        const tasks = await taskApi.getCalendarTasks(from, to);
+        const events: CalendarEvent[] = tasks.map((task) => ({
+          id: `task:${task.id}`,
+          title: task.title,
+          date: task.dueDate!.slice(0, 10),
+          type: "task" as const,
+          description: task.description ?? undefined,
+          taskId: task.id,
+          taskPriority: task.priority,
+          taskOverdue:
+            task.status !== "DONE" && new Date(task.dueDate!) < new Date(),
+        }));
+        setTaskEvents(events);
+      } catch {
+        setTaskEvents([]);
+      }
+    };
+    void fetchTaskEvents();
+  }, [currentYear, currentMonth]);
+
   // Calendar type filters
   const [filters, setFilters] = useState<CalendarTypeFilter[]>([
     { type: "vietnam_holiday", label: "Lịch Việt Nam", color: "bg-rose-500", checked: true },
     { type: "international", label: "Lịch Quốc tế", color: "bg-blue-500", checked: true },
     { type: "work", label: "Công việc", color: "bg-purple-500", checked: true },
     { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
+    { type: "task", label: "Nhiệm vụ", color: "bg-indigo-500", checked: true },
   ]);
 
-  // Generate events for current year
-  const allEvents = useMemo(() => getCalendarEvents(currentYear), [currentYear]);
+  // Generate events for current year, merged with task events
+  const allEvents = useMemo(
+    () => [...getCalendarEvents(currentYear), ...taskEvents],
+    [currentYear, taskEvents],
+  );
 
   // Filter events based on selected filters
   const filteredEvents = useMemo(() => {

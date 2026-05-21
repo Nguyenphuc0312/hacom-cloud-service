@@ -1,0 +1,62 @@
+{
+  "tasks": {
+    "title": "Công việc",
+    "create": "Tạo công việc",
+    "createFirst": "Tạo công việc đầu tiên",
+    "empty": "Bạn chưa có công việc nào",
+    "emptyHint": "Tạo công việc đầu tiên để bắt đầu",
+    "search": "Tìm kiếm công việc...",
+    "filters": {
+      "all": "Tất cả",
+      "status": "Trạng thái",
+      "priority": "Độ ưu tiên"
+    },
+    "status": {
+      "TODO": "Cần làm",
+      "IN_PROGRESS": "Đang làm",
+      "DONE": "Hoàn thành",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "priority": {
+      "LOW": "Thấp",
+      "MEDIUM": "Trung bình",
+      "HIGH": "Cao",
+      "URGENT": "Khẩn cấp"
+    },
+    "form": {
+      "title": "Tiêu đề",
+      "titlePlaceholder": "Nhập tiêu đề công việc",
+      "titleRequired": "Tiêu đề không được để trống",
+      "description": "Mô tả",
+      "descriptionPlaceholder": "Mô tả công việc (không bắt buộc)",
+      "status": "Trạng thái",
+      "priority": "Độ ưu tiên",
+      "startDate": "Ngày bắt đầu",
+      "dueDate": "Deadline",
+      "save": "Lưu",
+      "cancel": "Hủy",
+      "creating": "Đang lưu...",
+      "createTitle": "Tạo công việc",
+      "editTitle": "Sửa công việc",
+      "createButton": "Tạo công việc",
+      "updateButton": "Cập nhật"
+    },
+    "archive": {
+      "title": "Lưu trữ công việc?",
+      "confirm": "Lưu trữ",
+      "cancel": "Hủy"
+    },
+    "toast": {
+      "created": "Đã tạo công việc",
+      "updated": "Đã cập nhật công việc",
+      "done": "Đã hoàn thành công việc",
+      "archived": "Đã lưu trữ công việc",
+      "loadError": "Không thể tải danh sách công việc",
+      "saveError": "Không thể lưu công việc",
+      "archiveError": "Không thể lưu trữ công việc"
+    },
+    "overdue": "Quá hạn",
+    "deadline": "Deadline",
+    "retry": "Thử lại"
+  }
+}

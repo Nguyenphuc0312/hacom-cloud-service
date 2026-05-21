@@ -3,7 +3,7 @@
  * This is static frontend data - no backend API calls.
  */
 
-export type EventType = "vietnam_holiday" | "international" | "work" | "personal";
+export type EventType = "vietnam_holiday" | "international" | "work" | "personal" | "task";
 
 export interface CalendarEvent {
   id: string;
@@ -12,6 +12,12 @@ export interface CalendarEvent {
   type: EventType;
   description?: string;
   color?: string;
+  /** Set when type === "task" */
+  taskId?: string;
+  /** Set when type === "task": priority indicator */
+  taskPriority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  /** Set when type === "task": whether the task is overdue */
+  taskOverdue?: boolean;
 }
 
 /**
@@ -151,6 +157,8 @@ export const getEventColor = (type: EventType): { bg: string; text: string; bord
       return { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-300", border: "border-purple-500/20" };
     case "personal":
       return { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-300", border: "border-amber-500/20" };
+    case "task":
+      return { bg: "bg-indigo-500/10", text: "text-indigo-600 dark:text-indigo-300", border: "border-indigo-500/20" };
     default:
       return { bg: "bg-gray-500/10", text: "text-gray-600 dark:text-gray-300", border: "border-gray-500/20" };
   }
@@ -169,6 +177,8 @@ export const getEventTypeLabel = (type: EventType): string => {
       return "Công việc";
     case "personal":
       return "Cá nhân";
+    case "task":
+      return "Công việc";
     default:
       return "Khác";
   }
