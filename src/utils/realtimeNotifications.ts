@@ -8,6 +8,7 @@ export interface BroadcastUnreadConversationSnapshot {
   unreadCount: number;
   lastReadMessageId: string | null;
   lastReadAt: string | null;
+  lastReadSeq?: number | null;
 }
 
 export interface BroadcastUnreadSnapshot {

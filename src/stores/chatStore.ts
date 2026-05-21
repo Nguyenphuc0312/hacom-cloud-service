@@ -1052,12 +1052,20 @@ const mergeConversationSummary = (
   };
   const currentLastReadSeq = coerceSeq(current.lastReadSeq);
   const incomingLastReadSeq = coerceSeq(incoming.lastReadSeq);
+  // localReadIsAhead chỉ được kích hoạt khi incoming CÓ lastReadSeq hợp lệ (> 0)
+  // và vẫn thấp hơn local. Nếu incoming.lastReadSeq = 0 / null / undefined
+  // (server không gửi checkpoint), không được coi là "stale" — đây là missing
+  // data, không phải data cũ. Tránh false-positive giữ unreadCount=0 khi thực
+  // tế có unread mới.
   const localReadIsAhead =
-    currentLastReadSeq > 0 && currentLastReadSeq > incomingLastReadSeq;
+    currentLastReadSeq > 0 &&
+    incomingLastReadSeq > 0 &&
+    currentLastReadSeq > incomingLastReadSeq;
   const preserveLocalRead =
     localReadIsAhead ||
     ((current.unreadCount ?? 0) === 0 &&
       (incoming.unreadCount ?? 0) > 0 &&
+      incomingLastReadSeq > 0 &&
       incomingLastReadSeq < currentLastReadSeq);
 
   return (normalizeConversation({

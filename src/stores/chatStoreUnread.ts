@@ -551,11 +551,10 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         // Stale-overwrite guard: nếu FE đã chủ động mark-read tới seq X mà
         // snapshot trả về unreadCount > 0 hoặc lastReadSeq < X, projection
         // backend chưa kịp catch up — không cho phép ghi đè badge về đỏ.
+        // Dùng toPositiveSeq() thay vì typeof check để handle cả BIGINT string
+        // ("100") lẫn number (100) — BE serialize BIGINT thành string.
         const localSeq = getLocalMarkedSeq(conversation.id);
-        const snapshotSeq =
-          typeof unreadSnapshot?.lastReadSeq === "number"
-            ? unreadSnapshot.lastReadSeq
-            : 0;
+        const snapshotSeq = toPositiveSeq(unreadSnapshot?.lastReadSeq) ?? 0;
         if (localSeq > 0 && snapshotSeq < localSeq) {
           logger.debug("chat-unread", "conversationList.preventStaleUnread", {
             conversationId: conversation.id,
