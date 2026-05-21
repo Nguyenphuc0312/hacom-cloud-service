@@ -30,6 +30,7 @@
     "unreadDivider": "Unread messages",
     "edited": "edited",
     "forwardedFrom": "Forwarded from {{name}}",
+    "forwardedLabel": "Forwarded message",
     "bubbleAria": "{{name}} at {{time}}",
     "status": {
       "uploading": "Uploading",

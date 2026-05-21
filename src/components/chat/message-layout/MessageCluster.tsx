@@ -157,14 +157,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       username: message.replyToMessage.senderId,
     })
     : null;
-  const forwardedFromName = message.forwardedFrom
-    ? resolveUserDisplayName({
-      displayName:
-        (message.forwardedFrom as { displayName?: string | null })
-          .displayName || message.forwardedFrom.username,
-      username: message.forwardedFrom.username,
-    })
-    : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
   // Get user's current reaction emoji
@@ -553,26 +545,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     <p className={clsx(contract.cluster.senderLabel, "truncate")}>
                       {senderDisplayName}
                     </p>
-                  )}
-
-                  {message.forwardedFrom && (
-                    <div
-                      className={clsx(
-                        contract.cluster.forwardedBadge,
-                        isOwn ? "text-text-inverse/82" : "text-text-secondary",
-                      )}
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
-                      </svg>
-                      {t("chat:message.forwardedFrom", {
-                        name: forwardedFromName,
-                      })}
-                    </div>
                   )}
 
                   <MessageBodyRenderer
