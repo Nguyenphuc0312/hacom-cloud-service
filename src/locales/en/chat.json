@@ -14,7 +14,9 @@
     "user": "{{name}} is typing...",
     "default": "Typing...",
     "recording": "Recording audio...",
-    "uploading": "Uploading files..."
+    "uploading": "Uploading files...",
+    "twoUsers": "{{name1}}, {{name2}} are typing...",
+    "manyUsers": "{{name1}}, {{name2}} and {{count}} others are typing..."
   },
   "message": {
     "you": "You",
@@ -61,12 +63,15 @@
       "deleteForEveryone": "Unsend",
       "deleteForEveryoneAdmin": "Remove for everyone",
       "pin": "Pin message",
-      "unpin": "Unpin"
+      "unpin": "Unpin",
+      "download": "Download",
+      "copyLink": "Copy link"
     },
     "structuredBlock": "Structured content",
     "expandLong": "Show more",
     "collapseLong": "Show less",
     "copyFullSuccess": "Copied the full message",
+    "copySuccess": "Copied",
     "editedAtNoHistory": "Edited at {{time}}",
     "editedNoHistory": "Edited",
     "newLabel": "New messages ({{count}})",
@@ -350,5 +355,11 @@
     "deleteByAdmin": "You are removing another member's message as an administrator. No one in the conversation will see this content anymore.",
     "deleteByAdminButton": "Remove for everyone",
     "recall": "Unsend"
+  },
+  "sticker": {
+    "picker": "Sticker picker",
+    "recent": "Recent",
+    "search": "Search stickers...",
+    "noResults": "No stickers found"
   }
 }

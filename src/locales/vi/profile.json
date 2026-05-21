@@ -65,6 +65,9 @@
     "transferOwnership": "Chuyển quyền sở hữu",
     "transferOwnershipConfirm": "Bạn có chắc muốn chuyển quyền sở hữu cho {{name}}? Họ sẽ trở thành chủ nhóm mới.",
     "dangerZone": "Khu vực nguy hiểm",
+    "avatarUpdated": "Đã cập nhật ảnh nhóm",
+    "avatarUpdateFailed": "Không thể cập nhật ảnh nhóm",
+    "changeAvatar": "Thay đổi ảnh nhóm",
     "invite": {
       "invalidUsageLimit": "Giới hạn lượt dùng phải lớn hơn 0",
       "created": "Đã tạo liên kết mời",
