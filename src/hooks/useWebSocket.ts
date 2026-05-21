@@ -370,6 +370,7 @@ export const useWebSocket = (
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const processedTypingEventIdsRef = useRef<Set<string>>(new Set());
+  const processedToastEventIdsRef = useRef<Set<string>>(new Set());
   const unsubscribersRef = useRef<Array<() => void>>([]);
 
   // Track unsubscribe functions for external subscriptions so they can be cleaned up on unmount.
@@ -743,11 +744,44 @@ export const useWebSocket = (
         !input.senderId ||
         input.senderId === currentUserId
       ) {
+        logMessageDebug("useWebSocket", "toast_skipped_from_self", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          currentUserId,
+          pathname: window.location.pathname,
+        });
         return;
+      }
+
+      // Toast dedup: track which messages we've already shown a toast for.
+      // This is separate from the RTK deduper — we need to allow duplicate
+      // RTK events (for state reconciliation) but suppress duplicate toasts.
+      const toastDedupKey = `${input.conversationId}:${input.messageId}`;
+      if (processedToastEventIdsRef.current.has(toastDedupKey)) {
+        logMessageDebug("useWebSocket", "toast_skipped_duplicate", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
+        return;
+      }
+      processedToastEventIdsRef.current.add(toastDedupKey);
+      // Keep the set bounded to prevent memory leaks
+      if (processedToastEventIdsRef.current.size > 500) {
+        const firstKey = processedToastEventIdsRef.current.values().next().value;
+        if (firstKey) processedToastEventIdsRef.current.delete(firstKey);
       }
 
       const notificationSettings = getNotificationPreferences();
       if (!notificationSettings.enabled) {
+        logMessageDebug("useWebSocket", "toast_skipped_notifications_disabled", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
         return;
       }
 
@@ -757,6 +791,14 @@ export const useWebSocket = (
       const hasMention = input.mentions.includes(currentUserId);
       const isMuted = Boolean(conversation?.isMuted);
       if (isMuted && !hasMention) {
+        logMessageDebug("useWebSocket", "toast_skipped_muted", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+          isMuted,
+          hasMention,
+        });
         return;
       }
 
@@ -793,6 +835,24 @@ export const useWebSocket = (
         isRead: false,
       });
 
+      // Debug: log full decision tree before showing toast
+      const isInMessageModule = isMessageModule(window.location.pathname);
+      logMessageDebug("useWebSocket", "toast_decision_tree", {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        senderId: input.senderId,
+        currentUserId,
+        pathname: window.location.pathname,
+        isInMessageModule,
+        isActiveConversation,
+        visibleAndFocused,
+        hasMention,
+        isMuted,
+        notificationKind,
+        willShowToast: !isInMessageModule,
+        willShowBrowserNotification: !visibleAndFocused,
+      });
+
       // If user is on the Messages module, the UI is already updating in realtime —
       // no toast needed. The sidebar badge still updates via store.
       // NOTE: Do NOT add a secondary isActiveConversation guard here.
@@ -801,22 +861,16 @@ export const useWebSocket = (
       // for the last-viewed conversation. That would silently suppress toasts
       // for exactly the conversation the user was just reading — the most
       // common case when switching modules.
-      if (isMessageModule(window.location.pathname)) {
-        logMessageDebug("useWebSocket", "toast_skipped_messages_module", {
+      if (isInMessageModule) {
+        logMessageDebug("useWebSocket", "toast_skipped_in_message_module", {
           conversationId: input.conversationId,
+          messageId: input.messageId,
           senderId: input.senderId,
           pathname: window.location.pathname,
         });
         return;
       }
 
-      logMessageDebug("useWebSocket", "toast_will_show", {
-        conversationId: input.conversationId,
-        senderId: input.senderId,
-        pathname: window.location.pathname,
-        isActiveConversation,
-        visibleAndFocused,
-      });
       const notificationId =
         input.eventId ||
         `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
@@ -825,6 +879,16 @@ export const useWebSocket = (
         : hasMention
           ? "Đã nhắc đến bạn."
           : "Tin nhắn mới";
+
+      logMessageDebug("useWebSocket", "toast_showing", {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        senderId: input.senderId,
+        pathname: window.location.pathname,
+        isActiveConversation,
+        visibleAndFocused,
+        previewLength: preview.length,
+      });
 
       const isGroup = conversation?.type !== RoomType.DIRECT;
 
@@ -1155,6 +1219,36 @@ export const useWebSocket = (
         eventId,
         correlationKey,
       } = normalizedEvent;
+
+      // Early toast notification: We call maybeNotifyIncomingMessage BEFORE the
+      // deduper check so that toast shows even on duplicate/replayed events.
+      // The toast deduper (processedToastEventIdsRef) inside maybeNotifyIncomingMessage
+      // ensures we don't show duplicate toasts for the same message.
+      // This is separate from the RTK deduper which handles state deduplication.
+      if (eventType === "message:new") {
+        maybeNotifyIncomingMessage({
+          conversationId,
+          messageId,
+          senderId: senderId ?? null,
+          senderName:
+            asString(messagePayload.senderName) ?? asString(payload.senderName),
+          content:
+            typeof messagePayload.content === "string"
+              ? messagePayload.content
+              : "",
+          messageType: asString(messagePayload.type) ?? null,
+          mentions: Array.isArray(messagePayload.mentions)
+            ? messagePayload.mentions.filter(
+                (item): item is string => typeof item === "string",
+              )
+            : [],
+          kind:
+            asString(messagePayload.type) === "system" ? "system" : "message",
+          eventId,
+        });
+      }
+
+      // Now check the RTK deduper for state updates
       if (
         !shouldProcessRealtimeEvent(eventId, {
           eventType,
@@ -1256,29 +1350,6 @@ export const useWebSocket = (
 
       if (eventType === "message:new") {
         sendDeliveryAckForMessage(normalizedEvent);
-      }
-
-      if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
-        maybeNotifyIncomingMessage({
-          conversationId,
-          messageId,
-          senderId: senderId ?? null,
-          senderName:
-            asString(messagePayload.senderName) ?? asString(payload.senderName),
-          content:
-            typeof messagePayload.content === "string"
-              ? messagePayload.content
-              : "",
-          messageType: asString(messagePayload.type) ?? null,
-          mentions: Array.isArray(messagePayload.mentions)
-            ? messagePayload.mentions.filter(
-                (item): item is string => typeof item === "string",
-              )
-            : [],
-          kind:
-            asString(messagePayload.type) === "system" ? "system" : "message",
-          eventId,
-        });
       }
 
       if (isAmbiguousSelfReconcile) {
