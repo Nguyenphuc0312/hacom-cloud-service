@@ -36,7 +36,7 @@ import {
   useConversationCount,
   useFriendshipStore,
 } from "../stores";
-import { useWebSocket } from "../hooks";
+import { useGlobalWebSocket } from "../features/realtime/GlobalWebSocketProvider";
 import type { Attachment, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
@@ -193,8 +193,7 @@ export const ChatPage: React.FC = () => {
     stopTyping,
     joinConversation,
     leaveConversation,
-  } =
-    useWebSocket();
+  } = useGlobalWebSocket();
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);

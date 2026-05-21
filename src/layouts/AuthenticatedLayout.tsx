@@ -5,6 +5,7 @@ import { COMMAND_PALETTE_OPEN_EVENT } from "../lib/commandPalette";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
 import { PersistentNavigationRail } from "../shared/layout";
+import { GlobalWebSocketProvider } from "../features/realtime/GlobalWebSocketProvider";
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
@@ -43,21 +44,23 @@ export const AuthenticatedLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="private-app-shell">
-      <div className="private-app-viewport">
-        <PersistentNavigationRail
-          currentUser={currentUser}
-          onCurrentUserClick={() => navigate(ROUTE_PATHS.SETTINGS)}
-        />
-        <div className="private-app-route">
-          <Outlet />
+    <GlobalWebSocketProvider>
+      <div className="private-app-shell">
+        <div className="private-app-viewport">
+          <PersistentNavigationRail
+            currentUser={currentUser}
+            onCurrentUserClick={() => navigate(ROUTE_PATHS.SETTINGS)}
+          />
+          <div className="private-app-route">
+            <Outlet />
+          </div>
         </div>
+        <CommandPalette
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+        />
       </div>
-      <CommandPalette
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-      />
-    </div>
+    </GlobalWebSocketProvider>
   );
 };
 
