@@ -11,6 +11,8 @@ export interface Task {
   startDate: string | null;
   dueDate: string | null;
   assigneeId: string | null;
+  assigneeName?: string | null;
+  assigneeAvatar?: string | null;
   creatorId: string;
   sourceType: TaskSourceType | null;
   sourceConversationId: string | null;

@@ -3,6 +3,8 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import type { Task, TaskStatus, TaskPriority, CreateTaskPayload } from "../types/task.types";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "../types/task.types";
+import { AssigneePicker, type AssigneeUser } from "./AssigneePicker";
+import { useAuthStore } from "../../../stores/authStore";
 
 interface TaskFormModalProps {
   task?: Task | null;
@@ -19,12 +21,16 @@ const toDateInputValue = (iso: string | null | undefined): string => {
 };
 
 export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onSave }) => {
+  const currentUser = useAuthStore((s) => s.user);
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "TODO");
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "MEDIUM");
   const [dueDate, setDueDate] = useState(toDateInputValue(task?.dueDate));
   const [startDate, setStartDate] = useState(toDateInputValue(task?.startDate));
+  const [assignee, setAssignee] = useState<AssigneeUser | null>(
+    task?.assigneeId ? { id: task.assigneeId, displayName: task.assigneeName ?? task.assigneeId, avatar: task.assigneeAvatar ?? null } : null,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [titleError, setTitleError] = useState("");
 
@@ -36,6 +42,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
       setPriority(task.priority);
       setDueDate(toDateInputValue(task.dueDate));
       setStartDate(toDateInputValue(task.startDate));
+      setAssignee(task.assigneeId ? { id: task.assigneeId, displayName: task.assigneeName ?? task.assigneeId, avatar: task.assigneeAvatar ?? null } : null);
     }
   }, [task]);
 
@@ -55,6 +62,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
         priority,
         dueDate: dueDate || undefined,
         startDate: startDate || undefined,
+        assigneeId: assignee?.id,
       });
       onClose();
     } finally {
@@ -155,6 +163,16 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Người phụ trách</label>
+            <AssigneePicker
+              value={assignee}
+              onChange={setAssignee}
+              currentUserId={currentUser?.id}
+              currentUserName={currentUser?.effectiveDisplayName ?? currentUser?.displayName ?? currentUser?.username}
+            />
           </div>
 
           <div className="flex gap-3 pt-2">

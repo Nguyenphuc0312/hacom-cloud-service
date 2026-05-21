@@ -38,6 +38,11 @@ export interface TaskListResult {
 }
 
 export const taskApi = {
+  getById: async (taskId: string): Promise<Task> => {
+    const { data } = await client.get(`/${taskId}`);
+    return data.data;
+  },
+
   list: async (params?: ListTasksParams): Promise<TaskListResult> => {
     const { data } = await client.get("/", { params });
     return {

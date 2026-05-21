@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
   ChevronLeftIcon,
@@ -573,6 +574,7 @@ const AttendanceLegend: React.FC = () => (
  */
 export const CalendarPage: React.FC = () => {
   const today = new Date();
+  const navigate = useNavigate();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentView, setCurrentView] = useState<CalendarView>("month");
@@ -764,6 +766,18 @@ export const CalendarPage: React.FC = () => {
   const handleDateClick = useCallback((date: Date) => {
     setSelectedDate(date);
   }, []);
+
+  // Handle event click — navigate to /tasks for task events, open modal otherwise
+  const handleEventClick = useCallback(
+    (event: CalendarEvent) => {
+      if (event.type === "task" && event.taskId) {
+        navigate(`/tasks?taskId=${event.taskId}`);
+      } else {
+        setSelectedEvent(event);
+      }
+    },
+    [navigate, setSelectedEvent],
+  );
 
   // Toggle filter
   const toggleFilter = useCallback((type: EventType) => {
@@ -1002,7 +1016,7 @@ export const CalendarPage: React.FC = () => {
                           <EventBadge
                             key={event.id}
                             event={event}
-                            onClick={setSelectedEvent}
+                            onClick={handleEventClick}
                             compact
                           />
                         ))}
