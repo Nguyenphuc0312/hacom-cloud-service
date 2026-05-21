@@ -11,6 +11,7 @@ interface ConversationViewportProps {
   currentUserId: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -43,6 +44,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       currentUserId,
       onReply,
       onReact,
+      onForward,
       onEdit,
       onDelete,
       onInspect,
@@ -121,6 +123,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           messages={messages}
           onReply={onReply}
           onReact={onReact}
+          onForward={onForward}
           onEdit={onEdit}
           onDelete={onDelete}
           onInspect={onInspect}

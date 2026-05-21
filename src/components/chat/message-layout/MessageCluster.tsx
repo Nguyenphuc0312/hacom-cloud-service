@@ -55,6 +55,7 @@ interface MessageClusterProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
+  onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
   onUnpin?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
@@ -110,6 +111,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   onReact,
   onEdit,
   onDelete,
+  onForward,
   onPin,
   onUnpin,
   onImageClick,
@@ -287,6 +289,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           onReply(message);
           if (isActionsOpen) closeActions();
           break;
+        case "forward":
+          if (onForward) {
+            onForward(message);
+          }
+          closeActions();
+          break;
         case "copy":
           handleCopy();
           break;
@@ -346,6 +354,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       message,
       onDelete,
       onEdit,
+      onForward,
       onPin,
       onUnpin,
       onReply,

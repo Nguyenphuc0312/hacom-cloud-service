@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   Copy,
   CornerUpLeft,
+  Forward,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -67,6 +68,11 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         id: "reply",
         label: t("chat:message.actions.reply"),
         icon: CornerUpLeft,
+      },
+      forward: {
+        id: "forward",
+        label: t("chat:message.actions.forward", { defaultValue: "Chuyển tiếp" }),
+        icon: Forward,
       },
       copy: {
         id: "copy",

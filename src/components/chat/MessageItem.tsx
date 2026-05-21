@@ -16,6 +16,7 @@ interface MessageItemProps {
   message?: Message;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -117,6 +118,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   message,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -218,6 +220,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             conversationType={item.conversationType}
             onReply={onReply}
             onReact={onReact}
+            onForward={onForward}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}
@@ -257,6 +260,7 @@ const areEqualMessageItem = (
       prev.shouldAnimateInsert === next.shouldAnimateInsert &&
       prev.onReply === next.onReply &&
       prev.onReact === next.onReact &&
+      prev.onForward === next.onForward &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&
