@@ -224,7 +224,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         aria-label={t("chat:message.inConversationAria")}
         aria-live="polite"
         style={{
-          paddingBottom: composerHeight ?? 0,
+          paddingBottom: 8,
           scrollBehavior: "auto",
         }}
       >

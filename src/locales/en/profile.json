@@ -66,6 +66,9 @@
     "transferOwnership": "Transfer ownership",
     "transferOwnershipConfirm": "Are you sure you want to transfer ownership to {{name}}? They will become the new owner.",
     "dangerZone": "Danger Zone",
+    "avatarUpdated": "Group avatar updated",
+    "avatarUpdateFailed": "Unable to update group avatar",
+    "changeAvatar": "Change group avatar",
     "invite": {
       "invalidUsageLimit": "Usage limit must be greater than 0",
       "created": "Invite link created",

@@ -14,7 +14,9 @@
     "user": "{{name}} đang nhập...",
     "default": "Đang nhập...",
     "recording": "Đang ghi âm...",
-    "uploading": "Đang tải tệp..."
+    "uploading": "Đang tải tệp...",
+    "twoUsers": "{{name1}}, {{name2}} đang nhập...",
+    "manyUsers": "{{name1}}, {{name2}} và {{count}} người khác đang nhập..."
   },
   "message": {
     "you": "Bạn",
@@ -61,12 +63,15 @@
       "deleteForEveryone": "Thu hồi",
       "deleteForEveryoneAdmin": "Xóa ở mọi người",
       "pin": "Ghim tin nhắn",
-      "unpin": "Bỏ ghim"
+      "unpin": "Bỏ ghim",
+      "download": "Tải về",
+      "copyLink": "Sao chép link"
     },
     "structuredBlock": "Nội dung có cấu trúc",
     "expandLong": "Xem thêm",
     "collapseLong": "Thu gọn",
     "copyFullSuccess": "Đã sao chép toàn bộ tin nhắn",
+    "copySuccess": "Đã sao chép",
     "editedAtNoHistory": "Đã chỉnh sửa lúc {{time}}",
     "editedNoHistory": "Đã chỉnh sửa",
     "newLabel": "Tin nhắn mới ({{count}})",
@@ -360,5 +365,11 @@
     "location": "Vị trí",
     "sticker": "Sticker",
     "contact": "[Danh thiếp]"
+  },
+  "sticker": {
+    "picker": "Chọn sticker",
+    "recent": "Gần đây",
+    "search": "Tìm sticker...",
+    "noResults": "Không tìm thấy sticker"
   }
 }

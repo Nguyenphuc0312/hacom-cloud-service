@@ -1014,7 +1014,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       .map((message) => message.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
-    toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
+    toast.success(t("chat:message.copySuccess", { defaultValue: "Đã sao chép" }));
     exitSelectionMode();
   }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
