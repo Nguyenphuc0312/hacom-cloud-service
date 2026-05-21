@@ -156,7 +156,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                   )}
                 >
                   <Avatar
-                    src={conv.avatarUrl}
+                    src={conv.avatar}
                     alt={name}
                     size="sm"
                   />
