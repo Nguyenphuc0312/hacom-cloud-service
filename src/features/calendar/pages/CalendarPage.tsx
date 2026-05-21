@@ -28,6 +28,7 @@ import {
   type ClassificationColor,
 } from "../../api/hrApi";
 import { taskApi } from "../../tasks/api/taskApi";
+import { toast } from "../../../utils/toast";
 
 /**
  * Calendar view types.
@@ -653,6 +654,7 @@ export const CalendarPage: React.FC = () => {
         setTaskEvents(events);
       } catch {
         setTaskEvents([]);
+        toast.warning("Không thể tải nhiệm vụ trên lịch");
       }
     };
     void fetchTaskEvents();
