@@ -413,6 +413,10 @@ export const useWebSocket = (
               : conversation.lastReadAt instanceof Date
                 ? conversation.lastReadAt.toISOString()
                 : null,
+          lastReadSeq:
+            typeof conversation.lastReadSeq === "number"
+              ? conversation.lastReadSeq
+              : null,
         }),
       ),
       source: "socket",

@@ -733,7 +733,7 @@ export const useConversationSession = ({
   ]);
 
   // Auto mark-as-read khi:
-  //   1) selectedConversationId change (user mở conversation)
+  //   1) selectedConversationId change (user mở conversation) VÀ messages đã sẵn sàng
   //   2) tin nhắn mới arrive trong active conversation đã visible
   //   3) tab được focus lại trong khi conversation đang mở
   // handleReachedLatestMessage đã dedupe nội bộ qua lastVisibleReadAnchorKeyRef
@@ -747,10 +747,14 @@ export const useConversationSession = ({
       return;
     }
 
-    // Quan trọng: KHÔNG chờ isConversationReady — conversation list từ
-    // GET /conversations đã đủ để mark-read theo lastMessage.messageSeq dù
-    // messages chưa load. Đây là case F5 hoặc deep-link.
-    fireMarkReadToLatest();
+    // Chỉ mark-read khi messages thực sự sẵn sàng hiển thị cho user.
+    // Không fire sớm chỉ dựa vào lastMessage.messageSeq từ summary trước khi
+    // messages load — đây là root cause của badge "0.5s rồi biến mất".
+    // Effect sẽ re-run khi isConversationHistoryReady/canBootstrapFromCache thay
+    // đổi, lúc đó sẽ gọi fireMarkReadToLatest() và add lại listeners.
+    if (isConversationHistoryReady || canBootstrapConversationFromCache) {
+      fireMarkReadToLatest();
+    }
 
     if (typeof document === "undefined") return;
     const onVisibilityChange = () => {
@@ -765,7 +769,7 @@ export const useConversationSession = ({
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
     };
-  }, [selectedConversationId, fireMarkReadToLatest]);
+  }, [selectedConversationId, fireMarkReadToLatest, isConversationHistoryReady, canBootstrapConversationFromCache]);
 
   // Trigger lại mark-read mỗi khi seq cao nhất FE biết được thay đổi — bất
   // kể seq đó tới từ message list (load thêm, realtime) hay từ conversation
@@ -811,12 +815,18 @@ export const useConversationSession = ({
     ) {
       return;
     }
+    // latestKnownSeqSignature có thể dùng summarySeq từ conversation list ngay
+    // khi conversation được chọn, trước khi messages thực sự load. Không mark-read
+    // dựa trên summary seq — phải chờ messages hiển thị thật sự.
+    if (!isConversationHistoryReady && !canBootstrapConversationFromCache) {
+      return;
+    }
     // Debounce 400ms để gom nhiều message arrival liên tiếp thành 1 mark-read.
     const handle = setTimeout(() => {
       fireMarkReadToLatest();
     }, 400);
     return () => clearTimeout(handle);
-  }, [selectedConversationId, latestKnownSeqSignature, fireMarkReadToLatest]);
+  }, [selectedConversationId, latestKnownSeqSignature, fireMarkReadToLatest, isConversationHistoryReady, canBootstrapConversationFromCache]);
 
   // RTKQ reactive trigger: khi RTKQ enabled, latestKnownSeqSignature luôn là
   // "0:" vì Zustand state.messages không được populate. Effect này subscribe
