@@ -8,6 +8,7 @@ const FriendsPage = lazy(() => import("../../pages/FriendsPage"));
 const JoinByLinkPage = lazy(() => import("../../pages/JoinByLinkPage"));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage"));
 const MaintenancePage = lazy(() => import("../../pages/errors/MaintenancePage"));
+const TasksPage = lazy(() => import("../../features/tasks/pages/TasksPage"));
 const HelpPage = lazy(() => import("../../pages/HelpPage"));
 const FAQPage = lazy(() => import("../../pages/FAQPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
@@ -25,7 +26,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.JOIN_BY_TOKEN, component: JoinByLinkPage },
   { path: ROUTE_PATHS.SETTINGS, component: SettingsPage },
   { path: ROUTE_PATHS.MAINTENANCE, component: MaintenancePage },
-  { path: ROUTE_PATHS.TASKS, component: MaintenancePage },
+  { path: ROUTE_PATHS.TASKS, component: TasksPage },
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },

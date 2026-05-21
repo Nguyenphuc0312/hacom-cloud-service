@@ -20,6 +20,7 @@ export const appNamespaces = [
   "group",
   "calendar",
   "aiAssistant",
+  "tasks",
 ] as const;
 
 const isProduction =
