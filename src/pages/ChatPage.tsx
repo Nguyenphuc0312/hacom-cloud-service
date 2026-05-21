@@ -294,15 +294,15 @@ export const ChatPage: React.FC = () => {
     () =>
       user
         ? {
-            id: user.id,
-            username: user.username,
-            displayName:
-              resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
-              user.username,
-            avatar: user.avatar,
-            status: user.status as UserStatus,
-            isBot: false,
-          }
+          id: user.id,
+          username: user.username,
+          displayName:
+            resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
+            user.username,
+          avatar: user.avatar,
+          status: user.status as UserStatus,
+          isBot: false,
+        }
         : null,
     [user],
   );
@@ -509,11 +509,11 @@ export const ChatPage: React.FC = () => {
         pendingDeleteMessage.mode === "FOR_EVERYONE"
           ? pendingDeleteMessage.isAdminDeletion
             ? t("chat:toast.messageDeletedGlobal", {
-                defaultValue: "Đã xóa tin nhắn ở mọi người",
-              })
+              defaultValue: "Đã xóa tin nhắn ở mọi người",
+            })
             : t("chat:toast.messageRecalled", {
-                defaultValue: "Đã thu hồi tin nhắn",
-              })
+              defaultValue: "Đã thu hồi tin nhắn",
+            })
           : t("chat:toast.messageDeleted"),
       );
       setPendingDeleteMessage(null);
@@ -902,7 +902,6 @@ export const ChatPage: React.FC = () => {
               layoutState={sidebarLayoutState}
               currentUser={currentUserSummary}
               selectedId={routeConversationId}
-              isLoadingConversations={isLoadingConversations}
               isLoadingMoreConversations={isLoadingMoreConversations}
               hasMoreConversations={hasMoreConversations}
               showConversationSkeleton={showConversationSkeleton}
@@ -947,9 +946,9 @@ export const ChatPage: React.FC = () => {
             historyLoadingState={
               sessionIsHistoryPartial
                 ? {
-                    stage: sessionCurrentHistoryStage,
-                    isPartial: sessionIsHistoryPartial,
-                  }
+                  stage: sessionCurrentHistoryStage,
+                  isPartial: sessionIsHistoryPartial,
+                }
                 : null
             }
             onLoadOlderMessages={sessionHandleLoadOlderMessages}
@@ -966,7 +965,7 @@ export const ChatPage: React.FC = () => {
           />
         ) : routeConversationId &&
           conversationValidationError?.conversationId ===
-            routeConversationId ? (
+          routeConversationId ? (
           <div className="flex h-full items-center justify-center px-6">
             <ErrorState
               title={t("error:chat.conversationOpenFailed", {
@@ -985,83 +984,83 @@ export const ChatPage: React.FC = () => {
       {(infoPanelMode === "self-profile" ||
         (infoPanelMode === "conversation" && Boolean(routeConversationId)) ||
         Boolean(selectedConversation)) && (
-        <div
-          className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
-            isInfoPanelOpen
-              ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
-              : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
-          )}
-          aria-hidden={!isInfoPanelOpen}
-        >
           <div
             className={clsx(
-              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+              "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
               isInfoPanelOpen
-                ? "translate-x-0 opacity-100"
-                : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
+                ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
+                : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
             )}
-            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+            aria-hidden={!isInfoPanelOpen}
           >
-            {infoPanelMode !== null ? (
-              <React.Suspense fallback={<DeferredPanelFallback />}>
-                {infoPanelMode === "self-profile" ? (
-                  <UserProfile
-                    key={`self-profile:${currentUserSummary.id}`}
-                    userId={currentUserSummary.id}
-                    currentUserId={currentUserSummary.id}
-                    initialUser={{
-                      id: currentUserSummary.id,
-                      username: currentUserSummary.username,
-                      displayName: currentUserSummary.displayName,
-                      avatar: currentUserSummary.avatar,
-                      status: currentUserSummary.status,
-                    }}
-                    onClose={closeInfoPanel}
-                    onStartConversation={handleStartChat}
-                  />
-                ) : infoPanelMode === "contact-profile" && contactProfileUserId ? (
-                  <UserProfile
-                    key={`contact-profile:${contactProfileUserId}`}
-                    userId={contactProfileUserId}
-                    currentUserId={currentUserSummary.id}
-                    onClose={closeInfoPanel}
-                    onStartConversation={handleStartChat}
-                  />
-                ) : infoPanelMode === "conversation" && !selectedConversation ? (
-                  <DeferredPanelFallback />
-                ) : isSelectedDirectConversation ? (
-                  otherUser ? (
-                  <UserProfile
-                    key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
-                    userId={otherUser.id}
-                    currentUserId={currentUserSummary.id}
-                    conversationContext="direct"
-                    initialUser={{
-                      id: otherUser.id,
-                      username: otherUser.username,
-                      displayName: otherUser.displayName,
-                      avatar: otherUser.avatar,
-                      status: otherUser.status,
-                    }}
-                    onClose={closeInfoPanel}
-                    onStartConversation={handleStartChat}
-                  />
-                ) : (
-                  <ProfileSkeleton />
-                )
-              ) : selectedConversation ? (
-                <GroupInfo
-                  conversation={selectedConversation}
-                  currentUserId={currentUserSummary.id}
-                  onClose={closeInfoPanel}
-                />
+            <div
+              className={clsx(
+                "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+                isInfoPanelOpen
+                  ? "translate-x-0 opacity-100"
+                  : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
+              )}
+              style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+            >
+              {infoPanelMode !== null ? (
+                <React.Suspense fallback={<DeferredPanelFallback />}>
+                  {infoPanelMode === "self-profile" ? (
+                    <UserProfile
+                      key={`self-profile:${currentUserSummary.id}`}
+                      userId={currentUserSummary.id}
+                      currentUserId={currentUserSummary.id}
+                      initialUser={{
+                        id: currentUserSummary.id,
+                        username: currentUserSummary.username,
+                        displayName: currentUserSummary.displayName,
+                        avatar: currentUserSummary.avatar,
+                        status: currentUserSummary.status,
+                      }}
+                      onClose={closeInfoPanel}
+                      onStartConversation={handleStartChat}
+                    />
+                  ) : infoPanelMode === "contact-profile" && contactProfileUserId ? (
+                    <UserProfile
+                      key={`contact-profile:${contactProfileUserId}`}
+                      userId={contactProfileUserId}
+                      currentUserId={currentUserSummary.id}
+                      onClose={closeInfoPanel}
+                      onStartConversation={handleStartChat}
+                    />
+                  ) : infoPanelMode === "conversation" && !selectedConversation ? (
+                    <DeferredPanelFallback />
+                  ) : isSelectedDirectConversation ? (
+                    otherUser ? (
+                      <UserProfile
+                        key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
+                        userId={otherUser.id}
+                        currentUserId={currentUserSummary.id}
+                        conversationContext="direct"
+                        initialUser={{
+                          id: otherUser.id,
+                          username: otherUser.username,
+                          displayName: otherUser.displayName,
+                          avatar: otherUser.avatar,
+                          status: otherUser.status,
+                        }}
+                        onClose={closeInfoPanel}
+                        onStartConversation={handleStartChat}
+                      />
+                    ) : (
+                      <ProfileSkeleton />
+                    )
+                  ) : selectedConversation ? (
+                    <GroupInfo
+                      conversation={selectedConversation}
+                      currentUserId={currentUserSummary.id}
+                      onClose={closeInfoPanel}
+                    />
+                  ) : null}
+                </React.Suspense>
               ) : null}
-            </React.Suspense>
-          ) : null}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Info panel overlay (mobile) */}
       {isInfoPanelOpen && (
@@ -1131,37 +1130,37 @@ export const ChatPage: React.FC = () => {
           pendingDeleteMessage?.mode === "FOR_EVERYONE"
             ? pendingDeleteMessage.isAdminDeletion
               ? t("chat:confirm.deleteByAdminTitle", {
-                  defaultValue: "Xóa tin nhắn ở mọi người?",
-                })
-              : t("chat:confirm.deleteForEveryoneTitle", {
-                  defaultValue: "Thu hồi tin nhắn?",
-                })
-            : t("chat:confirm.deleteForMeTitle", {
-                defaultValue: "Xóa về phía tôi?",
+                defaultValue: "Xóa tin nhắn ở mọi người?",
               })
+              : t("chat:confirm.deleteForEveryoneTitle", {
+                defaultValue: "Thu hồi tin nhắn?",
+              })
+            : t("chat:confirm.deleteForMeTitle", {
+              defaultValue: "Xóa về phía tôi?",
+            })
         }
         message={
           pendingDeleteMessage?.mode === "FOR_EVERYONE"
             ? pendingDeleteMessage.isAdminDeletion
               ? t("chat:confirm.deleteByAdmin", {
-                  defaultValue:
-                    "Bạn đang xóa tin nhắn của thành viên khác với tư cách quản trị viên. Mọi người trong cuộc trò chuyện sẽ không còn thấy nội dung này.",
-                })
-              : t("chat:confirm.deleteForEveryone", {
-                  defaultValue:
-                    "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.",
-                })
-            : t("chat:confirm.deleteForMe", {
                 defaultValue:
-                  "Tin nhắn này sẽ chỉ bị xóa khỏi phía bạn. Người khác vẫn có thể xem tin nhắn.",
+                  "Bạn đang xóa tin nhắn của thành viên khác với tư cách quản trị viên. Mọi người trong cuộc trò chuyện sẽ không còn thấy nội dung này.",
               })
+              : t("chat:confirm.deleteForEveryone", {
+                defaultValue:
+                  "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.",
+              })
+            : t("chat:confirm.deleteForMe", {
+              defaultValue:
+                "Tin nhắn này sẽ chỉ bị xóa khỏi phía bạn. Người khác vẫn có thể xem tin nhắn.",
+            })
         }
         confirmText={
           pendingDeleteMessage?.mode === "FOR_EVERYONE"
             ? pendingDeleteMessage.isAdminDeletion
               ? t("chat:confirm.deleteByAdminButton", {
-                  defaultValue: "Xóa ở mọi người",
-                })
+                defaultValue: "Xóa ở mọi người",
+              })
               : t("chat:confirm.recall", { defaultValue: "Thu hồi" })
             : t("common:actions.delete", { defaultValue: "Xóa" })
         }
