@@ -541,6 +541,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setGroupAvatarStage("completing");
         const completed = await uploadClient.completeUpload({
           uploadId: reserved.uploadId,
+          conversationId: conversation.id,
           objectKey: reserved.objectKey,
         });
 
