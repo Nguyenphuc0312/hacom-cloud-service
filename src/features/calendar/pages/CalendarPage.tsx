@@ -533,14 +533,11 @@ const AttendanceBadge: React.FC<{
         <span className={clsx("truncate font-medium", colors.text)}>
           {attendance.firstPunch && attendance.lastPunch
             ? `${formatTime(attendance.firstPunch)} - ${formatTime(attendance.lastPunch)}`
-            : attendance.classificationLabel || "Chưa có dữ liệu"}
+            : attendance.firstPunch
+              ? `${formatTime(attendance.firstPunch)} - --`
+              : "Chưa có dữ liệu"}
         </span>
       </div>
-      {attendance.classificationLabel && (
-        <span className={clsx("block truncate text-[10px] opacity-80", colors.text)}>
-          {attendance.classificationLabel}
-        </span>
-      )}
     </button>
   );
 };
