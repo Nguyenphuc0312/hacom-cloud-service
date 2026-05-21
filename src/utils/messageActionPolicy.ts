@@ -92,12 +92,6 @@ const canPinMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
-const canForwardMessage = (message: Message): boolean =>
-  message.type !== MessageType.SYSTEM &&
-  !message.isDeleted &&
-  !isPendingMessage(message) &&
-  !isFailedMessage(message);
-
 const getActionCandidates = ({
   message,
   isOwn,
@@ -107,7 +101,6 @@ const getActionCandidates = ({
   canRetry = false,
   canPin = false,
   isPinned = false,
-  canForward = true,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -130,14 +123,8 @@ const getActionCandidates = ({
     });
   }
 
-  if (canForward && canForwardMessage(message)) {
-    candidates.push({
-      id: "forward",
-      score: isOwn ? 62 : 78,
-      railEligible: false,
-      menuEligible: true,
-    });
-  }
+  // Forward is exposed exclusively as a quick icon in MessageActionBar
+  // (next to Reply) — not in the "more actions" menu.
 
   if (canReactToMessage(message) && !failed) {
     candidates.push({

@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { X, Search, Forward, ImageIcon, FileText, Smile, Users, User } from "lucide-react";
+import { X, Search, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Conversation, Message } from "../../types";
 import { RoomType } from "../../types";
@@ -10,100 +10,8 @@ import { Avatar } from "../common/Avatar";
 import { useForwardMessagesMutation } from "../../features/api/chatApi";
 import { toast } from "../ui";
 
-type ForwardTab = "recent" | "group" | "direct";
-
 const resolveConvDisplayName = (conv: Conversation): string =>
   conv.displayName || (conv as { name?: string }).name || "Cuộc trò chuyện";
-
-function formatFileSize(bytes?: number): string {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function buildMessagePreview(messages: Message[]): React.ReactNode {
-  if (messages.length === 0) return null;
-  if (messages.length > 1) {
-    return (
-      <span className="text-sm text-text-muted">
-        Đã chọn {messages.length} tin nhắn
-      </span>
-    );
-  }
-  const msg = messages[0];
-  const hasAttachments = msg.attachments && msg.attachments.length > 0;
-  const firstAtt = hasAttachments ? msg.attachments![0] : null;
-
-  if (firstAtt) {
-    const att = firstAtt as typeof firstAtt & { url?: string; thumbnailUrl?: string; fileSize?: number; mimeType?: string };
-    const isImage =
-      (att.type as string) === "image" ||
-      (att.mimeType?.startsWith("image/") ?? false);
-    const sizeLabel = formatFileSize(att.fileSize);
-
-    if (isImage) {
-      const thumb = att.thumbnailUrl ?? att.url;
-      return (
-        <div className="flex items-center gap-3">
-          {thumb ? (
-            <img
-              src={thumb}
-              alt={att.fileName ?? "Hình ảnh"}
-              className="h-12 w-12 shrink-0 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-hover">
-              <ImageIcon className="h-5 w-5 text-text-muted" />
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-primary">
-              {att.fileName ?? "Hình ảnh"}
-            </p>
-            <p className="text-xs text-text-muted">
-              Hình ảnh{sizeLabel ? ` · ${sizeLabel}` : ""}
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-hover">
-          <FileText className="h-5 w-5 text-text-muted" />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-text-primary">
-            {att.fileName ?? "Tệp đính kèm"}
-          </p>
-          <p className="text-xs text-text-muted">
-            Tệp{sizeLabel ? ` · ${sizeLabel}` : ""}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if ((msg.type as string) === "sticker" || (msg.type as string) === "emoji") {
-    return (
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover">
-          <Smile className="h-5 w-5 text-text-muted" />
-        </div>
-        <p className="text-sm text-text-secondary">Nhãn dán</p>
-      </div>
-    );
-  }
-
-  const text = msg.plainText ?? msg.content ?? "";
-  return (
-    <p className="line-clamp-2 text-sm text-text-secondary">
-      {text || "Tin nhắn"}
-    </p>
-  );
-}
 
 interface ForwardModalProps {
   messages: Message[];
@@ -116,25 +24,19 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
-  const [tab, setTab] = React.useState<ForwardTab>("recent");
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [forwardMessages, { isLoading }] = useForwardMessagesMutation();
 
   const filtered = React.useMemo(() => {
-    const base =
-      tab === "group"
-        ? conversations.filter((c) => c.type === "group")
-        : tab === "direct"
-          ? conversations.filter((c) => c.type === "direct")
-          : conversations;
+    const base = conversations;
 
     const q = query.trim().toLowerCase();
     if (!q) return base;
     return base.filter((c) =>
       resolveConvDisplayName(c).toLowerCase().includes(q),
     );
-  }, [conversations, query, tab]);
+  }, [conversations, query]);
 
   const toggleSelect = (conversationId: string) => {
     setSelected((prev) => {
@@ -179,25 +81,6 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
     if (e.key === "Escape") onClose();
   };
 
-  const tabs: { id: ForwardTab; label: string }[] = [
-    {
-      id: "recent",
-      label: t("chat:message.forward.tabRecent", { defaultValue: "Gần đây" }),
-    },
-    {
-      id: "group",
-      label: t("chat:message.forward.tabGroup", {
-        defaultValue: "Nhóm trò chuyện",
-      }),
-    },
-    {
-      id: "direct",
-      label: t("chat:message.forward.tabDirect", {
-        defaultValue: "Bạn bè",
-      }),
-    },
-  ];
-
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
@@ -210,20 +93,17 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       })}
     >
       <div
-        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-2xl bg-surface shadow-elev4"
+        className="flex w-full max-w-[440px] flex-col overflow-hidden rounded-2xl bg-surface shadow-elev4"
         style={{ maxHeight: "80vh" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <Forward className="h-4.5 w-4.5 text-primary" />
-            <span className="text-base font-semibold text-text-primary">
-              {t("chat:message.forward.title", {
-                defaultValue: "Chuyển tiếp tin nhắn",
-              })}
-            </span>
-          </div>
+        <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3">
+          <span className="text-base font-semibold text-text-primary">
+            {t("chat:message.forward.title", {
+              defaultValue: "Chuyển tiếp",
+            })}
+          </span>
           <button
             type="button"
             onClick={onClose}
@@ -234,19 +114,9 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
           </button>
         </div>
 
-        {/* Message preview */}
-        <div className="mx-5 mt-4 shrink-0 rounded-xl border border-border bg-surface-subtle px-4 py-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-            {t("chat:message.forward.preview", {
-              defaultValue: "Tin nhắn sẽ chuyển tiếp",
-            })}
-          </p>
-          <div>{buildMessagePreview(messages)}</div>
-        </div>
-
         {/* Search */}
-        <div className="shrink-0 px-5 pt-4">
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-subtle px-3 py-2.5 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+        <div className="shrink-0 px-5 pb-3">
+          <div className="flex items-center gap-2 rounded-full bg-surface-subtle px-3.5 py-2">
             <Search className="h-4 w-4 shrink-0 text-text-muted" />
             <input
               type="text"
@@ -261,27 +131,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex shrink-0 gap-1 px-5 pt-3">
-          {tabs.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={clsx(
-                "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
-                tab === id
-                  ? "bg-primary text-white"
-                  : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
         {/* Conversation list */}
-        <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-text-muted">
               <Search className="h-8 w-8 opacity-30" />
@@ -328,12 +179,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                     <p className="truncate text-sm font-medium text-text-primary">
                       {name}
                     </p>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-text-muted">
-                      {!isGroup && (
-                        <User className="h-3 w-3" />
-                      )}
-                      {subtitle}
-                    </p>
+                    {isGroup && (
+                      <p className="mt-0.5 truncate text-xs text-text-muted">
+                        {subtitle}
+                      </p>
+                    )}
                   </div>
                   <span
                     className={clsx(
@@ -366,36 +216,31 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3.5">
-          <span className="text-sm text-text-muted">
-            {selected.size > 0
-              ? `Đã chọn ${selected.size} người nhận`
-              : "Chọn người nhận"}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover"
-            >
-              {t("common:actions.cancel", { defaultValue: "Hủy" })}
-            </button>
-            <button
-              type="button"
-              disabled={selected.size === 0 || isLoading}
-              onClick={() => void handleConfirm()}
-              className={clsx(
-                "rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
-                selected.size > 0 && !isLoading
-                  ? "bg-primary text-white hover:bg-primary/90"
-                  : "cursor-not-allowed bg-surface-subtle text-text-muted",
-              )}
-            >
-              {isLoading
-                ? "Đang chuyển tiếp..."
-                : "Chuyển tiếp"}
-            </button>
-          </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+          >
+            {t("common:actions.cancel", { defaultValue: "Hủy" })}
+          </button>
+          <button
+            type="button"
+            disabled={selected.size === 0 || isLoading}
+            onClick={() => void handleConfirm()}
+            className={clsx(
+              "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+              selected.size > 0 && !isLoading
+                ? "bg-primary text-white hover:bg-primary/90"
+                : "cursor-not-allowed bg-surface-subtle text-text-muted",
+            )}
+          >
+            {isLoading
+              ? "Đang gửi..."
+              : selected.size > 0
+                ? `Gửi (${selected.size})`
+                : "Gửi"}
+          </button>
         </div>
       </div>
     </div>,
