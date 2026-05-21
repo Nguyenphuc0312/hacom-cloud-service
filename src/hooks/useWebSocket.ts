@@ -795,17 +795,28 @@ export const useWebSocket = (
 
       // If user is on the Messages module, the UI is already updating in realtime —
       // no toast needed. The sidebar badge still updates via store.
+      // NOTE: Do NOT add a secondary isActiveConversation guard here.
+      // ChatPage does not clear selectedConversationId on unmount, so when the
+      // user navigates to Calendar/Tasks/etc., isActiveConversation stays true
+      // for the last-viewed conversation. That would silently suppress toasts
+      // for exactly the conversation the user was just reading — the most
+      // common case when switching modules.
       if (isMessageModule(window.location.pathname)) {
         logMessageDebug("useWebSocket", "toast_skipped_messages_module", {
           conversationId: input.conversationId,
           senderId: input.senderId,
+          pathname: window.location.pathname,
         });
         return;
       }
 
-      if (isActiveConversation && visibleAndFocused && !hasMention) {
-        return;
-      }
+      logMessageDebug("useWebSocket", "toast_will_show", {
+        conversationId: input.conversationId,
+        senderId: input.senderId,
+        pathname: window.location.pathname,
+        isActiveConversation,
+        visibleAndFocused,
+      });
       const notificationId =
         input.eventId ||
         `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
