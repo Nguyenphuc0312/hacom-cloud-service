@@ -407,12 +407,11 @@ export const RoomList: React.FC<RoomListProps> = ({
     <div className="flex h-full min-h-0 w-full flex-1 flex-col pb-2">
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1"
         tabIndex={0}
         role="listbox"
         aria-label={t("sidebar:room.listAria")}
         onKeyDown={handleKeyDown}
-        onScroll={shouldUseVirtualList ? undefined : handleContainerScroll}
         onMouseMove={() => {
           if (isKeyboardMode) {
             setIsKeyboardMode(false);
@@ -435,7 +434,10 @@ export const RoomList: React.FC<RoomListProps> = ({
             {Row}
           </VariableSizeList>
         ) : (
-          <div className="sidebar-scrollbar h-full space-y-0.5 overflow-y-auto py-0.5">
+          <div 
+            className="sidebar-scrollbar h-full space-y-0.5 overflow-y-auto py-0.5"
+            onScroll={handleContainerScroll}
+          >
             {flatItems.map((item, index) => (
               <RoomItemContainer
                 key={item.key}
