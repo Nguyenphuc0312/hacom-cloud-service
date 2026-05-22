@@ -32,7 +32,7 @@ import type {
   TypingStatus,
   UserSummary,
 } from "../../types";
-import { MessageType } from "../../types";
+import { FileType, MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { extractApiError } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
@@ -518,7 +518,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         hasAttachments &&
         allAttachments.every(
           (a) =>
-            a.type === MessageType.IMAGE ||
+            a.type === FileType.IMAGE ||
             (typeof a.mimeType === "string" && a.mimeType.startsWith("image/")),
         );
       const messageType = hasAttachments
