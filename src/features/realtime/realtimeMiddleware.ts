@@ -261,11 +261,15 @@ export const realtimeMiddleware: Middleware<
       ),
     );
 
-    // Sync conversation lastMessage preview for recall/admin_delete
-    if (mode !== "FOR_ME") {
-      const storeState = useChatStore.getState();
-      const affectedConv = storeState.conversationById[conversationId];
-      if (affectedConv?.lastMessage?.id === messageId) {
+    // Sync conversation lastMessage preview in Zustand (sidebar)
+    const storeState = useChatStore.getState();
+    const affectedConv = storeState.conversationById[conversationId];
+    if (affectedConv?.lastMessage?.id === messageId) {
+      if (mode === "FOR_ME") {
+        // Delete-for-me: clear preview immediately; snapshot refresh will fill in next message
+        storeState.updateConversation(conversationId, { lastMessage: undefined });
+      } else {
+        // Recall / admin-delete: replace preview with recalled placeholder
         storeState.updateConversation(conversationId, {
           lastMessage: {
             ...affectedConv.lastMessage,

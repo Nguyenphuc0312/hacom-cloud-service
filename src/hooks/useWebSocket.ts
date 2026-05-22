@@ -1508,6 +1508,9 @@ export const useWebSocket = (
             mode: "FOR_ME",
           }),
         );
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:deleted_for_me",
+        });
       },
       onMessageDelivered: (data: unknown) => {
         const payload = asRecord(data);
