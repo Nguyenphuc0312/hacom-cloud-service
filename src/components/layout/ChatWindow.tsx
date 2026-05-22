@@ -169,7 +169,7 @@ interface ChatWindowProps {
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
-  onDeleteMessage?: (messageId: string) => void | Promise<void>;
+  onDeleteMessage?: (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => void | Promise<void>;
   onToggleInfoPanel: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
@@ -460,9 +460,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [flushPendingDraftPersist, replaceComposerSeed]);
 
   const handleDelete = React.useCallback(
-    (messageId: string) => {
+    (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => {
       if (!onDeleteMessage) return;
-      void Promise.resolve(onDeleteMessage(messageId));
+      void Promise.resolve(onDeleteMessage(messageId, mode, context));
     },
     [onDeleteMessage],
   );

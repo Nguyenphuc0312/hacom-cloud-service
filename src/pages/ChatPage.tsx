@@ -516,6 +516,24 @@ export const ChatPage: React.FC = () => {
             })
           : t("chat:toast.messageDeleted"),
       );
+
+      // Sync conversation lastMessage in sidebar after delete/recall
+      const storeState = useChatStore.getState();
+      const affectedConv = storeState.conversationById[selectedConversationId];
+      if (affectedConv?.lastMessage?.id === pendingDeleteMessage.messageId) {
+        if (pendingDeleteMessage.mode === "FOR_ME") {
+          updateConversation(selectedConversationId, { lastMessage: undefined });
+        } else {
+          updateConversation(selectedConversationId, {
+            lastMessage: {
+              ...affectedConv.lastMessage,
+              isDeleted: true,
+              content: "",
+            },
+          });
+        }
+      }
+
       setPendingDeleteMessage(null);
     } catch (error) {
       const apiError = extractApiError(error);
@@ -528,6 +546,7 @@ export const ChatPage: React.FC = () => {
     pendingDeleteMessage,
     selectedConversationId,
     t,
+    updateConversation,
   ]);
 
   const closeInfoPanel = useCallback(() => {

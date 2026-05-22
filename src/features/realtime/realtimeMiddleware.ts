@@ -260,6 +260,21 @@ export const realtimeMiddleware: Middleware<
         },
       ),
     );
+
+    // Sync conversation lastMessage preview for recall/admin_delete
+    if (mode !== "FOR_ME") {
+      const storeState = useChatStore.getState();
+      const affectedConv = storeState.conversationById[conversationId];
+      if (affectedConv?.lastMessage?.id === messageId) {
+        storeState.updateConversation(conversationId, {
+          lastMessage: {
+            ...affectedConv.lastMessage,
+            isDeleted: true,
+            content: "",
+          },
+        });
+      }
+    }
   }
 
   if (realtimeMessageReactionChanged.match(action)) {
