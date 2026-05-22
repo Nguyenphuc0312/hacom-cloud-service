@@ -146,13 +146,16 @@ export function getMessagePreview(
       break;
     }
     case MessageType.IMAGE:
-      preview = i18n.t("chat:preview.photo");
+      preview =
+        message.content?.trim() || i18n.t("chat:preview.photo");
       break;
     case MessageType.VIDEO:
-      preview = i18n.t("chat:preview.video");
+      preview =
+        message.content?.trim() || i18n.t("chat:preview.video");
       break;
     case MessageType.FILE:
-      preview = i18n.t("chat:preview.file");
+      preview =
+        message.content?.trim() || i18n.t("chat:preview.file");
       break;
     case MessageType.VOICE:
       preview = i18n.t("chat:preview.voice");

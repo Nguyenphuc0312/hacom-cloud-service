@@ -21,14 +21,16 @@ export const formatMessagePreview = (
   content: string,
   messageType?: string,
 ): string => {
+  if (content && content.trim()) {
+    return content.length > MAX_PREVIEW_LENGTH
+      ? `${content.slice(0, MAX_PREVIEW_LENGTH)}…`
+      : content;
+  }
   const type = messageType?.toLowerCase();
   if (type && MEDIA_PREVIEW_MAP[type]) {
     return MEDIA_PREVIEW_MAP[type];
   }
-  if (!content) return "Tin nhắn mới";
-  return content.length > MAX_PREVIEW_LENGTH
-    ? `${content.slice(0, MAX_PREVIEW_LENGTH)}…`
-    : content;
+  return "Tin nhắn mới";
 };
 
 export interface SingletonMessageToastOptions {
