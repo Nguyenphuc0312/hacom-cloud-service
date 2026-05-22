@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   authenticateSocket,
   initSocket,
@@ -32,10 +33,16 @@ import {
 } from "../services/authRefreshCoordinator";
 import { isTokenExpiringSoon } from "../utils/jwtHelpers";
 import {
+  isMessageModule,
   notifyGlobalToast,
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
+import {
+  formatMessagePreview,
+  showSingletonMessageToast,
+} from "../utils/messageToast";
+import { RoomType } from "../types";
 import {
   broadcastUnreadSnapshot,
   emitBrowserNotification,
@@ -295,6 +302,7 @@ export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
+  const { t } = useTranslation(["auth", "chat"]);
   const dispatch = useAppDispatch();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -364,6 +372,7 @@ export const useWebSocket = (
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const processedTypingEventIdsRef = useRef<Set<string>>(new Set());
+  const processedToastEventIdsRef = useRef<Set<string>>(new Set());
   const unsubscribersRef = useRef<Array<() => void>>([]);
 
   // Track unsubscribe functions for external subscriptions so they can be cleaned up on unmount.
@@ -392,6 +401,26 @@ export const useWebSocket = (
     syncDocumentTitleBadge(totalUnreadCount);
     void syncAppBadge(totalUnreadCount);
   }, [totalUnreadCount]);
+
+  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
+    await refreshUnreadSummarySnapshotAction();
+  }, [refreshUnreadSummarySnapshotAction]);
+
+  // Re-sync badge counts from backend when the browser tab regains focus so
+  // that counts stay accurate across multi-tab and multi-device scenarios.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshUnreadSummarySnapshot();
+        void useFriendshipStore.getState().fetchPendingCount();
+        logMessageDebug("useWebSocket", "badge_synced_on_tab_focus", {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshUnreadSummarySnapshot]);
 
   useEffect(() => {
     if (suppressUnreadBroadcastRef.current) {
@@ -574,7 +603,7 @@ export const useWebSocket = (
         notifySessionExpired: () => {
           notifyGlobalToast({
             level: "error",
-            message: "Session expired. Please login again.",
+            message: t("auth:session.expired", { defaultValue: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." }),
             dedupeKey: "auth:session-expired",
             cooldownMs: 30000,
           });
@@ -589,7 +618,7 @@ export const useWebSocket = (
         updateSocketAuth,
         subscribeToAuthRefreshEvents,
       }),
-    [onError],
+    [onError, t],
   );
   const {
     handleConnectFailure,
@@ -656,9 +685,6 @@ export const useWebSocket = (
     },
     [emit],
   );
-  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
-    await refreshUnreadSummarySnapshotAction();
-  }, [refreshUnreadSummarySnapshotAction]);
 
   const resyncCoordinator = useMemo(
     () =>
@@ -709,6 +735,7 @@ export const useWebSocket = (
       senderId: string | null;
       senderName: string | null;
       content: string;
+      messageType?: string | null;
       mentions: string[];
       kind?: "message" | "mention" | "group_activity" | "system";
       eventId?: string | null;
@@ -719,11 +746,44 @@ export const useWebSocket = (
         !input.senderId ||
         input.senderId === currentUserId
       ) {
+        logMessageDebug("useWebSocket", "toast_skipped_from_self", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          currentUserId,
+          pathname: window.location.pathname,
+        });
         return;
+      }
+
+      // Toast dedup: track which messages we've already shown a toast for.
+      // This is separate from the RTK deduper — we need to allow duplicate
+      // RTK events (for state reconciliation) but suppress duplicate toasts.
+      const toastDedupKey = `${input.conversationId}:${input.messageId}`;
+      if (processedToastEventIdsRef.current.has(toastDedupKey)) {
+        logMessageDebug("useWebSocket", "toast_skipped_duplicate", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
+        return;
+      }
+      processedToastEventIdsRef.current.add(toastDedupKey);
+      // Keep the set bounded to prevent memory leaks
+      if (processedToastEventIdsRef.current.size > 500) {
+        const firstKey = processedToastEventIdsRef.current.values().next().value;
+        if (firstKey) processedToastEventIdsRef.current.delete(firstKey);
       }
 
       const notificationSettings = getNotificationPreferences();
       if (!notificationSettings.enabled) {
+        logMessageDebug("useWebSocket", "toast_skipped_notifications_disabled", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
         return;
       }
 
@@ -733,6 +793,14 @@ export const useWebSocket = (
       const hasMention = input.mentions.includes(currentUserId);
       const isMuted = Boolean(conversation?.isMuted);
       if (isMuted && !hasMention) {
+        logMessageDebug("useWebSocket", "toast_skipped_muted", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+          isMuted,
+          hasMention,
+        });
         return;
       }
 
@@ -760,8 +828,8 @@ export const useWebSocket = (
         body:
           input.content ||
           (notificationKind === "system"
-            ? "System activity"
-            : "Sent an attachment"),
+            ? t("chat:notification.systemActivity", { defaultValue: "Hoạt động hệ thống" })
+            : t("chat:notification.sentAttachment", { defaultValue: "Đã gửi một tệp đính kèm." })),
         createdAt: new Date().toISOString(),
         conversationId: input.conversationId,
         messageId: input.messageId,
@@ -769,26 +837,74 @@ export const useWebSocket = (
         isRead: false,
       });
 
-      if (isActiveConversation && visibleAndFocused && !hasMention) {
+      // Debug: log full decision tree before showing toast
+      const isInMessageModule = isMessageModule(window.location.pathname);
+      logMessageDebug("useWebSocket", "toast_decision_tree", {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        senderId: input.senderId,
+        currentUserId,
+        pathname: window.location.pathname,
+        isInMessageModule,
+        isActiveConversation,
+        visibleAndFocused,
+        hasMention,
+        isMuted,
+        notificationKind,
+        willShowToast: !isInMessageModule,
+        willShowBrowserNotification: !visibleAndFocused,
+      });
+
+      // If user is on the Messages module, the UI is already updating in realtime —
+      // no toast needed. The sidebar badge still updates via store.
+      // NOTE: Do NOT add a secondary isActiveConversation guard here.
+      // ChatPage does not clear selectedConversationId on unmount, so when the
+      // user navigates to Calendar/Tasks/etc., isActiveConversation stays true
+      // for the last-viewed conversation. That would silently suppress toasts
+      // for exactly the conversation the user was just reading — the most
+      // common case when switching modules.
+      if (isInMessageModule) {
+        logMessageDebug("useWebSocket", "toast_skipped_in_message_module", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
         return;
       }
-      const preview = notificationSettings.messagePreview
-        ? input.content || "Sent an attachment"
-        : hasMention
-          ? "You were mentioned."
-          : "New message";
+
       const notificationId =
         input.eventId ||
         `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
-      const toastMessage = hasMention
-        ? `${input.senderName || "Someone"} mentioned you in ${conversationLabel}`
-        : `${input.senderName || conversationLabel}: ${preview}`;
+      const preview = notificationSettings.messagePreview
+        ? formatMessagePreview(input.content, input.messageType ?? undefined)
+        : hasMention
+          ? "Đã nhắc đến bạn."
+          : "Tin nhắn mới";
 
-      notifyGlobalToast({
-        level: "info",
-        message: toastMessage,
-        dedupeKey: notificationId,
-        cooldownMs: 20_000,
+      logMessageDebug("useWebSocket", "toast_showing", {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        senderId: input.senderId,
+        pathname: window.location.pathname,
+        isActiveConversation,
+        visibleAndFocused,
+        previewLength: preview.length,
+      });
+
+      const isGroup = conversation?.type !== RoomType.DIRECT;
+
+      // Singleton toast: new message replaces old one instead of stacking.
+      showSingletonMessageToast({
+        senderName: input.senderName || conversationLabel,
+        conversationName:
+          conversation?.displayName || conversation?.name || undefined,
+        isGroup,
+        avatarUrl: conversation?.displayAvatar ?? null,
+        messageType: input.messageType ?? undefined,
+        preview,
+        conversationId: input.conversationId,
+        messageId: input.messageId,
       });
 
       if (!visibleAndFocused) {
@@ -822,14 +938,14 @@ export const useWebSocket = (
         .getState()
         .conversations.find((item) => item.id === conversationId);
       const conversationLabel =
-        conversation?.displayName || conversation?.name || "Group";
+        conversation?.displayName || conversation?.name || t("chat:conversation.group", { defaultValue: "Nhóm" });
       const notificationId = `membership:${conversationId}:${membershipState}:${reason ?? "unknown"}`;
       const message =
         membershipState === "active" && reason === "added"
-          ? `You were added to ${conversationLabel}.`
+          ? t("chat:membership.added", { name: conversationLabel, defaultValue: `Bạn đã được thêm vào ${conversationLabel}.` })
           : membershipState === "active" && reason === "restored"
-            ? `You can access ${conversationLabel} again.`
-            : `Membership changed for ${conversationLabel}.`;
+            ? t("chat:membership.restored", { name: conversationLabel, defaultValue: `Bạn đã được khôi phục vào ${conversationLabel}.` })
+            : t("chat:membership.changed", { name: conversationLabel, defaultValue: `Thành viên của ${conversationLabel} đã thay đổi.` });
 
       const notificationSettings = getNotificationPreferences();
       useNotificationStore.getState().upsertNotification({
@@ -862,7 +978,7 @@ export const useWebSocket = (
         });
       }
     },
-    [getNotificationPreferences],
+    [getNotificationPreferences, t],
   );
 
   const maybeNotifyGroupUpdate = useCallback(
@@ -871,7 +987,7 @@ export const useWebSocket = (
         .getState()
         .conversations.find((item) => item.id === conversationId);
       const conversationLabel =
-        conversation?.displayName || conversation?.name || "Group";
+        conversation?.displayName || conversation?.name || t("chat:conversation.group", { defaultValue: "Nhóm" });
       const notificationId = `group:${conversationId}:${notificationSuffix}`;
 
       useNotificationStore.getState().upsertNotification({
@@ -905,7 +1021,7 @@ export const useWebSocket = (
         });
       }
     },
-    [getNotificationPreferences],
+    [getNotificationPreferences, t],
   );
 
   const requestConversationJoin = useCallback(
@@ -1007,6 +1123,11 @@ export const useWebSocket = (
 
     const handleConnect = () => {
       connectionLifecycleRef.current?.handleSocketConnected();
+      // Sync badge counts from backend on every connect/reconnect so the
+      // sidebar never shows stale counts after a disconnection.
+      void refreshUnreadSummarySnapshot();
+      void useFriendshipStore.getState().fetchPendingCount();
+      logMessageDebug("useWebSocket", "badge_synced_on_connect", {});
     };
 
     const handleDisconnect = (data: unknown) => {
@@ -1017,13 +1138,13 @@ export const useWebSocket = (
 
     const handleConnectError = (data: unknown) => {
       const message =
-        asString(asRecord(data)?.message) ?? "WebSocket connection error";
+        asString(asRecord(data)?.message) ?? t("chat:websocket.connectionError", { defaultValue: "Kết nối thời gian thực bị gián đoạn. Hệ thống đang thử kết nối lại." });
       onError?.(new Error(message));
     };
 
     const handleWsError = (data: unknown) => {
       const message =
-        asString(asRecord(data)?.message) ?? "WebSocket server error";
+        asString(asRecord(data)?.message) ?? t("chat:websocket.serverError", { defaultValue: "Kết nối máy chủ gặp sự cố. Vui lòng thử lại sau." });
       onError?.(new Error(message));
     };
 
@@ -1100,6 +1221,36 @@ export const useWebSocket = (
         eventId,
         correlationKey,
       } = normalizedEvent;
+
+      // Early toast notification: We call maybeNotifyIncomingMessage BEFORE the
+      // deduper check so that toast shows even on duplicate/replayed events.
+      // The toast deduper (processedToastEventIdsRef) inside maybeNotifyIncomingMessage
+      // ensures we don't show duplicate toasts for the same message.
+      // This is separate from the RTK deduper which handles state deduplication.
+      if (eventType === "message:new") {
+        maybeNotifyIncomingMessage({
+          conversationId,
+          messageId,
+          senderId: senderId ?? null,
+          senderName:
+            asString(messagePayload.senderName) ?? asString(payload.senderName),
+          content:
+            typeof messagePayload.content === "string"
+              ? messagePayload.content
+              : "",
+          messageType: asString(messagePayload.type) ?? null,
+          mentions: Array.isArray(messagePayload.mentions)
+            ? messagePayload.mentions.filter(
+                (item): item is string => typeof item === "string",
+              )
+            : [],
+          kind:
+            asString(messagePayload.type) === "system" ? "system" : "message",
+          eventId,
+        });
+      }
+
+      // Now check the RTK deduper for state updates
       if (
         !shouldProcessRealtimeEvent(eventId, {
           eventType,
@@ -1201,28 +1352,6 @@ export const useWebSocket = (
 
       if (eventType === "message:new") {
         sendDeliveryAckForMessage(normalizedEvent);
-      }
-
-      if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
-        maybeNotifyIncomingMessage({
-          conversationId,
-          messageId,
-          senderId: senderId ?? null,
-          senderName:
-            asString(messagePayload.senderName) ?? asString(payload.senderName),
-          content:
-            typeof messagePayload.content === "string"
-              ? messagePayload.content
-              : "",
-          mentions: Array.isArray(messagePayload.mentions)
-            ? messagePayload.mentions.filter(
-                (item): item is string => typeof item === "string",
-              )
-            : [],
-          kind:
-            asString(messagePayload.type) === "system" ? "system" : "message",
-          eventId,
-        });
       }
 
       if (isAmbiguousSelfReconcile) {
@@ -1944,7 +2073,7 @@ export const useWebSocket = (
       if (conversationId) {
         maybeNotifyGroupUpdate(
           conversationId,
-          "Group settings changed.",
+          t("chat:group.settingsChanged", { defaultValue: "Cài đặt nhóm đã thay đổi." }),
           `settings:${asString(payload?.eventId) ?? Date.now()}`,
         );
       }
@@ -2216,6 +2345,7 @@ export const useWebSocket = (
     shouldProcessRealtimeEvent,
     upsertInviteLink,
     updateConversation,
+    refreshUnreadSummarySnapshot,
   ]);
 
   const connectionLifecycle = useMemo(

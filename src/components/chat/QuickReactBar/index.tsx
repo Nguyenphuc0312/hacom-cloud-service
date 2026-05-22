@@ -8,6 +8,7 @@ interface QuickReactBarProps {
   currentUserReaction?: string | null;
   visible: boolean;
   onReact: (emoji: string) => void;
+  onClose?: () => void;
   onMouseEnter?: React.MouseEventHandler<HTMLDivElement>;
   onMouseLeave?: React.MouseEventHandler<HTMLDivElement>;
 }
@@ -17,20 +18,44 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
   currentUserReaction,
   visible,
   onReact,
+  onClose,
   onMouseEnter,
   onMouseLeave,
 }) => {
+  const barRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!visible || !onClose) return;
+
+    const handleClick = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", handleClick, true);
+    document.addEventListener("keydown", handleKey, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClick, true);
+      document.removeEventListener("keydown", handleKey, true);
+    };
+  }, [visible, onClose]);
+
   return (
     <div
+      ref={barRef}
       role="toolbar"
-      aria-label="Quick reactions"
+      aria-label="Chọn cảm xúc"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={(e) => e.stopPropagation()}
       className={clsx(
-        "absolute bottom-full z-30 mb-1",
+        "absolute bottom-full z-30 mb-2",
         "flex items-center gap-0.5 rounded-full",
-        "bg-surface border border-border shadow-elev2",
+        "bg-surface border border-border shadow-elev3",
         "px-1.5 py-1",
         "transition-all duration-150 ease-out",
         visible
@@ -49,7 +74,7 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
               e.stopPropagation();
               onReact(emoji);
             }}
-            aria-label={`React with ${emoji}`}
+            aria-label={`Cảm xúc ${emoji}`}
             aria-pressed={isActive}
             className={clsx(
               "flex h-9 w-9 items-center justify-center rounded-full text-[22px]",

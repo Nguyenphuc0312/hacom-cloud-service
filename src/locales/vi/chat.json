@@ -14,7 +14,9 @@
     "user": "{{name}} đang nhập...",
     "default": "Đang nhập...",
     "recording": "Đang ghi âm...",
-    "uploading": "Đang tải tệp..."
+    "uploading": "Đang tải tệp...",
+    "twoUsers": "{{name1}}, {{name2}} đang nhập...",
+    "manyUsers": "{{name1}}, {{name2}} và {{count}} người khác đang nhập..."
   },
   "message": {
     "you": "Bạn",
@@ -28,6 +30,7 @@
     "unreadDivider": "Tin nhắn chưa đọc",
     "edited": "đã chỉnh sửa",
     "forwardedFrom": "Chuyển tiếp từ {{name}}",
+    "forwardedLabel": "Tin nhắn được chuyển tiếp",
     "bubbleAria": "{{name}} lúc {{time}}",
     "status": {
       "uploading": "Đang tải lên",
@@ -61,12 +64,15 @@
       "deleteForEveryone": "Thu hồi",
       "deleteForEveryoneAdmin": "Xóa ở mọi người",
       "pin": "Ghim tin nhắn",
-      "unpin": "Bỏ ghim"
+      "unpin": "Bỏ ghim",
+      "download": "Tải về",
+      "copyLink": "Sao chép link"
     },
     "structuredBlock": "Nội dung có cấu trúc",
     "expandLong": "Xem thêm",
     "collapseLong": "Thu gọn",
     "copyFullSuccess": "Đã sao chép toàn bộ tin nhắn",
+    "copySuccess": "Đã sao chép",
     "editedAtNoHistory": "Đã chỉnh sửa lúc {{time}}",
     "editedNoHistory": "Đã chỉnh sửa",
     "newLabel": "Tin nhắn mới ({{count}})",
@@ -154,7 +160,8 @@
     "resultCount_other": "{{count}} kết quả"
   },
   "conversation": {
-    "untitled": "Cuộc trò chuyện chưa đặt tên"
+    "untitled": "Cuộc trò chuyện chưa đặt tên",
+    "group": "Nhóm"
   },
   "contactShare": {
     "title": "Chia sẻ liên hệ",
@@ -281,6 +288,7 @@
     "download": "Tải tệp"
   },
   "voice": {
+    "recordingError": "Không thể ghi âm. Vui lòng thử lại.",
     "play": "Phát",
     "pause": "Tạm dừng",
     "progress": "Tiến độ âm thanh",
@@ -360,5 +368,31 @@
     "location": "Vị trí",
     "sticker": "Sticker",
     "contact": "[Danh thiếp]"
+  },
+  "sticker": {
+    "picker": "Chọn sticker",
+    "recent": "Gần đây",
+    "search": "Tìm sticker...",
+    "noResults": "Không tìm thấy sticker"
+  },
+  "notification": {
+    "sentAttachment": "Đã gửi một tệp đính kèm.",
+    "systemActivity": "Hoạt động hệ thống"
+  },
+  "membership": {
+    "added": "Bạn đã được thêm vào {{name}}.",
+    "restored": "Bạn đã được khôi phục vào {{name}}.",
+    "changed": "Thành viên của {{name}} đã thay đổi."
+  },
+  "group": {
+    "settingsChanged": "Cài đặt nhóm đã thay đổi."
+  },
+  "websocket": {
+    "connectionError": "Kết nối thời gian thực bị gián đoạn. Hệ thống đang thử kết nối lại.",
+    "serverError": "Kết nối máy chủ gặp sự cố. Vui lòng thử lại sau."
+  },
+  "common": {
+    "cancel": "Hủy",
+    "retry": "Thử lại"
   }
 }

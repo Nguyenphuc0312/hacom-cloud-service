@@ -38,6 +38,7 @@ interface MessageGroupProps {
   row: ConversationThreadGroupRow;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
@@ -149,6 +150,7 @@ const MessageGroupItem: React.FC<{
   senderDisplayName?: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -175,6 +177,7 @@ const MessageGroupItem: React.FC<{
   senderDisplayName,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -193,6 +196,7 @@ const MessageGroupItem: React.FC<{
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
+    const [showReactionPicker, setShowReactionPicker] = React.useState(false);
     const [showMobileReact, setShowMobileReact] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -278,6 +282,7 @@ const MessageGroupItem: React.FC<{
               ? true
               : undefined,
           canRetry: isFailedMessage(message),
+          canForward: Boolean(onForward),
         }),
       [
         coarsePointer,
@@ -286,6 +291,7 @@ const MessageGroupItem: React.FC<{
         message,
         onDelete,
         onEdit,
+        onForward,
         viewerCanRecallOthers,
       ],
     );
@@ -324,6 +330,7 @@ const MessageGroupItem: React.FC<{
     const handleItemMouseLeave = React.useCallback(() => {
       leaveTimerRef.current = setTimeout(() => {
         setIsHovered(false);
+        setShowReactionPicker(false);
       }, 150);
     }, []);
 
@@ -344,6 +351,11 @@ const MessageGroupItem: React.FC<{
 
           case "reply":
             onReply(message);
+            break;
+          case "forward":
+            if (onForward) {
+              onForward(message);
+            }
             break;
           case "copy":
             void navigator.clipboard.writeText(message.content || "");
@@ -383,7 +395,7 @@ const MessageGroupItem: React.FC<{
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
+      [message, onDelete, onEdit, onForward, onReact, onReply, resendMessage, isOwn],
     );
 
     const actionRail =
@@ -403,6 +415,15 @@ const MessageGroupItem: React.FC<{
             isOutgoing={isOwn}
             onReplyClick={() => onReply(message)}
             onMoreClick={() => setIsActionSheetOpen(true)}
+            onForwardClick={
+              onForward
+                ? () => {
+                    onForward(message);
+                    setIsHovered(false);
+                  }
+                : undefined
+            }
+            onReactClick={() => setShowReactionPicker((v) => !v)}
           />
         </div>
       ) : null;
@@ -436,7 +457,7 @@ const MessageGroupItem: React.FC<{
               onChange={() => onToggleSelect?.(message.id)}
               className="h-4 w-4 cursor-pointer rounded border-border text-primary focus:ring-primary/30"
               aria-label={t("chat:selection.selectMessage", {
-                defaultValue: "Select message",
+                defaultValue: "Chọn tin nhắn",
               })}
             />
           </div>
@@ -454,10 +475,14 @@ const MessageGroupItem: React.FC<{
           )}>
             <div className="relative">
               <QuickReactBar
-                visible={isHovered && !isSelectionMode}
+                visible={showReactionPicker && !isSelectionMode}
                 isMine={isOwn}
                 currentUserReaction={myReactionEmoji}
-                onReact={handleReactionSelect}
+                onReact={(emoji) => {
+                  handleReactionSelect(emoji);
+                  setShowReactionPicker(false);
+                }}
+                onClose={() => setShowReactionPicker(false)}
                 onMouseEnter={handleItemMouseEnter}
                 onMouseLeave={handleItemMouseLeave}
               />
@@ -541,25 +566,6 @@ const MessageGroupItem: React.FC<{
                 </button>
               )}
 
-              {message.forwardedFrom && (
-                <div
-                  className={clsx(
-                    "mb-2 text-[11px] font-medium leading-4",
-                    isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
-                  )}
-                >
-                  {t("chat:message.forwardedFrom", {
-                    defaultValue: "Forwarded from {{name}}",
-                    name: resolveUserDisplayName({
-                      displayName:
-                        (message.forwardedFrom as { displayName?: string | null })
-                          .displayName || message.forwardedFrom.username,
-                      username: message.forwardedFrom.username,
-                    }),
-                  })}
-                </div>
-              )}
-
               <MessageBodyRenderer
                 message={message}
                 isOwn={isOwn}
@@ -633,6 +639,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   row,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -699,6 +706,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               senderDisplayName={senderDisplayName}
               onReply={onReply}
               onReact={onReact}
+              onForward={onForward}
               onEdit={onEdit}
               onDelete={onDelete}
               onImageClick={onImageClick}

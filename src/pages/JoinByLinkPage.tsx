@@ -51,7 +51,7 @@ export const JoinByLinkPage: React.FC = () => {
         setConversationId(resolvedId);
         setStatus("joined");
         toast.success(
-          t("group:joinByLink.joined", { defaultValue: "Joined successfully" }),
+          t("group:joinByLink.joined", { defaultValue: "Đã tham gia thành công" }),
         );
       } catch (error) {
         const apiError = extractApiError(error);
@@ -91,27 +91,25 @@ export const JoinByLinkPage: React.FC = () => {
   const statusBody =
     status === "pending"
       ? t("group:joinByLink.pending", {
-          defaultValue: "Your join request is pending admin approval.",
+          defaultValue: "Yêu cầu tham gia của bạn đang chờ quản trị viên duyệt.",
         })
       : status === "joined"
         ? t("group:joinByLink.joinedDescription", {
-            defaultValue: "You can start chatting in this group now.",
+            defaultValue: "Bạn có thể bắt đầu trò chuyện trong nhóm ngay bây giờ.",
           })
         : t("group:joinByLink.description", {
-            defaultValue:
-              "Use this invite link to join the group. Access depends on group settings.",
+            defaultValue: "Dùng liên kết này để tham gia nhóm. Quyền truy cập phụ thuộc cài đặt nhóm.",
           });
 
   return (
     <AppPage layout="narrow">
       <AppPageHeader
-        title={t("group:joinByLink.title", { defaultValue: "Join group" })}
+        title={t("group:joinByLink.title", { defaultValue: "Tham gia nhóm" })}
         subtitle={t("group:joinByLink.description", {
-          defaultValue:
-            "Use this invite link to join the group. Access depends on group settings.",
+          defaultValue: "Dùng liên kết này để tham gia nhóm. Quyền truy cập phụ thuộc cài đặt nhóm.",
         })}
         onBack={() => navigate(ROUTE_PATHS.CHAT)}
-        backLabel={t("common:actions.back", { defaultValue: "Back" })}
+        backLabel={t("common:actions.back", { defaultValue: "Quay lại" })}
       />
 
       <AppPageBody className="items-center justify-center">
@@ -124,7 +122,7 @@ export const JoinByLinkPage: React.FC = () => {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-text-primary">
                   {t("group:joinByLink.inviteLink", {
-                    defaultValue: "Invite link",
+                    defaultValue: "Liên kết mời",
                   })}
                 </p>
                 <p className="truncate text-xs text-text-muted">
@@ -137,7 +135,7 @@ export const JoinByLinkPage: React.FC = () => {
               <p className="text-sm leading-6 text-text-secondary">
                 {status === "joining"
                   ? t("group:joinByLink.joining", {
-                      defaultValue: "Joining the group...",
+                      defaultValue: "Đang tham gia nhóm...",
                     })
                   : statusBody}
               </p>
@@ -161,14 +159,14 @@ export const JoinByLinkPage: React.FC = () => {
               >
                 {status === "pending"
                   ? t("group:joinByLink.backToChat", {
-                      defaultValue: "Back to chat",
+                      defaultValue: "Quay lại chat",
                     })
                   : status === "joined"
                     ? t("group:joinByLink.openGroup", {
-                        defaultValue: "Open group",
+                        defaultValue: "Mở nhóm",
                       })
                     : t("group:joinByLink.cta", {
-                        defaultValue: "Join now",
+                        defaultValue: "Tham gia ngay",
                       })}
               </Button>
             </div>

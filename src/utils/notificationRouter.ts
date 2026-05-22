@@ -3,6 +3,11 @@
  */
 
 import { toast } from "./toast";
+import { ROUTE_PATHS } from "../router/paths";
+
+export const isMessageModule = (pathname: string): boolean =>
+  pathname === ROUTE_PATHS.CHAT ||
+  pathname.startsWith(`${ROUTE_PATHS.CHAT}/`);
 
 type ToastLevel = "success" | "error" | "info" | "warning";
 

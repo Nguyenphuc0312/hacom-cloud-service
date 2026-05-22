@@ -9,8 +9,6 @@ import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import type { MessageInputHandle } from "../input/MessageInput";
 import { ConversationLane } from "./ConversationLane";
-import { AudioCallDialog } from "../../features/chat/components/AudioCallDialog";
-import { VideoCallView } from "../../features/chat/components/VideoCallView";
 import type { MentionCandidate } from "../input/MessageInput";
 import { NotificationListSkeleton, toast } from "../ui";
 import {
@@ -59,6 +57,9 @@ import { FeatureErrorBoundary } from "../error";
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
   () => import("../chat/PinnedMessagesPanel"),
+);
+const ForwardModal = React.lazy(
+  () => import("../chat/ForwardModal").then((m) => ({ default: m.ForwardModal })),
 );
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
@@ -285,6 +286,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
+  const [forwardMessages, setForwardMessages] = React.useState<
+    Message[] | null
+  >(null);
   const draftBeforeEditRef = React.useRef<string>(composerSeed);
   // Ref so handleSend (declared before mentionCandidates useMemo) always reads the latest value.
   const mentionCandidatesRef = React.useRef<MentionCandidate[]>([]);
@@ -399,6 +403,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setEditingMessage(undefined);
     setInputMode("reply");
   }, []);
+
+  const handleForward = React.useCallback((message: Message) => {
+    setForwardMessages([message]);
+  }, []);
+
+  const handleForwardSelected = React.useCallback(() => {
+    const messages = Array.from(selectedMessageIds)
+      .map((id) => useChatStore.getState().messageById?.[id])
+      .filter((m): m is Message => Boolean(m));
+    if (messages.length > 0) {
+      setForwardMessages(messages);
+    }
+  }, [selectedMessageIds]);
 
   const handleCancelReply = React.useCallback(() => {
     setReplyToMessage(undefined);
@@ -600,8 +617,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
-  const [callMode, setCallMode] = React.useState<"audio" | "video" | null>(null);
-  const [composerHeight, setComposerHeight] = React.useState(0);
+const [composerHeight, setComposerHeight] = React.useState(0);
   const viewportMetrics = useMobileViewportMetrics();
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
@@ -1014,7 +1030,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       .map((message) => message.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
-    toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
+    toast.success(t("chat:message.copySuccess", { defaultValue: "Đã sao chép" }));
     exitSelectionMode();
   }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
@@ -1047,8 +1063,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onInfoClick={onToggleInfoPanel}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
-        onCallClick={() => setCallMode("audio")}
-        onVideoCallClick={() => setCallMode("video")}
         onSelectionMode={enterSelectionMode}
       />
 
@@ -1095,6 +1109,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
+        onForward={handleForward}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onInspect={handleInspectMessage}
@@ -1147,6 +1162,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <SelectionToolbar
             selectedCount={selectedMessageIds.size}
             onDelete={handleSelectionDelete}
+            onForward={handleForwardSelected}
             onCopy={handleSelectionCopy}
             onCancel={exitSelectionMode}
           />
@@ -1203,17 +1219,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      <AudioCallDialog
-        isOpen={callMode === "audio"}
-        name={callDisplayName}
-        statusLabel="Đang gọi..."
-        onClose={() => setCallMode(null)}
-      />
-      <VideoCallView
-        isOpen={callMode === "video"}
-        name={callDisplayName}
-        onClose={() => setCallMode(null)}
-      />
+
+      {forwardMessages && (
+        <React.Suspense fallback={null}>
+          <ForwardModal
+            messages={forwardMessages}
+            onClose={() => setForwardMessages(null)}
+          />
+        </React.Suspense>
+      )}
     </section>
   );
 };

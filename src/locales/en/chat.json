@@ -14,7 +14,9 @@
     "user": "{{name}} is typing...",
     "default": "Typing...",
     "recording": "Recording audio...",
-    "uploading": "Uploading files..."
+    "uploading": "Uploading files...",
+    "twoUsers": "{{name1}}, {{name2}} are typing...",
+    "manyUsers": "{{name1}}, {{name2}} and {{count}} others are typing..."
   },
   "message": {
     "you": "You",
@@ -28,6 +30,7 @@
     "unreadDivider": "Unread messages",
     "edited": "edited",
     "forwardedFrom": "Forwarded from {{name}}",
+    "forwardedLabel": "Forwarded message",
     "bubbleAria": "{{name}} at {{time}}",
     "status": {
       "uploading": "Uploading",
@@ -61,12 +64,15 @@
       "deleteForEveryone": "Unsend",
       "deleteForEveryoneAdmin": "Remove for everyone",
       "pin": "Pin message",
-      "unpin": "Unpin"
+      "unpin": "Unpin",
+      "download": "Download",
+      "copyLink": "Copy link"
     },
     "structuredBlock": "Structured content",
     "expandLong": "Show more",
     "collapseLong": "Show less",
     "copyFullSuccess": "Copied the full message",
+    "copySuccess": "Copied",
     "editedAtNoHistory": "Edited at {{time}}",
     "editedNoHistory": "Edited",
     "newLabel": "New messages ({{count}})",
@@ -154,7 +160,8 @@
     "resultCount_other": "{{count}} results"
   },
   "conversation": {
-    "untitled": "Untitled conversation"
+    "untitled": "Untitled conversation",
+    "group": "Group"
   },
   "contactShare": {
     "title": "Share contact",
@@ -283,7 +290,18 @@
   "voice": {
     "play": "Play",
     "pause": "Pause",
-    "progress": "Audio progress"
+    "progress": "Audio progress",
+    "startRecording": "Start recording",
+    "holdToRecord": "Hold to record",
+    "recording": "Recording",
+    "paused": "Paused",
+    "stop": "Stop recording",
+    "resume": "Resume",
+    "sendRecording": "Send recording",
+    "recordingComplete": "Recording ready",
+    "recordingError": "Unable to record. Please try again.",
+    "permissionDenied": "Microphone access denied",
+    "tryAgain": "Click to try again"
   },
   "image": {
     "failedToLoad": "Failed to load image",
@@ -350,5 +368,31 @@
     "deleteByAdmin": "You are removing another member's message as an administrator. No one in the conversation will see this content anymore.",
     "deleteByAdminButton": "Remove for everyone",
     "recall": "Unsend"
+  },
+  "sticker": {
+    "picker": "Sticker picker",
+    "recent": "Recent",
+    "search": "Search stickers...",
+    "noResults": "No stickers found"
+  },
+  "notification": {
+    "sentAttachment": "Sent an attachment.",
+    "systemActivity": "System activity"
+  },
+  "membership": {
+    "added": "You were added to {{name}}.",
+    "restored": "You can access {{name}} again.",
+    "changed": "Membership of {{name}} has changed."
+  },
+  "group": {
+    "settingsChanged": "Group settings changed."
+  },
+  "websocket": {
+    "connectionError": "Real-time connection interrupted. Reconnecting...",
+    "serverError": "Server connection error. Please try again later."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Retry"
   }
 }

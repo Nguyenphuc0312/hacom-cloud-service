@@ -5,6 +5,7 @@ import { isFailedMessage, isPendingMessage } from "./messageTimeline";
 export type MessageActionId =
   | "react"
   | "reply"
+  | "forward"
   | "copy"
   | "edit"
   | "deleteForMe"
@@ -33,6 +34,8 @@ export interface MessageActionPolicyInput {
   canPin?: boolean;
   /** Tin nhắn đã được ghim chưa. */
   isPinned?: boolean;
+  /** Có cho phép chuyển tiếp tin nhắn hay không. */
+  canForward?: boolean;
 }
 
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -119,6 +122,9 @@ const getActionCandidates = ({
       menuEligible: true,
     });
   }
+
+  // Forward is exposed exclusively as a quick icon in MessageActionBar
+  // (next to Reply) — not in the "more actions" menu.
 
   if (canReactToMessage(message) && !failed) {
     candidates.push({

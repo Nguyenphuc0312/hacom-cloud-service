@@ -55,6 +55,7 @@ interface MessageClusterProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
+  onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
   onUnpin?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
@@ -110,6 +111,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   onReact,
   onEdit,
   onDelete,
+  onForward,
   onPin,
   onUnpin,
   onImageClick,
@@ -132,6 +134,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [showReactionPicker, setShowReactionPicker] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -152,14 +155,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     ? resolveUserDisplayName({
       displayName: message.replyToMessage.senderName,
       username: message.replyToMessage.senderId,
-    })
-    : null;
-  const forwardedFromName = message.forwardedFrom
-    ? resolveUserDisplayName({
-      displayName:
-        (message.forwardedFrom as { displayName?: string | null })
-          .displayName || message.forwardedFrom.username,
-      username: message.forwardedFrom.username,
     })
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
@@ -187,6 +182,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   );
 
   const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref stays in sync with showReactionPicker without stale closure in callbacks
+  const showReactionPickerRef = React.useRef(false);
+  showReactionPickerRef.current = showReactionPicker;
 
   const clearLongPressTimer = React.useCallback(() => {
     if (longPressTimerRef.current === null) return;
@@ -198,6 +196,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (force = false) => {
       if (force || !isActionsOpen) {
         setIsHovered(false);
+        setShowReactionPicker(false);
       }
     },
     [isActionsOpen],
@@ -212,10 +211,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   }, []);
 
   const handleClusterMouseLeave = React.useCallback(() => {
+    // Use a longer delay when the reaction picker is open so the mouse has enough
+    // time to travel from the action bar icon up through the mb-2 gap into the picker
+    // (QuickReactBar is positioned absolute bottom-full, outside the cluster div's
+    // layout bounds, so the mouse briefly exits the cluster div during that traversal).
+    const delay = showReactionPickerRef.current ? 400 : 150;
     leaveTimerRef.current = setTimeout(() => {
       hideRail();
       setIsHovered(false);
-    }, 150);
+    }, delay);
   }, [hideRail]);
 
   React.useEffect(
@@ -287,6 +291,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           onReply(message);
           if (isActionsOpen) closeActions();
           break;
+        case "forward":
+          if (onForward) {
+            onForward(message);
+          }
+          closeActions();
+          break;
         case "copy":
           handleCopy();
           break;
@@ -346,6 +356,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       message,
       onDelete,
       onEdit,
+      onForward,
       onPin,
       onUnpin,
       onReply,
@@ -423,6 +434,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 isOutgoing={isOwn}
                 onReplyClick={() => onReply(message)}
                 onMoreClick={openActions}
+                onForwardClick={onForward ? () => { onForward(message); hideRail(true); } : undefined}
+                onReactClick={() => setShowReactionPicker((v) => !v)}
               />
             </div>
           ) : null
@@ -507,12 +520,14 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
 
             <div className="relative w-full">
               <QuickReactBar
-                visible={isHovered && !isSelectionMode}
+                visible={showReactionPicker && !isSelectionMode}
                 isMine={isOwn}
                 currentUserReaction={myReactionEmoji}
-                onReact={handleReactionSelect}
-                onMouseEnter={handleClusterMouseEnter}
-                onMouseLeave={handleClusterMouseLeave}
+                onReact={(emoji) => {
+                  handleReactionSelect(emoji);
+                  setShowReactionPicker(false);
+                }}
+                onClose={() => setShowReactionPicker(false)}
               />
               <div
                 onPointerDown={handlePointerDown}
@@ -536,26 +551,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     <p className={clsx(contract.cluster.senderLabel, "truncate")}>
                       {senderDisplayName}
                     </p>
-                  )}
-
-                  {message.forwardedFrom && (
-                    <div
-                      className={clsx(
-                        contract.cluster.forwardedBadge,
-                        isOwn ? "text-text-inverse/82" : "text-text-secondary",
-                      )}
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
-                      </svg>
-                      {t("chat:message.forwardedFrom", {
-                        name: forwardedFromName,
-                      })}
-                    </div>
                   )}
 
                   <MessageBodyRenderer

@@ -38,6 +38,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   messages: readonly Message[];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -90,6 +91,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   messages,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onInspect,
@@ -224,7 +226,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         aria-label={t("chat:message.inConversationAria")}
         aria-live="polite"
         style={{
-          paddingBottom: composerHeight ?? 0,
+          paddingBottom: 8,
           scrollBehavior: "auto",
         }}
       >
@@ -258,6 +260,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         row={row}
                         onReply={onReply}
                         onReact={onReact}
+                        onForward={onForward}
                         onInspect={onInspect}
                         onEdit={onEdit}
                         onDelete={onDelete}
@@ -284,6 +287,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         item={row}
                         onReply={onReply}
                         onReact={onReact}
+                        onForward={onForward}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         onImageClick={wrappedOnImageClick}

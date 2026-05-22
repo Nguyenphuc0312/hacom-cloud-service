@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { DateDivider } from "./DateDivider";
 import { UnreadDivider } from "./UnreadDivider";
 import { MessageCluster } from "./message-layout/MessageCluster";
@@ -16,6 +17,7 @@ interface MessageItemProps {
   message?: Message;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -117,6 +119,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   message,
   onReply,
   onReact,
+  onForward,
   onEdit,
   onDelete,
   onImageClick,
@@ -133,6 +136,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onToggleTextExpand,
   shouldAnimateInsert = false,
 }) => {
+  const { t } = useTranslation();
   if (item.kind === "date") {
     return <DateDivider date={item.date} density={density} />;
   }
@@ -199,7 +203,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
               checked={isSelected}
               onChange={() => onToggleSelect?.(resolvedMessage.id)}
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer"
-              aria-label={`Select message`}
+              aria-label={t("chat:selection.selectMessage", { defaultValue: "Chọn tin nhắn" })}
               onClick={(event) => event.stopPropagation()}
             />
           </div>
@@ -218,6 +222,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             conversationType={item.conversationType}
             onReply={onReply}
             onReact={onReact}
+            onForward={onForward}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}
@@ -257,6 +262,7 @@ const areEqualMessageItem = (
       prev.shouldAnimateInsert === next.shouldAnimateInsert &&
       prev.onReply === next.onReply &&
       prev.onReact === next.onReact &&
+      prev.onForward === next.onForward &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&

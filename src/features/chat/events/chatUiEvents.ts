@@ -7,8 +7,14 @@ export interface NotificationClickDetail {
   messageId?: string;
 }
 
+export interface OpenConversationDetail {
+  conversationId: string;
+  messageId?: string;
+}
+
 const CONTACT_PROFILE_VIEW_EVENT = "chat:contact:view-profile";
 const NOTIFICATION_CLICK_EVENT = "chat:notification:clicked";
+const OPEN_CONVERSATION_EVENT = "chat:open-conversation";
 
 const dispatchWindowEvent = <TDetail>(name: string, detail: TDetail): void => {
   if (typeof window === "undefined") {
@@ -56,3 +62,13 @@ export const dispatchNotificationClick = (
 export const listenForNotificationClick = (
   handler: (detail: NotificationClickDetail) => void,
 ): (() => void) => listenWindowEvent(NOTIFICATION_CLICK_EVENT, handler);
+
+export const dispatchOpenConversation = (
+  detail: OpenConversationDetail,
+): void => {
+  dispatchWindowEvent(OPEN_CONVERSATION_EVENT, detail);
+};
+
+export const listenForOpenConversation = (
+  handler: (detail: OpenConversationDetail) => void,
+): (() => void) => listenWindowEvent(OPEN_CONVERSATION_EVENT, handler);
