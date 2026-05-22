@@ -105,6 +105,17 @@ const performRefresh = async (trigger: AuthRefreshTrigger): Promise<string> => {
   }
 
   const csrfToken = cookieMode ? getCsrfToken() : null;
+  // In cookie mode the refresh token lives in an HttpOnly cookie — the browser
+  // sends it automatically. But the CSRF double-submit pattern also requires the
+  // csrfToken value to be forwarded as a header. If that cookie is not readable
+  // via document.cookie (e.g. due to a cookie path mismatch on the server), the
+  // request would reach the backend without the header and be rejected with
+  // "CSRF header missing". Fail fast here to trigger a clean logout instead of
+  // letting the server reject the request and potentially causing a retry loop.
+  if (cookieMode && !csrfToken) {
+    throw new Error("CSRF token not available");
+  }
+
   // buildAuthEndpoint resolves against canonical AUTH_BASE_URL (/api/v1/auth).
   const response = await axios.post(
     buildAuthEndpoint(AUTH_ENDPOINTS.refresh),
