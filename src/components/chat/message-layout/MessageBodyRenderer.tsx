@@ -397,7 +397,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
     const placeholder =
       message.lifecycleStatus === "deleted_admin"
         ? "Tin nhắn đã bị xóa bởi quản trị viên"
-        : "Tin nhắn đã được thu hồi";
+        : isOwn
+          ? "Bạn đã thu hồi một tin nhắn"
+          : "Tin nhắn đã được thu hồi";
     return (
       <span className="italic text-text-muted">{placeholder}</span>
     );
