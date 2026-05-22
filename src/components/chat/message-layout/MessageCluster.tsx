@@ -182,6 +182,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   );
 
   const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref stays in sync with showReactionPicker without stale closure in callbacks
+  const showReactionPickerRef = React.useRef(false);
+  showReactionPickerRef.current = showReactionPicker;
 
   const clearLongPressTimer = React.useCallback(() => {
     if (longPressTimerRef.current === null) return;
@@ -208,10 +211,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   }, []);
 
   const handleClusterMouseLeave = React.useCallback(() => {
+    // Use a longer delay when the reaction picker is open so the mouse has enough
+    // time to travel from the action bar icon up through the mb-2 gap into the picker
+    // (QuickReactBar is positioned absolute bottom-full, outside the cluster div's
+    // layout bounds, so the mouse briefly exits the cluster div during that traversal).
+    const delay = showReactionPickerRef.current ? 400 : 150;
     leaveTimerRef.current = setTimeout(() => {
       hideRail();
       setIsHovered(false);
-    }, 150);
+    }, delay);
   }, [hideRail]);
 
   React.useEffect(
@@ -520,8 +528,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                   setShowReactionPicker(false);
                 }}
                 onClose={() => setShowReactionPicker(false)}
-                onMouseEnter={handleClusterMouseEnter}
-                onMouseLeave={handleClusterMouseLeave}
               />
               <div
                 onPointerDown={handlePointerDown}
