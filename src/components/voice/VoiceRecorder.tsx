@@ -45,7 +45,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   const {
     state,
     duration,
-    error,
     permissionStatus,
     startRecording,
     stopRecording,
@@ -123,7 +122,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           <MicrophoneIcon className="h-5 w-5" />
         </button>
         <div className="text-sm text-text-muted">
-          {t("chat:voice.holdToRecord", { defaultValue: "Hold to record" })}
+          {t("chat:voice.holdToRecord", { defaultValue: "Giữ để ghi âm" })}
         </div>
       </div>
     );
@@ -137,12 +136,16 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           <XMarkIcon className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <p className="text-sm text-danger">{error}</p>
-          <p className="text-xs text-text-muted">
+          <p className="text-sm text-danger">
             {permissionStatus === "denied"
-              ? t("chat:voice.permissionDenied", { defaultValue: "Microphone access denied" })
-              : t("chat:voice.tryAgain", { defaultValue: "Click to try again" })}
+              ? t("chat:voice.permissionDenied", { defaultValue: "Quyền truy cập microphone bị từ chối" })
+              : t("chat:voice.recordingError", { defaultValue: "Không thể ghi âm. Vui lòng thử lại." })}
           </p>
+          {permissionStatus !== "denied" && (
+            <p className="text-xs text-text-muted">
+              {t("chat:voice.tryAgain", { defaultValue: "Bấm để thử lại" })}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -183,7 +186,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
         <div className="flex-1">
           <p className="text-sm font-medium text-text-primary">
-            {t("chat:voice.recordingComplete", { defaultValue: "Recording ready" })}
+            {t("chat:voice.recordingComplete", { defaultValue: "Ghi âm sẵn sàng" })}
           </p>
           <p className="text-xs text-text-muted">
             {formattedDuration}
@@ -258,8 +261,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           )} />
           <p className="text-sm font-medium text-text-primary">
             {state === "paused"
-              ? t("chat:voice.paused", { defaultValue: "Paused" })
-              : t("chat:voice.recording", { defaultValue: "Recording" })}
+              ? t("chat:voice.paused", { defaultValue: "Đã tạm dừng" })
+              : t("chat:voice.recording", { defaultValue: "Đang ghi" })}
           </p>
         </div>
         <p className="text-xs text-text-muted">

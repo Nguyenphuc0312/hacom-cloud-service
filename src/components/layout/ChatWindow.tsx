@@ -9,8 +9,6 @@ import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import type { MessageInputHandle } from "../input/MessageInput";
 import { ConversationLane } from "./ConversationLane";
-import { AudioCallDialog } from "../../features/chat/components/AudioCallDialog";
-import { VideoCallView } from "../../features/chat/components/VideoCallView";
 import type { MentionCandidate } from "../input/MessageInput";
 import { NotificationListSkeleton, toast } from "../ui";
 import {
@@ -619,8 +617,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
-  const [callMode, setCallMode] = React.useState<"audio" | "video" | null>(null);
-  const [composerHeight, setComposerHeight] = React.useState(0);
+const [composerHeight, setComposerHeight] = React.useState(0);
   const viewportMetrics = useMobileViewportMetrics();
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
@@ -1066,8 +1063,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onInfoClick={onToggleInfoPanel}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
-        onCallClick={() => setCallMode("audio")}
-        onVideoCallClick={() => setCallMode("video")}
         onSelectionMode={enterSelectionMode}
       />
 
@@ -1224,17 +1219,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      <AudioCallDialog
-        isOpen={callMode === "audio"}
-        name={callDisplayName}
-        statusLabel="Đang gọi..."
-        onClose={() => setCallMode(null)}
-      />
-      <VideoCallView
-        isOpen={callMode === "video"}
-        name={callDisplayName}
-        onClose={() => setCallMode(null)}
-      />
 
       {forwardMessages && (
         <React.Suspense fallback={null}>

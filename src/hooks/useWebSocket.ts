@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   authenticateSocket,
   initSocket,
@@ -301,6 +302,7 @@ export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
+  const { t } = useTranslation(["auth", "chat"]);
   const dispatch = useAppDispatch();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -601,7 +603,7 @@ export const useWebSocket = (
         notifySessionExpired: () => {
           notifyGlobalToast({
             level: "error",
-            message: "Session expired. Please login again.",
+            message: t("auth:session.expired", { defaultValue: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." }),
             dedupeKey: "auth:session-expired",
             cooldownMs: 30000,
           });
@@ -616,7 +618,7 @@ export const useWebSocket = (
         updateSocketAuth,
         subscribeToAuthRefreshEvents,
       }),
-    [onError],
+    [onError, t],
   );
   const {
     handleConnectFailure,
@@ -826,8 +828,8 @@ export const useWebSocket = (
         body:
           input.content ||
           (notificationKind === "system"
-            ? "System activity"
-            : "Sent an attachment"),
+            ? t("chat:notification.systemActivity", { defaultValue: "Hoạt động hệ thống" })
+            : t("chat:notification.sentAttachment", { defaultValue: "Đã gửi một tệp đính kèm." })),
         createdAt: new Date().toISOString(),
         conversationId: input.conversationId,
         messageId: input.messageId,
@@ -936,14 +938,14 @@ export const useWebSocket = (
         .getState()
         .conversations.find((item) => item.id === conversationId);
       const conversationLabel =
-        conversation?.displayName || conversation?.name || "Group";
+        conversation?.displayName || conversation?.name || t("chat:conversation.group", { defaultValue: "Nhóm" });
       const notificationId = `membership:${conversationId}:${membershipState}:${reason ?? "unknown"}`;
       const message =
         membershipState === "active" && reason === "added"
-          ? `You were added to ${conversationLabel}.`
+          ? t("chat:membership.added", { name: conversationLabel, defaultValue: `Bạn đã được thêm vào ${conversationLabel}.` })
           : membershipState === "active" && reason === "restored"
-            ? `You can access ${conversationLabel} again.`
-            : `Membership changed for ${conversationLabel}.`;
+            ? t("chat:membership.restored", { name: conversationLabel, defaultValue: `Bạn đã được khôi phục vào ${conversationLabel}.` })
+            : t("chat:membership.changed", { name: conversationLabel, defaultValue: `Thành viên của ${conversationLabel} đã thay đổi.` });
 
       const notificationSettings = getNotificationPreferences();
       useNotificationStore.getState().upsertNotification({
@@ -976,7 +978,7 @@ export const useWebSocket = (
         });
       }
     },
-    [getNotificationPreferences],
+    [getNotificationPreferences, t],
   );
 
   const maybeNotifyGroupUpdate = useCallback(
@@ -985,7 +987,7 @@ export const useWebSocket = (
         .getState()
         .conversations.find((item) => item.id === conversationId);
       const conversationLabel =
-        conversation?.displayName || conversation?.name || "Group";
+        conversation?.displayName || conversation?.name || t("chat:conversation.group", { defaultValue: "Nhóm" });
       const notificationId = `group:${conversationId}:${notificationSuffix}`;
 
       useNotificationStore.getState().upsertNotification({
@@ -1019,7 +1021,7 @@ export const useWebSocket = (
         });
       }
     },
-    [getNotificationPreferences],
+    [getNotificationPreferences, t],
   );
 
   const requestConversationJoin = useCallback(
@@ -1136,13 +1138,13 @@ export const useWebSocket = (
 
     const handleConnectError = (data: unknown) => {
       const message =
-        asString(asRecord(data)?.message) ?? "WebSocket connection error";
+        asString(asRecord(data)?.message) ?? t("chat:websocket.connectionError", { defaultValue: "Kết nối thời gian thực bị gián đoạn. Hệ thống đang thử kết nối lại." });
       onError?.(new Error(message));
     };
 
     const handleWsError = (data: unknown) => {
       const message =
-        asString(asRecord(data)?.message) ?? "WebSocket server error";
+        asString(asRecord(data)?.message) ?? t("chat:websocket.serverError", { defaultValue: "Kết nối máy chủ gặp sự cố. Vui lòng thử lại sau." });
       onError?.(new Error(message));
     };
 
@@ -2071,7 +2073,7 @@ export const useWebSocket = (
       if (conversationId) {
         maybeNotifyGroupUpdate(
           conversationId,
-          "Group settings changed.",
+          t("chat:group.settingsChanged", { defaultValue: "Cài đặt nhóm đã thay đổi." }),
           `settings:${asString(payload?.eventId) ?? Date.now()}`,
         );
       }

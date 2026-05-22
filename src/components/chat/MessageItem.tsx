@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { DateDivider } from "./DateDivider";
 import { UnreadDivider } from "./UnreadDivider";
 import { MessageCluster } from "./message-layout/MessageCluster";
@@ -135,6 +136,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onToggleTextExpand,
   shouldAnimateInsert = false,
 }) => {
+  const { t } = useTranslation();
   if (item.kind === "date") {
     return <DateDivider date={item.date} density={density} />;
   }
@@ -201,7 +203,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
               checked={isSelected}
               onChange={() => onToggleSelect?.(resolvedMessage.id)}
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer"
-              aria-label={`Select message`}
+              aria-label={t("chat:selection.selectMessage", { defaultValue: "Chọn tin nhắn" })}
               onClick={(event) => event.stopPropagation()}
             />
           </div>

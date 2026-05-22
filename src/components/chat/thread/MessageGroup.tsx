@@ -457,7 +457,7 @@ const MessageGroupItem: React.FC<{
               onChange={() => onToggleSelect?.(message.id)}
               className="h-4 w-4 cursor-pointer rounded border-border text-primary focus:ring-primary/30"
               aria-label={t("chat:selection.selectMessage", {
-                defaultValue: "Select message",
+                defaultValue: "Chọn tin nhắn",
               })}
             />
           </div>
