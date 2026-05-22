@@ -183,6 +183,10 @@ export const realtimeMiddleware: Middleware<
   }
 
   if (realtimeMessageUpdated.match(action)) {
+    if (!action.payload.conversationId) {
+      console.warn("[realtimeMiddleware] realtimeMessageUpdated received without conversationId — skipped", action.payload);
+      return result;
+    }
     const patch = storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
