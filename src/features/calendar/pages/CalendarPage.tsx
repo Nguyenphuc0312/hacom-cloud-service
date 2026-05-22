@@ -512,8 +512,6 @@ const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
   onClick: () => void;
 }> = ({ attendance, onClick }) => {
-  const colors = getAttendanceColors(attendance.classificationColor);
-
   return (
     <button
       type="button"
@@ -522,23 +520,25 @@ const AttendanceBadge: React.FC<{
         onClick();
       }}
       className={clsx(
-        "attendance-badge block w-full cursor-pointer rounded border text-left transition-micro",
-        colors.bg,
-        colors.border,
+        "attendance-badge block w-full cursor-pointer rounded border border-border bg-surface text-left transition-micro hover:bg-surface-hover",
         "px-1.5 py-0.5 text-xs"
       )}
-      title={attendance.classificationLabel || "Chưa có dữ liệu chấm công"}
+      title={
+        attendance.firstPunch || attendance.lastPunch
+          ? `${formatTime(attendance.firstPunch)} - ${formatTime(attendance.lastPunch)}`
+          : "Chưa có dữ liệu chấm công"
+      }
     >
-      <div className="flex items-center gap-1">
-        <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", colors.dot)} />
-        <span className={clsx("truncate font-medium", colors.text)}>
-          {attendance.firstPunch && attendance.lastPunch
-            ? `${formatTime(attendance.firstPunch)} - ${formatTime(attendance.lastPunch)}`
-            : attendance.firstPunch
-              ? `${formatTime(attendance.firstPunch)} - --`
-              : "Chưa có dữ liệu"}
+      {attendance.firstPunch || attendance.lastPunch ? (
+        <span className="block space-y-0.5 font-medium text-text-primary">
+          <span className="block truncate">Giờ đến: {formatTime(attendance.firstPunch)}</span>
+          <span className="block truncate">Giờ về: {formatTime(attendance.lastPunch)}</span>
         </span>
-      </div>
+      ) : (
+        <span className="block truncate font-medium text-text-primary">
+          Chưa có dữ liệu
+        </span>
+      )}
     </button>
   );
 };
@@ -963,7 +963,6 @@ export const CalendarPage: React.FC = () => {
                   const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
                   const remainingCount = dayEvents.length - maxVisibleEvents;
                   const attendance = getAttendanceForDate(dayInfo.date);
-                  const attendanceColors = getAttendanceColors(attendance?.classificationColor);
 
                   return (
                     <div
@@ -977,9 +976,7 @@ export const CalendarPage: React.FC = () => {
                           "hover:bg-surface-hover",
                         isSelected(dayInfo.date) &&
                           !isToday(dayInfo.date) &&
-                          "bg-primary/5 ring-2 ring-primary/30 ring-inset",
-                        attendance?.classificationColor &&
-                          attendanceColors.bg
+                          "ring-1 ring-border-strong ring-inset"
                       )}
                     >
                       {/* Date number */}
@@ -994,9 +991,6 @@ export const CalendarPage: React.FC = () => {
                         >
                           {dayInfo.date.getDate()}
                         </span>
-                        {attendance && (
-                          <span className={clsx("h-2 w-2 rounded-full", attendanceColors.dot)} />
-                        )}
                       </div>
 
                       {/* Attendance badge */}

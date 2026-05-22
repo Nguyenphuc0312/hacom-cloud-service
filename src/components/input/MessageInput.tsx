@@ -1264,7 +1264,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                       name: conversationName,
                       defaultValue: `Nhập @, tin nhắn tới ${conversationName}`,
                     })
-                    : t("chat:composer.placeholder")
+                    : t("chat:composer.placeholder", {
+                      defaultValue: "Nhập tin nhắn của bạn...",
+                    })
                 }
                 disabled={disabled}
                 onContentChange={(plainText) => {

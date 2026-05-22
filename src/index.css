@@ -846,6 +846,20 @@ a:focus-visible {
   opacity: 1;
 }
 
+/* TipTap v3 placeholder –
+   The empty <p> gets class "is-empty" and attribute data-placeholder.
+   The container div gets class "is-editor-empty" via emptyEditorClass.
+   Both selectors are kept for compatibility. */
+.tiptap-editor-inner p.is-empty::before,
+.tiptap-editor-inner.is-editor-empty p:first-child::before {
+  color: hsl(var(--color-text-muted) / 0.75);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* Chat background pattern */
 .chat-background {
   background-color: hsl(var(--chat-shell-bg));
@@ -1321,7 +1335,7 @@ a:focus-visible {
     background: var(--hc-bg-app);
   }
 
-  .hc-app-shell > :first-child {
+  .hc-app-shell> :first-child {
     flex: 0 0 auto;
     width: var(--hc-sidebar-width);
     min-width: 0;
@@ -1685,7 +1699,7 @@ a:focus-visible {
   }
 
   @media (max-width: 1023px) {
-    .hc-app-shell > :first-child {
+    .hc-app-shell> :first-child {
       flex: 0 0 auto;
       width: var(--hc-sidebar-width-tablet);
       max-width: min(50vw, var(--hc-sidebar-width-tablet));
