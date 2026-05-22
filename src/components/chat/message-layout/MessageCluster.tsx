@@ -535,7 +535,17 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 }}
                 onClose={() => setShowReactionPicker(false)}
                 onMouseEnter={handleClusterMouseEnter}
+                onMouseLeave={handleClusterMouseLeave}
               />
+              {/* Hover bridge: fills the mb-2 gap below QuickReactBar so the
+                  mouse travelling from picker → bubble doesn't lose hover state. */}
+              {showReactionPicker && !isSelectionMode && (
+                <div
+                  aria-hidden="true"
+                  className="absolute bottom-full h-2 w-full"
+                  onMouseEnter={handleClusterMouseEnter}
+                />
+              )}
               <div
                 onPointerDown={handlePointerDown}
                 onPointerUp={clearLongPressTimer}

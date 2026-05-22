@@ -330,8 +330,10 @@ const MessageGroupItem: React.FC<{
     const handleItemMouseLeave = React.useCallback(() => {
       leaveTimerRef.current = setTimeout(() => {
         setIsHovered(false);
-        setShowReactionPicker(false);
-      }, 150);
+        // Never close showReactionPicker on mouseleave — it self-closes via
+        // click-outside (document mousedown) or ESC. Closing here would make
+        // it impossible to drag the mouse from the action bar into the picker.
+      }, 180);
     }, []);
 
     React.useEffect(
@@ -406,7 +408,7 @@ const MessageGroupItem: React.FC<{
           className={clsx(
             "absolute top-1 z-20 hidden transition-all duration-150 md:block",
             isOwn ? "right-full mr-2" : "left-full ml-2",
-            isHovered
+            (isHovered || showReactionPicker)
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
@@ -486,6 +488,16 @@ const MessageGroupItem: React.FC<{
                 onMouseEnter={handleItemMouseEnter}
                 onMouseLeave={handleItemMouseLeave}
               />
+              {/* Hover bridge: fills the mb-2 gap between QuickReactBar bottom
+                  and message surface so the mouse can travel from picker to
+                  bubble (and vice-versa) without triggering the close timer. */}
+              {showReactionPicker && !isSelectionMode && (
+                <div
+                  aria-hidden="true"
+                  className="absolute bottom-full h-2 w-full"
+                  onMouseEnter={handleItemMouseEnter}
+                />
+              )}
               {actionRail}
             <MessageBubble
               isOwn={isOwn}
