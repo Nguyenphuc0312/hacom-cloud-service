@@ -514,8 +514,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const outgoingContent = (content || "").trim();
       if (!outgoingContent && !hasAttachments) return;
 
+      const allAreImages =
+        hasAttachments &&
+        allAttachments.every(
+          (a) =>
+            a.type === MessageType.IMAGE ||
+            (typeof a.mimeType === "string" && a.mimeType.startsWith("image/")),
+        );
       const messageType = hasAttachments
-        ? MessageType.FILE
+        ? allAreImages
+          ? MessageType.IMAGE
+          : MessageType.FILE
         : (type as MessageType | undefined);
       const attachmentArg: Attachment | Attachment[] | undefined =
         hasAttachments
