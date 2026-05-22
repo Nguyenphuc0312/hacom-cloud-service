@@ -1224,6 +1224,22 @@ export const messageApi = {
     });
   },
 
+  getMessageEditHistory: async (messageId: string) => {
+    const response = await apiClient.get<{
+      success: boolean;
+      data: {
+        history: Array<{
+          version: number;
+          previousContent: string;
+          newContent: string;
+          editedBy: string;
+          editedAt: string;
+        }>;
+      };
+    }>(`/messages/${messageId}/edit-history`);
+    return response.data.data.history;
+  },
+
   pinMessage: async (messageId: string) => {
     const response = await apiClient.post<ApiResponse<Message>>(
       `/messages/${messageId}/pin`,
