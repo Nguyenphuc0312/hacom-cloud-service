@@ -184,9 +184,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   );
 
   const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref stays in sync with showReactionPicker without stale closure in callbacks
-  const showReactionPickerRef = React.useRef(false);
-  showReactionPickerRef.current = showReactionPicker;
+  // Keep isActionsOpen in a ref so the leave callback reads fresh value without stale closure.
+  const isActionsOpenRef = React.useRef(isActionsOpen);
+  isActionsOpenRef.current = isActionsOpen;
 
   const clearLongPressTimer = React.useCallback(() => {
     if (longPressTimerRef.current === null) return;
@@ -213,16 +213,17 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   }, []);
 
   const handleClusterMouseLeave = React.useCallback(() => {
-    // Use a longer delay when the reaction picker is open so the mouse has enough
-    // time to travel from the action bar icon up through the mb-2 gap into the picker
-    // (QuickReactBar is positioned absolute bottom-full, outside the cluster div's
-    // layout bounds, so the mouse briefly exits the cluster div during that traversal).
-    const delay = showReactionPickerRef.current ? 400 : 150;
+    // Only hide the action bar rail on leave — never close the reaction picker here.
+    // The picker (showReactionPicker) is self-contained: it closes when the user picks
+    // an emoji, clicks outside (document mousedown), or presses ESC. Tying its
+    // lifetime to hover state makes it impossible to drag the mouse from the action
+    // bar across the message bubble to reach the QuickReactBar above the bubble.
     leaveTimerRef.current = setTimeout(() => {
-      hideRail();
-      setIsHovered(false);
-    }, delay);
-  }, [hideRail]);
+      if (!isActionsOpenRef.current) {
+        setIsHovered(false);
+      }
+    }, 150);
+  }, []);
 
   React.useEffect(
     () => () => {
@@ -430,11 +431,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       <MessageRow
         isOwn={isOwn}
         actionRail={
-          isHovered ? (
+          (isHovered || showReactionPicker) ? (
             <div
               className="transition-fast pointer-events-auto opacity-100"
               onMouseEnter={handleClusterMouseEnter}
-              onMouseLeave={handleClusterMouseLeave}
             >
               <MessageActionBar
                 isOutgoing={isOwn}
@@ -535,7 +535,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 }}
                 onClose={() => setShowReactionPicker(false)}
                 onMouseEnter={handleClusterMouseEnter}
-                onMouseLeave={handleClusterMouseLeave}
               />
               <div
                 onPointerDown={handlePointerDown}
