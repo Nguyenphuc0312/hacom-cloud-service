@@ -26,6 +26,7 @@ interface MessageMetaProps {
   density?: ChatDensity;
   layout?: "block" | "inline";
   className?: string;
+  onViewEditHistory?: (messageId: string) => void;
 }
 
 const MessageStatusGlyph: React.FC<{ message: Message }> = React.memo(({ message }) => {
@@ -114,6 +115,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     density,
     layout = "block",
     className,
+    onViewEditHistory,
   }) => {
     const { t } = useTranslation();
     const contract = getTimelineDensityContract(density);
@@ -142,14 +144,31 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
         title={fullTimestamp}
       >
         {message.isEdited && (
-          <span
-            className="inline-flex items-center gap-1"
-            title={editedTitle}
-            aria-label={editedTitle}
-          >
-            <PencilIcon className="h-3 w-3" />
-            <span>{editedLabel}</span>
-          </span>
+          onViewEditHistory ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 underline-offset-2 hover:underline focus:outline-none"
+              title={t("chat:message.editHistory.viewTitle", {
+                defaultValue: "Xem lịch sử chỉnh sửa",
+              })}
+              aria-label={t("chat:message.editHistory.viewTitle", {
+                defaultValue: "Xem lịch sử chỉnh sửa",
+              })}
+              onClick={() => onViewEditHistory(message.id)}
+            >
+              <PencilIcon className="h-3 w-3" />
+              <span>{editedLabel}</span>
+            </button>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1"
+              title={editedTitle}
+              aria-label={editedTitle}
+            >
+              <PencilIcon className="h-3 w-3" />
+              <span>{editedLabel}</span>
+            </span>
+          )
         )}
         <span>{timeStr}</span>
         {isOwn && showStatus && (
@@ -166,7 +185,8 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     prev.showStatus === next.showStatus &&
     prev.density === next.density &&
     prev.layout === next.layout &&
-    prev.className === next.className,
+    prev.className === next.className &&
+    prev.onViewEditHistory === next.onViewEditHistory,
 );
 
 export default MessageMeta;

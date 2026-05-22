@@ -29,6 +29,7 @@ import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
 import { MessageSurface } from "./MessageSurface";
+import { MessageEditHistoryModal } from "../../message/MessageEditHistoryModal";
 import type { TimelineMergeLevel } from "../../../hooks/useMessageGrouping";
 import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
@@ -135,6 +136,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
   const [showReactionPicker, setShowReactionPicker] = React.useState(false);
+  const [editHistoryMessageId, setEditHistoryMessageId] = React.useState<string | null>(null);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -573,6 +575,11 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 isOwn={isOwn}
                 showStatus={showStatus}
                 density={density}
+                onViewEditHistory={
+                  message.isEdited
+                    ? (id) => setEditHistoryMessageId(id)
+                    : undefined
+                }
               />
             )}
 
@@ -611,6 +618,13 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         onClose={closeActions}
         actionLabelOverrides={adminRecallLabelOverride}
       />
+
+      {editHistoryMessageId && (
+        <MessageEditHistoryModal
+          messageId={editHistoryMessageId}
+          onClose={() => setEditHistoryMessageId(null)}
+        />
+      )}
     </div>
   );
 };
