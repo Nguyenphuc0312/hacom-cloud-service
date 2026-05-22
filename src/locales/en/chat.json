@@ -160,7 +160,8 @@
     "resultCount_other": "{{count}} results"
   },
   "conversation": {
-    "untitled": "Untitled conversation"
+    "untitled": "Untitled conversation",
+    "group": "Group"
   },
   "contactShare": {
     "title": "Share contact",
@@ -289,7 +290,18 @@
   "voice": {
     "play": "Play",
     "pause": "Pause",
-    "progress": "Audio progress"
+    "progress": "Audio progress",
+    "startRecording": "Start recording",
+    "holdToRecord": "Hold to record",
+    "recording": "Recording",
+    "paused": "Paused",
+    "stop": "Stop recording",
+    "resume": "Resume",
+    "sendRecording": "Send recording",
+    "recordingComplete": "Recording ready",
+    "recordingError": "Unable to record. Please try again.",
+    "permissionDenied": "Microphone access denied",
+    "tryAgain": "Click to try again"
   },
   "image": {
     "failedToLoad": "Failed to load image",
@@ -362,5 +374,25 @@
     "recent": "Recent",
     "search": "Search stickers...",
     "noResults": "No stickers found"
+  },
+  "notification": {
+    "sentAttachment": "Sent an attachment.",
+    "systemActivity": "System activity"
+  },
+  "membership": {
+    "added": "You were added to {{name}}.",
+    "restored": "You can access {{name}} again.",
+    "changed": "Membership of {{name}} has changed."
+  },
+  "group": {
+    "settingsChanged": "Group settings changed."
+  },
+  "websocket": {
+    "connectionError": "Real-time connection interrupted. Reconnecting...",
+    "serverError": "Server connection error. Please try again later."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Retry"
   }
 }

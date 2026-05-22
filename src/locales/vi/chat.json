@@ -160,7 +160,8 @@
     "resultCount_other": "{{count}} kết quả"
   },
   "conversation": {
-    "untitled": "Cuộc trò chuyện chưa đặt tên"
+    "untitled": "Cuộc trò chuyện chưa đặt tên",
+    "group": "Nhóm"
   },
   "contactShare": {
     "title": "Chia sẻ liên hệ",
@@ -287,6 +288,7 @@
     "download": "Tải tệp"
   },
   "voice": {
+    "recordingError": "Không thể ghi âm. Vui lòng thử lại.",
     "play": "Phát",
     "pause": "Tạm dừng",
     "progress": "Tiến độ âm thanh",
@@ -372,5 +374,25 @@
     "recent": "Gần đây",
     "search": "Tìm sticker...",
     "noResults": "Không tìm thấy sticker"
+  },
+  "notification": {
+    "sentAttachment": "Đã gửi một tệp đính kèm.",
+    "systemActivity": "Hoạt động hệ thống"
+  },
+  "membership": {
+    "added": "Bạn đã được thêm vào {{name}}.",
+    "restored": "Bạn đã được khôi phục vào {{name}}.",
+    "changed": "Thành viên của {{name}} đã thay đổi."
+  },
+  "group": {
+    "settingsChanged": "Cài đặt nhóm đã thay đổi."
+  },
+  "websocket": {
+    "connectionError": "Kết nối thời gian thực bị gián đoạn. Hệ thống đang thử kết nối lại.",
+    "serverError": "Kết nối máy chủ gặp sự cố. Vui lòng thử lại sau."
+  },
+  "common": {
+    "cancel": "Hủy",
+    "retry": "Thử lại"
   }
 }
