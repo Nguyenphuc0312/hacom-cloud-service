@@ -431,7 +431,11 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isOwn={isOwn}
         actionRail={
           isHovered ? (
-            <div className="transition-fast pointer-events-auto opacity-100">
+            <div
+              className="transition-fast pointer-events-auto opacity-100"
+              onMouseEnter={handleClusterMouseEnter}
+              onMouseLeave={handleClusterMouseLeave}
+            >
               <MessageActionBar
                 isOutgoing={isOwn}
                 onReplyClick={() => onReply(message)}
@@ -530,6 +534,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                   setShowReactionPicker(false);
                 }}
                 onClose={() => setShowReactionPicker(false)}
+                onMouseEnter={handleClusterMouseEnter}
+                onMouseLeave={handleClusterMouseLeave}
               />
               <div
                 onPointerDown={handlePointerDown}
