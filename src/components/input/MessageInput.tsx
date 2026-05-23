@@ -1,22 +1,11 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  PaperClipIcon,
-  XCircleIcon,
-  XMarkIcon,
-  EllipsisHorizontalIcon,
-  PencilIcon,
-} from "@heroicons/react/24/outline";
-
 import type { Editor } from "@tiptap/react";
-import { AttachmentMenu } from "./AttachmentMenu";
+
 import { AttachmentTray } from "./AttachmentTray";
 import { TipTapEditor, type TipTapEditorHandle } from "./TipTapEditor";
 import { RichTextToolbar } from "./RichTextToolbar";
-import { EmojiButton } from "./EmojiButton";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
@@ -26,13 +15,9 @@ import {
 } from "../../features/chat/components/PollCreateDialog";
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
-import type { ComposerMode } from "../../hooks/useComposerAvailability";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
-import type { InputMode, Message } from "../../types";
-import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { logMessageDebug } from "../../utils/messageDebug";
-import { getPreviewFromMessage } from "../../utils/messageContent.utils";
-import { InlineNotice, toast } from "../ui";
+import { toast } from "../ui";
 import {
   isChatPerformanceEnabled,
   recordChatPerformanceMeasure,
@@ -44,227 +29,23 @@ import {
 } from "../../utils/messageLengthPolicy";
 import { hasRichFormatting } from "../../utils/messageContent.utils";
 
-export interface MentionCandidate {
-  id: string;
-  username: string;
-  /** Primary display name for UI (fullName or resolved displayName) */
-  displayName?: string;
-  /** HR full name if available */
-  fullName?: string | null;
-  employeeCode?: string;
-  /** Resolved display name for insert (fullName > displayName > username) */
-  resolvedName?: string;
-}
-
-/** Imperative handle for MessageInput — allows parent to programmatically control the composer */
-export interface MessageInputHandle {
-  addFile: (file: File) => void;
-  /** Focus the editor — e.g. after selecting a new conversation */
-  focus: () => void;
-}
-
-const compactStatusToneClasses = {
-  info: "border-sky-200 bg-sky-50 text-sky-800",
-  warn: "border-amber-200 bg-amber-50 text-amber-900",
-  error: "border-rose-200 bg-rose-50 text-rose-800",
-} as const;
-
-const compactStatusToneIcons = {
-  info: InformationCircleIcon,
-  warn: ExclamationTriangleIcon,
-  error: XCircleIcon,
-} as const;
-
-const shouldRenderCompactStatusBar = (composerMode: ComposerMode): boolean =>
-  composerMode === "reconnecting" ||
-  composerMode === "offline" ||
-  composerMode === "unauthenticated";
-
-interface MessageInputProps {
-  value: string;
-  valueResetKey?: number;
-  onChange: (value: string) => void;
-  onSend: (
-    content?: string,
-    fileMeta?: unknown,
-    type?: string,
-  ) => unknown | Promise<unknown>;
-  mode: InputMode;
-  conversationId?: string;
-  mentionCandidates?: MentionCandidate[];
-  replyToMessage?: Message;
-  editingMessage?: Message;
-  onCancelReply?: () => void;
-  onCancelEdit?: () => void;
-  onTyping?: (isTyping: boolean) => void;
-  sendOnEnter?: boolean;
-  disabled?: boolean;
-  submitDisabled?: boolean;
-  attachmentsDisabled?: boolean;
-  className?: string;
-  onLayoutHeightChange?: (nextHeight: number) => void;
-  disabledReason?: string;
-  disabledReasonTone?: "info" | "warn" | "error";
-  composerMode?: ComposerMode;
-  currentUserId?: string;
-  onShareContact?: (contactUserId: string) => Promise<void>;
-  conversationName?: string;
-
-  // ── Multi-file upload queue (from ChatWindow) ──
-  uploadDrafts?: AttachmentDraft[];
-  onAddFiles?: (files: File[]) => { errors?: string[] } | void;
-  onRemoveDraft?: (localId: string) => void;
-  onCancelUpload?: (localId: string) => void;
-  onRetryUpload?: (localId: string) => void;
-  onClearAllDrafts?: () => void;
-  hasUploadingDrafts?: boolean;
-  hasFailedDrafts?: boolean;
-  hasReadyDrafts?: boolean;
-}
-
-interface MentionMatch {
-  start: number;
-  end: number;
-  query: string;
-}
-
-type ComposerVisualState =
-  | "idle"
-  | "focus"
-  | "ready-to-send"
-  | "uploading"
-  | "disabled"
-  | "slow-mode"
-  | "offline";
-
-interface ComposerVisualStyles {
-  shell: string;
-  attachmentButton: string;
-  attachmentDivider: string;
-}
-
-const COMPOSER_VISUAL_STATE_MAP: Record<
+import { ComposerStatusBanner } from "./MessageInput/ComposerStatusBanner";
+import { ComposerReplyBanner } from "./MessageInput/ComposerReplyBanner";
+import { ComposerEditBanner } from "./MessageInput/ComposerEditBanner";
+import { ComposerMentionPanel } from "./MessageInput/ComposerMentionPanel";
+import { ComposerActionBar } from "./MessageInput/ComposerActionBar";
+import { ComposerLengthFooter } from "./MessageInput/ComposerLengthFooter";
+import { COMPOSER_VISUAL_STATE_MAP } from "./MessageInput/constants";
+import { buildMentionMatch, normalizeMentionCandidates } from "./MessageInput/utils";
+import type {
+  MentionCandidate,
+  MessageInputHandle,
+  MessageInputProps,
+  MentionMatch,
   ComposerVisualState,
-  ComposerVisualStyles
-> = {
-  idle: {
-    shell: "border-border/80 bg-surface/50 dark:bg-white/5 shadow-sm",
-    attachmentButton:
-      "text-text-muted hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-border/40",
-  },
-  focus: {
-    shell:
-      "border-primary/26 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/12",
-    attachmentButton:
-      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-border/40",
-  },
-  "ready-to-send": {
-    shell:
-      "border-primary/22 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
-    attachmentButton:
-      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-border/35",
-  },
-  uploading: {
-    shell:
-      "border-primary/20 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
-    attachmentButton:
-      "text-primary hover:bg-primary/8 hover:text-primary-hover",
-    attachmentDivider: "border-border/35",
-  },
-  disabled: {
-    shell: "border-transparent bg-disabled-bg shadow-none",
-    attachmentButton: "text-text-disabled",
-    attachmentDivider: "border-transparent",
-  },
-  "slow-mode": {
-    shell:
-      "border-warning/35 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-warning/10",
-    attachmentButton: "text-warning hover:bg-warning/10 hover:text-warning",
-    attachmentDivider: "border-warning/18",
-  },
-  offline: {
-    shell:
-      "border-danger/28 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-danger/10",
-    attachmentButton: "text-danger hover:bg-danger/10 hover:text-danger",
-    attachmentDivider: "border-danger/18",
-  },
-};
+} from "./MessageInput/types";
 
-const buildMentionMatch = (
-  text: string,
-  caret: number,
-): MentionMatch | null => {
-  if (caret < 0 || caret > text.length) {
-    return null;
-  }
-
-  const beforeCaret = text.slice(0, caret);
-  const mentionStart = beforeCaret.lastIndexOf("@");
-  if (mentionStart < 0) {
-    return null;
-  }
-
-  const prefixChar = mentionStart === 0 ? " " : beforeCaret[mentionStart - 1];
-  const isValidPrefix = /\s|\(|\[|\{|"|'|`/.test(prefixChar);
-  if (!isValidPrefix) {
-    return null;
-  }
-
-  const mentionQuery = beforeCaret.slice(mentionStart + 1);
-  if (
-    mentionQuery.includes(" ") ||
-    mentionQuery.includes("\n") ||
-    mentionQuery.includes("\t")
-  ) {
-    return null;
-  }
-
-  if (!/^[a-zA-Z0-9._-]*$/.test(mentionQuery)) {
-    return null;
-  }
-
-  return {
-    start: mentionStart,
-    end: caret,
-    query: mentionQuery,
-  };
-};
-
-const normalizeMentionCandidates = (
-  mentionCandidates: MentionCandidate[],
-): MentionCandidate[] => {
-  const seen = new Set<string>();
-  const normalized: MentionCandidate[] = [];
-
-  mentionCandidates.forEach((candidate) => {
-    const username = candidate.username.trim();
-    if (!username) return;
-
-    const key = `${candidate.id}:${username.toLowerCase()}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-
-    // Resolve the primary display name: fullName > displayName > username
-    const resolvedName =
-      candidate.fullName?.trim() ||
-      candidate.displayName?.trim() ||
-      username;
-
-    normalized.push({
-      id: candidate.id,
-      username,
-      displayName: candidate.displayName?.trim() || undefined,
-      fullName: candidate.fullName?.trim() || undefined,
-      employeeCode: candidate.employeeCode?.trim() || undefined,
-      resolvedName,
-    });
-  });
-
-  return normalized;
-};
+export type { MentionCandidate, MessageInputHandle };
 
 const MessageInputComponent = React.forwardRef(function MessageInput(
   props: MessageInputProps,
@@ -648,15 +429,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
     logMessageDebug("MessageInput", "submit_intent", {
       conversationId,
-      hasQueueDrafts, 
-      hasReadyDrafts, 
-      hasText: draftValue.trim().length > 0, 
-      contentPreview: draftValue.trim().slice(0, 120), 
-      disabled, 
-      submitDisabled, 
-    }); 
-    try { 
-      if (hasQueueDrafts) { 
+      hasQueueDrafts,
+      hasReadyDrafts,
+      hasText: draftValue.trim().length > 0,
+      contentPreview: draftValue.trim().slice(0, 120),
+      disabled,
+      submitDisabled,
+    });
+    try {
+      if (hasQueueDrafts) {
         // Capture TipTap content before clearing — preserves rich text formatting
         const html = tipTapRef.current?.getHTML() ?? "";
         const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
@@ -672,30 +453,30 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         scheduleComposerResize();
         clearMentionState();
         stopTypingNow();
-        setLiveRegionMessage(optimisticAnnouncement); 
-        return; 
-      } 
+        setLiveRegionMessage(optimisticAnnouncement);
+        return;
+      }
 
-      await handleSendText(); 
+      await handleSendText();
     } catch {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
     } finally {
       releasePrimarySendLock();
     }
-  }, [ 
-    clearMentionState, 
-    conversationId, 
-    disabled, 
-    handleSendText, 
-    hasReadyDrafts, 
-    optimisticAnnouncement, 
+  }, [
+    clearMentionState,
+    conversationId,
+    disabled,
+    handleSendText,
+    hasReadyDrafts,
+    optimisticAnnouncement,
     onChange,
-    onSend, 
-    releasePrimarySendLock, 
-    scheduleComposerResize, 
-    stopTypingNow, 
-    submitDisabled, 
-    t, 
+    onSend,
+    releasePrimarySendLock,
+    scheduleComposerResize,
+    stopTypingNow,
+    submitDisabled,
+    t,
     uploadDrafts?.length,
     draftValue,
     messageValidation.canSendInlineMessage,
@@ -723,13 +504,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       updateMentionState,
     ],
   );
- 
+
   const handleFocusEditor = React.useCallback((e: React.MouseEvent) => {
     // Do not focus if the click was on an interactive element like a button or menu
     const target = e.target as HTMLElement;
     const isInteractive = !!target.closest("button, input, select, textarea, [role='button'], [role='menuitem'], .z-dropdown");
     const isInsideEditor = !!target.closest(".tiptap-composer");
-    
+
     if (!isInteractive && !isInsideEditor && tipTapRef.current) {
       // Focus the editor (TipTapEditor exposes focus() which focuses at the end)
       tipTapRef.current.focus();
@@ -940,15 +721,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         : composerMode === "slow_mode"
           ? "slow-mode"
           : "ready-to-send";
-  const resolvedCompactStatusTone =
-    disabledReasonTone === "error"
-      ? "error"
-      : disabledReasonTone === "info"
-        ? "info"
-        : "warn";
-  const showCompactStatusBar =
-    Boolean(disabledReason) && shouldRenderCompactStatusBar(composerMode);
-  const CompactStatusIcon = compactStatusToneIcons[resolvedCompactStatusTone];
 
   React.useEffect(() => {
     if (mode === "reply" || mode === "edit") {
@@ -1064,34 +836,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           {liveRegionMessage}
         </p>
 
-        {disabledReason &&
-          (showCompactStatusBar ? (
-            <div className="mb-2 flex items-start">
-              <div
-                className={clsx(
-                  "inline-flex max-w-full items-start gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm",
-                  compactStatusToneClasses[resolvedCompactStatusTone],
-                )}
-                role="status"
-                aria-live="polite"
-              >
-                <CompactStatusIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0 leading-5">{disabledReason}</span>
-              </div>
-            </div>
-          ) : (
-            <InlineNotice
-              tone={
-                disabledReasonTone === "error"
-                  ? "error"
-                  : disabledReasonTone === "info"
-                    ? "info"
-                    : "warning"
-              }
-              message={disabledReason}
-              className="mb-2"
-            />
-          ))}
+        {disabledReason && (
+          <ComposerStatusBanner
+            disabledReason={disabledReason}
+            disabledReasonTone={disabledReasonTone}
+            composerMode={composerMode}
+          />
+        )}
 
         <input
           ref={fileInputRef}
@@ -1104,63 +855,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-border/70 bg-surface px-3 py-2 animate-slide-up-fade">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="h-7 w-1 rounded-full bg-primary" />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-primary">
-                  {t("chat:composer.replyingTo", {
-                    name: replyToMessage.senderName,
-                  })}
-                </p>
-                <p className="truncate text-xs text-text-muted">
-                  {getPreviewFromMessage({
-                    contentFormat: replyToMessage.contentFormat,
-                    plainText: replyToMessage.plainText,
-                    content: replyToMessage.content,
-                  })}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onCancelReply}
-              className={clsx(
-                "rounded-full p-1 transition-colors hover:bg-surface-active",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-              )}
-              aria-label={t("chat:composer.cancelReply")}
-            >
-              <XMarkIcon className="h-4 w-4 text-text-muted" />
-            </button>
-          </div>
+          <ComposerReplyBanner
+            replyToMessage={replyToMessage}
+            onCancelReply={onCancelReply}
+          />
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="h-7 w-1 rounded-full bg-warning" />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-warning">
-                  {t("chat:composer.editing")}
-                </p>
-                <p className="truncate text-xs text-warning">
-                  {editingMessage.content}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onCancelEdit}
-              className={clsx(
-                "rounded-full p-1 transition-colors hover:bg-warning/20",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-              )}
-              aria-label={t("chat:composer.cancelEdit")}
-            >
-              <XMarkIcon className="h-4 w-4 text-warning" />
-            </button>
-          </div>
+          <ComposerEditBanner
+            editingMessage={editingMessage}
+            onCancelEdit={onCancelEdit}
+          />
         )}
 
         {/* Multi-file upload tray */}
@@ -1191,68 +896,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           >
             <div className="flex w-full items-end px-3 py-2">
               {showMentionPanel && (
-                <div
-                  id={mentionListId}
-                  role="listbox"
-                  aria-label={t("chat:composer.mentionList")}
-                  aria-activedescendant={`${mentionListId}-option-${activeMentionIndex}`}
-                  className={clsx(
-                    "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
-                    "p-1",
-                  )}
-                >
-                  {mentionSuggestions.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-text-muted">
-                      {t("chat:composer.noMentionResults")}
-                    </p>
-                  ) : (
-                    mentionSuggestions.map((candidate, index) => {
-                      const isActive = index === activeMentionIndex;
-                      // Primary: resolved full name / display name
-                      const primaryLabel =
-                        candidate.resolvedName ||
-                        candidate.displayName ||
-                        candidate.fullName ||
-                        candidate.username;
-                      // Secondary: employee code or username for disambiguation
-                      const secondaryLabel =
-                        candidate.employeeCode && candidate.employeeCode !== primaryLabel
-                          ? candidate.employeeCode
-                          : candidate.username && candidate.username !== primaryLabel
-                            ? `@${candidate.username}`
-                            : null;
-                      return (
-                        <button
-                          key={`${candidate.id}:${candidate.username}`}
-                          id={`${mentionListId}-option-${index}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isActive}
-                          className={clsx(
-                            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
-                            "transition-colors",
-                            isActive
-                              ? "bg-primary/15 text-text-primary"
-                              : "text-text-secondary hover:bg-surface-hover",
-                          )}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            handleMentionSelect(candidate);
-                          }}
-                        >
-                          <span className="truncate text-sm font-medium">
-                            {primaryLabel}
-                          </span>
-                          {secondaryLabel && (
-                            <span className="truncate text-xs text-text-muted">
-                              {secondaryLabel}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
+                <ComposerMentionPanel
+                  mentionListId={mentionListId}
+                  activeMentionIndex={activeMentionIndex}
+                  mentionSuggestions={mentionSuggestions}
+                  onSelectMention={handleMentionSelect}
+                />
               )}
 
               <TipTapEditor
@@ -1265,7 +914,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                       defaultValue: `Nhập @, tin nhắn tới ${conversationName}`,
                     })
                     : t("chat:composer.placeholder", {
-                      defaultValue: "Nhập tin nhắn của bạn...",
+                      defaultValue: "Nhập @, tin nhắn tới...",
                     })
                 }
                 disabled={disabled}
@@ -1315,105 +964,34 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 onEditorReady={setTipTapEditor}
               />
 
-              <div
-                className={clsx(
-                  "chat-composer-action-group ml-1 flex shrink-0 items-end gap-1 border-l pl-2",
-                  composerVisualStyles.attachmentDivider,
-                )}
-              >
-                <EmojiButton
-                  value={draftValue}
-                  onChange={handleEmojiChange}
-                  onEmojiSelect={(emoji) => {
-                    tipTapRef.current?.insertAtCursor(emoji);
-                  }}
-                  disabled={disabled}
-                />
-                <button
-                  type="button"
-                  onClick={() => openFilePicker("mixed", fileInputRef.current)}
-                  className={clsx(
-                    "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
-                    composerVisualStyles.attachmentButton,
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                    disableAttachmentActions && "cursor-not-allowed opacity-50",
-                  )}
-                  aria-label={t("chat:composer.attachFile")}
-                  disabled={disableAttachmentActions}
-                >
-                  <PaperClipIcon className="h-[18px] w-[18px]" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsFormatModeExpanded((prev) => !prev)}
-                  className={clsx(
-                    "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
-                    isFormatModeExpanded
-                      ? "bg-surface-active text-text-primary"
-                      : composerVisualStyles.attachmentButton,
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                    disabled && "cursor-not-allowed opacity-50",
-                  )}
-                  aria-label={t("chat:composer.formatLabel")}
-                  title={t("chat:composer.formatHint")}
-                  disabled={disabled}
-                >
-                  <div
-                    className={clsx(
-                      "relative flex items-center justify-center",
-                      "h-[18px] w-[18px]",
-                    )}
-                  >
-                    <span className="font-bold text-sm tracking-tighter">
-                      A
-                    </span>
-                    <PencilIcon
-                      className="absolute bottom-[2px] -right-[4px] h-[10px] w-[10px]"
-                      strokeWidth={2.5}
-                    />
-                  </div>
-                </button>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowAttachmentMenu((previous) => !previous)
-                    }
-                    className={clsx(
-                      "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
-                      showAttachmentMenu
-                        ? "bg-surface-active text-text-primary"
-                        : composerVisualStyles.attachmentButton,
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                      disableAttachmentActions &&
-                      "cursor-not-allowed opacity-50",
-                    )}
-                    aria-label={t("chat:header.moreActions", {
-                      defaultValue: "Thêm hành động",
-                    })}
-                    aria-haspopup="menu"
-                    aria-expanded={showAttachmentMenu}
-                    disabled={disableAttachmentActions}
-                  >
-                    <EllipsisHorizontalIcon className="h-[20px] w-[20px]" />
-                  </button>
-
-                  {showAttachmentMenu && (
-                    <AttachmentMenu
-                      onSelect={handleAttachmentSelect}
-                      onClose={() => setShowAttachmentMenu(false)}
-                      canShareContact={
-                        Boolean(onShareContact) &&
-                        Boolean(currentUserId) &&
-                        Boolean(conversationId)
-                      }
-                      className="absolute bottom-full right-0 z-dropdown mb-2"
-                    />
-                  )}
-                </div>
-              </div>
+              <ComposerActionBar
+                composerVisualStyles={composerVisualStyles}
+                draftValue={draftValue}
+                disabled={disabled}
+                disableAttachmentActions={disableAttachmentActions}
+                isFormatModeExpanded={isFormatModeExpanded}
+                showAttachmentMenu={showAttachmentMenu}
+                canShareContact={
+                  Boolean(onShareContact) &&
+                  Boolean(currentUserId) &&
+                  Boolean(conversationId)
+                }
+                onEmojiChange={handleEmojiChange}
+                onEmojiInsert={(emoji) => {
+                  tipTapRef.current?.insertAtCursor(emoji);
+                }}
+                onOpenFilePicker={() =>
+                  openFilePicker("mixed", fileInputRef.current)
+                }
+                onToggleFormatMode={() =>
+                  setIsFormatModeExpanded((prev) => !prev)
+                }
+                onToggleAttachmentMenu={() =>
+                  setShowAttachmentMenu((previous) => !previous)
+                }
+                onCloseAttachmentMenu={() => setShowAttachmentMenu(false)}
+                onAttachmentSelect={handleAttachmentSelect}
+              />
             </div>
 
             {isFormatModeExpanded && (
@@ -1448,82 +1026,11 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           {t("chat:composer.shortcutHint")}
         </p>
 
-        {(messageValidation.showCounter ||
-          messageValidation.isOverSoftLimit ||
-          messageValidation.isOverHardLimit) && (
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                {messageValidation.isOverHardLimit ? (
-                  <InlineNotice
-                    tone="error"
-                    className="mb-0"
-                    message={t("chat:composer.hardLimitError", {
-                      max: messageValidation.hardLimit.toLocaleString("vi-VN"),
-                      defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
-                    })}
-                    action={
-                      onAddFiles ? (
-                        <button
-                          type="button"
-                          onClick={handleSendAsTextFile}
-                          className="text-xs font-semibold underline-offset-2 hover:underline"
-                        >
-                          {t("chat:composer.sendAsTextFile", {
-                            defaultValue: "Gửi dưới dạng tệp .txt",
-                          })}
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
-                  <InlineNotice
-                    tone="warning"
-                    className="mb-0"
-                    message={
-                      showLongPasteNotice
-                        ? t("chat:composer.longPasteNotice", {
-                          defaultValue:
-                            "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
-                        })
-                        : t("chat:composer.softLimitWarning", {
-                          defaultValue:
-                            "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
-                        })
-                    }
-                    action={
-                      onAddFiles ? (
-                        <button
-                          type="button"
-                          onClick={handleSendAsTextFile}
-                          className="text-xs font-semibold underline-offset-2 hover:underline"
-                        >
-                          {t("chat:composer.sendAsTextFile", {
-                            defaultValue: "Gửi dưới dạng tệp .txt",
-                          })}
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                ) : null}
-              </div>
-
-              {messageValidation.showCounter && (
-                <p
-                  className={clsx(
-                    "shrink-0 text-[11px] font-medium",
-                    messageValidation.isOverHardLimit
-                      ? "text-danger"
-                      : messageValidation.isOverSoftLimit
-                        ? "text-warning"
-                        : "text-text-muted",
-                  )}
-                >
-                  {messageValidation.charCount.toLocaleString("vi-VN")}/
-                  {messageValidation.hardLimit.toLocaleString("vi-VN")}
-                </p>
-              )}
-            </div>
-          )}
+        <ComposerLengthFooter
+          messageValidation={messageValidation}
+          showLongPasteNotice={showLongPasteNotice}
+          onSendAsTextFile={onAddFiles ? handleSendAsTextFile : undefined}
+        />
 
         {onShareContact && currentUserId && (
           <ShareContactModal

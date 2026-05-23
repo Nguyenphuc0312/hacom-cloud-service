@@ -8,3 +8,4 @@ export * from "./VerificationStatusPanel";
 export * from "./ProtectedRoute";
 export * from "./AuthLogo";
 export * from "./AuthLayoutSplit";
+export * from "./PasswordField";

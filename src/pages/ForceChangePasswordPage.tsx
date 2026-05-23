@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { AuthShell, AuthLogo } from "../components/auth";
+import { AuthShell, AuthLogo, PasswordField } from "../components/auth";
 import { Button } from "../components/ui";
 import { PasswordStrength } from "../components/ui";
 import { toast } from "../components/ui";
@@ -14,13 +14,8 @@ import { authApi } from "../services/api";
 import { useAuthStore } from "../stores";
 import { translateI18nMessage } from "../utils/userMessages";
 
-import { Eye, EyeOff } from "lucide-react";
-
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { logout } = useAuthStore();
   const { t } = useTranslation();
 
@@ -79,97 +74,50 @@ export const ForceChangePasswordPage: React.FC = () => {
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Mật khẩu hiện tại
-            </label>
-            <div className="relative">
-              <input
-                {...register("currentPassword")}
-                type={showCurrentPassword ? "text" : "password"}
-                placeholder="Mật khẩu hiện tại"
-                disabled={isSubmitting}
-                autoComplete="current-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
-                aria-label={showCurrentPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
-              >
-                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            {errors.currentPassword && (
-              <p className="mt-1 text-xs text-danger">
-                {translateI18nMessage(errors.currentPassword.message, t)}
-              </p>
-            )}
-          </div>
+          <PasswordField
+            label="Mật khẩu hiện tại"
+            placeholder="Mật khẩu hiện tại"
+            registration={register("currentPassword")}
+            error={
+              errors.currentPassword
+                ? translateI18nMessage(errors.currentPassword.message, t)
+                : undefined
+            }
+            disabled={isSubmitting}
+            autoComplete="current-password"
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Mật khẩu mới
-            </label>
-            <div className="relative">
-              <input
-                {...register("newPassword")}
-                type={showNewPassword ? "text" : "password"}
-                placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
-                disabled={isSubmitting}
-                autoComplete="new-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
-                aria-label={showNewPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
-              >
-                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            {errors.newPassword && (
-              <p className="mt-1 text-xs text-danger">
-                {translateI18nMessage(errors.newPassword.message, t)}
-              </p>
-            )}
+          <PasswordField
+            label="Mật khẩu mới"
+            placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
+            registration={register("newPassword")}
+            error={
+              errors.newPassword
+                ? translateI18nMessage(errors.newPassword.message, t)
+                : undefined
+            }
+            disabled={isSubmitting}
+            autoComplete="new-password"
+          >
             {newPasswordValue ? (
               <div className="mt-2">
                 <PasswordStrength password={newPasswordValue} />
               </div>
             ) : null}
-          </div>
+          </PasswordField>
 
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Xác nhận mật khẩu mới
-            </label>
-            <div className="relative">
-              <input
-                {...register("confirmPassword")}
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="Nhập lại mật khẩu mới"
-                disabled={isSubmitting}
-                autoComplete="new-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
-                aria-label={showConfirmPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
-              >
-                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            {errors.confirmPassword && (
-              <p className="mt-1 text-xs text-danger">
-                {translateI18nMessage(errors.confirmPassword.message, t)}
-              </p>
-            )}
-          </div>
+          <PasswordField
+            label="Xác nhận mật khẩu mới"
+            placeholder="Nhập lại mật khẩu mới"
+            registration={register("confirmPassword")}
+            error={
+              errors.confirmPassword
+                ? translateI18nMessage(errors.confirmPassword.message, t)
+                : undefined
+            }
+            disabled={isSubmitting}
+            autoComplete="new-password"
+          />
 
           <Button
             type="submit"

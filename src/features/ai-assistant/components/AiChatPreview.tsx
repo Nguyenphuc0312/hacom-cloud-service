@@ -155,8 +155,8 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                     /* Loading dots */
                     <div className="flex items-center gap-1.5 py-1">
                       <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s]" />
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
+                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
                     </div>
                   ) : (
                     <div
