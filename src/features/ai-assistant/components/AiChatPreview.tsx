@@ -132,10 +132,9 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 {/* Message body */}
                 <div
                   className={clsx(
-                    "max-w-full w-full",
                     message.role === "user"
-                      ? "bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary"
-                      : "",
+                      ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words"
+                      : "w-full max-w-full",
                   )}
                 >
                   {message.role === "assistant" &&
