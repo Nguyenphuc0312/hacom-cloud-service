@@ -7,7 +7,6 @@ import {
   ArrowUpTrayIcon,
   LinkIcon,
   DocumentArrowDownIcon,
-  TrashIcon,
   BookmarkIcon,
   BookmarkSlashIcon,
 } from "@heroicons/react/24/outline";
@@ -28,8 +27,6 @@ export interface MessageContextMenuOptions {
   isOwn: boolean;
   /** Whether the message is pinned */
   isPinned?: boolean;
-  /** Whether the message is within recall window (< 24h) */
-  canRecall?: boolean;
   /** Whether the user can download the attachment */
   hasAttachment?: boolean;
   /** Whether the message contains a URL */
@@ -41,8 +38,6 @@ export interface MessageContextMenuOptions {
   onPin?: () => void;
   onUnpin?: () => void;
   onDownload?: () => void;
-  onDeleteForMe?: () => void;
-  onDeleteForEveryone?: () => void;
 }
 
 /**
@@ -52,7 +47,6 @@ export function buildMessageContextMenuItems(options: MessageContextMenuOptions)
   const {
     isOwn,
     isPinned = false,
-    canRecall = true,
     hasAttachment = false,
     hasUrl = false,
     onReply,
@@ -61,8 +55,6 @@ export function buildMessageContextMenuItems(options: MessageContextMenuOptions)
     onPin,
     onUnpin,
     onDownload,
-    onDeleteForMe,
-    onDeleteForEveryone,
   } = options;
 
   const items: ContextMenuItem[] = [];
@@ -121,27 +113,6 @@ export function buildMessageContextMenuItems(options: MessageContextMenuOptions)
       label: t("chat:message.actions.download", { defaultValue: "Tải về" }),
       icon: <DocumentArrowDownIcon className="h-4 w-4" />,
       onClick: onDownload,
-    });
-  }
-
-  // Delete actions
-  if (onDeleteForMe) {
-    items.push({
-      id: "deleteForMe",
-      label: t("chat:message.actions.deleteForMe", { defaultValue: "Xóa phía tôi" }),
-      icon: <TrashIcon className="h-4 w-4" />,
-      onClick: onDeleteForMe,
-      divider: true,
-    });
-  }
-
-  if (isOwn && canRecall && onDeleteForEveryone) {
-    items.push({
-      id: "deleteForEveryone",
-      label: t("chat:message.actions.deleteForEveryone", { defaultValue: "Thu hồi" }),
-      icon: <TrashIcon className="h-4 w-4" />,
-      onClick: onDeleteForEveryone,
-      danger: true,
     });
   }
 
