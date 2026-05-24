@@ -76,8 +76,7 @@ const formatRelationshipLabel = (
     | "not_friend"
     | "outgoing_request"
     | "incoming_request"
-    | "friend"
-    | "blocked",
+    | "friend",
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string => {
   switch (kind) {
@@ -99,7 +98,6 @@ const badgeToneByRelationship: Record<string, string> = {
   friend: "bg-success/12 text-success",
   incoming_request: "bg-warning/12 text-warning",
   outgoing_request: "bg-surface-overlay text-text-secondary",
-  blocked: "bg-danger/12 text-danger",
   not_friend: "bg-surface-overlay text-text-secondary",
 };
 

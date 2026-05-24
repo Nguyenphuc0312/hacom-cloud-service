@@ -178,15 +178,17 @@
   --color-disabled-bg: var(--core-gray-100);
   --color-disabled-border: var(--core-gray-200);
 
-  --color-sidebar-bg: 220 23% 97%;
-  --color-sidebar-text: 215 16% 45%;
-  --color-sidebar-text-strong: 206 100% 41%;
-  --color-sidebar-hover-bg: 214 24% 92%;
-  --color-sidebar-active-bg: 206 100% 94%;
-  --color-sidebar-indicator: 206 100% 41%;
+  --color-sidebar-bg: 220 100% 99%;
+  --color-sidebar-text: 215 16% 43%;
+  --color-sidebar-text-strong: 221 83% 53%;
+  --color-sidebar-hover-bg: 217 100% 95%;
+  --color-sidebar-active-bg: 213 100% 87%;
+  --color-sidebar-indicator: 221 83% 53%;
   --color-sidebar-surface: var(--color-sidebar-bg);
   --color-sidebar-hover: var(--color-sidebar-hover-bg);
   --color-sidebar-active: var(--color-sidebar-active-bg);
+  --color-sidebar-gradient-start: #F8FAFF;
+  --color-sidebar-gradient-end: #F1F5FF;
   --chat-shell-bg: 210 24% 96%;
   --chat-bubble-self: 146 34% 87%;
   --chat-bubble-other: 0 0% 100%;
@@ -1364,14 +1366,17 @@ a:focus-visible {
     align-items: center;
     gap: 12px;
     overflow: hidden;
-    border-right: 1px solid hsl(var(--color-border));
-    background: hsl(var(--color-sidebar-surface));
+    border-right: 1px solid #B71C1C;
+    background: linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%);
+    box-shadow: inset -1px 0 0 #B71C1C, 2px 0 16px rgb(211 47 47 / 0.18);
     padding: 10px 6px;
     transition: background-color 200ms ease, border-color 200ms ease;
   }
 
   :root[data-theme="dark"] .hc-side-rail {
-    border-right-color: hsl(var(--color-border));
+    background: linear-gradient(180deg, #B71C1C 0%, #8B0000 100%);
+    border-right-color: #7F1717;
+    box-shadow: inset -1px 0 0 #7F1717, 2px 0 16px rgb(211 47 47 / 0.3);
   }
 
   .hc-side-rail__logo {
@@ -1389,12 +1394,12 @@ a:focus-visible {
     font-size: 16px;
     font-weight: 700;
     line-height: 1;
-    box-shadow: 0 2px 10px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
+    box-shadow: 0 2px 12px rgb(37 99 235 / 0.18), 0 1px 3px rgb(0 0 0 / 0.08);
     transition: box-shadow 160ms ease, transform 120ms ease;
   }
 
   .hc-side-rail__logo:hover {
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.16), 0 1px 4px rgb(0 0 0 / 0.1);
+    box-shadow: 0 4px 20px rgb(37 99 235 / 0.26), 0 1px 4px rgb(0 0 0 / 0.1);
     transform: scale(1.04);
   }
 
@@ -1425,14 +1430,15 @@ a:focus-visible {
     align-items: center;
     justify-content: center;
     border-radius: 14px;
-    color: hsl(var(--color-sidebar-text) / 0.7);
+    color: rgba(255, 255, 255, 0.7);
     background: transparent;
     transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .hc-side-rail__item:hover {
-    color: hsl(var(--color-sidebar-text-strong));
-    background: hsl(var(--color-sidebar-hover));
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2), 0 1px 3px rgba(255, 255, 255, 0.1);
     transform: scale(1.07);
   }
 
@@ -1442,20 +1448,21 @@ a:focus-visible {
 
   .hc-side-rail__item:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px hsl(var(--color-primary) / 0.35);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
   }
 
   .hc-side-rail__item--active {
-    color: hsl(var(--color-primary));
-    background: hsl(var(--color-primary) / 0.12);
-    box-shadow: 0 1px 5px hsl(var(--color-primary) / 0.18);
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25), 0 1px 4px rgba(255, 255, 255, 0.15);
+    transform: scale(1.13);
   }
 
   .hc-side-rail__item--active:hover {
-    color: hsl(var(--color-primary));
-    background: hsl(var(--color-primary) / 0.17);
-    box-shadow: 0 2px 8px hsl(var(--color-primary) / 0.24);
-    transform: scale(1.04);
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 6px 24px rgba(255, 255, 255, 0.3), 0 1px 4px rgba(255, 255, 255, 0.2);
+    transform: scale(1.25);
   }
 
   .hc-side-rail__item-icon {
@@ -1464,6 +1471,7 @@ a:focus-visible {
     height: 22px;
     width: 22px;
     stroke-width: 1.8;
+    flex-shrink: 0;
   }
 
   .hc-side-rail__item-indicator {
@@ -1474,7 +1482,8 @@ a:focus-visible {
     height: 24px;
     width: 3.5px;
     border-radius: 0 4px 4px 0;
-    background: hsl(var(--color-sidebar-indicator));
+    background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
+    box-shadow: 1px 0 6px rgb(37 99 235 / 0.4);
     transition: opacity 160ms ease, height 160ms ease;
   }
 
@@ -1504,17 +1513,18 @@ a:focus-visible {
     justify-content: center;
     overflow: hidden;
     border-radius: 999px;
-    border: 2px solid hsl(var(--color-border));
+    border: 2px solid rgb(255 255 255 / 0.8);
     background: hsl(var(--color-surface-hover));
     color: hsl(var(--color-text-primary));
     font-size: 13px;
     font-weight: 600;
+    box-shadow: 0 2px 8px rgb(37 99 235 / 0.15);
     transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .hc-side-rail__avatar:hover {
-    border-color: hsl(var(--color-primary) / 0.5);
-    box-shadow: 0 0 0 3px hsl(var(--color-primary) / 0.12);
+    border-color: #93C5FD;
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18), 0 2px 8px rgb(37 99 235 / 0.2);
     transform: scale(1.06);
   }
 

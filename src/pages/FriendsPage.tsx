@@ -316,7 +316,6 @@ export const FriendsPage: React.FC = () => {
     acceptFriendRequest,
     rejectFriendRequest,
     cancelFriendRequest,
-    unblockUser,
   } = useFriendship();
 
   const initialQuery = searchParams.get("q") || "";
@@ -545,28 +544,6 @@ export const FriendsPage: React.FC = () => {
             }}
           >
             {t("friends:sentRequests.cancel")}
-          </Button>
-        );
-      case "blocked":
-        if (!capabilities.canUnblock) {
-          return null;
-        }
-        return (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            isLoading={actingKey === `unblock:${actionKeyPrefix}`}
-            onClick={(event) => {
-              stopPropagation(event);
-              void handleRelationshipAction(
-                `unblock:${actionKeyPrefix}`,
-                () => unblockUser(user.id),
-                t("friends:unblockSuccess"),
-              );
-            }}
-          >
-            {t("friends:unblock")}
           </Button>
         );
       default:

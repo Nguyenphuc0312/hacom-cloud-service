@@ -88,8 +88,6 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
     acceptFriendRequest,
     rejectFriendRequest,
     cancelFriendRequest,
-    blockUser,
-    unblockUser,
   } = useFriendship();
 
   const [myQr, setMyQr] = React.useState<FriendQrPayloadDto | null>(null);
@@ -512,23 +510,6 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               {t("friends:message")}
             </Button>
           ) : null}
-          {capabilities.canBlock ? (
-            <Button
-              type="button"
-              variant="secondary"
-              leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-              isLoading={isProfileActionLoading === "block"}
-              onClick={() =>
-                void handleProfileAction(
-                  "block",
-                  () => blockUser(resolvedProfile.id),
-                  t("friends:qr.toastBlocked"),
-                )
-              }
-            >
-              {t("profile:userProfile.blockUser")}
-            </Button>
-          ) : null}
         </div>
       );
     }
@@ -597,25 +578,6 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       );
     }
 
-    if (relationship.kind === "blocked") {
-      return capabilities.canUnblock ? (
-        <Button
-          type="button"
-          variant="secondary"
-          isLoading={isProfileActionLoading === "unblock"}
-          onClick={() =>
-            void handleProfileAction(
-              "unblock",
-              () => unblockUser(resolvedProfile.id),
-              t("friends:qr.toastUnblocked"),
-            )
-          }
-        >
-          {t("friends:unblock")}
-        </Button>
-      ) : null;
-    }
-
     return (
       <div className="flex flex-wrap gap-2">
         {capabilities.canSendRequest ? (
@@ -632,23 +594,6 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             }
           >
             {t("friends:addFriend")}
-          </Button>
-        ) : null}
-        {capabilities.canBlock ? (
-          <Button
-            type="button"
-            variant="secondary"
-            leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-            isLoading={isProfileActionLoading === "block"}
-            onClick={() =>
-              void handleProfileAction(
-                "block",
-                () => blockUser(resolvedProfile.id),
-                t("friends:qr.toastBlocked"),
-              )
-            }
-          >
-            {t("profile:userProfile.blockUser")}
           </Button>
         ) : null}
       </div>
@@ -669,8 +614,6 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         return t("friends:relationship.incoming");
       case "outgoing_request":
         return t("friends:relationship.outgoing");
-      case "blocked":
-        return t("friends:relationship.blocked");
       default:
         return t("friends:relationship.notFriend");
     }

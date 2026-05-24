@@ -195,7 +195,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     // The picker (showReactionPicker) is self-contained: it closes when the user picks
     // an emoji, clicks outside (document mousedown), or presses ESC. Tying its
     // lifetime to hover state makes it impossible to drag the mouse from the action
-    // bar across the message bubble to reach the QuickReactBar above the bubble.
+    // picker lifetime to hover state (picker self-closes via outside click / ESC).
     leaveTimerRef.current = setTimeout(() => {
       if (!isActionsOpenRef.current) {
         setIsHovered(false);
@@ -367,9 +367,22 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               <MessageActionBar
                 isOutgoing={isOwn}
                 onReplyClick={() => onReply(message)}
-                onMoreClick={openActions}
                 onForwardClick={onForward ? () => { onForward(message); hideRail(true); } : undefined}
                 onReactClick={() => setShowReactionPicker((v) => !v)}
+                reactionPickerNode={
+                  showReactionPicker && !isSelectionMode ? (
+                    <QuickReactBar
+                      visible={true}
+                      align="center"
+                      currentUserReaction={myReactionEmoji}
+                      onReact={(emoji) => {
+                        handleReactionSelect(emoji);
+                        setShowReactionPicker(false);
+                      }}
+                      onClose={() => setShowReactionPicker(false)}
+                    />
+                  ) : undefined
+                }
               />
             </div>
           ) : null
@@ -415,27 +428,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
             )}
 
             <div className="relative w-full">
-              <QuickReactBar
-                visible={showReactionPicker && !isSelectionMode}
-                isMine={isOwn}
-                currentUserReaction={myReactionEmoji}
-                onReact={(emoji) => {
-                  handleReactionSelect(emoji);
-                  setShowReactionPicker(false);
-                }}
-                onClose={() => setShowReactionPicker(false)}
-                onMouseEnter={handleClusterMouseEnter}
-                onMouseLeave={handleClusterMouseLeave}
-              />
-              {/* Hover bridge: fills the mb-2 gap below QuickReactBar so the
-                  mouse travelling from picker → bubble doesn't lose hover state. */}
-              {showReactionPicker && !isSelectionMode && (
-                <div
-                  aria-hidden="true"
-                  className="absolute bottom-full h-2 w-full"
-                  onMouseEnter={handleClusterMouseEnter}
-                />
-              )}
               <div
                 onPointerDown={handlePointerDown}
                 onPointerUp={clearLongPressTimer}

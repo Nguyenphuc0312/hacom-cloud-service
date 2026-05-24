@@ -373,7 +373,6 @@ const MessageGroupItem: React.FC<{
           <MessageActionBar
             isOutgoing={isOwn}
             onReplyClick={() => onReply(message)}
-            onMoreClick={() => setIsActionSheetOpen(true)}
             onForwardClick={
               onForward
                 ? () => {
@@ -383,6 +382,20 @@ const MessageGroupItem: React.FC<{
                 : undefined
             }
             onReactClick={() => setShowReactionPicker((v) => !v)}
+            reactionPickerNode={
+              showReactionPicker && !isSelectionMode ? (
+                <QuickReactBar
+                  visible={true}
+                  align="center"
+                  currentUserReaction={myReactionEmoji}
+                  onReact={(emoji) => {
+                    handleReactionSelect(emoji);
+                    setShowReactionPicker(false);
+                  }}
+                  onClose={() => setShowReactionPicker(false)}
+                />
+              ) : undefined
+            }
           />
         </div>
       ) : null;
@@ -433,28 +446,6 @@ const MessageGroupItem: React.FC<{
             isOwn ? "items-end" : "items-start",
           )}>
             <div className="relative">
-              <QuickReactBar
-                visible={showReactionPicker && !isSelectionMode}
-                isMine={isOwn}
-                currentUserReaction={myReactionEmoji}
-                onReact={(emoji) => {
-                  handleReactionSelect(emoji);
-                  setShowReactionPicker(false);
-                }}
-                onClose={() => setShowReactionPicker(false)}
-                onMouseEnter={handleItemMouseEnter}
-                onMouseLeave={handleItemMouseLeave}
-              />
-              {/* Hover bridge: fills the mb-2 gap between QuickReactBar bottom
-                  and message surface so the mouse can travel from picker to
-                  bubble (and vice-versa) without triggering the close timer. */}
-              {showReactionPicker && !isSelectionMode && (
-                <div
-                  aria-hidden="true"
-                  className="absolute bottom-full h-2 w-full"
-                  onMouseEnter={handleItemMouseEnter}
-                />
-              )}
               {actionRail}
             <MessageBubble
               isOwn={isOwn}
