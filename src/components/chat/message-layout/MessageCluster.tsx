@@ -237,14 +237,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isOwn,
         isCoarsePointer: coarsePointer,
         isSelectionMode,
-        canEdit: Boolean(onEdit),
-        canDelete: Boolean(onDelete),
-        // Admin/owner có quyền recall tin của người khác, không phụ thuộc 24h window.
-        // Khi không truyền canDeleteForEveryone, policy fallback: isOwn && within 24h.
-        canDeleteForEveryone:
-          Boolean(onDelete) && !isOwn && viewerCanRecallOthers === true
-            ? true
-            : undefined,
         canRetry: isFailedMessage(message),
         canPin: viewerCanPin,
         isPinned: message.isPinned === true,
@@ -254,9 +246,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isOwn,
       isSelectionMode,
       message,
-      onDelete,
-      onEdit,
-      viewerCanRecallOthers,
       viewerCanPin,
     ],
   );
@@ -280,33 +269,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           break;
         case "copy":
           handleCopy();
-          break;
-        case "edit":
-          if (onEdit) {
-            void Promise.resolve(onEdit(message));
-          }
-          closeActions();
-          break;
-        case "deleteForMe":
-          if (onDelete) {
-            void Promise.resolve(onDelete(message.id, "FOR_ME"));
-          }
-          closeActions();
-          break;
-        case "deleteForEveryone":
-          if (onDelete) {
-            // Khi !isOwn nghĩa là admin/owner đang xóa tin của người khác.
-            // Pass flag để ChatPage hiện confirm copy khác.
-            const adminCtx = !isOwn ? "ADMIN_DELETE" : undefined;
-            void Promise.resolve(
-              (onDelete as (
-                id: string,
-                mode?: "FOR_ME" | "FOR_EVERYONE",
-                context?: "ADMIN_DELETE",
-              ) => unknown)(message.id, "FOR_EVERYONE", adminCtx),
-            );
-          }
-          closeActions();
           break;
         case "retry":
           handleRetry();
@@ -379,18 +341,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     onNavigateToMessage,
     replyTargetMessageId,
   ]);
-
-  const adminRecallLabelOverride = React.useMemo(
-    () =>
-      !isOwn && viewerCanRecallOthers
-        ? ({
-            deleteForEveryone: t("chat:message.actions.deleteForEveryoneAdmin", {
-              defaultValue: "Xóa ở mọi người",
-            }),
-          } as const)
-        : undefined,
-    [isOwn, viewerCanRecallOthers, t],
-  );
 
   return (
     <div
@@ -571,7 +521,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isOpen={isActionsOpen}
         onAction={handleAction}
         onClose={closeActions}
-        actionLabelOverrides={adminRecallLabelOverride}
       />
 
       {editHistoryMessageId && (

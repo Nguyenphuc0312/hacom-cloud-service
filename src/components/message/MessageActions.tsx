@@ -7,12 +7,10 @@ import {
   CornerUpLeft,
   Forward,
   MoreHorizontal,
-  Pencil,
   Pin,
   PinOff,
   RefreshCw,
   SmilePlus,
-  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -27,7 +25,6 @@ interface MessageActionsProps {
   onAction: (actionId: MessageActionId) => void;
   onClose?: () => void;
   className?: string;
-  /** Override label cho một số action (vd: deleteForEveryone label khác giữa sender vs admin). */
   actionLabelOverrides?: Partial<Record<MessageActionId, string>>;
 }
 
@@ -79,31 +76,10 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         label: t("chat:message.actions.copy"),
         icon: Copy,
       },
-      edit: {
-        id: "edit",
-        label: t("chat:message.actions.edit"),
-        icon: Pencil,
-      },
       retry: {
         id: "retry",
         label: t("chat:message.status.retry", { defaultValue: "Retry" }),
         icon: RefreshCw,
-      },
-      deleteForMe: {
-        id: "deleteForMe",
-        label: t("chat:message.actions.deleteForMe", {
-          defaultValue: "Xóa về phía tôi",
-        }),
-        icon: Trash2,
-        danger: true,
-      },
-      deleteForEveryone: {
-        id: "deleteForEveryone",
-        label: t("chat:message.actions.deleteForEveryone", {
-          defaultValue: "Thu hồi",
-        }),
-        icon: Trash2,
-        danger: true,
       },
       pin: {
         id: "pin",
