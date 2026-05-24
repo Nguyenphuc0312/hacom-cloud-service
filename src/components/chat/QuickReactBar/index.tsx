@@ -5,6 +5,8 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const
 
 interface QuickReactBarProps {
   isMine?: boolean;
+  /** Override horizontal alignment. Defaults to isMine ? "right" : "left" */
+  align?: "left" | "right" | "center";
   currentUserReaction?: string | null;
   visible: boolean;
   onReact: (emoji: string) => void;
@@ -15,6 +17,7 @@ interface QuickReactBarProps {
 
 export const QuickReactBar: React.FC<QuickReactBarProps> = ({
   isMine,
+  align,
   currentUserReaction,
   visible,
   onReact,
@@ -22,6 +25,11 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
   onMouseEnter,
   onMouseLeave,
 }) => {
+  const alignClass = align === "center"
+    ? "left-1/2 -translate-x-1/2"
+    : align === "right" || (!align && isMine)
+      ? "right-0"
+      : "left-0";
   const barRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -61,7 +69,7 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
         visible
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
           : "pointer-events-none translate-y-1 scale-95 opacity-0",
-        isMine ? "right-0" : "left-0",
+        alignClass,
       )}
     >
       {QUICK_EMOJIS.map((emoji) => {

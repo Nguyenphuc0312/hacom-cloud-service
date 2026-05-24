@@ -1,20 +1,20 @@
 import React, { useCallback } from "react";
 import { clsx } from "clsx";
-import { ArrowUturnLeftIcon, EllipsisHorizontalIcon, FaceSmileIcon } from "@heroicons/react/24/outline";
-import { Forward } from "lucide-react";
+import { HeartIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 
 interface MessageActionBarProps {
   isOutgoing: boolean;
   onReplyClick: () => void;
-  onMoreClick: () => void;
   onForwardClick?: () => void;
   onReactClick?: () => void;
+  /** Node rendered anchored above the react button (e.g. QuickReactBar) */
+  reactionPickerNode?: React.ReactNode;
   className?: string;
 }
 
 const actionBtnClass = clsx(
-  "flex h-7 w-7 items-center justify-center rounded-full",
+  "flex h-8 w-8 items-center justify-center rounded-full",
   "text-text-secondary hover:bg-surface-hover hover:text-primary",
   "transition-all duration-100",
   "active:scale-90",
@@ -23,9 +23,9 @@ const actionBtnClass = clsx(
 export const MessageActionBar: React.FC<MessageActionBarProps> = ({
   isOutgoing,
   onReplyClick,
-  onMoreClick,
   onForwardClick,
   onReactClick,
+  reactionPickerNode,
   className,
 }) => {
   const { t } = useTranslation();
@@ -35,12 +35,12 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
     fn();
   }, []);
 
-  const buttonCount = 2 + (onReactClick ? 1 : 0) + (onForwardClick ? 1 : 0);
-  const barOffsetClass = buttonCount <= 2
-    ? (isOutgoing ? "-left-14" : "-right-14")
-    : buttonCount === 3
-      ? (isOutgoing ? "-left-[5.5rem]" : "-right-[5.5rem]")
-      : (isOutgoing ? "-left-[8rem]" : "-right-[8rem]");
+  const buttonCount = 1 + (onReactClick ? 1 : 0) + (onForwardClick ? 1 : 0);
+  const barOffsetClass = buttonCount <= 1
+    ? (isOutgoing ? "-left-[3.75rem]" : "-right-[3.75rem]")
+    : buttonCount === 2
+      ? (isOutgoing ? "-left-[6rem]" : "-right-[6rem]")
+      : (isOutgoing ? "-left-[8.5rem]" : "-right-[8.5rem]");
 
   return (
     <div
@@ -55,17 +55,25 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       )}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* React / Emoji button */}
+      {/* React / Heart button — picker rendered above this button */}
       {onReactClick && (
-        <button
-          type="button"
-          onClick={stop(onReactClick)}
-          title={t("chat:message.actions.react", "Cảm xúc")}
-          aria-label={t("chat:message.actions.react", "Cảm xúc")}
-          className={actionBtnClass}
-        >
-          <FaceSmileIcon className="h-4 w-4" />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={stop(onReactClick)}
+            title={t("chat:message.actions.react", "Cảm xúc")}
+            aria-label={t("chat:message.actions.react", "Cảm xúc")}
+            className={actionBtnClass}
+          >
+            <HeartIcon className="h-[18px] w-[18px]" />
+          </button>
+          {/* Picker floats above this button, centered horizontally */}
+          {reactionPickerNode && (
+            <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
+              {reactionPickerNode}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Reply button */}
@@ -76,7 +84,11 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
         aria-label={t("chat:message.reply", "Trả lời")}
         className={actionBtnClass}
       >
-        <ArrowUturnLeftIcon className="h-4 w-4" />
+        {/* Reply — Zalo-style: simple left-curved arrow ↩ */}
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="9 17 4 12 9 7" />
+          <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+        </svg>
       </button>
 
       {/* Forward button */}
@@ -88,20 +100,13 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
           aria-label={t("chat:message.actions.forward", "Chuyển tiếp")}
           className={actionBtnClass}
         >
-          <Forward className="h-4 w-4" />
+          {/* Forward — Zalo-style: mirror of reply ↪ */}
+          <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 17 20 12 15 7" />
+            <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+          </svg>
         </button>
       )}
-
-      {/* More button */}
-      <button
-        type="button"
-        onClick={stop(onMoreClick)}
-        title={t("chat:message.more", "Khác")}
-        aria-label={t("chat:message.more", "Khác")}
-        className={actionBtnClass}
-      >
-        <EllipsisHorizontalIcon className="h-4 w-4" />
-      </button>
     </div>
   );
 };

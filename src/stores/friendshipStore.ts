@@ -41,16 +41,6 @@ export interface FriendRecord extends User {
   updatedAt: string;
 }
 
-export interface BlockedUser extends User {
-  relationId: string;
-  capabilities: FriendshipCapabilitiesDto;
-  actorRole: FriendshipActorRole;
-  relationStatus: FriendshipStatusType;
-  actionResult: FriendshipActionResult;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export const EMPTY_CAPABILITIES: FriendshipCapabilitiesDto = {
   canSendRequest: false,
   canAccept: false,
@@ -86,17 +76,12 @@ export type RelationshipState =
       friendshipId: string;
       capabilities: FriendshipCapabilitiesDto;
     }
-  | {
-      kind: "blocked";
-      friendshipId: string;
-      capabilities: FriendshipCapabilitiesDto;
-    };
+;
 
 export interface FriendshipDirectorySnapshot {
   friends: FriendRecord[];
   incomingRequests: FriendRequest[];
   sentRequests: FriendRequest[];
-  blockedUsers: BlockedUser[];
   pendingCount: number;
   sentCount: number;
 }
@@ -104,7 +89,6 @@ export interface FriendshipDirectorySnapshot {
 interface DeriveRelationshipStateInput {
   userId: string;
   currentUserId?: string | null;
-  blockedUsers: BlockedUser[];
   friends: FriendRecord[];
   incomingRequests: FriendRequest[];
   sentRequests: FriendRequest[];
@@ -122,19 +106,16 @@ interface FriendshipStoreState {
   friends: FriendRecord[];
   incomingRequests: FriendRequest[];
   sentRequests: FriendRequest[];
-  blockedUsers: BlockedUser[];
   pendingCount: number;
   sentCount: number;
 
   friendByUserId: Record<string, FriendRecord>;
   incomingByRelationId: Record<string, FriendRequest>;
   sentByRelationId: Record<string, FriendRequest>;
-  blockedByUserId: Record<string, BlockedUser>;
 
   isFriendsLoading: boolean;
   isIncomingLoading: boolean;
   isSentLoading: boolean;
-  isBlockedLoading: boolean;
   isDirectoryRefreshing: boolean;
   hasHydrated: boolean;
   lastSyncedAt: string | null;
@@ -164,7 +145,6 @@ interface FriendshipStoreState {
   fetchFriends: () => Promise<void>;
   fetchIncomingRequests: () => Promise<void>;
   fetchSentRequests: () => Promise<void>;
-  fetchBlockedUsers: () => Promise<void>;
   fetchPendingCount: () => Promise<void>;
 
   refreshDirectory: (options?: {
@@ -400,29 +380,8 @@ const toRequestRecord = (
   };
 };
 
-const toBlockedRecord = (
-  relation: FriendshipRelationDto,
-): BlockedUser | null => {
-  const friend = toFriendshipUser(relation.friend);
-  if (!friend) {
-    return null;
-  }
-
-  return {
-    ...friend,
-    relationId: relation.relationId,
-    capabilities: relation.capabilities,
-    actorRole: relation.actorRole,
-    relationStatus: relation.status,
-    actionResult: relation.actionResult,
-    createdAt: relation.createdAt,
-    updatedAt: relation.updatedAt,
-  };
-};
-
 export const mapRelationToFriendRecord = toFriendRecord;
 export const mapRelationToRequestRecord = toRequestRecord;
-export const mapRelationToBlockedRecord = toBlockedRecord;
 
 export const removeByRelationId = <T extends { relationId: string }>(
   rows: T[],
@@ -492,10 +451,6 @@ export const applyRelationToSnapshot = (
       relationIdentity,
     ),
     sentRequests: removeByRelationIdentity(snapshot.sentRequests, relationIdentity),
-    blockedUsers: removeByRelationId(
-      snapshot.blockedUsers,
-      relation.relationId,
-    ),
     pendingCount: snapshot.pendingCount,
     sentCount: snapshot.sentCount,
   };
@@ -504,13 +459,6 @@ export const applyRelationToSnapshot = (
     const friend = toFriendRecord(relation);
     if (friend) {
       next.friends = upsertFront(next.friends, friend);
-    }
-  }
-
-  if (relation.status === "blocked") {
-    const blocked = toBlockedRecord(relation);
-    if (blocked) {
-      next.blockedUsers = upsertFront(next.blockedUsers, blocked);
     }
   }
 
@@ -543,7 +491,6 @@ export const deriveRelationshipState = (
   const {
     userId,
     currentUserId,
-    blockedUsers,
     friends,
     incomingRequests,
     sentRequests,
@@ -551,15 +498,6 @@ export const deriveRelationshipState = (
 
   if (currentUserId && userId === currentUserId) {
     return { kind: "self", capabilities: EMPTY_CAPABILITIES };
-  }
-
-  const blocked = blockedUsers.find((item) => item.id === userId);
-  if (blocked) {
-    return {
-      kind: "blocked",
-      friendshipId: blocked.relationId,
-      capabilities: blocked.capabilities,
-    };
   }
 
   const friend = friends.find((item) => item.id === userId);
@@ -598,7 +536,6 @@ const initialSnapshot: FriendshipDirectorySnapshot = {
   friends: [],
   incomingRequests: [],
   sentRequests: [],
-  blockedUsers: [],
   pendingCount: 0,
   sentCount: 0,
 };
@@ -620,13 +557,6 @@ const toIndexedFields = (snapshot: FriendshipDirectorySnapshot) => ({
   sentByRelationId: snapshot.sentRequests.reduce<Record<string, FriendRequest>>(
     (acc, item) => {
       acc[item.relationId] = item;
-      return acc;
-    },
-    {},
-  ),
-  blockedByUserId: snapshot.blockedUsers.reduce<Record<string, BlockedUser>>(
-    (acc, item) => {
-      acc[item.id] = item;
       return acc;
     },
     {},
@@ -661,7 +591,6 @@ const normalizeSnapshot = (
     friends: sortByUpdatedAtDesc(snapshot.friends),
     incomingRequests: dedupeRequests(sortByUpdatedAtDesc(snapshot.incomingRequests)),
     sentRequests: dedupeRequests(sortByUpdatedAtDesc(snapshot.sentRequests)),
-    blockedUsers: sortByUpdatedAtDesc(snapshot.blockedUsers),
     pendingCount: Math.max(0, snapshot.pendingCount),
     sentCount: Math.max(0, snapshot.sentCount),
   };
@@ -673,7 +602,6 @@ const currentSnapshot = (
   friends: state.friends,
   incomingRequests: state.incomingRequests,
   sentRequests: state.sentRequests,
-  blockedUsers: state.blockedUsers,
   pendingCount: state.pendingCount,
   sentCount: state.sentCount,
 });
@@ -707,7 +635,6 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
   isFriendsLoading: false,
   isIncomingLoading: false,
   isSentLoading: false,
-  isBlockedLoading: false,
   isDirectoryRefreshing: false,
   hasHydrated: false,
   lastSyncedAt: null,
@@ -946,43 +873,6 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     }
   },
 
-  fetchBlockedUsers: async () => {
-    set({ isBlockedLoading: true });
-    try {
-      const response = await friendshipApi.getBlockedUsers();
-      const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
-        .map((relation) => toBlockedRecord(relation))
-        .filter((item): item is BlockedUser => item !== null);
-
-      set((state) => {
-        const next = normalizeSnapshot({
-          ...currentSnapshot(state),
-          blockedUsers: list,
-        });
-
-        return {
-          ...next,
-          ...toIndexedFields(next),
-        };
-      });
-    } catch {
-      set((state) => {
-        const next = normalizeSnapshot({
-          ...currentSnapshot(state),
-          blockedUsers: [],
-        });
-
-        return {
-          ...next,
-          ...toIndexedFields(next),
-        };
-      });
-    } finally {
-      set({ isBlockedLoading: false });
-    }
-  },
-
   fetchPendingCount: async () => {
     try {
       const response = await friendshipApi.getPendingCount();
@@ -1018,7 +908,7 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
       ];
 
       if (includeFullSnapshot) {
-        tasks.push(get().fetchFriends(), get().fetchBlockedUsers());
+        tasks.push(get().fetchFriends());
       }
 
       await Promise.all(tasks);
@@ -1064,13 +954,11 @@ export const selectFriendshipState = (state: FriendshipStoreState) => ({
   friends: state.friends,
   incomingRequests: state.incomingRequests,
   sentRequests: state.sentRequests,
-  blockedUsers: state.blockedUsers,
   pendingCount: state.pendingCount,
   sentCount: state.sentCount,
   isFriendsLoading: state.isFriendsLoading,
   isIncomingLoading: state.isIncomingLoading,
   isSentLoading: state.isSentLoading,
-  isBlockedLoading: state.isBlockedLoading,
   hasHydrated: state.hasHydrated,
 });
 

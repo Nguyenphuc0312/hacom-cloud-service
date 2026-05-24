@@ -170,13 +170,11 @@ const SideRailButton: React.FC<{
         title={labelWithBadge}
       >
         {({ isActive: routeActive }) => {
-          const ActiveIcon =
-            (routeActive || isActive) && item.iconActive
-              ? item.iconActive
-              : item.icon;
+          const active = routeActive || isActive;
+          const ActiveIcon = active && item.iconActive ? item.iconActive : item.icon;
           return (
             <>
-              {renderIndicator(routeActive || isActive)}
+              {renderIndicator(active)}
               <ActiveIcon className="hc-side-rail__item-icon" aria-hidden="true" />
               <BadgeCount count={badgeCount} />
             </>

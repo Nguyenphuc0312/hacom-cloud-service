@@ -39,7 +39,6 @@ export type { InviteLinkItem, JoinRequestItem } from "./groupStore";
 
 export { useFriendshipStore } from "./friendshipStore";
 export type {
-  BlockedUser,
   FriendRecord,
   FriendRequest,
   FriendshipStatusType,
