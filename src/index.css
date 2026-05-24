@@ -1366,17 +1366,17 @@ a:focus-visible {
     align-items: center;
     gap: 12px;
     overflow: hidden;
-    border-right: 1px solid #C7DCFF;
-    background: linear-gradient(180deg, #EEF4FF 0%, #E4EDFF 60%, #D9E8FF 100%);
-    box-shadow: inset -1px 0 0 #C7DCFF, 2px 0 12px rgb(37 99 235 / 0.06);
+    border-right: 1px solid #B71C1C;
+    background: linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%);
+    box-shadow: inset -1px 0 0 #B71C1C, 2px 0 16px rgb(211 47 47 / 0.18);
     padding: 10px 6px;
     transition: background-color 200ms ease, border-color 200ms ease;
   }
 
   :root[data-theme="dark"] .hc-side-rail {
-    background: linear-gradient(180deg, hsl(222 30% 11%) 0%, hsl(222 30% 9%) 100%);
-    border-right-color: hsl(222 30% 16%);
-    box-shadow: inset -1px 0 0 hsl(222 30% 16%), 2px 0 12px rgb(0 0 0 / 0.2);
+    background: linear-gradient(180deg, #B71C1C 0%, #8B0000 100%);
+    border-right-color: #7F1717;
+    box-shadow: inset -1px 0 0 #7F1717, 2px 0 16px rgb(211 47 47 / 0.3);
   }
 
   .hc-side-rail__logo {
@@ -1430,15 +1430,15 @@ a:focus-visible {
     align-items: center;
     justify-content: center;
     border-radius: 14px;
-    color: #5B7BB5;
+    color: rgba(255, 255, 255, 0.7);
     background: transparent;
     transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .hc-side-rail__item:hover {
-    color: #1D4ED8;
-    background: rgb(255 255 255 / 0.7);
-    box-shadow: 0 2px 8px rgb(37 99 235 / 0.12), 0 1px 3px rgb(37 99 235 / 0.08);
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2), 0 1px 3px rgba(255, 255, 255, 0.1);
     transform: scale(1.07);
   }
 
@@ -1448,20 +1448,20 @@ a:focus-visible {
 
   .hc-side-rail__item:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgb(37 99 235 / 0.4);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
   }
 
   .hc-side-rail__item--active {
-    color: #1D4ED8;
-    background: rgb(255 255 255 / 0.85);
-    box-shadow: 0 2px 10px rgb(37 99 235 / 0.2), 0 1px 4px rgb(37 99 235 / 0.12);
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25), 0 1px 4px rgba(255, 255, 255, 0.15);
     transform: scale(1.13);
   }
 
   .hc-side-rail__item--active:hover {
-    color: #1E40AF;
-    background: rgb(255 255 255 / 0.95);
-    box-shadow: 0 4px 16px rgb(37 99 235 / 0.28), 0 1px 4px rgb(37 99 235 / 0.14);
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 6px 24px rgba(255, 255, 255, 0.3), 0 1px 4px rgba(255, 255, 255, 0.2);
     transform: scale(1.25);
   }
 
