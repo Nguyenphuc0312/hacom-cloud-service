@@ -275,12 +275,6 @@ const MessageGroupItem: React.FC<{
           isOwn,
           isCoarsePointer: coarsePointer,
           isSelectionMode,
-          canEdit: Boolean(onEdit),
-          canDelete: Boolean(onDelete),
-          canDeleteForEveryone:
-            Boolean(onDelete) && !isOwn && viewerCanRecallOthers === true
-              ? true
-              : undefined,
           canRetry: isFailedMessage(message),
           canForward: Boolean(onForward),
         }),
@@ -289,23 +283,8 @@ const MessageGroupItem: React.FC<{
         isOwn,
         isSelectionMode,
         message,
-        onDelete,
-        onEdit,
         onForward,
-        viewerCanRecallOthers,
       ],
-    );
-
-    const adminRecallLabelOverride = React.useMemo(
-      () =>
-        !isOwn && viewerCanRecallOthers
-          ? ({
-            deleteForEveryone: t("chat:message.actions.deleteForEveryoneAdmin", {
-              defaultValue: "Xóa ở mọi người",
-            }),
-          } as const)
-          : undefined,
-      [isOwn, viewerCanRecallOthers, t],
     );
     const threadCount = getThreadCount(message);
     const isRichBubble =
@@ -361,28 +340,6 @@ const MessageGroupItem: React.FC<{
             break;
           case "copy":
             void navigator.clipboard.writeText(message.content || "");
-            break;
-          case "edit":
-            if (onEdit) {
-              void Promise.resolve(onEdit(message));
-            }
-            break;
-          case "deleteForMe":
-            if (onDelete) {
-              void Promise.resolve(onDelete(message.id, "FOR_ME"));
-            }
-            break;
-          case "deleteForEveryone":
-            if (onDelete) {
-              const adminCtx = !isOwn ? "ADMIN_DELETE" : undefined;
-              void Promise.resolve(
-                (onDelete as (
-                  id: string,
-                  mode?: "FOR_ME" | "FOR_EVERYONE",
-                  context?: "ADMIN_DELETE",
-                ) => unknown)(message.id, "FOR_EVERYONE", adminCtx),
-              );
-            }
             break;
           case "retry":
             if (message.conversationId) {
@@ -633,7 +590,6 @@ const MessageGroupItem: React.FC<{
           isOpen={isActionSheetOpen}
           onAction={handleAction}
           onClose={() => setIsActionSheetOpen(false)}
-          actionLabelOverrides={adminRecallLabelOverride}
         />
 
         {/* Mobile emoji picker — full-screen overlay shown via long-press action sheet */}

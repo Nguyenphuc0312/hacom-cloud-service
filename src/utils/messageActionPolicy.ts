@@ -7,9 +7,6 @@ export type MessageActionId =
   | "reply"
   | "forward"
   | "copy"
-  | "edit"
-  | "deleteForMe"
-  | "deleteForEveryone"
   | "retry"
   | "pin"
   | "unpin"
@@ -20,15 +17,6 @@ export interface MessageActionPolicyInput {
   isOwn: boolean;
   isCoarsePointer: boolean;
   isSelectionMode?: boolean;
-  canEdit?: boolean;
-  /** Có cho phép "Xóa về phía tôi" hay không. Thường = Boolean(onDelete). */
-  canDelete?: boolean;
-  /**
-   * Có cho phép "Thu hồi"/"Xóa ở mọi người" hay không.
-   * Trong P3 mặc định = isOwn && tin nhắn còn trong window 24h.
-   * Admin/moderator có thể true cho tin nhắn của người khác (caller truyền vào).
-   */
-  canDeleteForEveryone?: boolean;
   canRetry?: boolean;
   /** Có cho phép ghim tin nhắn hay không (owner/admin). */
   canPin?: boolean;
@@ -37,18 +25,6 @@ export interface MessageActionPolicyInput {
   /** Có cho phép chuyển tiếp tin nhắn hay không. */
   canForward?: boolean;
 }
-
-const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-const isWithinRecallWindow = (message: Message): boolean => {
-  if (!message.createdAt) return false;
-  const createdAtMs =
-    message.createdAt instanceof Date
-      ? message.createdAt.getTime()
-      : new Date(message.createdAt).getTime();
-  if (Number.isNaN(createdAtMs)) return false;
-  return Date.now() - createdAtMs <= RECALL_WINDOW_MS;
-};
 
 interface ActionCandidate {
   id: Exclude<MessageActionId, "more">;
@@ -77,15 +53,6 @@ const canReplyToMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
-const canEditMessage = (message: Message, isOwn: boolean): boolean =>
-  isOwn &&
-  !message.isDeleted &&
-  !isFailedMessage(message) &&
-  !isPendingMessage(message) &&
-  message.type === MessageType.TEXT;
-
-const canDeleteMessage = (message: Message): boolean => !message.isDeleted;
-
 const canPinMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM &&
   !message.isDeleted &&
@@ -95,9 +62,6 @@ const canPinMessage = (message: Message): boolean =>
 const getActionCandidates = ({
   message,
   isOwn,
-  canEdit = false,
-  canDelete = false,
-  canDeleteForEveryone,
   canRetry = false,
   canPin = false,
   isPinned = false,
@@ -123,9 +87,6 @@ const getActionCandidates = ({
     });
   }
 
-  // Forward is exposed exclusively as a quick icon in MessageActionBar
-  // (next to Reply) — not in the "more actions" menu.
-
   if (canReactToMessage(message) && !failed) {
     candidates.push({
       id: "react",
@@ -140,35 +101,6 @@ const getActionCandidates = ({
       id: "copy",
       score: failed ? 76 : 72,
       railEligible: true,
-      menuEligible: true,
-    });
-  }
-
-  if (canEdit && canEditMessage(message, isOwn)) {
-    candidates.push({
-      id: "edit",
-      score: 70,
-      railEligible: false,
-      menuEligible: true,
-    });
-  }
-
-  if (canDelete && canDeleteMessage(message)) {
-    candidates.push({
-      id: "deleteForMe",
-      score: failed && isOwn ? 68 : 18,
-      railEligible: false,
-      menuEligible: true,
-    });
-  }
-
-  const allowRecall =
-    canDeleteForEveryone ?? (isOwn && isWithinRecallWindow(message));
-  if (allowRecall && canDeleteMessage(message)) {
-    candidates.push({
-      id: "deleteForEveryone",
-      score: isOwn ? 24 : 20,
-      railEligible: false,
       menuEligible: true,
     });
   }
