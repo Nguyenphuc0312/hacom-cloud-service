@@ -96,16 +96,16 @@ export const AiSuggestionChips: React.FC<AiSuggestionChipsProps> = ({
             key={suggestion.id}
             type="button"
             onClick={() => onSelect(suggestion.prompt)}
-            className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 bg-white text-left transition-all hover:bg-gray-50 hover:border-gray-300 active:scale-[0.99] group"
+            className="flex items-start gap-3 p-3.5 rounded-xl border border-border bg-surface text-left transition-all hover:bg-surface-hover hover:border-border-strong active:scale-[0.99] group"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 group-hover:bg-gray-200 transition-colors">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-active text-text-muted group-hover:bg-surface-hover transition-colors">
               <Icon size={18} strokeWidth={2} />
             </div>
             <div className="flex flex-col min-w-0 gap-0.5">
-              <span className="text-sm font-medium text-gray-800 truncate">
+              <span className="text-sm font-medium text-text-primary truncate">
                 {suggestion.label}
               </span>
-              <span className="text-xs text-gray-400 truncate">
+              <span className="text-xs text-text-secondary truncate">
                 {suggestion.sublabel}
               </span>
             </div>

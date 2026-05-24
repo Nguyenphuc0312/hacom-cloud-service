@@ -1,13 +1,8 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  ChatBubbleLeftIcon,
-  DocumentIcon,
-  PhotoIcon,
-  SpeakerWaveIcon,
-} from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
+import { ReplyPreview } from "./ReplyPreview";
 import { MessageActions } from "../../message/MessageActions";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import type { Attachment, Conversation, Message } from "../../../types";
@@ -24,7 +19,6 @@ import {
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
-import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
@@ -75,22 +69,6 @@ interface MessageClusterProps {
   shouldAnimateInsert?: boolean;
   className?: string;
 }
-
-const ReplyTypeIcon: React.FC<{ type?: string; className?: string }> = ({
-  type,
-  className,
-}) => {
-  switch (type) {
-    case "image":
-      return <PhotoIcon className={className} />;
-    case "file":
-      return <DocumentIcon className={className} />;
-    case "voice":
-      return <SpeakerWaveIcon className={className} />;
-    default:
-      return <ChatBubbleLeftIcon className={className} />;
-  }
-};
 
 const isCoarsePointer = (): boolean =>
   typeof window !== "undefined" &&
@@ -475,53 +453,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
             )}
           >
             {message.replyToMessage && (
-              <button
-                type="button"
+              <ReplyPreview
+                replyToMessage={message.replyToMessage}
+                replySenderDisplayName={replySenderDisplayName}
+                replyTargetMessageId={replyTargetMessageId}
+                isSelectionMode={isSelectionMode}
+                isOwn={isOwn}
+                replyPreviewClass={contract.cluster.replyPreview}
                 onClick={handleReplyPreviewClick}
-                disabled={!replyTargetMessageId || isSelectionMode}
-                className={clsx(
-                  "flex w-full items-center border-l-[3px] text-left transition-colors",
-                  contract.cluster.replyPreview,
-                  replyTargetMessageId && !isSelectionMode
-                    ? "cursor-pointer hover:opacity-90"
-                    : "cursor-default",
-                  isOwn
-                    ? "border-primary/70 bg-primary/10 text-text-primary dark:bg-primary/20"
-                    : "border-primary/40 bg-surface-hover text-text-primary dark:bg-surface-hover/50",
-                )}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <ReplyTypeIcon
-                    type={message.replyToMessage.type}
-                    className="h-3.5 w-3.5 shrink-0 text-text-muted"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[11.5px] font-bold leading-none text-primary">
-                      {replySenderDisplayName}
-                    </span>
-                    <p className="mt-1 truncate text-[12.5px] leading-tight text-text-secondary">
-                      {message.replyToMessage.isDeleted
-                        ? message.replyToMessage.lifecycleStatus ===
-                            "deleted_admin"
-                          ? t("chat:message.deletedByAdmin", {
-                              defaultValue:
-                                "Tin nhắn đã bị xóa bởi quản trị viên",
-                            })
-                          : message.replyToMessage.lifecycleStatus === "recalled"
-                            ? t("chat:message.recalled", {
-                                defaultValue: "Tin nhắn đã được thu hồi",
-                              })
-                            : t("chat:message.deleted", {
-                                defaultValue: "Tin nhắn đã được thu hồi",
-                              })
-                        : getPreviewFromMessage({
-                            contentFormat: message.replyToMessage.contentFormat,
-                            content: message.replyToMessage.content,
-                          })}
-                    </p>
-                  </div>
-                </div>
-              </button>
+              />
             )}
 
             <div className="relative w-full">

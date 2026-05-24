@@ -178,11 +178,12 @@
   --color-disabled-bg: var(--core-gray-100);
   --color-disabled-border: var(--core-gray-200);
 
-  --color-sidebar-bg: 217 100% 50%;
-  --color-sidebar-text: 0 0% 100%;
-  --color-sidebar-hover-bg: 217 100% 45%;
-  --color-sidebar-active-bg: 217 100% 40%;
-  --color-sidebar-indicator: 0 0% 100%;
+  --color-sidebar-bg: 220 23% 97%;
+  --color-sidebar-text: 215 16% 45%;
+  --color-sidebar-text-strong: 206 100% 41%;
+  --color-sidebar-hover-bg: 214 24% 92%;
+  --color-sidebar-active-bg: 206 100% 94%;
+  --color-sidebar-indicator: 206 100% 41%;
   --color-sidebar-surface: var(--color-sidebar-bg);
   --color-sidebar-hover: var(--color-sidebar-hover-bg);
   --color-sidebar-active: var(--color-sidebar-active-bg);
@@ -273,6 +274,7 @@
 
   --color-sidebar-bg: 210 8% 8%;
   --color-sidebar-text: 0 0% 72%;
+  --color-sidebar-text-strong: 0 0% 100%;
   --color-sidebar-hover-bg: 210 8% 12%;
   --color-sidebar-active-bg: 210 8% 16%;
   --color-sidebar-indicator: var(--core-brand-500);
@@ -1374,21 +1376,26 @@ a:focus-visible {
 
   .hc-side-rail__logo {
     display: flex;
-    height: 48px;
-    width: 48px;
+    height: 44px;
+    width: 44px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     border-radius: 14px;
     background: white;
     padding: 6px;
-    margin-bottom: 8px;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+    margin-bottom: 4px;
     color: var(--hc-primary-800);
     font-size: 16px;
     font-weight: 700;
     line-height: 1;
-    box-shadow: var(--hc-shadow-sm);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
+    transition: box-shadow 160ms ease, transform 120ms ease;
+  }
+
+  .hc-side-rail__logo:hover {
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.16), 0 1px 4px rgb(0 0 0 / 0.1);
+    transform: scale(1.04);
   }
 
   .hc-side-rail__nav,
@@ -1417,49 +1424,58 @@ a:focus-visible {
     width: 48px;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
-    color: hsl(var(--color-sidebar-text) / 0.8);
+    border-radius: 14px;
+    color: hsl(var(--color-sidebar-text) / 0.7);
     background: transparent;
-    transition: all 160ms ease;
+    transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .hc-side-rail__item:hover {
-    color: white;
+    color: hsl(var(--color-sidebar-text-strong));
     background: hsl(var(--color-sidebar-hover));
+    transform: scale(1.07);
+  }
+
+  .hc-side-rail__item:active {
+    transform: scale(0.96);
   }
 
   .hc-side-rail__item:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px hsl(var(--color-sidebar-text) / 0.3);
+    box-shadow: 0 0 0 2px hsl(var(--color-primary) / 0.35);
   }
 
   .hc-side-rail__item--active {
-    color: white;
-    background: hsl(var(--color-sidebar-active));
-    box-shadow: inset 0 0 0 1px hsl(var(--color-sidebar-text) / 0.1);
+    color: hsl(var(--color-primary));
+    background: hsl(var(--color-primary) / 0.12);
+    box-shadow: 0 1px 5px hsl(var(--color-primary) / 0.18);
   }
 
   .hc-side-rail__item--active:hover {
-    background: hsl(var(--color-sidebar-active));
+    color: hsl(var(--color-primary));
+    background: hsl(var(--color-primary) / 0.17);
+    box-shadow: 0 2px 8px hsl(var(--color-primary) / 0.24);
+    transform: scale(1.04);
   }
 
   .hc-side-rail__item-icon {
     position: relative;
     z-index: 1;
-    height: 21px;
-    width: 21px;
-    stroke-width: 2;
+    height: 22px;
+    width: 22px;
+    stroke-width: 1.8;
   }
 
   .hc-side-rail__item-indicator {
     position: absolute;
     left: 0;
-    top: 10px;
-    height: 20px;
-    width: 3px;
-    border-radius: 999px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 24px;
+    width: 3.5px;
+    border-radius: 0 4px 4px 0;
     background: hsl(var(--color-sidebar-indicator));
-    transition: opacity 160ms ease;
+    transition: opacity 160ms ease, height 160ms ease;
   }
 
   .hc-side-rail__badge {
@@ -1488,17 +1504,18 @@ a:focus-visible {
     justify-content: center;
     overflow: hidden;
     border-radius: 999px;
-    border: 1.5px solid hsl(var(--color-border));
+    border: 2px solid hsl(var(--color-border));
     background: hsl(var(--color-surface-hover));
     color: hsl(var(--color-text-primary));
     font-size: 13px;
     font-weight: 600;
-    transition: all 160ms ease;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .hc-side-rail__avatar:hover {
-    background: hsl(var(--color-surface-active));
-    border-color: hsl(var(--color-primary) / 0.3);
+    border-color: hsl(var(--color-primary) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--color-primary) / 0.12);
+    transform: scale(1.06);
   }
 
   .hc-module-sidebar {
@@ -1600,6 +1617,7 @@ a:focus-visible {
   .app-page-header {
     border-bottom: 1px solid hsl(var(--surface-border) / 0.62);
     background: hsl(var(--chat-panel-bg) / 0.94);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
 
@@ -1714,7 +1732,7 @@ a:focus-visible {
       height: 100dvh;
       min-width: var(--hc-rail-width);
       flex-direction: column;
-      border-right: 1px solid rgb(0 45 112 / 0.42);
+      border-right: 1px solid hsl(var(--color-border));
       border-top: 0;
       padding: 10px 6px;
     }
@@ -1777,7 +1795,6 @@ a:focus-visible {
   height: 0;
   color: hsl(var(--color-text-muted));
   pointer-events: none;
-  user-select: none;
   white-space: nowrap;
   overflow: hidden;
   max-width: 100%;
@@ -1785,4 +1802,11 @@ a:focus-visible {
 
 :root[data-theme="dark"] .tiptap-editor-inner p.is-editor-empty:first-child::before {
   color: hsl(var(--color-text-muted));
+}
+
+/* Hide the browser's native password reveal/clear icons (Edge/IE) so only the
+   custom Eye/EyeOff toggle is shown — otherwise two eye icons appear. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
 }

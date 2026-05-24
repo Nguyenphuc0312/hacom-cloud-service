@@ -2,7 +2,6 @@ import React from "react";
 import clsx from "clsx";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
 import type { Editor } from "@tiptap/react";
 
@@ -78,7 +77,6 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             keepMarks: true,
           },
         }),
-        Underline,
         // eslint-disable-next-line react-hooks/refs
         Placeholder.configure({
           // Function form reads from ref so decoration always shows current text
@@ -198,7 +196,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
         editor={editor}
         className={clsx(
           "tiptap-composer w-full flex-1 cursor-text overflow-y-auto",
-          "min-h-[var(--control-height-md)] px-1 py-1.5",
+          "min-h-[var(--control-height-md)] max-h-[40vh] px-1 py-1.5",
           "text-sm text-text-primary",
           "[&_.tiptap-editor-inner]:outline-none",
           "[&_.tiptap-editor-inner]:min-h-[1.5rem]",

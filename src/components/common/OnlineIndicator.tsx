@@ -49,7 +49,7 @@ export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
         "inline-block rounded-full ring-2 ring-surface",
         sizeClasses[size],
         statusColors[status],
-        status === UserStatus.ONLINE && pulse && "animate-pulse-online",
+        status === UserStatus.ONLINE && pulse && "animate-pulse-online shadow-[0_0_0_3px_hsl(142_71%_45%/0.22)]",
         className,
       )}
       aria-label={`${t("common:statusLabel")}: ${t(statusLabelKeys[status])}`}
