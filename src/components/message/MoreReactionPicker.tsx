@@ -88,7 +88,7 @@ export const MoreReactionPicker: React.FC<MoreReactionPickerProps> = ({
       {/* Emoji grid — 6 columns, internal scroll, never tall vertical column */}
       <div
         className={clsx(
-          "grid grid-cols-6 gap-1",
+          "grid grid-cols-6 gap-1.5",
           // Cap height so it never grows beyond ~260px
           "max-h-[260px] overflow-y-auto overscroll-contain",
           // Custom thin scrollbar
