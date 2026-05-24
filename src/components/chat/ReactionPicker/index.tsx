@@ -180,7 +180,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
             <p className="mb-1 px-1 text-xs font-medium text-text-muted">
               Gần đây
             </p>
-            <div className="grid grid-cols-8 gap-0.5">
+            <div className="grid grid-cols-8 gap-1.5">
               {recentEmojis.map((emoji) => (
                 <EmojiButton
                   key={emoji}
@@ -199,7 +199,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
             <p className="mb-1 px-1 text-xs font-medium text-text-muted">
               Phản ứng nhanh
             </p>
-            <div className="grid grid-cols-8 gap-0.5">
+            <div className="grid grid-cols-8 gap-1.5">
               {QUICK_REACTIONS.map((emoji) => (
                 <EmojiButton
                   key={emoji}
@@ -220,7 +220,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
                 <p className="mb-1 px-1 text-xs font-medium text-text-muted">
                   Kết quả tìm kiếm
                 </p>
-                <div className="grid grid-cols-8 gap-0.5">
+                <div className="grid grid-cols-8 gap-1.5">
                   {filteredEmojis.slice(0, 32).map((emoji) => (
                     <EmojiButton
                       key={emoji}
@@ -243,7 +243,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
             )}
           </div>
         ) : activeTab !== "recent" && (
-          <div className="grid grid-cols-8 gap-0.5">
+          <div className="grid grid-cols-8 gap-1.5">
             {displayEmojis.map((emoji: string) => (
               <EmojiButton
                 key={emoji}

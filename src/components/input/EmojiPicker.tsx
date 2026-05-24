@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { commonEmojis } from "../../constants/emojis";
+import { EMOJI_CATEGORIES, commonEmojis } from "../../constants/emojis";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -16,17 +16,12 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const categories = [
-    { id: "recent", label: "🕐", name: t("chat:emoji.category.recent") },
-    { id: "smileys", label: "😀", name: t("chat:emoji.category.smileys") },
-    { id: "gestures", label: "👍", name: t("chat:emoji.category.gestures") },
-    { id: "hearts", label: "❤️", name: t("chat:emoji.category.hearts") },
-    { id: "symbols", label: "🎉", name: t("chat:emoji.quickReactions") },
-  ];
-
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("smileys");
+  const [activeCategory, setActiveCategory] = useState(EMOJI_CATEGORIES[0].id);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const isScrollingRef = useRef(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -37,25 +32,61 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         onClose();
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  const filteredEmojis = search
-    ? commonEmojis.filter((emoji) => emoji.includes(search))
-    : commonEmojis;
+  const handleCategoryClick = useCallback((categoryId: string) => {
+    setActiveCategory(categoryId);
+    setSearch("");
+    const section = sectionRefs.current[categoryId];
+    if (section && scrollRef.current) {
+      isScrollingRef.current = true;
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 600);
+    }
+  }, []);
+
+  // Update active tab based on scroll position
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (isScrollingRef.current || search) return;
+      const containerTop = container.getBoundingClientRect().top;
+      let current = EMOJI_CATEGORIES[0].id;
+      for (const cat of EMOJI_CATEGORIES) {
+        const el = sectionRefs.current[cat.id];
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top - containerTop;
+        if (top <= 8) current = cat.id;
+      }
+      setActiveCategory(current);
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [search]);
+
+  const searchResults = search
+    ? commonEmojis.filter((e) => e.includes(search)).slice(0, 80)
+    : null;
 
   return (
     <div
       ref={pickerRef}
       className={clsx(
-        "bg-surface rounded-xl shadow-elev2 border border-border",
+        "bg-surface rounded-xl shadow-elev2 border border-border flex flex-col",
         "w-80 animate-slide-in-up",
         className,
       )}
+      style={{ height: 380 }}
     >
-      <div className="p-2 border-b border-border">
+      {/* Search */}
+      <div className="p-2 border-b border-border flex-shrink-0">
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
@@ -63,51 +94,86 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("chat:emoji.searchPlaceholder")}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-surface-overlay border-none focus:outline-none focus:ring-2 focus:ring-focus/30 focus:bg-surface"
+            className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg bg-surface-overlay border-none focus:outline-none focus:ring-2 focus:ring-focus/30 focus:bg-surface"
           />
         </div>
       </div>
 
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-border">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => setActiveCategory(cat.id)}
-            className={clsx(
-              "flex-1 py-2 rounded-md text-lg transition-colors",
-              activeCategory === cat.id ? "bg-surface-overlay" : "hover:bg-surface-hover",
-            )}
-            title={cat.name}
-            aria-label={cat.name}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="p-2 h-48 overflow-y-auto">
-        <div className="grid grid-cols-8 gap-1">
-          {filteredEmojis.map((emoji, index) => (
+      {/* Category tabs */}
+      {!search && (
+        <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-border flex-shrink-0 overflow-x-auto scrollbar-hide">
+          {EMOJI_CATEGORIES.map((cat) => (
             <button
-              key={index}
+              key={cat.id}
               type="button"
-              onClick={() => onSelect(emoji)}
-              className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-overlay text-xl transition-transform hover:scale-125"
+              onClick={() => handleCategoryClick(cat.id)}
+              title={cat.label}
+              aria-label={cat.label}
+              className={clsx(
+                "flex-shrink-0 w-8 h-7 flex items-center justify-center rounded-md text-base transition-colors",
+                activeCategory === cat.id
+                  ? "bg-surface-active"
+                  : "hover:bg-surface-hover",
+              )}
             >
-              {emoji}
+              {cat.icon}
             </button>
           ))}
         </div>
+      )}
 
-        {filteredEmojis.length === 0 && (
-          <div className="flex items-center justify-center h-full text-text-muted text-sm">
-            {t("chat:attachment.menu.noEmojiFound")}
-          </div>
+      {/* Emoji grid */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-2 space-y-3"
+      >
+        {searchResults ? (
+          <>
+            {searchResults.length > 0 ? (
+              <div className="grid grid-cols-8 gap-1.5">
+                {searchResults.map((emoji, i) => (
+                  <EmojiBtn key={i} emoji={emoji} onSelect={onSelect} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-24 text-text-muted text-sm">
+                {t("chat:attachment.menu.noEmojiFound")}
+              </div>
+            )}
+          </>
+        ) : (
+          EMOJI_CATEGORIES.map((cat) => (
+            <div
+              key={cat.id}
+              ref={(el) => { sectionRefs.current[cat.id] = el; }}
+            >
+              <p className="text-xs font-medium text-text-muted mb-1.5 px-0.5">
+                {cat.label}
+              </p>
+              <div className="grid grid-cols-8 gap-1.5">
+                {cat.emojis.map((emoji, i) => (
+                  <EmojiBtn key={i} emoji={emoji} onSelect={onSelect} />
+                ))}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
   );
 };
+
+const EmojiBtn: React.FC<{ emoji: string; onSelect: (e: string) => void }> = ({
+  emoji,
+  onSelect,
+}) => (
+  <button
+    type="button"
+    onClick={() => onSelect(emoji)}
+    className="w-8 h-8 flex items-center justify-center rounded text-xl hover:bg-surface-overlay transition-transform hover:scale-125 leading-none"
+  >
+    {emoji}
+  </button>
+);
 
 export default EmojiPicker;
