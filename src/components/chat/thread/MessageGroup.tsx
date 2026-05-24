@@ -187,7 +187,6 @@ const MessageGroupItem: React.FC<{
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
-  viewerCanRecallOthers,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,

@@ -45,7 +45,6 @@ export interface MessageContextMenuOptions {
  */
 export function buildMessageContextMenuItems(options: MessageContextMenuOptions): ContextMenuItem[] {
   const {
-    isOwn,
     isPinned = false,
     hasAttachment = false,
     hasUrl = false,
