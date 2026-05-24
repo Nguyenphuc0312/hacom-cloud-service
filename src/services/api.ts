@@ -1658,37 +1658,6 @@ export const friendshipApi = {
     return response.data;
   },
 
-  blockUser: async (userId: string) => {
-    const response = await apiClient.post<
-      ApiResponse<FriendshipWriteResponseDto>
-    >("/friends/block", { userId });
-    return response.data;
-  },
-
-  unblockUser: async (userId: string) => {
-    const response = await apiClient.delete<
-      ApiResponse<FriendshipWriteResponseDto>
-    >(`/friends/unblock/${userId}`);
-    return response.data;
-  },
-
-  getBlockedUsers: async () => {
-    const response = await apiClient.get<
-      ApiResponse<{
-        data: FriendshipRelationDto[];
-        pagination: {
-          page: number;
-          limit: number;
-          total: number;
-          totalPages: number;
-          hasNext: boolean;
-          hasPrev: boolean;
-        };
-      }>
-    >("/friends/blocked");
-    return response.data;
-  },
-
   getFriendshipStatus: async (userId: string) => {
     const response = await apiClient.get<
       ApiResponse<FriendshipStatusResponseDto>

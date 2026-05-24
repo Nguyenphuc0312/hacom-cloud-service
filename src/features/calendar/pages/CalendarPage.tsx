@@ -512,6 +512,9 @@ const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
   onClick: () => void;
 }> = ({ attendance, onClick }) => {
+  const colors = getAttendanceColors(attendance.classificationColor);
+  const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
+
   return (
     <button
       type="button"
@@ -520,25 +523,42 @@ const AttendanceBadge: React.FC<{
         onClick();
       }}
       className={clsx(
-        "attendance-badge block w-full cursor-pointer rounded border border-border bg-surface text-left transition-micro hover:bg-surface-hover",
-        "px-1.5 py-0.5 text-xs"
+        "attendance-badge block w-full cursor-pointer rounded border text-left transition-micro",
+        "px-1.5 py-0.5 text-xs",
+        hasPunch
+          ? [colors.bg, colors.border, "hover:brightness-95 dark:hover:brightness-110"]
+          : "border-border bg-surface hover:bg-surface-hover",
       )}
       title={
-        attendance.firstPunch || attendance.lastPunch
-          ? `${formatTime(attendance.firstPunch)} - ${formatTime(attendance.lastPunch)}`
+        hasPunch
+          ? `${formatTime(attendance.firstPunch)} – ${formatTime(attendance.lastPunch)}${attendance.classificationLabel ? ` · ${attendance.classificationLabel}` : ""}`
           : "Chưa có dữ liệu chấm công"
       }
     >
-      {attendance.firstPunch || attendance.lastPunch ? (
-        <span className="block space-y-0.5 font-medium text-text-primary">
-          <span className="block truncate">Giờ đến: {formatTime(attendance.firstPunch)}</span>
-          <span className="block truncate">Giờ về: {formatTime(attendance.lastPunch)}</span>
+      <span className="flex items-center gap-1">
+        {hasPunch && (
+          <span className={clsx("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", colors.dot)} />
+        )}
+        <span className={clsx("block min-w-0 space-y-0.5 font-medium", hasPunch ? colors.text : "text-text-muted")}>
+          {hasPunch ? (
+            <>
+              <span className="block truncate">
+                {formatTime(attendance.firstPunch)} – {formatTime(attendance.lastPunch)}
+              </span>
+              {attendance.totalMinutes && attendance.totalMinutes > 0 && (
+                <span className="block truncate opacity-80">
+                  {formatTotalTime(attendance.totalMinutes)}h
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="block truncate">Chưa chấm công</span>
+          )}
         </span>
-      ) : (
-        <span className="block truncate font-medium text-text-primary">
-          Chưa có dữ liệu
-        </span>
-      )}
+        {attendance.requiresAction && (
+          <ExclamationTriangleIcon className="ml-auto h-3 w-3 shrink-0 text-orange-500" />
+        )}
+      </span>
     </button>
   );
 };

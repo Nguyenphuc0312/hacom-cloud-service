@@ -27,4 +27,3 @@ export { SettingsApplier } from "./SettingsApplier";
 export { SecuritySection } from "./SecuritySection";
 export { DeviceSessionList } from "./DeviceSessionList";
 export { DangerZoneSection } from "./DangerZoneSection";
-export { BlockedUsersSection } from "./BlockedUsersSection";

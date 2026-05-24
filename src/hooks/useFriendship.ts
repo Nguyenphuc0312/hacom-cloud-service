@@ -19,7 +19,6 @@ import {
   applyRelationToSnapshot,
   deriveRelationshipState,
   extractWriteRelation,
-  mapRelationToBlockedRecord,
   mapRelationToFriendRecord,
   mapRelationToRequestRecord,
   computeFriendshipPairKey,
@@ -27,7 +26,6 @@ import {
   toFriendshipUser,
   upsertFront,
   useFriendshipStore,
-  type BlockedUser,
   type FriendRecord,
   type FriendRequest,
   type FriendshipDirectorySnapshot,
@@ -36,7 +34,6 @@ import {
 } from "../stores/friendshipStore";
 
 export type {
-  BlockedUser,
   FriendRecord,
   FriendRequest,
   FriendshipStatusType,
@@ -49,7 +46,6 @@ export {
   toFriendshipUser,
   mapRelationToFriendRecord,
   mapRelationToRequestRecord,
-  mapRelationToBlockedRecord,
   applyRelationToSnapshot,
   deriveRelationshipState,
 };
@@ -71,10 +67,6 @@ interface UseFriendshipReturn {
   pendingCount: number;
   fetchPendingCount: () => Promise<void>;
 
-  blockedUsers: BlockedUser[];
-  isBlockedLoading: boolean;
-  fetchBlockedUsers: () => Promise<void>;
-
   refreshDirectory: () => Promise<void>;
 
   sendFriendRequest: (userId: string) => Promise<boolean>;
@@ -82,9 +74,6 @@ interface UseFriendshipReturn {
   rejectFriendRequest: (requestId: string) => Promise<boolean>;
   cancelFriendRequest: (requestId: string) => Promise<boolean>;
   removeFriend: (friendshipId: string) => Promise<boolean>;
-  blockUser: (userId: string) => Promise<boolean>;
-  unblockUser: (userId: string) => Promise<boolean>;
-
   getRelationshipState: (
     userId: string,
     currentUserId?: string | null,
@@ -248,69 +237,6 @@ const optimisticRemoveFriendSnapshot = (
   friends: removeByRelationId(snapshot.friends, friendshipId),
 });
 
-const optimisticBlockSnapshot = (
-  snapshot: FriendshipDirectorySnapshot,
-  userId: string,
-): FriendshipDirectorySnapshot => {
-  const timestamp = nowIso();
-  const existingFriend = snapshot.friends.find((item) => item.id === userId);
-  const incomingRequest = snapshot.incomingRequests.find(
-    (item) => item.requester.id === userId,
-  );
-  const sentRequest = snapshot.sentRequests.find(
-    (item) => item.addressee.id === userId,
-  );
-
-  const relationId =
-    existingFriend?.relationId ??
-    incomingRequest?.relationId ??
-    sentRequest?.relationId ??
-    `optimistic:block:${userId}:${Date.now()}`;
-
-  const profile =
-    existingFriend ??
-    incomingRequest?.requester ??
-    sentRequest?.addressee ??
-    toUnknownUser(userId);
-
-  const blocked: BlockedUser = {
-    ...profile,
-    relationId,
-    capabilities: {
-      ...EMPTY_CAPABILITIES,
-      canUnblock: true,
-    },
-    actorRole: "requester",
-    relationStatus: "blocked" as FriendshipStatusType,
-    actionResult: "blocked",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-
-  const nextIncoming = snapshot.incomingRequests.filter(
-    (item) => item.requester.id !== userId,
-  );
-
-  return {
-    ...snapshot,
-    friends: snapshot.friends.filter((item) => item.id !== userId),
-    incomingRequests: nextIncoming,
-    sentRequests: snapshot.sentRequests.filter(
-      (item) => item.addressee.id !== userId,
-    ),
-    blockedUsers: upsertFront(snapshot.blockedUsers, blocked),
-    pendingCount: nextIncoming.length,
-  };
-};
-
-const optimisticUnblockSnapshot = (
-  snapshot: FriendshipDirectorySnapshot,
-  userId: string,
-): FriendshipDirectorySnapshot => ({
-  ...snapshot,
-  blockedUsers: snapshot.blockedUsers.filter((item) => item.id !== userId),
-});
-
 export const useFriendship = (): UseFriendshipReturn => {
   const friends = useFriendshipStore((state) => state.friends);
   const isFriendsLoading = useFriendshipStore(
@@ -335,13 +261,6 @@ export const useFriendship = (): UseFriendshipReturn => {
   const pendingCount = useFriendshipStore((state) => state.pendingCount);
   const fetchPendingCount = useFriendshipStore(
     (state) => state.fetchPendingCount,
-  );
-  const blockedUsers = useFriendshipStore((state) => state.blockedUsers);
-  const isBlockedLoading = useFriendshipStore(
-    (state) => state.isBlockedLoading,
-  );
-  const fetchBlockedUsers = useFriendshipStore(
-    (state) => state.fetchBlockedUsers,
   );
   const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
   const refreshDirectoryStore = useFriendshipStore(
@@ -473,40 +392,17 @@ export const useFriendship = (): UseFriendshipReturn => {
     [runOptimisticWrite],
   );
 
-  const blockUser = useCallback(
-    async (userId: string): Promise<boolean> => {
-      return runOptimisticWrite(
-        buildActionKey("block", userId),
-        () => friendshipApi.blockUser(userId),
-        (snapshot) => optimisticBlockSnapshot(snapshot, userId),
-      );
-    },
-    [runOptimisticWrite],
-  );
-
-  const unblockUser = useCallback(
-    async (userId: string): Promise<boolean> => {
-      return runOptimisticWrite(
-        buildActionKey("unblock", userId),
-        () => friendshipApi.unblockUser(userId),
-        (snapshot) => optimisticUnblockSnapshot(snapshot, userId),
-      );
-    },
-    [runOptimisticWrite],
-  );
-
   const getRelationshipState = useCallback(
     (userId: string, currentUserId?: string | null): RelationshipState => {
       return deriveRelationshipState({
         userId,
         currentUserId,
-        blockedUsers,
         friends,
         incomingRequests,
         sentRequests,
       });
     },
-    [blockedUsers, friends, incomingRequests, sentRequests],
+    [friends, incomingRequests, sentRequests],
   );
 
   const checkFriendshipStatus = useCallback(async (userId: string) => {
@@ -558,17 +454,12 @@ export const useFriendship = (): UseFriendshipReturn => {
     sentCount,
     pendingCount,
     fetchPendingCount,
-    blockedUsers,
-    isBlockedLoading,
-    fetchBlockedUsers,
     refreshDirectory,
     sendFriendRequest,
     acceptFriendRequest,
     rejectFriendRequest,
     cancelFriendRequest,
     removeFriend,
-    blockUser,
-    unblockUser,
     getRelationshipState,
     checkFriendshipStatus,
   };
