@@ -171,6 +171,7 @@ const EventDetailModal: React.FC<{
         <button
           type="button"
           onClick={onClose}
+          title="Đóng"
           className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
         >
           <XMarkIcon className="h-5 w-5" />
@@ -247,6 +248,7 @@ const AttendanceTooltip: React.FC<{
         <button
           type="button"
           onClick={onClose}
+          title="Đóng"
           className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
         >
           <XMarkIcon className="h-5 w-5" />
@@ -428,6 +430,7 @@ const MiniCalendar: React.FC<{
           <button
             type="button"
             onClick={handlePrevMonth}
+            title="Tháng trước"
             className="rounded p-1 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
           >
             <ChevronLeftIcon className="h-4 w-4" />
@@ -435,6 +438,7 @@ const MiniCalendar: React.FC<{
           <button
             type="button"
             onClick={handleNextMonth}
+            title="Tháng sau"
             className="rounded p-1 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
           >
             <ChevronRightIcon className="h-4 w-4" />
@@ -833,6 +837,7 @@ export const CalendarPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
+                  title="Xóa tìm kiếm"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
                 >
                   <XMarkIcon className="h-4 w-4" />
@@ -915,6 +920,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={goToPrevMonth}
+                    title="Tháng trước"
                     className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
                   >
                     <ChevronLeftIcon className="h-5 w-5" />
@@ -922,6 +928,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={goToNextMonth}
+                    title="Tháng sau"
                     className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
                   >
                     <ChevronRightIcon className="h-5 w-5" />
