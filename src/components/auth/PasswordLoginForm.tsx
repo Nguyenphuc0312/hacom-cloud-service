@@ -134,7 +134,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         <Button
           type="submit"
           fullWidth
-          className="h-12 rounded-xl bg-primary text-sm font-bold text-text-inverse transition-all hover:brightness-110 active:scale-95 shadow-lg shadow-primary/20"
+          className={"h-12 rounded-xl bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-sm font-bold text-white transition-all hover:brightness-105 active:scale-95 shadow-lg shadow-[#C41E3A]/25"}
           isLoading={isBusy}
           disabled={isBusy}
           aria-busy={isBusy}
