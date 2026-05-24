@@ -1,6 +1,5 @@
 import React from "react";
 import clsx from "clsx";
-import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
 import { ReplyPreview } from "./ReplyPreview";
 import { MessageActions } from "../../message/MessageActions";
@@ -99,7 +98,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   density,
   onNavigateToMessage,
   currentUsername,
-  viewerCanRecallOthers,
   viewerCanPin,
   textRenderMode = "expanded",
   isCollapsibleText = false,
@@ -107,7 +105,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   shouldAnimateInsert = false,
   className,
 }) => {
-  const { t } = useTranslation();
   const contract = getTimelineDensityContract(density);
   const resendMessage = useChatStore((s) => s.resendMessage);
   const currentUserId = useAuthStore((s) => s.user?.id);

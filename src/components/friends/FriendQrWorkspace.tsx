@@ -10,7 +10,6 @@ import {
   UserPlusIcon,
   ArrowDownTrayIcon,
   ChatBubbleLeftRightIcon,
-  NoSymbolIcon,
 } from "@heroicons/react/24/outline";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
