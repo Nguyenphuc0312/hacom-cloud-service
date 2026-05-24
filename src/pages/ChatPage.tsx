@@ -516,6 +516,24 @@ export const ChatPage: React.FC = () => {
             })
           : t("chat:toast.messageDeleted"),
       );
+
+      // Sync conversation lastMessage in sidebar after delete/recall
+      const storeState = useChatStore.getState();
+      const affectedConv = storeState.conversationById[selectedConversationId];
+      if (affectedConv?.lastMessage?.id === pendingDeleteMessage.messageId) {
+        if (pendingDeleteMessage.mode === "FOR_ME") {
+          updateConversation(selectedConversationId, { lastMessage: undefined });
+        } else {
+          updateConversation(selectedConversationId, {
+            lastMessage: {
+              ...affectedConv.lastMessage,
+              isDeleted: true,
+              content: "",
+            },
+          });
+        }
+      }
+
       setPendingDeleteMessage(null);
     } catch (error) {
       const apiError = extractApiError(error);
@@ -528,6 +546,7 @@ export const ChatPage: React.FC = () => {
     pendingDeleteMessage,
     selectedConversationId,
     t,
+    updateConversation,
   ]);
 
   const closeInfoPanel = useCallback(() => {
@@ -1136,7 +1155,7 @@ export const ChatPage: React.FC = () => {
                 defaultValue: "Thu hồi tin nhắn?",
               })
             : t("chat:confirm.deleteForMeTitle", {
-              defaultValue: "Xóa về phía tôi?",
+              defaultValue: "Xóa tin nhắn ở phía bạn?",
             })
         }
         message={
@@ -1148,11 +1167,11 @@ export const ChatPage: React.FC = () => {
               })
               : t("chat:confirm.deleteForEveryone", {
                 defaultValue:
-                  "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.",
+                  "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Người khác sẽ không còn xem được nội dung tin nhắn.",
               })
             : t("chat:confirm.deleteForMe", {
               defaultValue:
-                "Tin nhắn này sẽ chỉ bị xóa khỏi phía bạn. Người khác vẫn có thể xem tin nhắn.",
+                "Tin nhắn này chỉ bị xóa khỏi giao diện của bạn. Những người khác trong cuộc trò chuyện vẫn có thể xem tin nhắn.",
             })
         }
         confirmText={

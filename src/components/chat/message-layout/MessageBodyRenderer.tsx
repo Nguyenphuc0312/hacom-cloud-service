@@ -397,7 +397,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
     const placeholder =
       message.lifecycleStatus === "deleted_admin"
         ? "Tin nhắn đã bị xóa bởi quản trị viên"
-        : "Tin nhắn đã được thu hồi";
+        : isOwn
+          ? "Bạn đã thu hồi một tin nhắn"
+          : "Tin nhắn đã được thu hồi";
     return (
       <span className="italic text-text-muted">{placeholder}</span>
     );
@@ -411,6 +413,8 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       ? extractContactPayload(message)
       : null;
 
+  const hasContent = Boolean(message.content && message.content.trim());
+
   switch (message.type) {
     case MessageType.IMAGE:
       return (
@@ -421,7 +425,6 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   key={attachment.id || `${message.id}-image-${index}`}
                   conversationId={message.conversationId}
                   attachment={attachment}
-                  caption={index === 0 ? message.content : undefined}
                   isOwn={isOwn}
                   onClick={onImageClick}
                 />
@@ -435,6 +438,17 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 isCollapsibleText,
                 onToggleTextExpand,
               )}
+          {attachments.length > 0 && hasContent
+            ? renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                currentUserId,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )
+            : null}
         </div>
       );
     case MessageType.FILE:
@@ -459,6 +473,17 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 isCollapsibleText,
                 onToggleTextExpand,
               )}
+          {attachments.length > 0 && hasContent
+            ? renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                currentUserId,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )
+            : null}
         </div>
       );
     case MessageType.VOICE:

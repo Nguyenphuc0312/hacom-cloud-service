@@ -1161,6 +1161,14 @@ export const useWebSocket = (
       void handleReauthRequiredEvent({ reason });
     };
 
+    const handleReconnectFailed = (_data: unknown) => {
+      onError?.(new Error(
+        t("chat:websocket.reconnectFailed", {
+          defaultValue: "Không thể kết nối lại sau nhiều lần thử. Vui lòng kiểm tra mạng và nhấn Thử lại.",
+        }),
+      ));
+    };
+
     const sendDeliveryAckForMessage = (
       event: NormalizedMessageRealtimeEvent,
     ) => {
@@ -1197,6 +1205,7 @@ export const useWebSocket = (
       onWsError: handleWsError,
       onAuthUnauthorized: handleAuthUnauthorized,
       onAuthReauthRequired: handleAuthReauthRequired,
+      onReconnectFailed: handleReconnectFailed,
     });
     unsubscribersRef.current.push(unsubscribeConnectionEvents);
 
@@ -1508,6 +1517,9 @@ export const useWebSocket = (
             mode: "FOR_ME",
           }),
         );
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:deleted_for_me",
+        });
       },
       onMessageDelivered: (data: unknown) => {
         const payload = asRecord(data);

@@ -32,7 +32,7 @@ import type {
   TypingStatus,
   UserSummary,
 } from "../../types";
-import { MessageType } from "../../types";
+import { FileType, MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { extractApiError } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
@@ -169,7 +169,7 @@ interface ChatWindowProps {
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
-  onDeleteMessage?: (messageId: string) => void | Promise<void>;
+  onDeleteMessage?: (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => void | Promise<void>;
   onToggleInfoPanel: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
@@ -460,9 +460,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [flushPendingDraftPersist, replaceComposerSeed]);
 
   const handleDelete = React.useCallback(
-    (messageId: string) => {
+    (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => {
       if (!onDeleteMessage) return;
-      void Promise.resolve(onDeleteMessage(messageId));
+      void Promise.resolve(onDeleteMessage(messageId, mode, context));
     },
     [onDeleteMessage],
   );
@@ -514,8 +514,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const outgoingContent = (content || "").trim();
       if (!outgoingContent && !hasAttachments) return;
 
+      const allAreImages =
+        hasAttachments &&
+        allAttachments.every(
+          (a) =>
+            a.type === FileType.IMAGE ||
+            (typeof a.mimeType === "string" && a.mimeType.startsWith("image/")),
+        );
       const messageType = hasAttachments
-        ? MessageType.FILE
+        ? allAreImages
+          ? MessageType.IMAGE
+          : MessageType.FILE
         : (type as MessageType | undefined);
       const attachmentArg: Attachment | Attachment[] | undefined =
         hasAttachments

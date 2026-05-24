@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   SparklesIcon,
   AlertCircleIcon,
-  FileTextIcon,
-  ExternalLinkIcon,
   CopyIcon,
   RotateCcwIcon,
   CheckIcon,
@@ -12,12 +10,10 @@ import {
   UserIcon,
 } from "lucide-react";
 import clsx from "clsx";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
-import type { AiMessage, AiChatSource } from "../types";
-import { useAiAssistantStore } from "../state/aiAssistantStore";
+import type { AiMessage } from "../types";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
+import { AiAnswerContent } from "./AiAnswerContent";
+import { AiSourceList } from "./AiSourceList";
 import "../styles/ai-animations.css";
 
 interface AiChatPreviewProps {
@@ -25,9 +21,6 @@ interface AiChatPreviewProps {
   isLoading?: boolean;
 }
 
-/**
- * Block hiển thị quá trình "suy nghĩ" của AI.
- */
 const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -38,9 +31,9 @@ const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
         className="flex items-center gap-2 text-xs text-text-muted hover:text-text-secondary transition-colors mb-1"
       >
         <div className="flex gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0s' }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0s" }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.2s" }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.4s" }} />
         </div>
         <span className="font-medium">Đang suy nghĩ...</span>
       </button>
@@ -54,15 +47,15 @@ const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
 };
 
 /**
- * Danh sách tin nhắn kiểu ChatGPT – user messages căn phải nhẹ,
- * AI messages căn trái với avatar, markdown rendering, copy/feedback actions.
+ * Danh sách tin nhắn AI – user messages căn phải, AI messages căn trái.
+ * Citation [N] trong answer được render thành link chip.
+ * Nguồn tham khảo hiển thị inline bên dưới mỗi câu trả lời.
  */
 export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   messages,
   isLoading = false,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { setSelectedSources, toggleSourcePanel } = useAiAssistantStore();
   const { selectedEndpoint } = useChatUiStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -70,13 +63,6 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  /** Mở panel source references */
-  const handleSourceClick = (sources: AiChatSource[]) => {
-    setSelectedSources(sources);
-    toggleSourcePanel(true);
-  };
-
-  /** Copy nội dung tin nhắn */
   const handleCopy = (message: AiMessage) => {
     navigator.clipboard.writeText(message.content);
     setCopiedId(message.id);
@@ -131,7 +117,11 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
               >
                 {/* Label */}
                 <span className="text-xs font-semibold text-text-muted mb-1">
-                  {message.role === "user" ? "Bạn" : (selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân")}
+                  {message.role === "user"
+                    ? "Bạn"
+                    : selectedEndpoint === "company"
+                      ? "Hacom AI"
+                      : "Trợ lý ảo cá nhân"}
                 </span>
 
                 {/* Thinking */}
@@ -142,10 +132,9 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 {/* Message body */}
                 <div
                   className={clsx(
-                    "max-w-full",
                     message.role === "user"
-                      ? "bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary"
-                      : "",
+                      ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words"
+                      : "w-full max-w-full",
                   )}
                 >
                   {message.role === "assistant" &&
@@ -158,30 +147,16 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                       <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
                       <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
                     </div>
+                  ) : message.role === "assistant" ? (
+                    <AiAnswerContent
+                      content={message.content}
+                      sources={message.isStreaming ? undefined : message.sources}
+                      isStreaming={message.isStreaming}
+                    />
                   ) : (
-                    <div
-                      className={clsx(
-                        message.role === "assistant"
-                          ? "prose-chatgpt"
-                          : "text-[15px] leading-relaxed whitespace-pre-wrap break-words",
-                      )}
-                    >
-                      {message.role === "assistant" ? (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeSanitize]}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      ) : (
-                        message.content
-                      )}
+                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
                     </div>
-                  )}
-
-                  {/* Streaming cursor */}
-                  {message.isStreaming && message.content && (
-                    <span className="inline-block w-[3px] h-5 bg-text-primary ml-0.5 translate-y-1 animate-typing-cursor rounded-sm" />
                   )}
                 </div>
 
@@ -222,21 +197,14 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   </div>
                 )}
 
-                {/* Source references */}
+                {/* Nguồn tham khảo – inline dưới answer */}
                 {message.role === "assistant" &&
+                  !message.isStreaming &&
                   message.sources &&
-                  message.sources.length > 0 &&
-                  !message.isStreaming && (
-                    <button
-                      onClick={() => handleSourceClick(message.sources!)}
-                      className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg border border-border bg-surface-overlay text-xs text-text-muted hover:bg-surface-hover hover:border-border-strong transition-all"
-                    >
-                      <FileTextIcon size={14} />
-                      <span>
-                        {message.sources.length} nguồn tham khảo
-                      </span>
-                      <ExternalLinkIcon size={10} />
-                    </button>
+                  message.sources.length > 0 && (
+                    <div className="w-full max-w-[680px]">
+                      <AiSourceList sources={message.sources} />
+                    </div>
                   )}
               </div>
             </div>
@@ -258,11 +226,11 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   <span className="text-xs font-semibold text-text-muted mb-1">
                     {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
                   </span>
-                    <div className="flex items-center gap-1.5 py-1">
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0s' }} />
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
-                    </div>
+                  <div className="flex items-center gap-1.5 py-1">
+                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0s" }} />
+                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.2s" }} />
+                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.4s" }} />
+                  </div>
                 </div>
               </div>
             </div>

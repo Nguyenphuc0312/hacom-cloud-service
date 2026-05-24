@@ -1,14 +1,14 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { AiConversation, AiEndpoint, AiMessage } from "../types";
+import type { AiConversation, AiEndpoint, AiMessage, AiSource } from "../types";
 
 interface AiAssistantState {
   conversations: AiConversation[];
   activeConversationId: string | null;
   isSidebarOpen: boolean;
   isSourcePanelOpen: boolean;
-  selectedSources: any[] | null;
-  
+  selectedSources: AiSource[] | null;
+
   // Actions
   setActiveConversation: (id: string | null) => void;
   createNewConversation: (endpoint: AiEndpoint) => string;
@@ -18,7 +18,7 @@ interface AiAssistantState {
   deleteConversation: (id: string) => void;
   toggleSidebar: () => void;
   toggleSourcePanel: (open?: boolean) => void;
-  setSelectedSources: (sources: any[] | null) => void;
+  setSelectedSources: (sources: AiSource[] | null) => void;
   renameConversation: (id: string, title: string) => void;
   togglePinConversation: (id: string) => void;
 }
@@ -30,7 +30,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       activeConversationId: null,
       isSidebarOpen: true,
       isSourcePanelOpen: false,
-      selectedSources: null,
+      selectedSources: null as AiSource[] | null,
 
       setActiveConversation: (id) => set({ activeConversationId: id }),
 

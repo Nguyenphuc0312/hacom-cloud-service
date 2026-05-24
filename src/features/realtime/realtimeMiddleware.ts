@@ -183,6 +183,10 @@ export const realtimeMiddleware: Middleware<
   }
 
   if (realtimeMessageUpdated.match(action)) {
+    if (!action.payload.conversationId) {
+      console.warn("[realtimeMiddleware] realtimeMessageUpdated received without conversationId — skipped", action.payload);
+      return result;
+    }
     const patch = storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
@@ -260,6 +264,25 @@ export const realtimeMiddleware: Middleware<
         },
       ),
     );
+
+    // Sync conversation lastMessage preview in Zustand (sidebar)
+    const storeState = useChatStore.getState();
+    const affectedConv = storeState.conversationById[conversationId];
+    if (affectedConv?.lastMessage?.id === messageId) {
+      if (mode === "FOR_ME") {
+        // Delete-for-me: clear preview immediately; snapshot refresh will fill in next message
+        storeState.updateConversation(conversationId, { lastMessage: undefined });
+      } else {
+        // Recall / admin-delete: replace preview with recalled placeholder
+        storeState.updateConversation(conversationId, {
+          lastMessage: {
+            ...affectedConv.lastMessage,
+            isDeleted: true,
+            content: "",
+          },
+        });
+      }
+    }
   }
 
   if (realtimeMessageReactionChanged.match(action)) {

@@ -15,13 +15,22 @@ let inMemoryAccessToken: string | null = null;
 const getCookieValue = (name: string): string | null => {
   if (typeof document === "undefined") return null;
 
-  const match = document.cookie
-    .split(";")
-    .map((chunk) => chunk.trim())
-    .find((chunk) => chunk.startsWith(`${name}=`));
-
-  if (!match) return null;
-  return decodeURIComponent(match.substring(name.length + 1));
+  // document.cookie lists cookies visible at the current page path.
+  // When the server migrates cookie paths (e.g. /api/v1/auth → /) there can
+  // temporarily be duplicate cookies with the same name but different paths.
+  // Browsers expose cookies by path-specificity order in document.cookie, but
+  // only cookies whose path matches the current page path are visible here.
+  // Take the LAST matching value: when duplicates exist the root-path (/) cookie
+  // appears last, matching what the backend sets via setAuthCookies after the
+  // path migration.
+  let lastValue: string | null = null;
+  for (const chunk of document.cookie.split(";")) {
+    const trimmed = chunk.trim();
+    if (trimmed.startsWith(`${name}=`)) {
+      lastValue = decodeURIComponent(trimmed.substring(name.length + 1));
+    }
+  }
+  return lastValue;
 };
 
 const getAuthSessionMarker = (): string | null => {

@@ -178,7 +178,11 @@ const isDefiniteAuthRefreshFailure = (error: unknown): boolean => {
     return (
       error.message.includes("Missing refresh token") ||
       error.message.includes("No refresh token available") ||
-      error.message.includes("Auth session is inactive")
+      error.message.includes("Auth session is inactive") ||
+      // csrfToken cookie unreadable (path mismatch or expired session cookie):
+      // treat as definitive failure so the interceptor clears the session and
+      // redirects to /login rather than retrying indefinitely.
+      error.message.includes("CSRF token not available")
     );
   }
   return false;

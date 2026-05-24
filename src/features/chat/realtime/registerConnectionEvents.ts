@@ -12,6 +12,7 @@ interface ConnectionEventHandlers {
   onWsError?: RealtimeEventHandler;
   onAuthUnauthorized?: RealtimeEventHandler;
   onAuthReauthRequired?: RealtimeEventHandler;
+  onReconnectFailed?: RealtimeEventHandler;
 }
 
 export const registerConnectionEvents = (
@@ -40,6 +41,7 @@ export const registerConnectionEvents = (
   register("connect", handlers.onConnect);
   register("disconnect", handlers.onDisconnect);
   register("connect_error", handlers.onConnectError);
+  register("reconnect_failed", handlers.onReconnectFailed);
   register(WebSocketEvents.ERROR, handlers.onWsError);
   register(WebSocketEvents.AUTH_UNAUTHORIZED, handlers.onAuthUnauthorized);
   register(WebSocketEvents.AUTH_REAUTH_REQUIRED, handlers.onAuthReauthRequired);
