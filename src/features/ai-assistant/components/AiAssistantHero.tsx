@@ -42,10 +42,10 @@ export const AiAssistantHero: React.FC<AiAssistantHeroProps> = ({
 
       {/* Greeting */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
+        <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
           {greeting}
         </h1>
-        <p className="text-sm text-gray-500 leading-relaxed max-w-md mx-auto">
+        <p className="text-sm text-text-secondary leading-relaxed max-w-md mx-auto">
           {isCompany
             ? "Hỏi bất cứ điều gì về quy trình, chính sách và tài liệu nội bộ của công ty."
             : "Tôi là trợ lý AI cá nhân – sẵn sàng hỗ trợ soạn thảo, tóm tắt và giải đáp mọi câu hỏi."}

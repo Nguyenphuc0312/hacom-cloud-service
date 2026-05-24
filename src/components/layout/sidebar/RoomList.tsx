@@ -12,17 +12,13 @@ import {
   type ListChildComponentProps,
   type ListOnScrollProps,
 } from "react-window";
-import {
-  ConversationListSkeleton,
-  ErrorState,
-  SkeletonButton,
-  StateBlock,
-} from "../../ui";
-import {
-  ChatBubbleLeftRightIcon,
-  MagnifyingGlassIcon,
-} from "@heroicons/react/24/outline";
 import { RoomItemContainer } from "./RoomItem";
+import {
+  RoomListLoadingState,
+  RoomListErrorState,
+  RoomListEmptyState,
+} from "./RoomListEmptyStates";
+import { RoomListLoadMore } from "./RoomListLoadMore";
 import type { UserSummary } from "../../../types";
 import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
@@ -251,11 +247,22 @@ export const RoomList: React.FC<RoomListProps> = ({
       window.cancelAnimationFrame(rafId2);
       window.clearTimeout(timerId);
     };
-  }, [syncViewportHeight]);
+    // Re-run when the list container transitions in/out of an early-return
+    // branch (skeleton/error/empty). On first mount the container is absent
+    // (skeleton showing), so without these deps the ResizeObserver/resize
+    // listener would never attach and the height would stay fixed forever.
+  }, [
+    syncViewportHeight,
+    showLoadingSkeleton,
+    error,
+    hasAnyConversations,
+    normalizedQuery,
+    flatItems.length,
+  ]);
 
   useEffect(() => {
     syncViewportHeight();
-  }, [flatItems.length, syncViewportHeight]);
+  }, [flatItems.length, hasMore, isLoadingMore, syncViewportHeight]);
 
   const requestLoadMore = useCallback(() => {
     if (!hasMore || isLoadingMore) {
@@ -356,51 +363,15 @@ export const RoomList: React.FC<RoomListProps> = ({
   );
 
   if (showLoadingSkeleton) {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-        <ConversationListSkeleton count={7} />
-      </div>
-    );
+    return <RoomListLoadingState />;
   }
 
   if (error && !hasAnyConversations && normalizedQuery.length === 0) {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
-        <ErrorState
-          title={t("error:chat.fetchConversationsFailed")}
-          message={error}
-          onRetry={onRetry}
-        />
-      </div>
-    );
+    return <RoomListErrorState error={error} onRetry={onRetry} />;
   }
 
   if (flatItems.length === 0) {
-    return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-3">
-        <StateBlock
-          variant={normalizedQuery ? "search-empty" : "empty"}
-          icon={
-            normalizedQuery ? (
-              <MagnifyingGlassIcon className="h-6 w-6" />
-            ) : (
-              <ChatBubbleLeftRightIcon className="h-6 w-6" />
-            )
-          }
-          title={
-            normalizedQuery
-              ? t("sidebar:room.emptyBySearch")
-              : t("sidebar:room.empty")
-          }
-          description={
-            normalizedQuery
-              ? t("sidebar:search.placeholder")
-              : t("chat:empty.noChatDescription")
-          }
-          className="w-full border-dashed shadow-none"
-        />
-      </div>
-    );
+    return <RoomListEmptyState normalizedQuery={normalizedQuery} />;
   }
 
   return (
@@ -457,22 +428,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       </div>
 
       {(hasMore || isLoadingMore) && (
-        <div className="px-4 pb-2 pt-2">
-          {isLoadingMore ? (
-            <div
-              className="flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 bg-surface/80"
-              aria-busy="true"
-            >
-              <SkeletonButton width="64%" height={14} className="max-w-44" />
-            </div>
-          ) : (
-            <div className="flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 text-xs text-text-muted">
-              {t("sidebar:actions.loadMore", {
-                defaultValue: "Loading more...",
-              })}
-            </div>
-          )}
-        </div>
+        <RoomListLoadMore isLoadingMore={isLoadingMore} />
       )}
     </div>
   );

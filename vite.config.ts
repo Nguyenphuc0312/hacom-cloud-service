@@ -103,8 +103,9 @@ const wsProxy = (target: string) => ({
   secure: false,
   configure: (proxy: AnyProxy) => {
     proxy.on("proxyReqWs", (proxyReq: { setHeader: (k: string, v: string) => void }) => {
-      const wsOrigin = target.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
-      proxyReq.setHeader("Origin", wsOrigin);
+      // Gorilla WS validates Origin as an HTTP(S) origin. Sending a ws(s):// scheme
+      // gets a 403. target is already http(s):// (resolveWsTarget normalized it).
+      proxyReq.setHeader("Origin", target);
     });
 
     proxy.on("error", (err: Error) => {

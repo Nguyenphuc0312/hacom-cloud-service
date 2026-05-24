@@ -10,6 +10,14 @@ import {
   QuestionMarkCircleIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
+import {
+  BriefcaseIcon as BriefcaseSolid,
+  CalendarDaysIcon as CalendarDaysSolid,
+  ChatBubbleLeftRightIcon as ChatBubbleSolid,
+  Cog6ToothIcon as Cog6ToothSolid,
+  QuestionMarkCircleIcon as QuestionMarkCircleSolid,
+  SparklesIcon as SparklesSolid,
+} from "@heroicons/react/24/solid";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
 import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
@@ -20,6 +28,7 @@ type SideRailItem = {
   id: string;
   label: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  iconActive?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   to?: string;
   onClick?: () => void;
   activeWhen?: (pathname: string) => boolean;
@@ -36,6 +45,7 @@ const railItems: SideRailItem[] = [
     id: "messages",
     label: "sidebar:rail.messages",
     icon: ChatBubbleLeftRightIcon,
+    iconActive: ChatBubbleSolid,
     to: ROUTE_PATHS.CHAT,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.CHAT ||
@@ -50,17 +60,18 @@ const railItems: SideRailItem[] = [
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
-  { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
-  { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
-  { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, to: ROUTE_PATHS.AI_ASSISTANT },
+  { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
+  { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
+  { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },
 ];
 
 const bottomItems: SideRailItem[] = [
-  { id: "help", label: "sidebar:rail.help", icon: QuestionMarkCircleIcon, to: ROUTE_PATHS.HELP },
+  { id: "help", label: "sidebar:rail.help", icon: QuestionMarkCircleIcon, iconActive: QuestionMarkCircleSolid, to: ROUTE_PATHS.HELP },
   {
     id: "settings",
     label: "sidebar:rail.settings",
     icon: Cog6ToothIcon,
+    iconActive: Cog6ToothSolid,
     to: ROUTE_PATHS.SETTINGS,
     activeWhen: (pathname) => pathname === ROUTE_PATHS.SETTINGS,
   },
@@ -130,7 +141,7 @@ const SideRailButton: React.FC<{
   onClick?: () => void;
 }> = ({ item, isActive = false, badge, onClick }) => {
   const { t } = useTranslation();
-  const Icon = item.icon;
+  const Icon = (isActive && item.iconActive) ? item.iconActive : item.icon;
   const translatedLabel = t(item.label);
   const badgeCount = badge ?? 0;
   const labelWithBadge =
@@ -158,13 +169,19 @@ const SideRailButton: React.FC<{
         aria-label={labelWithBadge}
         title={labelWithBadge}
       >
-        {({ isActive: routeActive }) => (
-          <>
-            {renderIndicator(routeActive || isActive)}
-            <Icon className="hc-side-rail__item-icon" aria-hidden="true" />
-            <BadgeCount count={badgeCount} />
-          </>
-        )}
+        {({ isActive: routeActive }) => {
+          const ActiveIcon =
+            (routeActive || isActive) && item.iconActive
+              ? item.iconActive
+              : item.icon;
+          return (
+            <>
+              {renderIndicator(routeActive || isActive)}
+              <ActiveIcon className="hc-side-rail__item-icon" aria-hidden="true" />
+              <BadgeCount count={badgeCount} />
+            </>
+          );
+        }}
       </NavLink>
     );
   }

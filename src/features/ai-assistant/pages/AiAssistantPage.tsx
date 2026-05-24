@@ -190,7 +190,7 @@ export const AiAssistantPage: React.FC = () => {
 
   return (
     <AiLayout>
-      <div className="flex h-full flex-col overflow-hidden bg-white">
+      <div className="flex h-full flex-col overflow-hidden bg-surface">
         <AiChatHeader />
 
         {/* ── Empty state: Hero + Input + Suggestions căn giữa ── */}
@@ -230,7 +230,7 @@ export const AiAssistantPage: React.FC = () => {
             </div>
 
             {/* Input sticky bottom */}
-            <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-4">
+            <div className="flex-shrink-0 border-t border-border bg-surface px-4 py-4">
               <div className="mx-auto max-w-[768px]">
                 <AiPromptBox
                   ref={textareaRef}
@@ -239,7 +239,7 @@ export const AiAssistantPage: React.FC = () => {
                   onSubmit={handleSubmit}
                   isLoading={isLoading}
                 />
-                <p className="mt-2 text-center text-[11px] text-red-500">
+                <p className="mt-2 text-center text-[11px] text-text-muted">
                   AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng
                   các thông tin quan trọng.
                 </p>
