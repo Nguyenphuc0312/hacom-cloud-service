@@ -1667,6 +1667,116 @@ export const friendshipApi = {
 };
 
 // Export all APIs
+// ============================================
+// CONVERSATION RESOURCES API
+// ============================================
+
+export interface ConversationResourcesMemberPreview {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface ConversationResourcesMediaItem {
+  messageId: string;
+  fileId: string;
+  messageType: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  thumbnailUrl: string | null;
+  senderId: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  createdAt: string;
+}
+
+export interface ConversationResourcesFileItem {
+  messageId: string;
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  senderId: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  createdAt: string;
+}
+
+export interface ConversationResourcesLinkItem {
+  messageId: string;
+  url: string;
+  domain: string;
+  senderId: string;
+  senderName: string;
+  createdAt: string;
+}
+
+export interface ConversationSidebarSummary {
+  conversationId: string;
+  members: { total: number; preview: ConversationResourcesMemberPreview[] };
+  media: { total: number; preview: ConversationResourcesMediaItem[] };
+  files: { total: number; preview: ConversationResourcesFileItem[] };
+  links: { total: number; preview: ConversationResourcesLinkItem[] };
+}
+
+export interface ConversationResourcesPaginatedResult<T> {
+  data: T[];
+  pagination: { page: number; limit: number; total: number; hasNext: boolean };
+}
+
+export const conversationResourcesApi = {
+  getSidebarSummary: async (conversationId: string) => {
+    const response = await apiClient.get<ApiResponse<ConversationSidebarSummary>>(
+      `/conversations/${conversationId}/sidebar-summary`,
+    );
+    return response.data;
+  },
+
+  getMedia: async (
+    conversationId: string,
+    page = 1,
+    limit = 20,
+    type?: string,
+  ) => {
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (type) query.set('type', type);
+    const response = await apiClient.get<
+      ApiResponse<ConversationResourcesPaginatedResult<ConversationResourcesMediaItem>>
+    >(`/conversations/${conversationId}/media?${query}`);
+    return response.data;
+  },
+
+  getFiles: async (
+    conversationId: string,
+    page = 1,
+    limit = 20,
+    q?: string,
+  ) => {
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (q) query.set('q', q);
+    const response = await apiClient.get<
+      ApiResponse<ConversationResourcesPaginatedResult<ConversationResourcesFileItem>>
+    >(`/conversations/${conversationId}/files?${query}`);
+    return response.data;
+  },
+
+  getLinks: async (
+    conversationId: string,
+    page = 1,
+    limit = 20,
+  ) => {
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    const response = await apiClient.get<
+      ApiResponse<ConversationResourcesPaginatedResult<ConversationResourcesLinkItem>>
+    >(`/conversations/${conversationId}/links?${query}`);
+    return response.data;
+  },
+};
+
 export default {
   auth: authApi,
   user: userApi,
@@ -1677,4 +1787,5 @@ export default {
   friendship: friendshipApi,
   friendQr: friendQrApi,
   group: groupApi,
+  conversationResources: conversationResourcesApi,
 };

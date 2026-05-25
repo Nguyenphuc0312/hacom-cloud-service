@@ -10,7 +10,14 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../../lib/conversationAdapter";
-import { conversationApi, messageApi } from "../../services/api";
+import { conversationApi, messageApi, conversationResourcesApi } from "../../services/api";
+import type {
+  ConversationSidebarSummary,
+  ConversationResourcesMediaItem,
+  ConversationResourcesFileItem,
+  ConversationResourcesLinkItem,
+  ConversationResourcesPaginatedResult,
+} from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
 import type { Attachment, Conversation, Mention, Message } from "../../types";
 import {
@@ -341,7 +348,7 @@ const createInlineMessageTooLongError = (
 export const chatApi = createApi({
   reducerPath: "chatApi",
   baseQuery: fakeBaseQuery<ChatQueryError>(),
-  tagTypes: ["Conversation", "Messages", "Unread"],
+  tagTypes: ["Conversation", "Messages", "Unread", "ConversationResources"],
   keepUnusedDataFor: 60, // Phase 2: Keep conversation data for 60 seconds
   endpoints: (build) => ({
     getConversations: build.query<Conversation[], GetConversationsArgs | void>({
@@ -533,6 +540,15 @@ export const chatApi = createApi({
               });
             }),
           );
+          // Invalidate sidebar summary when media/file/link messages land
+          const RESOURCE_TYPES = new Set(["image", "video", "audio", "gif", "media", "file", "link"]);
+          if (input.type && RESOURCE_TYPES.has(input.type)) {
+            dispatch(
+              chatApi.util.invalidateTags([
+                { type: "ConversationResources" as const, id: `${input.conversationId}-summary` },
+              ]),
+            );
+          }
         } catch (error) {
           const normalizedError = extractApiError(error);
           dispatch(
@@ -766,6 +782,71 @@ export const chatApi = createApi({
         }
       },
     }),
+
+    getConversationSidebarSummary: build.query<ConversationSidebarSummary, string>({
+      async queryFn(conversationId) {
+        try {
+          const response = await conversationResourcesApi.getSidebarSummary(conversationId);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      providesTags: (_result, _error, conversationId) => [
+        { type: 'ConversationResources' as const, id: `${conversationId}-summary` },
+      ],
+    }),
+
+    getConversationMedia: build.query<
+      ConversationResourcesPaginatedResult<ConversationResourcesMediaItem>,
+      { conversationId: string; page?: number; limit?: number; type?: string }
+    >({
+      async queryFn({ conversationId, page = 1, limit = 20, type }) {
+        try {
+          const response = await conversationResourcesApi.getMedia(conversationId, page, limit, type);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      providesTags: (_result, _error, { conversationId }) => [
+        { type: 'ConversationResources' as const, id: `${conversationId}-media` },
+      ],
+    }),
+
+    getConversationFiles: build.query<
+      ConversationResourcesPaginatedResult<ConversationResourcesFileItem>,
+      { conversationId: string; page?: number; limit?: number; q?: string }
+    >({
+      async queryFn({ conversationId, page = 1, limit = 20, q }) {
+        try {
+          const response = await conversationResourcesApi.getFiles(conversationId, page, limit, q);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      providesTags: (_result, _error, { conversationId }) => [
+        { type: 'ConversationResources' as const, id: `${conversationId}-files` },
+      ],
+    }),
+
+    getConversationLinks: build.query<
+      ConversationResourcesPaginatedResult<ConversationResourcesLinkItem>,
+      { conversationId: string; page?: number; limit?: number }
+    >({
+      async queryFn({ conversationId, page = 1, limit = 20 }) {
+        try {
+          const response = await conversationResourcesApi.getLinks(conversationId, page, limit);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      providesTags: (_result, _error, { conversationId }) => [
+        { type: 'ConversationResources' as const, id: `${conversationId}-links` },
+      ],
+    }),
   }),
 });
 
@@ -784,4 +865,10 @@ export const {
   useSearchMessagesQuery,
   useSendMessageMutation,
   useForwardMessagesMutation,
+  useGetConversationSidebarSummaryQuery,
+  useGetConversationMediaQuery,
+  useGetConversationFilesQuery,
+  useGetConversationLinksQuery,
 } = chatApi;
+
+export type { ConversationSidebarSummary, ConversationResourcesMediaItem, ConversationResourcesFileItem, ConversationResourcesLinkItem, ConversationResourcesPaginatedResult };

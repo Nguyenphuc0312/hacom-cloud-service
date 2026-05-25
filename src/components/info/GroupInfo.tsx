@@ -61,6 +61,7 @@ import {
   TransferOwnershipModal,
   DeleteGroupModal,
 } from "../../features/chat/components/group-members";
+import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -1352,6 +1353,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             </div>
           )}
         </div>
+
+        <SharedResourcesPreview conversationId={conversation.id} />
 
         <div className="border-t border-border">
           <div className="flex gap-1 px-3 py-2">
