@@ -1822,21 +1822,6 @@ a:focus-visible {
   transform-origin: bottom center;
 }
 
-/* TipTap Placeholder */
-.tiptap-editor-inner p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  color: hsl(var(--color-text-muted));
-  pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  max-width: 100%;
-}
-
-:root[data-theme="dark"] .tiptap-editor-inner p.is-editor-empty:first-child::before {
-  color: hsl(var(--color-text-muted));
-}
 
 /* Hide the browser's native password reveal/clear icons (Edge/IE) so only the
    custom Eye/EyeOff toggle is shown — otherwise two eye icons appear. */

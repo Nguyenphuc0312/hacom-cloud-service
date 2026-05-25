@@ -412,18 +412,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               shouldAnimateInsert && "motion-message-insert",
             )}
           >
-            {message.replyToMessage && (
-              <ReplyPreview
-                replyToMessage={message.replyToMessage}
-                replySenderDisplayName={replySenderDisplayName}
-                replyTargetMessageId={replyTargetMessageId}
-                isSelectionMode={isSelectionMode}
-                isOwn={isOwn}
-                replyPreviewClass={contract.cluster.replyPreview}
-                onClick={handleReplyPreviewClick}
-              />
-            )}
-
             <div className="relative w-full">
               <div
                 onPointerDown={handlePointerDown}
@@ -447,6 +435,18 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     <p className={clsx(contract.cluster.senderLabel, "truncate")}>
                       {senderDisplayName}
                     </p>
+                  )}
+
+                  {message.replyToMessage && (
+                    <ReplyPreview
+                      replyToMessage={message.replyToMessage}
+                      replySenderDisplayName={replySenderDisplayName}
+                      replyTargetMessageId={replyTargetMessageId}
+                      isSelectionMode={isSelectionMode}
+                      isOwn={isOwn}
+                      replyPreviewClass={contract.cluster.replyPreview}
+                      onClick={handleReplyPreviewClick}
+                    />
                   )}
 
                   <MessageBodyRenderer
