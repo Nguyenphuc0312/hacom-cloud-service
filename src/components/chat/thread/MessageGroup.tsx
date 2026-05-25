@@ -9,7 +9,17 @@ import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
 import { MessageMeta } from "../message-layout/MessageMeta";
 import { MessageBubble, type MessageBubblePosition } from "./MessageBubble";
+import {
+  DocumentIcon,
+  PhotoIcon,
+  SpeakerWaveIcon,
+  VideoCameraIcon,
+  FaceSmileIcon,
+  MusicalNoteIcon,
+} from "@heroicons/react/24/outline";
 import type { Attachment, Message } from "../../../types";
+import { MessageType } from "../../../types";
+import { resolvePublicResourceUrl } from "../../../config";
 import { useChatStore, useAuthStore } from "../../../stores";
 import {
   type MessageActionId,
@@ -33,6 +43,41 @@ import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
 import { MessageActionBar } from "../MessageActionBar";
 import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
+
+const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
+  [MessageType.IMAGE]: "Hình ảnh",
+  [MessageType.GIF]: "Hình ảnh",
+  [MessageType.VIDEO]: "Video",
+  [MessageType.FILE]: "File",
+  [MessageType.VOICE]: "Tin nhắn thoại",
+  [MessageType.AUDIO]: "Audio",
+  [MessageType.STICKER]: "Sticker",
+};
+
+function getReplyFileExt(fileName?: string, mimeType?: string): string {
+  const name = fileName ?? "";
+  const dot = name.lastIndexOf(".");
+  const fromName = dot >= 0 ? name.slice(dot + 1).toUpperCase() : "";
+  const fromMime = mimeType?.split("/").pop()?.toUpperCase() ?? "";
+  return (fromName || fromMime || "").slice(0, 4);
+}
+
+function replyExtBadgeClass(ext: string): string {
+  const map: Record<string, string> = {
+    PDF: "bg-red-500/20 text-red-600 dark:text-red-400",
+    DOC: "bg-blue-500/20 text-blue-600 dark:text-blue-300",
+    DOCX: "bg-blue-500/20 text-blue-600 dark:text-blue-300",
+    XLS: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    XLSX: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    PPT: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    PPTX: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    ZIP: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+    RAR: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+    TXT: "bg-gray-500/15 text-gray-600 dark:text-gray-400",
+    CSV: "bg-teal-500/20 text-teal-600 dark:text-teal-400",
+  };
+  return map[ext] ?? "bg-gray-500/15 text-gray-600 dark:text-gray-400";
+}
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
@@ -237,6 +282,71 @@ const MessageGroupItem: React.FC<{
       }
       return undefined;
     }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
+    const replyPreviewMeta = React.useMemo(() => {
+      if (!resolvedReplyPreview) return null;
+      const type = resolvedReplyPreview.type as string;
+      const label = REPLY_TYPE_LABEL[type];
+      if (!label) return null;
+      const att = resolvedReplyPreview.attachments?.[0];
+      const caption = resolvedReplyPreview.content?.trim();
+      const iconCls = "h-3.5 w-3.5 flex-shrink-0";
+      switch (type) {
+        case MessageType.IMAGE:
+        case MessageType.GIF:
+        case MessageType.VIDEO: {
+          const isVideo = type === MessageType.VIDEO;
+          return {
+            label,
+            thumbnailUrl: resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url),
+            badge: null as { ext: string; className: string } | null,
+            icon: isVideo ? <VideoCameraIcon className={iconCls} /> : <PhotoIcon className={iconCls} />,
+            text: caption ?? "",
+            fullText: caption || label,
+          };
+        }
+        case MessageType.FILE: {
+          const ext = getReplyFileExt(att?.fileName, att?.mimeType);
+          const name = att?.fileName || caption || "Tệp đính kèm";
+          return {
+            label,
+            thumbnailUrl: undefined,
+            badge: ext ? { ext, className: replyExtBadgeClass(ext) } : null,
+            icon: <DocumentIcon className={iconCls} />,
+            text: name,
+            fullText: name,
+          };
+        }
+        case MessageType.VOICE:
+          return {
+            label,
+            thumbnailUrl: undefined,
+            badge: null,
+            icon: <SpeakerWaveIcon className={iconCls} />,
+            text: "",
+            fullText: label,
+          };
+        case MessageType.AUDIO:
+          return {
+            label,
+            thumbnailUrl: undefined,
+            badge: null,
+            icon: <MusicalNoteIcon className={iconCls} />,
+            text: caption ?? "",
+            fullText: caption || label,
+          };
+        case MessageType.STICKER:
+          return {
+            label,
+            thumbnailUrl: undefined,
+            badge: null,
+            icon: <FaceSmileIcon className={iconCls} />,
+            text: "",
+            fullText: label,
+          };
+        default:
+          return null;
+      }
+    }, [resolvedReplyPreview]);
     const isHighlighted =
       highlightedMessageId === message.id ||
       highlightedMessageId === message.localId ||
@@ -479,18 +589,53 @@ const MessageGroupItem: React.FC<{
                     }
                   }}
                   className={clsx(
-                    "mb-2 flex w-full items-start gap-2 rounded-[12px] border-l-2 px-2.5 py-2 text-left transition-colors",
+                    "mb-2 flex w-full items-stretch gap-2 overflow-hidden rounded-[10px] border py-1.5 pl-2 pr-2.5 text-left transition-colors",
                     isOwn
-                      ? "border-[hsl(var(--chat-bubble-sent-text))/0.2] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
-                      : "border-border-strong/70 bg-surface-overlay/78 hover:bg-surface-hover",
+                      ? "border-[hsl(var(--chat-bubble-sent-text))/0.18] bg-[hsl(var(--chat-bubble-sent-text))/0.15] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.22]"
+                      : "border-[hsl(var(--chat-bubble-received-text))/0.14] bg-[hsl(var(--chat-bubble-received-text))/0.08] hover:bg-[hsl(var(--chat-bubble-received-text))/0.12]",
                     !onNavigateToMessage && "cursor-default",
                   )}
+                  title={
+                    replyPreviewMeta?.fullText ??
+                    (resolvedReplyPreview && !resolvedReplyPreview.isDeleted
+                      ? getPreviewFromMessage({
+                        contentFormat: resolvedReplyPreview.contentFormat,
+                        content: resolvedReplyPreview.content,
+                      })
+                      : undefined)
+                  }
                 >
-                  <div className="min-w-0">
+                  {/* Thanh nhận diện bên trái */}
+                  <span
+                    className={clsx(
+                      "w-[3px] flex-shrink-0 self-stretch rounded-full",
+                      isOwn ? "bg-[hsl(var(--chat-bubble-sent-text))/0.55]" : "bg-primary",
+                    )}
+                  />
+
+                  {/* Thumbnail (ảnh/video) hoặc badge loại file */}
+                  {replyPreviewMeta?.thumbnailUrl ? (
+                    <img
+                      src={replyPreviewMeta.thumbnailUrl}
+                      alt=""
+                      className="h-10 w-10 flex-shrink-0 self-center rounded-md object-cover"
+                    />
+                  ) : replyPreviewMeta?.badge ? (
+                    <span
+                      className={clsx(
+                        "flex h-10 w-10 flex-shrink-0 select-none items-center justify-center self-center rounded-md text-[10px] font-bold leading-none",
+                        replyPreviewMeta.badge.className,
+                      )}
+                    >
+                      {replyPreviewMeta.badge.ext}
+                    </span>
+                  ) : null}
+
+                  <div className="flex min-w-0 flex-col justify-center">
                     <div
                       className={clsx(
-                        "text-[11px] font-semibold leading-4",
-                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.78]" : "text-text-secondary",
+                        "truncate text-[13px] font-semibold leading-4",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.85]" : "text-text-secondary",
                       )}
                     >
                       {resolvedReplyPreview
@@ -504,32 +649,46 @@ const MessageGroupItem: React.FC<{
                     </div>
                     <p
                       className={clsx(
-                        "truncate text-[12px] leading-4",
+                        "mt-0.5 flex items-center gap-1 text-[12px] leading-4",
                         isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
                       )}
                     >
-                      {!resolvedReplyPreview
-                        ? t("chat:message.replyLoading", {
-                          defaultValue: "Đang tải tin nhắn...",
-                        })
-                        : resolvedReplyPreview.isDeleted
-                          ? resolvedReplyPreview.lifecycleStatus ===
-                            "deleted_admin"
+                      {!resolvedReplyPreview ? (
+                        <span className="truncate">
+                          {t("chat:message.replyLoading", {
+                            defaultValue: "Đang tải tin nhắn...",
+                          })}
+                        </span>
+                      ) : resolvedReplyPreview.isDeleted ? (
+                        <span className="truncate italic opacity-70">
+                          {resolvedReplyPreview.lifecycleStatus === "deleted_admin"
                             ? t("chat:message.deletedByAdmin", {
-                              defaultValue:
-                                "Tin nhắn đã bị xóa bởi quản trị viên",
+                              defaultValue: "Tin nhắn đã bị xóa bởi quản trị viên",
                             })
-                            : resolvedReplyPreview.lifecycleStatus === "recalled"
-                              ? t("chat:message.recalled", {
-                                defaultValue: "Tin nhắn đã được thu hồi",
-                              })
-                              : t("chat:message.deleted", {
-                                defaultValue: "Tin nhắn đã được thu hồi",
-                              })
-                          : getPreviewFromMessage({
+                            : t("chat:message.recalled", {
+                              defaultValue: "Tin nhắn đã được thu hồi",
+                            })}
+                        </span>
+                      ) : replyPreviewMeta ? (
+                        <>
+                          {!replyPreviewMeta.thumbnailUrl && !replyPreviewMeta.badge && (
+                            <span className="flex-shrink-0">{replyPreviewMeta.icon}</span>
+                          )}
+                          <span className="flex-shrink-0 font-medium opacity-90">
+                            [{replyPreviewMeta.label}]
+                          </span>
+                          {replyPreviewMeta.text && (
+                            <span className="truncate">{replyPreviewMeta.text}</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="truncate">
+                          {getPreviewFromMessage({
                             contentFormat: resolvedReplyPreview.contentFormat,
                             content: resolvedReplyPreview.content,
                           })}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </button>
