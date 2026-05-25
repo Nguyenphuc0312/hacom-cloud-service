@@ -428,7 +428,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
       <div className="h-64 overflow-y-auto p-2">
         {filteredEmojis ? (
-          <div className="grid grid-cols-8 gap-1">
+          <div className="grid grid-cols-8 gap-1.5">
             {filteredEmojis.map((emoji, index) => (
               <button
                 type="button"
@@ -458,7 +458,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               <h3 className="text-xs font-semibold text-text-muted px-2 mb-2 sticky top-0 bg-surface/90 backdrop-blur-sm">
                 {category.name}
               </h3>
-              <div className="grid grid-cols-8 gap-1">
+              <div className="grid grid-cols-8 gap-1.5">
                 {category.emojis.map((emoji, index) => (
                   <button
                     type="button"

@@ -64,7 +64,7 @@ export const EmojiReactionPicker: React.FC<EmojiReactionPickerProps> = ({
       {/* Quick reaction pill — Zalo-style */}
       <div
         className={clsx(
-          "flex items-center gap-0.5 rounded-full border border-border bg-surface px-1.5 py-1.5 shadow-elev2",
+          "flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-1.5 shadow-elev2",
           "animate-scale-in-emoji",
         )}
       >

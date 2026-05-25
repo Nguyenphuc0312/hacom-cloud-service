@@ -35,7 +35,6 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({
 
   const handleSelect = React.useCallback(
     (emoji: string) => {
-      setIsOpen(false);
       if (onEmojiSelect) {
         onEmojiSelect(emoji);
         return;
