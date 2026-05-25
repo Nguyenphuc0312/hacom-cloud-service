@@ -642,7 +642,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           );
           return true;
         }
-        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        if (
+          (event.key === "Enter" && !event.shiftKey && !event.isComposing) ||
+          event.key === "Tab"
+        ) {
           const candidate =
             mentionSuggestionsRef.current[activeMentionIndexRef.current];
           if (candidate) {

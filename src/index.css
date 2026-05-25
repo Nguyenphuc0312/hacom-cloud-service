@@ -77,7 +77,7 @@
   /* Chat bubble density (overridden by SettingsApplier) */
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
-  --chat-bubble-radius: 16px;
+  --chat-bubble-radius: 18px;
   --chat-bubble-corner-radius: 9px;
   --chat-panel-radius: 14px;
   --chat-control-radius: 10px;
