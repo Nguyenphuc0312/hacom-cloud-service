@@ -2,7 +2,6 @@ import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
-  PencilIcon,
   CheckIcon,
   UserPlusIcon,
   ArrowRightOnRectangleIcon,
@@ -12,7 +11,11 @@ import {
   NoSymbolIcon,
   CameraIcon,
   ExclamationTriangleIcon,
+  UsersIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
@@ -21,9 +24,9 @@ import {
   ConfirmDialog,
   DirectorySkeleton,
   Input,
-  TabTrigger,
   toast,
 } from "../ui";
+import { InfoMenuRow } from "./InfoMenuRow";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
@@ -305,9 +308,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<
-    "members" | "inviteLinks" | "joinRequests"
-  >("members");
+  const [membersExpanded, setMembersExpanded] = useState(true);
+  const [securityExpanded, setSecurityExpanded] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1138,26 +1140,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   // Pending join requests count (only pending status)
   const pendingJoinRequestsCount = joinRequests.filter((r) => r.status === "pending").length;
 
-  type TabId = "members" | "inviteLinks" | "joinRequests";
-  interface TabItem {
-    id: TabId;
-    label: string;
-    badge?: number;
-  }
-
-  const tabs: TabItem[] = [
-    { id: "members", label: t("profile:groupInfo.tabs.members") },
-    {
-      id: "inviteLinks",
-      label: t("profile:groupInfo.tabs.inviteLinks"),
-    },
-    {
-      id: "joinRequests",
-      label: t("profile:groupInfo.tabs.joinRequests"),
-      badge: pendingJoinRequestsCount > 0 ? pendingJoinRequestsCount : undefined,
-    },
-  ];
-
   const confirmTitle =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveGroup")
@@ -1261,7 +1243,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       className="rounded-md p-2 hover:bg-surface-overlay"
                       aria-label={t("profile:groupInfo.renameGroup")}
                     >
-                      <PencilIcon className="h-4 w-4 text-text-muted" />
+                      <HugeiconsIcon
+                        icon={PencilEdit01Icon}
+                        className="h-4 w-4 text-text-muted"
+                        strokeWidth={1.5}
+                      />
                     </button>
                   </div>
                 ) : null}
@@ -1328,7 +1314,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => {
-                    setActiveTab("members");
+                    setMembersExpanded(true);
                     setShowAddMember((prev) => !prev);
                   }}
                   className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
@@ -1341,7 +1327,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveTab("inviteLinks");
+                    setSecurityExpanded(true);
                     setShowCreateInviteForm((prev) => !prev);
                   }}
                   className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
@@ -1354,33 +1340,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
         </div>
 
-        <SharedResourcesPreview conversationId={conversation.id} />
-
-        <div className="border-t border-border">
-          <div className="flex gap-1 px-3 py-2">
-            {tabs.map((tab) => (
-              <TabTrigger
-                key={tab.id}
-                active={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className="min-w-0 flex-1"
-              >
-                <span className="flex items-center gap-1.5">
-                  {tab.label}
-                  {tab.badge !== undefined && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-xs font-medium leading-none text-white">
-                      {tab.badge}
-                    </span>
-                  )}
-                </span>
-              </TabTrigger>
-            ))}
-          </div>
-        </div>
-        <div className="border-t border-border">
-          <div className="py-1">
-            {activeTab === "members" && (
-              <>
+        <div className="space-y-3 bg-background px-3 py-3">
+          <div className="rounded-xl border border-border bg-surface">
+            <InfoMenuRow
+              icon={<UsersIcon />}
+              label={t("profile:groupInfo.sections.members")}
+              count={participantCount}
+              expandable
+              expanded={membersExpanded}
+              onClick={() => setMembersExpanded((prev) => !prev)}
+            />
+            {membersExpanded && (
+              <div className="border-t border-border py-1">
                 {showAddMember && (
                   <div className="space-y-2 px-4 pb-3">
                     <Input
@@ -1470,17 +1441,32 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     }}
                   />
                 )}
-              </>
+              </div>
             )}
+          </div>
 
-            {activeTab === "inviteLinks" && (
-            <div className="p-4">
-              {!isAdmin ? (
-                <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.invite.noPermission")}
-                </p>
-              ) : (
-                <div className="space-y-3">
+          <SharedResourcesPreview conversationId={conversation.id} />
+
+          {isAdmin && (
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <InfoMenuRow
+                icon={<ShieldCheckIcon />}
+                label={t("profile:groupInfo.sections.security")}
+                badge={
+                  pendingJoinRequestsCount > 0
+                    ? pendingJoinRequestsCount
+                    : undefined
+                }
+                expandable
+                expanded={securityExpanded}
+                onClick={() => setSecurityExpanded((prev) => !prev)}
+              />
+              {securityExpanded && (
+                <div className="space-y-4 border-t border-border p-4">
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      {t("profile:groupInfo.tabs.inviteLinks")}
+                    </p>
                   {showCreateInviteForm && (
                     <div className="space-y-2 rounded-lg border border-border p-3">
                       <Input
@@ -1604,19 +1590,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       })}
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "joinRequests" && (
-            <div className="p-4">
-              {!isAdmin ? (
-                <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.noPermission")}
-                </p>
-              ) : joinRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      {t("profile:groupInfo.tabs.joinRequests")}
+                    </p>
+                    {joinRequests.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckIcon className="mb-3 h-10 w-10 text-text-muted" />
                   <p className="text-sm text-text-muted">
                     {t("profile:groupInfo.joinRequests.empty")}
@@ -1692,9 +1672,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   })}
                 </div>
               )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
         </div>
 
         <div className="border-t border-border bg-danger/5">

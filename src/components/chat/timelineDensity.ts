@@ -89,7 +89,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
         "px-2.75 py-0.5 text-[10px] font-semibold tracking-[0.01em]",
     },
     cluster: {
-      rowGap: "gap-1",
+      rowGap: "gap-2",
       senderLabel:
         "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
       replyPreview: "",
@@ -119,7 +119,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       pill: "px-3 py-0.75 text-[11px] font-semibold tracking-[0.01em]",
     },
     cluster: {
-      rowGap: "gap-1.5",
+      rowGap: "gap-2",
       senderLabel:
         "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
       replyPreview: "",

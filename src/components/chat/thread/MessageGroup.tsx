@@ -295,9 +295,11 @@ const MessageGroupItem: React.FC<{
         case MessageType.GIF:
         case MessageType.VIDEO: {
           const isVideo = type === MessageType.VIDEO;
+          const resolvedThumb = resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url);
           return {
             label,
-            thumbnailUrl: resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url),
+            thumbnailUrl: resolvedThumb,
+            showPlaceholder: !resolvedThumb,
             badge: null as { ext: string; className: string } | null,
             icon: isVideo ? <VideoCameraIcon className={iconCls} /> : <PhotoIcon className={iconCls} />,
             text: caption ?? "",
@@ -307,10 +309,12 @@ const MessageGroupItem: React.FC<{
         case MessageType.FILE: {
           const ext = getReplyFileExt(att?.fileName, att?.mimeType);
           const name = att?.fileName || caption || "Tệp đính kèm";
+          const badge = ext ? { ext, className: replyExtBadgeClass(ext) } : null;
           return {
             label,
             thumbnailUrl: undefined,
-            badge: ext ? { ext, className: replyExtBadgeClass(ext) } : null,
+            showPlaceholder: !badge,
+            badge,
             icon: <DocumentIcon className={iconCls} />,
             text: name,
             fullText: name,
@@ -320,6 +324,7 @@ const MessageGroupItem: React.FC<{
           return {
             label,
             thumbnailUrl: undefined,
+            showPlaceholder: true,
             badge: null,
             icon: <SpeakerWaveIcon className={iconCls} />,
             text: "",
@@ -329,6 +334,7 @@ const MessageGroupItem: React.FC<{
           return {
             label,
             thumbnailUrl: undefined,
+            showPlaceholder: true,
             badge: null,
             icon: <MusicalNoteIcon className={iconCls} />,
             text: caption ?? "",
@@ -338,6 +344,7 @@ const MessageGroupItem: React.FC<{
           return {
             label,
             thumbnailUrl: undefined,
+            showPlaceholder: true,
             badge: null,
             icon: <FaceSmileIcon className={iconCls} />,
             text: "",
@@ -589,11 +596,9 @@ const MessageGroupItem: React.FC<{
                     }
                   }}
                   className={clsx(
-                    "mb-2 flex w-full items-stretch gap-2 overflow-hidden rounded-[10px] border py-1.5 pl-2 pr-2.5 text-left transition-colors",
-                    isOwn
-                      ? "border-[hsl(var(--chat-bubble-sent-text))/0.18] bg-[hsl(var(--chat-bubble-sent-text))/0.15] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.22]"
-                      : "border-[hsl(var(--chat-bubble-received-text))/0.14] bg-[hsl(var(--chat-bubble-received-text))/0.08] hover:bg-[hsl(var(--chat-bubble-received-text))/0.12]",
-                    !onNavigateToMessage && "cursor-default",
+                    "mb-2 flex w-full items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
+                    "bg-black/[0.12] dark:bg-black/[0.20]",
+                    onNavigateToMessage ? "cursor-pointer hover:opacity-75 active:opacity-50" : "cursor-default",
                   )}
                   title={
                     replyPreviewMeta?.fullText ??
@@ -608,8 +613,7 @@ const MessageGroupItem: React.FC<{
                   {/* Thanh nhận diện bên trái */}
                   <span
                     className={clsx(
-                      "w-[3px] flex-shrink-0 self-stretch rounded-full",
-                      isOwn ? "bg-[hsl(var(--chat-bubble-sent-text))/0.55]" : "bg-primary",
+                      "w-[3px] flex-shrink-0 self-stretch rounded-full bg-primary",
                     )}
                   />
 
@@ -620,6 +624,13 @@ const MessageGroupItem: React.FC<{
                       alt=""
                       className="h-10 w-10 flex-shrink-0 self-center rounded-md object-cover"
                     />
+                  ) : replyPreviewMeta?.showPlaceholder ? (
+                    <span className={clsx(
+                      "flex h-10 w-10 flex-shrink-0 select-none items-center justify-center self-center rounded-md",
+                      isOwn ? "bg-black/[0.15]" : "bg-black/[0.08] dark:bg-white/[0.10]",
+                    )}>
+                      {replyPreviewMeta.icon}
+                    </span>
                   ) : replyPreviewMeta?.badge ? (
                     <span
                       className={clsx(
@@ -635,7 +646,7 @@ const MessageGroupItem: React.FC<{
                     <div
                       className={clsx(
                         "truncate text-[13px] font-semibold leading-4",
-                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.85]" : "text-text-secondary",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.65]" : "text-text-muted",
                       )}
                     >
                       {resolvedReplyPreview
@@ -650,7 +661,7 @@ const MessageGroupItem: React.FC<{
                     <p
                       className={clsx(
                         "mt-0.5 flex items-center gap-1 text-[12px] leading-4",
-                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.50]" : "text-text-muted/75",
                       )}
                     >
                       {!resolvedReplyPreview ? (
@@ -671,7 +682,7 @@ const MessageGroupItem: React.FC<{
                         </span>
                       ) : replyPreviewMeta ? (
                         <>
-                          {!replyPreviewMeta.thumbnailUrl && !replyPreviewMeta.badge && (
+                          {!replyPreviewMeta.thumbnailUrl && !replyPreviewMeta.badge && !replyPreviewMeta.showPlaceholder && (
                             <span className="flex-shrink-0">{replyPreviewMeta.icon}</span>
                           )}
                           <span className="flex-shrink-0 font-medium opacity-90">

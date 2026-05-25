@@ -17,6 +17,10 @@
     "renamePlaceholder": "Nhập tên nhóm mới...",
     "membersCount": "{{count}} thành viên",
     "notifications": "Thông báo",
+    "sections": {
+      "members": "Thành viên nhóm",
+      "security": "Thiết lập bảo mật"
+    },
     "tabs": {
       "members": "Thành viên",
       "media": "Phương tiện",
