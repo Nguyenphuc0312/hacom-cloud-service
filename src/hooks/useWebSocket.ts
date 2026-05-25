@@ -2533,6 +2533,11 @@ export const useWebSocket = (
     }
 
     let lastResumeHandledAt = 0;
+    // Track when the tab was last hidden so we can skip or throttle resync
+    // for very short tab switches that do not warrant a full conversation +
+    // message reconciliation round-trip.
+    let lastHiddenAt = 0;
+
     const shouldHandleResume = () => {
       const now = Date.now();
       if (now - lastResumeHandledAt < 1200) {
@@ -2551,13 +2556,33 @@ export const useWebSocket = (
     };
 
     const handleVisibilityChange = () => {
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible" &&
-        shouldHandleResume()
-      ) {
-        handleResume("visibility_resume");
+      if (typeof document === "undefined") return;
+
+      if (document.visibilityState === "hidden") {
+        lastHiddenAt = Date.now();
+        return;
       }
+
+      if (document.visibilityState !== "visible" || !shouldHandleResume()) {
+        return;
+      }
+
+      const hiddenDurationMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0;
+
+      // Skip resync entirely for very short tab switches (< 1 min).
+      // The WebSocket keeps the session alive; no stale data risk.
+      if (hiddenDurationMs > 0 && hiddenDurationMs < 60_000) {
+        return;
+      }
+
+      // For long absences (≥ 5 min) where the WebSocket may still be connected,
+      // proactively refresh the access token before the resync API calls fire.
+      // The disconnected path already calls ensureFreshAccessToken via connect().
+      if (hiddenDurationMs >= 5 * 60_000) {
+        void ensureFreshAccessToken("proactive").catch(() => undefined);
+      }
+
+      handleResume("visibility_resume");
     };
 
     const handlePageShow = () => {
