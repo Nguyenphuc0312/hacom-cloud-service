@@ -926,6 +926,29 @@ a:focus-visible {
   }
 }
 
+@keyframes messageHighlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0);
+  }
+  20% {
+    box-shadow: 0 0 0 3px hsl(var(--color-primary, 206 100% 41%) / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0);
+  }
+}
+
+.message-highlight-pulse {
+  animation: messageHighlightPulse 2s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-highlight-pulse {
+    animation: none;
+    box-shadow: 0 0 0 2px hsl(var(--color-primary, 206 100% 41%) / 0.4);
+  }
+}
+
 @layer components {
   .skeleton {
     position: relative;
@@ -1482,8 +1505,8 @@ a:focus-visible {
     height: 24px;
     width: 3.5px;
     border-radius: 0 4px 4px 0;
-    background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
-    box-shadow: 1px 0 6px rgb(37 99 235 / 0.4);
+    background: linear-gradient(180deg, #FACC15 0%, #EAB308 100%);
+    box-shadow: 1px 0 6px rgb(234 179 8 / 0.5);
     transition: opacity 160ms ease, height 160ms ease;
   }
 

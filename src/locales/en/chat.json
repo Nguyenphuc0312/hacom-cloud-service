@@ -139,7 +139,8 @@
   "pinned": {
     "title": "Pinned messages",
     "empty": "No pinned messages",
-    "jumpTo": "Jump to message"
+    "jumpTo": "Jump to message",
+    "unpin": "Unpin"
   },
   "selection": {
     "enter": "Select messages",

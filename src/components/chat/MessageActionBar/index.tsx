@@ -1,13 +1,15 @@
 import React, { useCallback } from "react";
 import { clsx } from "clsx";
 import { HeartIcon } from "@heroicons/react/24/outline";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PinIcon } from "@hugeicons/core-free-icons";
 import { useTranslation } from "react-i18next";
 
 interface MessageActionBarProps {
-  isOutgoing: boolean;
   onReplyClick: () => void;
   onForwardClick?: () => void;
   onReactClick?: () => void;
+  onPinClick?: () => void;
   /** Node rendered anchored above the react button (e.g. QuickReactBar) */
   reactionPickerNode?: React.ReactNode;
   className?: string;
@@ -21,10 +23,10 @@ const actionBtnClass = clsx(
 );
 
 export const MessageActionBar: React.FC<MessageActionBarProps> = ({
-  isOutgoing,
   onReplyClick,
   onForwardClick,
   onReactClick,
+  onPinClick,
   reactionPickerNode,
   className,
 }) => {
@@ -35,22 +37,13 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
     fn();
   }, []);
 
-  const buttonCount = 1 + (onReactClick ? 1 : 0) + (onForwardClick ? 1 : 0);
-  const barOffsetClass = buttonCount <= 1
-    ? (isOutgoing ? "-left-[3.75rem]" : "-right-[3.75rem]")
-    : buttonCount === 2
-      ? (isOutgoing ? "-left-[6rem]" : "-right-[6rem]")
-      : (isOutgoing ? "-left-[8.5rem]" : "-right-[8.5rem]");
-
   return (
     <div
       className={clsx(
-        "absolute z-20 flex items-center gap-0.5 rounded-full",
+        "flex items-center gap-0.5 rounded-full",
         "bg-surface/95 border border-border/50 shadow-elev2 backdrop-blur-sm",
         "p-0.5",
         "transition-fast",
-        barOffsetClass,
-        isOutgoing ? "mr-1" : "ml-1",
         className,
       )}
       onClick={(e) => e.stopPropagation()}
@@ -105,6 +98,23 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
             <polyline points="15 17 20 12 15 7" />
             <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
           </svg>
+        </button>
+      )}
+
+      {/* Pin button */}
+      {onPinClick && (
+        <button
+          type="button"
+          onClick={stop(onPinClick)}
+          title={t("chat:pinned.title", "Ghim")}
+          aria-label={t("chat:pinned.title", "Ghim")}
+          className={actionBtnClass}
+        >
+          <HugeiconsIcon
+            icon={PinIcon}
+            className="h-[18px] w-[18px]"
+            strokeWidth={1.5}
+          />
         </button>
       )}
     </div>

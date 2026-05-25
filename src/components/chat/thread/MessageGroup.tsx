@@ -39,6 +39,7 @@ interface MessageGroupProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
@@ -151,6 +152,7 @@ const MessageGroupItem: React.FC<{
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -178,6 +180,7 @@ const MessageGroupItem: React.FC<{
   onReply,
   onReact,
   onForward,
+  onPin,
   onEdit,
   onDelete,
   onImageClick,
@@ -370,12 +373,19 @@ const MessageGroupItem: React.FC<{
           )}
         >
           <MessageActionBar
-            isOutgoing={isOwn}
             onReplyClick={() => onReply(message)}
             onForwardClick={
               onForward
                 ? () => {
                     onForward(message);
+                    setIsHovered(false);
+                  }
+                : undefined
+            }
+            onPinClick={
+              onPin
+                ? () => {
+                    onPin(message.id);
                     setIsHovered(false);
                   }
                 : undefined
@@ -598,6 +608,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   onReply,
   onReact,
   onForward,
+  onPin,
   onEdit,
   onDelete,
   onImageClick,
@@ -665,6 +676,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               onReply={onReply}
               onReact={onReact}
               onForward={onForward}
+              onPin={onPin}
               onEdit={onEdit}
               onDelete={onDelete}
               onImageClick={onImageClick}

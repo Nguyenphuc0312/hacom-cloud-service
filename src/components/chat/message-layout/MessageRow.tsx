@@ -18,17 +18,12 @@ export const MessageRow: React.FC<MessageRowProps> = React.memo(
     return (
       <div
         className={clsx(
-          "chat-message-row flex items-start gap-1.5",
+          "chat-message-row flex items-end gap-1",
           isOwn ? "flex-row-reverse justify-start" : "justify-start",
           className,
         )}
       >
-        <div
-          className={clsx(
-            "hidden min-h-9 min-w-[2.25rem] items-start pt-1 sm:flex",
-            isOwn ? "justify-start" : "justify-end",
-          )}
-        >
+        <div className="hidden shrink-0 items-center sm:flex">
           {actionRail}
         </div>
         <div className="min-w-0 flex-1">{children}</div>
