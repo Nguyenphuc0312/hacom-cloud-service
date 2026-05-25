@@ -420,6 +420,28 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    if (error.response?.status === 429) {
+      const retryAfterRaw = error.response.headers?.["retry-after"];
+      const retryAfterSec = Number.parseInt(String(retryAfterRaw ?? ""), 10);
+      const message =
+        Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? i18n.t("error:rateLimit.withDelay", {
+              seconds: retryAfterSec,
+              defaultValue: `Bạn thao tác hơi nhanh. Vui lòng thử lại sau ${retryAfterSec} giây.`,
+            })
+          : i18n.t("error:rateLimit.generic", {
+              defaultValue:
+                "Bạn thao tác hơi nhanh. Vui lòng thử lại sau ít giây.",
+            });
+      const data = error.response.data;
+      if (data && typeof data === "object") {
+        (data as Record<string, unknown>).message = message;
+      } else {
+        error.response.data = { message };
+      }
+      return Promise.reject(error);
+    }
+
     if (
       !originalRequest ||
       error.response?.status !== 401 ||
@@ -461,6 +483,28 @@ authenticatedAuthClient.interceptors.response.use(
     const requestId = originalRequest?._requestId ?? "";
     if (requestId) {
       apiPerfLogger.endApiCall(requestId, error.response?.status ?? 0, false);
+    }
+
+    if (error.response?.status === 429) {
+      const retryAfterRaw = error.response.headers?.["retry-after"];
+      const retryAfterSec = Number.parseInt(String(retryAfterRaw ?? ""), 10);
+      const message =
+        Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? i18n.t("error:rateLimit.withDelay", {
+              seconds: retryAfterSec,
+              defaultValue: `Bạn thao tác hơi nhanh. Vui lòng thử lại sau ${retryAfterSec} giây.`,
+            })
+          : i18n.t("error:rateLimit.generic", {
+              defaultValue:
+                "Bạn thao tác hơi nhanh. Vui lòng thử lại sau ít giây.",
+            });
+      const data = error.response.data;
+      if (data && typeof data === "object") {
+        (data as Record<string, unknown>).message = message;
+      } else {
+        error.response.data = { message };
+      }
+      return Promise.reject(error);
     }
 
     if (
