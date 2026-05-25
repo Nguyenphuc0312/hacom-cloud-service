@@ -161,7 +161,7 @@ const EventDetailModal: React.FC<{
   const colors = getEventColor(event.type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
@@ -177,7 +177,7 @@ const EventDetailModal: React.FC<{
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="pr-8">
+        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
           <div
             className={clsx(
               "mb-3 inline-block rounded-full px-3 py-1 text-xs font-medium",
@@ -238,7 +238,7 @@ const AttendanceTooltip: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
@@ -254,7 +254,7 @@ const AttendanceTooltip: React.FC<{
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="pr-8">
+        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
           {/* Header with status */}
           <div className="mb-4 flex items-center gap-2">
             <span className={clsx("h-3 w-3 rounded-full", colors.dot)} />
@@ -516,7 +516,6 @@ const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
   onClick: () => void;
 }> = ({ attendance, onClick }) => {
-  const colors = getAttendanceColors(attendance.classificationColor);
   const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
 
   return (
@@ -526,43 +525,17 @@ const AttendanceBadge: React.FC<{
         e.stopPropagation();
         onClick();
       }}
-      className={clsx(
-        "attendance-badge block w-full cursor-pointer rounded border text-left transition-micro",
-        "px-1.5 py-0.5 text-xs",
-        hasPunch
-          ? [colors.bg, colors.border, "hover:brightness-95 dark:hover:brightness-110"]
-          : "border-border bg-surface hover:bg-surface-hover",
-      )}
-      title={
-        hasPunch
-          ? `${formatTime(attendance.firstPunch)} – ${formatTime(attendance.lastPunch)}${attendance.classificationLabel ? ` · ${attendance.classificationLabel}` : ""}`
-          : "Chưa có dữ liệu chấm công"
-      }
+      className="attendance-badge block w-full cursor-pointer rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs hover:bg-surface-hover transition-micro"
+      title={hasPunch ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}` : "Chưa có dữ liệu chấm công"}
     >
-      <span className="flex items-center gap-1">
-        {hasPunch && (
-          <span className={clsx("mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full", colors.dot)} />
-        )}
-        <span className={clsx("block min-w-0 space-y-0.5 font-medium", hasPunch ? colors.text : "text-text-muted")}>
-          {hasPunch ? (
-            <>
-              <span className="block truncate">
-                {formatTime(attendance.firstPunch)} – {formatTime(attendance.lastPunch)}
-              </span>
-              {attendance.totalMinutes && attendance.totalMinutes > 0 && (
-                <span className="block truncate opacity-80">
-                  {formatTotalTime(attendance.totalMinutes)}h
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="block truncate">Chưa chấm công</span>
-          )}
+      {hasPunch ? (
+        <span className="block space-y-0.5">
+          <span className="block truncate text-text-secondary">Giờ đến: <span className="font-medium text-text-primary">{formatTime(attendance.firstPunch)}</span></span>
+          <span className="block truncate text-text-secondary">Giờ về: <span className="font-medium text-text-primary">{formatTime(attendance.lastPunch)}</span></span>
         </span>
-        {attendance.requiresAction && (
-          <ExclamationTriangleIcon className="ml-auto h-3 w-3 shrink-0 text-orange-500" />
-        )}
-      </span>
+      ) : (
+        <span className="block truncate text-text-muted">Chưa chấm công</span>
+      )}
     </button>
   );
 };
