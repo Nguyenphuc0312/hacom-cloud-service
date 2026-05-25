@@ -13,7 +13,6 @@
 
 import React, { useMemo } from "react";
 import clsx from "clsx";
-import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
 import { Skeleton } from "../ui";
 import type { LinkPreviewMeta } from "./linkPreviewUtils";
 import { buildLinkMeta } from "./linkPreviewUtils";
@@ -178,16 +177,6 @@ export const LinkPreviewCard: React.FC<LinkPreviewCardProps> = ({
             {linkMeta.url}
           </p>
         )}
-      </div>
-
-      {/* External link icon */}
-      <div className="absolute bottom-3 right-3">
-        <ArrowUpRightIcon
-          className={clsx(
-            "h-4 w-4 transition-transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5",
-            secondaryTextColor,
-          )}
-        />
       </div>
     </a>
   );

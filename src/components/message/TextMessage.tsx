@@ -311,10 +311,10 @@ export const TextMessage: React.FC<TextMessageProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className={clsx(
-                    "underline decoration-border-strong underline-offset-2 transition-colors",
+                    "underline decoration-current underline-offset-2 transition-opacity hover:opacity-80",
                     isOwn
-                      ? "text-[hsl(var(--chat-bubble-sent-text))] hover:text-[hsl(var(--chat-bubble-sent-text))]/85"
-                      : "text-primary hover:text-secondary",
+                      ? "text-[hsl(var(--chat-bubble-sent-text))] opacity-90"
+                      : "text-primary",
                   )}
                 >
                   {part}

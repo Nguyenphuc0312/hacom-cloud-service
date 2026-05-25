@@ -17,6 +17,10 @@
     "renamePlaceholder": "Enter new group name...",
     "membersCount": "{{count}} members",
     "notifications": "Notifications",
+    "sections": {
+      "members": "Group members",
+      "security": "Security settings"
+    },
     "tabs": {
       "members": "Members",
       "media": "Media",
