@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
 import type { Editor } from "@tiptap/react";
 
 export interface TipTapEditorHandle {
@@ -84,6 +85,12 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           placeholder: () => placeholderRef.current,
           emptyEditorClass: "is-editor-empty",
           showOnlyWhenEditable: false,
+        }),
+        Link.configure({
+          autolink: true,
+          linkOnPaste: true,
+          openOnClick: false,
+          protocols: ["http", "https"],
         }),
       ],
       [], // stable — placeholder is read via ref, not captured in closure
@@ -205,6 +212,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           "[&_.tiptap-editor-inner_ul]:list-disc [&_.tiptap-editor-inner_ul]:pl-5 [&_.tiptap-editor-inner_ul]:my-1",
           "[&_.tiptap-editor-inner_ol]:list-decimal [&_.tiptap-editor-inner_ol]:pl-5 [&_.tiptap-editor-inner_ol]:my-1",
           "[&_.tiptap-editor-inner_ol]:list-decimal [&_.tiptap-editor-inner_ol]:pl-5 [&_.tiptap-editor-inner_ol]:my-1",
+          "[&_.tiptap-editor-inner_a]:text-primary [&_.tiptap-editor-inner_a]:underline [&_.tiptap-editor-inner_a]:underline-offset-2",
           disabled && "cursor-not-allowed opacity-70",
           className,
         )}

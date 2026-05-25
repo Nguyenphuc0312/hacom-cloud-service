@@ -123,26 +123,23 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
   const isClickable = !!replyTargetMessageId && !isSelectionMode;
 
   return (
-    <div>
+    <div className="mb-2.5">
       {/* Reply card */}
       <button
         type="button"
         onClick={onClick}
         disabled={!isClickable}
         className={clsx(
-          "w-full overflow-hidden rounded-lg text-left transition-opacity",
-          isClickable ? "cursor-pointer hover:opacity-75 active:opacity-60" : "cursor-default",
-          isOwn
-            ? "bg-black/[0.10] dark:bg-black/[0.18]"
-            : "bg-black/[0.05] dark:bg-white/[0.07]",
+          "w-full overflow-hidden text-left transition-opacity",
+          isClickable ? "cursor-pointer hover:opacity-70 active:opacity-50" : "cursor-default",
         )}
       >
         <div className="flex items-stretch">
           {/* Left accent stripe */}
           <div
             className={clsx(
-              "w-[3px] flex-shrink-0 self-stretch",
-              isOwn ? "bg-white/55" : "bg-primary",
+              "w-[3px] flex-shrink-0 self-stretch rounded-full",
+              isOwn ? "bg-white/70" : "bg-primary",
             )}
           />
 
@@ -152,7 +149,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
               <img
                 src={thumbnailUrl}
                 alt=""
-                className="h-10 w-10 rounded object-cover"
+                className="h-10 w-10 rounded-lg object-cover"
               />
             </div>
           )}
@@ -163,7 +160,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
             <span
               className={clsx(
                 "block truncate text-[11.5px] font-semibold leading-tight",
-                isOwn ? "text-white/85" : "text-primary",
+                isOwn ? "text-white/70" : "text-text-secondary",
               )}
             >
               {replySenderDisplayName}
@@ -174,7 +171,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
               <div
                 className={clsx(
                   "mt-0.5 flex items-center gap-1.5",
-                  isOwn ? "text-white/60" : "text-text-muted",
+                  isOwn ? "text-white/50" : "text-text-muted",
                 )}
               >
                 {isFile && ext ? (
@@ -201,12 +198,12 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
             ) : (
               <p
                 className={clsx(
-                  "mt-0.5 truncate text-[12px] leading-tight",
+                  "mt-0.5 line-clamp-2 text-[12px] leading-tight",
                   isDeleted
-                    ? "italic opacity-50"
+                    ? "italic opacity-40"
                     : isOwn
-                      ? "text-white/65"
-                      : "text-text-secondary",
+                      ? "text-white/50"
+                      : "text-text-muted",
                 )}
               >
                 {previewText}
@@ -215,14 +212,6 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
           </div>
         </div>
       </button>
-
-      {/* Hairline divider separating reply card from message content */}
-      <div
-        className={clsx(
-          "mt-2 mb-2 h-px",
-          isOwn ? "bg-white/15" : "bg-black/[0.07] dark:bg-white/10",
-        )}
-      />
     </div>
   );
 };
