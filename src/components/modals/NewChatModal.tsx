@@ -56,6 +56,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   >({});
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [groupNameTouched, setGroupNameTouched] = useState(false);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [pendingFriendRequestIds, setPendingFriendRequestIds] = useState<
     Set<string>
@@ -69,12 +70,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     () => Object.values(selectedUsersById),
     [selectedUsersById],
   );
+
   const { results, isLoading: isSearchLoading, errorMessage, debouncedQuery } = useChatUserSearch(
     searchQuery,
-    {
-      enabled: isOpen,
-      limit: isGroupMode ? 20 : 10,
-    },
+    { enabled: isOpen, limit: isGroupMode ? 20 : 10 },
   );
   const { suggestions, isLoading: isSuggestionsLoading } = useFriendSuggestions({
     query: searchQuery,
@@ -97,7 +96,6 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   );
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
-
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (!isOpen) {
@@ -105,6 +103,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setSelectedUsersById({});
       setIsGroupMode(false);
       setGroupName("");
+      setGroupNameTouched(false);
       setIsSubmitting(false);
       setPendingUserId(null);
       setPendingFriendRequestIds(new Set());
@@ -112,52 +111,39 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     }
   }
 
-  const getDisplayName = useCallback((user: ChatSearchUser) => {
-    return (
-      resolveUserDisplayName(user, {
-        allowLegacyFallback: true,
-      }) || user.username
-    );
-  }, []);
+  const getDisplayName = useCallback(
+    (user: ChatSearchUser) =>
+      resolveUserDisplayName(user, { allowLegacyFallback: true }) || user.username,
+    [],
+  );
 
   const toggleSelectedUser = useCallback((user: ChatSearchUser) => {
-    setSelectedUsersById((previous) => {
-      if (previous[user.id]) {
-        const next = { ...previous };
+    setSelectedUsersById((prev) => {
+      if (prev[user.id]) {
+        const next = { ...prev };
         delete next[user.id];
         return next;
       }
-
-      return {
-        ...previous,
-        [user.id]: user,
-      };
+      return { ...prev, [user.id]: user };
     });
   }, []);
 
   const handleUserClick = useCallback(
     async (user: ChatSearchUser) => {
       if (isBusy) return;
-
       if (isGroupMode) {
-        if (!isGroupMemberEligible(user)) {
-          return;
-        }
-
+        if (!isGroupMemberEligible(user)) return;
         toggleSelectedUser(user);
         return;
       }
-
       if (!isDirectConversationEligible(user)) {
         toast.error(
           t("profile:newChatModal.friendRequired", {
-            defaultValue:
-              "You can only start direct chat with friends. Send a friend request first.",
+            defaultValue: "You can only start direct chat with friends. Send a friend request first.",
           }),
         );
         return;
       }
-
       setPendingUserId(user.id);
       setIsSubmitting(true);
       try {
@@ -174,33 +160,20 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const handleSendFriendRequest = useCallback(
     async (userId: string) => {
       if (isBusy) return;
-
-      setPendingFriendRequestIds((previous) => new Set(previous).add(userId));
+      setPendingFriendRequestIds((prev) => new Set(prev).add(userId));
       try {
         await sendFriendRequestUseCase(userId);
-        setSearchUserOverridesById((previous) => ({
-          ...previous,
-          [userId]: {
-            friendshipStatus: "pending",
-            canAddFriend: false,
-          },
+        setSearchUserOverridesById((prev) => ({
+          ...prev,
+          [userId]: { friendshipStatus: "pending", canAddFriend: false },
         }));
-        toast.success(
-          t("profile:newChatModal.friendRequestSent", {
-            defaultValue: "Friend request sent",
-          }),
-        );
+        toast.success(t("profile:newChatModal.friendRequestSent", { defaultValue: "Friend request sent" }));
       } catch (error) {
         const apiError = extractApiError(error);
-        toast.error(
-          apiError.message ||
-            t("profile:newChatModal.friendRequestFailed", {
-              defaultValue: "Cannot send friend request",
-            }),
-        );
+        toast.error(apiError.message || t("profile:newChatModal.friendRequestFailed", { defaultValue: "Cannot send friend request" }));
       } finally {
-        setPendingFriendRequestIds((previous) => {
-          const next = new Set(previous);
+        setPendingFriendRequestIds((prev) => {
+          const next = new Set(prev);
           next.delete(userId);
           return next;
         });
@@ -214,26 +187,36 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       toast.error(t("profile:toast.selectAtLeastOneMember"));
       return;
     }
-
     const name = groupName.trim();
     if (!name) {
+      setGroupNameTouched(true);
       toast.error(t("profile:toast.groupNameRequired"));
       return;
     }
-
     if (!onCreateGroup) return;
-
     setIsSubmitting(true);
     try {
-      await onCreateGroup({
-        name,
-        memberIds: selectedUsers.map((user) => user.id),
-      });
+      await onCreateGroup({ name, memberIds: selectedUsers.map((u) => u.id) });
       onClose();
     } finally {
       setIsSubmitting(false);
     }
   }, [groupName, onClose, onCreateGroup, selectedUsers, t]);
+
+  /* ── Footer: nút tạo nhóm luôn nằm ngoài vùng scroll ── */
+  const modalFooter = isGroupMode ? (
+    <Button
+      fullWidth
+      size="md"
+      onClick={() => void handleCreateGroup()}
+      isLoading={isBusy}
+      disabled={isBusy || selectedUsers.length < 1 || !groupName.trim()}
+    >
+      {selectedUsers.length > 0
+        ? t("profile:newChatModal.createGroupButton", { count: selectedUsers.length })
+        : t("profile:newChatModal.selectMembersHint", { defaultValue: "Chọn thành viên để tạo nhóm" })}
+    </Button>
+  ) : undefined;
 
   return (
     <Modal
@@ -242,22 +225,25 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       title={t("profile:newChatModal.title")}
       size="lg"
       contentClassName="sm:w-[36rem]"
-      bodyClassName="p-4 sm:p-5"
+      bodyClassName="p-0 flex flex-col"
+      footer={modalFooter}
     >
-      <div className="space-y-3">
-        <div className="flex gap-2">
+      {/* ── Controls cố định phía trên ── */}
+      <div className="flex-shrink-0 space-y-3 px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+        {/* Mode toggle */}
+        <div className="flex rounded-[var(--chat-control-radius)] border border-border p-1 gap-1">
           <button
             type="button"
             onClick={() => setIsGroupMode(false)}
             disabled={isBusy}
             className={clsx(
-              "flex flex-1 items-center justify-center gap-2 rounded-[var(--chat-control-radius)] px-3 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               !isGroupMode
-                ? "bg-primary text-text-inverse"
-                : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
+                ? "bg-primary text-text-inverse shadow-sm"
+                : "text-text-secondary hover:bg-surface-hover",
             )}
           >
-            <UserPlusIcon className="h-5 w-5" />
+            <UserPlusIcon className="h-4 w-4" />
             {t("profile:newChatModal.directMessage")}
           </button>
           <button
@@ -265,209 +251,169 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             onClick={() => setIsGroupMode(true)}
             disabled={isBusy}
             className={clsx(
-              "flex flex-1 items-center justify-center gap-2 rounded-[var(--chat-control-radius)] px-3 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               isGroupMode
-                ? "bg-primary text-text-inverse"
-                : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
+                ? "bg-primary text-text-inverse shadow-sm"
+                : "text-text-secondary hover:bg-surface-hover",
             )}
           >
-            <UserGroupIcon className="h-5 w-5" />
+            <UserGroupIcon className="h-4 w-4" />
             {t("profile:newChatModal.createGroup")}
           </button>
         </div>
 
-        <Input
-          type="text"
-          placeholder={t("profile:newChatModal.searchPlaceholder")}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
-          autoFocus
-          disabled={isBusy}
-        />
-
-        {isGroupMode ? (
-          <div className="space-y-2">
+        {/* Group name input */}
+        {isGroupMode && (
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-text-secondary">
+              {t("profile:newChatModal.groupNameLabel", { defaultValue: "Tên nhóm" })}
+            </span>
             <Input
               type="text"
               placeholder={t("profile:newChatModal.groupNamePlaceholder")}
               value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
+              onChange={(e) => { setGroupName(e.target.value); }}
+              onBlur={() => setGroupNameTouched(true)}
               disabled={isBusy}
+              error={
+                !groupName.trim()
+                  ? t("profile:toast.groupNameRequired", { defaultValue: "Vui lòng nhập tên nhóm" })
+                  : undefined
+              }
             />
-            <p className="text-xs leading-4 text-text-muted">
-              {t("profile:newChatModal.groupEligibilityHint", {
-                defaultValue:
-                  "Members must be accepted contacts.",
-              })}
-            </p>
           </div>
-        ) : null}
+        )}
 
-        {isGroupMode && selectedUsers.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+        {/* Search */}
+        <Input
+          type="text"
+          placeholder={t("profile:newChatModal.searchPlaceholder")}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
+          autoFocus={!isGroupMode}
+          disabled={isBusy}
+        />
+
+        {/* Selected member chips */}
+        {isGroupMode && selectedUsers.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
             {selectedUsers.map((user) => (
-              <div
+              <span
                 key={user.id}
-                className="flex items-center gap-2 rounded-full bg-primary/12 px-2.5 py-1.5 text-sm text-primary"
+                className="flex items-center gap-1.5 rounded-full bg-primary/12 py-1 pl-3 pr-1.5 text-sm text-primary"
               >
-                <span>{getDisplayName(user)}</span>
+                {getDisplayName(user)}
                 <button
                   type="button"
                   onClick={() => toggleSelectedUser(user)}
-                  className="rounded-full p-1 hover:bg-primary/25"
+                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-primary/25"
+                  aria-label={`Bỏ ${getDisplayName(user)}`}
                 >
-                  <XMarkIcon className="h-4 w-4" />
+                  <XMarkIcon className="h-3 w-3" />
                 </button>
-              </div>
+              </span>
             ))}
           </div>
-        ) : null}
+        )}
 
-        <div className="-mx-4 min-h-[18rem] max-h-[22rem] overflow-y-auto px-4 sm:-mx-5 sm:px-5">
-          {isLoading ? (
-            <DirectorySkeleton count={5} />
-          ) : errorMessage && isSearchActive ? (
-            <p className="py-8 text-center text-sm text-danger">{errorMessage}</p>
-          ) : users.length === 0 && isSearchActive ? (
-            <EmptySearchResults query={debouncedQuery} />
-          ) : users.length === 0 ? (
-            <p className="py-8 text-center text-sm text-text-muted">
-              {t("profile:newChatModal.noFriendsYet", {
-                defaultValue: "You have no friends to add yet.",
-              })}
-            </p>
-          ) : (
-            <div className="space-y-1">
-              {!isSearchActive && (
-                <p className="pb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
-                  {t("profile:newChatModal.friendsSectionLabel", {
-                    defaultValue: "Friends",
-                  })}
-                </p>
-              )}
-              {users.map((user) => {
-                const isSelected = Boolean(selectedUsersById[user.id]);
-                const isPending = pendingUserId === user.id;
-                const isFriendRequestPending = pendingFriendRequestIds.has(
-                  user.id,
-                );
-                const canStartDirect = isDirectConversationEligible(user);
-                const canSelectForGroup = isGroupMemberEligible(user);
+        {/* Section label */}
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          {isSearchActive
+            ? t("profile:newChatModal.searchResults", { defaultValue: "Kết quả tìm kiếm" })
+            : t("profile:newChatModal.friendsSectionLabel", { defaultValue: "Bạn bè" })}
+        </p>
+      </div>
 
-                return (
-                  <UserSearchResultItem
-                    key={user.id}
-                    avatarUrl={user.avatarUrl}
-                    avatarAlt={getDisplayName(user)}
-                    status={user.status ?? null}
-                    primaryText={getDisplayName(user)}
-                    secondaryText={buildUserSearchSecondaryText(user)}
-                    selected={isSelected}
-                    disabled={
-                      isBusy ||
-                      (!isGroupMode && !canStartDirect) ||
-                      (isGroupMode && !canSelectForGroup)
-                    }
-                    onSelect={() => void handleUserClick(user)}
-                    trailing={
-                      isGroupMode ? (
-                        canSelectForGroup ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              toggleSelectedUser(user);
-                            }}
-                            disabled={isBusy}
-                            aria-label={
-                              isSelected
-                                ? t("profile:newChatModal.unselectMember", {
-                                    defaultValue: "Remove member",
-                                  })
-                                : t("profile:newChatModal.selectMember", {
-                                    defaultValue: "Select member",
-                                  })
-                            }
-                            aria-pressed={isSelected}
-                            className={clsx(
-                              "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                              isSelected
-                                ? "border-primary bg-primary text-text-inverse"
-                                : "border-border-strong text-transparent hover:border-primary/40",
-                              isBusy && "cursor-not-allowed opacity-60",
-                            )}
-                          >
-                            <svg
-                              className="h-3 w-3"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={3}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          </button>
-                        ) : (
-                          <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
-                            {t("profile:newChatModal.friendsOnly", {
-                              defaultValue: "Friends only",
-                            })}
-                          </span>
-                        )
-                      ) : isPending ? (
-                        <SkeletonCircle size={18} />
-                      ) : !canStartDirect ? (
-                        user.friendshipStatus === "pending" ? (
-                          <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
-                            {t("profile:newChatModal.requestSent", {
-                              defaultValue: "Requested",
-                            })}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isFriendRequestPending || isBusy}
-                            onClick={() => void handleSendFriendRequest(user.id)}
-                            className="rounded-lg bg-primary/15 px-2 py-1 text-xs font-medium text-primary disabled:opacity-60"
-                          >
-                            {isFriendRequestPending
-                              ? t("profile:newChatModal.sending", {
-                                  defaultValue: "Sending...",
-                                })
-                              : t("profile:newChatModal.addFriend", {
-                                  defaultValue: "Add friend",
-                                })}
-                          </button>
-                        )
-                      ) : null
-                    }
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {/* ── Danh sách scrollable ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
+        {isLoading ? (
+          <DirectorySkeleton count={5} />
+        ) : errorMessage && isSearchActive ? (
+          <p className="py-8 text-center text-sm text-danger">{errorMessage}</p>
+        ) : users.length === 0 && isSearchActive ? (
+          <EmptySearchResults query={debouncedQuery} />
+        ) : users.length === 0 ? (
+          <p className="py-10 text-center text-sm text-text-muted">
+            {t("profile:newChatModal.noFriendsYet", { defaultValue: "Bạn chưa có bạn bè nào." })}
+          </p>
+        ) : (
+          <div className="space-y-0.5">
+            {users.map((user) => {
+              const isSelected = Boolean(selectedUsersById[user.id]);
+              const isPending = pendingUserId === user.id;
+              const isFriendRequestPending = pendingFriendRequestIds.has(user.id);
+              const canStartDirect = isDirectConversationEligible(user);
+              const canSelectForGroup = isGroupMemberEligible(user);
 
-        {isGroupMode && selectedUsers.length > 0 ? (
-          <Button
-            fullWidth
-            size="md"
-            onClick={() => void handleCreateGroup()}
-            isLoading={isBusy}
-            disabled={isBusy}
-          >
-            {t("profile:newChatModal.createGroupButton", {
-              count: selectedUsers.length,
+              return (
+                <UserSearchResultItem
+                  key={user.id}
+                  avatarUrl={user.avatarUrl}
+                  avatarAlt={getDisplayName(user)}
+                  status={user.status ?? null}
+                  primaryText={getDisplayName(user)}
+                  secondaryText={buildUserSearchSecondaryText(user)}
+                  selected={isSelected}
+                  disabled={
+                    isBusy ||
+                    (!isGroupMode && !canStartDirect) ||
+                    (isGroupMode && !canSelectForGroup)
+                  }
+                  onSelect={() => void handleUserClick(user)}
+                  trailing={
+                    isGroupMode ? (
+                      canSelectForGroup ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelectedUser(user); }}
+                          disabled={isBusy}
+                          aria-label={isSelected ? "Bỏ chọn" : "Chọn thành viên"}
+                          aria-pressed={isSelected}
+                          className={clsx(
+                            "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                            isSelected
+                              ? "border-primary bg-primary text-text-inverse"
+                              : "border-border-strong text-transparent hover:border-primary/50",
+                            isBusy && "cursor-not-allowed opacity-60",
+                          )}
+                        >
+                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span className="rounded-md bg-surface-overlay px-2 py-0.5 text-xs text-text-muted">
+                          {t("profile:newChatModal.friendsOnly", { defaultValue: "Chỉ bạn bè" })}
+                        </span>
+                      )
+                    ) : isPending ? (
+                      <SkeletonCircle size={18} />
+                    ) : !canStartDirect ? (
+                      user.friendshipStatus === "pending" ? (
+                        <span className="rounded-md bg-surface-overlay px-2 py-0.5 text-xs text-text-muted">
+                          {t("profile:newChatModal.requestSent", { defaultValue: "Đã gửi" })}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isFriendRequestPending || isBusy}
+                          onClick={() => void handleSendFriendRequest(user.id)}
+                          className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary disabled:opacity-60"
+                        >
+                          {isFriendRequestPending
+                            ? t("profile:newChatModal.sending", { defaultValue: "Đang gửi..." })
+                            : t("profile:newChatModal.addFriend", { defaultValue: "Kết bạn" })}
+                        </button>
+                      )
+                    ) : null
+                  }
+                />
+              );
             })}
-          </Button>
-        ) : null}
+          </div>
+        )}
       </div>
     </Modal>
   );
