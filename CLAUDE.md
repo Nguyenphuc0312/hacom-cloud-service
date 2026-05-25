@@ -164,7 +164,7 @@ App dùng **song song** Redux và Zustand. Không nhầm lẫn hai cái này:
 
 ## 5. RTK Query — `features/api/chatApi.ts` (`reducerPath: chatApi`)
 
-Endpoints (build tại dòng ~346):
+Endpoints (build tại dòng ~354):
 | Endpoint | Loại | Mô tả |
 |----------|------|-------|
 | `getConversations` | query | danh sách hội thoại |
@@ -179,8 +179,14 @@ Endpoints (build tại dòng ~346):
 | `getUnreadSummary` | query | tổng unread |
 | `searchMessages` | query | tìm message |
 | `forwardMessages` | mutation | chuyển tiếp |
+| `getConversationSidebarSummary` | query | tóm tắt cho panel info (counts media/file/link…) |
+| `getConversationMedia` | query | media dùng chung (ảnh/video) — phân trang, lọc `type` |
+| `getConversationFiles` | query | file dùng chung — phân trang, search `q` |
+| `getConversationLinks` | query | link dùng chung — phân trang |
 
-- Dùng `fakeBaseQuery` — query thực gọi qua `services/api.ts` (`conversationApi`, `messageApi`), không dùng `fetchBaseQuery`.
+> 4 endpoint cuối phục vụ panel **Shared Resources** trong `components/info/GroupInfo` (xem `shared-resources/SharedResourcesPreview`). Types: `ConversationResourcesMediaItem/FileItem/LinkItem` export từ `chatApi.ts`.
+
+- Dùng `fakeBaseQuery` — query thực gọi qua `services/api.ts` (`conversationApi`, `messageApi`, `conversationResourcesApi`), không dùng `fetchBaseQuery`.
 - Logic merge/patch cache nằm ở `features/chat/domain/messageMerge.ts` (`upsertMessageInCache`, `patchMessageInCache`, `mergeIncomingMessagesPage`, `patchMessageReactionInCache`, `patchReadCursorInCache`, `removeMessageFromCache`…). Đây là module **trọng yếu** cho tính đúng của timeline.
 - Error chuẩn hóa qua `ChatQueryError` + `extractApiError` (`lib/apiContract.ts`).
 
@@ -196,7 +202,7 @@ Endpoints (build tại dòng ~346):
 - `setAuthFailureHandler` nối axios → `authStore.handleAuthFailure` (logout khi 401/403 thật sự; network/5xx KHÔNG xóa session).
 
 ### Services (`src/services/`)
-- `api.ts`: gom tất cả REST call thật: `authApi, userApi, conversationApi, groupApi, messageApi, fileApi, contactApi, friendshipApi, friendQrApi`. **Đây là nơi định nghĩa endpoint backend.**
+- `api.ts`: gom tất cả REST call thật: `authApi, userApi, conversationApi, groupApi, messageApi, fileApi, contactApi, friendQrApi, friendshipApi, conversationResourcesApi` (media/file/link dùng chung). **Đây là nơi định nghĩa endpoint backend.**
 - `tokenService.ts`: lưu/đọc access/refresh token (hỗ trợ cookie mode cho refresh token + CSRF), parse `mustChangePassword` từ JWT.
 - `authService.ts`: cross-tab logout sync, client cleanup, redirect login.
 - `uploadClient.ts`: upload file qua signed URL (reserve → PUT signed URL → complete).
@@ -211,7 +217,7 @@ Endpoints (build tại dòng ~346):
 
 - `domain/` — logic thuần: `messageMerge.ts` (patch RTK cache), `messageIdentity.ts`, `messageOrdering.ts`, `serializableMessage.ts` (chuẩn hóa Message trước khi vào Redux).
 - `hooks/` — `useConversationMessagesRTK` (timeline từ RTK cache), `useChatConversations`, `useSendMessage`, `useConversationTimelineRows`, `useConversationThreadRows`, `useMessageTimelineViewModel`, `useMessageJumpTargetRTK`, `useSidebarConversationList/Summaries`, `useConversationSession/Validation`, `useChatUserSearch`.
-- `usecases/` — 28 use case (1 file/việc): tạo nhóm/DM, add/remove member, role, reaction, edit/delete message, invite link, join request, transfer ownership, share contact, send friend request… (xem `usecases/index.ts`).
+- `usecases/` — 34 use case (1 file/việc): tạo nhóm/DM, add/remove member, role, reaction, edit/delete message, invite link, join request, transfer ownership, share contact, send friend request… (xem `usecases/index.ts`).
 - `realtime/` — đăng ký handler WS theo nhóm sự kiện: `registerChatEvents`, `registerConversationEvents`, `registerGroupEvents`, `registerPresenceEvents`, `registerFriendshipEvents`, `registerConnectionEvents`, `registerSyncEvents`. `chatRealtimeAdapter` chuẩn hóa event, `realtimeEventKeys` dedupe, `resyncPolicy` phát hiện gap seq để resync.
 - `state/` — zustand phụ trợ: `chatSidebarStore` (filter), `chatUiStore`, `chatEntityStore`, `chatSelectors`.
 - `simple-virtual-timeline/` — virtual list tự viết (`SimpleVirtualizedChatTimeline`) + `useSimpleChatScroll`.
@@ -227,6 +233,7 @@ Endpoints (build tại dòng ~346):
 - `components/message/` — render theo loại: `TextMessage`, `ImageMessage`, `VideoMessage`, `VoiceMessage`, `FileMessage`/`FileMessageCard`, `StickerMessage`, `SystemMessage`, `MarkdownContent`, `LinkPreviewCard`, `context-menu/*`, `sticker-picker/*`.
 - `components/input/` — `MessageInput.tsx` + `MessageInput/*` (composer banners: reply, edit, mention, status, length), `TipTapEditor`, attachments (`AttachmentTray/Item/Preview/Menu`), `EmojiPicker`, `FormatToolbar`, `VoiceRecorder` (ở `components/voice/`).
 - `components/layout/` — `Sidebar`, `ChatWindow`, `CommandPalette`, `sidebar/*` (RoomList, RoomItem, SidebarHeader/Search…).
+- `components/info/` — panel thông tin bên phải: `GroupInfo` (chi tiết hội thoại/nhóm, members, invite link), `UserProfile` (info DM), `InfoMenuRow`, `shared-resources/SharedResourcesPreview` (preview media/file/link dùng chung, gọi 4 endpoint resources ở mục 5). Dùng trong `ChatPage`.
 - `components/settings/` — các section settings (Appearance, Notification, Privacy, Chat, Security, Language, DangerZone…) + `SettingsApplier` (áp dụng settings lúc mount).
 
 ---
