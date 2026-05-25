@@ -88,7 +88,7 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({
         <EmojiPicker
           onSelect={handleSelect}
           onClose={handleClose}
-          className="absolute bottom-full left-0 z-dropdown mb-2"
+          className="absolute bottom-full right-0 z-dropdown mb-2"
         />
       )}
     </div>
