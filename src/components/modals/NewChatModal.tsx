@@ -56,8 +56,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   >({});
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [groupNameTouched, setGroupNameTouched] = useState(false);
-  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [pendingFriendRequestIds, setPendingFriendRequestIds] = useState<
     Set<string>
   >(new Set());
