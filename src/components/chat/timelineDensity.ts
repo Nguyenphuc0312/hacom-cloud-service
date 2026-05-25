@@ -60,8 +60,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       rowGap: "gap-1",
       senderLabel:
         "mb-1 block text-[11.5px] font-semibold leading-[1.15] text-primary",
-      replyPreview:
-        "mb-1 gap-1.5 rounded-l-none rounded-r-lg px-2.5 py-1 text-[11px]",
+      replyPreview: "",
       forwardedBadge: "mb-1 flex items-center gap-1 text-[11px] leading-4",
       meta:
         "mt-0.5 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
@@ -93,8 +92,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       rowGap: "gap-1",
       senderLabel:
         "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
-      replyPreview:
-        "mb-1 gap-2 rounded-l-none rounded-r-lg px-2.5 py-1.5 text-[11px]",
+      replyPreview: "",
       forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",
       meta:
         "mt-0.5 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
@@ -124,8 +122,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       rowGap: "gap-1.5",
       senderLabel:
         "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
-      replyPreview:
-        "mb-1 gap-2 rounded-l-none rounded-r-lg px-2.5 py-1.5 text-[11px]",
+      replyPreview: "",
       forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",
       meta:
         "mt-0.75 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
