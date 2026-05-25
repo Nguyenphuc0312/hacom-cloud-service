@@ -56,7 +56,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   >({});
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
-const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [groupNameTouched, setGroupNameTouched] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [pendingFriendRequestIds, setPendingFriendRequestIds] = useState<
     Set<string>
   >(new Set());
@@ -275,7 +276,7 @@ const [pendingUserId, setPendingUserId] = useState<string | null>(null);
               onBlur={() => setGroupNameTouched(true)}
               disabled={isBusy}
               error={
-                !groupName.trim()
+                groupNameTouched && !groupName.trim()
                   ? t("profile:toast.groupNameRequired", { defaultValue: "Vui lòng nhập tên nhóm" })
                   : undefined
               }
