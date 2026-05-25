@@ -72,22 +72,22 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-900 shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-base font-semibold text-text-primary">
             {task ? "Sửa công việc" : "Tạo công việc"}
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
               Tiêu đề <span className="text-red-500">*</span>
             </label>
             <input
@@ -95,9 +95,9 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
               value={title}
               onChange={(e) => { setTitle(e.target.value); setTitleError(""); }}
               className={clsx(
-                "w-full rounded-lg border px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
-                "focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                titleError ? "border-red-400" : "border-gray-300 dark:border-gray-600",
+                "w-full rounded-lg border px-3 py-2 text-sm bg-surface text-text-primary",
+                "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary",
+                titleError ? "border-red-400" : "border-border",
               )}
               placeholder="Nhập tiêu đề công việc"
             />
@@ -105,23 +105,23 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Mô tả</label>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Mô tả</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
               placeholder="Mô tả công việc (không bắt buộc)"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Trạng thái</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Trạng thái</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>{TASK_STATUS_LABELS[s]}</option>
@@ -130,11 +130,11 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Độ ưu tiên</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Độ ưu tiên</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>{TASK_PRIORITY_LABELS[p]}</option>
@@ -145,28 +145,28 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Ngày bắt đầu</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Ngày bắt đầu</label>
               <input
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Deadline</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Deadline</label>
               <input
                 type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Người phụ trách</label>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Người phụ trách</label>
             <AssigneePicker
               value={assignee}
               onChange={setAssignee}
@@ -179,14 +179,14 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, onClose, onS
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+              className="flex-1 rounded-lg border border-border py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover transition-micro"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+              className="flex-1 rounded-lg bg-primary py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60 transition-micro"
             >
               {isSubmitting ? "Đang lưu..." : task ? "Cập nhật" : "Tạo công việc"}
             </button>
