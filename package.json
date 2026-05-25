@@ -30,6 +30,8 @@
     "@hacom/chat-shared-types": "file:../chat-shared-types",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^3.9.0",
+    "@hugeicons/core-free-icons": "^4.1.4",
+    "@hugeicons/react": "^1.1.6",
     "@reduxjs/toolkit": "^2.8.2",
     "@tanstack/react-virtual": "^3.13.24",
     "@tiptap/extension-placeholder": "^3.23.1",

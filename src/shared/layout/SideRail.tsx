@@ -7,7 +7,6 @@ import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
-  QuestionMarkCircleIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -15,20 +14,20 @@ import {
   CalendarDaysIcon as CalendarDaysSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
   Cog6ToothIcon as Cog6ToothSolid,
-  QuestionMarkCircleIcon as QuestionMarkCircleSolid,
   SparklesIcon as SparklesSolid,
 } from "@heroicons/react/24/solid";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Contact01Icon, MentoringIcon } from "@hugeicons/core-free-icons";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
-import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 
 type SideRailItem = {
   id: string;
   label: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  iconActive?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>> | React.ComponentType<object>;
+  iconActive?: React.ComponentType<React.SVGProps<SVGSVGElement>> | React.ComponentType<object>;
   to?: string;
   onClick?: () => void;
   activeWhen?: (pathname: string) => boolean;
@@ -54,7 +53,7 @@ const railItems: SideRailItem[] = [
   {
     id: "contacts",
     label: "sidebar:rail.contacts",
-    icon: ContactsAddressBookOutlineIcon,
+    icon: (_props: object) => <HugeiconsIcon icon={Contact01Icon} size={22} color="currentColor" strokeWidth={1.8} />,
     to: ROUTE_PATHS.FRIENDS,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.FRIENDS ||
@@ -66,7 +65,7 @@ const railItems: SideRailItem[] = [
 ];
 
 const bottomItems: SideRailItem[] = [
-  { id: "help", label: "sidebar:rail.help", icon: QuestionMarkCircleIcon, iconActive: QuestionMarkCircleSolid, to: ROUTE_PATHS.HELP },
+  { id: "help", label: "sidebar:rail.help", icon: (_props: object) => <HugeiconsIcon icon={MentoringIcon} size={22} color="currentColor" strokeWidth={1.8} />, to: ROUTE_PATHS.HELP },
   {
     id: "settings",
     label: "sidebar:rail.settings",

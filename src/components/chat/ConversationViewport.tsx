@@ -12,6 +12,7 @@ interface ConversationViewportProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -34,6 +35,10 @@ interface ConversationViewportProps {
   className?: string;
   /** Fires when the user scrolls to within the near-bottom threshold. */
   onBottomVisible?: () => void;
+  /** Message id to scroll to + briefly highlight. */
+  jumpToMessageId?: string | null;
+  /** Bumped on every jump request so repeated jumps to the same id re-fire. */
+  jumpNonce?: number;
 }
 
 export const ConversationViewport: React.FC<ConversationViewportProps> =
@@ -45,6 +50,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       onReply,
       onReact,
       onForward,
+      onPin,
       onEdit,
       onDelete,
       onInspect,
@@ -60,6 +66,8 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       composerHeight,
       className,
       onBottomVisible,
+      jumpToMessageId,
+      jumpNonce,
     }: ConversationViewportProps) => {
       const conversationReadSnapshot = conversation as Conversation & {
         lastReadMessageId?: string;
@@ -124,6 +132,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onReply={onReply}
           onReact={onReact}
           onForward={onForward}
+          onPin={onPin}
           onEdit={onEdit}
           onDelete={onDelete}
           onInspect={onInspect}
@@ -150,6 +159,8 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           composerHeight={composerHeight}
           className={className}
           onBottomVisible={onBottomVisible}
+          jumpToMessageId={jumpToMessageId}
+          jumpNonce={jumpNonce}
         />
       );
     },

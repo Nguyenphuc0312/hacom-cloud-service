@@ -39,6 +39,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -64,6 +65,10 @@ export interface SimpleVirtualizedChatTimelineProps {
   className?: string;
   /** Fires when the user scrolls to within the near-bottom threshold. */
   onBottomVisible?: () => void;
+  /** Message id to scroll to + briefly highlight. */
+  jumpToMessageId?: string | null;
+  /** Bumped on every jump request so repeated jumps to the same id re-fire. */
+  jumpNonce?: number;
 }
 
 const EMPTY_SELECTED = new Set<string>();
@@ -92,6 +97,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   onReply,
   onReact,
   onForward,
+  onPin,
   onEdit,
   onDelete,
   onInspect,
@@ -112,6 +118,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   composerHeight,
   className,
   onBottomVisible,
+  jumpToMessageId,
+  jumpNonce,
 }) => {
   const { t } = useTranslation();
   const timelineItems = useConversationTimelineRows({
@@ -162,6 +170,94 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   React.useLayoutEffect(
     () => notifyTotalSizeChanged(totalSize),
     [totalSize, notifyTotalSizeChanged],
+  );
+
+  // ── Jump-to-message: scroll the target row into view + flash a highlight ──
+  const [highlightedId, setHighlightedId] = React.useState<string | null>(null);
+  const lastJumpNonceRef = React.useRef<number | undefined>(undefined);
+  const highlightTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const scrollCleanupRef = React.useRef<(() => void) | null>(null);
+  // Holds a requested jump whose target row is not loaded yet, so it can be
+  // retried once the message arrives in the list.
+  const pendingJumpRef = React.useRef<string | null>(null);
+
+  // Map every message id (and its alternate ids) to the row that renders it.
+  const rowIndexByMessageId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    threadRows.forEach((row, index) => {
+      if (row.kind !== "group") return;
+      for (const item of row.items) {
+        const m = item.message;
+        map.set(item.messageId, index);
+        if (m.id) map.set(m.id, index);
+        if (m.localId) map.set(m.localId, index);
+        if (m.stableId) map.set(m.stableId, index);
+        if (m.clientMessageId) map.set(m.clientMessageId, index);
+      }
+    });
+    return map;
+  }, [threadRows]);
+  // Always read the freshest map without re-running the jump effect on every
+  // message change (which would re-scroll mid-highlight).
+  const rowIndexRef = React.useRef(rowIndexByMessageId);
+  rowIndexRef.current = rowIndexByMessageId;
+
+  const runScrollAndHighlight = React.useCallback(
+    (messageId: string, index: number) => {
+      // Dynamically measured rows shift after the first scroll; re-issue it
+      // across a couple of frames so we land on the corrected offset.
+      const scrollToTarget = () =>
+        virtualizer.scrollToIndex(index, { align: "center" });
+      scrollToTarget();
+      const raf = requestAnimationFrame(scrollToTarget);
+      const correctionTimer = setTimeout(scrollToTarget, 160);
+      scrollCleanupRef.current?.();
+      scrollCleanupRef.current = () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(correctionTimer);
+      };
+
+      setHighlightedId(messageId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => {
+        setHighlightedId(null);
+        highlightTimerRef.current = null;
+      }, 2200);
+    },
+    [virtualizer],
+  );
+
+  const tryResolvePendingJump = React.useCallback(() => {
+    const id = pendingJumpRef.current;
+    if (!id) return;
+    const index = rowIndexRef.current.get(id);
+    if (index == null) return; // target not loaded yet — wait for next change
+    pendingJumpRef.current = null;
+    runScrollAndHighlight(id, index);
+  }, [runScrollAndHighlight]);
+
+  // New jump request → remember it and try right away.
+  React.useEffect(() => {
+    if (jumpNonce == null || jumpNonce === lastJumpNonceRef.current) return;
+    lastJumpNonceRef.current = jumpNonce;
+    if (!jumpToMessageId) return;
+    pendingJumpRef.current = jumpToMessageId;
+    tryResolvePendingJump();
+  }, [jumpNonce, jumpToMessageId, tryResolvePendingJump]);
+
+  // Retry a pending jump when the row set changes (target just loaded in).
+  React.useEffect(() => {
+    tryResolvePendingJump();
+  }, [rowIndexByMessageId, tryResolvePendingJump]);
+
+  React.useEffect(
+    () => () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      scrollCleanupRef.current?.();
+    },
+    [],
   );
 
   const selectedIds = selectedMessageIds ?? EMPTY_SELECTED;
@@ -261,6 +357,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onReply={onReply}
                         onReact={onReact}
                         onForward={onForward}
+                        onPin={onPin}
                         onInspect={onInspect}
                         onEdit={onEdit}
                         onDelete={onDelete}
@@ -276,7 +373,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         expandedLongMessageIds={EMPTY_EXPANDED}
                         onToggleLongMessageExpand={noopToggleExpand}
                         insertedMessageKeys={EMPTY_INSERTED}
-                        highlightedMessageId={null}
+                        highlightedMessageId={highlightedId}
                       />
                     ) : (
                       // system / date / unread — MessageItem already
@@ -288,6 +385,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onReply={onReply}
                         onReact={onReact}
                         onForward={onForward}
+                        onPin={onPin}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         onImageClick={wrappedOnImageClick}

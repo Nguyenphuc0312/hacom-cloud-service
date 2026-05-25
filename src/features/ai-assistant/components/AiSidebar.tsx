@@ -10,7 +10,6 @@ import {
   Building2Icon,
   UserCircle2Icon,
   PinOffIcon,
-  PanelLeftCloseIcon,
 } from "lucide-react";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
@@ -29,7 +28,6 @@ export const AiSidebar: React.FC = () => {
     deleteConversation,
     togglePinConversation,
     renameConversation,
-    toggleSidebar,
   } = useAiAssistantStore();
 
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
@@ -108,23 +106,18 @@ export const AiSidebar: React.FC = () => {
 
   return (
     <div className="flex h-full w-full flex-col bg-surface-overlay border-r border-border select-none">
-      {/* ── Header: New chat + Collapse ── */}
-      <div className="flex items-center justify-between p-3">
+      {/* ── Header: New chat ── */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider pl-1">
+          Hội thoại
+        </span>
         <button
-          onClick={toggleSidebar}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
-          aria-label="Thu gọn sidebar"
-        >
-          <PanelLeftCloseIcon size={20} strokeWidth={1.8} />
-        </button>
-        <button
-          onClick={() => {
-            createNewConversation(activeTab);
-          }}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
+          onClick={() => createNewConversation(activeTab)}
+          className="h-8 w-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
           aria-label="Tạo cuộc trò chuyện mới"
+          title="Tạo mới"
         >
-          <PlusIcon size={20} strokeWidth={1.8} />
+          <PlusIcon size={18} strokeWidth={2} />
         </button>
       </div>
 
