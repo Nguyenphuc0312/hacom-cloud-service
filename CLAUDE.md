@@ -1,0 +1,293 @@
+# CLAUDE.md — chat-web-client
+
+Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File này mô tả chi tiết kiến trúc để AI hiểu context mà **không cần đọc lại toàn bộ source**. Đọc file này trước; chỉ mở file cụ thể khi cần sửa.
+
+> Khi sửa code mà phát hiện file này sai/lỗi thời, hãy cập nhật lại nó.
+
+---
+
+## 1. Stack & tooling
+
+- **React 19** + **TypeScript 5.9** + **Vite 7** (ESM, `import.meta.env`)
+- **State**: Redux Toolkit + RTK Query **VÀ** Zustand cùng tồn tại — xem mục 4 (rất quan trọng)
+- **Routing**: React Router v7 (route-object + `createBrowserRouter`, lazy pages)
+- **Styling**: Tailwind CSS v3 + theme tokens động (CSS variables)
+- **Editor**: Tiptap v3 (rich text trong MessageInput)
+- **Realtime**: WebSocket thuần (native `WebSocket`, không socket.io) qua `src/lib/socket.ts`
+- **Animation**: Framer Motion
+- **i18n**: i18next (vi mặc định, en) — lazy load JSON theo namespace
+- **Forms**: react-hook-form + zod (`@hookform/resolvers`)
+- **HTTP**: axios (nhiều instance, có refresh-token interceptor)
+- **Shared types**: `@hacom/chat-shared-types` (local package tại `../chat-shared-types`) — types dùng chung với backend (auth, chat, core, runtime)
+- **Tests**: Vitest (unit) + Playwright (e2e + performance)
+
+### Dev commands
+```bash
+npm run dev          # vite dev server
+npm run build        # tsc -b && vite build
+npm run typecheck    # tsc -b (chỉ type-check)
+npm run lint         # eslint
+npm test             # vitest run (loại trừ *.bench)
+npm run test:chat-runtime   # bộ test chat runtime trọng yếu
+npm run test:e2e     # playwright
+npm run i18n:check   # kiểm tra thiếu key dịch
+npm run ci:readiness # typecheck + lint + build:gate + test + perf + static gate
+```
+
+---
+
+## 2. Kiến trúc tổng quan & data flow
+
+```
+main.tsx
+ └─ <Provider store> (Redux)
+     └─ <ThemeProvider>
+         └─ <ResponsiveProvider>
+             └─ <App> → <RouterProvider router={appRouter}>
+                 └─ RootLayout (ToastProvider, SettingsApplier, AppErrorBoundary, Suspense)
+                     ├─ AuthLayout      → public routes (login, activation, verify…)
+                     └─ ProtectedRoute → AppLayout = AuthenticatedLayout
+                                          (GlobalWebSocketProvider + PersistentNavigationRail + <Outlet/>)
+```
+
+**Luồng tin nhắn (đọc):** HTTP `messageApi.getMessages` → RTK Query `getMessages` cache (`ConversationMessagesCache`) → component dùng hook `useConversationMessagesRTK`.
+
+**Luồng realtime:** WebSocket event → `useWebSocket` + register handlers (`features/chat/realtime/register*Events.ts`) → dispatch Redux action (`realtimeMessageReceived`,…) → `realtimeMiddleware` patch trực tiếp vào RTK Query cache qua `messageMerge.ts` helpers. Một số state (sidebar preview, typing) sync vào Zustand `chatStore`.
+
+**Luồng gửi tin:** `useSendMessage` / `sendMessage` usecase → optimistic message vào cache → `messageApi.sendMessage` → ack thay thế optimistic bằng message thật (đối chiếu qua `clientMessageId`).
+
+---
+
+## 3. Cấu trúc thư mục
+
+```
+src/
+├── main.tsx                 # entry; bootstrap theme, diagnostics, mount providers
+├── App.tsx                  # chỉ render <RouterProvider>
+│
+├── router/
+│   ├── router.tsx           # routeTree + createBrowserRouter (appRouter)
+│   ├── paths.ts             # ROUTE_PATHS (single source of truth cho path)
+│   ├── builders.tsx         # build RouteObject từ config (lazy + guards)
+│   ├── config/
+│   │   ├── publicRoutes.ts  # login, activation, verify-email, forgot/reset/force-change pw
+│   │   └── privateRoutes.ts # chat, friends, tasks, calendar, ai-assistant, settings…
+│   ├── guards/RouteGuards.tsx # ProtectedRoute, GuestRoute, ActivationRoute, ForceChangePasswordRoute
+│   └── types.ts             # AppRouteConfig (guestOnly, activationOnly, roles…)
+│
+├── layouts/
+│   ├── RootLayout.tsx          # providers toàn cục + Suspense + error boundary
+│   ├── AuthLayout.tsx          # khung cho route public
+│   ├── AppLayout.tsx           # = AuthenticatedLayout
+│   └── AuthenticatedLayout.tsx # WS provider + nav rail + CommandPalette (Ctrl/Cmd+K)
+│
+├── store/                   # ===== REDUX =====
+│   ├── index.ts             # configureStore: reducers {chatApi, chat, realtime} + middleware
+│   └── hooks.ts             # useAppDispatch, useAppSelector (typed)
+│
+├── stores/                  # ===== ZUSTAND ===== (lưu ý: store"s" số nhiều)
+│   ├── authStore.ts         # auth/session (persist localStorage "auth-storage")
+│   ├── chatStore.ts         # conversations, messages mirror, drafts, unread, typing, outbox
+│   ├── chatStoreOutbox.ts / chatStoreUnread.ts / chatStoreTyping.ts  # controllers tách nhỏ
+│   ├── uiStore.ts           # theme/density/modal/toast state
+│   ├── presenceStore.ts     # online/offline/away của user
+│   ├── groupStore.ts        # invite links, join requests
+│   ├── friendshipStore.ts   # bạn bè, lời mời kết bạn
+│   └── storeResetRegistry.ts# đăng ký reset tất cả store khi logout
+│
+├── features/                # domain features (feature-sliced)
+│   ├── api/
+│   │   ├── chatApi.ts       # RTK Query API CHÍNH (xem mục 5)
+│   │   ├── hrApi.ts         # RTK Query cho HR/chấm công
+│   │   └── rtkQueryMetricsMiddleware.ts
+│   ├── auth/                # authApi, authState (AuthStatus state machine), authErrorMapper
+│   ├── chat/                # feature lớn nhất — xem mục 7
+│   ├── realtime/
+│   │   ├── GlobalWebSocketProvider.tsx  # context bọc useWebSocket
+│   │   ├── realtimeMiddleware.ts        # Redux middleware patch cache từ realtime actions
+│   │   └── realtimeSlice.ts             # connectionStatus + typingByConversationId
+│   ├── activation/          # luồng kích hoạt tài khoản (OTP + set password)
+│   ├── ai-assistant/        # AI chat (có aiMockResponses, zustand store riêng)
+│   ├── tasks/               # quản lý task (axios riêng + realtime hook)
+│   ├── calendar/            # lịch (CalendarPage + data tĩnh calendarEvents)
+│   ├── friends/ friend-qr/  # bạn bè + QR add friend (shareCode)
+│   ├── notification/        # notification store
+│   └── profile/             # chỉnh sửa hồ sơ
+│
+├── components/              # UI dùng chung (xem mục 8)
+│   ├── ui/                  # primitives: Button, Modal, Input, Toast, Spinner, Skeleton…
+│   ├── chat/                # ChatHeader, MessageItem, message-layout, ReactionBar, thread…
+│   ├── message/             # render từng loại message (Text/Image/Video/Voice/File/Sticker…)
+│   ├── input/               # MessageInput (Tiptap), attachments, emoji, format toolbar
+│   ├── layout/              # Sidebar, ChatWindow, CommandPalette, sidebar/*
+│   ├── conversation/ modals/ settings/ auth/ friends/ notification/ preview/ voice/ info/ common/ error/ dev/
+│
+├── hooks/                   # custom hooks toàn cục (xem mục 9)
+├── services/               # HTTP clients & auth (api.ts, authService, tokenService, uploadClient…)
+├── lib/                    # axios, socket, apiContract, conversationAdapter, validations, commandPalette
+├── settings/               # hệ thống settings (store + sync + persistence + defaults)
+├── theme/                  # ThemeProvider, runtimeTheme (CSS vars), useTheme
+├── types/                  # types FE (index.ts: Message, Conversation, Attachment, enums)
+├── utils/                  # helpers thuần (messageIdentity, uploadPolicy, formatTime, logger…)
+├── constants/              # emojis, passwordPolicy
+├── config/index.ts         # đọc env → API_BASE_URL, AUTH_BASE_URL, WEBSOCKET_URL, *_CONFIG
+├── i18n/                   # i18next setup + dateFns locale
+├── locales/{vi,en}/*.json  # bản dịch theo namespace
+├── pages/                  # page components (ChatPage, LoginPage, errors/*…)
+├── shared/layout/          # AppShell, PersistentNavigationRail, ModuleSidebar, MainHeader, icons
+├── responsive/             # ResponsiveProvider + breakpoints
+└── test/                   # test setup
+```
+
+---
+
+## 4. State management — ĐỌC KỸ (dual-state)
+
+App dùng **song song** Redux và Zustand. Không nhầm lẫn hai cái này:
+
+### Redux (`src/store/`) — chủ yếu cho dữ liệu server & realtime
+- `chatApi.reducer` (RTK Query): **cache message & conversation** từ server. Đây là **source of truth cho messages**.
+- `chat` slice (`features/chat/chatSlice.ts`): `activeConversationId`, `selectedMessageId`, `sidebarFilter`, `sidebarSearchQuery`, `draftByConversationId`.
+- `realtime` slice: `connectionStatus`, `typingByConversationId`.
+- Middleware: `chatApi.middleware`, `realtimeMiddleware` (patch cache khi có realtime action), `rtkQueryMetricsMiddleware`.
+- Hooks typed: `useAppSelector` / `useAppDispatch` từ `src/store/hooks.ts`.
+
+### Zustand (`src/stores/`) — chủ yếu cho UI/session & state cục bộ
+- `authStore`: toàn bộ session, login/logout/register/refresh, persist localStorage. Có **AuthStatus state machine** (`idle | loading | authenticated | anonymous | activation_required | locked | disabled | bootstrap_error`). Guards trong router đọc store này.
+- `chatStore`: bản mirror của conversations + messages (dùng cho sidebar preview, outbox optimistic, typing, unread). **Lưu ý: messages tồn tại ở CẢ RTK cache lẫn chatStore** — RTK cache là chính cho timeline, chatStore phục vụ sidebar/outbox/legacy.
+- `uiStore`, `presenceStore`, `groupStore`, `friendshipStore`, `notification/notificationStore`, `ai-assistant/aiAssistantStore`.
+- Logout: `storeResetRegistry` chạy reset tất cả store đã đăng ký.
+
+> Khi cần dữ liệu message để render timeline → dùng RTK Query hooks. Khi cần preview/sidebar/unread/typing → thường dùng Zustand `chatStore`.
+
+---
+
+## 5. RTK Query — `features/api/chatApi.ts` (`reducerPath: chatApi`)
+
+Endpoints (build tại dòng ~346):
+| Endpoint | Loại | Mô tả |
+|----------|------|-------|
+| `getConversations` | query | danh sách hội thoại |
+| `getConversationById` | query | 1 hội thoại |
+| `getMessages` | query | trả `ConversationMessagesCache` (cache chính của timeline) |
+| `getMessageById` | query | 1 message |
+| `sendMessage` | mutation | gửi (optimistic update) |
+| `editMessage` | mutation | sửa |
+| `deleteMessage` | mutation | xóa (mode FOR_ME / FOR_EVERYONE) |
+| `addReaction` / `removeReaction` | mutation | thả/bỏ reaction |
+| `markConversationRead` | mutation | đánh dấu đã đọc |
+| `getUnreadSummary` | query | tổng unread |
+| `searchMessages` | query | tìm message |
+| `forwardMessages` | mutation | chuyển tiếp |
+
+- Dùng `fakeBaseQuery` — query thực gọi qua `services/api.ts` (`conversationApi`, `messageApi`), không dùng `fetchBaseQuery`.
+- Logic merge/patch cache nằm ở `features/chat/domain/messageMerge.ts` (`upsertMessageInCache`, `patchMessageInCache`, `mergeIncomingMessagesPage`, `patchMessageReactionInCache`, `patchReadCursorInCache`, `removeMessageFromCache`…). Đây là module **trọng yếu** cho tính đúng của timeline.
+- Error chuẩn hóa qua `ChatQueryError` + `extractApiError` (`lib/apiContract.ts`).
+
+---
+
+## 6. API layer & Auth
+
+### Axios clients (`src/lib/axios.ts`)
+- `apiClient` (default): baseURL `API_BASE_URL` (`/api/v1`), tự gắn Bearer cho endpoint tin cậy, interceptor 401 → refresh token → retry.
+- `authClient`: cho endpoint auth public (login/register/refresh), không tự gắn Bearer.
+- `authenticatedAuthClient`: endpoint auth cần Bearer (me, change-password).
+- Refresh phối hợp tập trung qua `services/authRefreshCoordinator.ts` (`refreshAccessTokenShared`) — tránh refresh trùng.
+- `setAuthFailureHandler` nối axios → `authStore.handleAuthFailure` (logout khi 401/403 thật sự; network/5xx KHÔNG xóa session).
+
+### Services (`src/services/`)
+- `api.ts`: gom tất cả REST call thật: `authApi, userApi, conversationApi, groupApi, messageApi, fileApi, contactApi, friendshipApi, friendQrApi`. **Đây là nơi định nghĩa endpoint backend.**
+- `tokenService.ts`: lưu/đọc access/refresh token (hỗ trợ cookie mode cho refresh token + CSRF), parse `mustChangePassword` từ JWT.
+- `authService.ts`: cross-tab logout sync, client cleanup, redirect login.
+- `uploadClient.ts`: upload file qua signed URL (reserve → PUT signed URL → complete).
+- `notificationApi.ts`, `qrLoginService.ts`.
+
+### Config (`src/config/index.ts`)
+Đọc env Vite → `API_BASE_URL`, `AUTH_BASE_URL`, `HR_API_BASE_URL`, `WEBSOCKET_URL`, `FILE_BASE_URL`, `USE_AUTH_SERVICE` (flag tách auth-service), `APP_BASE_PATH`, và các nhóm `AUTH_CONFIG / PAGINATION_CONFIG / UPLOAD_CONFIG / WEBSOCKET_CONFIG / UI_CONFIG / VALIDATION_CONFIG`. `resolvePublicResourceUrl()` để chuẩn hóa URL ảnh/file an toàn.
+
+---
+
+## 7. Feature `chat` (lớn nhất) — `src/features/chat/`
+
+- `domain/` — logic thuần: `messageMerge.ts` (patch RTK cache), `messageIdentity.ts`, `messageOrdering.ts`, `serializableMessage.ts` (chuẩn hóa Message trước khi vào Redux).
+- `hooks/` — `useConversationMessagesRTK` (timeline từ RTK cache), `useChatConversations`, `useSendMessage`, `useConversationTimelineRows`, `useConversationThreadRows`, `useMessageTimelineViewModel`, `useMessageJumpTargetRTK`, `useSidebarConversationList/Summaries`, `useConversationSession/Validation`, `useChatUserSearch`.
+- `usecases/` — 28 use case (1 file/việc): tạo nhóm/DM, add/remove member, role, reaction, edit/delete message, invite link, join request, transfer ownership, share contact, send friend request… (xem `usecases/index.ts`).
+- `realtime/` — đăng ký handler WS theo nhóm sự kiện: `registerChatEvents`, `registerConversationEvents`, `registerGroupEvents`, `registerPresenceEvents`, `registerFriendshipEvents`, `registerConnectionEvents`, `registerSyncEvents`. `chatRealtimeAdapter` chuẩn hóa event, `realtimeEventKeys` dedupe, `resyncPolicy` phát hiện gap seq để resync.
+- `state/` — zustand phụ trợ: `chatSidebarStore` (filter), `chatUiStore`, `chatEntityStore`, `chatSelectors`.
+- `simple-virtual-timeline/` — virtual list tự viết (`SimpleVirtualizedChatTimeline`) + `useSimpleChatScroll`.
+- `components/` — group-members/* (modal quản lý thành viên), PollCard/PollCreateDialog, VideoCallView, AudioCallDialog.
+- `permissions/groupPermissions.ts` — quyền theo role (owner/admin/member).
+
+---
+
+## 8. Components UI quan trọng
+
+- `components/ui/` — primitives + barrel `index.ts` (Button, Input, Modal, Toast/ToastProvider, Spinner/PageSpinner, Skeleton, EmptyState, SegmentedControl, Checkbox…).
+- `components/chat/` — `ChatHeader`, `MessageItem/*`, `message-layout/*` (MessageRow, MessageCluster, MessageBodyRenderer, ReplyPreview), `ReactionBar/*`, `ReactionPicker/*`, `QuickReactBar`, `SearchPanel`, `PinnedMessagesPanel`, `ForwardModal`, `thread/*`.
+- `components/message/` — render theo loại: `TextMessage`, `ImageMessage`, `VideoMessage`, `VoiceMessage`, `FileMessage`/`FileMessageCard`, `StickerMessage`, `SystemMessage`, `MarkdownContent`, `LinkPreviewCard`, `context-menu/*`, `sticker-picker/*`.
+- `components/input/` — `MessageInput.tsx` + `MessageInput/*` (composer banners: reply, edit, mention, status, length), `TipTapEditor`, attachments (`AttachmentTray/Item/Preview/Menu`), `EmojiPicker`, `FormatToolbar`, `VoiceRecorder` (ở `components/voice/`).
+- `components/layout/` — `Sidebar`, `ChatWindow`, `CommandPalette`, `sidebar/*` (RoomList, RoomItem, SidebarHeader/Search…).
+- `components/settings/` — các section settings (Appearance, Notification, Privacy, Chat, Security, Language, DangerZone…) + `SettingsApplier` (áp dụng settings lúc mount).
+
+---
+
+## 9. Hooks toàn cục (`src/hooks/`)
+
+WebSocket: `useWebSocket` (core), `useWebSocketConnectionLifecycle`, `useWebSocketAuthCoordinator`, `useWebSocketConversationCoordinator`, `useWebSocketResyncCoordinator`, `useMultiTabCoordination`.
+Chat: `useSendMessage`, `useMessageGrouping`, `useMessageSearch`, `usePinnedMessages`, `useTypingIndicator`, `usePresence`, `useComposerAvailability`.
+Upload/file: `useUploadQueue`, `useFilePreview`, `useAttachmentDownloadUrl`, `useDropZone`, `useVoiceRecorder`.
+Auth: `useAuth`, `useLogout`, `useFriendship`, `useNotifications`, `useEmailVerificationChallenge`, `useOtpInput`, `useResendCooldown`.
+Tiện ích: `useDebounce/useDebouncedCallback/useThrottledCallback`, `useAutoResizeTextarea`, `useInViewport`, `useDelayedLoading`, `useMobileViewportMetrics`.
+
+---
+
+## 10. Settings & Theme
+
+- `settings/` — `settingsStore` (zustand) + `defaults.ts` + `persistence.ts` (localStorage) + `sync.ts`/`settingsSyncBridge.ts` (đồng bộ server qua WS `UserSettingsUpdatedPayload`). Types re-export từ shared types. `SettingsApplier` (trong `components/settings/`) áp theme/lang/density khi app mount.
+- `theme/` — `ThemeProvider` + `runtimeTheme.ts` ghi CSS variables (token màu động, accent color), `bootstrapThemeAttributes()` set sớm trong `main.tsx` để tránh flash. Tailwind đọc các CSS var này.
+- i18n: ngôn ngữ resolve qua `chat.language` localStorage (SettingsApplier owns việc "system" → browser lang). Namespaces: common, auth, chat, sidebar, profile, error, validation, theme, settings, friends, group, calendar, aiAssistant, tasks.
+
+---
+
+## 11. Routes
+
+| Path | Component | Guard |
+|------|-----------|-------|
+| `/login` | LoginPage | guestOnly |
+| `/activation` | ActivationFlowPage | activationOnly |
+| `/verify-email` | VerifyEmailPage | public |
+| `/forgot-password`,`/reset-password` | Forgot/ResetPasswordPage | guestOnly |
+| `/force-change-password` | ForceChangePasswordPage | forceChangePasswordOnly |
+| `/chat/:conversationId?` | ChatPage | protected |
+| `/friends`, `/friend-discovery/:shareCode` | FriendsPage | protected |
+| `/join/:token` | JoinByLinkPage | protected |
+| `/tasks` | TasksPage | protected |
+| `/calendar` | CalendarPage | protected |
+| `/ai-assistant` | AiAssistantPage | protected |
+| `/archive` | ArchiveToAiRedirect | protected |
+| `/notifications` | NotificationsPage | protected |
+| `/settings` | SettingsPage | protected |
+| `/help`, `/faq`, `/report-issue` | Help/FAQ/ReportIssuePage | protected |
+| `/` | → redirect `/chat` | |
+| `*` | NotFoundPage | |
+
+Errors pages: `pages/errors/` (Forbidden, Unauthorized, NotFound, ServerError, Offline, RateLimit, Maintenance).
+
+---
+
+## 12. Conventions
+
+- Feature code trong `src/features/<feature>/`; UI dùng chung trong `src/components/`.
+- REST endpoint thật khai báo ở `src/services/api.ts`; timeline/cache đi qua RTK Query `features/api/chatApi.ts`.
+- Realtime: WS event → `register*Events` → dispatch action → `realtimeMiddleware` patch cache (đừng patch cache trực tiếp ở component).
+- Path luôn lấy từ `ROUTE_PATHS` (`router/paths.ts`), không hardcode string.
+- i18n: dùng `t('namespace:key')`; thêm key ở **cả** `locales/vi` và `locales/en`, chạy `npm run i18n:check`.
+- Message luôn chuẩn hóa qua `serializableMessage`/`messageIdentity` trước khi vào Redux (tránh non-serializable & trùng id).
+- Logging qua `utils/logger.ts` (không `console.log` rải rác).
+- Có nhiều test runtime trọng yếu (xem `test:chat-runtime`) — khi sửa logic timeline/merge/scroll nên chạy bộ này.
+
+---
+
+## 13. Lưu ý cá nhân hóa (memory)
+
+- Khi user yêu cầu **chỉnh UI/UX**: chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc (theo feedback đã lưu).

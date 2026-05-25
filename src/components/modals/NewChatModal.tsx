@@ -276,7 +276,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
               onBlur={() => setGroupNameTouched(true)}
               disabled={isBusy}
               error={
-                !groupName.trim()
+                groupNameTouched && !groupName.trim()
                   ? t("profile:toast.groupNameRequired", { defaultValue: "Vui lòng nhập tên nhóm" })
                   : undefined
               }
