@@ -2,6 +2,7 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
+import { PinnedMessageBar } from "../chat/PinnedMessageBar";
 import { ConversationViewport } from "../chat/ConversationViewport";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
 import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
@@ -23,6 +24,7 @@ import {
   useMobileViewportMetrics,
   useUploadQueue,
   usePresence,
+  usePinnedMessages,
 } from "../../hooks";
 import type {
   Attachment,
@@ -473,6 +475,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // ── Presence subscription: subscribe to room members' presence ──
   usePresence({ conversationId: conversation.id });
 
+  const {
+    togglePin,
+    pinnedMessages,
+    isLoading: isPinnedLoading,
+    error: pinnedError,
+  } = usePinnedMessages(conversation.id);
+
   const handleSend = React.useCallback(
     (content?: string, fileMeta?: unknown, type?: string) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
@@ -621,8 +630,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [inspectMessageId, setInspectMessageId] = React.useState<string | null>(
     null,
   );
-  const [, setJumpTargetMessageId] = React.useState<string | null>(null);
-  const [, setJumpRequestVersion] = React.useState(0);
+  const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
+    string | null
+  >(null);
+  const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
@@ -771,6 +782,16 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   const handlePinnedClick = React.useCallback(() => {
     setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
   }, []);
+
+  const handlePin = React.useCallback(
+    (messageId: string) => {
+      const msg = rtkChatApi.endpoints.getMessages
+        .select({ conversationId: conversation.id })(store.getState())
+        .data?.messages.find((m) => m.id === messageId);
+      if (msg) void togglePin(msg);
+    },
+    [conversation.id, togglePin],
+  );
 
   const handleInspectMessage = React.useCallback((message: Message) => {
     setInspectMessageId(message.id);
@@ -1075,6 +1096,15 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         onSelectionMode={enterSelectionMode}
       />
 
+      {pinnedMessages.length > 0 && (
+        <PinnedMessageBar
+          pinnedMessages={pinnedMessages}
+          currentUserId={currentUser.id}
+          onJumpToMessage={handleJumpToMessage}
+          onOpenList={handlePinnedClick}
+        />
+      )}
+
       {overlayMode && (
         <div className="pointer-events-none absolute inset-0 z-[45]">
           <button
@@ -1100,9 +1130,15 @@ const [composerHeight, setComposerHeight] = React.useState(0);
                 />
               ) : (
                 <PinnedMessagesPanel
-                  conversationId={conversation.id}
+                  pinnedMessages={pinnedMessages}
+                  isLoading={isPinnedLoading}
+                  error={pinnedError}
+                  currentUserId={currentUser.id}
                   onClose={() => setOverlayMode(null)}
                   onJumpToMessage={handleJumpToMessage}
+                  onUnpin={(message) =>
+                    togglePin({ ...message, isPinned: true })
+                  }
                   className="h-full"
                 />
               )}
@@ -1119,6 +1155,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         onReply={handleReply}
         onReact={handleReact}
         onForward={handleForward}
+        onPin={handlePin}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onInspect={handleInspectMessage}
@@ -1137,6 +1174,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         composerHeight={composerHeight}
         className="flex-1 min-h-0"
         onBottomVisible={onReachedLatestMessage ? () => onReachedLatestMessage({} as Message) : undefined}
+        jumpToMessageId={jumpTargetMessageId}
+        jumpNonce={jumpRequestVersion}
         />
       </FeatureErrorBoundary>
 

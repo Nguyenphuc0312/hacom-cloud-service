@@ -420,7 +420,7 @@ export const PageSkeleton: React.FC<{ className?: string }> = ({
     className={clsx("grid h-dvh min-h-dvh grid-cols-[var(--hc-rail-width)_var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background", className)}
     aria-busy="true"
   >
-    <div className="flex flex-col items-center gap-3 bg-primary px-2 py-4">
+    <div className="hc-side-rail">
       <SkeletonCircle size={34} className="bg-white/20" />
       <div className="mt-4 flex flex-1 flex-col gap-3">
         {Array.from({ length: 7 }).map((_, index) => (

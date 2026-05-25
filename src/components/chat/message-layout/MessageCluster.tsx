@@ -362,9 +362,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               onMouseEnter={handleClusterMouseEnter}
             >
               <MessageActionBar
-                isOutgoing={isOwn}
                 onReplyClick={() => onReply(message)}
                 onForwardClick={onForward ? () => { onForward(message); hideRail(true); } : undefined}
+                onPinClick={onPin ? () => { void Promise.resolve(onPin(message.id)); hideRail(true); } : undefined}
                 onReactClick={() => setShowReactionPicker((v) => !v)}
                 reactionPickerNode={
                   showReactionPicker && !isSelectionMode ? (

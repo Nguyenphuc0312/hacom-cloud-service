@@ -22,6 +22,7 @@ export interface MessageItemProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -66,6 +67,7 @@ export interface MessageItemContentProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,

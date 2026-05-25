@@ -42,7 +42,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         : "border border-black/[0.09] dark:border-white/[0.09] bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",
       isOwn ? OUTGOING_RADIUS_MAP[position] : INCOMING_RADIUS_MAP[position],
       isRich ? "px-2 py-2" : "px-3 py-2",
-      isHighlighted && "ring-1 ring-warning/35",
+      isHighlighted && "message-highlight-pulse",
       className,
     )}
   >

@@ -139,7 +139,8 @@
   "pinned": {
     "title": "Tin nhắn ghim",
     "empty": "Chưa có tin nhắn ghim",
-    "jumpTo": "Đi tới tin nhắn"
+    "jumpTo": "Đi tới tin nhắn",
+    "unpin": "Bỏ ghim"
   },
   "selection": {
     "enter": "Chọn tin nhắn",

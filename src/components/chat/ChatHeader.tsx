@@ -3,14 +3,12 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftIcon,
-  CheckCircleIcon,
-  EllipsisHorizontalIcon,
-  InformationCircleIcon,
   MagnifyingGlassIcon,
-  MapPinIcon,
   PhoneIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PanelLeftIcon, PinIcon } from "@hugeicons/core-free-icons";
 import { Avatar } from "../common/Avatar";
 import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
@@ -43,13 +41,6 @@ interface ChatHeaderProps {
   className?: string;
 }
 
-interface HeaderAction {
-  id: string;
-  label: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  onClick: () => void;
-}
-
 const iconButtonClass = clsx(
   "chat-header-action inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-transparent",
   "text-text-muted transition-micro",
@@ -69,7 +60,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onVideoCallClick,
   onSearchClick,
   onPinnedClick,
-  onSelectionMode,
   className,
 }) => {
   const { t } = useTranslation();
@@ -101,38 +91,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   }, [typingStatus, typingStatuses]);
   const primaryTypingStatus = activeTypingStatuses[0] ?? typingStatus;
   const isTyping = activeTypingStatuses.length > 0;
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement | null>(null);
-  const menuButtonRef = React.useRef<HTMLButtonElement | null>(null);
-
-  React.useEffect(() => {
-    if (!isMenuOpen) return;
-
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (menuRef.current?.contains(target)) return;
-      if (menuButtonRef.current?.contains(target)) return;
-      setIsMenuOpen(false);
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isMenuOpen]);
-
-  React.useEffect(() => {
-    setIsMenuOpen(false);
-  }, [conversation.id]);
-
   const statusText = (() => {
     if (isTyping) return "";
 
@@ -163,57 +121,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
-
-  const menuActions = React.useMemo<HeaderAction[]>(() => {
-    const nextActions: HeaderAction[] = [];
-
-    if (onSearchClick) {
-      nextActions.push({
-        id: "search",
-        label: t("chat:header.searchInChat"),
-        icon: MagnifyingGlassIcon,
-        onClick: onSearchClick,
-      });
-    }
-
-    if (onPinnedClick) {
-      nextActions.push({
-        id: "pinned",
-        label: t("chat:pinned.title"),
-        icon: MapPinIcon,
-        onClick: onPinnedClick,
-      });
-    }
-
-    if (onSelectionMode) {
-      nextActions.push({
-        id: "select",
-        label: t("chat:selection.enter"),
-        icon: CheckCircleIcon,
-        onClick: onSelectionMode,
-      });
-    }
-
-    if (onCallClick) {
-      nextActions.push({
-        id: "voice-call",
-        label: t("chat:header.voiceCall"),
-        icon: PhoneIcon,
-        onClick: onCallClick,
-      });
-    }
-
-    if (onVideoCallClick) {
-      nextActions.push({
-        id: "video-call",
-        label: t("chat:header.videoCall"),
-        icon: VideoCameraIcon,
-        onClick: onVideoCallClick,
-      });
-    }
-
-    return nextActions;
-  }, [onCallClick, onPinnedClick, onSearchClick, onSelectionMode, onVideoCallClick, t]);
 
   return (
     <header
@@ -309,6 +216,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </button>
             )}
 
+            {onPinnedClick && (
+              <button
+                type="button"
+                onClick={onPinnedClick}
+                className={iconButtonClass}
+                aria-label={t("chat:pinned.title")}
+              >
+                <HugeiconsIcon
+                  icon={PinIcon}
+                  className="h-[18px] w-[18px]"
+                  strokeWidth={1.5}
+                />
+              </button>
+            )}
+
             {onCallClick && (
               <button
                 type="button"
@@ -337,54 +259,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               className={iconButtonClass}
               aria-label={t("chat:header.toggleInfoPanel")}
             >
-              <InformationCircleIcon className="h-[18px] w-[18px]" />
+              <HugeiconsIcon
+                icon={PanelLeftIcon}
+                className="h-[18px] w-[18px]"
+                strokeWidth={1.5}
+              />
             </button>
 
-            <button
-              ref={menuButtonRef}
-              type="button"
-              onClick={() => setIsMenuOpen((value) => !value)}
-              className={iconButtonClass}
-              aria-label={t("chat:header.moreActions")}
-              aria-haspopup="menu"
-              aria-expanded={isMenuOpen}
-            >
-              <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
-            </button>
-
-            {isMenuOpen && (
-              <div
-                ref={menuRef}
-                className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-lg border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
-                  "animate-slide-up-fade",
-                )}
-                role="menu"
-              >
-                {menuActions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      role="menuitem"
-                      className={clsx(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary",
-                        "transition-micro hover:bg-surface-hover hover:text-text-primary active:bg-surface-active",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                      )}
-                      onClick={() => {
-                        action.onClick();
-                        setIsMenuOpen(false);
-                      }}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      <span className="truncate">{action.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       </ConversationLane>

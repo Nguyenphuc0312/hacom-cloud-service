@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Building2Icon,
-  SparklesIcon,
-  PanelRightIcon,
-  ChevronDownIcon,
-} from "lucide-react";
+import { Building2Icon, SparklesIcon, PanelRightIcon } from "lucide-react";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import clsx from "clsx";
@@ -21,13 +16,11 @@ export const AiChatHeader: React.FC = () => {
   return (
     <header className="flex h-12 flex-shrink-0 items-center justify-between px-4 sticky top-0 z-30 bg-surface border-b border-border">
       {/* Left – Model label */}
-      <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors group">
+      <div className="flex items-center gap-2 px-2 py-1.5">
         <div
           className={clsx(
             "flex h-6 w-6 items-center justify-center rounded-md",
-            isCompany
-              ? "bg-primary text-white"
-              : "bg-success text-white",
+            isCompany ? "bg-primary text-white" : "bg-success text-white",
           )}
         >
           {isCompany ? (
@@ -39,11 +32,7 @@ export const AiChatHeader: React.FC = () => {
         <span className="text-sm font-semibold text-text-primary">
           {isCompany ? "Hacom AI" : "Trợ lý ảo cá nhân"}
         </span>
-        <ChevronDownIcon
-          size={14}
-          className="text-text-muted group-hover:text-text-secondary transition-colors"
-        />
-      </button>
+      </div>
 
       {/* Right – Source panel toggle */}
       <div className="flex items-center gap-1">

@@ -479,7 +479,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
               "opacity-0 group-hover/file:opacity-100 focus:opacity-100",
               isOwn
-                ? "bg-surface/25 text-text-inverse hover:bg-surface/40"
+                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.25]"
                 : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
             )}
             aria-label={t("chat:filePreview.preview", {
