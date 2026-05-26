@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   PhotoIcon,
   DocumentIcon,
@@ -245,7 +245,11 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
     <div className="p-3">
       <div className="grid grid-cols-3 gap-1">
         {items.map((item) => (
-          <GalleryThumb key={`${item.messageId}-${item.fileId}`} item={item} />
+          <GalleryThumb
+            key={`${item.messageId}-${item.fileId}`}
+            item={item}
+            conversationId={conversationId}
+          />
         ))}
       </div>
       {showAll ? (
@@ -271,11 +275,40 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
   );
 };
 
-const GalleryThumb: React.FC<{ item: ConversationResourcesMediaItem }> = ({
-  item,
-}) => {
-  const src = item.thumbnailUrl ?? undefined;
-  const isVideo = item.messageType === "video";
+const GalleryThumb: React.FC<{
+  item: ConversationResourcesMediaItem;
+  conversationId: string;
+}> = ({ item, conversationId }) => {
+  const isVideo =
+    item.mimeType.startsWith("video/") || item.messageType === "video";
+  const isImage =
+    item.mimeType.startsWith("image/") || item.messageType === "image";
+  const needsFallback = !item.thumbnailUrl && (isImage || isVideo);
+
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
+
+  useEffect(() => {
+    if (!needsFallback || fallbackUrl || fallbackLoading) return;
+    let cancelled = false;
+    setFallbackLoading(true);
+    fileApi
+      .getDownloadUrl({ conversationId, attachmentId: item.fileId })
+      .then((res) => {
+        if (cancelled) return;
+        const payload = unwrapApiSuccess(res);
+        if (payload?.url) setFallbackUrl(payload.url as string);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setFallbackLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.fileId, conversationId, needsFallback, fallbackUrl, fallbackLoading]);
+
+  const src = item.thumbnailUrl ?? fallbackUrl ?? undefined;
 
   return (
     <div className="relative aspect-square overflow-hidden rounded-md bg-surface-overlay">
@@ -286,6 +319,8 @@ const GalleryThumb: React.FC<{ item: ConversationResourcesMediaItem }> = ({
           className="h-full w-full object-cover"
           loading="lazy"
         />
+      ) : fallbackLoading ? (
+        <Skeleton className="h-full w-full rounded-none" />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <PhotoIcon className="h-6 w-6 text-text-muted" />
@@ -321,7 +356,13 @@ const FilesSection: React.FC<{ conversationId: string; total: number }> = ({
   });
 
   const hasNext = data?.pagination.hasNext ?? false;
-  const items = data?.data ?? [];
+  const rawItems = data?.data ?? [];
+  const items = rawItems.filter(
+    (f) =>
+      !f.mimeType.startsWith("image/") &&
+      !f.mimeType.startsWith("video/") &&
+      !f.mimeType.startsWith("audio/"),
+  );
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchInput(e.target.value);
