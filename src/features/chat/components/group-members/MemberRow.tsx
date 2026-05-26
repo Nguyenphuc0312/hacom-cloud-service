@@ -70,14 +70,12 @@ export const MemberRow: React.FC<MemberRowProps> = ({
         className,
       )}
     >
-      {/* Avatar with online status */}
+      {/* Avatar */}
       <div className="shrink-0">
         <Avatar
           src={avatar}
           alt={resolvedName}
           size="sm"
-          status={status}
-          showStatus
         />
       </div>
 
