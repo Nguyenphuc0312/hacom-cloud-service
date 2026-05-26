@@ -52,12 +52,16 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const isLargeImage = (attachment.fileSize || 0) > HD_THRESHOLD;
   const [showHd, setShowHd] = useState(!isLargeImage);
 
-  // Phase 02: Use batch thumbnail URLs for timeline
+  // Phase 02: Use batch thumbnail URLs for timeline.
+  // Only fetch when the attachment is near the viewport so long histories
+  // don't request every thumbnail at once.
   const {
     urls: thumbnailUrls,
     isLoading: isLoadingThumbnail,
     refresh: refreshThumbnail,
-  } = useBatchThumbnailUrl(conversationId, [attachment.id]);
+  } = useBatchThumbnailUrl(conversationId, [attachment.id], {
+    autoFetch: isVisible,
+  });
 
   // Phase 02: Use preview URL for lightbox
   const {
@@ -81,15 +85,17 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
   const isError = Boolean(activeSource && failedSource === activeSource);
 
-  // Auto-refresh thumbnail if PENDING and visible
+  // Auto-refresh thumbnail if PENDING and visible. Uses the non-force path so
+  // the hook's PENDING negative-TTL (10s) caps the real retry rate even though
+  // this timer fires more often; only refetches when the cooldown has elapsed.
   useEffect(() => {
     if (!isThumbnailPending || !isVisible) return;
-    
-    const timer = setTimeout(() => {
-      void refreshThumbnail();
-    }, 3000); // Retry every 3 seconds
-    
-    return () => clearTimeout(timer);
+
+    const timer = setInterval(() => {
+      void refreshThumbnail(false);
+    }, 8000);
+
+    return () => clearInterval(timer);
   }, [isThumbnailPending, isVisible, refreshThumbnail]);
 
   const handleImageClick = useCallback(async () => {
@@ -140,6 +146,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     return (
       <div className={clsx("relative", className)}>
         <div
+          ref={containerRef}
           className={clsx(
             "relative overflow-hidden rounded-xl bg-surface-overlay",
           )}
