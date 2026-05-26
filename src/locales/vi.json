@@ -355,7 +355,7 @@
       "requestFailed": "Yêu cầu thất bại"
     },
     "auth": {
-      "loginFailed": "Đăng nhập thất bại",
+      "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
       "registerFailed": "Đăng ký thất bại",
       "logoutFailed": "Đăng xuất thất bại",
       "statusUpdateFailed": "Cập nhật trạng thái thất bại",
@@ -669,7 +669,7 @@
     },
     "toast": {
       "loginSuccess": "Đăng nhập thành công!",
-      "loginFailed": "Đăng nhập thất bại",
+      "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
       "registerSuccess": "Đăng ký thành công! Chào mừng bạn đến với Hacom Chat",
       "registerFailed": "Đăng ký thất bại",
       "forgotPasswordSent": "Email đặt lại mật khẩu đã được gửi!",

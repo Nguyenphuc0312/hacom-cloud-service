@@ -106,7 +106,7 @@ export const LoginPage: React.FC = () => {
       }
     } catch (err) {
       toast.error(
-        toVietnameseMessage((err as Error).message, "Đăng nhập thất bại."),
+        toVietnameseMessage((err as Error).message, "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại."),
       );
     } finally {
       submitLockRef.current = false;
