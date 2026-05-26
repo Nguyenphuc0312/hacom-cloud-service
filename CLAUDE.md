@@ -297,7 +297,9 @@ Errors pages: `pages/errors/` (Forbidden, Unauthorized, NotFound, ServerError, O
 
 ## 13. Build & CI
 
-Trước khi push, đọc **`BUILD.md`** ở root để tránh các lỗi build đã từng dính (đặc biệt: casing import sai giữa Windows local và Linux CI — TS1261). Lệnh tối thiểu:
+**KHÔNG tự động chạy build.** Chỉ chạy `npm run build` (hoặc bất kỳ lệnh build nào) khi user yêu cầu rõ ràng. Nếu thấy cần build để verify, **phải hỏi và được user đồng ý trước**, không được tự ý chạy.
+
+Trước khi push, đọc **`BUILD.md`** ở root để tránh các lỗi build đã từng dính (đặc biệt: casing import sai giữa Windows local và Linux CI — TS1261). Lệnh tối thiểu (chỉ chạy khi được yêu cầu):
 ```bash
 npm run build && node scripts/verify-dist-assets.mjs
 ```
