@@ -57,18 +57,16 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     urls: thumbnailUrls,
     isLoading: isLoadingThumbnail,
     refresh: refreshThumbnail,
-  } = useBatchThumbnailUrl(conversationId, [attachment.id || attachment.fileId || '']);
+  } = useBatchThumbnailUrl(conversationId, [attachment.id]);
 
   // Phase 02: Use preview URL for lightbox
   const {
     url: previewUrl,
-    isLoading: isLoadingPreview,
     fetchUrl: fetchPreview,
-  } = usePreviewUrl(conversationId, attachment.id || attachment.fileId || '');
+  } = usePreviewUrl(conversationId, attachment.id);
 
-  const thumbnailUrl = thumbnailUrls?.[attachment.id || attachment.fileId || ''];
-  const isThumbnailPending = thumbnailUrl?.status === 'pending' || thumbnailUrl?.status === 'not_previewable';
-  const isThumbnailFailed = thumbnailUrl?.status === 'error';
+  const thumbnailUrl = thumbnailUrls?.[attachment.id];
+  const isThumbnailPending = thumbnailUrl?.variant === 'pending' || thumbnailUrl?.status === 'not_previewable';
 
   const mediaWidth = attachment.width ? Math.min(attachment.width, 320) : 280;
   const aspectRatio =
@@ -331,9 +329,9 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { url: previewUrl, isLoading: isLoadingPreview, fetchUrl: fetchPreview } = usePreviewUrl(
+  const { url: previewUrl, fetchUrl: fetchPreview } = usePreviewUrl(
     conversationId,
-    attachment.id || attachment.fileId || '',
+    attachment.id,
   );
 
   useEffect(() => {
