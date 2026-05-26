@@ -21,7 +21,7 @@ import { useInViewport } from "../../hooks/useInViewport";
 import { formatFileSize } from "../../utils/formatFileSize";
 import { FileProgress } from "./FileProgress";
 import { FileStatus } from "./FileStatus";
-import { truncateFilename } from "../../utils/truncateFileName";
+import { truncateFilename } from "../../utils/truncateFilename";
 
 interface ImageFileAttachmentProps {
   conversationId: string;

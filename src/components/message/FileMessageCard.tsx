@@ -38,7 +38,7 @@ import {
 import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
-import { truncateFilename } from "../../utils/truncateFileName";
+import { truncateFilename } from "../../utils/truncateFilename";
 
 // ── Status types for edge cases ──────────────────────────────────────
 

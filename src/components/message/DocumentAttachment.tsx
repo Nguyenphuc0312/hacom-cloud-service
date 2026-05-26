@@ -33,7 +33,7 @@ import {
   isFileTooLargeForPreview,
   getFileExtension,
 } from "../../utils/formatFileSize";
-import { truncateFilename } from "../../utils/truncateFileName";
+import { truncateFilename } from "../../utils/truncateFilename";
 
 interface DocumentAttachmentProps {
   conversationId: string;
