@@ -1,7 +1,8 @@
-import React, { forwardRef, useCallback } from "react";
+import React, { forwardRef, useCallback, useRef } from "react";
 import clsx from "clsx";
 import { ArrowUpIcon, SquareIcon, PaperclipIcon } from "lucide-react";
 import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
+import { toast } from "../../../utils/toast";
 
 interface AiPromptBoxProps {
   value: string;
@@ -21,12 +22,37 @@ const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
  */
 export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
   ({ value, onChange, onSubmit, onStop, isLoading = false }, ref) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     /** Tự điều chỉnh chiều cao textarea */
     const adjustHeight = useCallback((textarea: HTMLTextAreaElement) => {
       textarea.style.height = "auto";
       const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
       textarea.style.height = `${newHeight}px`;
     }, []);
+
+    const handleAttachClick = useCallback(() => {
+      if (isLoading) return;
+      fileInputRef.current?.click();
+    }, [isLoading]);
+
+    const handleFileChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        // Tạm thời AI service chưa hỗ trợ đính kèm file, thông báo cho user
+        const fileName = files[0].name;
+        const more = files.length > 1 ? ` (+${files.length - 1})` : "";
+        toast.info(
+          `Đã chọn "${fileName}"${more}. Tính năng đính kèm tài liệu cho trợ lý AI sẽ sớm có mặt.`,
+        );
+
+        // Reset để có thể chọn lại cùng file lần sau
+        e.target.value = "";
+      },
+      [],
+    );
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -56,9 +82,27 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       <div className="relative w-full">
         <div className="relative flex items-end rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-border-strong focus-within:shadow-md">
           {/* Attach button */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.txt,.md,.csv,.xls,.xlsx,.ppt,.pptx,image/*"
+            className="hidden"
+            onChange={handleFileChange}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
+            onClick={handleAttachClick}
+            disabled={isLoading}
+            className={clsx(
+              "flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-text-muted transition-colors",
+              isLoading
+                ? "cursor-not-allowed opacity-50"
+                : "hover:text-text-secondary hover:bg-surface-hover cursor-pointer",
+            )}
+            aria-label="Tải lên tài liệu"
             title="Tải lên tài liệu"
           >
             <PaperclipIcon size={18} strokeWidth={2} />
