@@ -307,7 +307,12 @@
   "image": {
     "failedToLoad": "Không tải được ảnh",
     "previewAlt": "Xem trước ảnh",
-    "close": "Đóng"
+    "close": "Đóng",
+    "processing": "Đang tạo xem trước…",
+    "processingFallback": "Ảnh đang được xử lý",
+    "retry": "Thử lại",
+    "notPreviewable": "Không hỗ trợ xem trước",
+    "previewFailed": "Không tạo được xem trước"
   },
   "empty": {
     "messagesTitle": "Chưa có tin nhắn",

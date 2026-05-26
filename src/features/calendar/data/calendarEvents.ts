@@ -3,7 +3,7 @@
  * This is static frontend data - no backend API calls.
  */
 
-export type EventType = "vietnam_holiday" | "international" | "work" | "personal" | "task" | "meeting";
+export type EventType = "vietnam_holiday" | "international" | "work" | "personal" | "task" | "meeting" | "attendance";
 
 export interface CalendarEvent {
   id: string;
@@ -163,6 +163,8 @@ export const getEventColor = (type: EventType): { bg: string; text: string; bord
       return { bg: "bg-indigo-500/10", text: "text-indigo-600 dark:text-indigo-300", border: "border-indigo-500/20" };
     case "meeting":
       return { bg: "bg-teal-500/10", text: "text-teal-600 dark:text-teal-300", border: "border-teal-500/20" };
+    case "attendance":
+      return { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-300", border: "border-emerald-500/20" };
     default:
       return { bg: "bg-gray-500/10", text: "text-gray-600 dark:text-gray-300", border: "border-gray-500/20" };
   }
@@ -185,6 +187,8 @@ export const getEventTypeLabel = (type: EventType): string => {
       return "Công việc";
     case "meeting":
       return "Lịch họp";
+    case "attendance":
+      return "Chấm công";
     default:
       return "Khác";
   }

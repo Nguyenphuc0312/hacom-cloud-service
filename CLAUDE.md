@@ -295,6 +295,15 @@ Errors pages: `pages/errors/` (Forbidden, Unauthorized, NotFound, ServerError, O
 
 ---
 
-## 13. Lưu ý cá nhân hóa (memory)
+## 13. Build & CI
+
+Trước khi push, đọc **`BUILD.md`** ở root để tránh các lỗi build đã từng dính (đặc biệt: casing import sai giữa Windows local và Linux CI — TS1261). Lệnh tối thiểu:
+```bash
+npm run build && node scripts/verify-dist-assets.mjs
+```
+
+---
+
+## 14. Lưu ý cá nhân hóa (memory)
 
 - Khi user yêu cầu **chỉnh UI/UX**: chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc (theo feedback đã lưu).
