@@ -3,7 +3,7 @@
  * Uses the batch-thumbnail-urls API to get thumbnail variants for multiple images.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
@@ -35,8 +35,6 @@ interface SignedUrlCacheEntry {
 const BATCH_THUMBNAIL_CACHE = new ExpiringLruCache<SignedUrlCacheEntry>({
   maxEntries: 500,
 });
-
-const CACHE_SKEW_MS = 30_000;
 
 const parseExpiry = (expiresAt?: string): number => {
   if (!expiresAt) return Date.now();
@@ -83,13 +81,20 @@ export const useBatchThumbnailUrl = (
             BATCH_THUMBNAIL_CACHE.set(item.fileId, { url: resolvedUrl }, expiresAtMs);
             resolvedUrls[item.fileId] = {
               ...item,
+              status: item.status as ThumbnailUrlItem['status'],
               url: resolvedUrl,
             };
           } else {
-            resolvedUrls[item.fileId] = item;
+            resolvedUrls[item.fileId] = {
+              ...item,
+              status: item.status as ThumbnailUrlItem['status'],
+            };
           }
         } else {
-          resolvedUrls[item.fileId] = item;
+          resolvedUrls[item.fileId] = {
+            ...item,
+            status: item.status as ThumbnailUrlItem['status'],
+          };
         }
       }
       

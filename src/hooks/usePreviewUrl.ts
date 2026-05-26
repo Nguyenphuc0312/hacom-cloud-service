@@ -3,7 +3,7 @@
  * Uses the preview-url API to get preview variant or fall back to original.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
