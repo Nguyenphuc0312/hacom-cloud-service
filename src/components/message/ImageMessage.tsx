@@ -49,6 +49,11 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
 
+  // Retry counter — bounded so we never poll forever.
+  // Resets when the file reaches a terminal/ready state.
+  const retryCountRef = useRef(0);
+  const MAX_THUMBNAIL_RETRIES = 5;
+
   const isLargeImage = (attachment.fileSize || 0) > HD_THRESHOLD;
   const [showHd, setShowHd] = useState(!isLargeImage);
 
@@ -70,9 +75,11 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   } = usePreviewUrl(conversationId, attachment.id);
 
   const thumbnailUrl = thumbnailUrls?.[attachment.id];
-  // Only poll when the thumbnail pipeline is still in-flight.
-  // not_previewable / failed / not_found / forbidden are terminal — never poll those.
-  const isThumbnailPending = thumbnailUrl?.status === 'processing' || thumbnailUrl?.status === 'queued';
+  // Only poll when the thumbnail pipeline is still in-flight AND the server says retryable.
+  // Terminal states (not_previewable / failed / not_found / forbidden) must never poll.
+  const isThumbnailPending =
+    (thumbnailUrl?.status === 'processing' || thumbnailUrl?.status === 'queued') &&
+    (thumbnailUrl?.isRetryable !== false);
 
   const mediaWidth = attachment.width ? Math.min(attachment.width, 320) : 280;
   const aspectRatio =
@@ -95,18 +102,36 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
       thumbnailUrl?.status === 'not_found' ||
       thumbnailUrl?.status === 'forbidden');
 
-  // Auto-refresh thumbnail if PENDING and visible. Uses the non-force path so
-  // the hook's PENDING negative-TTL (10s) caps the real retry rate even though
-  // this timer fires more often; only refetches when the cooldown has elapsed.
+  // Reset retry counter whenever the thumbnail reaches a non-retryable state.
+  useEffect(() => {
+    if (!isThumbnailPending) {
+      retryCountRef.current = 0;
+    }
+  }, [isThumbnailPending]);
+
+  // Auto-refresh thumbnail while in-flight, visible, and under the retry budget.
+  // Uses non-force path so the hook's TTL gate prevents hammering the endpoint;
+  // the actual network call fires at most once per retryAfterMs / PENDING_TTL_MS.
+  // Stops permanently when retryCountRef reaches MAX_THUMBNAIL_RETRIES to prevent
+  // an infinite loop if the worker is stuck or the job is lost.
   useEffect(() => {
     if (!isThumbnailPending || !isVisible) return;
+    if (retryCountRef.current >= MAX_THUMBNAIL_RETRIES) return;
+
+    // Use retryAfterMs from the server response; fall back to 8 s.
+    const intervalMs = thumbnailUrl?.retryAfterMs ?? 8000;
 
     const timer = setInterval(() => {
+      if (retryCountRef.current >= MAX_THUMBNAIL_RETRIES) {
+        clearInterval(timer);
+        return;
+      }
+      retryCountRef.current += 1;
       void refreshThumbnail(false);
-    }, 8000);
+    }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isThumbnailPending, isVisible, refreshThumbnail]);
+  }, [isThumbnailPending, isVisible, refreshThumbnail, thumbnailUrl?.retryAfterMs]);
 
   const handleImageClick = useCallback(async () => {
     if (onClick) {

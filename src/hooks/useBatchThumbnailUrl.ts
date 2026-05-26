@@ -41,8 +41,15 @@ export interface ThumbnailUrlItem {
   height?: number | null;
   mimeType?: string;
   fallbackReason?: string | null;
-  /** Milliseconds to wait before retrying. Only meaningful for processing/queued. */
-  retryAfterMs?: number | null;
+  /**
+   * Whether the client is allowed to retry this fileId.
+   * False = terminal state; the hook will use a long negative TTL and never auto-retry.
+   */
+  isRetryable: boolean;
+  /** Milliseconds to wait before retrying. Null when isRetryable = false. */
+  retryAfterMs: number | null;
+  /** Suggested cache TTL from the server (ms). Hook uses this to set the LRU expiry. */
+  cacheTtlMs: number | null;
 }
 
 interface UseBatchThumbnailUrlResult {
@@ -87,17 +94,24 @@ const parseExpiry = (expiresAt?: string | null): number => {
 const computeRefetchAtMs = (item: ThumbnailUrlItem): number => {
   const now = Date.now();
 
-  // Thumbnail is still in-flight — short positive cache so we retry soon.
-  // Honour retryAfterMs from the server when present; fall back to PENDING_TTL_MS.
-  if (item.status === 'processing' || item.status === 'queued') {
-    const delay = typeof item.retryAfterMs === 'number' && item.retryAfterMs > 0
-      ? item.retryAfterMs
-      : PENDING_TTL_MS;
+  // Server explicitly says do not retry — use a long terminal TTL so the hook
+  // never re-fetches. This covers not_previewable, failed, not_found, forbidden.
+  if (!item.isRetryable && item.status !== 'ready') {
+    return now + FAILED_TTL_MS;
+  }
+
+  // Retryable in-flight state — use server-supplied cacheTtlMs or retryAfterMs,
+  // falling back to PENDING_TTL_MS.
+  if (item.isRetryable) {
+    const serverDelay = item.cacheTtlMs ?? item.retryAfterMs;
+    const delay = typeof serverDelay === 'number' && serverDelay > 0 ? serverDelay : PENDING_TTL_MS;
     return now + delay;
   }
 
-  // Terminal non-success states — cache long so the client never hammers this endpoint.
-  if (item.status !== 'ready' || !item.url) return now + FAILED_TTL_MS;
+  // Ready — prefer server-supplied cacheTtlMs over computing from expiresAt.
+  if (typeof item.cacheTtlMs === 'number' && item.cacheTtlMs > 0) {
+    return now + Math.max(item.cacheTtlMs, MIN_READY_TTL_MS);
+  }
 
   // Signed URL is valid — cache until safety skew before real expiry.
   const expiry = parseExpiry(item.expiresAt);
@@ -121,16 +135,28 @@ const resolveItem = (raw: {
   height?: number | null;
   mimeType?: string;
   fallbackReason?: string | null;
+  isRetryable?: boolean;    // present in new contract; absent in legacy responses
   retryAfterMs?: number | null;
+  cacheTtlMs?: number | null;
 }): ThumbnailUrlItem => {
-  // Strip legacy 'pending' variant value — it was a BE bug; treat as no variant.
+  // Strip legacy 'pending' variant — it was a BE bug, treat as no variant.
   const safeVariant: ThumbnailUrlItem['variant'] =
     raw.variant === 'pending' ? undefined : raw.variant;
 
+  const status = raw.status as ThumbnailUrlItem['status'];
+
+  // If the server didn't send isRetryable (legacy response), derive it from status.
+  const isRetryable: boolean = raw.isRetryable !== undefined
+    ? raw.isRetryable
+    : (status === 'processing' || status === 'queued');
+
   const base: ThumbnailUrlItem = {
     ...raw,
-    status: raw.status as ThumbnailUrlItem['status'],
+    status,
     variant: safeVariant,
+    isRetryable,
+    retryAfterMs: raw.retryAfterMs ?? null,
+    cacheTtlMs: raw.cacheTtlMs ?? null,
   };
 
   if (raw.url) {
