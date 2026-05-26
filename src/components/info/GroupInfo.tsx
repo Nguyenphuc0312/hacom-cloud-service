@@ -1684,15 +1684,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <button
               type="button"
               onClick={() => setDangerZoneOpen((prev) => !prev)}
-              className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-danger/10"
             >
-              <ExclamationTriangleIcon className="h-4 w-4 text-text-muted" />
-              <span className="flex-1 text-xs font-medium text-text-muted">
+              <ExclamationTriangleIcon className="h-4 w-4 text-danger" />
+              <span className="flex-1 text-xs font-medium text-danger">
                 {t("profile:groupInfo.dangerZone", { defaultValue: "Tuỳ chọn khác" })}
               </span>
               <ChevronDownIcon
                 className={clsx(
-                  "h-4 w-4 text-text-muted transition-transform duration-200",
+                  "h-4 w-4 text-danger transition-transform duration-200",
                   dangerZoneOpen && "rotate-180",
                 )}
               />

@@ -61,7 +61,7 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
   const displayName =
     resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
     t("common:labels.user");
-  const username = user?.username ? `@${user.username}` : t("common:status.unknown");
+  const username = displayName;
   const phone =
     user?.phone ||
     t("profile:settings.phoneEmpty", {
@@ -75,21 +75,15 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
     readValue(userRecord, "employeeCode", "employee_code") ||
     t("common:status.unknown");
   const departmentName =
-    readValue(
-      userRecord,
-      "departmentName",
-      "department_name",
-      "orgUnit",
-      "org_unit",
-    ) || t("common:status.unknown");
+    readValue(userRecord, "departmentName", "department_name") ||
+    t("common:status.unknown");
+  const orgUnit =
+    readValue(userRecord, "orgUnit", "org_unit") || t("common:status.unknown");
   const jobTitle =
     readValue(userRecord, "jobTitle", "job_title", "title", "position") ||
     t("profile:settings.jobTitleEmpty", {
       defaultValue: "Chưa cập nhật chức danh",
     });
-  const joinedAt =
-    readValue(userRecord, "joinedAt", "joined_at", "startDate", "start_date") ||
-    t("common:status.unknown");
   const userStatus = user?.status || "online";
 
   return (
@@ -128,6 +122,9 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
               <p className="mt-1 break-words text-sm text-text-secondary">
                 {departmentName}
               </p>
+              <p className="mt-1 break-words text-sm text-text-secondary">
+                {orgUnit}
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
                   <span className="h-2 w-2 rounded-full bg-success" />
@@ -157,14 +154,14 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
               value={departmentName}
             />
             <SummaryItem
-              label={t("profile:settings.employeeCode")}
-              value={employeeCode}
+              label={t("profile:settings.orgUnit", {
+                defaultValue: "Công ty",
+              })}
+              value={orgUnit}
             />
             <SummaryItem
-              label={t("profile:settings.joinedAt", {
-                defaultValue: "Ngày gia nhập",
-              })}
-              value={joinedAt}
+              label={t("profile:settings.employeeCode")}
+              value={employeeCode}
             />
           </dl>
         </SettingsCard>
