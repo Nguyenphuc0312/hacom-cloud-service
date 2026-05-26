@@ -20,6 +20,7 @@ import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
 import { getUserByIdUseCase } from "../../features/chat/usecases/getUserById";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -39,6 +40,7 @@ type UserProfileConversationContext = "standalone" | "direct" | "group";
 interface UserProfileProps {
   userId: string;
   currentUserId: string;
+  conversationId?: string;
   initialUser?: ProfileUser | null;
   onClose: () => void;
   onStartConversation?: (userId: string) => void | Promise<void>;
@@ -107,6 +109,7 @@ const statCardClass =
 export const UserProfile: React.FC<UserProfileProps> = ({
   userId,
   currentUserId,
+  conversationId,
   initialUser,
   onClose,
   onStartConversation,
@@ -546,6 +549,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </div>
                     </div>
                   ) : null}
+                </section>
+              )}
+
+              {conversationContext === "direct" && conversationId && (
+                <section className="space-y-2">
+                  <SharedResourcesPreview conversationId={conversationId} />
                 </section>
               )}
 
