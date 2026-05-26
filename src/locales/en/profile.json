@@ -163,6 +163,7 @@
     "personalIdentityDescription": "Update the basic account details teammates use to identify you.",
     "readOnlyTitle": "HR source fields (read-only)",
     "departmentName": "Department",
+    "orgUnit": "Company",
     "unitCode": "Unit code",
     "employeeCode": "Employee code",
     "hrLegalName": "HR legal name",
