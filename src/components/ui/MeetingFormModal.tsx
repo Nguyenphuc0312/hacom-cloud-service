@@ -13,6 +13,13 @@ export interface MeetingParticipant {
   hasConflict?: boolean;
 }
 
+export interface MeetingReadReceipt {
+  userId: string;
+  name: string;
+  /** ISO timestamp */
+  readAt: string;
+}
+
 export interface MeetingFormData {
   id: string;
   title: string;
@@ -24,6 +31,12 @@ export interface MeetingFormData {
   format: "offline" | "online";
   location: string;
   notes: string;
+  /** ID của người tạo lịch — dùng để phân quyền sửa/xóa */
+  createdById?: string;
+  /** Tên hiển thị người tạo lịch */
+  createdByName?: string;
+  /** Danh sách người đã xem (theo tên/ID) */
+  readBy?: MeetingReadReceipt[];
 }
 
 interface MeetingFormModalProps {
@@ -33,6 +46,8 @@ interface MeetingFormModalProps {
   defaultDate?: string;
   /** Existing meetings on the same date to detect conflicts */
   existingMeetings?: MeetingFormData[];
+  /** Nếu có → modal hoạt động ở chế độ chỉnh sửa (giữ id, createdBy, readBy) */
+  initialData?: MeetingFormData | null;
 }
 
 const SAVED_LOCATIONS_KEY = "hacom-meeting-saved-locations";
@@ -57,6 +72,19 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+const formatDuration = (start: string, end: string): string => {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return "";
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) return "";
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  if (h === 0) return `${m} phút`;
+  if (m === 0) return `${h} giờ`;
+  return `${h} giờ ${m} phút`;
+};
+
 const timeRangesOverlap = (
   s1: string, e1: string,
   s2: string, e2: string,
@@ -71,7 +99,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   onSave,
   defaultDate,
   existingMeetings = [],
+  initialData = null,
 }) => {
+  const isEditMode = !!initialData;
   const [title, setTitle] = React.useState("");
   const [date, setDate] = React.useState(defaultDate ?? today());
   const [startTime, setStartTime] = React.useState("08:00");
@@ -88,9 +118,23 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
 
   const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
 
-  // Reset form khi mở modal
+  // Reset / pre-fill form khi mở modal
   React.useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    if (initialData) {
+      setTitle(initialData.title);
+      setDate(initialData.date);
+      setStartTime(initialData.startTime);
+      setEndTime(initialData.endTime);
+      setChairman(initialData.chairman);
+      setParticipantInput("");
+      setParticipants(initialData.participants);
+      setFormat(initialData.format);
+      setLocation(initialData.location);
+      setLocationInput(initialData.location);
+      setNotes(initialData.notes);
+      setErrors({});
+    } else {
       setTitle("");
       setDate(defaultDate ?? today());
       setStartTime("08:00");
@@ -104,7 +148,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setNotes("");
       setErrors({});
     }
-  }, [isOpen, defaultDate]);
+  }, [isOpen, defaultDate, initialData]);
 
   // Kiểm tra xung đột khi thêm người tham gia
   const checkConflict = (name: string): boolean => {
@@ -158,7 +202,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     if (locToSave) saveLocation(locToSave);
 
     onSave({
-      id: `meeting-${Date.now()}`,
+      id: initialData?.id ?? `meeting-${Date.now()}`,
       title: title.trim(),
       date,
       startTime,
@@ -168,6 +212,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       format,
       location: locToSave,
       notes: notes.trim(),
+      createdById: initialData?.createdById,
+      createdByName: initialData?.createdByName,
+      readBy: initialData?.readBy,
     });
     onClose();
   };
@@ -182,7 +229,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Thêm lịch họp"
+      title={isEditMode ? "Chỉnh sửa lịch họp" : "Thêm lịch họp"}
       size="lg"
       footer={
         <div className="flex items-center justify-between gap-3">
@@ -197,7 +244,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               Hủy
             </Button>
             <Button variant="primary" onClick={handleSave} type="button">
-              Lưu &amp; Gửi
+              {isEditMode ? "Cập nhật" : "Lưu & Gửi"}
             </Button>
           </div>
         </div>
@@ -223,44 +270,81 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           {errors.title && <p className="mt-1 text-xs text-danger">{errors.title}</p>}
         </div>
 
-        {/* 2. Thời gian */}
+        {/* 2. Thời gian — ISO 8601, định dạng 24h */}
         <div>
           <label className="mb-1 block text-sm font-medium text-text-primary">
             Thời gian <span className="text-danger">*</span>
+            <span className="ml-2 text-[11px] font-normal text-text-muted">
+              (định dạng 24h — giờ địa phương)
+            </span>
           </label>
-          <div className="flex flex-wrap items-center gap-2">
+
+          {/* Ngày họp */}
+          <div className="mb-2">
+            <span className="mb-1 block text-xs font-medium text-text-secondary">
+              Ngày họp
+            </span>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className={clsx(
-                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
+                "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
                 "focus:outline-none focus:ring-2 focus:ring-primary/30",
                 errors.date ? "border-danger" : "border-border",
               )}
             />
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className={clsx(
-                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
-                "focus:outline-none focus:ring-2 focus:ring-primary/30",
-                errors.startTime ? "border-danger" : "border-border",
-              )}
-            />
-            <span className="text-sm text-text-muted">đến</span>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className={clsx(
-                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
-                "focus:outline-none focus:ring-2 focus:ring-primary/30",
-                errors.endTime ? "border-danger" : "border-border",
-              )}
-            />
           </div>
+
+          {/* Bắt đầu / Kết thúc */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="mb-1 flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Bắt đầu
+              </span>
+              <input
+                type="time"
+                value={startTime}
+                step={300}
+                onChange={(e) => setStartTime(e.target.value)}
+                className={clsx(
+                  "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm font-mono text-text-primary tabular-nums",
+                  "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                  errors.startTime ? "border-danger" : "border-border",
+                )}
+              />
+            </div>
+            <div>
+              <span className="mb-1 flex items-center gap-1 text-xs font-medium text-rose-700 dark:text-rose-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                Kết thúc
+              </span>
+              <input
+                type="time"
+                value={endTime}
+                step={300}
+                onChange={(e) => setEndTime(e.target.value)}
+                className={clsx(
+                  "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm font-mono text-text-primary tabular-nums",
+                  "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                  errors.endTime ? "border-danger" : "border-border",
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Tóm tắt thời lượng */}
+          {startTime && endTime && startTime < endTime && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-teal-500/10 px-2 py-1 text-xs font-medium text-teal-700 dark:text-teal-300">
+              <span className="font-mono tabular-nums">
+                {startTime} — {endTime}
+              </span>
+              <span className="text-text-muted">·</span>
+              <span>Thời lượng: {formatDuration(startTime, endTime)}</span>
+            </p>
+          )}
+
           {(errors.date || errors.startTime || errors.endTime) && (
             <p className="mt-1 text-xs text-danger">
               {errors.date ?? errors.startTime ?? errors.endTime}
