@@ -8,7 +8,8 @@ const FriendsPage = lazy(() => import("../../pages/FriendsPage"));
 const JoinByLinkPage = lazy(() => import("../../pages/JoinByLinkPage"));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage"));
 const MaintenancePage = lazy(() => import("../../pages/errors/MaintenancePage"));
-const TasksPage = lazy(() => import("../../features/tasks/pages/TasksPage"));
+// const TasksPage = lazy(() => import("../../features/tasks/pages/TasksPage")); // tạm ẩn
+const TasksPage = lazy(() => import("../../features/tasks/pages/TasksComingSoon"));
 const HelpPage = lazy(() => import("../../pages/HelpPage"));
 const FAQPage = lazy(() => import("../../pages/FAQPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
