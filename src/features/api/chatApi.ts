@@ -10,7 +10,7 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../../lib/conversationAdapter";
-import { conversationApi, messageApi, conversationResourcesApi } from "../../services/api";
+import { conversationApi, messageApi, conversationResourcesApi, fileApi } from "../../services/api";
 import type {
   ConversationSidebarSummary,
   ConversationResourcesMediaItem,
@@ -847,6 +847,20 @@ export const chatApi = createApi({
         { type: 'ConversationResources' as const, id: `${conversationId}-links` },
       ],
     }),
+
+    batchThumbnailUrls: build.mutation<
+      { items: Array<{ fileId: string; url: string | null; expiresAt: string | null; status: string }> },
+      { conversationId: string; fileIds: string[] }
+    >({
+      async queryFn({ conversationId, fileIds }) {
+        try {
+          const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+    }),
   }),
 });
 
@@ -869,6 +883,7 @@ export const {
   useGetConversationMediaQuery,
   useGetConversationFilesQuery,
   useGetConversationLinksQuery,
+  useBatchThumbnailUrlsMutation,
 } = chatApi;
 
 export type { ConversationSidebarSummary, ConversationResourcesMediaItem, ConversationResourcesFileItem, ConversationResourcesLinkItem, ConversationResourcesPaginatedResult };
