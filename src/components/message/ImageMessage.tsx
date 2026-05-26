@@ -70,7 +70,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   } = usePreviewUrl(conversationId, attachment.id);
 
   const thumbnailUrl = thumbnailUrls?.[attachment.id];
-  const isThumbnailPending = thumbnailUrl?.variant === 'pending' || thumbnailUrl?.status === 'not_previewable';
+  // Only poll when the thumbnail pipeline is still in-flight.
+  // not_previewable / failed / not_found / forbidden are terminal — never poll those.
+  const isThumbnailPending = thumbnailUrl?.status === 'processing' || thumbnailUrl?.status === 'queued';
 
   const mediaWidth = attachment.width ? Math.min(attachment.width, 320) : 280;
   const aspectRatio =
@@ -84,6 +86,14 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
   const isError = Boolean(activeSource && failedSource === activeSource);
+  // Terminal states where no URL will ever be available — show a static fallback icon,
+  // never a spinning skeleton.
+  const isTerminalNoUrl =
+    !activeSource &&
+    (thumbnailUrl?.status === 'not_previewable' ||
+      thumbnailUrl?.status === 'failed' ||
+      thumbnailUrl?.status === 'not_found' ||
+      thumbnailUrl?.status === 'forbidden');
 
   // Auto-refresh thumbnail if PENDING and visible. Uses the non-force path so
   // the hook's PENDING negative-TTL (10s) caps the real retry rate even though
@@ -220,12 +230,35 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           className="relative overflow-hidden rounded-xl bg-surface-overlay"
           style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >
-          {/* Loading skeleton */}
-          {(!isLoaded || isLoadingThumbnail || !hasDisplayUrl) && !isError && (
+          {/* Skeleton — only while we're waiting for a real URL or for the image to load.
+               Hide when thumbnail is in a terminal no-URL state. */}
+          {(!isLoaded || isLoadingThumbnail || !hasDisplayUrl) && !isError && !isTerminalNoUrl && !isThumbnailPending && (
             <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
-          {/* Error state */}
+          {/* Processing/queued — thumbnail pipeline is still running */}
+          {isThumbnailPending && !hasDisplayUrl && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay">
+              <ArrowPathIcon className="h-8 w-8 animate-spin text-text-muted" />
+              <span className="text-xs text-text-muted">
+                {t("chat:image.processing", { defaultValue: "Đang tạo xem trước…" })}
+              </span>
+            </div>
+          )}
+
+          {/* Terminal no-URL — file cannot be previewed or failed permanently */}
+          {isTerminalNoUrl && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
+              <PhotoIcon className="h-10 w-10 text-text-muted" />
+              {thumbnailUrl?.status === 'not_previewable' && (
+                <span className="text-center text-xs text-text-muted">
+                  {t("chat:image.notPreviewable", { defaultValue: "Không hỗ trợ xem trước" })}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Error state — URL was available but browser failed to load the image */}
           {isError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-sm text-text-muted">
               <PhotoIcon className="h-8 w-8" />

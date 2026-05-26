@@ -24,12 +24,25 @@ export interface ThumbnailUrlItem {
   fileId: string;
   url: string | null;
   expiresAt: string | null;
-  status: 'ok' | 'not_found' | 'forbidden' | 'not_previewable' | 'error';
-  variant?: 'thumbnail' | 'preview' | 'original' | 'pending';
+  /**
+   * ready          — signed URL available; use `url`.
+   * processing     — thumbnail job running; retry after `retryAfterMs`.
+   * queued         — thumbnail job enqueued but not started; retry after `retryAfterMs`.
+   * not_previewable — file type not supported; do NOT retry.
+   * failed         — thumbnail generation failed permanently; do NOT retry.
+   * not_found      — fileId does not exist.
+   * forbidden      — no access to this file.
+   * error          — unexpected server error.
+   */
+  status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'not_found' | 'forbidden' | 'error';
+  /** Only set when a URL is returned (status = ready). */
+  variant?: 'thumbnail' | 'preview' | 'original';
   width?: number | null;
   height?: number | null;
   mimeType?: string;
-  fallbackReason?: string;
+  fallbackReason?: string | null;
+  /** Milliseconds to wait before retrying. Only meaningful for processing/queued. */
+  retryAfterMs?: number | null;
 }
 
 interface UseBatchThumbnailUrlResult {
@@ -73,9 +86,20 @@ const parseExpiry = (expiresAt?: string | null): number => {
 
 const computeRefetchAtMs = (item: ThumbnailUrlItem): number => {
   const now = Date.now();
-  if (item.variant === 'pending') return now + PENDING_TTL_MS;
-  if (item.status !== 'ok' || !item.url) return now + FAILED_TTL_MS;
 
+  // Thumbnail is still in-flight — short positive cache so we retry soon.
+  // Honour retryAfterMs from the server when present; fall back to PENDING_TTL_MS.
+  if (item.status === 'processing' || item.status === 'queued') {
+    const delay = typeof item.retryAfterMs === 'number' && item.retryAfterMs > 0
+      ? item.retryAfterMs
+      : PENDING_TTL_MS;
+    return now + delay;
+  }
+
+  // Terminal non-success states — cache long so the client never hammers this endpoint.
+  if (item.status !== 'ready' || !item.url) return now + FAILED_TTL_MS;
+
+  // Signed URL is valid — cache until safety skew before real expiry.
   const expiry = parseExpiry(item.expiresAt);
   if (!Number.isFinite(expiry) || expiry <= now) {
     logger.warn("thumbnail", "invalid_or_past_expiry_fallback", {
@@ -92,15 +116,21 @@ const resolveItem = (raw: {
   url: string | null;
   expiresAt: string | null;
   status: string;
-  variant?: ThumbnailUrlItem['variant'];
+  variant?: ThumbnailUrlItem['variant'] | 'pending'; // accept legacy 'pending' defensively
   width?: number | null;
   height?: number | null;
   mimeType?: string;
-  fallbackReason?: string;
+  fallbackReason?: string | null;
+  retryAfterMs?: number | null;
 }): ThumbnailUrlItem => {
+  // Strip legacy 'pending' variant value — it was a BE bug; treat as no variant.
+  const safeVariant: ThumbnailUrlItem['variant'] =
+    raw.variant === 'pending' ? undefined : raw.variant;
+
   const base: ThumbnailUrlItem = {
     ...raw,
     status: raw.status as ThumbnailUrlItem['status'],
+    variant: safeVariant,
   };
 
   if (raw.url) {
