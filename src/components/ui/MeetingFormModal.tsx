@@ -7,6 +7,9 @@ import clsx from "clsx";
 import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { useFriendshipStore } from "../../stores/friendshipStore";
+import { Avatar } from "../common/Avatar";
+import { resolvePublicResourceUrl } from "../../config";
 
 export interface MeetingParticipant {
   name: string;
@@ -72,6 +75,21 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+const formatDateVN = (iso: string): string => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return "";
+  return `${d}/${m}/${y}`;
+};
+
+const WEEKDAY_VN = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+const formatWeekdayVN = (iso: string): string => {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  return WEEKDAY_VN[d.getDay()];
+};
+
 const formatDuration = (start: string, end: string): string => {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
@@ -117,6 +135,65 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
+
+  // Bạn bè dùng cho @-mention — lấy từ friendshipStore (cache server, có avatar/HR fields)
+  const friends = useFriendshipStore((s) => s.friends);
+  const isFriendsLoading = useFriendshipStore((s) => s.isFriendsLoading);
+  const fetchFriends = useFriendshipStore((s) => s.fetchFriends);
+
+  React.useEffect(() => {
+    if (isOpen && friends.length === 0 && !isFriendsLoading) {
+      void fetchFriends();
+    }
+  }, [isOpen, friends.length, isFriendsLoading, fetchFriends]);
+
+  const friendOptions = React.useMemo(() => {
+    const looksLikeCode = (s: string): boolean =>
+      /^[a-z0-9._-]+$/i.test(s) && !/\s/.test(s);
+    const pickName = (f: typeof friends[number]): string => {
+      const hr =
+        (f.fullNameFromHR ?? "").trim() ||
+        (f.full_name_from_hr ?? "").trim() ||
+        (f.hrLegalName ?? "").trim();
+      const full =
+        (f.fullName ?? "").trim() ||
+        [f.firstName, f.lastName].filter(Boolean).join(" ").trim();
+      const display =
+        (f.effectiveDisplayName ?? "").trim() || (f.displayName ?? "").trim();
+      // Ưu tiên tên người (có dấu cách, không giống mã/email)
+      if (hr) return hr;
+      if (full) return full;
+      if (display && !looksLikeCode(display)) return display;
+      return display || f.username || f.email || "";
+    };
+    return friends
+      .map((f) => ({
+        id: f.id,
+        name: pickName(f),
+        avatar: f.avatar || "",
+        employeeCode: f.employeeCode || f.employee_code || "",
+        department: f.departmentName || f.orgUnit || "",
+        title: f.title || "",
+      }))
+      .filter((f) => f.name)
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  }, [friends]);
+  const [showFriendPicker, setShowFriendPicker] = React.useState(false);
+  const mentionQuery = participantInput.startsWith("@")
+    ? participantInput.slice(1).trim().toLowerCase()
+    : "";
+  const isMentioning = participantInput.startsWith("@");
+  const pickerOpen = showFriendPicker || isMentioning;
+  const filteredFriendOptions = React.useMemo(() => {
+    const q = isMentioning ? mentionQuery : participantInput.trim().toLowerCase();
+    if (!q) return friendOptions;
+    return friendOptions.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.employeeCode.toLowerCase().includes(q) ||
+        f.department.toLowerCase().includes(q),
+    );
+  }, [friendOptions, mentionQuery, isMentioning, participantInput]);
 
   // Reset / pre-fill form khi mở modal
   React.useEffect(() => {
@@ -174,6 +251,19 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const removeParticipant = (name: string) => {
     setParticipants((prev) => prev.filter((p) => p.name !== name));
   };
+
+  const toggleParticipant = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setParticipants((prev) => {
+      const exists = prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+      if (exists) {
+        return prev.filter((p) => p.name.toLowerCase() !== trimmed.toLowerCase());
+      }
+      return [...prev, { name: trimmed, hasConflict: checkConflict(trimmed) }];
+    });
+  };
+
 
   const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
@@ -279,21 +369,76 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             </span>
           </label>
 
-          {/* Ngày họp */}
+          {/* Ngày họp — thứ tự ngày / tháng / năm */}
           <div className="mb-2">
-            <span className="mb-1 block text-xs font-medium text-text-secondary">
-              Ngày họp
+            <span className="mb-1 flex items-center justify-between text-xs font-medium text-text-secondary">
+              <span>Ngày họp</span>
+              {date && (
+                <span className="rounded-md bg-teal-500/10 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-300">
+                  {formatWeekdayVN(date)}, {formatDateVN(date)}
+                </span>
+              )}
             </span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+            <div
               className={clsx(
-                "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
-                "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                "flex items-center gap-1 rounded-lg border bg-surface-overlay px-2 py-1.5",
+                "focus-within:ring-2 focus-within:ring-primary/30",
                 errors.date ? "border-danger" : "border-border",
               )}
-            />
+            >
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                value={date ? date.slice(8, 10) : ""}
+                onChange={(e) => {
+                  const dd = e.target.value.replace(/\D/g, "").slice(0, 2);
+                  const [y, m] = date ? date.split("-") : ["", "", ""];
+                  setDate(`${y || "0000"}-${m || "01"}-${dd.padStart(2, "0")}`);
+                }}
+                placeholder="DD"
+                aria-label="Ngày"
+                className="w-10 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              <span className="text-text-muted">/</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                value={date ? date.slice(5, 7) : ""}
+                onChange={(e) => {
+                  const mm = e.target.value.replace(/\D/g, "").slice(0, 2);
+                  const [y, , d] = date ? date.split("-") : ["", "", ""];
+                  setDate(`${y || "0000"}-${mm.padStart(2, "0")}-${d || "01"}`);
+                }}
+                placeholder="MM"
+                aria-label="Tháng"
+                className="w-10 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              <span className="text-text-muted">/</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={date ? date.slice(0, 4) : ""}
+                onChange={(e) => {
+                  const yyyy = e.target.value.replace(/\D/g, "").slice(0, 4);
+                  const [, m, d] = date ? date.split("-") : ["", "", ""];
+                  setDate(`${yyyy.padStart(4, "0")}-${m || "01"}-${d || "01"}`);
+                }}
+                placeholder="YYYY"
+                aria-label="Năm"
+                className="w-14 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                aria-label="Chọn ngày từ lịch"
+                className="ml-auto w-7 cursor-pointer bg-transparent text-text-secondary focus:outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:hidden"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-text-muted">Thứ tự: ngày / tháng / năm (dd/mm/yyyy).</p>
           </div>
 
           {/* Bắt đầu / Kết thúc */}
@@ -372,10 +517,24 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         </div>
 
         {/* 4. Người tham gia */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-text-primary">
-            Người tham gia
-          </label>
+        <div className="relative">
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-text-primary">
+              Người tham gia
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowFriendPicker((v) => !v)}
+              className={clsx(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
+                pickerOpen
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+              )}
+            >
+              @ Chọn từ bạn bè
+            </button>
+          </div>
           <div
             className={clsx(
               "flex min-h-[40px] flex-wrap gap-1.5 rounded-lg border border-border bg-surface-overlay px-2.5 py-1.5",
@@ -409,13 +568,100 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               value={participantInput}
               onChange={(e) => setParticipantInput(e.target.value)}
               onKeyDown={handleParticipantKeyDown}
-              onBlur={() => addParticipant(participantInput)}
-              placeholder={participants.length === 0 ? "Nhập tên, nhấn Enter hoặc dấu phẩy để thêm" : ""}
+              onBlur={() => {
+                if (!isMentioning) addParticipant(participantInput);
+              }}
+              placeholder={
+                participants.length === 0
+                  ? "Nhập tên, gõ @ để tag từ bạn bè, Enter/dấu phẩy để thêm"
+                  : ""
+              }
               className="min-w-[180px] flex-1 bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             />
           </div>
+
+          {/* Gợi ý chọn từ bạn bè */}
+          {pickerOpen && (
+            <div className="mt-1.5 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-elev2">
+              {isFriendsLoading && friendOptions.length === 0 ? (
+                <p className="px-2 py-3 text-center text-xs text-text-muted">
+                  Đang tải danh sách bạn bè…
+                </p>
+              ) : filteredFriendOptions.length === 0 ? (
+                <p className="px-2 py-3 text-center text-xs text-text-muted">
+                  {friendOptions.length === 0
+                    ? "Bạn chưa có bạn bè nào để tag."
+                    : "Không tìm thấy bạn bè phù hợp."}
+                </p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {filteredFriendOptions.map((f) => {
+                    const checked = participants.some(
+                      (p) => p.name.toLowerCase() === f.name.toLowerCase(),
+                    );
+                    return (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggleParticipant(f.name);
+                            if (isMentioning) setParticipantInput("");
+                          }}
+                          className={clsx(
+                            "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors",
+                            checked
+                              ? "bg-teal-500/10"
+                              : "hover:bg-surface-hover",
+                          )}
+                        >
+                          <span
+                            className={clsx(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                              checked
+                                ? "border-teal-600 bg-teal-600 text-white"
+                                : "border-border bg-surface-overlay",
+                            )}
+                          >
+                            {checked && (
+                              <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M2.5 6.5L5 9l4.5-5.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </span>
+                          <Avatar
+                            src={f.avatar ? resolvePublicResourceUrl(f.avatar) : undefined}
+                            alt={f.name}
+                            size="sm"
+                            className="shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span
+                              className={clsx(
+                                "block truncate text-sm font-medium",
+                                checked
+                                  ? "text-teal-700 dark:text-teal-300"
+                                  : "text-text-primary",
+                              )}
+                            >
+                              {f.name}
+                            </span>
+                            {(f.department || f.title) && (
+                              <p className="truncate text-[11px] text-text-muted">
+                                {[f.title, f.department].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
           <p className="mt-1 text-[11px] text-text-muted">
-            Tag đỏ = có lịch trùng giờ, vẫn có thể thêm vào cuộc họp.
+            Gõ <span className="font-mono text-teal-600 dark:text-teal-400">@</span> để tag từ bạn bè · Tag đỏ = có lịch trùng giờ, vẫn có thể thêm.
           </p>
         </div>
 
