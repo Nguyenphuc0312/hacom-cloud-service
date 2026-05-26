@@ -1,0 +1,419 @@
+/**
+ * MeetingFormModal — form thêm lịch họp trong WeeklyCalendarWidget
+ */
+
+import React from "react";
+import clsx from "clsx";
+import { XMarkIcon, PlusIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { Modal } from "./Modal";
+import { Button } from "./Button";
+
+export interface MeetingParticipant {
+  name: string;
+  hasConflict?: boolean;
+}
+
+export interface MeetingFormData {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string;
+  chairman: string;
+  participants: MeetingParticipant[];
+  format: "offline" | "online";
+  location: string;
+  notes: string;
+}
+
+interface MeetingFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: MeetingFormData) => void;
+  defaultDate?: string;
+  /** Existing meetings on the same date to detect conflicts */
+  existingMeetings?: MeetingFormData[];
+}
+
+const SAVED_LOCATIONS_KEY = "hacom-meeting-saved-locations";
+
+const getSavedLocations = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_LOCATIONS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+};
+
+const saveLocation = (loc: string) => {
+  const existing = getSavedLocations();
+  if (!existing.includes(loc)) {
+    localStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify([loc, ...existing].slice(0, 20)));
+  }
+};
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const timeRangesOverlap = (
+  s1: string, e1: string,
+  s2: string, e2: string,
+): boolean => {
+  if (!s1 || !e1 || !s2 || !e2) return false;
+  return s1 < e2 && e1 > s2;
+};
+
+export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  defaultDate,
+  existingMeetings = [],
+}) => {
+  const [title, setTitle] = React.useState("");
+  const [date, setDate] = React.useState(defaultDate ?? today());
+  const [startTime, setStartTime] = React.useState("08:00");
+  const [endTime, setEndTime] = React.useState("09:00");
+  const [chairman, setChairman] = React.useState("");
+  const [participantInput, setParticipantInput] = React.useState("");
+  const [participants, setParticipants] = React.useState<MeetingParticipant[]>([]);
+  const [format, setFormat] = React.useState<"offline" | "online">("offline");
+  const [location, setLocation] = React.useState("");
+  const [locationInput, setLocationInput] = React.useState("");
+  const [showLocationSuggestions, setShowLocationSuggestions] = React.useState(false);
+  const [notes, setNotes] = React.useState("");
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
+
+  // Reset form khi mở modal
+  React.useEffect(() => {
+    if (isOpen) {
+      setTitle("");
+      setDate(defaultDate ?? today());
+      setStartTime("08:00");
+      setEndTime("09:00");
+      setChairman("");
+      setParticipantInput("");
+      setParticipants([]);
+      setFormat("offline");
+      setLocation("");
+      setLocationInput("");
+      setNotes("");
+      setErrors({});
+    }
+  }, [isOpen, defaultDate]);
+
+  // Kiểm tra xung đột khi thêm người tham gia
+  const checkConflict = (name: string): boolean => {
+    return existingMeetings.some(
+      (m) =>
+        m.date === date &&
+        timeRangesOverlap(startTime, endTime, m.startTime, m.endTime) &&
+        m.participants.some((p) => p.name.toLowerCase() === name.toLowerCase()),
+    );
+  };
+
+  const addParticipant = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (participants.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) return;
+    setParticipants((prev) => [
+      ...prev,
+      { name: trimmed, hasConflict: checkConflict(trimmed) },
+    ]);
+    setParticipantInput("");
+  };
+
+  const removeParticipant = (name: string) => {
+    setParticipants((prev) => prev.filter((p) => p.name !== name));
+  };
+
+  const handleParticipantKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addParticipant(participantInput);
+    } else if (e.key === "Backspace" && !participantInput && participants.length > 0) {
+      removeParticipant(participants[participants.length - 1].name);
+    }
+  };
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!title.trim()) errs.title = "Vui lòng nhập nội dung cuộc họp";
+    if (!date) errs.date = "Vui lòng chọn ngày họp";
+    if (!startTime) errs.startTime = "Vui lòng chọn giờ bắt đầu";
+    if (!endTime) errs.endTime = "Vui lòng chọn giờ kết thúc";
+    if (startTime && endTime && startTime >= endTime) errs.endTime = "Giờ kết thúc phải sau giờ bắt đầu";
+    if (!chairman.trim()) errs.chairman = "Vui lòng nhập chủ trì cuộc họp";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    const locToSave = location.trim() || locationInput.trim();
+    if (locToSave) saveLocation(locToSave);
+
+    onSave({
+      id: `meeting-${Date.now()}`,
+      title: title.trim(),
+      date,
+      startTime,
+      endTime,
+      chairman: chairman.trim(),
+      participants,
+      format,
+      location: locToSave,
+      notes: notes.trim(),
+    });
+    onClose();
+  };
+
+  const filteredSavedLocations = savedLocations.filter(
+    (l) => l.toLowerCase().includes(locationInput.toLowerCase()) && locationInput,
+  );
+
+  const hasConflicts = participants.some((p) => p.hasConflict);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Thêm lịch họp"
+      size="lg"
+      footer={
+        <div className="flex items-center justify-between gap-3">
+          {hasConflicts && (
+            <p className="flex items-center gap-1.5 text-xs text-danger">
+              <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+              Một số người tham gia có lịch trùng giờ
+            </p>
+          )}
+          <div className="ml-auto flex gap-2">
+            <Button variant="secondary" onClick={onClose} type="button">
+              Hủy
+            </Button>
+            <Button variant="primary" onClick={handleSave} type="button">
+              Lưu &amp; Gửi
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {/* 1. Nội dung cuộc họp */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">
+            Nội dung cuộc họp <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="VD: Họp tổng kết tháng 5"
+            className={clsx(
+              "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
+              "focus:outline-none focus:ring-2 focus:ring-primary/30",
+              errors.title ? "border-danger" : "border-border",
+            )}
+          />
+          {errors.title && <p className="mt-1 text-xs text-danger">{errors.title}</p>}
+        </div>
+
+        {/* 2. Thời gian */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">
+            Thời gian <span className="text-danger">*</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={clsx(
+                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
+                "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                errors.date ? "border-danger" : "border-border",
+              )}
+            />
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className={clsx(
+                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
+                "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                errors.startTime ? "border-danger" : "border-border",
+              )}
+            />
+            <span className="text-sm text-text-muted">đến</span>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className={clsx(
+                "rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary",
+                "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                errors.endTime ? "border-danger" : "border-border",
+              )}
+            />
+          </div>
+          {(errors.date || errors.startTime || errors.endTime) && (
+            <p className="mt-1 text-xs text-danger">
+              {errors.date ?? errors.startTime ?? errors.endTime}
+            </p>
+          )}
+        </div>
+
+        {/* 3. Chủ trì */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">
+            Chủ trì <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            value={chairman}
+            onChange={(e) => setChairman(e.target.value)}
+            placeholder="Họ và tên người chủ trì"
+            className={clsx(
+              "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
+              "focus:outline-none focus:ring-2 focus:ring-primary/30",
+              errors.chairman ? "border-danger" : "border-border",
+            )}
+          />
+          {errors.chairman && <p className="mt-1 text-xs text-danger">{errors.chairman}</p>}
+        </div>
+
+        {/* 4. Người tham gia */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">
+            Người tham gia
+          </label>
+          <div
+            className={clsx(
+              "flex min-h-[40px] flex-wrap gap-1.5 rounded-lg border border-border bg-surface-overlay px-2.5 py-1.5",
+              "focus-within:ring-2 focus-within:ring-primary/30",
+            )}
+          >
+            {participants.map((p) => (
+              <span
+                key={p.name}
+                className={clsx(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                  p.hasConflict
+                    ? "bg-danger/10 text-danger ring-1 ring-danger/30"
+                    : "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200",
+                )}
+                title={p.hasConflict ? "Người này có lịch trùng giờ họp" : undefined}
+              >
+                {p.hasConflict && <ExclamationTriangleIcon className="h-3 w-3" />}
+                {p.name}
+                <button
+                  type="button"
+                  onClick={() => removeParticipant(p.name)}
+                  className="ml-0.5 opacity-60 hover:opacity-100"
+                >
+                  <XMarkIcon className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              value={participantInput}
+              onChange={(e) => setParticipantInput(e.target.value)}
+              onKeyDown={handleParticipantKeyDown}
+              onBlur={() => addParticipant(participantInput)}
+              placeholder={participants.length === 0 ? "Nhập tên, nhấn Enter hoặc dấu phẩy để thêm" : ""}
+              className="min-w-[180px] flex-1 bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-text-muted">
+            Tag đỏ = có lịch trùng giờ, vẫn có thể thêm vào cuộc họp.
+          </p>
+        </div>
+
+        {/* 5. Hình thức */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">Hình thức họp</label>
+          <div className="flex gap-2">
+            {(["offline", "online"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFormat(f)}
+                className={clsx(
+                  "rounded-lg border px-4 py-1.5 text-sm font-medium transition-micro",
+                  format === f
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+                )}
+              >
+                {f === "offline" ? "Trực tiếp (Offline)" : "Trực tuyến (Online)"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 6. Địa điểm */}
+        <div className="relative">
+          <label className="mb-1 block text-sm font-medium text-text-primary">Địa điểm họp</label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={location || locationInput}
+                onChange={(e) => {
+                  setLocation("");
+                  setLocationInput(e.target.value);
+                  setShowLocationSuggestions(true);
+                }}
+                onFocus={() => setShowLocationSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
+                placeholder="Nhập địa điểm hoặc chọn từ danh sách đã lưu"
+                className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              {showLocationSuggestions && filteredSavedLocations.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-surface shadow-elev2">
+                  {filteredSavedLocations.map((loc) => (
+                    <button
+                      key={loc}
+                      type="button"
+                      onMouseDown={() => {
+                        setLocation(loc);
+                        setLocationInput(loc);
+                        setShowLocationSuggestions(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover"
+                    >
+                      {loc}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] text-text-muted">
+            Địa điểm mới sẽ được lưu để dùng lại sau.
+          </p>
+        </div>
+
+        {/* 7. Ghi chú */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">Ghi chú</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Thêm ghi chú cho cuộc họp (nếu có)..."
+            rows={3}
+            className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export default MeetingFormModal;

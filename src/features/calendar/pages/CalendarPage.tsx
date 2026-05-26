@@ -27,6 +27,7 @@ import {
   type AttendanceCalendarDay,
   type ClassificationColor,
 } from "../../api/hrApi";
+import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
 
@@ -514,18 +515,12 @@ const EventBadge: React.FC<{
  */
 const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
-  onClick: () => void;
-}> = ({ attendance, onClick }) => {
+}> = ({ attendance }) => {
   const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
 
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="attendance-badge block w-full cursor-pointer rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs hover:bg-surface-hover transition-micro"
+    <div
+      className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
       title={hasPunch ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}` : "Chưa có dữ liệu chấm công"}
     >
       {hasPunch ? (
@@ -536,7 +531,7 @@ const AttendanceBadge: React.FC<{
       ) : (
         <span className="block truncate text-text-muted">Chưa chấm công</span>
       )}
-    </button>
+    </div>
   );
 };
 
@@ -575,7 +570,6 @@ export const CalendarPage: React.FC = () => {
   const [currentView, setCurrentView] = useState<CalendarView>("month");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [selectedAttendance, setSelectedAttendance] = useState<AttendanceCalendarDay | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Attendance data state
@@ -585,6 +579,11 @@ export const CalendarPage: React.FC = () => {
 
   // Task events state
   const [taskEvents, setTaskEvents] = useState<CalendarEvent[]>([]);
+
+  // Meeting form modal state
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
+  const [localMeetings, setLocalMeetings] = useState<MeetingFormData[]>([]);
 
   // Fetch attendance data when month changes
   useEffect(() => {
@@ -659,8 +658,7 @@ export const CalendarPage: React.FC = () => {
 
   // Calendar type filters
   const [filters, setFilters] = useState<CalendarTypeFilter[]>([
-    { type: "vietnam_holiday", label: "Lịch Việt Nam", color: "bg-rose-500", checked: true },
-    { type: "international", label: "Lịch Quốc tế", color: "bg-blue-500", checked: true },
+    { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
     { type: "work", label: "Công việc", color: "bg-purple-500", checked: true },
     { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
     { type: "task", label: "Nhiệm vụ", color: "bg-indigo-500", checked: true },
@@ -828,19 +826,7 @@ export const CalendarPage: React.FC = () => {
               />
             </div>
 
-            {/* Attendance legend */}
-            <div className="mb-4">
-              <h3 className="mb-2 text-sm font-semibold text-text-primary">
-                Chấm công
-              </h3>
-              <AttendanceLegend />
-              {isLoadingAttendance && (
-                <p className="mt-2 text-xs text-text-muted">Đang tải...</p>
-              )}
-              {attendanceError && (
-                <p className="mt-2 text-xs text-red-500">{attendanceError}</p>
-              )}
-            </div>
+            {/* Attendance legend — tạm ẩn */}
 
             {/* Calendar types */}
             <div className="mb-4">
@@ -871,6 +857,10 @@ export const CalendarPage: React.FC = () => {
             </div>
             <button
               type="button"
+              onClick={() => {
+                setMeetingModalDate(formatDateString(selectedDate));
+                setMeetingModalOpen(true);
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-primary hover:bg-primary/5 hover:text-primary transition-micro"
             >
               <PlusIcon className="h-4 w-4" />
@@ -996,10 +986,7 @@ export const CalendarPage: React.FC = () => {
                       {/* Attendance badge */}
                       {attendance && (
                         <div className="mb-1">
-                          <AttendanceBadge
-                            attendance={attendance}
-                            onClick={() => setSelectedAttendance(attendance)}
-                          />
+                          <AttendanceBadge attendance={attendance} />
                         </div>
                       )}
 
@@ -1063,13 +1050,15 @@ export const CalendarPage: React.FC = () => {
         />
       )}
 
-      {/* Attendance tooltip */}
-      {selectedAttendance && (
-        <AttendanceTooltip
-          attendance={selectedAttendance}
-          onClose={() => setSelectedAttendance(null)}
-        />
-      )}
+      {/* Meeting form modal */}
+      <MeetingFormModal
+        isOpen={meetingModalOpen}
+        onClose={() => setMeetingModalOpen(false)}
+        onSave={(data) => setLocalMeetings((prev) => [...prev, data])}
+        defaultDate={meetingModalDate}
+        existingMeetings={localMeetings}
+      />
+
     </div>
   );
 };
