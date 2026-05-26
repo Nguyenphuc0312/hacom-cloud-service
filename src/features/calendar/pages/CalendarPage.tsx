@@ -404,9 +404,8 @@ export const CalendarPage: React.FC = () => {
   // Calendar type filters
   const [filters, setFilters] = useState<CalendarTypeFilter[]>([
     { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
-    { type: "work", label: "Công việc", color: "bg-purple-500", checked: true },
     { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
-    { type: "task", label: "Nhiệm vụ", color: "bg-indigo-500", checked: true },
+    { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: true },
   ]);
 
   // Generate events for current year, merged with task events
@@ -729,7 +728,7 @@ export const CalendarPage: React.FC = () => {
                       </div>
 
                       {/* Attendance badge */}
-                      {attendance && (
+                      {attendance && filters.find((f) => f.type === "attendance")?.checked && (
                         <div className="mb-1">
                           <AttendanceBadge attendance={attendance} />
                         </div>

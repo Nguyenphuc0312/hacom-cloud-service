@@ -122,9 +122,12 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const isEditMode = !!initialData;
   const [title, setTitle] = React.useState("");
   const [date, setDate] = React.useState(defaultDate ?? today());
+  const [dateText, setDateText] = React.useState(formatDateVN(defaultDate ?? today()));
   const [startTime, setStartTime] = React.useState("08:00");
   const [endTime, setEndTime] = React.useState("09:00");
   const [chairman, setChairman] = React.useState("");
+  const [chairmanInput, setChairmanInput] = React.useState("");
+  const [showChairmanPicker, setShowChairmanPicker] = React.useState(false);
   const [participantInput, setParticipantInput] = React.useState("");
   const [participants, setParticipants] = React.useState<MeetingParticipant[]>([]);
   const [format, setFormat] = React.useState<"offline" | "online">("offline");
@@ -184,6 +187,23 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     : "";
   const isMentioning = participantInput.startsWith("@");
   const pickerOpen = showFriendPicker || isMentioning;
+
+  // Chairman @-mention picker
+  const isChairmanMentioning = chairmanInput.startsWith("@");
+  const chairmanMentionQuery = isChairmanMentioning
+    ? chairmanInput.slice(1).trim().toLowerCase()
+    : "";
+  const chairmanPickerOpen = showChairmanPicker || isChairmanMentioning;
+  const filteredChairmanOptions = React.useMemo(() => {
+    const q = isChairmanMentioning ? chairmanMentionQuery : chairmanInput.trim().toLowerCase();
+    if (!q) return friendOptions;
+    return friendOptions.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.employeeCode.toLowerCase().includes(q) ||
+        f.department.toLowerCase().includes(q),
+    );
+  }, [friendOptions, chairmanMentionQuery, isChairmanMentioning, chairmanInput]);
   const filteredFriendOptions = React.useMemo(() => {
     const q = isMentioning ? mentionQuery : participantInput.trim().toLowerCase();
     if (!q) return friendOptions;
@@ -201,9 +221,12 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     if (initialData) {
       setTitle(initialData.title);
       setDate(initialData.date);
+      setDateText(formatDateVN(initialData.date));
       setStartTime(initialData.startTime);
       setEndTime(initialData.endTime);
       setChairman(initialData.chairman);
+      setChairmanInput(initialData.chairman);
+      setShowChairmanPicker(false);
       setParticipantInput("");
       setParticipants(initialData.participants);
       setFormat(initialData.format);
@@ -212,11 +235,15 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setNotes(initialData.notes);
       setErrors({});
     } else {
+      const d0 = defaultDate ?? today();
       setTitle("");
-      setDate(defaultDate ?? today());
+      setDate(d0);
+      setDateText(formatDateVN(d0));
       setStartTime("08:00");
       setEndTime("09:00");
       setChairman("");
+      setChairmanInput("");
+      setShowChairmanPicker(false);
       setParticipantInput("");
       setParticipants([]);
       setFormat("offline");
@@ -389,56 +416,46 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               <input
                 type="text"
                 inputMode="numeric"
-                maxLength={2}
-                value={date ? date.slice(8, 10) : ""}
+                value={dateText}
                 onChange={(e) => {
-                  const dd = e.target.value.replace(/\D/g, "").slice(0, 2);
-                  const [y, m] = date ? date.split("-") : ["", "", ""];
-                  setDate(`${y || "0000"}-${m || "01"}-${dd.padStart(2, "0")}`);
+                  const raw = e.target.value;
+                  // Cho phép gõ số + dấu /, tự thêm dấu / sau 2 và 4 số
+                  let digits = raw.replace(/\D/g, "").slice(0, 8);
+                  let formatted = digits;
+                  if (digits.length > 4) {
+                    formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+                  } else if (digits.length > 2) {
+                    formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+                  }
+                  setDateText(formatted);
+                  // Parse khi đủ 8 số
+                  if (digits.length === 8) {
+                    const dd = digits.slice(0, 2);
+                    const mm = digits.slice(2, 4);
+                    const yyyy = digits.slice(4, 8);
+                    setDate(`${yyyy}-${mm}-${dd}`);
+                  }
                 }}
-                placeholder="DD"
-                aria-label="Ngày"
-                className="w-10 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              <span className="text-text-muted">/</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={2}
-                value={date ? date.slice(5, 7) : ""}
-                onChange={(e) => {
-                  const mm = e.target.value.replace(/\D/g, "").slice(0, 2);
-                  const [y, , d] = date ? date.split("-") : ["", "", ""];
-                  setDate(`${y || "0000"}-${mm.padStart(2, "0")}-${d || "01"}`);
+                onBlur={() => {
+                  // Đồng bộ lại text từ date hợp lệ; nếu không parse được thì giữ nguyên để user thấy lỗi
+                  if (date) setDateText(formatDateVN(date));
                 }}
-                placeholder="MM"
-                aria-label="Tháng"
-                className="w-10 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              <span className="text-text-muted">/</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={date ? date.slice(0, 4) : ""}
-                onChange={(e) => {
-                  const yyyy = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  const [, m, d] = date ? date.split("-") : ["", "", ""];
-                  setDate(`${yyyy.padStart(4, "0")}-${m || "01"}-${d || "01"}`);
-                }}
-                placeholder="YYYY"
-                aria-label="Năm"
-                className="w-14 bg-transparent text-center font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
+                placeholder="dd/mm/yyyy"
+                aria-label="Ngày họp"
+                className="flex-1 bg-transparent px-1 font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
               />
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  setDateText(formatDateVN(e.target.value));
+                }}
                 aria-label="Chọn ngày từ lịch"
                 className="ml-auto w-7 cursor-pointer bg-transparent text-text-secondary focus:outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:hidden"
               />
             </div>
-            <p className="mt-1 text-[11px] text-text-muted">Thứ tự: ngày / tháng / năm (dd/mm/yyyy).</p>
+            <p className="mt-1 text-[11px] text-text-muted">Tự gõ dd/mm/yyyy hoặc bấm icon lịch để chọn.</p>
           </div>
 
           {/* Bắt đầu / Kết thúc */}
@@ -498,21 +515,104 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         </div>
 
         {/* 3. Chủ trì */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-text-primary">
-            Chủ trì <span className="text-danger">*</span>
-          </label>
+        <div className="relative">
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-text-primary">
+              Chủ trì <span className="text-danger">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowChairmanPicker((v) => !v)}
+              className={clsx(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
+                chairmanPickerOpen
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+              )}
+            >
+              @ Chọn từ bạn bè
+            </button>
+          </div>
           <input
             type="text"
-            value={chairman}
-            onChange={(e) => setChairman(e.target.value)}
-            placeholder="Họ và tên người chủ trì"
+            value={chairmanInput}
+            onChange={(e) => {
+              setChairmanInput(e.target.value);
+              if (!e.target.value.startsWith("@")) setChairman(e.target.value);
+            }}
+            onBlur={() => {
+              // Nếu user gõ @query mà không chọn ai, bỏ ký tự @ khi blur
+              if (isChairmanMentioning) {
+                setChairmanInput(chairman);
+              }
+            }}
+            placeholder="Họ và tên người chủ trì (gõ @ để tag từ bạn bè)"
             className={clsx(
               "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
               "focus:outline-none focus:ring-2 focus:ring-primary/30",
               errors.chairman ? "border-danger" : "border-border",
             )}
           />
+          {chairmanPickerOpen && (
+            <div className="mt-1.5 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-elev2">
+              {isFriendsLoading && friendOptions.length === 0 ? (
+                <p className="px-2 py-3 text-center text-xs text-text-muted">
+                  Đang tải danh sách bạn bè…
+                </p>
+              ) : filteredChairmanOptions.length === 0 ? (
+                <p className="px-2 py-3 text-center text-xs text-text-muted">
+                  {friendOptions.length === 0
+                    ? "Bạn chưa có bạn bè nào để tag."
+                    : "Không tìm thấy bạn bè phù hợp."}
+                </p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {filteredChairmanOptions.map((f) => {
+                    const selected = chairman.toLowerCase() === f.name.toLowerCase();
+                    return (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setChairman(f.name);
+                            setChairmanInput(f.name);
+                            setShowChairmanPicker(false);
+                          }}
+                          className={clsx(
+                            "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors",
+                            selected ? "bg-teal-500/10" : "hover:bg-surface-hover",
+                          )}
+                        >
+                          <Avatar
+                            src={f.avatar ? resolvePublicResourceUrl(f.avatar) : undefined}
+                            alt={f.name}
+                            size="sm"
+                            className="shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span
+                              className={clsx(
+                                "block truncate text-sm font-medium",
+                                selected ? "text-teal-700 dark:text-teal-300" : "text-text-primary",
+                              )}
+                            >
+                              {f.name}
+                            </span>
+                            {(f.department || f.title) && (
+                              <p className="truncate text-[11px] text-text-muted">
+                                {[f.title, f.department].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
           {errors.chairman && <p className="mt-1 text-xs text-danger">{errors.chairman}</p>}
         </div>
 

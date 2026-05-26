@@ -37,7 +37,7 @@
     "noRealName": "Chưa cập nhật tên thật",
     "removeMemberConfirm": "Bạn có chắc muốn xóa {{name}} khỏi nhóm?",
     "roles": {
-      "owner": "Chủ nhóm",
+      "owner": "Trưởng nhóm",
       "admin": "Quản trị viên",
       "member": "Thành viên"
     },
@@ -67,7 +67,7 @@
     "deleteGroupWarning": "Hành động này không thể hoàn tác. Tất cả tin nhắn, tệp và dữ liệu nhóm sẽ bị xóa vĩnh viễn.",
     "deleteGroupConfirm": "Bạn có chắc muốn xóa nhóm này? Hành động này không thể hoàn tác.",
     "transferOwnership": "Chuyển quyền sở hữu",
-    "transferOwnershipConfirm": "Bạn có chắc muốn chuyển quyền sở hữu cho {{name}}? Họ sẽ trở thành chủ nhóm mới.",
+    "transferOwnershipConfirm": "Bạn có chắc muốn chuyển quyền sở hữu cho {{name}}? Họ sẽ trở thành Trưởng nhóm mới.",
     "dangerZone": "Khu vực nguy hiểm",
     "avatarUpdated": "Đã cập nhật ảnh nhóm",
     "avatarUpdateFailed": "Không thể cập nhật ảnh nhóm",
