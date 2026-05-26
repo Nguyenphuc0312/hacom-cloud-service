@@ -430,7 +430,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 w-[min(22rem,100%)] items-center gap-3 rounded-lg border p-3 transition-colors",
+        "group/file flex min-w-0 w-[min(17rem,100%)] items-center gap-2.5 rounded-lg border p-2.5 transition-colors",
         isOwn
           ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
           : "border-border/70 bg-surface hover:bg-surface-hover",
@@ -449,15 +449,29 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
       {/* File info */}
       <div className="min-w-0 flex-1">
-        <p
-          className={clsx(
-            "truncate text-sm font-medium",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
-          )}
-          title={attachment.fileName}
-        >
-          {attachment.fileName || t("chat:file.unknown")}
-        </p>
+        {(() => {
+          const fullName = attachment.fileName || t("chat:file.unknown");
+          const MAX_LEN = 24;
+          const TAIL_LEN = 10;
+          const isLong = fullName.length > MAX_LEN;
+          const head = isLong
+            ? fullName.slice(0, MAX_LEN - TAIL_LEN - 1)
+            : fullName;
+          const tail = isLong ? fullName.slice(fullName.length - TAIL_LEN) : "";
+          return (
+            <p
+              className={clsx(
+                "truncate text-sm font-medium",
+                isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
+              )}
+              title={fullName}
+            >
+              {head}
+              {isLong ? "…" : ""}
+              {tail}
+            </p>
+          );
+        })()}
         <p
           className={clsx(
             "text-xs",
