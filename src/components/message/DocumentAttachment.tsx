@@ -33,6 +33,7 @@ import {
   isFileTooLargeForPreview,
   getFileExtension,
 } from "../../utils/formatFileSize";
+import { truncateFilename } from "../../utils/truncateFileName";
 
 interface DocumentAttachmentProps {
   conversationId: string;
@@ -245,7 +246,7 @@ export const DocumentAttachment: React.FC<DocumentAttachmentProps> = ({
             )}
             title={fileName}
           >
-            {fileName}
+            {truncateFilename(fileName, 32)}
           </p>
 
           {/* File size + type */}
