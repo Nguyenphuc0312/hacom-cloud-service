@@ -36,7 +36,6 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   displayName,
   fullNameFromHR,
   avatar,
-  status,
   role,
   currentUserId,
   currentUserRole,
