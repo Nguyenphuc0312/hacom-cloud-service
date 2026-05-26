@@ -4,7 +4,7 @@
     "requestFailed": "Yêu cầu thất bại"
   },
   "auth": {
-    "loginFailed": "Đăng nhập thất bại",
+    "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
     "registerFailed": "Đăng ký thất bại",
     "logoutFailed": "Đăng xuất thất bại",
     "statusUpdateFailed": "Cập nhật trạng thái thất bại",
