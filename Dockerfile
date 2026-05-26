@@ -8,10 +8,12 @@ WORKDIR /workspace/chat-shared-types
 RUN npm ci
 
 WORKDIR /workspace
-COPY chat-web-client/package.json ./chat-web-client/
-COPY chat-web-client/package-lock.json ./chat-web-client/
+# package*.json matches both package.json AND package-lock.json (if present),
+# so the build doesn't hard-fail when the lockfile is missing from context.
+COPY chat-web-client/package*.json ./chat-web-client/
 WORKDIR /workspace/chat-web-client
-RUN npm ci
+# Use ci (fast, deterministic) when lockfile exists; fall back to install otherwise.
+RUN npm ci 2>/dev/null || npm install --no-audit --no-fund
 
 FROM deps AS build
 ARG VITE_APP_BASE_PATH=/

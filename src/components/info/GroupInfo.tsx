@@ -13,6 +13,7 @@ import {
   ExclamationTriangleIcon,
   UsersIcon,
   ShieldCheckIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PencilEdit01Icon } from "@hugeicons/core-free-icons";
@@ -297,9 +298,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
-  const blockedOwnerLeaveTitle = t("profile:groupInfo.leaveBlockedOwner", {
-    defaultValue: "Transfer ownership before leaving this group.",
-  });
 
   const participants = React.useMemo(
     () =>
@@ -310,6 +308,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const navigate = useNavigate();
   const [membersExpanded, setMembersExpanded] = useState(true);
   const [securityExpanded, setSecurityExpanded] = useState(false);
+  const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1193,109 +1192,102 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className="shrink-0">
+          <div className="flex flex-col items-center text-center">
+            <div className="relative mb-3">
               <Avatar
                 src={groupAvatarPreview || conversation.avatar}
                 alt={conversation.name}
-                size="lg"
+                size="xl"
               />
+              {isAdmin && !isRenamingGroup && (
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isSubmitting || groupAvatarStage === "uploading"}
+                  className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-sm transition-colors hover:bg-surface-hover"
+                  aria-label={t("profile:groupInfo.changeAvatar", {
+                    defaultValue: "Change group avatar",
+                  })}
+                >
+                  <CameraIcon className="h-3.5 w-3.5 text-text-secondary" />
+                </button>
+              )}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="truncate text-base font-semibold text-text-primary">
-                    {isRenamingGroup
-                      ? t("profile:groupInfo.renameGroup")
-                      : conversation.name || t("common:labels.group")}
-                  </h2>
-                  <p className="mt-1 text-sm text-text-muted">
-                    {t("profile:groupInfo.membersCount", {
-                      count: participantCount,
-                    })}
-                  </p>
-                  {groupAvatarStage !== "idle" ? (
-                    <p className="mt-1 text-xs text-text-muted">
-                      {resolveGroupAvatarStageLabel(
-                        groupAvatarStage,
-                        groupAvatarProgress,
-                      )}
-                    </p>
-                  ) : null}
-                </div>
-                {isAdmin && !isRenamingGroup ? (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => avatarInputRef.current?.click()}
-                      disabled={isSubmitting || groupAvatarStage === "uploading"}
-                      className="rounded-md p-2 hover:bg-surface-overlay"
-                      aria-label={t("profile:groupInfo.changeAvatar", {
-                        defaultValue: "Change group avatar",
-                      })}
-                    >
-                      <CameraIcon className="h-4 w-4 text-text-muted" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsRenamingGroup(true)}
-                      disabled={isSubmitting}
-                      className="rounded-md p-2 hover:bg-surface-overlay"
-                      aria-label={t("profile:groupInfo.renameGroup")}
-                    >
-                      <HugeiconsIcon
-                        icon={PencilEdit01Icon}
-                        className="h-4 w-4 text-text-muted"
-                        strokeWidth={1.5}
-                      />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
 
-              {isRenamingGroup ? (
-                <div className="mt-3 max-w-sm space-y-2">
-                  <Input
-                    type="text"
-                    value={groupNameDraft}
-                    onChange={(event) => setGroupNameDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleRenameGroup();
-                      }
-                      if (event.key === "Escape") {
-                        setIsRenamingGroup(false);
-                        setGroupNameDraft(conversation.name || "");
-                      }
+            {isRenamingGroup ? (
+              <div className="w-full max-w-xs space-y-2">
+                <Input
+                  type="text"
+                  value={groupNameDraft}
+                  onChange={(event) => setGroupNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleRenameGroup();
+                    }
+                    if (event.key === "Escape") {
+                      setIsRenamingGroup(false);
+                      setGroupNameDraft(conversation.name || "");
+                    }
+                  }}
+                  placeholder={t("profile:groupInfo.renamePlaceholder")}
+                  disabled={isSubmitting}
+                />
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRenamingGroup(false);
+                      setGroupNameDraft(conversation.name || "");
                     }}
-                    placeholder={t("profile:groupInfo.renamePlaceholder")}
+                    className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
+                  >
+                    {t("common:actions.cancel")}
+                  </button>
+                  <button
+                    type="button"
                     disabled={isSubmitting}
-                  />
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRenamingGroup(false);
-                        setGroupNameDraft(conversation.name || "");
-                      }}
-                      className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
-                    >
-                      {t("common:actions.cancel")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => void handleRenameGroup()}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
-                    >
-                      <CheckIcon className="w-4 h-4" />
-                      {t("common:actions.save")}
-                    </button>
-                  </div>
+                    onClick={() => void handleRenameGroup()}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                    {t("common:actions.save")}
+                  </button>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-semibold text-text-primary">
+                  {conversation.name || t("common:labels.group")}
+                </h2>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsRenamingGroup(true)}
+                    disabled={isSubmitting}
+                    className="rounded-md p-1 hover:bg-surface-overlay"
+                    aria-label={t("profile:groupInfo.renameGroup")}
+                  >
+                    <HugeiconsIcon
+                      icon={PencilEdit01Icon}
+                      className="h-3.5 w-3.5 text-text-muted"
+                      strokeWidth={1.5}
+                    />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p className="mt-1 text-sm text-text-muted">
+              {t("profile:groupInfo.membersCount", {
+                count: participantCount,
+              })}
+            </p>
+            {groupAvatarStage !== "idle" && (
+              <p className="mt-1 text-xs text-text-muted">
+                {resolveGroupAvatarStageLabel(groupAvatarStage, groupAvatarProgress)}
+              </p>
+            )}
           </div>
           <input
             ref={avatarInputRef}
@@ -1307,8 +1299,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             }}
           />
 
-          {(canAddMembers || isAdmin || joinRequests.length > 0) && (
-            <div className="mt-3 flex flex-wrap gap-2">
+          {(canAddMembers || isAdmin) && (
+            <div className="mt-4 grid grid-cols-2 gap-2">
               {canAddMembers && (
                 <button
                   type="button"
@@ -1317,10 +1309,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     setMembersExpanded(true);
                     setShowAddMember((prev) => !prev);
                   }}
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-surface-overlay py-3 transition-colors hover:bg-surface-hover"
                 >
-                  <UserPlusIcon className="h-4 w-4" />
-                  {t("profile:groupInfo.addMember")}
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                    <UserPlusIcon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-xs font-medium text-text-secondary">
+                    {t("profile:groupInfo.addMember")}
+                  </span>
                 </button>
               )}
               {isAdmin && (
@@ -1330,10 +1326,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     setSecurityExpanded(true);
                     setShowCreateInviteForm((prev) => !prev);
                   }}
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-surface-overlay py-3 transition-colors hover:bg-surface-hover"
                 >
-                  <LinkIcon className="h-4 w-4" />
-                  {t("profile:groupInfo.invite.create")}
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                    <LinkIcon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-xs font-medium text-text-secondary">
+                    {t("profile:groupInfo.invite.create")}
+                  </span>
                 </button>
               )}
             </div>
@@ -1679,46 +1679,52 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
         </div>
 
-        <div className="border-t border-border bg-danger/5">
-          {currentUserRole === RoomMemberRole.OWNER && (
-            <div className="px-4 py-3">
-              <div className="mb-2 flex items-center gap-2">
-                <ExclamationTriangleIcon className="h-4 w-4 text-danger" />
-                <span className="text-xs font-medium uppercase tracking-wide text-danger">
-                  {t("profile:groupInfo.dangerZone", { defaultValue: "Danger Zone" })}
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => void handleDeleteGroup()}
-                className="w-full flex items-center justify-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/20 disabled:opacity-60"
-              >
-                <ExclamationTriangleIcon className="h-4 w-4" />
-                {t("profile:groupInfo.deleteGroup")}
-              </button>
-            </div>
-          )}
-          <div className="px-4 py-2">
+        {(canLeaveCurrentGroup || currentUserRole === RoomMemberRole.OWNER) && (
+          <div className="border-t border-border">
             <button
               type="button"
-              disabled={isSubmitting || !canLeaveCurrentGroup}
-              title={
-                canLeaveCurrentGroup ? undefined : blockedOwnerLeaveTitle
-              }
-              onClick={() => void handleLeaveGroup()}
-              className={clsx(
-                "w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
-                canLeaveCurrentGroup
-                  ? "text-danger hover:bg-danger/10"
-                  : "cursor-not-allowed text-text-muted opacity-60",
-              )}
+              onClick={() => setDangerZoneOpen((prev) => !prev)}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
             >
-              <ArrowRightOnRectangleIcon className="w-5 h-5" />
-              <span>{t("profile:groupInfo.leaveGroup")}</span>
+              <ExclamationTriangleIcon className="h-4 w-4 text-text-muted" />
+              <span className="flex-1 text-xs font-medium text-text-muted">
+                {t("profile:groupInfo.dangerZone", { defaultValue: "Tuỳ chọn khác" })}
+              </span>
+              <ChevronDownIcon
+                className={clsx(
+                  "h-4 w-4 text-text-muted transition-transform duration-200",
+                  dangerZoneOpen && "rotate-180",
+                )}
+              />
             </button>
+            {dangerZoneOpen && (
+              <div className="space-y-1 px-4 pb-3">
+                {canLeaveCurrentGroup && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void handleLeaveGroup()}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                    <span>{t("profile:groupInfo.leaveGroup")}</span>
+                  </button>
+                )}
+                {currentUserRole === RoomMemberRole.OWNER && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void handleDeleteGroup()}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                  >
+                    <ExclamationTriangleIcon className="h-5 w-5" />
+                    <span>{t("profile:groupInfo.deleteGroup")}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
       <ConfirmDialog
         isOpen={pendingConfirm !== null}

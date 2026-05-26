@@ -1054,6 +1054,7 @@ export const ChatPage: React.FC = () => {
                         key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
                         userId={otherUser.id}
                         currentUserId={currentUserSummary.id}
+                        conversationId={selectedConversation?.id}
                         conversationContext="direct"
                         initialUser={{
                           id: otherUser.id,
