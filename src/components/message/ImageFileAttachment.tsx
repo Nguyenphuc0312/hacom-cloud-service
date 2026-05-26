@@ -21,6 +21,7 @@ import { useInViewport } from "../../hooks/useInViewport";
 import { formatFileSize } from "../../utils/formatFileSize";
 import { FileProgress } from "./FileProgress";
 import { FileStatus } from "./FileStatus";
+import { truncateFilename } from "../../utils/truncateFileName";
 
 interface ImageFileAttachmentProps {
   conversationId: string;
@@ -146,7 +147,7 @@ export const ImageFileAttachment: React.FC<ImageFileAttachmentProps> = ({
           {/* File info */}
           <div className="min-w-0 flex-1">
             <p className={clsx("truncate text-sm font-medium", textColor)} title={fileName}>
-              {fileName}
+              {truncateFilename(fileName, 32)}
             </p>
             <p className={clsx("text-xs", secondaryTextColor)}>{fileSize}</p>
 
