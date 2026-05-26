@@ -1401,12 +1401,28 @@ export const fileApi = {
         signal: params.signal,
       },
     ); 
-    return response.data; 
-  }, 
-  uploadToSignedUrl: async ( 
-    url: string, 
-    file: File, 
-    options: UploadToSignedUrlOptions = {}, 
+    return response.data;
+  },
+
+  batchThumbnailUrls: async (params: {
+    conversationId: string;
+    fileIds: string[];
+    signal?: AbortSignal;
+  }) => {
+    const response = await apiClient.post<
+      ApiResponse<{ items: Array<{ fileId: string; url: string | null; expiresAt: string | null; status: string }> }>
+    >(
+      "/files/batch-thumbnail-urls",
+      { conversationId: params.conversationId, fileIds: params.fileIds },
+      { signal: params.signal },
+    );
+    return response.data;
+  },
+
+  uploadToSignedUrl: async (
+    url: string,
+    file: File,
+    options: UploadToSignedUrlOptions = {},
   ) => {
     await axios.request({
       url,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   PhotoIcon,
   DocumentIcon,
@@ -12,6 +12,7 @@ import {
   useGetConversationMediaQuery,
   useGetConversationFilesQuery,
   useGetConversationLinksQuery,
+  useBatchThumbnailUrlsMutation,
 } from "../../../features/api/chatApi";
 import type {
   ConversationResourcesMediaItem,
@@ -210,6 +211,13 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
 }) => {
   const [showAll, setShowAll] = useState(false);
   const [page, setPage] = useState(1);
+  // urlCache is keyed by conversationId so stale URLs from previous conversations are never returned
+  const [urlCache, setUrlCache] = useState<{ forConversationId: string; urls: Record<string, string> }>({
+    forConversationId: conversationId,
+    urls: {},
+  });
+  const [batchThumbnailUrls] = useBatchThumbnailUrlsMutation();
+  const batchAbortRef = useRef<AbortController | null>(null);
 
   const limit = showAll ? MEDIA_PAGE_SIZE : MEDIA_PREVIEW_SIZE;
 
@@ -221,6 +229,57 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
 
   const hasNext = data?.pagination.hasNext ?? false;
   const items = data?.data ?? [];
+
+  // Derived: only use cache if it belongs to the current conversation
+  const thumbnailUrls = urlCache.forConversationId === conversationId ? urlCache.urls : {};
+
+  useEffect(() => {
+    const needingFallback = items.filter((item) => {
+      const isMedia =
+        item.mimeType.startsWith("image/") ||
+        item.mimeType.startsWith("video/") ||
+        item.messageType === "image" ||
+        item.messageType === "video";
+      return isMedia && !item.thumbnailUrl && !thumbnailUrls[item.fileId];
+    });
+
+    if (needingFallback.length === 0) return;
+
+    const controller = new AbortController();
+    batchAbortRef.current = controller;
+
+    const fileIds = needingFallback.map((i) => i.fileId);
+    batchThumbnailUrls({ conversationId, fileIds })
+      .unwrap()
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        const newUrls: Record<string, string> = {};
+        for (const item of result.items) {
+          if (item.status === "ok" && item.url) newUrls[item.fileId] = item.url;
+        }
+        if (Object.keys(newUrls).length > 0) {
+          setUrlCache((prev) => ({
+            forConversationId: conversationId,
+            urls: prev.forConversationId === conversationId
+              ? { ...prev.urls, ...newUrls }
+              : newUrls,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      controller.abort();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, conversationId]);
+
+  // Abort any in-flight batch request when conversation changes
+  useEffect(() => {
+    return () => {
+      batchAbortRef.current?.abort();
+    };
+  }, [conversationId]);
 
   if (isLoading) {
     return (
@@ -248,7 +307,7 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
           <GalleryThumb
             key={`${item.messageId}-${item.fileId}`}
             item={item}
-            conversationId={conversationId}
+            fallbackUrl={thumbnailUrls[item.fileId] ?? null}
           />
         ))}
       </div>
@@ -277,36 +336,10 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
 
 const GalleryThumb: React.FC<{
   item: ConversationResourcesMediaItem;
-  conversationId: string;
-}> = ({ item, conversationId }) => {
+  fallbackUrl: string | null;
+}> = ({ item, fallbackUrl }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const isImage =
-    item.mimeType.startsWith("image/") || item.messageType === "image";
-  const needsFallback = !item.thumbnailUrl && (isImage || isVideo);
-
-  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
-  const [fallbackLoading, setFallbackLoading] = useState(false);
-
-  useEffect(() => {
-    if (!needsFallback || fallbackUrl || fallbackLoading) return;
-    let cancelled = false;
-    setFallbackLoading(true);
-    fileApi
-      .getDownloadUrl({ conversationId, attachmentId: item.fileId })
-      .then((res) => {
-        if (cancelled) return;
-        const payload = unwrapApiSuccess(res);
-        if (payload?.url) setFallbackUrl(payload.url as string);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setFallbackLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [item.fileId, conversationId, needsFallback, fallbackUrl, fallbackLoading]);
 
   const src = item.thumbnailUrl ?? fallbackUrl ?? undefined;
 
@@ -319,8 +352,6 @@ const GalleryThumb: React.FC<{
           className="h-full w-full object-cover"
           loading="lazy"
         />
-      ) : fallbackLoading ? (
-        <Skeleton className="h-full w-full rounded-none" />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <PhotoIcon className="h-6 w-6 text-text-muted" />
