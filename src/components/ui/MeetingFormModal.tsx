@@ -4,7 +4,7 @@
 
 import React from "react";
 import clsx from "clsx";
-import { XMarkIcon, PlusIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 

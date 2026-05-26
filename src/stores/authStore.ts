@@ -183,9 +183,31 @@ interface AuthState {
   ) => void;
   clearEmailVerificationChallenge: () => void;
 
-  handleAuthFailure: (reason?: string) => Promise<void>;
+  handleAuthFailure: (input?: AuthFailureInput) => Promise<void>;
   handleRemoteLogout: (reason?: string) => Promise<void>;
 }
+
+export type AuthFailureInput =
+  | string
+  | {
+      reason: string;
+      /** Force broadcast/redirect. Defaults derived from whether the reason is definitive. */
+      broadcast?: boolean;
+      redirect?: boolean;
+      definitive?: boolean;
+    };
+
+// Reasons that represent a transient (network/429/5xx) failure — these must NOT
+// clear the session, redirect to /login, or broadcast a logout to other tabs.
+const TRANSIENT_AUTH_FAILURE_REASONS = new Set<string>([
+  "network",
+  "transient",
+  "refresh_transient",
+  "ws_refresh_transient",
+  "refresh_429",
+  "refresh_5xx",
+  "refresh_timeout",
+]);
 
 let logoutFlowPromise: Promise<void> | null = null;
 let initializePromise: Promise<void> | null = null;
@@ -1106,6 +1128,8 @@ export const useAuthStore = create<AuthState>()(
                 if (
                   refreshApiErr.isNetworkError ||
                   refreshApiErr.statusCode === 0 ||
+                  refreshApiErr.statusCode === 408 ||
+                  refreshApiErr.statusCode === 429 ||
                   refreshApiErr.statusCode >= 500
                 ) {
                   set({
@@ -1152,12 +1176,26 @@ export const useAuthStore = create<AuthState>()(
           return initializePromise;
         },
 
-        handleAuthFailure: async (reason = "refresh_failed") => {
+        handleAuthFailure: async (input = "refresh_failed") => {
+          const normalized =
+            typeof input === "string" ? { reason: input } : input;
+
+          const definitive =
+            normalized.definitive ??
+            !TRANSIENT_AUTH_FAILURE_REASONS.has(normalized.reason);
+
+          // Transient failures keep the session intact: do not clear tokens,
+          // do not redirect, do not broadcast a logout to other tabs.
+          if (!definitive) {
+            set({ isLoading: false, isBootstrappingAuth: false });
+            return;
+          }
+
           await runLogoutFlow({
-            reason,
+            reason: normalized.reason,
             notifyServer: false,
-            broadcast: true,
-            redirect: true,
+            broadcast: normalized.broadcast ?? true,
+            redirect: normalized.redirect ?? true,
           });
         },
 

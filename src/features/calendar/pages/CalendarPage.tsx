@@ -7,10 +7,6 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   XMarkIcon,
-  ClockIcon,
-  UserCircleIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -25,7 +21,6 @@ import {
 import {
   hrApi,
   type AttendanceCalendarDay,
-  type ClassificationColor,
 } from "../../api/hrApi";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { taskApi } from "../../tasks/api/taskApi";
@@ -46,50 +41,6 @@ interface CalendarTypeFilter {
   checked: boolean;
 }
 
-/**
- * Attendance status color mapping
- */
-const ATTENDANCE_COLORS: Record<ClassificationColor, { bg: string; border: string; text: string; dot: string }> = {
-  green: {
-    bg: "bg-green-50 dark:bg-green-950/30",
-    border: "border-green-200 dark:border-green-800",
-    text: "text-green-700 dark:text-green-300",
-    dot: "bg-green-500",
-  },
-  yellow: {
-    bg: "bg-yellow-50 dark:bg-yellow-950/30",
-    border: "border-yellow-200 dark:border-yellow-800",
-    text: "text-yellow-700 dark:text-yellow-300",
-    dot: "bg-yellow-500",
-  },
-  orange: {
-    bg: "bg-orange-50 dark:bg-orange-950/30",
-    border: "border-orange-200 dark:border-orange-800",
-    text: "text-orange-700 dark:text-orange-300",
-    dot: "bg-orange-500",
-  },
-  red: {
-    bg: "bg-red-50 dark:bg-red-950/30",
-    border: "border-red-200 dark:border-red-800",
-    text: "text-red-700 dark:text-red-300",
-    dot: "bg-red-500",
-  },
-};
-
-/**
- * Get attendance color styles
- */
-const getAttendanceColors = (color: ClassificationColor | null | undefined) => {
-  if (!color) {
-    return {
-      bg: "",
-      border: "",
-      text: "",
-      dot: "bg-gray-400",
-    };
-  }
-  return ATTENDANCE_COLORS[color] || ATTENDANCE_COLORS.green;
-};
 
 /**
  * Generate calendar days for a given month.
@@ -142,15 +93,6 @@ const formatTime = (time: string | null | undefined): string => {
   return time;
 };
 
-/**
- * Format total time (HH:mm)
- */
-const formatTotalTime = (totalMinutes: number | null | undefined): string => {
-  if (!totalMinutes) return "";
-  const hours = Math.floor(totalMinutes / 60);
-  const mins = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-};
 
 /**
  * Event detail modal component.
@@ -202,182 +144,6 @@ const EventDetailModal: React.FC<{
               {event.description}
             </p>
           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Attendance detail tooltip component
- */
-const AttendanceTooltip: React.FC<{
-  attendance: AttendanceCalendarDay;
-  onClose: () => void;
-}> = ({ attendance, onClose }) => {
-  const colors = getAttendanceColors(attendance.classificationColor);
-
-  const getExceptionStatusLabel = (status: string | null | undefined): string => {
-    switch (status) {
-      case "NONE":
-        return "Không cần xử lý";
-      case "PENDING_MANAGER_CONFIRMATION":
-        return "Chờ quản lý xác nhận";
-      case "PENDING_HR_REVIEW":
-        return "Chờ HR review";
-      case "ESCALATED":
-        return "Escalate";
-      case "APPROVED":
-        return "Đã phê duyệt";
-      case "REJECTED":
-        return "Từ chối";
-      case "RESOLVED":
-        return "Đã xử lý";
-      default:
-        return "Không xác định";
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
-        <button
-          type="button"
-          onClick={onClose}
-          title="Đóng"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-
-        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
-          {/* Header with status */}
-          <div className="mb-4 flex items-center gap-2">
-            <span className={clsx("h-3 w-3 rounded-full", colors.dot)} />
-            <span className={clsx("text-sm font-medium", colors.text)}>
-              {attendance.classificationLabel || "Chưa có dữ liệu"}
-            </span>
-          </div>
-
-          {/* Date */}
-          <h3 className="text-xl font-semibold text-text-primary">
-            {attendance.date && new Date(attendance.date).toLocaleDateString("vi-VN", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </h3>
-
-          {/* Attendance details */}
-          <div className="mt-4 space-y-3">
-            {/* Time info */}
-            <div className="flex items-center gap-3 text-sm">
-              <ClockIcon className="h-5 w-5 text-text-muted" />
-              <div>
-                <span className="text-text-secondary">Giờ vào: </span>
-                <span className="font-medium text-text-primary">
-                  {formatTime(attendance.firstPunch)}
-                </span>
-                <span className="mx-2 text-text-muted">—</span>
-                <span className="text-text-secondary">Giờ ra: </span>
-                <span className="font-medium text-text-primary">
-                  {formatTime(attendance.lastPunch)}
-                </span>
-              </div>
-            </div>
-
-            {/* Total time */}
-            {attendance.totalMinutes && attendance.totalMinutes > 0 && (
-              <div className="flex items-center gap-3 text-sm">
-                <ClockIcon className="h-5 w-5 text-text-muted" />
-                <div>
-                  <span className="text-text-secondary">Tổng giờ làm: </span>
-                  <span className="font-medium text-text-primary">
-                    {formatTotalTime(attendance.totalMinutes)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Employee info */}
-            {attendance.employeeCode && (
-              <div className="flex items-center gap-3 text-sm">
-                <UserCircleIcon className="h-5 w-5 text-text-muted" />
-                <div>
-                  <span className="text-text-secondary">Mã NV: </span>
-                  <span className="font-medium text-text-primary">
-                    {attendance.employeeCode}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Classification reasons */}
-            {attendance.classificationReasons && attendance.classificationReasons.length > 0 && (
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-medium text-text-primary">
-                  Lý do:
-                </h4>
-                <ul className="space-y-1">
-                  {attendance.classificationReasons.map((reason, idx) => (
-                    <li
-                      key={idx}
-                      className={clsx(
-                        "flex items-start gap-2 text-sm",
-                        colors.text
-                      )}
-                    >
-                      <span className="mt-1">•</span>
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Exception status */}
-            {attendance.exceptionStatus && attendance.exceptionStatus !== "NONE" && (
-              <div className="mt-4 rounded-lg bg-surface-hover p-3">
-                <div className="flex items-center gap-2">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />
-                  <span className="text-sm font-medium text-text-primary">
-                    {getExceptionStatusLabel(attendance.exceptionStatus)}
-                  </span>
-                </div>
-                {attendance.exceptionReason && (
-                  <p className="mt-2 text-sm text-text-secondary">
-                    {attendance.exceptionReason}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Action status */}
-            {attendance.requiresAction && (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 p-3 dark:bg-orange-950/30">
-                <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />
-                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                  Cần xử lý
-                </span>
-              </div>
-            )}
-
-            {/* No action needed */}
-            {!attendance.requiresAction && attendance.classificationStatus === "PASS" && (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                  Không cần xử lý
-                </span>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -538,27 +304,6 @@ const AttendanceBadge: React.FC<{
 /**
  * Attendance legend component
  */
-const AttendanceLegend: React.FC = () => (
-  <div className="flex flex-wrap items-center gap-4 text-xs">
-    <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-      <span className="text-text-secondary">Hợp lệ</span>
-    </div>
-    <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-      <span className="text-text-secondary">Cần xác nhận</span>
-    </div>
-    <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-      <span className="text-text-secondary">Cần review</span>
-    </div>
-    <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-      <span className="text-text-secondary">Escalate</span>
-    </div>
-  </div>
-);
-
 /**
  * Calendar page component.
  */
@@ -574,8 +319,8 @@ export const CalendarPage: React.FC = () => {
 
   // Attendance data state
   const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
-  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [, setIsLoadingAttendance] = useState(false);
+  const [, setAttendanceError] = useState<string | null>(null);
 
   // Task events state
   const [taskEvents, setTaskEvents] = useState<CalendarEvent[]>([]);
