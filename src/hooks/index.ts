@@ -28,3 +28,7 @@ export { useResendCooldown } from "./useResendCooldown";
 export { useOtpInput } from "./useOtpInput";
 export { useEmailVerificationChallenge } from "./useEmailVerificationChallenge";
 export { useNotifications } from "./useNotifications";
+
+// Phase 02: Thumbnail/Preview hooks
+export { useBatchThumbnailUrl } from "./useBatchThumbnailUrl";
+export { usePreviewUrl } from "./usePreviewUrl";
