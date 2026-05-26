@@ -1410,11 +1410,51 @@ export const fileApi = {
     signal?: AbortSignal;
   }) => {
     const response = await apiClient.post<
-      ApiResponse<{ items: Array<{ fileId: string; url: string | null; expiresAt: string | null; status: string }> }>
+      ApiResponse<{
+        items: Array<{
+          fileId: string;
+          url: string | null;
+          expiresAt: string | null;
+          status: string;
+          variant?: 'thumbnail' | 'preview' | 'original' | 'pending';
+          width?: number | null;
+          height?: number | null;
+          mimeType?: string;
+          fallbackReason?: string;
+        }>
+      }>
     >(
       "/files/batch-thumbnail-urls",
       { conversationId: params.conversationId, fileIds: params.fileIds },
       { signal: params.signal },
+    );
+    return response.data;
+  },
+
+  /**
+   * Phase 02: Get preview URL for lightbox/modal display
+   * Priority: preview > thumbnail > original
+   */
+  getPreviewUrl: async (params: {
+    conversationId: string;
+    attachmentId: string;
+    signal?: AbortSignal;
+  }) => {
+    const response = await apiClient.get<ApiResponse<{
+      url: string;
+      expiresAt: string;
+      variant: 'preview' | 'original';
+      width?: number;
+      height?: number;
+    }>>(
+      "/files/preview-url",
+      {
+        params: {
+          conversationId: params.conversationId,
+          attachmentId: params.attachmentId,
+        },
+        signal: params.signal,
+      },
     );
     return response.data;
   },
