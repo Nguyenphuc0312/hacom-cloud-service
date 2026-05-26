@@ -1415,12 +1415,20 @@ export const fileApi = {
           fileId: string;
           url: string | null;
           expiresAt: string | null;
-          status: string;
-          variant?: 'thumbnail' | 'preview' | 'original' | 'pending';
+          /** See ThumbnailUrlItem.status for semantics. */
+          status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'not_found' | 'forbidden' | 'error';
+          /** Only present when status = ready. */
+          variant?: 'thumbnail' | 'preview' | 'original';
           width?: number | null;
           height?: number | null;
           mimeType?: string;
-          fallbackReason?: string;
+          fallbackReason?: string | null;
+          /** False = terminal state; client MUST NOT retry automatically. */
+          isRetryable: boolean;
+          /** Milliseconds before next allowed retry. Null when isRetryable = false. */
+          retryAfterMs: number | null;
+          /** Suggested client cache TTL in milliseconds. */
+          cacheTtlMs: number | null;
         }>
       }>
     >(
