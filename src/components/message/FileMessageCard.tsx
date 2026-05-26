@@ -38,6 +38,7 @@ import {
 import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
+import { truncateFilename } from "../../utils/truncateFileName";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -404,7 +405,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
             )}
           >
-            {attachment.fileName || t("chat:file.unknown")} · {size}
+            {truncateFilename(attachment.fileName || t("chat:file.unknown"), 24)} · {size}
           </span>
           <button
             type="button"
@@ -449,29 +450,15 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
       {/* File info */}
       <div className="min-w-0 flex-1">
-        {(() => {
-          const fullName = attachment.fileName || t("chat:file.unknown");
-          const MAX_LEN = 24;
-          const TAIL_LEN = 10;
-          const isLong = fullName.length > MAX_LEN;
-          const head = isLong
-            ? fullName.slice(0, MAX_LEN - TAIL_LEN - 1)
-            : fullName;
-          const tail = isLong ? fullName.slice(fullName.length - TAIL_LEN) : "";
-          return (
-            <p
-              className={clsx(
-                "truncate text-sm font-medium",
-                isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
-              )}
-              title={fullName}
-            >
-              {head}
-              {isLong ? "…" : ""}
-              {tail}
-            </p>
-          );
-        })()}
+        <p
+          className={clsx(
+            "truncate text-sm font-medium",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
+          )}
+          title={attachment.fileName}
+        >
+          {truncateFilename(attachment.fileName || t("chat:file.unknown"), 28)}
+        </p>
         <p
           className={clsx(
             "text-xs",
