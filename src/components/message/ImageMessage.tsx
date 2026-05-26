@@ -52,7 +52,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   // Retry counter — bounded so we never poll forever.
   // Resets when the file reaches a terminal/ready state.
   const retryCountRef = useRef(0);
-  const MAX_THUMBNAIL_RETRIES = 5;
+  const MAX_THUMBNAIL_RETRIES = 3;
+  // True once the client has exhausted all auto-retries. Triggers fallback UI.
+  const [retryExhausted, setRetryExhausted] = useState(false);
 
   const isLargeImage = (attachment.fileSize || 0) > HD_THRESHOLD;
   const [showHd, setShowHd] = useState(!isLargeImage);
@@ -102,36 +104,46 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
       thumbnailUrl?.status === 'not_found' ||
       thumbnailUrl?.status === 'forbidden');
 
-  // Reset retry counter whenever the thumbnail reaches a non-retryable state.
+  // Reset retry counter and exhaustion flag whenever the thumbnail pipeline
+  // leaves the retryable state (reaches ready, failed, not_found, etc.).
   useEffect(() => {
     if (!isThumbnailPending) {
       retryCountRef.current = 0;
+      setRetryExhausted(false);
     }
   }, [isThumbnailPending]);
 
   // Auto-refresh thumbnail while in-flight, visible, and under the retry budget.
   // Uses non-force path so the hook's TTL gate prevents hammering the endpoint;
   // the actual network call fires at most once per retryAfterMs / PENDING_TTL_MS.
-  // Stops permanently when retryCountRef reaches MAX_THUMBNAIL_RETRIES to prevent
-  // an infinite loop if the worker is stuck or the job is lost.
+  // When retryCountRef hits MAX_THUMBNAIL_RETRIES: stop the timer and set
+  // retryExhausted so the component renders a fallback UI instead of a spinner.
   useEffect(() => {
-    if (!isThumbnailPending || !isVisible) return;
-    if (retryCountRef.current >= MAX_THUMBNAIL_RETRIES) return;
+    if (!isThumbnailPending || !isVisible || retryExhausted) return;
 
     // Use retryAfterMs from the server response; fall back to 8 s.
     const intervalMs = thumbnailUrl?.retryAfterMs ?? 8000;
 
     const timer = setInterval(() => {
+      retryCountRef.current += 1;
       if (retryCountRef.current >= MAX_THUMBNAIL_RETRIES) {
         clearInterval(timer);
+        setRetryExhausted(true);
         return;
       }
-      retryCountRef.current += 1;
       void refreshThumbnail(false);
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isThumbnailPending, isVisible, refreshThumbnail, thumbnailUrl?.retryAfterMs]);
+  }, [isThumbnailPending, isVisible, retryExhausted, refreshThumbnail, thumbnailUrl?.retryAfterMs]);
+
+  // Manual retry: resets exhaustion state and forces a fresh network call,
+  // bypassing the TTL cache. Gives the user 3 more auto-retries after this.
+  const handleManualRetry = useCallback(() => {
+    retryCountRef.current = 0;
+    setRetryExhausted(false);
+    void refreshThumbnail(true);
+  }, [refreshThumbnail]);
 
   const handleImageClick = useCallback(async () => {
     if (onClick) {
@@ -187,15 +199,32 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           )}
           style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >
-          {/* Thumbnail placeholder */}
-          {isThumbnailPending ? (
+          {/* Thumbnail placeholder / retry-exhausted fallback */}
+          {isThumbnailPending && !retryExhausted && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <ArrowPathIcon className="h-8 w-8 animate-spin text-text-muted" />
               <span className="text-xs text-text-muted">
                 {t("chat:image.processing", { defaultValue: "Đang xử lý..." })}
               </span>
             </div>
-          ) : (
+          )}
+          {isThumbnailPending && retryExhausted && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3">
+              <PhotoIcon className="h-10 w-10 text-text-muted" />
+              <span className="text-center text-xs text-text-muted">
+                {t("chat:image.processingFallback", { defaultValue: "Ảnh đang được xử lý" })}
+              </span>
+              <button
+                type="button"
+                onClick={handleManualRetry}
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <ArrowPathIcon className="h-3 w-3" />
+                {t("chat:image.retry", { defaultValue: "Thử lại" })}
+              </button>
+            </div>
+          )}
+          {!isThumbnailPending && (
             <div className="absolute inset-0 flex items-center justify-center">
               <PhotoIcon className="h-12 w-12 text-text-muted" />
             </div>
@@ -256,13 +285,13 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >
           {/* Skeleton — only while we're waiting for a real URL or for the image to load.
-               Hide when thumbnail is in a terminal no-URL state. */}
+               Hidden when thumbnail is pending (has its own UI), terminal, or errored. */}
           {(!isLoaded || isLoadingThumbnail || !hasDisplayUrl) && !isError && !isTerminalNoUrl && !isThumbnailPending && (
             <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
-          {/* Processing/queued — thumbnail pipeline is still running */}
-          {isThumbnailPending && !hasDisplayUrl && (
+          {/* Processing/queued — thumbnail pipeline is still running, within retry budget */}
+          {isThumbnailPending && !hasDisplayUrl && !retryExhausted && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay">
               <ArrowPathIcon className="h-8 w-8 animate-spin text-text-muted" />
               <span className="text-xs text-text-muted">
@@ -271,15 +300,33 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
             </div>
           )}
 
-          {/* Terminal no-URL — file cannot be previewed or failed permanently */}
+          {/* Retry exhausted — client gave up auto-polling; offer manual retry */}
+          {isThumbnailPending && !hasDisplayUrl && retryExhausted && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay p-4">
+              <PhotoIcon className="h-10 w-10 text-text-muted" />
+              <span className="text-center text-xs text-text-muted">
+                {t("chat:image.processingFallback", { defaultValue: "Ảnh đang được xử lý" })}
+              </span>
+              <button
+                type="button"
+                onClick={handleManualRetry}
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <ArrowPathIcon className="h-3 w-3" />
+                {t("chat:image.retry", { defaultValue: "Thử lại" })}
+              </button>
+            </div>
+          )}
+
+          {/* Terminal no-URL — server says this file cannot be previewed or permanently failed */}
           {isTerminalNoUrl && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
               <PhotoIcon className="h-10 w-10 text-text-muted" />
-              {thumbnailUrl?.status === 'not_previewable' && (
-                <span className="text-center text-xs text-text-muted">
-                  {t("chat:image.notPreviewable", { defaultValue: "Không hỗ trợ xem trước" })}
-                </span>
-              )}
+              <span className="text-center text-xs text-text-muted">
+                {thumbnailUrl?.status === 'not_previewable'
+                  ? t("chat:image.notPreviewable", { defaultValue: "Không hỗ trợ xem trước" })
+                  : t("chat:image.previewFailed", { defaultValue: "Không tạo được xem trước" })}
+              </span>
             </div>
           )}
 
