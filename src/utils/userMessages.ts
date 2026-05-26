@@ -5,7 +5,7 @@ const I18N_MARKER_PREFIX = "__I18N__";
 const englishMessageMap: Array<[RegExp, string]> = [
   [/^login successful!?$/i, "Đăng nhập thành công."],
   [/^signed in with qr successfully\.?$/i, "Đăng nhập bằng QR thành công."],
-  [/^login failed\.?$/i, "Đăng nhập thất bại."],
+  [/^login failed\.?$/i, "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại."],
   [/^registration successful/i, "Đăng ký thành công."],
   [/^registration failed\.?$/i, "Đăng ký thất bại."],
   [/^password reset email has been sent!?$/i, "Email đặt lại mật khẩu đã được gửi."],
