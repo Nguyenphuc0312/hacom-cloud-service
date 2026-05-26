@@ -8,7 +8,8 @@ WORKDIR /workspace/chat-shared-types
 RUN npm ci
 
 WORKDIR /workspace
-COPY chat-web-client/package*.json ./chat-web-client/
+COPY chat-web-client/package.json ./chat-web-client/
+COPY chat-web-client/package-lock.json ./chat-web-client/
 WORKDIR /workspace/chat-web-client
 RUN npm ci
 
