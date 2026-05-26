@@ -2,6 +2,13 @@ import type {
   AuthRefreshEvent,
   AuthRefreshTrigger,
 } from "../services/authRefreshCoordinator";
+import {
+  extractHttpStatus,
+  isDefiniteAuthRefreshFailure,
+  isTransientRefreshFailure,
+} from "../services/authRefreshErrorClassifier";
+import type { AuthFailureInput } from "../stores/authStore";
+import { logger } from "../utils/logger";
 
 export type WebSocketAuthRecoveryTrigger =
   | "ws_reauth_required"
@@ -20,7 +27,7 @@ type CreateWebSocketAuthCoordinatorOptions = {
   tokenRefreshThreshold: number;
   onError?: (error: Error) => void;
   notifySessionExpired: () => void;
-  handleAuthFailure: () => Promise<void>;
+  handleAuthFailure: (input?: AuthFailureInput) => Promise<void>;
   resetAuthFailureState: () => void;
   refreshAccessTokenShared: (trigger: AuthRefreshTrigger) => Promise<string>;
   getAccessToken: () => string | null;
@@ -84,13 +91,35 @@ export const createWebSocketAuthCoordinator = ({
     reason: string,
     error: unknown,
   ): Promise<void> => {
-    if (!state.failureHandled) {
-      state.failureHandled = true;
-      notifySessionExpired();
-      await handleAuthFailure();
+    const message = error instanceof Error ? error.message : "refresh_failed";
+
+    // Transient failures (network/timeout/429/5xx) must NOT log the user out.
+    // The WebSocket reconnect scheduler/backoff will retry; the session is
+    // still valid. This mirrors the HTTP interceptor's behavior.
+    if (!isDefiniteAuthRefreshFailure(error)) {
+      logger.warn("ws-auth", "recovery_failed_transient_keep_session", {
+        reason,
+        status: extractHttpStatus(error),
+        transient: isTransientRefreshFailure(error),
+      });
+      onError?.(
+        new Error(`WebSocket auth recovery transient failure (${reason}): ${message}`),
+      );
+      return;
     }
 
-    const message = error instanceof Error ? error.message : "refresh_failed";
+    if (!state.failureHandled) {
+      state.failureHandled = true;
+      logger.warn("ws-auth", "recovery_failed_definitive_logout", { reason });
+      notifySessionExpired();
+      await handleAuthFailure({
+        reason: "ws_refresh_definitive_auth_failure",
+        broadcast: true,
+        redirect: true,
+        definitive: true,
+      });
+    }
+
     onError?.(
       new Error(`WebSocket auth recovery failed (${reason}): ${message}`),
     );

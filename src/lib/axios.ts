@@ -27,6 +27,7 @@ import {
 } from "../services/tokenService";
 import { updateSocketAuth } from "./socket";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
+import { isDefiniteAuthRefreshFailure } from "../services/authRefreshErrorClassifier";
 import { logger } from "../utils/logger";
 import { apiPerfLogger } from "../utils/apiPerfLogger";
 
@@ -159,33 +160,6 @@ const notifyAuthFailure = (reason: AuthFailureReason): void => {
   if (authFailureHandler) {
     void authFailureHandler(reason);
   }
-};
-
-/**
- * Returns true only when the refresh attempt was definitively rejected by the
- * server (HTTP 401/403) or when there is no local token to begin with.
- * Network errors (no HTTP response), 5xx server errors, and timeouts are NOT
- * definitive auth failures — the session may still be valid and should be
- * preserved so the user can recover once connectivity is restored.
- */
-const isDefiniteAuthRefreshFailure = (error: unknown): boolean => {
-  if (axios.isAxiosError(error)) {
-    if (!error.response) return false; // network error, not a server rejection
-    const status = error.response.status;
-    return status === 401 || status === 403;
-  }
-  if (error instanceof Error) {
-    return (
-      error.message.includes("Missing refresh token") ||
-      error.message.includes("No refresh token available") ||
-      error.message.includes("Auth session is inactive") ||
-      // csrfToken cookie unreadable (path mismatch or expired session cookie):
-      // treat as definitive failure so the interceptor clears the session and
-      // redirects to /login rather than retrying indefinitely.
-      error.message.includes("CSRF token not available")
-    );
-  }
-  return false;
 };
 
 const refreshAccessToken = async (): Promise<string> => {

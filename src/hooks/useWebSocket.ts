@@ -608,8 +608,8 @@ export const useWebSocket = (
             cooldownMs: 30000,
           });
         },
-        handleAuthFailure: () =>
-          useAuthStore.getState().handleAuthFailure("refresh_failed"),
+        handleAuthFailure: (input) =>
+          useAuthStore.getState().handleAuthFailure(input ?? "refresh_failed"),
         resetAuthFailureState,
         refreshAccessTokenShared,
         getAccessToken,
