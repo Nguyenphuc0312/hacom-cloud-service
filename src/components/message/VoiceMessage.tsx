@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+﻿import React, { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
@@ -131,7 +131,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn
             ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.3]"
-            : "bg-gradient-to-r from-[#C41E3A] to-[#D32F2F] text-white hover:brightness-105",
+            : "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white hover:brightness-105",
         )}
         aria-label={isPlaying ? t("chat:voice.pause") : t("chat:voice.play")}
       >
@@ -164,7 +164,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
                   isPlayed
                     ? isOwn
                       ? "bg-[hsl(var(--chat-bubble-sent-text))]"
-                      : "bg-[#C41E3A]"
+                      : "bg-[#1976D2]"
                     : isOwn
                       ? "bg-[hsl(var(--chat-bubble-sent-text))/0.45]"
                       : "bg-border-strong/45",

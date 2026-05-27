@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
@@ -87,7 +87,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[#FFC857]/10",
+    container: "bg-[#DBEAFE]/10",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
@@ -260,7 +260,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       {(visualState === "active" || visualState === "mention") && (
         <span
           className="absolute left-0 top-2 bottom-2 w-1 rounded-full"
-          style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
+          style={{ background: "linear-gradient(180deg, #1565C0 0%, #DBEAFE 100%)" }}
           aria-hidden="true"
         />
       )}

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   ArrowsPointingOutIcon,
   ComputerDesktopIcon,
@@ -56,7 +56,7 @@ export const VideoCallView: React.FC<VideoCallViewProps> = ({
 
       <div className="relative min-h-0 flex-1">
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[#C41E3A] to-[#D32F2F] text-4xl font-semibold text-white">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[#1976D2] to-[#1565C0] text-4xl font-semibold text-white">
             {name.slice(0, 1).toUpperCase()}
           </div>
         </div>

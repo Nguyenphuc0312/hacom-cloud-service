@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Toggle switch component for settings
  * Accessible, keyboard-navigable toggle with label + description.
  */
@@ -61,8 +61,8 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
         className={clsx(
           "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full",
           "transition-all duration-200 ease-in-out",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
-          checked ? "bg-gradient-to-r from-[#C41E3A] to-[#D32F2F] shadow-xs" : "bg-border-strong/55",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+          checked ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] shadow-xs" : "bg-border-strong/55",
           disabled && "pointer-events-none",
         )}
       >

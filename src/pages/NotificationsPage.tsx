@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -227,8 +227,8 @@ const NotificationsPage: React.FC = () => {
                   className={clsx(
                     "rounded-full border px-3 py-1.5 text-xs font-medium transition-micro",
                     isActive
-                      ? "border-[#C41E3A]/25 bg-[#FFC857]/20 text-[#C41E3A]"
-                      : "border-border/70 bg-surface text-text-secondary hover:bg-[#FFC857]/8",
+                      ? "border-[#1976D2]/25 bg-[#1976D2]/10 text-[#1565C0]"
+                      : "border-border/70 bg-surface text-text-secondary hover:bg-[#1976D2]/8",
                   )}
                 >
                   {getFilterLabel(filter, t)}
@@ -254,8 +254,8 @@ const NotificationsPage: React.FC = () => {
                   className={clsx(
                     "flex w-full items-start gap-4 rounded-2xl border px-4 py-4 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     item.isRead
-                      ? "border-transparent bg-transparent hover:bg-[#FFC857]/8"
-                      : "border-[#FFC857]/20 bg-[#FFC857]/6 hover:bg-[#FFC857]/10",
+                      ? "border-transparent bg-transparent hover:bg-[#1976D2]/8"
+                      : "border-[#1976D2]/20 bg-[#DBEAFE]/6 hover:bg-[#DBEAFE]/10",
                   )}
                 >
                   <div
@@ -267,7 +267,7 @@ const NotificationsPage: React.FC = () => {
                           ? "bg-warning/12 text-warning"
                           : item.kind === "system"
                             ? "bg-secondary/12 text-secondary"
-                            : "bg-[#C41E3A]/10 text-[#C41E3A]",
+                            : "bg-[#1976D2]/10 text-[#1565C0]",
                     )}
                   >
                     <NotificationKindIcon item={item} />

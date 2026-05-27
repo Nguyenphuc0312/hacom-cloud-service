@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -96,7 +96,7 @@ const formatRelationshipLabel = (
 };
 
 const badgeToneByRelationship: Record<string, string> = {
-  self: "bg-[#C41E3A]/10 text-[#C41E3A]",
+  self: "bg-[#1976D2]/10 text-[#1565C0]",
   friend: "bg-success/12 text-success",
   incoming_request: "bg-warning/12 text-warning",
   outgoing_request: "bg-surface-overlay text-text-secondary",
@@ -525,7 +525,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {user?.phone ? (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
-                        <PhoneIcon className="mt-0.5 h-5 w-5 text-[#C41E3A]" />
+                        <PhoneIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                             {t("profile:editProfileModal.phone")}
@@ -541,7 +541,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {user?.createdAt ? (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
-                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-[#C41E3A]" />
+                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                             {t("friends:joined")}

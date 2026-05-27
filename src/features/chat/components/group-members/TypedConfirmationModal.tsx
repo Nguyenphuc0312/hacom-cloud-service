@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Modal } from "../../../../components/ui/Modal";
@@ -95,7 +95,7 @@ export const TypedConfirmationModal: React.FC<TypedConfirmationModalProps> = ({
                 "w-full rounded-md border px-3 py-2 text-sm",
                 "border-border bg-surface text-text-primary",
                 "placeholder:text-text-muted",
-                "focus:outline-none focus:ring-2 focus:ring-[#FFC857]/30",
+                "focus:outline-none focus:ring-2 focus:ring-[#1976D2]/30",
               )}
               autoFocus
             />

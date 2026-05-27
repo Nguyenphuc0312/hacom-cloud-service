@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   MicrophoneIcon,
   PhoneXMarkIcon,
@@ -42,7 +42,7 @@ export const AudioCallDialog: React.FC<AudioCallDialogProps> = ({
         aria-modal="true"
         aria-label={`Gọi thoại ${name}`}
       >
-        <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-[#C41E3A]/12 text-xl font-semibold text-[#C41E3A]">
+        <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-[#1976D2]/12 text-xl font-semibold text-[#1565C0]">
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (

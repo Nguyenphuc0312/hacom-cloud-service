@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import {
   SparklesIcon,
   AlertCircleIcon,
@@ -98,7 +98,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 )}
                 style={
                   message.role === "assistant" && !message.isError
-                    ? { background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }
+                    ? { background: "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)" }
                     : message.role === "user"
                       ? { background: "rgba(196,30,58,0.75)" }
                       : undefined
@@ -228,7 +228,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
               <div className="flex gap-4">
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white mt-0.5"
-                  style={{ background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }}
+                  style={{ background: "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)" }}
                 >
                   <SparklesIcon size={16} strokeWidth={2.5} />
                 </div>

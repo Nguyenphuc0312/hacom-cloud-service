@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview StickerGrid - Grid display of stickers.
  *
  * Features:
@@ -85,7 +85,7 @@ const StickerGridItem: React.FC<StickerGridItemProps> = ({
       className={clsx(
         "group/sticker relative aspect-square overflow-hidden rounded-lg",
         "transition-transform duration-150 hover:scale-110 active:scale-95",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30",
       )}
       aria-label={sticker.name}
       title={sticker.name}

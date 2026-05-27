@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { Button, Checkbox, Modal } from "../../../components/ui";
 
@@ -116,7 +116,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
             <button
               type="button"
               onClick={addOption}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#C41E3A] transition-micro hover:bg-[#C41E3A]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#1565C0] transition-micro hover:bg-[#1976D2]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
             >
               <PlusIcon className="h-4 w-4" aria-hidden="true" />
               Thêm lựa chọn

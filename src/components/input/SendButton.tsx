@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 
@@ -47,9 +47,9 @@ export const SendButton: React.FC<SendButtonProps> = ({
         resolvedState === "idle" &&
           "border-border/55 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-none hover:bg-surface-hover/80 hover:text-text-primary",
         resolvedState === "ready-to-send" &&
-          "border-transparent bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-lg shadow-[#C41E3A]/25 hover:brightness-105 active:scale-95",
+          "border-transparent bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-md shadow-[#1565C0]/15 hover:brightness-105 active:scale-95",
         resolvedState === "uploading" &&
-          "border-[#FFC857]/25 bg-[#FFC857]/12 text-[#C41E3A] shadow-none",
+          "border-[#1976D2]/25 bg-[#DBEAFE]/12 text-[#1565C0] shadow-none",
         resolvedState === "slow-mode" &&
           "border-warning/30 bg-warning/10 text-warning shadow-none",
         resolvedState === "offline" &&

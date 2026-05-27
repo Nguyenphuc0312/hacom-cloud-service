@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+﻿import React, { useCallback } from "react";
 import { clsx } from "clsx";
 import { HeartIcon } from "@heroicons/react/24/outline";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -17,7 +17,7 @@ interface MessageActionBarProps {
 
 const actionBtnClass = clsx(
   "flex h-8 w-8 items-center justify-center rounded-full",
-  "text-text-secondary hover:bg-surface-hover hover:text-[#C41E3A]",
+  "text-text-secondary hover:bg-surface-hover hover:text-[#1565C0]",
   "transition-all duration-100",
   "active:scale-90",
 );

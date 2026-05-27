@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+﻿import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -494,8 +494,8 @@ const MiniCalendar: React.FC<{
               "flex h-7 w-full items-center justify-center rounded text-xs transition-micro",
               !dayInfo.isCurrentMonth && "text-text-disabled",
               dayInfo.isCurrentMonth && !isToday(dayInfo.date) && !isSelected(dayInfo.date) && "text-text-primary hover:bg-surface-hover",
-              isToday(dayInfo.date) && "bg-[#C41E3A] text-white font-semibold",
-              isSelected(dayInfo.date) && !isToday(dayInfo.date) && "bg-[#FFC857]/20 text-[#C41E3A] font-medium ring-2 ring-[#FFC857]/40"
+              isToday(dayInfo.date) && "bg-[#1565C0] text-white font-semibold",
+              isSelected(dayInfo.date) && !isToday(dayInfo.date) && "bg-[#1976D2]/10 text-[#1565C0] font-medium ring-2 ring-[#1976D2]/40"
             )}
           >
             {dayInfo.date.getDate()}
@@ -968,7 +968,7 @@ export const CalendarPage: React.FC = () => {
                 placeholder="Tìm kiếm sự kiện..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-[#FFC857]/60 focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
               />
               {searchQuery && (
                 <button
@@ -1055,7 +1055,7 @@ export const CalendarPage: React.FC = () => {
                       type="checkbox"
                       checked={filter.checked}
                       onChange={() => toggleFilter(filter.type)}
-                      className="h-4 w-4 rounded border-border accent-[#C41E3A] focus:ring-2 focus:ring-[#FFC857]/30"
+                      className="h-4 w-4 rounded border-border accent-[#1565C0] focus:ring-2 focus:ring-[#1976D2]/30"
                     />
                     <span
                       className={clsx("h-2.5 w-2.5 rounded-full", filter.color)}
@@ -1073,7 +1073,7 @@ export const CalendarPage: React.FC = () => {
                 setMeetingModalDate(formatDateString(selectedDate));
                 setMeetingModalOpen(true);
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-[#C41E3A]/60 hover:bg-[#C41E3A]/5 hover:text-[#C41E3A] transition-micro"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5 hover:text-[#1565C0] transition-micro"
             >
               <PlusIcon className="h-4 w-4" />
               Thêm lịch
@@ -1112,7 +1112,7 @@ export const CalendarPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={goToToday}
-                  className="rounded-xl bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] px-4 py-1.5 text-sm font-medium text-white hover:brightness-105 active:scale-95 shadow-sm shadow-[#C41E3A]/25 transition-micro"
+                  className="rounded-xl bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:brightness-105 active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
                 >
                   Hôm nay
                 </button>
@@ -1128,7 +1128,7 @@ export const CalendarPage: React.FC = () => {
                     className={clsx(
                       "rounded-md px-3 py-1.5 text-sm font-medium transition-micro",
                       currentView === view.id
-                        ? "bg-gradient-to-r from-[#C41E3A] to-[#D32F2F] text-white shadow-sm"
+                        ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-sm"
                         : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                     )}
                   >
@@ -1188,7 +1188,7 @@ export const CalendarPage: React.FC = () => {
                             "flex h-7 w-7 items-center justify-center rounded-full text-sm",
                             !dayInfo.isCurrentMonth && "text-text-disabled",
                             dayInfo.isCurrentMonth && !isToday(dayInfo.date) && "text-text-primary",
-                            isToday(dayInfo.date) && "bg-[#C41E3A] text-white font-semibold"
+                            isToday(dayInfo.date) && "bg-[#1565C0] text-white font-semibold"
                           )}
                         >
                           {dayInfo.date.getDate()}
@@ -1218,7 +1218,7 @@ export const CalendarPage: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                             }}
-                            className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-[#C41E3A] transition-micro"
+                            className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-[#1565C0] transition-micro"
                           >
                             +{remainingCount} sự kiện
                           </button>

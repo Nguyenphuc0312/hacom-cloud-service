@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview StickerMessage - Sticker display component.
  *
  * Features:
@@ -71,7 +71,7 @@ export const StickerMessage: React.FC<StickerMessageProps> = ({
           className="flex h-[120px] w-[120px] items-center justify-center rounded-lg bg-surface-overlay animate-pulse"
           style={{ width: 120, height: 120 }}
         >
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C41E3A] border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1976D2] border-t-transparent" />
         </div>
       )}
 
