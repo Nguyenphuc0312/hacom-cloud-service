@@ -26,7 +26,11 @@ import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
 import { conversationApi, userApi } from "../services/api";
-import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import {
+  extractApiError,
+  unwrapApiSuccess,
+} from "../lib/apiContract";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { ROUTE_PATHS } from "../router/paths";
 import { UserStatus } from "../types";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
@@ -499,7 +503,7 @@ export const FriendsPage: React.FC = () => {
     ): Promise<ContactUser[]> => {
       try {
         const res = await fn();
-        return normalizeSearchResults(unwrapApiSuccess(res));
+        return normalizeSearchResults(unwrapApiSuccess(res as ApiResponse<unknown>));
       } catch {
         return [];
       }
