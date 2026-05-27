@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview StickerPicker - Sticker selection panel (Zalo-style).
  *
  * Features:
@@ -203,7 +203,7 @@ export const StickerPicker: React.FC<StickerPickerProps> = ({
             className={clsx(
               "w-full rounded-lg border border-border bg-surface-overlay py-2 pl-9 pr-8 text-sm",
               "placeholder:text-text-muted",
-              "focus:border-[#FFC857]/60 focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
+              "focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15",
             )}
           />
           {searchQuery && (

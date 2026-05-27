@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ReactionChip - Single reaction chip component with tooltip.
  *
  * Features:
@@ -99,7 +99,7 @@ export const ReactionChip: React.FC<ReactionChipProps> = ({
           "border transition-all duration-100",
           "hover:scale-105 hover:shadow-xs active:scale-100",
           reactedByMe
-            ? "bg-[#FFC857]/15 border-[#FFC857]/40 hover:bg-[#FFC857]/20"
+            ? "bg-[#1976D2]/10 border-[#1976D2]/40 hover:bg-[#1976D2]/10"
             : "bg-surface border-border hover:bg-surface-hover",
           className,
         )}
@@ -114,7 +114,7 @@ export const ReactionChip: React.FC<ReactionChipProps> = ({
         <span
           className={clsx(
             "font-medium tabular-nums",
-            reactedByMe ? "text-[#C41E3A]" : "text-text-secondary",
+            reactedByMe ? "text-[#1565C0]" : "text-text-secondary",
           )}
         >
           {reaction.count}

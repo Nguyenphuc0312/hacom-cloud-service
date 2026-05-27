@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { RoomMemberRole } from "../../../../types";
@@ -22,7 +22,7 @@ export const MemberRoleBadge: React.FC<MemberRoleBadgeProps> = ({ role, classNam
 
   const roleClasses: Record<RoomMemberRole, string> = {
     [RoomMemberRole.OWNER]: "bg-warning/15 text-warning",
-    [RoomMemberRole.ADMIN]: "bg-[#C41E3A]/10 text-[#C41E3A]",
+    [RoomMemberRole.ADMIN]: "bg-[#1976D2]/10 text-[#1565C0]",
     [RoomMemberRole.MODERATOR]: "bg-purple-500/15 text-purple-600",
     [RoomMemberRole.MEMBER]: "bg-surface-overlay text-text-muted",
     [RoomMemberRole.RESTRICTED]: "bg-orange-500/15 text-orange-600",

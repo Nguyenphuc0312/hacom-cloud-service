@@ -29,11 +29,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   brand:
-    "border border-[#C41E3A] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-lg shadow-[#C41E3A]/25 hover:brightness-105 focus:ring-[#C41E3A]/30",
+    "border border-[#1565C0] bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-md shadow-[#1565C0]/20 hover:brightness-105 focus:ring-[#1565C0]/25",
   "brand-yellow":
-    "border border-[#FFC857]/70 bg-gradient-to-r from-[#FFC857] via-[#E6A800] to-[#C41E3A] text-white shadow-lg shadow-[#FFC857]/30 hover:brightness-105 focus:ring-[#FFC857]/30",
+    "border border-[#1565C0]/70 bg-gradient-to-r from-[#1565C0] to-[#1976D2] text-white shadow-md shadow-[#1565C0]/25 hover:brightness-105 focus:ring-[#1565C0]/25",
   "brand-outline":
-    "border border-[#C41E3A]/40 bg-transparent text-[#C41E3A] hover:bg-[#C41E3A]/8 active:bg-[#C41E3A]/12 focus:ring-[#C41E3A]/25",
+    "border border-[#1976D2]/60 bg-transparent text-[#1565C0] hover:bg-[#1976D2]/8 active:bg-[#1976D2]/12 focus:ring-[#1565C0]/25",
   primary:
     "border border-primary bg-primary text-text-inverse hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
   secondary:

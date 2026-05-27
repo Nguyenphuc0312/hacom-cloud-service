@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+﻿import React, { useCallback } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -33,7 +33,7 @@ const KindIcon: React.FC<{
     case "pdf":
       return <DocumentTextIcon className={clsx(className, "text-danger")} />;
     case "doc":
-      return <DocumentTextIcon className={clsx(className, "text-[#C41E3A]")} />;
+      return <DocumentTextIcon className={clsx(className, "text-[#1565C0]")} />;
     default:
       return <DocumentTextIcon className={className} />;
   }
@@ -55,7 +55,7 @@ const StatusBadge: React.FC<{
     case "uploading":
     case "completing":
       return (
-        <span className="text-[10px] font-medium text-[#C41E3A]">
+        <span className="text-[10px] font-medium text-[#1565C0]">
           {t("chat:attachmentTray.uploading")}
         </span>
       );
@@ -198,7 +198,7 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
       ) && (
         <div className="h-1 w-full overflow-hidden rounded-full bg-border">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857] transition-[width] duration-200"
+            className="h-full rounded-full bg-gradient-to-r from-[#1565C0] to-[#1565C0] transition-[width] duration-200"
             style={{ width: `${draft.progress}%` }}
             role="progressbar"
             aria-valuenow={draft.progress}

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
@@ -340,7 +340,7 @@ export const SettingsPage: React.FC = () => {
           })}
           badge={
             currentUser ? (
-              <span className="hidden rounded-full bg-[#C41E3A]/10 px-2 py-1 text-[11px] font-semibold text-[#C41E3A] sm:inline-flex">
+              <span className="hidden rounded-full bg-[#1976D2]/10 px-2 py-1 text-[11px] font-semibold text-[#1565C0] sm:inline-flex">
                 {resolveUserDisplayName(currentUser, {
                   allowLegacyFallback: true,
                 })}

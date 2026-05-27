@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ReactionPicker - Unified emoji picker component.
  *
  * Features:
@@ -161,7 +161,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
                 "flex flex-1 items-center justify-center gap-1.5 py-2 text-xs",
                 "transition-colors duration-100",
                 activeTab === tab.id
-                  ? "border-b-2 border-[#C41E3A] font-medium text-[#C41E3A]"
+                  ? "border-b-2 border-[#1976D2] font-medium text-[#1565C0]"
                   : "text-text-secondary hover:text-text-primary",
               )}
             >

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview PinnedMessagesPanel
  * Presentational panel that lists pinned messages for a conversation.
  * Click an item to jump to it; hover to reveal the unpin action.
@@ -51,14 +51,14 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
       <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3">
         <HugeiconsIcon
           icon={PinIcon}
-          className="h-[18px] w-[18px] text-[#C41E3A]"
+          className="h-[18px] w-[18px] text-[#1565C0]"
           strokeWidth={1.5}
         />
         <h3 className="flex-1 text-sm font-semibold text-text-primary">
           {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
         </h3>
         {pinnedMessages.length > 0 && (
-          <span className="rounded-full bg-[#C41E3A]/10 px-2 py-0.5 text-xs font-medium text-[#C41E3A]">
+          <span className="rounded-full bg-[#1976D2]/10 px-2 py-0.5 text-xs font-medium text-[#1565C0]">
             {pinnedMessages.length}
           </span>
         )}

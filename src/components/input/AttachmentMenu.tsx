@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+﻿import React, { useEffect, useRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -31,7 +31,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       id: "photo",
       label: t("chat:attachment.types.photo"),
       icon: PhotoIcon,
-      color: "bg-[#FFC857]/20 text-[#C41E3A]",
+      color: "bg-[#1976D2]/10 text-[#1565C0]",
       enabled: true,
     },
     {
@@ -66,7 +66,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       id: "poll",
       label: t("chat:attachment.types.poll"),
       icon: ChartBarIcon,
-      color: "bg-[#FFC857]/20 text-[#C41E3A]",
+      color: "bg-[#1976D2]/10 text-[#1565C0]",
       enabled: true,
     },
   ];

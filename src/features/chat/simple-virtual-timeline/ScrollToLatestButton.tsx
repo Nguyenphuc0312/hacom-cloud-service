@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { ArrowDown } from "lucide-react";
 
@@ -66,7 +66,7 @@ const ScrollToLatestButtonComponent: React.FC<ScrollToLatestButtonProps> = ({
           className={clsx(
             "absolute -right-1 -top-1",
             "flex h-5 min-w-5 items-center justify-center rounded-full",
-            "bg-[#FFC857] px-1 text-xs font-semibold text-[#C41E3A]",
+            "bg-[#DBEAFE] px-1 text-xs font-semibold text-[#1565C0]",
           )}
         >
           {badge}

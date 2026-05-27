@@ -1,33 +1,248 @@
-# CLAUDEUI.md — Bảng màu & các màn UI
+# WEBUI.md — Bảng màu & Hướng dẫn chỉnh UI
 
-Tài liệu **chỉ dành cho việc thiết kế / chỉnh UI**: tổng hợp toàn bộ màn hình của app và bảng màu nhận diện (đỏ, vàng, đỏ + vàng — đúng tông màn Đăng nhập). Khi sửa UI, lấy mã màu ở đây — **không hardcode lại từ trí nhớ**.
+Tài liệu **chỉ dành cho việc thiết kế / chỉnh UI**. Đọc file này trước khi sửa bất kỳ màu nào — **không hardcode từ trí nhớ**.
 
-> Nguồn dữ liệu: `src/index.css`, `tailwind.config.js`, `src/router/config/*.ts`, `src/pages/**`, `src/features/*/pages/**`, `src/components/auth/PasswordLoginForm.tsx`, `src/shared/layout/*`.
+> Nguồn dữ liệu: `src/index.css`, `src/components/ui/Button.tsx`, `src/shared/layout/SideRail.tsx`, `src/components/layout/sidebar/RoomItem.tsx`, `tailwind.config.js`.
 
 ---
 
-## 1. Brand palette HACOM — Đỏ + Vàng
+## 1. Quy tắc màu tổng quát
 
-### 1.1 Đỏ (red / crimson) — màu chủ đạo
-| Token / Hex | HSL | Dùng ở đâu |
+App dùng **hai vùng màu** tách biệt:
+
+| Vùng | Màu | Ghi chú |
 |---|---|---|
-| `#C41E3A` (crimson) | `350 73% 44%` | Gradient nút Đăng nhập (điểm bắt đầu); chữ trên badge vàng (`.hc-side-rail__badge` color); shadow nút login (`shadow-[#C41E3A]/25`) |
-| `#D32F2F` (red 600) | `0 65% 51%` | Gradient nền sidebar rail (đỉnh); gradient nút Đăng nhập (giữa); box-shadow đổ bóng rail (`rgb(211 47 47 / 0.18)`) |
-| `#B71C1C` (red 700) | `0 73% 41%` | Viền phải sidebar rail (`border-right`); inset shadow rail (light mode); gradient rail (top trong dark mode) |
-| `#8B0000` (dark red) | `0 100% 27%` | Gradient sidebar rail dark mode (đáy) |
-| `#7F1717` | `0 70% 29%` | Border + inset shadow rail trong dark mode |
+| **Thanh điều hướng trái (SideRail)** | Đỏ + Vàng | `#D32F2F → #C41E3A`, badge vàng `#FFC857` |
+| **Màn Đăng nhập** | Đỏ + Vàng | Gradient nút `#C41E3A → #D32F2F → #FFC857` |
+| **Toàn bộ app còn lại** | Xanh dương | `#1976D2` (medium blue) / `#1565C0` (dark blue) |
 
-### 1.2 Vàng (yellow / amber) — accent
-| Token / Hex | HSL | Dùng ở đâu |
+---
+
+## 2. Brand Palette — Đỏ + Vàng (chỉ SideRail & LoginPage)
+
+### 2.1 Màu đỏ
+| Hex | Tên | Dùng ở đâu |
 |---|---|---|
-| `#FFC857` (amber sáng) | `40 100% 67%` | Background badge số (`.hc-side-rail__badge`); điểm kết thúc gradient nút Đăng nhập |
-| `#FACC15` (yellow 400) | `48 96% 53%` | Indicator thanh dọc khi item rail active (đỉnh gradient) |
-| `#EAB308` (yellow 500) | `45 93% 47%` | Indicator rail active (đáy gradient); shadow indicator (`rgb(234 179 8 / 0.5)`) |
+| `#C41E3A` | Crimson | Gradient rail (đáy); chữ badge rail; shadow nút login |
+| `#D32F2F` | Red 600 | Gradient rail (đỉnh); gradient nút login (giữa); box-shadow rail |
+| `#B71C1C` | Red 700 | Viền phải rail; inset shadow rail (light mode); gradient rail dark (đỉnh) |
+| `#8B0000` | Dark red | Gradient rail dark mode (đáy) |
+| `#7F1717` | | Border + inset shadow rail trong dark mode |
 
-### 1.3 Kết hợp Đỏ + Vàng (signature combo — như màn Đăng nhập)
-Đây là **chữ ký nhận diện** của app. Khi muốn nhấn mạnh CTA quan trọng dùng đúng pattern này:
+### 2.2 Màu vàng
+| Hex | Tên | Dùng ở đâu |
+|---|---|---|
+| `#FFC857` | Amber sáng | Nền badge số unread trên rail; điểm cuối gradient nút login |
+| `#FACC15` | Yellow 400 | Indicator thanh dọc item rail active (đỉnh) |
+| `#EAB308` | Yellow 500 | Indicator rail active (đáy); shadow indicator |
 
-**Nút Đăng nhập** (`src/components/auth/PasswordLoginForm.tsx:137`):
+---
+
+## 3. Brand Palette — Xanh dương (toàn bộ app, trừ SideRail & Login)
+
+| Hex | Tên | Dùng ở đâu |
+|---|---|---|
+| `#1976D2` | Blue 700 | Gradient (đỉnh); border; shadow; focus ring |
+| `#1565C0` | Blue 800 | Gradient (đáy); text màu brand; checked state |
+| `#DBEAFE` | Blue 50 | Background highlight nhạt (hover, active, badge bg) |
+
+### Các pattern xanh hay dùng
+```
+Gradient nút/toggle/checkbox:  from-[#1976D2] to-[#1565C0]
+Text brand:                     text-[#1565C0]
+Background badge/highlight:     bg-[#1976D2]/10  hoặc  bg-[#DBEAFE]
+Border active:                  border-[#1976D2]/60
+Focus ring:                     focus:ring-[#1565C0]/25
+Hover bg nhạt:                  bg-[#1976D2]/8
+```
+
+---
+
+## 4. File & màu chi tiết từng thành phần
+
+### 4.1 SideRail — `src/index.css` (dòng 1382–1554)
+
+```css
+/* Light mode */
+.hc-side-rail {
+  background: linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%);
+  border-right: 1px solid #B71C1C;
+  box-shadow: inset -1px 0 0 #B71C1C, 2px 0 16px rgb(211 47 47 / 0.18);
+}
+
+/* Dark mode */
+:root[data-theme="dark"] .hc-side-rail {
+  background: linear-gradient(180deg, #B71C1C 0%, #8B0000 100%);
+  border-right-color: #7F1717;
+  box-shadow: inset -1px 0 0 #7F1717, 2px 0 16px rgb(211 47 47 / 0.3);
+}
+
+/* Icon (inactive) */
+.hc-side-rail__item { color: rgba(255, 255, 255, 0.7); }
+
+/* Icon (hover) */
+.hc-side-rail__item:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Icon (active) */
+.hc-side-rail__item--active {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Indicator thanh dọc (active) */
+.hc-side-rail__item-indicator {
+  background: linear-gradient(180deg, #FACC15 0%, #EAB308 100%);
+  box-shadow: 1px 0 6px rgb(234 179 8 / 0.5);
+}
+
+/* Badge số unread */
+.hc-side-rail__badge {
+  background: #FFC857;
+  color: #C41E3A;
+  box-shadow: 0 2px 6px rgba(255, 200, 87, 0.4);
+}
+
+/* Logo (nền trắng) */
+.hc-side-rail__logo {
+  background: white;
+  color: var(--hc-primary-800); /* #1e293b */
+}
+```
+
+---
+
+### 4.2 Button — `src/components/ui/Button.tsx`
+
+```typescript
+const variantClasses = {
+  // CTA nội bộ app (màn sau đăng nhập)
+  brand:
+    "border border-[#1565C0] bg-gradient-to-r from-[#1976D2] to-[#1565C0]
+     text-white shadow-md shadow-[#1565C0]/20
+     hover:brightness-105 focus:ring-[#1565C0]/25",
+
+  // Nút phụ/hủy đi kèm brand
+  "brand-outline":
+    "border border-[#1976D2]/60 bg-transparent text-[#1565C0]
+     hover:bg-[#1976D2]/8 active:bg-[#1976D2]/12
+     focus:ring-[#1565C0]/25",
+
+  // Không dùng nữa (giữ lại chỉ tương thích)
+  "brand-yellow":
+    "border border-[#1565C0]/70 bg-gradient-to-r from-[#1565C0] to-[#1976D2]
+     text-white shadow-md shadow-[#1565C0]/25
+     hover:brightness-105 focus:ring-[#1565C0]/25",
+
+  // Semantic variants — không thay đổi
+  primary:   "border-primary bg-primary text-text-inverse hover:bg-primary-hover",
+  secondary: "border-border bg-surface-overlay text-text-primary hover:bg-surface-hover",
+  outline:   "border-primary/40 bg-transparent text-primary hover:bg-primary/10",
+  ghost:     "border-transparent bg-transparent text-text-secondary hover:bg-surface-hover",
+  danger:    "border-danger bg-danger text-text-inverse hover:bg-danger-hover",
+};
+```
+
+**Quy tắc dùng Button:**
+- Nút submit/lưu chính → `variant="brand"`
+- Nút hủy đi kèm → `variant="brand-outline"`
+- Nút xóa/phá hoại → `variant="danger"`
+- Nút phụ trợ → `variant="ghost"` hoặc `variant="secondary"`
+
+---
+
+### 4.3 Badge unread (RoomItem) — `src/components/layout/sidebar/RoomItem.tsx`
+
+```typescript
+const ROOM_ITEM_STATE_MAP = {
+  default: {
+    container: "bg-transparent",
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",  // vàng + đỏ (khớp SideRail)
+  },
+  active: {
+    container: "bg-[#DBEAFE]/10",                  // highlight xanh rất nhạt
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
+  },
+  unread: {
+    container: "bg-transparent",
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
+  },
+  muted: {
+    unreadBadge: "bg-text-muted text-text-inverse",  // xám — đã tắt thông báo
+  },
+  mention: {
+    container: "bg-danger/6",
+    unreadBadge: "bg-danger text-text-inverse",       // đỏ danger — có mention
+  },
+};
+```
+
+> Badge unread dùng vàng+đỏ (`#FFC857` / `#C41E3A`) để **đồng bộ màu với badge trên SideRail**.
+
+---
+
+### 4.4 Toggle, Checkbox, RadioGroup — trạng thái active
+
+Tất cả đều dùng gradient xanh dương:
+
+**ToggleSwitch** — `src/components/settings/ToggleSwitch.tsx`:
+```tsx
+checked ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] shadow-xs"
+        : "bg-border-strong/55"
+// Focus: focus-visible:ring-2 focus-visible:ring-[#1976D2]/30
+```
+
+**Checkbox** — `src/components/ui/Checkbox.tsx`:
+```tsx
+"peer-checked:border-[#1565C0]
+ peer-checked:bg-gradient-to-br peer-checked:from-[#1565C0] peer-checked:to-[#1976D2]"
+// Focus: peer-focus:ring-2 peer-focus:ring-[#1976D2]/30
+```
+
+**RadioGroup** — `src/components/settings/RadioGroup.tsx`:
+- Pills active: `bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-xs`
+- Cards active: `border-[#1976D2]/25 bg-[#1976D2]/8`, icon `bg-[#1976D2]/10 text-[#1565C0]`
+- Radio dot: `border-[#1565C0]` / `bg-[#1565C0]`
+
+**ThemeToggle** — `src/components/common/ThemeToggle.tsx`:
+```tsx
+active ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-xs"
+       : "text-text-secondary hover:bg-surface hover:text-text-primary"
+```
+
+---
+
+### 4.5 NewChatButton & SendButton
+
+**NewChatButton** — `src/components/conversation/NewChatButton.tsx`:
+```tsx
+"bg-gradient-to-r from-[#1976D2] to-[#1565C0]
+ text-white shadow-lg hover:brightness-105 hover:scale-105 active:scale-95"
+```
+
+**SendButton** — `src/components/input/SendButton.tsx`:
+```tsx
+// Sẵn sàng gửi:
+"border-transparent bg-gradient-to-r from-[#1976D2] to-[#1565C0]
+ text-white shadow-md shadow-[#1565C0]/15 hover:brightness-105 active:scale-95"
+
+// Đang upload:
+"border-[#1976D2]/25 bg-[#DBEAFE]/12 text-[#1565C0]"
+```
+
+---
+
+### 4.6 LoginPage & PasswordLoginForm (GIỮ NGUYÊN ĐỎ/VÀNG)
+
+**`src/pages/LoginPage.tsx`** — tiêu đề gradient:
+```tsx
+"bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]
+ bg-clip-text text-transparent"
+```
+
+**`src/components/auth/PasswordLoginForm.tsx`** — nút Đăng nhập:
 ```tsx
 className="h-12 rounded-xl
   bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]
@@ -35,193 +250,115 @@ className="h-12 rounded-xl
   hover:brightness-105 active:scale-95
   shadow-lg shadow-[#C41E3A]/25"
 ```
-- Gradient ngang: đỏ → đỏ sáng → vàng amber
-- Chữ trắng, bóng đỏ 25%, brighten khi hover, scale nhẹ khi nhấn
-
-**Sidebar rail + badge** (`src/index.css:1382-1530`):
-- Nền rail: gradient dọc đỏ (`#D32F2F → #C41E3A`)
-- Badge unread: nền `#FFC857`, chữ `#C41E3A` (đỏ trên nền vàng)
-- Indicator item active: gradient vàng (`#FACC15 → #EAB308`)
-- **Đây chính là combo đỏ + vàng dùng làm nhận diện chính** ở khu vực điều hướng.
-
-### 1.4 Các sắc đỏ/vàng "ngữ nghĩa" (semantic — không phải brand)
-Token CSS variables trong `src/index.css` (light theme defaults):
-- `--color-danger: 0 84% 60%` → `hsl(0 84% 60%)` ≈ `#ef4444` (Tailwind red-500)
-- `--color-danger-hover: 0 72% 50%` ≈ `#dc2626` (red-600)
-- `--color-warning: 42 96% 50%` ≈ `#f5b800` (amber-ish)
-- `--color-warning-hover: 38 94% 44%` ≈ `#d97706`
-- `--color-away: 42 96% 50%` (= warning)
-- `--state-danger-bg: 0 100% 97%` / `--state-danger-border: 0 76% 82%` — alert đỏ nhạt
-- `--state-warning-bg: 46 100% 96%` / `--state-warning-border: 43 80% 76%` — alert vàng nhạt
-
-Dùng trong code qua class Tailwind: `text-danger`, `bg-danger/10`, `border-danger/30`, `text-warning`, `bg-warning/10`, `text-state-away`, …
-
-### 1.5 Các shade red/yellow Tailwind rải rác (ngoài token)
-Một số nơi vẫn dùng class Tailwind native (không qua token) — biết để giữ tông nhất quán:
-- `text-red-500 / bg-red-500/10` — icon PDF (`FileTypeIcon`, `PdfPreview`, `PdfJsViewer`), trạng thái lỗi file
-- `text-rose-500 / bg-rose-500/10` — icon trong `HelpPage`, ngày cuối tuần `CalendarPage`, banner reply lỗi
-- `bg-amber-500 / text-amber-600` — calendar tag "Cá nhân", icon audio, lưu trữ
-- `text-yellow-600 / bg-yellow-500/10` — icon archive (`ArchivePreview`)
-- `bg-red-500/20 text-red-600` — chip type PDF trong reply preview / thread group
-- `bg-amber-500/20 text-amber-700` — chip type ZIP/RAR
-- `bg-yellow-500 / bg-yellow-400` — chấm presence "away" / "idle" (`PresenceIndicator`)
-- `bg-red-500 / bg-red-400` — chấm presence "dnd" / "busy"
-- `URGENT badge`: `bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300` (task priority)
 
 ---
 
-## 2. CSS variables liên quan màu Brand (cố định, không đổi theo theme dark)
+### 4.7 ProfileSettingsSection (GIỮ NGUYÊN — CÓ ĐỎ/VÀNG)
 
-Khối `:root` ở cuối `src/index.css` (sau dòng 395) định nghĩa "Hacom palette" độc lập:
+**`src/features/profile/components/ProfileSettingsSection.tsx`**:
+- Avatar ring: `ring-2 ring-[#C41E3A]/20`
+- Job title text: `text-[#C41E3A]`
+- Background nhạt: `bg-[#FFC857]/4`
+- Hover item: `hover:bg-[#FFC857]/4`
+
+---
+
+### 4.8 CSS Variables hệ thống — `src/index.css`
+
 ```css
+/* Hacom palette cố định (không thay đổi theo dark/light) */
 --hc-primary-900: #0f172a;
 --hc-primary-800: #1e293b;
 --hc-primary-700: #0045a5;
 --hc-primary-600: #0057c8;
---hc-primary-500: #0068ff;       /* xanh — KHÔNG phải brand đỏ; dùng cho text/header chung */
+--hc-primary-500: #0068ff;    /* xanh — dùng cho text/header chung */
 --hc-primary-100: #f0f7ff;
 --hc-primary-50:  #f8fbff;
 --hc-cyan-500:    #22c7e8;
---hc-success-600: #16a34a;       /* xanh lá success */
---hc-warning-500: #f59e0b;       /* cam-vàng cảnh báo */
---hc-danger-600:  #dc2626;       /* đỏ danger */
+--hc-success-600: #16a34a;
+--hc-warning-500: #f59e0b;
+--hc-danger-600:  #dc2626;
 --hc-danger-50:   #fef2f2;
+
+/* Semantic tokens (thay đổi theo light/dark) */
+--color-primary:        206 100% 41%   /* xanh brand default */
+--color-danger:         0 84% 60%      /* ≈ #ef4444 — KHÔNG phải brand đỏ */
+--color-warning:        42 96% 50%     /* ≈ #f5b800 — KHÔNG phải brand vàng */
+
+/* Surface & text */
+--hc-surface:           #ffffff
+--hc-border:            #d7dce3
+--hc-border-soft:       #e5e7eb
+--hc-text-900:          #0f172a
+--hc-text-500:          #64748b
+--hc-bg-app:            #eef2f7
 ```
 
-> **Lưu ý:** `--hc-primary-*` ở đây là **xanh dương** dùng cho text/labels trong shell chung. Brand đỏ HACOM **không** lưu vào CSS var — chúng được hardcode trực tiếp ở `.hc-side-rail` và nút Đăng nhập.
+> `--color-danger` / `--color-warning` là **semantic state** — không phải màu brand. Dùng `text-danger`, `bg-danger/10` cho trạng thái lỗi/cảnh báo, không dùng cho brand UI.
 
 ---
 
-## 3. Toàn bộ các màn UI (screens) trong app
+### 4.9 Module Sidebar & Main Header
 
-### 3.1 Routes Public (chưa đăng nhập) — `src/router/config/publicRoutes.ts`
-| Path | File | Mô tả UI |
+```css
+.hc-module-sidebar {
+  background: var(--hc-surface);          /* #ffffff */
+  border-right: 1px solid var(--hc-border); /* #d7dce3 */
+}
+.hc-module-sidebar__header {
+  border-bottom: 1px solid var(--hc-border-soft); /* #e5e7eb */
+}
+.hc-module-sidebar__title { color: var(--hc-text-900); } /* #0f172a */
+
+.hc-main-header {
+  background: var(--hc-surface);          /* #ffffff */
+  border-bottom: 1px solid var(--hc-border); /* #d7dce3 */
+}
+```
+
+---
+
+## 5. Toàn bộ màn UI
+
+### 5.1 Routes Public
+| Path | File | Màu |
 |---|---|---|
-| `/login` | `src/pages/LoginPage.tsx` | **Màn đăng nhập** — split layout (slider ảnh trái + form phải), tabs "Tài khoản" / "Quét QR", nút submit gradient **đỏ → vàng** |
-| `/activation` | `src/features/activation/pages/ActivationFlowPage.tsx` | Kích hoạt tài khoản (OTP + set password) |
-| `/verify-email` | `src/pages/VerifyEmailPage.tsx` | Xác minh email |
-| `/forgot-password` | `src/pages/ForgotPasswordPage.tsx` | Quên mật khẩu |
-| `/reset-password` | `src/pages/ResetPasswordPage.tsx` | Đặt lại mật khẩu |
-| `/force-change-password` | `src/pages/ForceChangePasswordPage.tsx` | Bắt buộc đổi mật khẩu lần đầu |
+| `/login` | `src/pages/LoginPage.tsx` | **ĐỎ + VÀNG** (giữ nguyên) |
+| `/activation` | `src/features/activation/pages/ActivationFlowPage.tsx` | Xanh dương |
+| `/verify-email` | `src/pages/VerifyEmailPage.tsx` | Xanh dương |
+| `/forgot-password` | `src/pages/ForgotPasswordPage.tsx` | Xanh dương |
+| `/reset-password` | `src/pages/ResetPasswordPage.tsx` | Xanh dương |
+| `/force-change-password` | `src/pages/ForceChangePasswordPage.tsx` | Xanh dương |
 
-Tất cả màn public dùng chung `AuthLayoutSplit` (slider ảnh HACOM bên trái) hoặc `AuthShell`.
-
-### 3.2 Routes Private (đã đăng nhập) — `src/router/config/privateRoutes.ts`
-| Path | File | Mô tả UI |
+### 5.2 Routes Private
+| Path | File | Ghi chú |
 |---|---|---|
-| `/chat/:conversationId?` | `src/pages/ChatPage.tsx` | **Màn chat chính** — sidebar rail đỏ, ModuleSidebar (danh sách hội thoại), ChatWindow (header + timeline + composer), Info panel phải |
-| `/friends` | `src/pages/FriendsPage.tsx` | Danh sách bạn bè, lời mời, gợi ý |
-| `/friend-discovery/:shareCode` | `src/pages/FriendsPage.tsx` | Thêm bạn qua shareCode/QR |
-| `/join/:token` | `src/pages/JoinByLinkPage.tsx` | Vào nhóm qua invite link |
-| `/tasks` | `src/features/tasks/pages/TasksPage.tsx` | Quản lý task (list + Kanban) |
-| `/calendar` | `src/features/calendar/pages/CalendarPage.tsx` | Lịch & sự kiện |
-| `/ai-assistant` | `src/features/ai-assistant/pages/AiAssistantPage.tsx` | Trợ lý AI |
-| `/archive` | `src/pages/errors/ArchiveToAiRedirect.tsx` | Redirect → AI Assistant |
-| `/notifications` | `src/pages/NotificationsPage.tsx` | Thông báo |
-| `/settings` | `src/pages/SettingsPage.tsx` | Cài đặt (Appearance, Notification, Privacy, Chat, Security, Language, DangerZone…) |
-| `/help` | `src/pages/HelpPage.tsx` | Trợ giúp |
-| `/faq` | `src/pages/FAQPage.tsx` | FAQ |
-| `/report-issue` | `src/pages/ReportIssuePage.tsx` | Báo lỗi |
-| `/` | redirect → `/chat` | |
+| `/chat/:id?` | `src/pages/ChatPage.tsx` | SideRail đỏ, app xanh |
+| `/friends` | `src/pages/FriendsPage.tsx` | Xanh dương |
+| `/tasks` | `src/features/tasks/pages/TasksPage.tsx` | Xanh dương |
+| `/calendar` | `src/features/calendar/pages/CalendarPage.tsx` | Xanh dương |
+| `/ai-assistant` | `src/features/ai-assistant/pages/AiAssistantPage.tsx` | Xanh dương |
+| `/notifications` | `src/pages/NotificationsPage.tsx` | Xanh dương |
+| `/settings` | `src/pages/SettingsPage.tsx` | Xanh dương |
 
-### 3.3 Màn lỗi — `src/pages/errors/*`
-| Path | File |
+### 5.3 Layout dùng chung
+- `src/layouts/AuthenticatedLayout.tsx` — chứa `PersistentNavigationRail` (SideRail đỏ)
+- `src/shared/layout/SideRail.tsx` — component SideRail
+- `src/components/auth/AuthLayoutSplit.tsx` — split 50/50 cho màn auth
+
+---
+
+## 6. Checklist khi thêm UI mới
+
+| Việc cần làm | Pattern |
 |---|---|
-| `/403` | `ForbiddenPage.tsx` |
-| `/401` | `UnauthorizedPage.tsx` |
-| `*` (404) | `NotFoundPage.tsx` |
-| `/500` | `ServerErrorPage.tsx` |
-| `/offline` | `OfflinePage.tsx` |
-| `/429` | `RateLimitPage.tsx` |
-| `/maintenance` | `MaintenancePage.tsx` |
-
-### 3.4 Khung layout dùng chung
-- `RootLayout` (`src/layouts/RootLayout.tsx`) — providers + Suspense + error boundary
-- `AuthLayout` (`src/layouts/AuthLayout.tsx`) — khung public route
-- `AuthenticatedLayout` = `AppLayout` (`src/layouts/AuthenticatedLayout.tsx`) — `GlobalWebSocketProvider` + `PersistentNavigationRail` (= SideRail đỏ) + `<Outlet />` + CommandPalette
-- `AuthLayoutSplit` (`src/components/auth/AuthLayoutSplit.tsx`) — split 50/50 (slider ảnh trái + form phải dùng cho mọi màn auth)
-- `AppShell` / `ModuleSidebar` / `MainHeader` / `SideRail` ở `src/shared/layout/`
-
----
-
-## 4. Bảng "lookup nhanh" — muốn xài combo đỏ+vàng ở đâu thì copy đoạn nào
-
-### 4.1 CTA quan trọng (giống nút Đăng nhập)
-```tsx
-className="h-12 rounded-xl
-  bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]
-  text-sm font-bold text-white
-  hover:brightness-105 active:scale-95
-  shadow-lg shadow-[#C41E3A]/25"
-```
-
-### 4.2 Pill / badge đỏ-trên-vàng (giống badge unread của sidebar rail)
-```tsx
-style={{
-  background: "#FFC857",
-  color: "#C41E3A",
-  boxShadow: "0 2px 6px rgba(255, 200, 87, 0.4)",
-}}
-className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-```
-
-### 4.3 Surface đỏ rắn (giống sidebar rail)
-```css
-background: linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%);
-border-right: 1px solid #B71C1C;
-box-shadow: inset -1px 0 0 #B71C1C, 2px 0 16px rgb(211 47 47 / 0.18);
-/* dark mode */
-background: linear-gradient(180deg, #B71C1C 0%, #8B0000 100%);
-```
-
-### 4.4 Active indicator vàng (giống thanh dọc khi item rail được chọn)
-```css
-background: linear-gradient(180deg, #FACC15 0%, #EAB308 100%);
-box-shadow: 1px 0 6px rgb(234 179 8 / 0.5);
-```
-
-### 4.5 Button variants brand (Button component — `src/components/ui/Button.tsx`)
-
-Đã thêm 2 variant mới vào Button component:
-
-**`variant="brand"`** — CTA chính (lưu, xác nhận, submit form chính):
-```tsx
-<Button variant="brand">Lưu thay đổi</Button>
-// → gradient đỏ→vàng, shadow đỏ, chữ trắng
-```
-
-**`variant="brand-outline"`** — Nút phụ/hủy đi kèm CTA chính:
-```tsx
-<Button variant="brand-outline">Hủy</Button>
-// → viền đỏ mờ, chữ đỏ, hover nền đỏ nhạt
-```
-
-> Không dùng `variant="primary"` hay `variant="outline"` cho CTA/cancel nữa — dùng brand/brand-outline.  
-> Nút danger (xóa, hành động phá hoại) vẫn giữ `variant="danger"`.
-
-### 4.6 Các pattern đồng bộ đã áp dụng toàn app
-
-| Element | Trước | Sau |
-|---|---|---|
-| Active sidebar room item | `bg-[hsl(--chat-active-surface)/0.1)]` | `bg-[#FFC857]/10` |
-| Hover tin nhắn | `hsl(--color-surface-hover / 0.18)` | `rgb(255 200 87 / 0.08)` |
-| Input/search focus ring | `ring-focus/20`, viền xanh | `ring-[#FFC857]/15`, viền vàng |
-| Tab active (SegmentedControl) | `bg-surface-hover text-text-primary` | `bg-[#FFC857]/30 text-text-primary` |
-| Reply banner (ComposerReplyBanner) | `bg-surface-overlay/60` | `bg-[#FFC857]/8`, viền `border-[#FFC857]/20` |
-| Badge/pill active filter | `bg-primary/12 text-primary` | `bg-[#FFC857]/20 text-[#C41E3A]` |
-| Badge đếm (ghim, profile, settings) | `bg-primary/10 text-primary` | `bg-[#C41E3A]/10 text-[#C41E3A]` |
-| Unread notification row | `bg-primary/6 border-primary/10` | `bg-[#FFC857]/6 border-[#FFC857]/20` |
-| Checkbox checked | `bg-primary border-primary` | gradient `from-[#C41E3A] to-[#D32F2F]` |
-| Checkbox focus ring | `ring-focus/20` | `ring-[#FFC857]/30` |
-| Icon accent (pin, calendar) | `text-primary` | `text-[#C41E3A]` |
-
----
-
-## 5. Quy tắc khi chỉnh UI (đọc lại memory)
-
-- **Chỉ sửa styling/tokens — không động vào logic & cấu trúc** (theo feedback đã lưu).
-- Brand đỏ + vàng **không** lưu trong CSS var — phải hardcode `#C41E3A`, `#D32F2F`, `#FFC857`, … hoặc rút ra thành utility riêng nếu cần dùng nhiều chỗ.
-- Token `--color-danger` / `--color-warning` **không phải** brand red/yellow — chúng là semantic state. Đừng lẫn lộn.
-- Khi thêm CTA mới → dùng `variant="brand"` (Button), khi thêm nút phụ/hủy → `variant="brand-outline"`.
-- Khi thêm badge/pill đếm → `bg-[#C41E3A]/10 text-[#C41E3A]`. Khi thêm filter active → `bg-[#FFC857]/20 text-[#C41E3A]`.
-- Focus ring trên mọi input → `ring-[#FFC857]/15` và viền `border-[#FFC857]/60`. Class `.input-surface:focus-within` đã xử lý tự động; với inline Tailwind dùng `focus:border-[#FFC857]/60 focus:ring-[#FFC857]/15`.
+| Thêm nút CTA chính | `variant="brand"` → xanh |
+| Thêm nút hủy/phụ | `variant="brand-outline"` → xanh outline |
+| Thêm nút xóa | `variant="danger"` |
+| Thêm badge số đếm | `bg-[#FFC857] text-[#C41E3A]` (vàng+đỏ, khớp rail) |
+| Thêm badge filter active | `bg-[#1976D2]/10 text-[#1565C0]` (xanh nhạt) |
+| Thêm toggle/checkbox | gradient `from-[#1976D2] to-[#1565C0]` |
+| Focus ring input | `focus:border-[#1976D2]/60 focus:ring-[#1565C0]/25` |
+| Active row/item | `bg-[#DBEAFE]/10` hoặc `bg-[#1976D2]/8` |
+| Icon accent | `text-[#1565C0]` |
+| Màn Login/SideRail | Giữ nguyên đỏ/vàng — **không đổi** |

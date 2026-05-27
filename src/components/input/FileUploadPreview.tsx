@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview FileUploadPreview - Multi-file upload preview component.
  *
  * Features:
@@ -162,7 +162,7 @@ export const FileUploadPreview: React.FC<FileUploadPreviewProps> = ({
           className={clsx(
             "flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all",
             canSend && !isSending
-              ? "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white hover:brightness-105 active:scale-95"
+              ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white hover:brightness-105 active:scale-95"
               : "bg-surface-overlay text-text-muted cursor-not-allowed",
           )}
           aria-label={t("chat:composer.send", { defaultValue: "Gửi" })}
@@ -236,7 +236,7 @@ const FileUploadItem: React.FC<FileUploadItemProps> = ({ file, onRemove }) => {
           <div className="mt-1.5">
             <div className="relative h-1 w-full overflow-hidden rounded-full bg-surface-overlay">
               <div
-                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857] transition-all duration-300"
+                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-[#1565C0] to-[#1565C0] transition-all duration-300"
                 style={{ width: `${file.uploadProgress}%` }}
               />
             </div>
