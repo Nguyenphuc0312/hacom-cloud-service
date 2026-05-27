@@ -45,12 +45,14 @@ export interface MeetingFormData {
 interface MeetingFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: MeetingFormData) => void;
+  onSave: (data: MeetingFormData) => Promise<void> | void;
   defaultDate?: string;
   /** Existing meetings on the same date to detect conflicts */
   existingMeetings?: MeetingFormData[];
   /** Nếu có → modal hoạt động ở chế độ chỉnh sửa (giữ id, createdBy, readBy) */
   initialData?: MeetingFormData | null;
+  /** Loading state - disables save button */
+  isLoading?: boolean;
 }
 
 const SAVED_LOCATIONS_KEY = "hacom-meeting-saved-locations";
@@ -118,6 +120,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   defaultDate,
   existingMeetings = [],
   initialData = null,
+  isLoading = false,
 }) => {
   const isEditMode = !!initialData;
   const [title, setTitle] = React.useState("");
@@ -313,12 +316,13 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
     const locToSave = location.trim() || locationInput.trim();
     if (locToSave) saveLocation(locToSave);
 
-    onSave({
+    // Build meeting data
+    const meetingData: MeetingFormData = {
       id: initialData?.id ?? `meeting-${Date.now()}`,
       title: title.trim(),
       date,
@@ -332,8 +336,17 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       createdById: initialData?.createdById,
       createdByName: initialData?.createdByName,
       readBy: initialData?.readBy,
-    });
+    };
+
+    // Close modal immediately (optimistic)
     onClose();
+
+    // Call onSave - parent handles API call and loading state
+    try {
+      await onSave(meetingData);
+    } catch {
+      // Error is handled by parent
+    }
   };
 
   const filteredSavedLocations = savedLocations.filter(
@@ -360,8 +373,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             <Button variant="brand-outline" onClick={onClose} type="button">
               Hủy
             </Button>
-            <Button variant="brand" onClick={handleSave} type="button">
-              {isEditMode ? "Cập nhật" : "Lưu & Gửi"}
+            <Button variant="brand" onClick={handleSave} type="button" disabled={isLoading}>
+              {isLoading ? "Đang lưu..." : isEditMode ? "Cập nhật" : "Lưu & Gửi"}
             </Button>
           </div>
         </div>

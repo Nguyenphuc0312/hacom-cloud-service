@@ -33,12 +33,13 @@ import {
 import { CheckCircleIcon as CheckCircleSolidIcon } from "@heroicons/react/24/solid";
 import { Button } from "./Button";
 import {
-  getCalendarEvents,
   getEventsByDate,
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
-import { MeetingFormModal, type MeetingFormData, type MeetingReadReceipt } from "./MeetingFormModal";
+import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
 import { useAuthStore } from "../../stores";
+import { useCalendarStore } from "../../stores/calendarStore";
+import { toast } from "../../utils/toast";
 
 interface EmptyStateProps {
   title: string;
@@ -224,19 +225,6 @@ const getWeekDays = (base: Date): Date[] => {
 };
 
 const MAX_VISIBLE_EVENTS = 3;
-
-const LOCAL_MEETINGS_KEY = "hacom-weekly-widget-meetings";
-
-const loadLocalMeetings = (): MeetingFormData[] => {
-  try {
-    const raw = localStorage.getItem(LOCAL_MEETINGS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
 
 interface SelectedEventDetail {
   kind: "meeting" | "personal";
@@ -567,12 +555,17 @@ const WeeklyCalendarWidget: React.FC = () => {
   const navigate = useNavigate();
   const today = React.useMemo(() => new Date(), []);
   const [weekOffset, setWeekOffset] = React.useState(0);
-  const [events, setEvents] = React.useState<CalendarEvent[]>([]);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalDefaultDate, setModalDefaultDate] = React.useState<string | undefined>();
-  const [localMeetings, setLocalMeetings] = React.useState<MeetingFormData[]>(() => loadLocalMeetings());
   const [selectedDetail, setSelectedDetail] = React.useState<SelectedEventDetail | null>(null);
   const [editingMeeting, setEditingMeeting] = React.useState<MeetingFormData | null>(null);
+
+  // Calendar store - shared source of truth
+  const storeEvents = useCalendarStore((s) => s.events);
+  const storeIsLoading = useCalendarStore((s) => s.isLoading);
+  const storeError = useCalendarStore((s) => s.error);
+  const fetchEvents = useCalendarStore((s) => s.fetchEvents);
+  const createEvent = useCalendarStore((s) => s.createEvent);
 
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id;
@@ -587,50 +580,41 @@ const WeeklyCalendarWidget: React.FC = () => {
     [currentUser],
   );
 
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_MEETINGS_KEY, JSON.stringify(localMeetings));
-    } catch {
-      /* ignore quota errors */
-    }
-  }, [localMeetings]);
-
-  // Migrate lịch cũ (không có createdById) — gán cho user hiện tại để có quyền sửa/xóa
-  React.useEffect(() => {
-    if (!currentUserId) return;
-    setLocalMeetings((prev) => {
-      let changed = false;
-      const next = prev.map((m) => {
-        if (!m.createdById) {
-          changed = true;
-          return {
-            ...m,
-            createdById: currentUserId,
-            createdByName: m.createdByName || currentUserName || "Tôi",
-            readBy: m.readBy ?? [],
-          };
-        }
-        return m;
-      });
-      return changed ? next : prev;
-    });
-  }, [currentUserId, currentUserName]);
-
   const weekDays = React.useMemo(() => {
     const base = new Date(today);
     base.setDate(today.getDate() + weekOffset * 7);
     return getWeekDays(base);
   }, [today, weekOffset]);
 
-  React.useEffect(() => {
-    if (!weekDays.length) return;
-    const year = weekDays[0].getFullYear();
-    setEvents(
-      getCalendarEvents(year).filter(
-        (e) => e.type === "meeting" || e.type === "personal",
-      ),
-    );
+  // Compute week range for API call
+  const weekRange = React.useMemo(() => {
+    if (!weekDays.length) return { start: null, end: null };
+    const start = weekDays[0];
+    const end = new Date(weekDays[6]);
+    end.setHours(23, 59, 59, 999);
+    return {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    };
   }, [weekDays]);
+
+  // Fetch events from API when week changes
+  React.useEffect(() => {
+    if (!weekRange.start || !weekRange.end) return;
+    void fetchEvents(weekRange.start, weekRange.end);
+  }, [weekRange.start, weekRange.end, fetchEvents]);
+
+  // Map store events to CalendarEvent format for display
+  const events: CalendarEvent[] = React.useMemo(() => {
+    return storeEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      date: event.startAt.slice(0, 10),
+      type: event.type === "MEETING" ? "meeting" : event.type === "PERSONAL" ? "personal" : "meeting",
+      description: event.description ?? undefined,
+      time: event.startAt.slice(11, 16),
+    }));
+  }, [storeEvents]);
 
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
@@ -641,34 +625,45 @@ const WeeklyCalendarWidget: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleSaveMeeting = (data: MeetingFormData) => {
-    setLocalMeetings((prev) => {
-      const exists = prev.some((m) => m.id === data.id);
-      if (exists) {
-        // edit: giữ nguyên createdBy / readBy nếu form trả về thiếu
-        return prev.map((m) =>
-          m.id === data.id
-            ? {
-                ...data,
-                createdById: data.createdById ?? m.createdById,
-                createdByName: data.createdByName ?? m.createdByName,
-                readBy: data.readBy ?? m.readBy,
-              }
-            : m,
-        );
+  const handleSaveMeeting = async (data: MeetingFormData) => {
+    try {
+      const startAt = `${data.date}T${data.startTime}:00.000Z`;
+      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        type: "MEETING" as const,
+        source: "MEETING" as const,
+        startAt,
+        endAt,
+        timezone: "Asia/Ho_Chi_Minh",
+        isAllDay: false,
+        visibility: "PRIVATE" as const,
+        status: "CONFIRMED" as const,
+        attendees: data.participants.map(p => p.name),
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
+        meetingLocation: data.location || undefined,
+      };
+
+      const result = await createEvent(input);
+
+      if (result) {
+        toast.success("Đã thêm lịch họp");
+        // Refetch to update the calendar
+        if (weekRange.start && weekRange.end) {
+          await fetchEvents(weekRange.start, weekRange.end);
+        }
       }
-      // tạo mới: stamp người tạo
-      return [
-        ...prev,
-        {
-          ...data,
-          createdById: currentUserId,
-          createdByName: currentUserName,
-          readBy: [],
-        },
-      ];
-    });
+    } catch (error) {
+      console.error("Failed to create event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    }
   };
+
+  // Get store delete function
+  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
 
   const handleEditMeeting = (meeting: MeetingFormData) => {
     setSelectedDetail(null);
@@ -677,48 +672,25 @@ const WeeklyCalendarWidget: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleDeleteMeeting = (meetingId: string) => {
-    setLocalMeetings((prev) => prev.filter((m) => m.id !== meetingId));
-    setSelectedDetail(null);
+  const handleDeleteMeeting = async (meetingId: string) => {
+    try {
+      await deleteEvent(meetingId);
+      toast.success("Đã xóa lịch");
+      setSelectedDetail(null);
+      // Refetch to update the calendar
+      if (weekRange.start && weekRange.end) {
+        await fetchEvents(weekRange.start, weekRange.end);
+      }
+    } catch (error) {
+      console.error("Failed to delete event:", error);
+      toast.error("Không thể xóa lịch");
+    }
   };
 
-  const handleToggleRead = (meetingId: string) => {
-    if (!currentUserId) return;
-    setLocalMeetings((prev) =>
-      prev.map((m) => {
-        if (m.id !== meetingId) return m;
-        const existing = m.readBy ?? [];
-        const already = existing.some((r) => r.userId === currentUserId);
-        const nextReadBy: MeetingReadReceipt[] = already
-          ? existing.filter((r) => r.userId !== currentUserId)
-          : [
-              ...existing,
-              {
-                userId: currentUserId,
-                name: currentUserName || "Tôi",
-                readAt: new Date().toISOString(),
-              },
-            ];
-        return { ...m, readBy: nextReadBy };
-      }),
-    );
-    // sync vào selectedDetail để popup cập nhật ngay
-    setSelectedDetail((prev) => {
-      if (!prev?.meeting || prev.meeting.id !== meetingId) return prev;
-      const existing = prev.meeting.readBy ?? [];
-      const already = existing.some((r) => r.userId === currentUserId);
-      const nextReadBy: MeetingReadReceipt[] = already
-        ? existing.filter((r) => r.userId !== currentUserId)
-        : [
-            ...existing,
-            {
-              userId: currentUserId,
-              name: currentUserName || "Tôi",
-              readAt: new Date().toISOString(),
-            },
-          ];
-      return { ...prev, meeting: { ...prev.meeting, readBy: nextReadBy } };
-    });
+  // Note: handleToggleRead is not supported by API yet - disabled for API-based events
+  const handleToggleRead = (_meetingId: string) => {
+    // Read receipts are stored locally for now
+    // This functionality will be implemented when backend supports it
   };
 
   const isToday = (d: Date) =>
@@ -811,7 +783,6 @@ const WeeklyCalendarWidget: React.FC = () => {
         }}
         onSave={handleSaveMeeting}
         defaultDate={modalDefaultDate}
-        existingMeetings={localMeetings}
         initialData={editingMeeting}
       />
 
@@ -827,7 +798,34 @@ const WeeklyCalendarWidget: React.FC = () => {
         />
       )}
 
+      {/* Loading state */}
+      {storeIsLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#C41E3A] border-t-transparent" />
+        </div>
+      )}
+
+      {/* Error state */}
+      {storeError && !storeIsLoading && (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 px-4">
+          <ExclamationTriangleIcon className="h-8 w-8 text-danger" />
+          <p className="text-sm text-danger">{storeError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              if (weekRange.start && weekRange.end) {
+                void fetchEvents(weekRange.start, weekRange.end);
+              }
+            }}
+            className="text-xs text-[#C41E3A] hover:underline"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
       {/* Grid */}
+      {!storeIsLoading && !storeError && (
       <div className="grid grid-cols-7 divide-x divide-border">
         {weekDays.map((day, i) => {
           const todayDay = isToday(day);
@@ -837,7 +835,6 @@ const WeeklyCalendarWidget: React.FC = () => {
 
           const personal = dayEvents.filter((e) => e.type === "personal").sort(sortByTime);
           const meeting = dayEvents.filter((e) => e.type === "meeting").sort(sortByTime);
-          const localDayMeetings = localMeetings.filter((m) => m.date === dayStr);
 
           const allEvents: Array<{
             id: string;
@@ -852,13 +849,6 @@ const WeeklyCalendarWidget: React.FC = () => {
               title: e.title,
               kind: "meeting" as const,
               detail: { kind: "meeting" as const, id: e.id, title: e.title, date: dayStr, time: e.time, source: e },
-            })),
-            ...localDayMeetings.map((m) => ({
-              id: m.id,
-              time: m.startTime,
-              title: m.title,
-              kind: "meeting" as const,
-              detail: { kind: "meeting" as const, id: m.id, title: m.title, date: m.date, time: m.startTime, meeting: m },
             })),
             ...personal.map((e) => ({
               id: e.id,
@@ -966,6 +956,7 @@ const WeeklyCalendarWidget: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
