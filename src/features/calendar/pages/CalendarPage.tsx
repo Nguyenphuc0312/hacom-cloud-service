@@ -347,7 +347,7 @@ const EventDetailModal: React.FC<{
                 <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
                   <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
-                    Thành phần ({attendees.length})
+                    Thành viên ({attendees.length})
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {attendees.slice(0, 10).map((name, idx) => (
@@ -373,7 +373,7 @@ const EventDetailModal: React.FC<{
               <div className="flex items-center gap-3">
                 <ExclamationCircleIcon className="h-5 w-5 shrink-0 text-text-muted" />
                 <p className="text-xs text-text-muted">
-                  {visibility === "PRIVATE" ? "Riêng tư" :
+                  {visibility === "PRIVATE" ? "Ghi chú" :
                     visibility === "TEAM" ? "Nhóm" :
                     visibility === "UNIT" ? "Đơn vị" :
                     visibility === "PUBLIC" ? "Công khai" :
