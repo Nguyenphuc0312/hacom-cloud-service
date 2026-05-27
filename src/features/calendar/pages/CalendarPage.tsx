@@ -202,14 +202,9 @@ const EventDetailModal: React.FC<{
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-<<<<<<< HEAD
 }> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
-=======
-  onRequestDelete?: () => void;
-}> = ({ event, currentUserId, onClose, onEdit, onDelete, onRequestDelete }) => {
->>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -403,11 +398,7 @@ const EventDetailModal: React.FC<{
               {canDelete && (
                 <button
                   type="button"
-<<<<<<< HEAD
                   onClick={() => setShowDeleteConfirm(true)}
-=======
-                  onClick={onRequestDelete}
->>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
                   className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
                 >
                   <TrashIcon className="h-4 w-4" />
@@ -1020,12 +1011,7 @@ export const CalendarPage: React.FC = () => {
     }
   }, [selectedEvent, deleteEvent]);
 
-  // Handle request delete — open confirm dialog
-  const handleRequestDelete = useCallback(() => {
-    setShowDeleteConfirm(true);
-  }, []);
-
-  // Handle successful edit — close modal, refresh events
+// Handle successful edit — close modal, refresh events
   const handleEditSuccess = useCallback(() => {
     setEditingEvent(null);
     setSelectedEvent(null);
@@ -1388,7 +1374,6 @@ export const CalendarPage: React.FC = () => {
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
-          onRequestDelete={handleRequestDelete}
         />
       )}
 
