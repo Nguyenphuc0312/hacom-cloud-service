@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
+import clsx from "clsx";
 import {
   PhotoIcon,
   DocumentIcon,
   LinkIcon,
-  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
-import { Skeleton, Input } from "../../ui";
-import { InfoMenuRow } from "../InfoMenuRow";
+import { Skeleton } from "../../ui";
 import {
   useGetConversationSidebarSummaryQuery,
-  useGetConversationMediaQuery,
-  useGetConversationFilesQuery,
-  useGetConversationLinksQuery,
   useBatchThumbnailUrlsMutation,
 } from "../../../features/api/chatApi";
 import type {
@@ -23,22 +19,18 @@ import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
-import { useDebounce } from "../../../hooks/useDebounce";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
+import { SharedContentModal } from "./SharedContentModal";
+import type { SharedContentTab } from "./SharedContentModal";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
 }
 
-const MEDIA_PAGE_SIZE = 12;
-const FILES_PAGE_SIZE = 10;
-const LINKS_PAGE_SIZE = 10;
-
-const MEDIA_PREVIEW_SIZE = 6;
-const FILES_PREVIEW_SIZE = 4;
-const LINKS_PREVIEW_SIZE = 3;
-
-type ResourceKey = "media" | "files" | "links";
+const DRAWER_MEDIA_PREVIEW = 6;
+const DRAWER_FILES_PREVIEW = 4;
+const DRAWER_LINKS_PREVIEW = 3;
 
 function truncateFilename(name: string, maxLength = 24): string {
   if (name.length <= maxLength) return name;
@@ -46,210 +38,93 @@ function truncateFilename(name: string, maxLength = 24): string {
   if (dotIdx <= 0) return name.slice(0, maxLength - 3) + "...";
   const ext = name.slice(dotIdx + 1);
   const base = name.slice(0, dotIdx);
-  const keepBase = maxLength - ext.length - 3;
+  const keepBase = maxLength - ext.length - 4;
   if (keepBase <= 2) return name.slice(0, maxLength - 3) + "...";
-  return base.slice(0, keepBase) + "..." + ext;
+  return `${base.slice(0, keepBase)}...${ext}`;
 }
 
 export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   conversationId,
 }) => {
-  const [open, setOpen] = useState<Record<ResourceKey, boolean>>({
-    media: false,
-    files: false,
-    links: false,
-  });
+  const [activeTab, setActiveTab] = useState<SharedContentTab>("media");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxAlt, setLightboxAlt] = useState("");
 
-  const { data, isLoading } = useGetConversationSidebarSummaryQuery(
+  const [urlCache, setUrlCache] = useState<{
+    forConversationId: string;
+    urls: Record<string, string>;
+  }>({ forConversationId: conversationId, urls: {} });
+  const [batchThumbnailUrls] = useBatchThumbnailUrlsMutation();
+  const batchAbortRef = useRef<AbortController | null>(null);
+
+  const { data, isLoading, isError } = useGetConversationSidebarSummaryQuery(
     conversationId,
     { skip: !conversationId },
   );
 
-  const toggle = (key: ResourceKey) =>
-    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  if (isLoading) {
-    return (
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 px-3.5 py-3">
-            <Skeleton className="h-9 w-9 rounded-full" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   const mediaTotal = data?.media.total ?? 0;
   const filesTotal = data?.files.total ?? 0;
   const linksTotal = data?.links.total ?? 0;
+  const totalAll = mediaTotal + filesTotal + linksTotal;
 
-  return (
-    <>
-      <ResourceCard
-        icon={<PhotoIcon />}
-        label="Ảnh/Video"
-        count={mediaTotal}
-        open={open.media}
-        onToggle={() => toggle("media")}
-      >
-        <MediaSection conversationId={conversationId} total={mediaTotal} />
-      </ResourceCard>
+  const mediaPreview = data?.media.preview.slice(0, DRAWER_MEDIA_PREVIEW) ?? [];
+  const filesPreview = (data?.files.preview ?? [])
+    .filter(
+      (f) =>
+        !f.mimeType.startsWith("image/") &&
+        !f.mimeType.startsWith("video/") &&
+        !f.mimeType.startsWith("audio/"),
+    )
+    .slice(0, DRAWER_FILES_PREVIEW);
+  const linksPreview = data?.links.preview.slice(0, DRAWER_LINKS_PREVIEW) ?? [];
 
-      <ResourceCard
-        icon={<DocumentIcon />}
-        label="File"
-        count={filesTotal}
-        open={open.files}
-        onToggle={() => toggle("files")}
-      >
-        <FilesSection conversationId={conversationId} total={filesTotal} />
-      </ResourceCard>
+  const thumbnailUrls =
+    urlCache.forConversationId === conversationId ? urlCache.urls : {};
 
-      <ResourceCard
-        icon={<LinkIcon />}
-        label="Link"
-        count={linksTotal}
-        open={open.links}
-        onToggle={() => toggle("links")}
-      >
-        <LinksSection conversationId={conversationId} total={linksTotal} />
-      </ResourceCard>
-    </>
-  );
-};
-
-const ResourceCard: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}> = ({ icon, label, count, open, onToggle, children }) => (
-  <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-    <InfoMenuRow
-      icon={icon}
-      label={label}
-      count={count}
-      expandable
-      expanded={open}
-      onClick={onToggle}
-    />
-    {open && <div className="border-t border-border">{children}</div>}
-  </div>
-);
-
-const EmptyInline: React.FC<{ icon: React.ReactNode; text: string }> = ({
-  icon,
-  text,
-}) => (
-  <div className="flex flex-col items-center justify-center gap-2 py-8 text-text-muted">
-    {icon}
-    <p className="text-sm">{text}</p>
-  </div>
-);
-
-const ViewAllButton: React.FC<{ total: number; onClick: () => void }> = ({
-  total,
-  onClick,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="mt-2 w-full rounded-lg py-2 text-sm font-medium text-primary transition-colors hover:bg-surface-hover"
-  >
-    Xem tất cả ({total})
-  </button>
-);
-
-const CollapseButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="mt-2 w-full rounded-lg py-2 text-sm font-medium text-text-muted transition-colors hover:bg-surface-hover"
-  >
-    Rút gọn
-  </button>
-);
-
-const Pager: React.FC<{
-  page: number;
-  hasNext: boolean;
-  isFetching: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-}> = ({ page, hasNext, isFetching, onPrev, onNext }) => {
-  if (!hasNext && page <= 1) return null;
-  return (
-    <div className="mt-3 flex items-center justify-center gap-3">
-      <button
-        type="button"
-        disabled={page === 1 || isFetching}
-        onClick={onPrev}
-        className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-hover disabled:opacity-40"
-      >
-        Trước
-      </button>
-      <span className="text-sm text-text-muted">Trang {page}</span>
-      <button
-        type="button"
-        disabled={!hasNext || isFetching}
-        onClick={onNext}
-        className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-hover disabled:opacity-40"
-      >
-        Sau
-      </button>
-    </div>
-  );
-};
-
-const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
-  conversationId,
-  total,
-}) => {
-  const [showAll, setShowAll] = useState(false);
-  const [page, setPage] = useState(1);
-  // urlCache is keyed by conversationId so stale URLs from previous conversations are never returned
-  const [urlCache, setUrlCache] = useState<{ forConversationId: string; urls: Record<string, string> }>({
-    forConversationId: conversationId,
-    urls: {},
-  });
-  const [batchThumbnailUrls] = useBatchThumbnailUrlsMutation();
-  const batchAbortRef = useRef<AbortController | null>(null);
-
-  const limit = showAll ? MEDIA_PAGE_SIZE : MEDIA_PREVIEW_SIZE;
-
-  const { data, isLoading, isFetching } = useGetConversationMediaQuery({
-    conversationId,
-    page: showAll ? page : 1,
-    limit,
-  });
-
-  const hasNext = data?.pagination.hasNext ?? false;
-  const items = data?.data ?? [];
-
-  // Derived: only use cache if it belongs to the current conversation
-  const thumbnailUrls = urlCache.forConversationId === conversationId ? urlCache.urls : {};
-
+  // Auto-select first non-empty tab once data arrives
   useEffect(() => {
-    const needingFallback = items.filter((item) => {
-      const isMedia =
-        item.mimeType.startsWith("image/") ||
-        item.mimeType.startsWith("video/") ||
-        item.messageType === "image" ||
-        item.messageType === "video";
-      return isMedia && !item.thumbnailUrl && !thumbnailUrls[item.fileId];
-    });
+    if (!data) return;
+    const order: SharedContentTab[] = ["media", "files", "links"];
+    const totals: Record<SharedContentTab, number> = {
+      media: data.media.total,
+      files: data.files.total,
+      links: data.links.total,
+    };
+    if (totals[activeTab] === 0) {
+      const fallback = order.find((t) => totals[t] > 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (fallback) setActiveTab(fallback);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
+  // Reset when conversation changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab("media");
+    setUrlCache({ forConversationId: conversationId, urls: {} });
+    return () => {
+      batchAbortRef.current?.abort();
+    };
+  }, [conversationId]);
+
+  // Batch thumbnail loading for drawer media preview (only when media tab is active)
+  useEffect(() => {
+    if (activeTab !== "media" || mediaPreview.length === 0) return;
+
+    const needingFallback = mediaPreview.filter(
+      (item) => !item.thumbnailUrl && !thumbnailUrls[item.fileId],
+    );
     if (needingFallback.length === 0) return;
 
     const controller = new AbortController();
     batchAbortRef.current = controller;
 
-    const fileIds = needingFallback.map((i) => i.fileId);
-    batchThumbnailUrls({ conversationId, fileIds })
+    batchThumbnailUrls({
+      conversationId,
+      fileIds: needingFallback.map((i) => i.fileId),
+    })
       .unwrap()
       .then((result) => {
         if (controller.signal.aborted) return;
@@ -260,221 +135,314 @@ const MediaSection: React.FC<{ conversationId: string; total: number }> = ({
         if (Object.keys(newUrls).length > 0) {
           setUrlCache((prev) => ({
             forConversationId: conversationId,
-            urls: prev.forConversationId === conversationId
-              ? { ...prev.urls, ...newUrls }
-              : newUrls,
+            urls:
+              prev.forConversationId === conversationId
+                ? { ...prev.urls, ...newUrls }
+                : newUrls,
           }));
         }
       })
       .catch(() => {});
 
-    return () => {
-      controller.abort();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, conversationId]);
-
-  // Abort any in-flight batch request when conversation changes
-  useEffect(() => {
-    return () => {
-      batchAbortRef.current?.abort();
-    };
-  }, [conversationId]);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaPreview, conversationId, activeTab]);
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-1 p-3">
-        {Array.from({ length: MEDIA_PREVIEW_SIZE }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square rounded-md" />
-        ))}
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="flex items-center justify-between px-4 py-3">
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="border-t border-border px-3 py-3">
+          <div className="grid grid-cols-3 gap-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square rounded-md" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (items.length === 0) {
+  if (isError) {
     return (
-      <EmptyInline
-        icon={<PhotoIcon className="h-8 w-8" />}
-        text="Chưa có ảnh hoặc video nào"
-      />
+      <div className="rounded-2xl border border-border bg-surface px-4 py-6 text-center text-sm text-text-muted">
+        Không thể tải dữ liệu lưu trữ
+      </div>
     );
   }
+
+  if (!data || totalAll === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-surface py-8 text-text-muted">
+        <PhotoIcon className="h-8 w-8" />
+        <p className="text-sm">Chưa có nội dung nào được chia sẻ</p>
+      </div>
+    );
+  }
+
+  const allTabs: { key: SharedContentTab; label: string; count: number }[] = [
+    { key: "media", label: "Ảnh/Video", count: mediaTotal },
+    { key: "files", label: "File", count: filesTotal },
+    { key: "links", label: "Link", count: linksTotal },
+  ];
+  const tabs = allTabs.filter((t) => t.count > 0);
+
+  const activeTabTotal =
+    activeTab === "media"
+      ? mediaTotal
+      : activeTab === "files"
+        ? filesTotal
+        : linksTotal;
+
+  const activeTabPreviewCount =
+    activeTab === "media"
+      ? DRAWER_MEDIA_PREVIEW
+      : activeTab === "files"
+        ? DRAWER_FILES_PREVIEW
+        : DRAWER_LINKS_PREVIEW;
+
+  const showViewAllFooter = activeTabTotal > activeTabPreviewCount;
 
   return (
-    <div className="p-3">
-      <div className="grid grid-cols-3 gap-1">
-        {items.map((item) => (
-          <GalleryThumb
-            key={`${item.messageId}-${item.fileId}`}
-            item={item}
-            fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-          />
-        ))}
+    <>
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <h3 className="text-sm font-semibold text-text-primary">Kho lưu trữ</h3>
+        </div>
+
+        {/* Tab Bar */}
+        {tabs.length > 1 && (
+          <div className="flex border-t border-border">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={clsx(
+                  "flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors",
+                  activeTab === tab.key
+                    ? "border-b-2 border-primary text-primary"
+                    : "text-text-muted hover:text-text-primary",
+                )}
+              >
+                {tab.label}
+                <span
+                  className={clsx(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                    activeTab === tab.key
+                      ? "bg-primary/10 text-primary"
+                      : "bg-surface-overlay text-text-muted",
+                  )}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Tab Content */}
+        <div className={clsx("p-3", tabs.length === 1 && "border-t border-border")}>
+          {activeTab === "media" && (
+            <DrawerMediaTab
+              items={mediaPreview}
+              total={mediaTotal}
+              thumbnailUrls={thumbnailUrls}
+              onImageClick={(url, alt) => {
+                setLightboxUrl(url);
+                setLightboxAlt(alt);
+              }}
+              onViewAll={() => {
+                setActiveTab("media");
+                setModalOpen(true);
+              }}
+            />
+          )}
+          {activeTab === "files" && (
+            <DrawerFilesTab
+              items={filesPreview}
+              conversationId={conversationId}
+            />
+          )}
+          {activeTab === "links" && (
+            <DrawerLinksTab items={linksPreview} />
+          )}
+        </div>
+
+        {/* View All Footer */}
+        {showViewAllFooter && (
+          <div className="border-t border-border">
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="w-full py-2.5 text-sm font-medium text-primary transition-colors hover:bg-surface-hover"
+            >
+              Xem tất cả ({activeTabTotal})
+            </button>
+          </div>
+        )}
       </div>
-      {showAll ? (
-        <>
-          <Pager
-            page={page}
-            hasNext={hasNext}
-            isFetching={isFetching}
-            onPrev={() => setPage((p) => p - 1)}
-            onNext={() => setPage((p) => p + 1)}
-          />
-          <CollapseButton
-            onClick={() => {
-              setShowAll(false);
-              setPage(1);
-            }}
-          />
-        </>
-      ) : total > MEDIA_PREVIEW_SIZE ? (
-        <ViewAllButton total={total} onClick={() => setShowAll(true)} />
-      ) : null}
+
+      <ImagePreviewModal
+        isOpen={lightboxUrl !== null}
+        onClose={() => setLightboxUrl(null)}
+        imageUrl={lightboxUrl ?? ""}
+        alt={lightboxAlt}
+      />
+
+      <SharedContentModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        conversationId={conversationId}
+        defaultTab={activeTab}
+      />
+    </>
+  );
+};
+
+// ─── Drawer Media Tab ─────────────────────────────────────────────────────────
+
+const DrawerMediaTab: React.FC<{
+  items: ConversationResourcesMediaItem[];
+  total: number;
+  thumbnailUrls: Record<string, string>;
+  onImageClick: (url: string, alt: string) => void;
+  onViewAll: () => void;
+}> = ({ items, total, thumbnailUrls, onImageClick, onViewAll }) => {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
+        <PhotoIcon className="h-8 w-8" />
+        <p className="text-sm">Chưa có ảnh hoặc video nào</p>
+      </div>
+    );
+  }
+
+  // When total > preview limit, replace last slot with "+N" overlay
+  const showOverlay = total > DRAWER_MEDIA_PREVIEW;
+  const visibleItems = showOverlay ? items.slice(0, DRAWER_MEDIA_PREVIEW - 1) : items;
+  const overlayItem = showOverlay ? items[DRAWER_MEDIA_PREVIEW - 1] ?? null : null;
+  const remainingCount = total - (DRAWER_MEDIA_PREVIEW - 1);
+
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {visibleItems.map((item) => (
+        <DrawerMediaThumb
+          key={`${item.messageId}-${item.fileId}`}
+          item={item}
+          fallbackUrl={thumbnailUrls[item.fileId] ?? null}
+          onImageClick={onImageClick}
+        />
+      ))}
+      {showOverlay && (
+        <button
+          type="button"
+          onClick={onViewAll}
+          aria-label={`Xem thêm ${remainingCount} ảnh`}
+          className="relative aspect-square overflow-hidden rounded-md bg-surface-overlay"
+        >
+          {overlayItem && (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
+            <img
+              src={overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]}
+              alt={overlayItem.fileName}
+              className="h-full w-full object-cover opacity-40"
+              loading="lazy"
+            />
+          ) : (
+            <div className="h-full w-full bg-surface-overlay" />
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span className="text-base font-bold text-white">+{remainingCount}</span>
+          </div>
+        </button>
+      )}
     </div>
   );
 };
 
-const GalleryThumb: React.FC<{
+const DrawerMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
-}> = ({ item, fallbackUrl }) => {
+  onImageClick: (url: string, alt: string) => void;
+}> = ({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-
-  const src = item.thumbnailUrl ?? fallbackUrl ?? undefined;
+  const src = item.thumbnailUrl ?? fallbackUrl ?? null;
 
   return (
-    <div className="relative aspect-square overflow-hidden rounded-md bg-surface-overlay">
+    <button
+      type="button"
+      disabled={!src}
+      onClick={() => {
+        if (src) onImageClick(src, item.fileName);
+      }}
+      className={clsx(
+        "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",
+        src && "cursor-pointer hover:ring-2 hover:ring-primary/50",
+      )}
+      aria-label={item.fileName}
+    >
       {src ? (
         <img
           src={src}
           alt={item.fileName}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
           loading="lazy"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
-          <PhotoIcon className="h-6 w-6 text-text-muted" />
+          <PhotoIcon className="h-5 w-5 text-text-muted" />
         </div>
       )}
       {isVideo && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/80">
-            <span className="ml-0.5 border-y-[5px] border-l-[9px] border-r-0 border-y-transparent border-l-text-primary" />
+            <span className="ml-0.5 border-y-[5px] border-l-[9px] border-y-transparent border-l-text-primary" />
           </div>
         </div>
       )}
-    </div>
+    </button>
   );
 };
 
-const FilesSection: React.FC<{ conversationId: string; total: number }> = ({
-  conversationId,
-  total,
-}) => {
-  const [showAll, setShowAll] = useState(false);
-  const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState("");
-  const debouncedSearch = useDebounce(searchInput, 300);
+// ─── Drawer Files Tab ─────────────────────────────────────────────────────────
 
-  const limit = showAll ? FILES_PAGE_SIZE : FILES_PREVIEW_SIZE;
-
-  const { data, isLoading, isFetching } = useGetConversationFilesQuery({
-    conversationId,
-    page: showAll ? page : 1,
-    limit,
-    q: debouncedSearch || undefined,
-  });
-
-  const hasNext = data?.pagination.hasNext ?? false;
-  const rawItems = data?.data ?? [];
-  const items = rawItems.filter(
-    (f) =>
-      !f.mimeType.startsWith("image/") &&
-      !f.mimeType.startsWith("video/") &&
-      !f.mimeType.startsWith("audio/"),
-  );
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchInput(e.target.value);
-    setPage(1);
-    if (!showAll) setShowAll(true);
-  };
+const DrawerFilesTab: React.FC<{
+  items: ConversationResourcesFileItem[];
+  conversationId: string;
+}> = ({ items, conversationId }) => {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
+        <DocumentIcon className="h-8 w-8" />
+        <p className="text-sm">Chưa có file nào</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-3">
-      <Input
-        type="text"
-        value={searchInput}
-        onChange={handleSearchChange}
-        placeholder="Tìm kiếm file..."
-        leftIcon={<MagnifyingGlassIcon className="h-4 w-4" />}
-      />
-
-      {isLoading || isFetching ? (
-        <div className="mt-2 space-y-1">
-          {Array.from({ length: FILES_PREVIEW_SIZE }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <div className="flex-1 space-y-1">
-                <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="h-3 w-1/3" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyInline
-          icon={<DocumentIcon className="h-8 w-8" />}
-          text={debouncedSearch ? "Không tìm thấy file phù hợp" : "Chưa có file nào"}
+    <div className="space-y-0.5">
+      {items.map((item) => (
+        <DrawerFileRow
+          key={`${item.messageId}-${item.fileId}`}
+          item={item}
+          conversationId={conversationId}
         />
-      ) : (
-        <>
-          <div className="mt-2 space-y-1">
-            {items.map((item) => (
-              <FileRow
-                key={`${item.messageId}-${item.fileId}`}
-                item={item}
-                conversationId={conversationId}
-              />
-            ))}
-          </div>
-          {showAll ? (
-            <>
-              <Pager
-                page={page}
-                hasNext={hasNext}
-                isFetching={isFetching}
-                onPrev={() => setPage((p) => p - 1)}
-                onNext={() => setPage((p) => p + 1)}
-              />
-              {!debouncedSearch && (
-                <CollapseButton
-                  onClick={() => {
-                    setShowAll(false);
-                    setPage(1);
-                  }}
-                />
-              )}
-            </>
-          ) : total > FILES_PREVIEW_SIZE ? (
-            <ViewAllButton total={total} onClick={() => setShowAll(true)} />
-          ) : null}
-        </>
-      )}
+      ))}
     </div>
   );
 };
 
-const FileRow: React.FC<{
+const DrawerFileRow: React.FC<{
   item: ConversationResourcesFileItem;
   conversationId: string;
 }> = ({ item, conversationId }) => {
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeDate(new Date(item.createdAt));
   const [isDownloading, setIsDownloading] = useState(false);
-
-  const displayName = truncateFilename(item.fileName);
 
   const handleDownload = async () => {
     if (isDownloading) return;
@@ -496,7 +464,7 @@ const FileRow: React.FC<{
         document.body.removeChild(a);
       }
     } catch {
-      // silently ignore — user can retry
+      // silent — user can retry
     } finally {
       setIsDownloading(false);
     }
@@ -508,14 +476,14 @@ const FileRow: React.FC<{
       onClick={() => void handleDownload()}
       disabled={isDownloading}
       title={item.fileName}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-hover disabled:opacity-60"
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
     >
       <div className="shrink-0">
         <FileTypeIcon type={iconType} className="h-8 w-8" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-text-primary">
-          {displayName}
+          {truncateFilename(item.fileName)}
         </p>
         <p className="truncate text-xs text-text-muted">
           {formatFileSize(item.sizeBytes)} · {item.senderName} · {date}
@@ -525,80 +493,30 @@ const FileRow: React.FC<{
   );
 };
 
-const LinksSection: React.FC<{ conversationId: string; total: number }> = ({
-  conversationId,
-  total,
-}) => {
-  const [showAll, setShowAll] = useState(false);
-  const [page, setPage] = useState(1);
+// ─── Drawer Links Tab ─────────────────────────────────────────────────────────
 
-  const limit = showAll ? LINKS_PAGE_SIZE : LINKS_PREVIEW_SIZE;
-
-  const { data, isLoading, isFetching } = useGetConversationLinksQuery({
-    conversationId,
-    page: showAll ? page : 1,
-    limit,
-  });
-
-  const hasNext = data?.pagination.hasNext ?? false;
-  const items = data?.data ?? [];
-
-  if (isLoading || isFetching) {
-    return (
-      <div className="space-y-2 p-3">
-        {Array.from({ length: LINKS_PREVIEW_SIZE }).map((_, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-md" />
-            <div className="flex-1 space-y-1">
-              <Skeleton className="h-3 w-1/2" />
-              <Skeleton className="h-3 w-3/4" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+const DrawerLinksTab: React.FC<{
+  items: ConversationResourcesLinkItem[];
+}> = ({ items }) => {
   if (items.length === 0) {
     return (
-      <EmptyInline
-        icon={<LinkIcon className="h-8 w-8" />}
-        text="Chưa có link nào được chia sẻ"
-      />
+      <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
+        <LinkIcon className="h-8 w-8" />
+        <p className="text-sm">Chưa có link nào được chia sẻ</p>
+      </div>
     );
   }
 
   return (
-    <div className="p-3">
-      <div className="space-y-1">
-        {items.map((item) => (
-          <LinkRow key={item.messageId} item={item} />
-        ))}
-      </div>
-      {showAll ? (
-        <>
-          <Pager
-            page={page}
-            hasNext={hasNext}
-            isFetching={isFetching}
-            onPrev={() => setPage((p) => p - 1)}
-            onNext={() => setPage((p) => p + 1)}
-          />
-          <CollapseButton
-            onClick={() => {
-              setShowAll(false);
-              setPage(1);
-            }}
-          />
-        </>
-      ) : total > LINKS_PREVIEW_SIZE ? (
-        <ViewAllButton total={total} onClick={() => setShowAll(true)} />
-      ) : null}
+    <div className="space-y-0.5">
+      {items.map((item) => (
+        <DrawerLinkRow key={item.messageId} item={item} />
+      ))}
     </div>
   );
 };
 
-const LinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
+const DrawerLinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
   item,
 }) => {
   const date = formatRelativeDate(new Date(item.createdAt));
@@ -608,15 +526,13 @@ const LinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-hover"
+      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
     >
       <div className="shrink-0 rounded-md bg-primary/10 p-2">
-        <LinkIcon className="h-5 w-5 text-primary" />
+        <LinkIcon className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-primary">
-          {item.domain}
-        </p>
+        <p className="truncate text-sm font-medium text-text-primary">{item.domain}</p>
         <p className="truncate text-xs text-primary">{item.url}</p>
         <p className="truncate text-xs text-text-muted">
           {item.senderName} · {date}
