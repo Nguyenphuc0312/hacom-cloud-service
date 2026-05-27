@@ -1,4 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -50,6 +51,7 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
   const { t } = useTranslation("profile");
   const [isOpen, setIsOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<"inline-confirm" | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -79,6 +81,7 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
   }
 
   const handleToggle = () => {
+    if (!isOpen) updatePos();
     setIsOpen((prev) => !prev);
     setActiveAction(null);
   };
@@ -124,31 +127,40 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
     setActiveAction(null);
   };
 
-  // Handle click outside
+  const updatePos = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+  }, []);
+
+  // Handle click outside + scroll + resize
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && activeAction === null) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        handleClose();
-      }
+      const target = event.target as Node;
+      const insideMenu = menuRef.current?.contains(target);
+      const insideButton = buttonRef.current?.contains(target);
+      if (!insideMenu && !insideButton) handleClose();
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleClose();
-        buttonRef.current?.focus();
-      }
+      if (event.key === "Escape") { handleClose(); buttonRef.current?.focus(); }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen, activeAction, handleClose, updatePos]);
 
   // Keyboard navigation
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -206,31 +218,15 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
   const destructiveActions = actions.filter((a) => a.variant !== "neutral");
   const showSeparator = neutralActions.length > 0 && destructiveActions.length > 0;
 
-  return (
-    <div className={clsx("relative", className)} ref={menuRef}>
-      {/* Kebab button */}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleToggle}
-        disabled={isLoading}
-        className={clsx(
-          "flex h-8 w-8 items-center justify-center rounded-md transition-all",
-          "opacity-0 group-hover:opacity-100",
-          "hover:bg-surface-overlay active:bg-surface-active",
-          "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-        )}
-        aria-label={t("profile:groupInfo.actions.options", { name: memberName })}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-      >
-        <ChevronUpIcon className="h-5 w-5 rotate-90 transform text-text-muted" />
-      </button>
-
+  const portalContent = (
+    <>
       {/* Inline confirmation popover */}
-      {activeAction === "inline-confirm" && (
-        <div className="absolute right-0 top-full z-20 mt-1 min-w-52 rounded-lg border border-border bg-surface p-3 shadow-elev3 animate-fade-in">
+      {activeAction === "inline-confirm" && menuPos && (
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          className="z-[9999] min-w-52 rounded-lg border border-border bg-surface p-3 shadow-elev3 animate-fade-in"
+        >
           <p className="mb-3 text-sm text-text-primary">
             {memberRole === RoomMemberRole.ADMIN
               ? t("profile:groupInfo.confirm.removeAdmin", { name: memberName })
@@ -257,23 +253,19 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
       )}
 
       {/* Dropdown menu */}
-      {isOpen && (
+      {isOpen && menuPos && (
         <div
-          className={clsx(
-            "absolute right-0 top-full z-20 mt-1 min-w-48 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-elev3 animate-fade-in",
-            "focus-visible:outline-none",
-          )}
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          className="z-[9999] min-w-48 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-elev3 animate-fade-in focus-visible:outline-none"
           role="menu"
           aria-orientation="vertical"
           onKeyDown={handleKeyDown}
         >
-          {/* Neutral actions */}
           {neutralActions.map((action, index) => (
             <button
               key={action.id}
-              ref={(el) => {
-                menuItemRefs.current[index] = el;
-              }}
+              ref={(el) => { menuItemRefs.current[index] = el; }}
               type="button"
               disabled={isLoading}
               onClick={() => handleActionClick(action)}
@@ -290,18 +282,14 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
             </button>
           ))}
 
-          {/* Separator */}
           {showSeparator && <div className="my-1 h-px bg-border/60" role="separator" />}
 
-          {/* Destructive actions */}
           {destructiveActions.map((action, idx) => {
             const actualIndex = neutralActions.length + idx;
             return (
               <button
                 key={action.id}
-                ref={(el) => {
-                  menuItemRefs.current[actualIndex] = el;
-                }}
+                ref={(el) => { menuItemRefs.current[actualIndex] = el; }}
                 type="button"
                 disabled={isLoading}
                 onClick={() => handleActionClick(action)}
@@ -322,6 +310,31 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
           })}
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div className={clsx("relative", className)}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={handleToggle}
+        disabled={isLoading}
+        className={clsx(
+          "flex h-8 w-8 items-center justify-center rounded-md transition-all",
+          "opacity-0 group-hover:opacity-100",
+          "hover:bg-surface-overlay active:bg-surface-active",
+          "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+        )}
+        aria-label={t("profile:groupInfo.actions.options", { name: memberName })}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+      >
+        <ChevronUpIcon className="h-5 w-5 rotate-90 transform text-text-muted" />
+      </button>
+
+      {createPortal(portalContent, document.body)}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+export { AddMemberModal } from "./AddMemberModal";
 export { MemberRoleBadge } from "./MemberRoleBadge";
 export { MemberActionsMenu } from "./MemberActionsMenu";
 export { MemberRow } from "./MemberRow";

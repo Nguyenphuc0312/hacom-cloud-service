@@ -573,6 +573,8 @@ const MessageGroupItem: React.FC<{
           )}>
             <div className="relative">
               {actionRail}
+              {/* Wrapper inline để pill absolute neo đúng vào bubble */}
+              <div className={clsx("relative inline-block", (message.reactions?.length ?? 0) > 0 && "mb-2")}>
             <MessageBubble
               isOwn={isOwn}
               position={bubblePosition}
@@ -612,8 +614,7 @@ const MessageGroupItem: React.FC<{
                 >
                   {/* Thanh nhận diện bên trái */}
                   <span
-                    className="w-[3px] flex-shrink-0 self-stretch rounded-full"
-                    style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
+                    className="w-[3px] flex-shrink-0 self-stretch rounded-full bg-gradient-to-b from-[#1976D2] to-[#1565C0]"
                   />
 
                   {/* Thumbnail (ảnh/video) hoặc badge loại file */}
@@ -729,19 +730,26 @@ const MessageGroupItem: React.FC<{
                 />
               )}
             </MessageBubble>
-            </div>
 
             {(message.reactions?.length ?? 0) > 0 && (
-              <div className="mt-1">
+              <div
+                className={clsx(
+                  "absolute bottom-0 translate-y-1/2 z-10",
+                  isOwn ? "right-0" : "left-0",
+                )}
+              >
                 <ReactionBar
                   reactions={message.reactions}
                   currentUserId={currentUserId}
                   isOutgoing={isOwn}
                   onReact={handleReactionSelect}
                   onToggleReaction={handleReactionToggle}
+                  conversationId={message.conversationId}
                 />
               </div>
             )}
+              </div>{/* end bubble inline wrapper */}
+            </div>{/* end actionRail wrapper */}
 
             {threadCount > 0 && (
               <ThreadIndicator

@@ -17,18 +17,13 @@ import {
   ChevronRightIcon,
   BellIcon,
   BellSlashIcon,
-  BookmarkIcon,
-  EyeIcon,
-  LockClosedIcon,
-  ArrowPathIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { PencilEdit01Icon, Pin02Icon } from "@hugeicons/core-free-icons";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
-import { UserSearchResultItem } from "../common/UserSearchResultItem";
 import {
   ConfirmDialog,
   DirectorySkeleton,
@@ -44,11 +39,7 @@ import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
 import uploadClient from "../../services/uploadClient";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
-import {
-  buildUserSearchSecondaryText,
-  isGroupMemberEligible,
-  useChatUserSearch,
-} from "../../features/chat/hooks/useChatUserSearch";
+import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
 import {
   canAddGroupMembers,
   canLeaveGroup,
@@ -65,6 +56,7 @@ import { banMemberUseCase } from "../../features/chat/usecases/manageMemberRestr
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 import {
+  AddMemberModal,
   MembersList,
   RemoveMemberModal,
   BanMemberModal,
@@ -248,34 +240,6 @@ const areMemberMapsEqual = (
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const ToggleSwitch: React.FC<{
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-  ariaLabel: string;
-}> = ({ checked, onChange, disabled, ariaLabel }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-label={ariaLabel}
-    onClick={onChange}
-    disabled={disabled}
-    className={clsx(
-      "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50",
-      checked
-        ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
-        : "bg-surface-active",
-    )}
-  >
-    <span
-      className={clsx(
-        "pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform duration-200",
-        checked ? "translate-x-4" : "translate-x-0",
-      )}
-    />
-  </button>
-);
 
 
 interface CollapsibleSectionProps {
@@ -369,7 +333,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const navigate = useNavigate();
   const [securityExpanded, setSecurityExpanded] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>({});
@@ -401,16 +364,26 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const [isPinned, setIsPinned] = useState(() => Boolean(conversation.isPinned));
 
   // Security settings local state
-  const [settingsDiscoverable, setSettingsDiscoverable] = useState(false);
-  const [settingsApproveNew, setSettingsApproveNew] = useState(false);
-  const [isUpdatingSetting, setIsUpdatingSetting] = useState(false);
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
+
+  const handleTogglePin = useCallback(async () => {
+    const next = !isPinned;
+    setIsPinned(next);
+    updateConversation(conversation.id, { isPinned: next });
+    try {
+      await updateConversationUseCase(conversation.id, { isPinned: next });
+    } catch {
+      setIsPinned(!next);
+      updateConversation(conversation.id, { isPinned: !next });
+      toast.error(next ? "Ghim hội thoại thất bại" : "Bỏ ghim hội thoại thất bại");
+    }
+  }, [isPinned, conversation.id, updateConversation]);
 
   const inviteLinks = useGroupStore(
     (state) => state.inviteLinksByConversation[conversation.id] ?? EMPTY_INVITE_LINKS,
@@ -479,16 +452,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     [createdBy, members],
   );
 
-  const {
-    results: searchResults,
-    isLoading: isSearching,
-    errorMessage: searchErrorMessage,
-    debouncedQuery,
-  } = useChatUserSearch(searchQuery, {
-    enabled: showAddMember,
-    limit: 10,
-    excludeUserIds: [currentUserId, ...members.map((m) => m.id), ...participants.map((p) => p.id)],
-  });
+  const excludeMemberIds = React.useMemo(
+    () => [currentUserId, ...members.map((m) => m.id), ...participants.map((p) => p.id)],
+    [currentUserId, members, participants],
+  );
 
   const currentUserRole =
     membersByUserId[currentUserId]?.role ||
@@ -578,26 +545,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     [conversation.id, refreshGroupState, t],
   );
 
-  const handleToggleSetting = useCallback(
-    async (key: "discoverable" | "approveNewMembers", current: boolean) => {
-      if (!isAdmin || isUpdatingSetting) return;
-      setIsUpdatingSetting(true);
-      const nextValue = !current;
-      if (key === "discoverable") setSettingsDiscoverable(nextValue);
-      else setSettingsApproveNew(nextValue);
-      try {
-        await chatApi.group.updateSettings(conversation.id, { [key]: nextValue });
-      } catch (error) {
-        // revert
-        if (key === "discoverable") setSettingsDiscoverable(current);
-        else setSettingsApproveNew(current);
-        toast.error(extractApiError(error).message || "Không thể cập nhật cài đặt");
-      } finally {
-        setIsUpdatingSetting(false);
-      }
-    },
-    [conversation.id, isAdmin, isUpdatingSetting],
-  );
 
   React.useEffect(() => {
     setGroupNameDraft(conversation.name || "");
@@ -679,7 +626,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await chatApi.group.addMember(conversation.id, userId);
         await refreshGroupState();
-        setSearchQuery("");
         setShowAddMember(false);
         toast.success(t("profile:toast.memberAdded"));
       } catch (error) {
@@ -1116,25 +1062,25 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 }
               </div>
               <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
-                {isMuted ? "Bật báo" : "Tắt báo"}
+                {isMuted ? "Bật thông báo" : "Tắt thông báo"}
               </span>
             </button>
 
             {/* Pin / Unpin */}
             <button
               type="button"
-              onClick={() => setIsPinned((p) => !p)}
+              onClick={() => { void handleTogglePin(); }}
               className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
-              aria-label={isPinned ? "Bỏ ghim nhóm" : "Ghim nhóm"}
+              aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
               <div className={clsx(
                 "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
                 isPinned ? "bg-primary/10 group-hover:bg-primary/15" : "bg-surface-active group-hover:bg-surface-hover",
               )}>
-                <BookmarkIcon className={clsx("h-5 w-5", isPinned ? "text-primary" : "text-text-secondary")} />
+                <HugeiconsIcon icon={Pin02Icon} size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-primary" : "text-text-secondary"} />
               </div>
               <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
-                {isPinned ? "Bỏ ghim" : "Ghim"}
+                {isPinned ? "Bỏ ghim" : "Ghim nhóm"}
               </span>
             </button>
 
@@ -1160,7 +1106,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             {isAdmin && (
               <button
                 type="button"
-                onClick={() => { setSecurityExpanded(true); setShowCreateInviteForm((p) => !p); }}
+                onClick={() => { setSecurityExpanded(true); setShowCreateInviteForm(true); }}
                 className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
                 aria-label="Tạo link mời vào nhóm"
               >
@@ -1208,51 +1154,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </span>
             }
           >
-            {/* Add-member search panel */}
-            {showAddMember && (
-              <div className="border-b border-border px-3 py-3">
-                <p className="mb-2 text-xs font-semibold text-text-muted">Thêm thành viên mới</p>
-                <Input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("profile:groupInfo.searchMemberPlaceholder")}
-                  leftIcon={<MagnifyingGlassIcon className="h-4 w-4" />}
-                  disabled={isSubmitting}
-                />
-                {(isSearching || searchErrorMessage || debouncedQuery.trim().length >= 2 || searchResults.length > 0) && (
-                  <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border">
-                    {isSearching ? (
-                      <DirectorySkeleton count={3} />
-                    ) : searchErrorMessage ? (
-                      <p className="px-3 py-3 text-sm text-danger">{searchErrorMessage}</p>
-                    ) : debouncedQuery.trim().length >= 2 && searchResults.length === 0 ? (
-                      <p className="px-3 py-3 text-sm text-text-muted">{t("profile:groupInfo.noSearchResult")}</p>
-                    ) : (
-                      searchResults.map((user) => (
-                        <UserSearchResultItem
-                          key={user.id}
-                          avatarUrl={user.avatarUrl}
-                          avatarAlt={user.displayName || user.id}
-                          status={user.status ?? null}
-                          primaryText={user.displayName || user.id}
-                          secondaryText={buildUserSearchSecondaryText(user)}
-                          disabled={isSubmitting || !isGroupMemberEligible(user)}
-                          onSelect={() => void handleAddMember(user.id)}
-                          trailing={
-                            isGroupMemberEligible(user) ? (
-                              <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">{t("common:actions.add")}</span>
-                            ) : (
-                              <span className="rounded-md bg-surface-overlay px-2 py-1 text-xs text-text-muted">{t("profile:newChatModal.friendsOnly", { defaultValue: "Chỉ bạn bè" })}</span>
-                            )
-                          }
-                        />
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Member search */}
             <div className="px-3 pt-2.5 pb-2">
@@ -1394,66 +1295,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
               {securityExpanded && (
                 <div className="border-t border-border">
-                  {/* Settings toggles */}
-                  <div className="divide-y divide-border">
-                    {/* Discoverable */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-overlay">
-                        <EyeIcon className="h-4 w-4 text-text-secondary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-text-primary">Hiển thị trong tìm kiếm</p>
-                        <p className="text-xs text-text-muted">Cho phép mọi người tìm thấy nhóm</p>
-                      </div>
-                      <ToggleSwitch
-                        checked={settingsDiscoverable}
-                        onChange={() => void handleToggleSetting("discoverable", settingsDiscoverable)}
-                        disabled={isUpdatingSetting}
-                        ariaLabel="Hiển thị nhóm trong tìm kiếm"
-                      />
-                    </div>
-
-                    {/* Approve new members */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-overlay">
-                        <LockClosedIcon className="h-4 w-4 text-text-secondary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-text-primary">Phê duyệt thành viên mới</p>
-                        <p className="text-xs text-text-muted">Quản trị viên phải duyệt yêu cầu</p>
-                      </div>
-                      <ToggleSwitch
-                        checked={settingsApproveNew}
-                        onChange={() => void handleToggleSetting("approveNewMembers", settingsApproveNew)}
-                        disabled={isUpdatingSetting}
-                        ariaLabel="Phê duyệt thành viên mới"
-                      />
-                    </div>
-
-                    {/* Auto delete (UI only for now) */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-overlay">
-                        <ArrowPathIcon className="h-4 w-4 text-text-secondary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-text-primary">Tự động xóa tin nhắn</p>
-                        <p className="text-xs text-text-muted">Sau 30 ngày</p>
-                      </div>
-                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
-                    </div>
-
-                    {/* Reset invite link */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-overlay">
-                        <LinkIcon className="h-4 w-4 text-text-secondary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-text-primary">Đặt lại link mời</p>
-                      </div>
-                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
-                    </div>
-                  </div>
-
                   {/* Invite Links */}
                   <div className="border-t border-border px-4 py-3 space-y-3">
                     <div className="flex items-center justify-between">
@@ -1714,6 +1555,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         confirmText={confirmText}
         isLoading={isConfirmActionPending}
         variant="danger"
+      />
+
+      <AddMemberModal
+        isOpen={showAddMember}
+        onClose={() => setShowAddMember(false)}
+        onAddMember={handleAddMember}
+        excludeUserIds={excludeMemberIds}
+        isSubmitting={isSubmitting}
       />
 
       <RemoveMemberModal
