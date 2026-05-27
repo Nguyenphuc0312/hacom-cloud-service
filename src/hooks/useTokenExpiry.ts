@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 
 import { useAuthStore } from '@/store/authStore/authStore';
-import { getTokenExpiryInfo, isTokenExpiringSoon } from '@/utils/token.utils';
+import { getTokenExpiryInfo } from '@/utils/token.utils';
 
 const TOKEN_CHECK_INTERVAL_MS = 60 * 1000; // Check every minute
 

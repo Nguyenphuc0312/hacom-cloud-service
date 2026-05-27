@@ -27,7 +27,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     unknown: { color: 'gray', status: 'default' },
   };
 
-  const { color, status: badgeStatus } = config[status] ?? config.unknown;
+  const { status: badgeStatus } = config[status] ?? config.unknown;
 
   return <Badge status={badgeStatus} />;
 };
