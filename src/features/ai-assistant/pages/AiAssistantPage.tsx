@@ -6,6 +6,7 @@ import { AiChatPreview } from "../components/AiChatPreview";
 import {
   sendAiChatMessage,
   uploadPersonalWeeklyReport,
+  invalidateWeeklyReportFilenameCache,
   AiApiError,
 } from "../services/aiChatApi";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
+import { AiWeeklyReportFilesDialog } from "../components/AiWeeklyReportFilesDialog";
 import { toast } from "../../../utils/toast";
 import type { AiMessage } from "../types";
 
@@ -33,8 +35,11 @@ export const AiAssistantPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [weeklyReportsOpen, setWeeklyReportsOpen] = useState(false);
+  const [weeklyReportsRefreshKey, setWeeklyReportsRefreshKey] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const openWeeklyReportFilePickerRef = useRef<() => void>(() => {});
 
   // Global state
   const {
@@ -190,6 +195,8 @@ export const AiAssistantPage: React.FC = () => {
           }));
 
           setPendingFile(null);
+          invalidateWeeklyReportFilenameCache();
+          setWeeklyReportsRefreshKey((k) => k + 1);
         } else {
           const isCompany = selectedEndpoint === "company";
           const request: any = {
@@ -340,6 +347,20 @@ export const AiAssistantPage: React.FC = () => {
   const hasMessages = messages.length > 0;
   const attachHandler = isPersonal ? handleAttachFiles : undefined;
 
+  const handleRegisterFilePicker = useCallback((open: () => void) => {
+    openWeeklyReportFilePickerRef.current = open;
+  }, []);
+
+  const defaultCompany = user?.departmentName || "";
+
+  const weeklyReportPromptProps = isPersonal
+    ? {
+        weeklyReportAttachMenu: true as const,
+        onOpenWeeklyReports: () => setWeeklyReportsOpen(true),
+        onRegisterFilePicker: handleRegisterFilePicker,
+      }
+    : {};
+
   // Auto focus input
   useEffect(() => {
     textareaRef.current?.focus();
@@ -347,6 +368,14 @@ export const AiAssistantPage: React.FC = () => {
 
   return (
     <AiLayout>
+      <AiWeeklyReportFilesDialog
+        isOpen={weeklyReportsOpen}
+        onClose={() => setWeeklyReportsOpen(false)}
+        defaultCompany={defaultCompany}
+        refreshKey={weeklyReportsRefreshKey}
+        onUploadNew={() => openWeeklyReportFilePickerRef.current()}
+      />
+
       <div className="flex h-full flex-col overflow-hidden bg-surface">
         <AiChatHeader />
 
@@ -374,6 +403,7 @@ export const AiAssistantPage: React.FC = () => {
                     isPersonal ? handleRemoveAttachment : undefined
                   }
                   attachmentHint="Đặt câu hỏi về báo cáo đã đính kèm..."
+                  {...weeklyReportPromptProps}
                 />
               </div>
 
@@ -417,6 +447,7 @@ export const AiAssistantPage: React.FC = () => {
                     isPersonal ? handleRemoveAttachment : undefined
                   }
                   attachmentHint="Đặt câu hỏi về báo cáo đã đính kèm..."
+                  {...weeklyReportPromptProps}
                 />
                 <p className="mt-2 text-center text-[11px] text-text-muted">
                   AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng
