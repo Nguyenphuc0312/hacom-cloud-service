@@ -3,14 +3,23 @@ import { AiAssistantHero } from "../components/AiAssistantHero";
 import { AiPromptBox } from "../components/AiPromptBox";
 import { AiSuggestionChips } from "../components/AiSuggestionChips";
 import { AiChatPreview } from "../components/AiChatPreview";
-import { sendAiChatMessage, AiApiError } from "../services/aiChatApi";
+import {
+  sendAiChatMessage,
+  uploadPersonalWeeklyReport,
+  AiApiError,
+} from "../services/aiChatApi";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
+import { toast } from "../../../utils/toast";
 import type { AiMessage } from "../types";
+
+const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+const WEEKLY_REPORT_ACCEPT =
+  ".pdf,.doc,.docx,.txt,.md,.csv,.xls,.xlsx,.ppt,.pptx";
 
 /**
  * Trang AI Assistant chính – layout kiểu ChatGPT.
@@ -22,6 +31,8 @@ export const AiAssistantPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -49,11 +60,53 @@ export const AiAssistantPage: React.FC = () => {
     user.username
     : undefined;
 
+  const isPersonal = selectedEndpoint === "personal";
+
+  /** Helper: chuẩn hoá nội dung message của user khi gửi kèm file. */
+  const buildUserMessageContent = useCallback(
+    (questionText: string, file: File | null): string => {
+      if (!file) return questionText;
+      return `[Tệp đính kèm: ${file.name}]\n\n${questionText}`;
+    },
+    [],
+  );
+
+  /** Helper: lấy session_id ổn định cho conversation cá nhân hiện tại. */
+  const resolvePersonalSessionId = useCallback(
+    (conversationId: string | null): string => {
+      const sid = (conversationId ?? "").trim();
+      return sid || "default";
+    },
+    [],
+  );
+
+  /** Helper: mapping lỗi từ AiApiError sang message tiếng Việt. */
+  const describeApiError = useCallback(
+    (err: unknown, fallback: string): string => {
+      if (err instanceof AiApiError) {
+        if (err.kind === "timeout") return t("chat.errorTimeout");
+        if (err.kind === "network") return t("chat.errorNetwork");
+        if (err.status === 422) return t("chat.error422");
+        if (err.status === 413)
+          return "Tệp vượt quá dung lượng cho phép của máy chủ.";
+        if (err.status === 415)
+          return "Định dạng tệp không được hỗ trợ.";
+        if (err.status === 401 || err.status === 403)
+          return "Bạn không có quyền sử dụng tính năng này.";
+      }
+      return fallback;
+    },
+    [t],
+  );
+
   /** Gửi tin nhắn đến AI API */
   const handleSubmit = useCallback(
     async (promptText: string) => {
       const trimmed = promptText.trim();
-      if (!trimmed || isLoading) return;
+      if (!trimmed || isLoading || isUploading) return;
+
+      const fileToSend = pendingFile;
+      const usingUpload = isPersonal && !!fileToSend;
 
       let currentId = activeConversationId;
 
@@ -69,16 +122,12 @@ export const AiAssistantPage: React.FC = () => {
       const userMessage: AiMessage = {
         id: crypto.randomUUID(),
         role: "user",
-        content: trimmed,
+        content: buildUserMessageContent(trimmed, fileToSend),
         timestamp: new Date(),
       };
 
       addMessage(currentId, userMessage);
       setInputValue("");
-      setIsLoading(true);
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
 
       // Tạo placeholder message cho AI
       const assistantMessageId = crypto.randomUUID();
@@ -91,61 +140,114 @@ export const AiAssistantPage: React.FC = () => {
       };
       addMessage(currentId, assistantMessage);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      if (usingUpload) {
+        setIsUploading(true);
+      } else {
+        setIsLoading(true);
+      }
+
       try {
-        const isCompany = selectedEndpoint === "company";
-        const request: any = {
-          question: trimmed,
-          session_id: currentId || "",
-          department: user?.departmentName || "",
-        };
+        if (usingUpload && fileToSend) {
+          const sessionId = resolvePersonalSessionId(currentId);
+          const response = await uploadPersonalWeeklyReport(
+            fileToSend,
+            {
+              question: trimmed,
+              session_id: sessionId,
+              company: "",
+              week_start: "",
+              week_end: "",
+            },
+            { signal: controller.signal },
+          );
 
-        if (isCompany) {
-          // Schema cho Công ty
-          request.user_id = user?.id || "";
-          request.user_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
+          const answerText =
+            (response.answer && response.answer.trim()) ||
+            `Đã nhận tệp "${fileToSend.name}". Bạn muốn hỏi gì thêm về tệp này?`;
+
+          updateLastMessage(currentId, answerText, false);
+          useAiAssistantStore.setState((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === currentId
+                ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                        ...m,
+                        content: answerText,
+                        sources: response.sources,
+                        isStreaming: false,
+                      }
+                      : m,
+                  ),
+                }
+                : c,
+            ),
+          }));
+
+          setPendingFile(null);
         } else {
-          // Schema cho Cá nhân
-          request.employee_code = user?.employeeCode || user?.employee_code || "";
-          request.employee_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
+          const isCompany = selectedEndpoint === "company";
+          const request: any = {
+            question: trimmed,
+            session_id: currentId || "",
+            department: user?.departmentName || "",
+          };
+
+          if (isCompany) {
+            request.user_id = user?.id || "";
+            request.user_name =
+              user?.fullNameFromHR ||
+              user?.displayName ||
+              user?.username ||
+              "";
+          } else {
+            request.employee_code =
+              user?.employeeCode || user?.employee_code || "";
+            request.employee_name =
+              user?.fullNameFromHR ||
+              user?.displayName ||
+              user?.username ||
+              "";
+          }
+
+          const response = await sendAiChatMessage(request, selectedEndpoint, {
+            onToken: (token) => {
+              updateLastMessage(currentId!, token, true);
+            },
+            onThinking: (thinking) => {
+              setThinking(currentId!, thinking);
+            },
+          });
+
+          updateLastMessage(currentId, response.answer, false);
+
+          useAiAssistantStore.setState((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === currentId
+                ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                        ...m,
+                        content: response.answer,
+                        sources: response.sources,
+                        isStreaming: false,
+                      }
+                      : m,
+                  ),
+                }
+                : c,
+            ),
+          }));
         }
-
-        const response = await sendAiChatMessage(request, selectedEndpoint, {
-          onToken: (token) => {
-            updateLastMessage(currentId!, token, true);
-          },
-          onThinking: (thinking) => {
-            setThinking(currentId!, thinking);
-          },
-        });
-
-        // Finalize message
-        updateLastMessage(currentId, response.answer, false);
-
-        useAiAssistantStore.setState((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === currentId
-              ? {
-                ...c,
-                messages: c.messages.map((m) =>
-                  m.id === assistantMessageId
-                    ? {
-                      ...m,
-                      content: response.answer,
-                      sources: response.sources,
-                      isStreaming: false,
-                    }
-                    : m,
-                ),
-              }
-              : c,
-          ),
-        }));
       } catch (err) {
-        let content = t("chat.errorNetwork");
-        if (err instanceof AiApiError) {
-          if (err.kind === "timeout") content = t("chat.errorTimeout");
-          if (err.status === 422) content = t("chat.error422");
-        }
+        const content = describeApiError(err, t("chat.errorNetwork"));
 
         updateLastMessage(currentId, content, false);
         useAiAssistantStore.setState((state) => ({
@@ -162,13 +264,25 @@ export const AiAssistantPage: React.FC = () => {
               : c,
           ),
         }));
+
+        if (usingUpload && fileToSend) {
+          toast.error(`Tải lên "${fileToSend.name}" thất bại: ${content}`);
+        }
       } finally {
-        setIsLoading(false);
+        if (usingUpload) {
+          setIsUploading(false);
+        } else {
+          setIsLoading(false);
+        }
+        abortControllerRef.current = null;
         setTimeout(() => textareaRef.current?.focus(), 0);
       }
     },
     [
       isLoading,
+      isUploading,
+      pendingFile,
+      isPersonal,
       activeConversationId,
       conversations,
       selectedEndpoint,
@@ -177,11 +291,54 @@ export const AiAssistantPage: React.FC = () => {
       updateLastMessage,
       setThinking,
       createNewConversation,
+      buildUserMessageContent,
+      resolvePersonalSessionId,
+      describeApiError,
       t,
     ],
   );
 
+  /** Stage file để gửi kèm câu hỏi (không upload ngay). */
+  const handleAttachFiles = useCallback(
+    (files: File[]) => {
+      if (selectedEndpoint !== "personal") return;
+      if (isLoading || isUploading) return;
+
+      const file = files[0];
+      if (!file) return;
+      if (files.length > 1) {
+        toast.info(
+          `Hiện chỉ hỗ trợ đính kèm 1 tệp mỗi lần — sẽ dùng "${file.name}".`,
+        );
+      }
+      if (file.size > WEEKLY_REPORT_MAX_BYTES) {
+        toast.error(
+          `Tệp "${file.name}" quá lớn (giới hạn 25MB). Vui lòng chọn tệp nhỏ hơn.`,
+        );
+        return;
+      }
+
+      setPendingFile(file);
+      // Focus textarea để user gõ câu hỏi luôn
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [selectedEndpoint, isLoading, isUploading],
+  );
+
+  const handleRemoveAttachment = useCallback(() => {
+    if (isUploading) return;
+    setPendingFile(null);
+  }, [isUploading]);
+
+  // Khi user chuyển endpoint sang công ty thì xoá file đã stage (endpoint khác không hỗ trợ).
+  useEffect(() => {
+    if (!isPersonal && pendingFile) {
+      setPendingFile(null);
+    }
+  }, [isPersonal, pendingFile]);
+
   const hasMessages = messages.length > 0;
+  const attachHandler = isPersonal ? handleAttachFiles : undefined;
 
   // Auto focus input
   useEffect(() => {
@@ -206,6 +363,17 @@ export const AiAssistantPage: React.FC = () => {
                   onChange={setInputValue}
                   onSubmit={handleSubmit}
                   isLoading={isLoading}
+                  isUploading={isUploading}
+                  onAttachFiles={attachHandler}
+                  attachAccept={isPersonal ? WEEKLY_REPORT_ACCEPT : undefined}
+                  attachMultiple={false}
+                  pendingAttachment={
+                    isPersonal && pendingFile ? { file: pendingFile } : null
+                  }
+                  onRemoveAttachment={
+                    isPersonal ? handleRemoveAttachment : undefined
+                  }
+                  attachmentHint="Đặt câu hỏi về báo cáo đã đính kèm..."
                 />
               </div>
 
@@ -238,6 +406,17 @@ export const AiAssistantPage: React.FC = () => {
                   onChange={setInputValue}
                   onSubmit={handleSubmit}
                   isLoading={isLoading}
+                  isUploading={isUploading}
+                  onAttachFiles={attachHandler}
+                  attachAccept={isPersonal ? WEEKLY_REPORT_ACCEPT : undefined}
+                  attachMultiple={false}
+                  pendingAttachment={
+                    isPersonal && pendingFile ? { file: pendingFile } : null
+                  }
+                  onRemoveAttachment={
+                    isPersonal ? handleRemoveAttachment : undefined
+                  }
+                  attachmentHint="Đặt câu hỏi về báo cáo đã đính kèm..."
                 />
                 <p className="mt-2 text-center text-[11px] text-text-muted">
                   AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng
