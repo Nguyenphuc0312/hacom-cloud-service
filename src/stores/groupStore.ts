@@ -43,6 +43,7 @@ interface GroupStoreState {
     linkId: string,
     revokedAt?: string,
   ) => void;
+  removeInviteLink: (conversationId: string, linkId: string) => void;
 
   upsertJoinRequest: (conversationId: string, request: JoinRequestItem) => void;
   setJoinRequests: (conversationId: string, requests: JoinRequestItem[]) => void;
@@ -159,6 +160,19 @@ export const useGroupStore = create<GroupStoreState>()(
           inviteLinksByConversation: {
             ...state.inviteLinksByConversation,
             [conversationId]: next,
+          },
+        };
+      });
+    },
+
+    removeInviteLink: (conversationId, linkId) => {
+      if (!conversationId || !linkId) return;
+      set((state) => {
+        const current = state.inviteLinksByConversation[conversationId] || [];
+        return {
+          inviteLinksByConversation: {
+            ...state.inviteLinksByConversation,
+            [conversationId]: current.filter((item) => item.id !== linkId),
           },
         };
       });

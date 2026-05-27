@@ -359,7 +359,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // Member filter / search state
   const [memberSearch, setMemberSearch] = useState("");
-  const [memberFilterRole, setMemberFilterRole] = useState<"all" | "owner" | "admin" | "member">("all");
+  const [memberFilterRole, setMemberFilterRole] = useState<"all" | "leadership">("all");
   const [membersShowAll, setMembersShowAll] = useState(false);
 
   // UI quick-action toggles (local state)
@@ -397,6 +397,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
   const markInviteLinkRevoked = useGroupStore((state) => state.markInviteLinkRevoked);
+  const removeInviteLink = useGroupStore((state) => state.removeInviteLink);
   const setJoinRequests = useGroupStore((state) => state.setJoinRequests);
   const markJoinRequestResolved = useGroupStore((state) => state.markJoinRequestResolved);
   const removeJoinRequest = useGroupStore((state) => state.removeJoinRequest);
@@ -428,7 +429,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const filteredMembers = React.useMemo(() => {
     let result = members;
-    if (memberFilterRole !== "all") result = result.filter((m) => m.role === memberFilterRole);
+    if (memberFilterRole === "leadership") result = result.filter((m) => m.role === RoomMemberRole.OWNER || m.role === RoomMemberRole.ADMIN);
     if (memberSearch.trim()) {
       const q = memberSearch.toLowerCase();
       result = result.filter((m) =>
@@ -442,9 +443,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   // Role counts for filter badges
   const roleCounts = React.useMemo(() => ({
     all: members.length,
-    owner: members.filter((m) => m.role === RoomMemberRole.OWNER).length,
-    admin: members.filter((m) => m.role === RoomMemberRole.ADMIN).length,
-    member: members.filter((m) => m.role === RoomMemberRole.MEMBER).length,
+    leadership: members.filter((m) => m.role === RoomMemberRole.OWNER || m.role === RoomMemberRole.ADMIN).length,
   }), [members]);
 
   const activeOwnerCount = React.useMemo(
@@ -577,6 +576,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         const normalizedInviteLinks: InviteLinkItem[] = Array.isArray(inviteLinksPayload)
           ? inviteLinksPayload.reduce<InviteLinkItem[]>((items, item) => {
               if (!isRecord(item) || typeof item.id !== "string") return items;
+              if (asString(item.revokedAt)) return items;
               items.push({
                 id: item.id,
                 conversationId: resolveConversationId(item, { source: "GroupInfo.inviteLinks" }) ?? conversation.id,
@@ -587,7 +587,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 usageCount: typeof item.usageCount === "number" ? item.usageCount : 0,
                 usageLimit: typeof item.usageLimit === "number" ? item.usageLimit : null,
                 expireAt: asString(item.expireAt) ?? null,
-                revokedAt: asString(item.revokedAt) ?? null,
+                revokedAt: null,
                 createdAt: asString(item.createdAt) ?? new Date().toISOString(),
               });
               return items;
@@ -758,7 +758,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const handleDeleteGroup = useCallback(() => {
     if (currentUserRole !== RoomMemberRole.OWNER) return;
-    setPendingConfirm({ type: "delete-group" });
     setDeleteGroupTarget(true);
   }, [currentUserRole]);
 
@@ -860,7 +859,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       setRevokingInviteId(linkId);
       try {
         await revokeGroupInviteLinkUseCase(conversation.id, linkId);
-        markInviteLinkRevoked(conversation.id, linkId);
+        removeInviteLink(conversation.id, linkId);
         toast.success(t("profile:groupInfo.invite.revoked"));
       } catch (error) {
         toast.error(extractApiError(error).message || t("profile:groupInfo.invite.revokeFailed"));
@@ -868,7 +867,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setRevokingInviteId(null);
       }
     },
-    [conversation.id, isAdmin, markInviteLinkRevoked, t],
+    [conversation.id, isAdmin, removeInviteLink, t],
+  );
+
+  const handleDeleteInviteLink = useCallback(
+    async (linkId: string) => {
+      if (!isAdmin || !linkId) return;
+      try {
+        await revokeGroupInviteLinkUseCase(conversation.id, linkId);
+      } catch { /* already removed or unauthorized — remove locally anyway */ }
+      removeInviteLink(conversation.id, linkId);
+    },
+    [conversation.id, isAdmin, removeInviteLink],
   );
 
   const handleResolveJoinRequest = useCallback(
@@ -920,11 +930,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
-  const memberFilterTabs: { key: "all" | "owner" | "admin" | "member"; label: string }[] = [
+  const memberFilterTabs: { key: "all" | "leadership"; label: string }[] = [
     { key: "all", label: "Tất cả" },
-    { key: "owner", label: t("profile:groupInfo.roles.owner") },
-    { key: "admin", label: t("profile:groupInfo.roles.admin") },
-    { key: "member", label: t("profile:groupInfo.roles.member") },
+    { key: "leadership", label: "Trưởng nhóm" },
   ];
 
   return (
@@ -1044,12 +1052,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
         {/* ── Quick Actions Row ── */}
         <div className="bg-surface px-4 pb-5">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             {/* Mute / Unmute */}
             <button
               type="button"
               onClick={() => setIsMuted((p) => !p)}
-              className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
               aria-label={isMuted ? "Bật thông báo nhóm" : "Tắt thông báo nhóm"}
             >
               <div className={clsx(
@@ -1070,14 +1078,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <button
               type="button"
               onClick={() => { void handleTogglePin(); }}
-              className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
               aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
               <div className={clsx(
                 "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                isPinned ? "bg-primary/10 group-hover:bg-primary/15" : "bg-surface-active group-hover:bg-surface-hover",
+                isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15",
               )}>
-                <HugeiconsIcon icon={Pin02Icon} size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-primary" : "text-text-secondary"} />
+                <HugeiconsIcon icon={Pin02Icon} size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
               </div>
               <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
                 {isPinned ? "Bỏ ghim" : "Ghim nhóm"}
@@ -1090,7 +1098,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => setShowAddMember((p) => !p)}
-                className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+                className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
                 aria-label="Thêm thành viên vào nhóm"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/15">
@@ -1102,29 +1110,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </button>
             )}
 
-            {/* Invite Link */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => { setSecurityExpanded(true); setShowCreateInviteForm(true); }}
-                className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
-                aria-label="Tạo link mời vào nhóm"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/15">
-                  <LinkIcon className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
-                  Link mời
-                </span>
-              </button>
-            )}
-
             {/* Join Requests (admin only, if pending) */}
             {isAdmin && pendingJoinRequestsCount > 0 && (
               <button
                 type="button"
                 onClick={() => setSecurityExpanded(true)}
-                className="group relative flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+                className="group relative flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
                 aria-label={`${pendingJoinRequestsCount} yêu cầu vào nhóm đang chờ`}
               >
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 transition-colors group-hover:bg-warning/15">
@@ -1172,7 +1163,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             {/* Filter tabs */}
             <div className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
               {memberFilterTabs.map((tab) => {
-                const count = roleCounts[tab.key];
+                const count = tab.key === "all" ? roleCounts.all : roleCounts.leadership;
                 if (count === 0 && tab.key !== "all") return null;
                 const isActive = memberFilterRole === tab.key;
                 return (
@@ -1351,13 +1342,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     ) : (
                       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
                         {inviteLinks.map((link) => {
-                          const shareValue = link.inviteUrl || link.token || "";
+                          const shareValue = link.inviteUrl || link.token || link.tokenPreview || "";
                           const isRevoked = Boolean(link.revokedAt);
                           return (
-                            <div key={link.id} className="flex items-start justify-between gap-3 px-3 py-3">
-                              <div className="min-w-0 flex-1">
+                            <div key={link.id} className="flex flex-col gap-2 px-3 py-3">
+                              <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="truncate text-sm font-medium text-text-primary">
+                                  <p className="text-sm font-medium text-text-primary">
                                     {link.name || t("profile:groupInfo.invite.unnamed")}
                                   </p>
                                   {isRevoked && (
@@ -1366,14 +1357,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-1 truncate text-xs text-text-muted">
+                                <p className="mt-1 break-all text-xs text-text-muted">
                                   {link.inviteUrl || link.tokenPreview || link.id}
                                 </p>
                                 <p className="mt-1 text-xs text-text-muted">
                                   {t("profile:groupInfo.invite.usage", { count: link.usageCount || 0, limit: typeof link.usageLimit === "number" ? link.usageLimit : "unlimited" })}
                                 </p>
                               </div>
-                              <div className="flex shrink-0 items-center gap-2">
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   disabled={!shareValue}
@@ -1394,6 +1385,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                     {revokingInviteId === link.id ? t("common:loading.processing") : t("profile:groupInfo.invite.revoke")}
                                   </button>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteInviteLink(link.id)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10"
+                                  aria-label="Xóa link mời"
+                                >
+                                  <TrashIcon className="h-3.5 w-3.5" />
+                                  Xóa
+                                </button>
                               </div>
                             </div>
                           );
@@ -1470,28 +1470,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               danger
             >
               <div className="space-y-0.5 px-4 py-3">
-                {/* Mute */}
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50/60"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50">
-                    <BellSlashIcon className="h-4 w-4" />
-                  </div>
-                  <span>Tắt thông báo nhóm</span>
-                </button>
-
-                {/* Block */}
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50/60"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50">
-                    <NoSymbolIcon className="h-4 w-4" />
-                  </div>
-                  <span>Chặn nhóm</span>
-                </button>
-
                 {/* Leave */}
                 {canLeaveCurrentGroup && (
                   <button
