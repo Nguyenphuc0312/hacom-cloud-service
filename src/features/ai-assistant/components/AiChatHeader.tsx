@@ -1,5 +1,5 @@
 import React from "react";
-import { Building2Icon, SparklesIcon, PanelRightIcon } from "lucide-react";
+import { SparklesIcon, PanelRightIcon } from "lucide-react";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import clsx from "clsx";
@@ -22,12 +22,9 @@ export const AiChatHeader: React.FC = () => {
             "flex h-6 w-6 items-center justify-center rounded-md",
             !isCompany && "bg-success text-white",
           )}
-          style={isCompany ? {
-            background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)",
-          } : undefined}
         >
           {isCompany ? (
-            <Building2Icon size={14} strokeWidth={2.5} />
+            <img src="/Logo_noname.png" alt="HACOM" className="h-5 w-5 object-contain" />
           ) : (
             <SparklesIcon size={14} strokeWidth={2.5} />
           )}

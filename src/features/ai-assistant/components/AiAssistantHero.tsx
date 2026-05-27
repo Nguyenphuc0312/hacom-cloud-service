@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { SparklesIcon, Building2Icon } from "lucide-react";
+import { SparklesIcon } from "lucide-react";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 
 interface AiAssistantHeroProps {
@@ -28,17 +28,11 @@ export const AiAssistantHero: React.FC<AiAssistantHeroProps> = ({
       {/* Icon */}
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-full ${
-          isCompany
-            ? "text-white"
-            : "bg-emerald-600 text-white"
+          isCompany ? "" : "bg-emerald-600 text-white"
         }`}
-        style={isCompany ? {
-          background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 50%, #FFC857 100%)",
-          boxShadow: "0 4px 16px rgba(196,30,58,0.3)",
-        } : undefined}
       >
         {isCompany ? (
-          <Building2Icon size={28} strokeWidth={2} />
+          <img src="/Logo_noname.png" alt="HACOM" className="h-16 w-16 object-contain" />
         ) : (
           <SparklesIcon size={28} strokeWidth={2} />
         )}
