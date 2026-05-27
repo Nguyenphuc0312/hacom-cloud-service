@@ -36,7 +36,7 @@ const inFlightRequests = new Map<string, Promise<unknown>>();
 
 // Module-level cache for thumbnail URLs with status tracking
 const thumbnailStatusCache = new Map<string, {
-  status: 'ready' | 'processing' | 'queued' | 'failed';
+  status: 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original';
   url?: string | null;
   retryAfterMs?: number | null;
   fetchedAt: number;
@@ -161,6 +161,16 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
     // Create the request promise
     const requestPromise = (async () => {
+      // Debug logging for QA (dev only)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[ThumbnailQA] Fetching batch-thumbnail-urls`, {
+          conversationId,
+          fileIds: needingFallback.map((i) => i.fileId),
+          needingCount: needingFallback.length,
+          timestamp: Date.now(),
+        });
+      }
+
       try {
         const response = await fileApi.batchThumbnailUrls({
           conversationId,
@@ -171,17 +181,31 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
         if (controller.signal.aborted) return null;
 
+        // Debug logging for QA (dev only)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[ThumbnailQA] Received batch-thumbnail-urls response`, {
+            conversationId,
+            totalItems: payload.items.length,
+            readyCount: payload.items.filter((i) => i.status === 'ready').length,
+            fallbackOriginalCount: payload.items.filter(
+              (i) => i.status === 'fallback_original',
+            ).length,
+            failedCount: payload.items.filter((i) => i.status === 'failed').length,
+            withUrlCount: payload.items.filter((i) => i.url).length,
+          });
+        }
+
         const newUrls: Record<string, string> = {};
         const now = Date.now();
 
         for (const item of payload.items) {
           // Map response status to our cache format
           // Backend returns: ready, processing, queued, not_previewable, failed, not_found, forbidden, error
-          const status = item.status as 'ready' | 'processing' | 'queued' | 'failed';
+          const status = item.status as 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original';
           const url = item.url ?? null;
           const retryAfterMs = item.retryAfterMs ?? null;
 
-          // Update module-level cache
+          // Update module-level cache with full status for retry logic
           thumbnailStatusCache.set(item.fileId, {
             status,
             url,
@@ -189,7 +213,13 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             fetchedAt: now,
           });
 
-          if (item.status === 'ready' && url) {
+          // Cache URL when: ready (thumbnail exists) OR failed/fallback_original (original URL exists)
+          // This ensures images render even when thumbnail generation failed
+          const hasRenderableUrl =
+            (item.status === 'ready' && url) ||
+            (url && ['failed', 'fallback_original'].includes(item.status));
+
+          if (hasRenderableUrl && url) {
             newUrls[item.fileId] = url;
           }
         }
@@ -236,7 +266,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       });
 
     return () => controller.abort();
-  }, [activeTab, thumbnailFileIdsKey, conversationId, mediaPreview, thumbnailUrls]);
+  }, [activeTab, thumbnailFileIdsKey, conversationId]);
 
   if (isLoading) {
     return (
@@ -457,7 +487,7 @@ const DrawerMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string, alt: string) => void;
-}> = ({ item, fallbackUrl, onImageClick }) => {
+}> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const src = item.thumbnailUrl ?? fallbackUrl ?? null;
@@ -496,7 +526,7 @@ const DrawerMediaThumb: React.FC<{
       )}
     </button>
   );
-};
+});
 
 // ─── Drawer Files Tab ─────────────────────────────────────────────────────────
 

@@ -1431,7 +1431,7 @@ export const fileApi = {
           url: string | null;
           expiresAt: string | null;
           /** See ThumbnailUrlItem.status for semantics. */
-          status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'not_found' | 'forbidden' | 'error';
+          status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'fallback_original' | 'not_found' | 'forbidden' | 'error';
           /** Only present when status = ready. */
           variant?: 'thumbnail' | 'preview' | 'original';
           width?: number | null;
