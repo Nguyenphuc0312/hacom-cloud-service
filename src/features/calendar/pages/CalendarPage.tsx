@@ -7,6 +7,9 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   XMarkIcon,
+  UserIcon,
+  BuildingOfficeIcon,
+  CalendarIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -15,9 +18,10 @@ import {
   getEventTypeLabel,
   VIETNAMESE_MONTHS,
   VIETNAMESE_WEEKDAYS,
-  type CalendarEvent,
+  type CalendarEvent as LocalCalendarEvent,
   type EventType,
 } from "../data/calendarEvents";
+import type { CalendarEvent as CalendarEventApi } from "../../api/calendarApi";
 import {
   hrApi,
   type AttendanceCalendarDay,
@@ -25,6 +29,10 @@ import {
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
+import { useCalendarStore } from "../../../stores/calendarStore";
+import { DayView } from "../components/DayView";
+import { WeekView } from "../components/WeekView";
+import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 
 /**
  * Calendar view types.
@@ -96,9 +104,10 @@ const formatTime = (time: string | null | undefined): string => {
 
 /**
  * Event detail modal component.
+ * Works with LocalCalendarEvent (merged events: holidays + tasks + API).
  */
 const EventDetailModal: React.FC<{
-  event: CalendarEvent;
+  event: LocalCalendarEvent;
   onClose: () => void;
 }> = ({ event, onClose }) => {
   const colors = getEventColor(event.type);
@@ -248,8 +257,8 @@ const MiniCalendar: React.FC<{
  * Event badge component.
  */
 const EventBadge: React.FC<{
-  event: CalendarEvent;
-  onClick: (event: CalendarEvent) => void;
+  event: LocalCalendarEvent;
+  onClick: (event: LocalCalendarEvent) => void;
   compact?: boolean;
 }> = ({ event, onClick, compact = false }) => {
   const colors = getEventColor(event.type);
@@ -302,19 +311,31 @@ const AttendanceBadge: React.FC<{
 };
 
 /**
- * Attendance legend component
- */
-/**
  * Calendar page component.
  */
 export const CalendarPage: React.FC = () => {
   const today = new Date();
   const navigate = useNavigate();
+  
+  // Calendar store
+  const storeState = useCalendarStore();
+  const { 
+    mode, 
+    view: currentView,
+    setView,
+    events: apiEvents,
+    viewingUserName,
+    viewingUnitName,
+    filters,
+    setFilters,
+    setViewingUser,
+    fetchEvents,
+  } = storeState;
+
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [currentView, setCurrentView] = useState<CalendarView>("month");
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<LocalCalendarEvent | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Attendance data state
@@ -323,12 +344,37 @@ export const CalendarPage: React.FC = () => {
   const [, setAttendanceError] = useState<string | null>(null);
 
   // Task events state
-  const [taskEvents, setTaskEvents] = useState<CalendarEvent[]>([]);
+  const [taskEvents, setTaskEvents] = useState<LocalCalendarEvent[]>([]);
 
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
   const [localMeetings, setLocalMeetings] = useState<MeetingFormData[]>([]);
+
+  // User search modal state
+  const [userSearchModalOpen, setUserSearchModalOpen] = useState(false);
+
+  // Handle select user from search
+  const handleSelectUser = (userId: string, userName: string) => {
+    setViewingUser(userId, userName);
+  };
+
+  // Fetch calendar events from API when month changes
+  useEffect(() => {
+    void fetchEvents();
+  }, [currentYear, currentMonth, mode]);
+
+  // Convert API CalendarEvent to LocalCalendarEvent
+  const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
+    return apiEvents.map((event: CalendarEventApi): LocalCalendarEvent => ({
+      id: event.id,
+      title: event.title,
+      date: event.startAt.slice(0, 10),
+      type: mapApiEventTypeToLocal(event.type),
+      description: event.description ?? undefined,
+      time: event.startAt.slice(11, 16),
+    }));
+  }, [apiEvents]);
 
   // Fetch attendance data when month changes
   useEffect(() => {
@@ -370,7 +416,7 @@ export const CalendarPage: React.FC = () => {
       }
     };
 
-    fetchAttendance();
+    void fetchAttendance();
   }, [currentYear, currentMonth]);
 
   // Fetch tasks with dueDate in current month range
@@ -381,7 +427,7 @@ export const CalendarPage: React.FC = () => {
         const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
         const to = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
         const tasks = await taskApi.getCalendarTasks(from, to);
-        const events: CalendarEvent[] = tasks.map((task) => ({
+        const events: LocalCalendarEvent[] = tasks.map((task) => ({
           id: `task:${task.id}`,
           title: task.title,
           date: task.dueDate!.slice(0, 10),
@@ -401,24 +447,45 @@ export const CalendarPage: React.FC = () => {
     void fetchTaskEvents();
   }, [currentYear, currentMonth]);
 
-  // Calendar type filters
-  const [filters, setFilters] = useState<CalendarTypeFilter[]>([
-    { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
-    { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
-    { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: true },
-  ]);
+  // Calendar type filters — local state for display
+  const localFilters = useMemo((): CalendarTypeFilter[] => {
+    const defaultFilters: CalendarTypeFilter[] = [
+      { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
+      { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
+      { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: true },
+    ];
+    
+    if (filters.types.length === 0) return defaultFilters;
+    
+    return defaultFilters.map(f => ({
+      ...f,
+      checked: filters.types.some(t => t.toLowerCase() === f.type || mapLocalTypeToApi(t) === f.type),
+    }));
+  }, [filters]);
 
-  // Generate events for current year, merged with task events
+  const handleFilterChange = (type: EventType) => {
+    const currentTypes = filters.types.length > 0 
+      ? filters.types 
+      : ["meeting", "personal", "attendance"] as EventType[];
+    
+    const newTypes = currentTypes.includes(type)
+      ? currentTypes.filter(t => t !== type)
+      : [...currentTypes, type];
+    
+    setFilters(newTypes);
+  };
+
+  // Generate events for current year, merged with task events and API events
   const allEvents = useMemo(
-    () => [...getCalendarEvents(currentYear), ...taskEvents],
-    [currentYear, taskEvents],
+    () => [...getCalendarEvents(currentYear), ...taskEvents, ...calendarEventsFromApi],
+    [currentYear, taskEvents, calendarEventsFromApi],
   );
 
   // Filter events based on selected filters
   const filteredEvents = useMemo(() => {
-    const activeTypes = filters.filter((f) => f.checked).map((f) => f.type);
+    const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
     return allEvents.filter((event) => activeTypes.includes(event.type));
-  }, [allEvents, filters]);
+  }, [allEvents, localFilters]);
 
   // Search filtered events
   const searchedEvents = useMemo(() => {
@@ -473,7 +540,7 @@ export const CalendarPage: React.FC = () => {
     } else {
       setCurrentMonth((m) => m - 1);
     }
-  }, [currentMonth, setCurrentMonth, setCurrentYear]);
+  }, [currentMonth]);
 
   // Navigate to next month
   const goToNextMonth = useCallback(() => {
@@ -483,7 +550,7 @@ export const CalendarPage: React.FC = () => {
     } else {
       setCurrentMonth((m) => m + 1);
     }
-  }, [currentMonth, setCurrentMonth, setCurrentYear]);
+  }, [currentMonth]);
 
   // Go to today
   const goToToday = useCallback(() => {
@@ -491,14 +558,14 @@ export const CalendarPage: React.FC = () => {
     setCurrentYear(now.getFullYear());
     setCurrentMonth(now.getMonth());
     setSelectedDate(now);
-  }, [setCurrentMonth, setCurrentYear, setSelectedDate]);
+  }, []);
 
   // Handle mini calendar navigation
   const handleMiniCalendarNavigate = useCallback((year: number, month: number) => {
     setCurrentYear(year);
     setCurrentMonth(month);
     setSelectedDate(new Date(year, month, 1));
-  }, [setCurrentMonth, setCurrentYear, setSelectedDate]);
+  }, []);
 
   // Handle date selection
   const handleDateClick = useCallback((date: Date) => {
@@ -507,22 +574,23 @@ export const CalendarPage: React.FC = () => {
 
   // Handle event click — navigate to /tasks for task events, open modal otherwise
   const handleEventClick = useCallback(
-    (event: CalendarEvent) => {
+    (event: LocalCalendarEvent) => {
       if (event.type === "task" && event.taskId) {
         navigate(`/tasks?taskId=${event.taskId}`);
       } else {
         setSelectedEvent(event);
       }
     },
-    [navigate, setSelectedEvent],
+    [navigate]
   );
 
   // Toggle filter
   const toggleFilter = useCallback((type: EventType) => {
-    setFilters((prev) =>
-      prev.map((f) => (f.type === type ? { ...f, checked: !f.checked } : f))
-    );
-  }, []);
+    handleFilterChange(type);
+  }, [handleFilterChange]);
+
+  // Check if attendance filter is active
+  const isAttendanceFilterActive = localFilters.find(f => f.type === "attendance")?.checked ?? true;
 
   // View buttons
   const viewButtons: Array<{ id: CalendarView; label: string }> = [
@@ -570,7 +638,53 @@ export const CalendarPage: React.FC = () => {
               />
             </div>
 
-            {/* Attendance legend — tạm ẩn */}
+            {/* Calendar mode selector */}
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-text-primary">
+                Chế độ xem
+              </h3>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => useCalendarStore.getState().setMode("my")}
+                  className={clsx(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
+                    mode === "my"
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-secondary hover:bg-surface-hover"
+                  )}
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                  Lịch của tôi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserSearchModalOpen(true)}
+                  className={clsx(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
+                    mode === "other"
+                      ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                      : "text-text-secondary hover:bg-surface-hover"
+                  )}
+                >
+                  <UserIcon className="h-4 w-4" />
+                  {mode === "other" && viewingUserName ? viewingUserName : "Xem lịch người khác"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toast.info("Tính năng đang phát triển")}
+                  className={clsx(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
+                    mode === "unit"
+                      ? "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
+                      : "text-text-secondary hover:bg-surface-hover"
+                  )}
+                >
+                  <BuildingOfficeIcon className="h-4 w-4" />
+                  {mode === "unit" && viewingUnitName ? viewingUnitName : "Lịch đơn vị"}
+                </button>
+              </div>
+            </div>
 
             {/* Calendar types */}
             <div className="mb-4">
@@ -578,7 +692,7 @@ export const CalendarPage: React.FC = () => {
                 Lịch của tôi
               </h3>
               <div className="space-y-2">
-                {filters.map((filter) => (
+                {localFilters.map((filter) => (
                   <label
                     key={filter.type}
                     className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-hover transition-micro"
@@ -656,7 +770,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     key={view.id}
                     type="button"
-                    onClick={() => setCurrentView(view.id)}
+                    onClick={() => setView(view.id)}
                     className={clsx(
                       "rounded-md px-3 py-1.5 text-sm font-medium transition-micro",
                       currentView === view.id
@@ -728,7 +842,7 @@ export const CalendarPage: React.FC = () => {
                       </div>
 
                       {/* Attendance badge */}
-                      {attendance && filters.find((f) => f.type === "attendance")?.checked && (
+                      {attendance && isAttendanceFilterActive && (
                         <div className="mb-1">
                           <AttendanceBadge attendance={attendance} />
                         </div>
@@ -763,25 +877,28 @@ export const CalendarPage: React.FC = () => {
             </div>
           )}
 
-          {/* Day/Week view placeholder */}
-          {(currentView === "day" || currentView === "week") && (
-            <div className="flex flex-1 items-center justify-center">
-              <div className="text-center">
-                <p className="text-lg font-medium text-text-secondary">
-                  View "{currentView === "day" ? "Ngày" : "Tuần"}" đang phát triển
-                </p>
-                <p className="mt-1 text-sm text-text-muted">
-                  Chuyển sang view "Tháng" để xem lịch
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView("month")}
-                  className="mt-3 rounded-lg bg-[#C41E3A] px-4 py-2 text-sm font-medium text-white hover:brightness-105 transition-micro"
-                >
-                  Xem lịch Tháng
-                </button>
-              </div>
-            </div>
+          {/* Day view */}
+          {currentView === "day" && (
+            <DayView
+              date={selectedDate}
+              events={searchedEvents}
+              attendance={getAttendanceForDate(selectedDate)}
+              onEventClick={handleEventClick}
+            />
+          )}
+
+          {/* Week view */}
+          {currentView === "week" && (
+            <WeekView
+              year={currentYear}
+              month={currentMonth}
+              events={searchedEvents}
+              attendanceData={attendanceData}
+              onDateClick={handleDateClick}
+              onEventClick={handleEventClick}
+              isToday={isToday}
+              isSelected={isSelected}
+            />
           )}
         </div>
       </div>
@@ -803,8 +920,59 @@ export const CalendarPage: React.FC = () => {
         existingMeetings={localMeetings}
       />
 
+      {/* User search modal */}
+      <UserSearchModal
+        isOpen={userSearchModalOpen}
+        onClose={() => setUserSearchModalOpen(false)}
+        onSelectUser={handleSelectUser}
+      />
+
     </div>
   );
+};
+
+/**
+ * Map API CalendarEventType (UPPERCASE) to local EventType (lowercase_underscore).
+ */
+const mapApiEventTypeToLocal = (apiType: string): EventType => {
+  switch (apiType) {
+    case "PERSONAL":
+      return "personal";
+    case "MEETING":
+      return "meeting";
+    case "ATTENDANCE":
+      return "attendance";
+    case "TASK":
+      return "task";
+    case "UNIT":
+    case "LEADER":
+    case "WORK":
+      return "work";
+    default:
+      return "personal";
+  }
+};
+
+/**
+ * Map local EventType to API CalendarEventType.
+ */
+const mapLocalTypeToApi = (localType: string): string => {
+  switch (localType) {
+    case "personal":
+      return "PERSONAL";
+    case "meeting":
+      return "MEETING";
+    case "attendance":
+      return "ATTENDANCE";
+    case "task":
+      return "TASK";
+    case "work":
+    case "unit":
+    case "leader":
+      return "WORK";
+    default:
+      return "PERSONAL";
+  }
 };
 
 export default CalendarPage;
