@@ -23,6 +23,7 @@ import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 
 export type SharedContentTab = "media" | "files" | "links";
@@ -217,8 +218,11 @@ const ModalMediaTab: React.FC<{
             fetchedAt: now,
           });
 
-          if (item.status === 'ready' && item.url) {
-            newUrls[item.fileId] = item.url;
+          // Use URL whenever backend provides one — status 'failed' still includes
+          // the original file URL as a fallback (variant: "original")
+          if (item.url) {
+            const resolved = resolvePublicResourceUrl(item.url, { context: 'image' });
+            if (resolved) newUrls[item.fileId] = resolved;
           }
         }
 
@@ -325,7 +329,8 @@ const ModalMediaThumb: React.FC<{
 }> = ({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const src = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
 
   return (
     <button

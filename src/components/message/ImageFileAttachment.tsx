@@ -7,7 +7,8 @@
  * - Two action buttons: preview (lightbox) and download
  */
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -105,6 +106,19 @@ export const ImageFileAttachment: React.FC<ImageFileAttachmentProps> = ({
   const handleClose = useCallback(() => {
     setShowFullScreen(false);
   }, []);
+
+  // ESC to close lightbox + body scroll lock
+  useEffect(() => {
+    if (!showFullScreen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handler);
+    return () => {
+      document.removeEventListener("keydown", handler);
+      document.body.style.overflow = prev;
+    };
+  }, [showFullScreen, handleClose]);
 
   const textColor = isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary";
   const secondaryTextColor = isOwn
@@ -214,28 +228,53 @@ export const ImageFileAttachment: React.FC<ImageFileAttachmentProps> = ({
         </div>
       </div>
 
-      {/* Lightbox */}
-      {showFullScreen && thumbnailUrl && (
+      {/* Lightbox — portal so fixed always anchors to viewport regardless of parent transforms */}
+      {showFullScreen && thumbnailUrl && createPortal(
         <div
-          className="fixed inset-0 z-modal flex items-center justify-center bg-surface-overlay/95 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 flex flex-col"
+          style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
           onClick={handleClose}
         >
-          <button
-            className="absolute right-4 top-4 rounded-full border border-border bg-surface/80 p-2 text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
-            onClick={handleClose}
-            aria-label={t("common:actions.close")}
-          >
-            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <img
-            src={thumbnailUrl}
-            alt={fileName}
-            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
+          {/* Toolbar */}
+          <div
+            className="flex h-14 shrink-0 items-center justify-between gap-3 px-4"
+            style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
             onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+          >
+            <span className="min-w-0 truncate text-sm font-medium text-white/70" title={fileName}>
+              {fileName}
+            </span>
+            {/* Close — circular bg for visibility against any image color */}
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label={t("common:actions.close")}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 active:bg-white/35"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {/* Image */}
+          <div
+            className="flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={thumbnailUrl}
+              alt={fileName}
+              className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-32px)] select-none object-contain"
+              draggable={false}
+            />
+          </div>
+          <div className="flex h-9 shrink-0 items-center justify-center">
+            <span className="text-xs text-white/30">
+              {t("common:hint.escToClose", { defaultValue: "ESC / click ngoài để đóng" })}
+            </span>
+          </div>
+        </div>,
+        document.body,
       )}
     </>
   );

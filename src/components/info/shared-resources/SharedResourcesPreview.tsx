@@ -19,6 +19,7 @@ import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
@@ -189,8 +190,11 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             fetchedAt: now,
           });
 
-          if (item.status === 'ready' && url) {
-            newUrls[item.fileId] = url;
+          // Use URL whenever backend provides one — status 'failed' still includes
+          // the original file URL as a fallback (variant: "original")
+          if (url) {
+            const resolved = resolvePublicResourceUrl(url, { context: 'image' });
+            if (resolved) newUrls[item.fileId] = resolved;
           }
         }
 
@@ -436,7 +440,7 @@ const DrawerMediaTab: React.FC<{
         >
           {overlayItem && (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
             <img
-              src={overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]}
+              src={resolvePublicResourceUrl(overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId], { context: 'image' }) ?? undefined}
               alt={overlayItem.fileName}
               className="h-full w-full object-cover opacity-40"
               loading="lazy"
@@ -460,7 +464,8 @@ const DrawerMediaThumb: React.FC<{
 }> = ({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const src = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
 
   return (
     <button
