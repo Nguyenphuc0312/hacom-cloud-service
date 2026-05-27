@@ -17,6 +17,7 @@ import {
   PencilSquareIcon,
   TrashIcon,
   ExclamationCircleIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -33,12 +34,12 @@ import {
   hrApi,
   type AttendanceCalendarDay,
 } from "../../api/hrApi";
+import { type HRCalendarEvent } from "../../api/hrCalendarApi";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { ConfirmDialog } from "../../../components/ui/Modal";
 import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
-import { useAuthStore } from "../../../stores";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
@@ -198,20 +199,24 @@ const getStatusBadge = (status?: string): { bg: string; text: string; label: str
  */
 const EventDetailModal: React.FC<{
   event: LocalCalendarEvent | ExtendedCalendarEvent;
-  currentUserId?: string;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-}> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
+  isViewingOthers?: boolean;
+}> = ({ event, onClose, onEdit, onDelete, isViewingOthers = false }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
-  // Check if current user is the owner
-  const isOwner = "ownerUserId" in event && event.ownerUserId === currentUserId;
-  const canEdit = isOwner && onEdit;
-  const canDelete = isOwner && onDelete;
+  // Permission: use canEdit/canDelete from API when available (hr-api-service),
+  // otherwise fall back to owner check (chat-api-service)
+  const apiCanEdit = "canEdit" in event ? event.canEdit : undefined;
+  const apiCanDelete = "canDelete" in event ? event.canDelete : undefined;
+
+  // If viewing others, always disable edit/delete
+  const canEdit = !isViewingOthers && (apiCanEdit ?? false) && !!onEdit;
+  const canDelete = !isViewingOthers && (apiCanDelete ?? false) && !!onDelete;
 
   // Get status badge info
   const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
@@ -223,10 +228,10 @@ const EventDetailModal: React.FC<{
     ? calculateDuration(event.startAt, event.endAt)
     : null;
 
-  // Location/Meeting URL
+  // Location
   const location = "meetingLocation" in event ? event.meetingLocation : null;
-  const format = "meetingFormat" in event ? event.meetingFormat : null;
-  const chairman = "meetingChairman" in event ? event.meetingChairman : null;
+  const format = null;
+  const chairman = null;
   const attendees = "attendees" in event ? event.attendees : null;
   const visibility = "visibility" in event ? event.visibility : null;
 
@@ -248,8 +253,14 @@ const EventDetailModal: React.FC<{
         </button>
 
         <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-8">
-          {/* Header: Type badge + Status badge */}
+          {/* Header: Type badge + Status badge + Read-only badge */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
+            {isViewingOthers && (
+              <div className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                <EyeIcon className="h-3 w-3" />
+                Chỉ xem
+              </div>
+            )}
             <div
               className={clsx(
                 "inline-block rounded-full px-3 py-1 text-xs font-medium",
@@ -621,11 +632,9 @@ export const CalendarPage: React.FC = () => {
     setViewingUser,
     fetchEvents,
     deleteEvent,
+    isLoading: storeLoading,
+    error: _storeError,
   } = storeState;
-
-  // Current user for permission checks
-  const currentUser = useAuthStore((s) => s.user);
-  const currentUserId = currentUser?.id;
 
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -671,25 +680,20 @@ export const CalendarPage: React.FC = () => {
     try {
       setIsCreatingEvent(true);
 
-      // Map MeetingFormData to CreateCalendarEventInput
+      // Map MeetingFormData to hr-api-service CreateCalendarEventInput
       const startAt = `${data.date}T${data.startTime}:00.000Z`;
       const endAt = `${data.date}T${data.endTime}:00.000Z`;
 
+      // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
       const input = {
         title: data.title,
         description: data.notes || undefined,
-        type: "MEETING" as const,
-        source: "MEETING" as const,
         startAt,
         endAt,
-        timezone: "Asia/Ho_Chi_Minh",
+        eventType: "MEETING",
+        visibility: "PRIVATE",
         isAllDay: false,
-        visibility: "PRIVATE" as const,
-        status: "CONFIRMED" as const,
-        attendees: data.participants.map(p => p.name),
-        meetingChairman: data.chairman || undefined,
-        meetingFormat: data.format,
-        meetingLocation: data.location || undefined,
+        location: data.location || undefined,
       };
 
       // Use store's createEvent which handles API call + state update
@@ -706,7 +710,7 @@ export const CalendarPage: React.FC = () => {
     }
   }, []);
 
-  // Fetch calendar events from API when month changes
+  // Fetch calendar events from API when month changes or mode changes
   useEffect(() => {
     void fetchEvents();
   }, [currentYear, currentMonth, mode]);
@@ -714,23 +718,29 @@ export const CalendarPage: React.FC = () => {
   // Build extended events map from API events
   useEffect(() => {
     const map: Record<string, ExtendedCalendarEvent> = {};
-    apiEvents.forEach((event) => {
+    apiEvents.forEach((event: HRCalendarEvent) => {
+      // Extract attendee names from participants (hr-api-service) or attendees (chat-api-service)
+      const attendeeNames = "participants" in event && Array.isArray(event.participants)
+        ? event.participants
+            .filter((p) => p.employee?.fullName)
+            .map((p) => p.employee!.fullName)
+        : ("attendees" in event && Array.isArray(event.attendees) ? event.attendees : []);
+
       map[event.id] = {
         id: event.id,
         title: event.title,
         date: event.startAt.slice(0, 10),
-        type: mapApiEventTypeToLocal(event.type),
+        type: mapApiEventTypeToLocal(event.eventType),
         description: event.description ?? undefined,
         time: event.startAt.slice(11, 16),
         startAt: event.startAt,
         endAt: event.endAt,
-        meetingFormat: (event.meetingFormat as "offline" | "online") ?? undefined,
-        meetingLocation: event.meetingLocation ?? undefined,
-        meetingChairman: event.meetingChairman ?? undefined,
-        attendees: event.attendees ?? [],
+        meetingLocation: event.location ?? undefined,
+        attendees: attendeeNames,
         visibility: event.visibility,
-        status: event.status,
-        ownerUserId: event.ownerUserId,
+        ownerId: event.ownerId,
+        canEdit: event.canEdit,
+        canDelete: event.canDelete,
       };
     });
     setApiEventsMap(map);
@@ -738,11 +748,11 @@ export const CalendarPage: React.FC = () => {
 
   // Convert API CalendarEvent to LocalCalendarEvent
   const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
-    return apiEvents.map((event): LocalCalendarEvent => ({
+    return apiEvents.map((event: HRCalendarEvent): LocalCalendarEvent => ({
       id: event.id,
       title: event.title,
       date: event.startAt.slice(0, 10),
-      type: mapApiEventTypeToLocal(event.type),
+      type: mapApiEventTypeToLocal(event.eventType),
       description: event.description ?? undefined,
       time: event.startAt.slice(11, 16),
     }));
@@ -962,34 +972,46 @@ export const CalendarPage: React.FC = () => {
   const handleEditEvent = useCallback(() => {
     if (!selectedEvent) return;
 
+    // Check if viewing others — don't allow edit
+    if (mode === "other") {
+      toast.warning("Bạn không có quyền chỉnh sửa sự kiện này.");
+      return;
+    }
+
+    // Check if current user has edit permission (from API)
+    const extended = apiEventsMap[selectedEvent.id];
+    if (extended && extended.canEdit === false) {
+      toast.warning("Bạn không có quyền chỉnh sửa sự kiện này.");
+      return;
+    }
+
     // Check if it's an extended event with startAt/endAt
     const isExtended = "startAt" in selectedEvent && selectedEvent.startAt;
-    const isLocalEvent = "time" in selectedEvent && !("startAt" in selectedEvent);
 
     // Only allow editing API events (with startAt/endAt)
-    if (!isExtended || isLocalEvent) {
+    if (!isExtended) {
       toast.warning("Chỉ có thể chỉnh sửa lịch họp từ API");
       return;
     }
 
-    const extended = selectedEvent as ExtendedCalendarEvent;
+    const extEvent = selectedEvent as ExtendedCalendarEvent;
 
     // Build MeetingFormData from ExtendedCalendarEvent
     const data: MeetingFormData = {
-      id: extended.id,
-      title: extended.title,
-      date: extended.startAt ? extended.startAt.split("T")[0] : formatDateString(new Date()),
-      startTime: extended.startAt ? formatTimeFromISO(extended.startAt) : "08:00",
-      endTime: extended.endAt ? formatTimeFromISO(extended.endAt) : "09:00",
-      chairman: extended.meetingChairman || "",
-      participants: (extended.attendees || []).map((uid, idx) => ({
-        id: uid,
-        name: (extended as { attendeeNames?: string[] }).attendeeNames?.[idx] || uid,
+      id: extEvent.id,
+      title: extEvent.title,
+      date: extEvent.startAt ? extEvent.startAt.split("T")[0] : formatDateString(new Date()),
+      startTime: extEvent.startAt ? formatTimeFromISO(extEvent.startAt) : "08:00",
+      endTime: extEvent.endAt ? formatTimeFromISO(extEvent.endAt) : "09:00",
+      chairman: "",
+      participants: (extEvent.attendees || []).map((name) => ({
+        id: name,
+        name: name,
       })),
-      format: (extended.meetingFormat as "offline" | "online") || "offline",
-      location: extended.meetingLocation || "",
-      notes: extended.description || "",
-      createdById: extended.ownerUserId,
+      format: "offline",
+      location: extEvent.meetingLocation || "",
+      notes: extEvent.description || "",
+      createdById: extEvent.ownerId,
     };
 
     setEditingEvent(data);
@@ -1024,15 +1046,13 @@ export const CalendarPage: React.FC = () => {
       const startAt = `${data.date}T${data.startTime}:00.000Z`;
       const endAt = `${data.date}T${data.endTime}:00.000Z`;
 
+      // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
       const input = {
         title: data.title,
         description: data.notes || undefined,
         startAt,
         endAt,
-        attendees: data.participants.map(p => p.name),
-        meetingChairman: data.chairman || undefined,
-        meetingFormat: data.format,
-        meetingLocation: data.location || undefined,
+        location: data.location || undefined,
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
@@ -1176,55 +1196,86 @@ export const CalendarPage: React.FC = () => {
                 ))}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setMeetingModalDate(formatDateString(selectedDate));
-                setMeetingModalOpen(true);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5 hover:text-[#1565C0] transition-micro"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Thêm lịch
-            </button>
+            {mode !== "other" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMeetingModalDate(formatDateString(selectedDate));
+                  setMeetingModalOpen(true);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5 hover:text-[#1565C0] transition-micro"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Thêm lịch
+              </button>
+            )}
           </div>
         </aside>
 
         {/* Main calendar area */}
         <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+          {/* Loading overlay */}
+          {storeLoading && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60">
+              <div className="flex flex-col items-center gap-2 rounded-xl bg-surface p-4 shadow-lg">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm text-text-secondary">
+                  Đang tải lịch...
+                </span>
+              </div>
+            </div>
+          )}
           {/* Header */}
           <header className="shrink-0 border-b border-border px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Month/Year title and navigation */}
               <div className="flex items-center gap-3">
-                <h2 className="text-lg font-semibold text-text-primary">
-                  {VIETNAMESE_MONTHS[currentMonth]} {currentYear}
-                </h2>
-                <div className="flex items-center gap-1">
+                {/* Viewing others indicator */}
+                {mode === "other" && viewingUserName && (
+                  <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 dark:bg-blue-900/30">
+                    <EyeIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      Đang xem lịch của <span className="font-semibold">{viewingUserName}</span>
+                    </span>
+                    <span className="rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                      Chỉ xem
+                    </span>
+                  </div>
+                )}
+                {mode === "my" && (
+                  <h2 className="text-lg font-semibold text-text-primary">
+                    {VIETNAMESE_MONTHS[currentMonth]} {currentYear}
+                  </h2>
+                )}
+                {mode !== "other" && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={goToPrevMonth}
+                      title="Tháng trước"
+                      className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+                    >
+                      <ChevronLeftIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={goToNextMonth}
+                      title="Tháng sau"
+                      className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+                    >
+                      <ChevronRightIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+                {mode !== "other" && (
                   <button
                     type="button"
-                    onClick={goToPrevMonth}
-                    title="Tháng trước"
-                    className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+                    onClick={goToToday}
+                    className="rounded-xl bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:brightness-105 active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
                   >
-                    <ChevronLeftIcon className="h-5 w-5" />
+                    Hôm nay
                   </button>
-                  <button
-                    type="button"
-                    onClick={goToNextMonth}
-                    title="Tháng sau"
-                    className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
-                  >
-                    <ChevronRightIcon className="h-5 w-5" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={goToToday}
-                  className="rounded-xl bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:brightness-105 active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
-                >
-                  Hôm nay
-                </button>
+                )}
               </div>
 
               {/* View switcher */}
@@ -1370,10 +1421,10 @@ export const CalendarPage: React.FC = () => {
       {selectedEvent && (
         <EventDetailModal
           event={selectedEvent}
-          currentUserId={currentUserId}
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
+          isViewingOthers={mode === "other"}
         />
       )}
 
@@ -1431,6 +1482,10 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
       return "attendance";
     case "TASK":
       return "task";
+    case "LEAVE":
+    case "DEADLINE":
+    case "REMINDER":
+    case "OTHER":
     case "UNIT":
     case "LEADER":
     case "WORK":
