@@ -396,7 +396,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
-  const markInviteLinkRevoked = useGroupStore((state) => state.markInviteLinkRevoked);
   const removeInviteLink = useGroupStore((state) => state.removeInviteLink);
   const setJoinRequests = useGroupStore((state) => state.setJoinRequests);
   const markJoinRequestResolved = useGroupStore((state) => state.markJoinRequestResolved);
