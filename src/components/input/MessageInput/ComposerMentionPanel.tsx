@@ -60,7 +60,7 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
                 "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
                 "transition-colors",
                 isActive
-                  ? "bg-primary/15 text-text-primary"
+                  ? "bg-[#FFC857]/15 text-text-primary"
                   : "text-text-secondary hover:bg-surface-hover",
               )}
               onMouseDown={(event) => {

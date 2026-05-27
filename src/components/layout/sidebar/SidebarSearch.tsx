@@ -44,7 +44,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             isDense
               ? "pl-9 pr-8 text-[13px]"
               : "pl-10 pr-9 text-[13px]",
-            "focus:border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
+            "focus:border-[#FFC857]/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
           )}
           aria-label={t("sidebar:search.aria")}
         />

@@ -22,7 +22,7 @@ export const MemberRoleBadge: React.FC<MemberRoleBadgeProps> = ({ role, classNam
 
   const roleClasses: Record<RoomMemberRole, string> = {
     [RoomMemberRole.OWNER]: "bg-warning/15 text-warning",
-    [RoomMemberRole.ADMIN]: "bg-primary/10 text-primary",
+    [RoomMemberRole.ADMIN]: "bg-[#C41E3A]/10 text-[#C41E3A]",
     [RoomMemberRole.MODERATOR]: "bg-purple-500/15 text-purple-600",
     [RoomMemberRole.MEMBER]: "bg-surface-overlay text-text-muted",
     [RoomMemberRole.RESTRICTED]: "bg-orange-500/15 text-orange-600",

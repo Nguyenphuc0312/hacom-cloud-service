@@ -72,11 +72,12 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
       bodyClassName="p-4 sm:p-5"
       footer={
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="brand-outline" onClick={onClose}>
             Hủy
           </Button>
           <Button
             type="button"
+            variant="brand"
             disabled={!canSubmit}
             onClick={() => {
               onSubmit({
@@ -115,7 +116,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
             <button
               type="button"
               onClick={addOption}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary transition-micro hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#C41E3A] transition-micro hover:bg-[#C41E3A]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30"
             >
               <PlusIcon className="h-4 w-4" aria-hidden="true" />
               Thêm lựa chọn

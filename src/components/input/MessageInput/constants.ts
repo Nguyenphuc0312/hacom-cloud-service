@@ -29,23 +29,23 @@ export const COMPOSER_VISUAL_STATE_MAP: Record<
   },
   focus: {
     shell:
-      "border-primary/26 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/12",
+      "border-[#FFC857]/40 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-[#FFC857]/15",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
     attachmentDivider: "border-border/40",
   },
   "ready-to-send": {
     shell:
-      "border-primary/22 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
+      "border-[#FFC857]/35 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-[#FFC857]/12",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
     attachmentDivider: "border-border/35",
   },
   uploading: {
     shell:
-      "border-primary/20 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
+      "border-[#FFC857]/30 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-[#FFC857]/10",
     attachmentButton:
-      "text-primary hover:bg-primary/8 hover:text-primary-hover",
+      "text-[#C41E3A] hover:bg-[#FFC857]/8 hover:text-[#C41E3A]",
     attachmentDivider: "border-border/35",
   },
   disabled: {

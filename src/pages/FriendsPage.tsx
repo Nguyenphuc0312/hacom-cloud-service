@@ -50,6 +50,7 @@ interface ContactUser {
   phone?: string;
   employeeCode?: string;
   departmentName?: string;
+  orgUnit?: string;
   unitCode?: string;
   title?: string;
   createdAt?: string;
@@ -125,6 +126,7 @@ const toContactUser = (value: {
   phone?: string;
   employeeCode?: string;
   departmentName?: string;
+  orgUnit?: string;
   unitCode?: string;
   title?: string;
   createdAt?: string;
@@ -140,20 +142,20 @@ const toContactUser = (value: {
   phone: value.phone,
   employeeCode: value.employeeCode,
   departmentName: value.departmentName,
+  orgUnit: value.orgUnit,
   unitCode: value.unitCode,
   title: value.title,
   createdAt: value.createdAt,
 });
 
-const buildSearchContextSubtitle = (user: ContactUser): string | undefined => {
+
+const buildSuggestionSubtitle = (user: ContactUser): string | undefined => {
   const parts = [
-    user.username ? `@${user.username}` : null,
-    user.employeeCode ?? null,
     user.departmentName ?? null,
-    user.unitCode ?? user.title ?? null,
+    user.orgUnit ?? user.unitCode ?? null,
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(" / ") : undefined;
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 };
 
 const normalizeSearchResults = (payload: unknown): ContactUser[] => {
@@ -196,6 +198,12 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
             : typeof row.department_name === "string"
               ? row.department_name
               : undefined,
+        orgUnit:
+          typeof row.orgUnit === "string"
+            ? row.orgUnit
+            : typeof row.org_unit === "string"
+              ? row.org_unit
+              : undefined,
         unitCode:
           typeof row.unitCode === "string"
             ? row.unitCode
@@ -212,6 +220,30 @@ const profileFromSummary = (user: ContactUser): PreviewTarget => ({
   userId: user.id,
   initialUser: user,
 });
+
+const proximityScore = (
+  user: ContactUser,
+  myOrg?: string,
+  myDept?: string,
+): number => {
+  let score = 0;
+  if (myOrg && user.orgUnit?.trim().toLowerCase() === myOrg) score += 2;
+  if (myDept && user.departmentName?.trim().toLowerCase() === myDept) score += 1;
+  return score;
+};
+
+const sortByProximity = (
+  users: ContactUser[],
+  currentUser: { departmentName?: string; orgUnit?: string } | null | undefined,
+): ContactUser[] => {
+  const myOrg = currentUser?.orgUnit?.trim().toLowerCase();
+  const myDept = currentUser?.departmentName?.trim().toLowerCase();
+  return [...users].sort((a, b) => {
+    const diff = proximityScore(b, myOrg, myDept) - proximityScore(a, myOrg, myDept);
+    if (diff !== 0) return diff;
+    return (a.displayName || "").localeCompare(b.displayName || "", "vi");
+  });
+};
 
 const stopPropagation = (
   event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -331,6 +363,8 @@ export const FriendsPage: React.FC = () => {
   const [query, setQuery] = useState(initialQuery);
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<ContactUser[]>([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(
     null,
@@ -347,8 +381,9 @@ export const FriendsPage: React.FC = () => {
       (request) => request.addressee?.id && ids.add(request.addressee.id),
     );
     searchResults.forEach((user) => ids.add(user.id));
+    suggestions.forEach((user) => ids.add(user.id));
     return Array.from(ids);
-  }, [friends, incomingRequests, searchResults, sentRequests]);
+  }, [friends, incomingRequests, searchResults, sentRequests, suggestions]);
 
   usePresence({
     userIds: visiblePresenceIds,
@@ -407,6 +442,41 @@ export const FriendsPage: React.FC = () => {
     if (activeTab !== "discover") return;
     void searchUsers(debouncedQuery);
   }, [activeTab, debouncedQuery, searchUsers]);
+
+  useEffect(() => {
+    if (activeTab !== "discover" || suggestions.length > 0) return;
+    const controller = new AbortController();
+    setIsSuggestionsLoading(true);
+
+    const loadSuggestions = async () => {
+      // 1. Try dedicated suggestions endpoint
+      try {
+        const res = await userApi.getSuggestions(30, { signal: controller.signal });
+        const items = normalizeSearchResults(unwrapApiSuccess(res));
+        if (items.length > 0) {
+          setSuggestions(sortByProximity(items, currentUser));
+          return;
+        }
+      } catch {
+        // endpoint may not exist — fall through to search fallback
+      }
+
+      // 2. Fallback: search by current user's department name
+      const fallbackQuery = currentUser?.departmentName?.trim() ?? currentUser?.orgUnit?.trim() ?? "";
+      if (fallbackQuery.length >= 2) {
+        try {
+          const res = await userApi.searchUsers(fallbackQuery, 1, 30, { signal: controller.signal });
+          const items = normalizeSearchResults(unwrapApiSuccess(res));
+          setSuggestions(sortByProximity(items.filter((u) => u.id !== currentUser?.id), currentUser));
+        } catch {
+          // silent
+        }
+      }
+    };
+
+    loadSuggestions().finally(() => setIsSuggestionsLoading(false));
+    return () => controller.abort();
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMessage = useCallback(
     async (userId: string) => {
@@ -474,7 +544,7 @@ export const FriendsPage: React.FC = () => {
           <Button
             type="button"
             size="sm"
-            variant="secondary"
+            variant="brand-yellow"
             isLoading={actingKey === `message:${actionKeyPrefix}`}
             onClick={(event) => {
               stopPropagation(event);
@@ -491,6 +561,7 @@ export const FriendsPage: React.FC = () => {
               <Button
                 type="button"
                 size="sm"
+                variant="brand"
                 isLoading={actingKey === `accept:${actionKeyPrefix}`}
                 onClick={(event) => {
                   stopPropagation(event);
@@ -508,7 +579,7 @@ export const FriendsPage: React.FC = () => {
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="brand-outline"
                 isLoading={actingKey === `decline:${actionKeyPrefix}`}
                 onClick={(event) => {
                   stopPropagation(event);
@@ -532,7 +603,7 @@ export const FriendsPage: React.FC = () => {
           <Button
             type="button"
             size="sm"
-            variant="secondary"
+            variant="brand-outline"
             isLoading={actingKey === `cancel:${actionKeyPrefix}`}
             onClick={(event) => {
               stopPropagation(event);
@@ -554,6 +625,7 @@ export const FriendsPage: React.FC = () => {
           <Button
             type="button"
             size="sm"
+            variant="brand"
             leftIcon={<UserPlusIcon className="h-4 w-4" />}
             isLoading={actingKey === `add:${actionKeyPrefix}`}
             onClick={(event) => {
@@ -720,42 +792,67 @@ export const FriendsPage: React.FC = () => {
     </div>
   );
 
-  const renderDiscoverTab = () => (
-    <div className="space-y-4">
-      {isSearching ? (
-        <DirectorySkeleton count={4} />
-      ) : debouncedQuery.trim().length < 2 ? (
-        <StateBlock
-          variant="search-empty"
-          icon={<MagnifyingGlassIcon className="h-6 w-6" />}
-          title={t("friends:discoverHintTitle")}
-          description={t("friends:searchHint")}
-          className="border-dashed shadow-none"
-        />
-      ) : searchResults.length === 0 ? (
-        <StateBlock
-          variant="search-empty"
-          icon={<MagnifyingGlassIcon className="h-6 w-6" />}
-          title={t("friends:noSearchResult")}
-          description={t("friends:discoverHintBody")}
-          className="border-dashed shadow-none"
-        />
-      ) : (
-        <div className="space-y-1">
-          {searchResults.map((user) => (
-            <ContactRow
-              key={user.id}
-              user={user}
-              subtitle={buildSearchContextSubtitle(user)}
-              selected={previewTarget?.userId === user.id}
-              onClick={() => setPreviewTarget(profileFromSummary(user))}
-              action={renderRelationshipAction(user)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+  const sortedSearchResults = useMemo(
+    () => sortByProximity(searchResults, currentUser),
+    [searchResults, currentUser],
   );
+
+  const renderDiscoverTab = () => {
+    const hasQuery = debouncedQuery.trim().length >= 2;
+
+    return (
+      <div className="space-y-4">
+        {isSearching ? (
+          <DirectorySkeleton count={4} />
+        ) : hasQuery ? (
+          sortedSearchResults.length === 0 ? (
+            <StateBlock
+              variant="search-empty"
+              icon={<MagnifyingGlassIcon className="h-6 w-6" />}
+              title={t("friends:noSearchResult")}
+              description={t("friends:discoverHintBody")}
+              className="border-dashed shadow-none"
+            />
+          ) : (
+            <div className="space-y-1">
+              {sortedSearchResults.map((user) => (
+                <ContactRow
+                  key={user.id}
+                  user={user}
+                  subtitle={buildSuggestionSubtitle(user)}
+                  selected={previewTarget?.userId === user.id}
+                  onClick={() => setPreviewTarget(profileFromSummary(user))}
+                  action={renderRelationshipAction(user)}
+                />
+              ))}
+            </div>
+          )
+        ) : isSuggestionsLoading ? (
+          <DirectorySkeleton count={4} />
+        ) : (
+          <div className="space-y-2">
+            {suggestions.length > 0 && (
+              <p className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                {t("friends:suggestions")}
+              </p>
+            )}
+            <div className="space-y-1">
+              {suggestions.map((user) => (
+                <ContactRow
+                  key={user.id}
+                  user={user}
+                  subtitle={buildSuggestionSubtitle(user)}
+                  selected={previewTarget?.userId === user.id}
+                  onClick={() => setPreviewTarget(profileFromSummary(user))}
+                  action={renderRelationshipAction(user)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
 
 
@@ -770,7 +867,7 @@ export const FriendsPage: React.FC = () => {
         subtitle={t("friends:subtitle")}
         badge={
           pendingCount > 0 ? (
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+            <span className="inline-flex items-center rounded-full bg-[#C41E3A]/10 px-2 py-1 text-[11px] font-semibold text-[#C41E3A]">
               {t("friends:requests.incoming")} {pendingCount}
             </span>
           ) : null

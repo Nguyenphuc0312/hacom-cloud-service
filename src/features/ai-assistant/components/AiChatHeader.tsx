@@ -20,8 +20,11 @@ export const AiChatHeader: React.FC = () => {
         <div
           className={clsx(
             "flex h-6 w-6 items-center justify-center rounded-md",
-            isCompany ? "bg-primary text-white" : "bg-success text-white",
+            !isCompany && "bg-success text-white",
           )}
+          style={isCompany ? {
+            background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)",
+          } : undefined}
         >
           {isCompany ? (
             <Building2Icon size={14} strokeWidth={2.5} />

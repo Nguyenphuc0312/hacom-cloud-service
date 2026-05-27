@@ -129,11 +129,12 @@ export const Modal: React.FC<ModalProps> = ({
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const lastActiveElementRef = React.useRef<HTMLElement | null>(null);
 
-  const handleEsc = useCallback(
+  // Keep latest handler in a ref so the event listener never needs to be re-added
+  // when props like onClose/closeOnEsc change — avoids focus-restore side effects mid-session
+  const handleEscRef = React.useRef<(e: KeyboardEvent) => void>(() => undefined);
+  handleEscRef.current = useCallback(
     (e: KeyboardEvent) => {
-      if (!isOpen) {
-        return;
-      }
+      if (!isOpen) return;
 
       const contentElement = contentRef.current;
       const activeElement = document.activeElement;
@@ -144,10 +145,7 @@ export const Modal: React.FC<ModalProps> = ({
 
       if (e.key === "Tab" && isActiveInside) {
         const focusableElements = getFocusableElements(contentElement);
-        if (focusableElements.length === 0) {
-          e.preventDefault();
-          return;
-        }
+        if (focusableElements.length === 0) { e.preventDefault(); return; }
 
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];
@@ -170,41 +168,35 @@ export const Modal: React.FC<ModalProps> = ({
   );
 
   useEffect(() => {
-    if (!isOpen) {
-      return undefined;
-    }
+    if (!isOpen) return undefined;
 
     const restoreTargetRef = restoreFocusRef?.current ?? null;
     lastActiveElementRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-    document.addEventListener("keydown", handleEsc);
+    const stableHandler = (e: KeyboardEvent) => handleEscRef.current(e);
+    document.addEventListener("keydown", stableHandler);
     lockBodyScroll();
 
+    // Focus initial element once — RAF ensures DOM is painted
     const focusTimer = window.requestAnimationFrame(() => {
       const preferredTarget = initialFocusRef?.current;
-      if (preferredTarget) {
-        preferredTarget.focus();
-        return;
-      }
-
-      const focusableElements = getFocusableElements(contentRef.current);
-      focusableElements[0]?.focus();
+      if (preferredTarget) { preferredTarget.focus(); return; }
+      getFocusableElements(contentRef.current)[0]?.focus();
     });
 
     return () => {
       window.cancelAnimationFrame(focusTimer);
-      document.removeEventListener("keydown", handleEsc);
+      document.removeEventListener("keydown", stableHandler);
       unlockBodyScroll();
 
       const restoreTarget = restoreTargetRef ?? lastActiveElementRef.current;
       if (restoreTarget && typeof restoreTarget.focus === "function") {
-        window.requestAnimationFrame(() => {
-          restoreTarget.focus();
-        });
+        window.requestAnimationFrame(() => { restoreTarget.focus(); });
       }
     };
-  }, [isOpen, handleEsc, initialFocusRef, restoreFocusRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen || typeof document === "undefined") return null;
 
@@ -305,12 +297,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       button: "danger" as const,
     },
     warning: {
-      icon: "bg-warning/15 text-warning",
-      button: "primary" as const,
+      icon: "bg-[#FFC857]/20 text-[#C41E3A]",
+      button: "brand" as const,
     },
     info: {
-      icon: "bg-primary/15 text-primary",
-      button: "primary" as const,
+      icon: "bg-[#FFC857]/20 text-[#C41E3A]",
+      button: "brand" as const,
     },
   };
 
@@ -346,7 +338,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="flex gap-3">
           <Button
             type="button"
-            variant="secondary"
+            variant="brand-outline"
             fullWidth
             disabled={isLoading}
             onClick={onClose}

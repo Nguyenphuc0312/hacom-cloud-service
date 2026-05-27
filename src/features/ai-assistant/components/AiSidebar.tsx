@@ -132,7 +132,7 @@ export const AiSidebar: React.FC = () => {
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "company"
-                ? "bg-surface text-text-primary shadow-sm"
+                ? "bg-surface shadow-sm text-[#C41E3A]"
                 : "text-text-muted hover:text-text-secondary",
             )}
           >
@@ -147,7 +147,7 @@ export const AiSidebar: React.FC = () => {
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "personal"
-                ? "bg-surface text-text-primary shadow-sm"
+                ? "bg-surface shadow-sm text-[#C41E3A]"
                 : "text-text-muted hover:text-text-secondary",
             )}
           >
@@ -170,7 +170,7 @@ export const AiSidebar: React.FC = () => {
             placeholder="Tìm kiếm..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-strong transition-all"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15 focus:border-[#FFC857]/60 transition-all"
           />
         </div>
       </div>
@@ -191,7 +191,7 @@ export const AiSidebar: React.FC = () => {
                     className={clsx(
                       "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer",
                       activeConversationId === conv.id
-                        ? "bg-surface-active/80 text-text-primary"
+                        ? "bg-[#FFC857]/10 text-text-primary"
                         : "text-text-secondary hover:bg-surface-hover/40",
                     )}
                   >

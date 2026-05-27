@@ -16,7 +16,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     | "ghost"
     | "danger"
     | "destructive"
-    | "link";
+    | "link"
+    | "brand"
+    | "brand-yellow"
+    | "brand-outline";
   size?: "xs" | "sm" | "md" | "lg";
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -25,6 +28,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses = {
+  brand:
+    "border border-[#C41E3A] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-lg shadow-[#C41E3A]/25 hover:brightness-105 focus:ring-[#C41E3A]/30",
+  "brand-yellow":
+    "border border-[#FFC857]/70 bg-gradient-to-r from-[#FFC857] via-[#E6A800] to-[#C41E3A] text-white shadow-lg shadow-[#FFC857]/30 hover:brightness-105 focus:ring-[#FFC857]/30",
+  "brand-outline":
+    "border border-[#C41E3A]/40 bg-transparent text-[#C41E3A] hover:bg-[#C41E3A]/8 active:bg-[#C41E3A]/12 focus:ring-[#C41E3A]/25",
   primary:
     "border border-primary bg-primary text-text-inverse hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
   secondary:
@@ -72,7 +81,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const { t } = useTranslation();
     const isDisabled = disabled || isLoading;
-    const resolvedVariant = variant === "danger" ? "destructive" : variant;
+    const resolvedVariant = variant === "danger" ? "destructive" : (variant ?? "primary");
 
     return (
       <button
@@ -83,7 +92,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           "transition-micro",
           "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
           "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
-          resolvedVariant !== "link" && variantClasses[resolvedVariant],
+          resolvedVariant !== "link" && variantClasses[resolvedVariant as keyof typeof variantClasses],
           resolvedVariant !== "link" && sizeClasses[size],
           variant === "link" && variantClasses.link,
           fullWidth && "w-full",
@@ -97,7 +106,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             <Spinner
               size={size === "lg" ? "sm" : "xs"}
               variant={
-                resolvedVariant === "primary" || resolvedVariant === "destructive"
+                resolvedVariant === "primary" || resolvedVariant === "destructive" || resolvedVariant === "brand" || resolvedVariant === "brand-yellow"
                   ? "inverse"
                   : "neutral"
               }
