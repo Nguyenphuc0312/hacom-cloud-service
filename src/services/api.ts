@@ -116,6 +116,13 @@ export interface ReserveFileUploadPayload {
   sizeBytes: number; 
 } 
 
+type ReserveFileUploadRequest = Omit<UploadSignedUrlRequest, "conversationId"> & {
+  uploadId?: string;
+  purpose: FileUploadPurpose;
+  conversationId?: string;
+  groupId?: string;
+};
+
 interface UploadToSignedUrlOptions {
   method?: string;
   headers?: Record<string, string>;
@@ -1351,7 +1358,7 @@ export const fileApi = {
         fileName: payload.filename,
         mimeType: payload.mimeType,
         fileSize: payload.sizeBytes,
-      } satisfies UploadSignedUrlRequest,
+      } satisfies ReserveFileUploadRequest,
     ); 
     return response.data; 
   }, 

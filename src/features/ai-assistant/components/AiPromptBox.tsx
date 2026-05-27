@@ -1,4 +1,10 @@
-﻿import React, { forwardRef, useCallback, useRef } from "react";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import clsx from "clsx";
 import {
   ArrowUpIcon,
@@ -7,7 +13,10 @@ import {
   Loader2Icon,
   FileTextIcon,
   XIcon,
+  FolderOpenIcon,
+  UploadIcon,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 import { toast } from "../../../utils/toast";
 
@@ -34,6 +43,12 @@ interface AiPromptBoxProps {
   onRemoveAttachment?: () => void;
   /** Placeholder gợi ý câu hỏi khi đã có file pending. */
   attachmentHint?: string;
+  /** Bật menu đính kèm báo cáo tuần (tải mới / danh sách). */
+  weeklyReportAttachMenu?: boolean;
+  /** Mở dialog danh sách báo cáo đã tải lên. */
+  onOpenWeeklyReports?: () => void;
+  /** Đăng ký hàm mở file picker (dùng từ dialog danh sách báo cáo). */
+  onRegisterFilePicker?: (open: () => void) => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -66,10 +81,16 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       pendingAttachment = null,
       onRemoveAttachment,
       attachmentHint,
+      weeklyReportAttachMenu = false,
+      onOpenWeeklyReports,
+      onRegisterFilePicker,
     },
     ref,
   ) => {
+    const { t } = useTranslation("aiAssistant");
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const attachMenuRef = useRef<HTMLDivElement>(null);
+    const [attachMenuOpen, setAttachMenuOpen] = useState(false);
     const attachDisabled = isLoading || isUploading || !!pendingAttachment;
 
     /** Tự điều chỉnh chiều cao textarea */
@@ -81,8 +102,42 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     const handleAttachClick = useCallback(() => {
       if (attachDisabled) return;
+      if (weeklyReportAttachMenu && onOpenWeeklyReports) {
+        setAttachMenuOpen((open) => !open);
+        return;
+      }
       fileInputRef.current?.click();
-    }, [attachDisabled]);
+    }, [attachDisabled, weeklyReportAttachMenu, onOpenWeeklyReports]);
+
+    const handlePickUploadFile = useCallback(() => {
+      setAttachMenuOpen(false);
+      fileInputRef.current?.click();
+    }, []);
+
+    const handleOpenWeeklyReports = useCallback(() => {
+      setAttachMenuOpen(false);
+      onOpenWeeklyReports?.();
+    }, [onOpenWeeklyReports]);
+
+    useEffect(() => {
+      onRegisterFilePicker?.(() => {
+        fileInputRef.current?.click();
+      });
+    }, [onRegisterFilePicker]);
+
+    useEffect(() => {
+      if (!attachMenuOpen) return;
+      const handlePointerDown = (event: MouseEvent) => {
+        if (
+          attachMenuRef.current &&
+          !attachMenuRef.current.contains(event.target as Node)
+        ) {
+          setAttachMenuOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handlePointerDown);
+      return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [attachMenuOpen]);
 
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,41 +250,76 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
               aria-hidden="true"
               tabIndex={-1}
             />
-            <button
-              type="button"
-              onClick={handleAttachClick}
-              disabled={attachDisabled}
-              className={clsx(
-                "flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-text-muted transition-colors",
-                attachDisabled
-                  ? "cursor-not-allowed opacity-50"
-                  : "hover:text-text-secondary hover:bg-surface-hover cursor-pointer",
+            <div ref={attachMenuRef} className="relative ml-2 mb-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleAttachClick}
+                disabled={attachDisabled}
+                className={clsx(
+                  "flex h-10 w-10 items-center justify-center rounded-full text-text-muted transition-colors",
+                  attachDisabled
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:text-text-secondary hover:bg-surface-hover cursor-pointer",
+                  attachMenuOpen && "bg-surface-hover text-text-secondary",
+                )}
+                aria-label={
+                  pendingAttachment
+                    ? "Đã đính kèm tệp"
+                    : isUploading
+                      ? "Đang tải lên..."
+                      : "Báo cáo tuần"
+                }
+                title={
+                  pendingAttachment
+                    ? "Đã đính kèm tệp — xoá trước khi đính kèm tệp khác"
+                    : isUploading
+                      ? "Đang tải lên..."
+                      : "Báo cáo tuần"
+                }
+                aria-expanded={attachMenuOpen}
+                aria-haspopup={weeklyReportAttachMenu ? "menu" : undefined}
+              >
+                {isUploading ? (
+                  <Loader2Icon
+                    size={18}
+                    strokeWidth={2}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <PaperclipIcon size={18} strokeWidth={2} />
+                )}
+              </button>
+
+              {attachMenuOpen && weeklyReportAttachMenu && (
+                <div
+                  role="menu"
+                  className="absolute bottom-full left-0 z-50 mb-2 min-w-[220px] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handlePickUploadFile}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-text-primary hover:bg-surface-hover"
+                  >
+                    <UploadIcon size={16} strokeWidth={2} className="shrink-0" />
+                    {t("weeklyReport.menuUpload")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleOpenWeeklyReports}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-text-primary hover:bg-surface-hover"
+                  >
+                    <FolderOpenIcon
+                      size={16}
+                      strokeWidth={2}
+                      className="shrink-0"
+                    />
+                    {t("weeklyReport.menuList")}
+                  </button>
+                </div>
               )}
-              aria-label={
-                pendingAttachment
-                  ? "Đã đính kèm tệp"
-                  : isUploading
-                    ? "Đang tải lên..."
-                    : "Tải lên tài liệu"
-              }
-              title={
-                pendingAttachment
-                  ? "Đã đính kèm tệp — xoá trước khi đính kèm tệp khác"
-                  : isUploading
-                    ? "Đang tải lên..."
-                    : "Tải lên tài liệu"
-              }
-            >
-              {isUploading ? (
-                <Loader2Icon
-                  size={18}
-                  strokeWidth={2}
-                  className="animate-spin"
-                />
-              ) : (
-                <PaperclipIcon size={18} strokeWidth={2} />
-              )}
-            </button>
+            </div>
 
             {/* Textarea */}
             <textarea

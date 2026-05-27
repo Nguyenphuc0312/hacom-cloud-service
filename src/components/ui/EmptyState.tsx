@@ -234,6 +234,22 @@ interface SelectedEventDetail {
   time?: string;
   /** Có giá trị khi click vào lịch local (đã tạo qua MeetingFormModal) */
   meeting?: MeetingFormData;
+  /** Có giá trị khi click vào sự kiện API */
+  apiEvent?: {
+    id: string;
+    title: string;
+    startAt: string;
+    endAt: string;
+    description: string | null;
+    meetingChairman: string | null;
+    meetingFormat: string | null;
+    meetingLocation: string | null;
+    attendees: string[];
+    visibility: string;
+    status: string;
+    ownerUserId: string;
+    ownerEmployeeId: string | null;
+  };
   /** Có giá trị khi click vào sự kiện demo (getCalendarEvents) */
   source?: CalendarEvent;
 }
@@ -245,6 +261,7 @@ interface EventDetailPopupProps {
   onClose: () => void;
   onEdit?: (meeting: MeetingFormData) => void;
   onDelete?: (meetingId: string) => void;
+  onDeleteApiEvent?: (eventId: string) => Promise<void>;
   onToggleRead?: (meetingId: string) => void;
 }
 
@@ -279,13 +296,17 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   onClose,
   onEdit,
   onDelete,
+  onDeleteApiEvent,
   onToggleRead,
 }) => {
   const isLocalMeeting = !!detail.meeting;
+  const isApiEvent = !!detail.apiEvent;
   const m = detail.meeting;
+  const apiEvent = detail.apiEvent;
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const isCreator = !!(m && currentUserId && m.createdById === currentUserId);
+  const isApiOwner = !!(apiEvent && currentUserId && apiEvent.ownerUserId === currentUserId);
   const isTaggedParticipant = !!(
     m && !isCreator && isParticipantMatch(m.participants, m.chairman, currentUserName)
   );
@@ -422,7 +443,83 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               </div>
             )}
 
-            {!isLocalMeeting && detail.source?.description && (
+            {/* API Event rich display */}
+            {isApiEvent && apiEvent && (
+              <>
+                {/* Time */}
+                {apiEvent.startAt && apiEvent.endAt && (
+                  <div className="flex items-center gap-3">
+                    <ClockIcon className="h-5 w-5 text-text-muted" />
+                    <span className="text-text-primary">
+                      {apiEvent.startAt.slice(11, 16)} — {apiEvent.endAt.slice(11, 16)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Chairman */}
+                {apiEvent.meetingChairman && (
+                  <div className="flex items-center gap-3">
+                    <UserIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    <span className="text-text-primary">
+                      <span className="font-semibold text-teal-600 dark:text-teal-400">Chủ trì: </span>
+                      {apiEvent.meetingChairman}
+                    </span>
+                  </div>
+                )}
+
+                {/* Attendees */}
+                {apiEvent.attendees && apiEvent.attendees.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-teal-600 dark:text-teal-400">
+                        Thành phần ({apiEvent.attendees.length})
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {apiEvent.attendees.slice(0, 10).map((name, idx) => (
+                          <span
+                            key={`${name}-${idx}`}
+                            className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-primary"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                        {apiEvent.attendees.length > 10 && (
+                          <span className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
+                            +{apiEvent.attendees.length - 10} người khác
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Location / Meeting Link */}
+                {apiEvent.meetingLocation && (
+                  <div className="flex items-center gap-3">
+                    {apiEvent.meetingFormat === "online" ? (
+                      <VideoCameraIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    ) : (
+                      <MapPinIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    )}
+                    <span className="text-text-primary break-all">
+                      {apiEvent.meetingFormat === "online" ? "Trực tuyến: " : "Địa điểm: "}
+                      {apiEvent.meetingLocation}
+                    </span>
+                  </div>
+                )}
+
+                {/* Description */}
+                {apiEvent.description && (
+                  <div className="flex items-start gap-3">
+                    <DocumentTextIcon className="mt-0.5 h-5 w-5 text-text-muted" />
+                    <p className="whitespace-pre-wrap text-text-primary">{apiEvent.description}</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!isLocalMeeting && !isApiEvent && detail.source?.description && (
               <p className="text-text-secondary">{detail.source.description}</p>
             )}
           </div>
@@ -498,6 +595,25 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             </div>
           )}
 
+          {/* Action footer for API events */}
+          {isApiEvent && isApiOwner && (
+            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<TrashIcon className="h-4 w-4" />}
+                className="text-danger hover:bg-danger/10"
+                onClick={async () => {
+                  if (window.confirm("Bạn có chắc muốn xóa sự kiện này?")) {
+                    await onDeleteApiEvent?.(detail.id);
+                  }
+                }}
+              >
+                Xóa
+              </Button>
+            </div>
+          )}
+
           {/* Action footer: chỉ người tạo mới có Sửa/Xóa */}
           {isLocalMeeting && isCreator && (
             <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
@@ -566,6 +682,30 @@ const WeeklyCalendarWidget: React.FC = () => {
   const storeError = useCalendarStore((s) => s.error);
   const fetchEvents = useCalendarStore((s) => s.fetchEvents);
   const createEvent = useCalendarStore((s) => s.createEvent);
+  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
+
+  // Store full API events for detail view
+  const apiEventsMap = React.useMemo(() => {
+    const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
+    storeEvents.forEach((event) => {
+      map[event.id] = {
+        id: event.id,
+        title: event.title,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        description: event.description,
+        meetingChairman: event.meetingChairman,
+        meetingFormat: event.meetingFormat as "offline" | "online" | null,
+        meetingLocation: event.meetingLocation,
+        attendees: event.attendees ?? [],
+        visibility: event.visibility,
+        status: event.status,
+        ownerUserId: event.ownerUserId,
+        ownerEmployeeId: event.ownerEmployeeId,
+      };
+    });
+    return map;
+  }, [storeEvents]);
 
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id;
@@ -662,9 +802,6 @@ const WeeklyCalendarWidget: React.FC = () => {
     }
   };
 
-  // Get store delete function
-  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
-
   const handleEditMeeting = (meeting: MeetingFormData) => {
     setSelectedDetail(null);
     setEditingMeeting(meeting);
@@ -685,6 +822,11 @@ const WeeklyCalendarWidget: React.FC = () => {
       console.error("Failed to delete event:", error);
       toast.error("Không thể xóa lịch");
     }
+  };
+
+  // Handler for deleting API events
+  const handleDeleteApiEvent = async (eventId: string) => {
+    await handleDeleteMeeting(eventId);
   };
 
   // Note: handleToggleRead is not supported by API yet - disabled for API-based events
@@ -794,6 +936,7 @@ const WeeklyCalendarWidget: React.FC = () => {
           onClose={() => setSelectedDetail(null)}
           onEdit={handleEditMeeting}
           onDelete={handleDeleteMeeting}
+          onDeleteApiEvent={handleDeleteApiEvent}
           onToggleRead={handleToggleRead}
         />
       )}
@@ -848,14 +991,30 @@ const WeeklyCalendarWidget: React.FC = () => {
               time: e.time,
               title: e.title,
               kind: "meeting" as const,
-              detail: { kind: "meeting" as const, id: e.id, title: e.title, date: dayStr, time: e.time, source: e },
+              detail: {
+                kind: "meeting" as const,
+                id: e.id,
+                title: e.title,
+                date: dayStr,
+                time: e.time,
+                source: e,
+                apiEvent: apiEventsMap[e.id],
+              },
             })),
             ...personal.map((e) => ({
               id: e.id,
               time: e.time,
               title: e.title,
               kind: "personal" as const,
-              detail: { kind: "personal" as const, id: e.id, title: e.title, date: dayStr, time: e.time, source: e },
+              detail: {
+                kind: "personal" as const,
+                id: e.id,
+                title: e.title,
+                date: dayStr,
+                time: e.time,
+                source: e,
+                apiEvent: apiEventsMap[e.id],
+              },
             })),
           ];
 
