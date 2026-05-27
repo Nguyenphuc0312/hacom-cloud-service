@@ -23,6 +23,33 @@ export interface CalendarEvent {
 }
 
 /**
+ * Extended calendar event with full API data for detail view.
+ * Used when displaying event details with time, location, attendees, etc.
+ */
+export interface ExtendedCalendarEvent extends CalendarEvent {
+  /** Full start timestamp from API */
+  startAt?: string;
+  /** Full end timestamp from API */
+  endAt?: string;
+  /** Meeting format: "offline" | "online" | null */
+  meetingFormat?: "offline" | "online";
+  /** Meeting location (for offline) or URL (for online) */
+  meetingLocation?: string;
+  /** Meeting chairman name */
+  meetingChairman?: string;
+  /** List of attendee names */
+  attendees?: string[];
+  /** Event visibility */
+  visibility?: "PRIVATE" | "BUSY_ONLY" | "TEAM" | "UNIT" | "PUBLIC";
+  /** Event status */
+  status?: "CONFIRMED" | "TENTATIVE" | "CANCELLED";
+  /** Owner user ID for permission checks */
+  ownerUserId?: string;
+  /** Whether current user is the owner */
+  isOwner?: boolean;
+}
+
+/**
  * Get Vietnamese month names.
  */
 export const VIETNAMESE_MONTHS = [
