@@ -513,7 +513,7 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
-          variant="secondary"
+          variant="brand-outline"
           onClick={requestClose}
           disabled={isSaving}
         >
@@ -521,6 +521,7 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
         </Button>
         <Button
           type="button"
+          variant="brand"
           onClick={() => {
             void handleSave();
           }}
@@ -582,7 +583,7 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="brand-outline"
                 size="sm"
                 leftIcon={<CameraIcon className="h-4 w-4" />}
                 disabled={isSaving}

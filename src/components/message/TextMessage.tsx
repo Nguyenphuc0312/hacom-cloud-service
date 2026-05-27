@@ -158,10 +158,10 @@ const renderWithMentions = (
           isSelfMention
             ? isOwn
               ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
-              : "bg-primary/15 text-primary"
+              : "bg-[#FFC857]/20 text-[#C41E3A]"
             : isOwn
               ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
-              : "text-primary/80",
+              : "text-[#C41E3A]/80",
         )}
         data-mention-user-id={resolved?.userId}
         title={resolved?.employeeCode || undefined}
@@ -221,7 +221,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
             onClick={onToggleExpand}
             className={clsx(
               "text-xs font-semibold underline-offset-2 hover:underline",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-primary",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-[#C41E3A]",
             )}
           >
             {renderMode === "collapsed"
@@ -268,7 +268,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
           <button
             type="button"
             onClick={onToggleExpand}
-            className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+            className="text-xs font-semibold text-[#C41E3A] underline-offset-2 hover:underline"
           >
             {renderMode === "collapsed"
               ? t("chat:message.expandLong", { defaultValue: "Xem them" })
@@ -314,7 +314,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
                     "underline decoration-current underline-offset-2 transition-opacity hover:opacity-80",
                     isOwn
                       ? "text-[hsl(var(--chat-bubble-sent-text))] opacity-90"
-                      : "text-primary",
+                      : "text-[#C41E3A]",
                   )}
                 >
                   {part}
@@ -341,7 +341,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
           onClick={onToggleExpand}
           className={clsx(
             "text-xs font-semibold underline-offset-2 hover:underline",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-primary",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-[#C41E3A]",
           )}
         >
           {renderMode === "collapsed"

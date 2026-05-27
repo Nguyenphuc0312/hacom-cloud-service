@@ -163,8 +163,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                   className={clsx(
                     "flex w-full items-center gap-3 px-5 py-3 text-left transition-colors",
                     isSelected
-                      ? "bg-primary/8 dark:bg-primary/12"
-                      : "hover:bg-surface-hover",
+                      ? "bg-[#FFC857]/10"
+                      : "hover:bg-[#FFC857]/6",
                   )}
                 >
                   <div className="relative shrink-0">
@@ -189,7 +189,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                     className={clsx(
                       "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                       isSelected
-                        ? "border-primary bg-primary"
+                        ? "border-[#C41E3A] bg-gradient-to-br from-[#C41E3A] to-[#D32F2F]"
                         : "border-border bg-transparent",
                     )}
                   >
@@ -231,7 +231,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             className={clsx(
               "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
               selected.size > 0 && !isLoading
-                ? "bg-primary text-white hover:bg-primary/90"
+                ? "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white hover:brightness-105"
                 : "cursor-not-allowed bg-surface-subtle text-text-muted",
             )}
           >

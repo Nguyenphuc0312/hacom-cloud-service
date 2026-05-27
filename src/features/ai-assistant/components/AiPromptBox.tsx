@@ -80,7 +80,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     return (
       <div className="relative w-full">
-        <div className="relative flex items-end rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-border-strong focus-within:shadow-md">
+        <div className="relative flex items-end rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-[#FFC857]/60 focus-within:ring-2 focus-within:ring-[#FFC857]/15 focus-within:shadow-md">
           {/* Attach button */}
           <input
             ref={fileInputRef}
@@ -131,7 +131,8 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
               <button
                 type="button"
                 onClick={onStop}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-hover transition-colors"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:brightness-105"
+                style={{ background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }}
                 aria-label="Dừng phản hồi"
               >
                 <SquareIcon size={14} fill="white" />
@@ -151,9 +152,13 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                 className={clsx(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all",
                   hasText
-                    ? "bg-primary text-white hover:bg-primary-hover cursor-pointer"
+                    ? "text-white hover:brightness-105 cursor-pointer"
                     : "bg-surface-active text-text-disabled cursor-not-allowed",
                 )}
+                style={hasText ? {
+                  background: "linear-gradient(to right, #C41E3A, #D32F2F, #FFC857)",
+                  boxShadow: "0 2px 8px rgba(196,30,58,0.3)",
+                } : undefined}
                 aria-label="Gửi tin nhắn"
               >
                 <ArrowUpIcon size={18} strokeWidth={2.5} />

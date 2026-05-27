@@ -119,9 +119,9 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
           });
 
   return (
-    <div className="mb-1.5 flex items-stretch overflow-hidden rounded-xl bg-surface-overlay/60 border border-border/50 animate-slide-up-fade">
+    <div className="mb-1.5 flex items-stretch overflow-hidden rounded-xl bg-[#FFC857]/8 border border-[#FFC857]/20 animate-slide-up-fade">
       {/* Accent bar */}
-      <div className="w-[3px] flex-shrink-0 self-stretch bg-primary rounded-l-xl" />
+      <div className="w-[3px] flex-shrink-0 self-stretch rounded-l-xl" style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }} />
 
       {/* Thumbnail (image/video only) */}
       {hasThumb && (

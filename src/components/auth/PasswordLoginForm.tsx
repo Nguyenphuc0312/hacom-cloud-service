@@ -117,7 +117,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             <input
               type="checkbox"
               {...register("rememberMe")}
-              className="h-4 w-4 rounded border-border text-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.2)]"
+              className="h-4 w-4 rounded border-border accent-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/20"
             />
             <span className="text-sm font-medium text-text-secondary">{t("auth:login.rememberMe")}</span>
           </label>

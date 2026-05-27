@@ -89,7 +89,7 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
               "border border-transparent",
               "transition-all duration-100",
               "hover:scale-125 hover:bg-surface-hover",
-              isActive && "scale-110 border-primary/40 bg-primary/10",
+              isActive && "scale-110 border-[#FFC857]/50 bg-[#FFC857]/15",
             )}
           >
             {emoji}

@@ -20,7 +20,7 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
       className={clsx(
         "fixed bottom-6 right-6 z-sticky",
         "w-14 h-14 rounded-full",
-        "bg-primary hover:bg-primary-hover",
+        "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] hover:brightness-105",
         "text-text-inverse shadow-lg hover:shadow-xl",
         "flex items-center justify-center",
         "transition-all duration-200",

@@ -253,8 +253,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                 className={clsx(
                   "rounded-full border px-3 py-1.5 text-xs font-medium transition-micro",
                   isActive
-                    ? "border-primary/25 bg-primary/12 text-primary"
-                    : "border-border/70 bg-surface text-text-secondary hover:bg-surface-hover",
+                    ? "border-[#C41E3A]/25 bg-[#FFC857]/20 text-[#C41E3A]"
+                    : "border-border/70 bg-surface text-text-secondary hover:bg-[#FFC857]/8",
                 )}
               >
                 {getFilterLabel(filter, t)}
@@ -287,7 +287,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                   "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                   item.isRead
                     ? "border-transparent bg-transparent hover:bg-surface-hover"
-                    : "border-primary/10 bg-primary/6 hover:bg-primary/10",
+                    : "border-[#FFC857]/20 bg-[#FFC857]/6 hover:bg-[#FFC857]/10",
                 )}
               >
                 <div
@@ -299,7 +299,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                         ? "bg-warning/12 text-warning"
                         : item.kind === "system"
                           ? "bg-secondary/12 text-secondary"
-                          : "bg-primary/12 text-primary",
+                          : "bg-[#C41E3A]/10 text-[#C41E3A]",
                   )}
                 >
                   <NotificationKindIcon item={item} />

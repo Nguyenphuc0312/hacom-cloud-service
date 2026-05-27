@@ -1,5 +1,7 @@
 # CLAUDE.md — chat-web-client
 
+@WEBUI.md
+
 Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File này mô tả chi tiết kiến trúc để AI hiểu context mà **không cần đọc lại toàn bộ source**. Đọc file này trước; chỉ mở file cụ thể khi cần sửa.
 
 > Khi sửa code mà phát hiện file này sai/lỗi thời, hãy cập nhật lại nó.
@@ -308,4 +310,17 @@ npm run build && node scripts/verify-dist-assets.mjs
 
 ## 14. Lưu ý cá nhân hóa (memory)
 
-- Khi user yêu cầu **chỉnh UI/UX**: chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc (theo feedback đã lưu).
+- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBUI.md`** trước để lấy đúng bảng màu brand (đỏ/vàng), pattern gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc (theo feedback đã lưu).
+
+- **Button variants brand** (đã thêm vào `src/components/ui/Button.tsx`):
+  - `variant="brand"` → CTA chính (gradient đỏ→vàng). Thay thế `variant="primary"` cho các nút submit/save quan trọng.
+  - `variant="brand-outline"` → nút phụ/hủy. Thay thế `variant="outline"` / `variant="secondary"` đi kèm CTA.
+  - `variant="danger"` / `variant="ghost"` / `variant="secondary"` → giữ nguyên cho semantic action (xóa, toolbar, phụ trợ).
+
+- **Focus ring** trên mọi input mới: `focus:border-[#FFC857]/60 focus:ring-[#FFC857]/15` (không dùng `focus:border-focus focus:ring-focus/*`).
+
+- **Badge/pill brand**: đếm số → `bg-[#C41E3A]/10 text-[#C41E3A]`; filter active → `bg-[#FFC857]/20 text-[#C41E3A]`.
+
+- **Active/hover state**: active item list → `bg-[#FFC857]/10`; hover row → `rgb(255 200 87 / 0.08)`.
+
+- Xem bảng đầy đủ tại **`WEBUI.md` mục 4.5 & 4.6**.
