@@ -64,7 +64,14 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
           components={{
-            a: ({ href, title, children, ...props }) => {
+            a: ({
+              href,
+              title,
+              children,
+              type: _linkType,
+              ref: _linkRef,
+              ...props
+            }) => {
               const label = flattenLinkLabel(children);
               const weeklyAction = resolveWeeklyReportFileAction(href, label);
 
@@ -75,7 +82,6 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
                 return (
                   <button
                     type="button"
-                    {...props}
                     title={title}
                     disabled={isBusy}
                     className="inline cursor-pointer border-0 bg-transparent p-0 font-inherit text-primary hover:underline disabled:cursor-wait disabled:opacity-60"
