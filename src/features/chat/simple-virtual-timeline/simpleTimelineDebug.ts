@@ -34,13 +34,27 @@ export type SimpleTimelineDebugEvent =
   | "jump_to_latest"
   | "measurement_grow_recorrect_bottom"
   | "rule9_guard_skipped"
-  | "rule9_guard_passed";
+  | "rule9_guard_passed"
+  | "programmatic_scroll_event_ignored"
+  | "conversation_changed";
 
 const isDebugEnabled = (): boolean => {
   if (typeof globalThis === "undefined") return false;
-  return (
+  // Enable via DevTools: window.__SIMPLE_TIMELINE_DEBUG__ = true
+  // or via localStorage: localStorage.setItem('debug:chat-scroll', '1')
+  if (
     (globalThis as Record<string, unknown>).__SIMPLE_TIMELINE_DEBUG__ === true
-  );
+  ) {
+    return true;
+  }
+  if (typeof localStorage !== "undefined") {
+    try {
+      return localStorage.getItem("debug:chat-scroll") === "1";
+    } catch {
+      return false;
+    }
+  }
+  return false;
 };
 
 /**

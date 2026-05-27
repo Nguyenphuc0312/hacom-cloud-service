@@ -183,6 +183,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     handleMediaLoad,
     jumpToLatest,
     notifyTotalSizeChanged,
+    isInitialSettled,
   } = useSimpleChatScroll({
     conversationId,
     currentUserId,
@@ -216,6 +217,70 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     () => notifyTotalSizeChanged(totalSize),
     [totalSize, notifyTotalSizeChanged],
   );
+
+  // ── Initial stick-to-bottom window ──────────────────────────────────────────
+  // During the first few frames after initial scroll fires, the virtualizer is
+  // still measuring real row heights. Without this window, the user would land
+  // in the middle of the conversation when estimates are too low.
+  // We schedule 3 consecutive RAF frames that verify bottomGap <= 2px and
+  // correct if needed. Guards prevent interference: conversation changes reset
+  // the ref, user scrolling sets userScrollingRef which blocks the check.
+  const initialStickRafRef = React.useRef<number | null>(null);
+  const initialStickConvRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!isInitialSettled) return;
+    if (!scrollRef.current) return;
+    // Mark this stick-window as belonging to the current conversation.
+    const activeConversation = conversationId;
+    initialStickConvRef.current = activeConversation;
+
+    const scheduleNext = (frame: number) => {
+      if (frame >= 3) return;
+      // Guard: abort if conversation changed while we were waiting in RAF queue.
+      if (initialStickConvRef.current !== activeConversation) return;
+
+      const raf = requestAnimationFrame(() => {
+        // Guard: abort if conversation changed during RAF wait.
+        if (initialStickConvRef.current !== activeConversation) return;
+        if (!scrollRef.current) return;
+
+        const elNow = scrollRef.current;
+        const gap = Math.max(
+          0,
+          elNow.scrollHeight - elNow.scrollTop - elNow.clientHeight,
+        );
+        if (gap > 2) {
+          elNow.scrollTo({ top: elNow.scrollHeight, behavior: "auto" });
+        }
+
+        scheduleNext(frame + 1);
+      });
+      initialStickRafRef.current = raf;
+    };
+
+    scheduleNext(0);
+
+    return () => {
+      if (initialStickRafRef.current !== null) {
+        cancelAnimationFrame(initialStickRafRef.current);
+        initialStickRafRef.current = null;
+      }
+    };
+  }, [isInitialSettled, conversationId]);
+
+  // Composer height changes shift the timeline's visible area. When the user is
+  // at the bottom, the timeline should stay pinned to the bottom edge.
+  // Reuse handleMediaLoad which already implements the correct stick logic.
+  const prevComposerHeightRef = React.useRef(composerHeight);
+  React.useEffect(() => {
+    if (
+      isInitialSettled &&
+      composerHeight !== prevComposerHeightRef.current
+    ) {
+      prevComposerHeightRef.current = composerHeight;
+      handleMediaLoad();
+    }
+  }, [composerHeight, isInitialSettled, handleMediaLoad]);
 
   // ── Jump-to-message: scroll the target row into view + flash a highlight ──
   const [highlightedId, setHighlightedId] = React.useState<string | null>(null);
