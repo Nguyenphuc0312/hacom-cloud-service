@@ -26,6 +26,23 @@ type UploadState =
   | { phase: "success"; fileName: string }
   | { phase: "error"; message: string };
 
+const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+const ACCEPT_LIST = ALLOWED_EXTENSIONS.join(",");
+
+const isAllowedFile = (file: File): boolean => {
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (ALLOWED_EXTENSIONS.includes(ext)) return true;
+  if (file.type && ALLOWED_MIME_TYPES.has(file.type)) return true;
+  return false;
+};
+
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
@@ -71,13 +88,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       e.preventDefault();
       dragCountRef.current = 0;
       setState({ phase: "idle" });
-      const file = Array.from(e.dataTransfer.files).find((f) =>
-        f.name.toLowerCase().endsWith(".pdf"),
-      );
+      const file = Array.from(e.dataTransfer.files).find((f) => isAllowedFile(f));
       if (!file) {
         setState({
           phase: "error",
-          message: "Chỉ hỗ trợ tệp PDF. Vui lòng thả tệp .pdf.",
+          message: "Chỉ hỗ trợ PDF/DOC/DOCX/XLS/XLSX. Vui lòng thả tệp hợp lệ.",
         });
         return;
       }
@@ -136,10 +151,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <div className="flex items-center justify-between px-6 pt-6 pb-4">
               <div>
                 <h2 className="text-base font-bold text-text-primary">
-                  Thêm tài liệu PDF
+                  Thêm tài liệu
                 </h2>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  Tài liệu sẽ trở thành nguồn kiến thức cho AI
+                  Hỗ trợ PDF, DOC/DOCX, XLS/XLSX
                 </p>
               </div>
               <button
@@ -158,7 +173,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
+                accept={ACCEPT_LIST}
                 className="hidden"
                 onChange={handleFileInput}
                 aria-hidden="true"
@@ -281,7 +296,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           <p className="text-sm font-semibold text-text-primary">
                             {state.phase === "dragging"
                               ? "Thả tệp vào đây"
-                              : "Kéo thả tệp PDF vào đây"}
+                              : "Kéo thả tệp vào đây"}
                           </p>
                           <p className="mt-1 text-xs text-text-muted">
                             hoặc{" "}
@@ -291,7 +306,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           </p>
                         </div>
                         <p className="text-[11px] text-text-disabled">
-                          Chỉ hỗ trợ PDF · Tối đa 50 MB
+                          Hỗ trợ PDF/DOC/DOCX/XLS/XLSX · Tối đa 50 MB
                         </p>
                       </>
                     )}

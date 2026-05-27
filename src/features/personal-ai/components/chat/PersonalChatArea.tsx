@@ -9,9 +9,13 @@ interface PersonalChatAreaProps {
   messages: PersonalChatMessage[];
   isStreaming: boolean;
   isRagMode: boolean;
+  onSuggestionSelect?: (value: string) => void;
 }
 
-const EmptyState: React.FC<{ isRagMode: boolean }> = ({ isRagMode }) => (
+const EmptyState: React.FC<{
+  isRagMode: boolean;
+  onSuggestionSelect?: (value: string) => void;
+}> = ({ isRagMode, onSuggestionSelect }) => (
   <div className="flex flex-1 items-center justify-center px-6">
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -55,12 +59,14 @@ const EmptyState: React.FC<{ isRagMode: boolean }> = ({ isRagMode }) => (
             "Giải thích chi tiết hơn",
             "So sánh các phần",
           ].map((s) => (
-            <div
+            <button
+              type="button"
               key={s}
-              className="rounded-full border border-[#FFC857]/25 bg-[#FFC857]/6 px-3 py-1.5 text-xs font-medium text-text-secondary"
+              onClick={() => onSuggestionSelect?.(s)}
+              className="rounded-full border border-[#FFC857]/25 bg-[#FFC857]/6 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-[#FFC857]/40 hover:bg-[#FFC857]/12"
             >
               {s}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -72,6 +78,7 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   messages,
   isStreaming,
   isRagMode,
+  onSuggestionSelect,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +101,10 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   if (!hasMessages) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <EmptyState isRagMode={isRagMode} />
+        <EmptyState
+          isRagMode={isRagMode}
+          onSuggestionSelect={onSuggestionSelect}
+        />
       </div>
     );
   }

@@ -31,6 +31,17 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     [sendMessage],
   );
 
+  const handleSuggestionSelect = useCallback((value: string) => {
+    setInputValue(value);
+    setTimeout(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const end = value.length;
+      textarea.setSelectionRange(end, end);
+    }, 0);
+  }, []);
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-surface font-sans">
       {/* ── Left: Conversation Sidebar ── */}
@@ -47,6 +58,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           messages={messages}
           isStreaming={isStreaming}
           isRagMode={isRagMode}
+          onSuggestionSelect={handleSuggestionSelect}
         />
 
         {/* Sticky input footer */}
