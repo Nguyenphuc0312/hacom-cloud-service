@@ -141,6 +141,18 @@ const formatTimeStr = (timeStr: string): string => {
 };
 
 /**
+ * Format time from ISO string to HH:mm
+ */
+const formatTimeFromISO = (iso: string): string => {
+  if (!iso) return "08:00";
+  const parts = iso.split(":");
+  if (parts.length >= 2) {
+    return `${parts[0]}:${parts[1]}`;
+  }
+  return "08:00";
+};
+
+/**
  * Calculate duration between two timestamps
  */
 const calculateDuration = (startAt: string, endAt: string): string => {
@@ -190,9 +202,14 @@ const EventDetailModal: React.FC<{
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+<<<<<<< HEAD
 }> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
+=======
+  onRequestDelete?: () => void;
+}> = ({ event, currentUserId, onClose, onEdit, onDelete, onRequestDelete }) => {
+>>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -386,7 +403,11 @@ const EventDetailModal: React.FC<{
               {canDelete && (
                 <button
                   type="button"
+<<<<<<< HEAD
                   onClick={() => setShowDeleteConfirm(true)}
+=======
+                  onClick={onRequestDelete}
+>>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
                   className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
                 >
                   <TrashIcon className="h-4 w-4" />
@@ -636,6 +657,12 @@ export const CalendarPage: React.FC = () => {
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
   const [localMeetings] = useState<MeetingFormData[]>([]);
+
+  // Edit event modal state
+  const [editingEvent, setEditingEvent] = useState<MeetingFormData | null>(null);
+
+  // Delete confirmation dialog state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // User search modal state
   const [userSearchModalOpen, setUserSearchModalOpen] = useState(false);
@@ -940,12 +967,42 @@ export const CalendarPage: React.FC = () => {
     [navigate, apiEventsMap]
   );
 
-  // Handle edit event
+  // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
-    // TODO: Open meeting form modal with event data pre-filled
-    toast.info("Chỉnh sửa sự kiện - tính năng đang phát triển");
-    setSelectedEvent(null);
-  }, []);
+    if (!selectedEvent) return;
+
+    // Check if it's an extended event with startAt/endAt
+    const isExtended = "startAt" in selectedEvent && selectedEvent.startAt;
+    const isLocalEvent = "time" in selectedEvent && !("startAt" in selectedEvent);
+
+    // Only allow editing API events (with startAt/endAt)
+    if (!isExtended || isLocalEvent) {
+      toast.warning("Chỉ có thể chỉnh sửa lịch họp từ API");
+      return;
+    }
+
+    const extended = selectedEvent as ExtendedCalendarEvent;
+
+    // Build MeetingFormData from ExtendedCalendarEvent
+    const data: MeetingFormData = {
+      id: extended.id,
+      title: extended.title,
+      date: extended.startAt ? extended.startAt.split("T")[0] : formatDateString(new Date()),
+      startTime: extended.startAt ? formatTimeFromISO(extended.startAt) : "08:00",
+      endTime: extended.endAt ? formatTimeFromISO(extended.endAt) : "09:00",
+      chairman: extended.meetingChairman || "",
+      participants: (extended.attendees || []).map((uid, idx) => ({
+        id: uid,
+        name: (extended as { attendeeNames?: string[] }).attendeeNames?.[idx] || uid,
+      })),
+      format: (extended.meetingFormat as "offline" | "online") || "offline",
+      location: extended.meetingLocation || "",
+      notes: extended.description || "",
+      createdById: extended.ownerUserId,
+    };
+
+    setEditingEvent(data);
+  }, [selectedEvent]);
 
   // Handle delete event
   const handleDeleteEvent = useCallback(async () => {
@@ -955,13 +1012,54 @@ export const CalendarPage: React.FC = () => {
       const success = await deleteEvent(selectedEvent.id);
       if (success) {
         setSelectedEvent(null);
-        // Refresh events
-        await fetchEvents();
+        setShowDeleteConfirm(false);
       }
     } catch (error) {
       console.error("Failed to delete event:", error);
+      setShowDeleteConfirm(false);
     }
-  }, [selectedEvent, deleteEvent, fetchEvents]);
+  }, [selectedEvent, deleteEvent]);
+
+  // Handle request delete — open confirm dialog
+  const handleRequestDelete = useCallback(() => {
+    setShowDeleteConfirm(true);
+  }, []);
+
+  // Handle successful edit — close modal, refresh events
+  const handleEditSuccess = useCallback(() => {
+    setEditingEvent(null);
+    setSelectedEvent(null);
+    void fetchEvents();
+  }, [fetchEvents]);
+
+  // Handle update event from edit form
+  const handleUpdateEvent = useCallback(async (data: MeetingFormData) => {
+    try {
+      const startAt = `${data.date}T${data.startTime}:00.000Z`;
+      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        startAt,
+        endAt,
+        attendees: data.participants.map(p => p.name),
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
+        meetingLocation: data.location || undefined,
+      };
+
+      const success = await useCalendarStore.getState().updateEvent(data.id, input);
+      if (success) {
+        toast.success("Đã cập nhật sự kiện");
+        void handleEditSuccess();
+      }
+    } catch (error) {
+      console.error("Failed to update event:", error);
+      toast.error("Không thể cập nhật sự kiện");
+      throw error;
+    }
+  }, [handleEditSuccess]);
 
   // Toggle filter
   const toggleFilter = useCallback((type: EventType) => {
@@ -1290,6 +1388,7 @@ export const CalendarPage: React.FC = () => {
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
+          onRequestDelete={handleRequestDelete}
         />
       )}
 
@@ -1301,6 +1400,26 @@ export const CalendarPage: React.FC = () => {
         defaultDate={meetingModalDate}
         existingMeetings={localMeetings}
         isLoading={isCreatingEvent}
+      />
+
+      {/* Edit event modal */}
+      <MeetingFormModal
+        isOpen={!!editingEvent}
+        onClose={() => setEditingEvent(null)}
+        onSave={handleUpdateEvent}
+        initialData={editingEvent}
+      />
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteEvent}
+        title="Xóa sự kiện"
+        message="Bạn có chắc muốn xóa sự kiện này? Hành động này không thể hoàn tác."
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
       />
 
       {/* User search modal */}
