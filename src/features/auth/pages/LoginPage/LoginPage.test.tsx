@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiErrorBody } from '@/api/types/common/common';
 import type { CurrentAdmin } from '@/api/types/auth/auth';
+import { PASSWORD_MIN_LENGTH_MESSAGE } from '@/config/passwordPolicy';
 import { useAuthStore } from '@/store/authStore/authStore';
 
 const { loginMock, getCurrentAdminMock } = vi.hoisted(() => ({
@@ -112,7 +113,7 @@ const submitLogin = async (container: HTMLElement) => {
   const passwordInput = container.querySelector('input[type="password"]');
   expect(passwordInput).toBeInTheDocument();
   fireEvent.change(passwordInput!, {
-    target: { value: 'secret' },
+    target: { value: 'secret88' },
   });
 
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
@@ -120,7 +121,7 @@ const submitLogin = async (container: HTMLElement) => {
 
 describe('LoginPage admin preflight', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     useAuthStore.setState({
       accessToken: null,
       user: null,
@@ -132,6 +133,27 @@ describe('LoginPage admin preflight', () => {
     vi.mocked(message.success).mockReset();
     vi.mocked(message.error).mockReset();
     vi.mocked(message.info).mockReset();
+  });
+
+  it('rejects passwords shorter than the minimum policy before calling login', async () => {
+    const { container } = renderLoginPage();
+
+    fireEvent.change(screen.getByPlaceholderText('admin@company.com'), {
+      target: { value: 'admin@company.test' },
+    });
+
+    const passwordInput = container.querySelector('input[type="password"]');
+    expect(passwordInput).toBeInTheDocument();
+    fireEvent.change(passwordInput!, {
+      target: { value: 'short7!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith(PASSWORD_MIN_LENGTH_MESSAGE);
+    });
+    expect(loginMock).not.toHaveBeenCalled();
   });
 
   it('stores token and enters dashboard only after /admin/me passes', async () => {

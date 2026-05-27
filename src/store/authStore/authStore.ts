@@ -49,7 +49,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'chat-admin-auth',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         accessToken: state.accessToken,
         user: state.user,

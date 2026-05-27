@@ -28,3 +28,13 @@ export interface LoginResponse {
 }
 
 export type MeResponse = CurrentAdmin;
+
+export interface MeResponseWithConfig {
+  admin: CurrentAdmin;
+  config: {
+    environment: string;
+    allowlistConfigured: boolean;
+    ipApprovalEnabled: boolean;
+    writeActionsEnabled: boolean;
+  };
+}

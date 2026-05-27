@@ -43,6 +43,8 @@ export const queryKeys = {
   emailTemplates: ['email-templates'] as const,
   emailTemplateDetail: (code: string) => ['email-template-detail', code] as const,
   serviceHealth: ['service-health'] as const,
+  projectionStatus: ['projection-status'] as const,
+  adminConfigStatus: ['admin-config-status'] as const,
   monitoringOverview: (range: string) => ['monitoring-overview', range] as const,
   dashboardSummary: (stamp: string) => ['dashboard-summary', stamp] as const,
 };
