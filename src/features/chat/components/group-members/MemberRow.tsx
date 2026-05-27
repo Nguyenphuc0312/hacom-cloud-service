@@ -46,7 +46,6 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   onBanMember,
   onRemoveMember,
   isLoading = false,
-  isMobile = false,
   className,
 }) => {
   const { t } = useTranslation("profile");
@@ -62,62 +61,54 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   return (
     <div
       className={clsx(
-        "group flex items-center gap-3 px-4 py-2 transition-colors",
-        "hover:bg-gray-50 dark:hover:bg-gray-800",
-        !isMobile && "cursor-default",
-        isMobile && "cursor-pointer",
+        "group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover",
         className,
       )}
     >
-      {/* Avatar */}
+      {/* Avatar — 32px */}
       <div className="shrink-0">
-        <Avatar
-          src={avatar}
-          alt={resolvedName}
-          size="sm"
-        />
+        <Avatar src={avatar} alt={resolvedName} size="sm" />
       </div>
 
-      {/* Name and username */}
+      {/* Name + secondary info — takes remaining space, truncates */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span
-            className={clsx(
-              "truncate text-sm font-medium text-text-primary",
-              usedFallback && "italic",
-            )}
-            title={usedFallback ? t("profile:groupInfo.noRealName") : undefined}
-          >
-            {resolvedName}
-          </span>
-
+        <p
+          className={clsx(
+            "truncate text-sm font-medium leading-snug text-text-primary",
+            usedFallback && "italic",
+          )}
+          title={resolvedName}
+        >
+          {resolvedName}
+        </p>
+        <p className="truncate text-xs leading-snug text-text-muted">
+          @{username}
           {isCurrentUser && (
-            <span className="shrink-0 text-xs text-text-muted">
-              ({t("profile:groupInfo.youSuffix")})
+            <span className="ml-1 font-medium text-text-secondary">
+              · {t("profile:groupInfo.youSuffix")}
             </span>
           )}
-
-          <MemberRoleBadge role={role} />
-        </div>
-
-        <p className="truncate text-xs text-text-muted">@{username}</p>
+        </p>
       </div>
 
-      {/* Actions menu */}
-      <MemberActionsMenu
-        memberId={memberId}
-        memberName={resolvedName}
-        memberRole={role}
-        currentUserId={currentUserId}
-        currentUserRole={currentUserRole}
-        capabilities={capabilities}
-        onMakeAdmin={onMakeAdmin}
-        onRemoveAdmin={onRemoveAdmin}
-        onTransferOwnership={onTransferOwnership}
-        onBanMember={onBanMember}
-        onRemoveMember={onRemoveMember}
-        isLoading={isLoading}
-      />
+      {/* Right column: role badge + actions kebab */}
+      <div className="flex shrink-0 items-center gap-1">
+        <MemberRoleBadge role={role} />
+        <MemberActionsMenu
+          memberId={memberId}
+          memberName={resolvedName}
+          memberRole={role}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          capabilities={capabilities}
+          onMakeAdmin={onMakeAdmin}
+          onRemoveAdmin={onRemoveAdmin}
+          onTransferOwnership={onTransferOwnership}
+          onBanMember={onBanMember}
+          onRemoveMember={onRemoveMember}
+          isLoading={isLoading}
+        />
+      </div>
     </div>
   );
 };

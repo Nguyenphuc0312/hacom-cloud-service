@@ -1,4 +1,5 @@
 import React from "react";
+import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MemberRow } from "./MemberRow";
 import { DirectorySkeleton } from "../../../../components/ui/Skeleton";
@@ -83,7 +84,7 @@ export const MembersList: React.FC<MembersListProps> = ({
   }
 
   return (
-    <div className={className}>
+    <div className={clsx("divide-y divide-border/60", className)}>
       {sortedMembers.map((member) => (
         <MemberRow
           key={member.id}
