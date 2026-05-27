@@ -208,6 +208,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     <Button
       fullWidth
       size="md"
+      variant="brand"
       onClick={() => void handleCreateGroup()}
       isLoading={isBusy}
       disabled={isBusy || selectedUsers.length < 1 || !groupName.trim()}
@@ -239,8 +240,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             className={clsx(
               "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               !isGroupMode
-                ? "bg-primary text-text-inverse shadow-sm"
-                : "text-text-secondary hover:bg-surface-hover",
+                ? "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-sm"
+                : "text-text-secondary hover:bg-[#FFC857]/8",
             )}
           >
             <UserPlusIcon className="h-4 w-4" />
@@ -253,8 +254,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             className={clsx(
               "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               isGroupMode
-                ? "bg-primary text-text-inverse shadow-sm"
-                : "text-text-secondary hover:bg-surface-hover",
+                ? "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-sm"
+                : "text-text-secondary hover:bg-[#FFC857]/8",
             )}
           >
             <UserGroupIcon className="h-4 w-4" />
@@ -301,13 +302,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             {selectedUsers.map((user) => (
               <span
                 key={user.id}
-                className="flex items-center gap-1.5 rounded-full bg-primary/12 py-1 pl-3 pr-1.5 text-sm text-primary"
+                className="flex items-center gap-1.5 rounded-full bg-[#FFC857]/20 py-1 pl-3 pr-1.5 text-sm text-[#C41E3A]"
               >
                 {getDisplayName(user)}
                 <button
                   type="button"
                   onClick={() => toggleSelectedUser(user)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-primary/25"
+                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-[#C41E3A]/20"
                   aria-label={`Bỏ ${getDisplayName(user)}`}
                 >
                   <XMarkIcon className="h-3 w-3" />
@@ -372,10 +373,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                           aria-pressed={isSelected}
                           className={clsx(
                             "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30",
                             isSelected
-                              ? "border-primary bg-primary text-text-inverse"
-                              : "border-border-strong text-transparent hover:border-primary/50",
+                              ? "border-[#C41E3A] bg-gradient-to-br from-[#C41E3A] to-[#D32F2F] text-white"
+                              : "border-border-strong text-transparent hover:border-[#C41E3A]/50",
                             isBusy && "cursor-not-allowed opacity-60",
                           )}
                         >
@@ -400,7 +401,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                           type="button"
                           disabled={isFriendRequestPending || isBusy}
                           onClick={() => void handleSendFriendRequest(user.id)}
-                          className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary disabled:opacity-60"
+                          className="rounded-md bg-[#FFC857]/20 px-2 py-0.5 text-xs font-medium text-[#C41E3A] disabled:opacity-60"
                         >
                           {isFriendRequestPending
                             ? t("profile:newChatModal.sending", { defaultValue: "Đang gửi..." })

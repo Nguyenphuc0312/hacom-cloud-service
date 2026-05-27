@@ -93,9 +93,16 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   message.role === "assistant"
                     ? message.isError
                       ? "bg-danger/10 text-danger"
-                      : "bg-primary text-white"
-                    : "bg-primary/80 text-white",
+                      : "text-white"
+                    : "text-white",
                 )}
+                style={
+                  message.role === "assistant" && !message.isError
+                    ? { background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }
+                    : message.role === "user"
+                      ? { background: "rgba(196,30,58,0.75)" }
+                      : undefined
+                }
               >
                 {message.role === "assistant" ? (
                   message.isError ? (
@@ -219,7 +226,10 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
           <div className="w-full bg-surface-overlay/50">
             <div className="max-w-[768px] mx-auto px-4 py-6">
               <div className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white mt-0.5">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white mt-0.5"
+                  style={{ background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }}
+                >
                   <SparklesIcon size={16} strokeWidth={2.5} />
                 </div>
                 <div className="flex flex-col gap-1">

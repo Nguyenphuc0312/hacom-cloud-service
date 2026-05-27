@@ -71,9 +71,9 @@ export const StickerPackTabs: React.FC<StickerPackTabsProps> = ({
             onClick={() => onTabClick(tab.id)}
             className={clsx(
               "group/tab relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30",
               isActive
-                ? "text-primary"
+                ? "text-[#C41E3A]"
                 : "text-text-secondary hover:text-text-primary",
             )}
           >
@@ -100,7 +100,7 @@ export const StickerPackTabs: React.FC<StickerPackTabsProps> = ({
             {/* Active indicator */}
             <div
               className={clsx(
-                "absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary transition-transform",
+                "absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#C41E3A] transition-transform",
                 isActive ? "scale-x-100" : "scale-x-0 group-hover/tab:scale-x-50",
               )}
             />

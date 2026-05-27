@@ -132,7 +132,10 @@ export const LoginPage: React.FC = () => {
             className="mb-1 font-bold tracking-tight text-text-primary"
             style={{ fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)" }}
           >
-            Chào mừng trở lại với Hacom Chat
+            Chào mừng trở lại với{" "}
+            <span className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-transparent">
+              Hacom Chat
+            </span>
           </h1>
           <p className="text-sm font-medium text-text-muted">
             Đăng nhập vào tài khoản của bạn để tiếp tục

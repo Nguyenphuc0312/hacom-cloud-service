@@ -71,8 +71,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     preview: "text-text-muted",
     time: "text-text-muted",
     timeBadge: "bg-transparent text-text-muted",
-    unreadBadge:
-      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   hover: {
     container:
@@ -88,14 +87,13 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[hsl(var(--chat-active-surface)/0.1)]",
+    container: "bg-[#FFC857]/10",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
     timeBadge:
       "bg-transparent text-text-secondary",
-    unreadBadge:
-      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   unread: {
     container: "bg-transparent",
@@ -104,8 +102,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     time: "text-text-secondary",
     timeBadge:
       "bg-transparent text-text-secondary",
-    unreadBadge:
-      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+    unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   muted: {
     container: "bg-transparent",
@@ -262,12 +259,8 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
     >
       {(visualState === "active" || visualState === "mention") && (
         <span
-          className={clsx(
-            "absolute left-0 top-2 bottom-2 w-1 rounded-full",
-        visualState === "mention"
-              ? "bg-danger"
-              : "bg-[hsl(var(--chat-active-surface))]",
-          )}
+          className="absolute left-0 top-2 bottom-2 w-1 rounded-full"
+          style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
           aria-hidden="true"
         />
       )}

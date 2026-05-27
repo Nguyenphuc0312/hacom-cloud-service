@@ -31,7 +31,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       id: "photo",
       label: t("chat:attachment.types.photo"),
       icon: PhotoIcon,
-      color: "bg-primary/15 text-primary",
+      color: "bg-[#FFC857]/20 text-[#C41E3A]",
       enabled: true,
     },
     {
@@ -66,7 +66,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       id: "poll",
       label: t("chat:attachment.types.poll"),
       icon: ChartBarIcon,
-      color: "bg-primary/15 text-primary",
+      color: "bg-[#FFC857]/20 text-[#C41E3A]",
       enabled: true,
     },
   ];

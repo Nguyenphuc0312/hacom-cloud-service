@@ -160,7 +160,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
             className={clsx(
               "relative flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
               activeTab === tab.id
-                ? "text-primary"
+                ? "text-[#C41E3A]"
                 : "text-text-muted hover:text-text-secondary",
             )}
           >
@@ -170,7 +170,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
               <Badge count={tab.count} size="sm" />
             )}
             {activeTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#C41E3A] to-[#FFC857]" />
             )}
           </button>
         ))}

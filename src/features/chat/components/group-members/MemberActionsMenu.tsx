@@ -218,7 +218,7 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
           "flex h-8 w-8 items-center justify-center rounded-md transition-all",
           "opacity-0 group-hover:opacity-100",
           "hover:bg-surface-overlay active:bg-surface-active",
-          "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+          "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
         )}
         aria-label={t("profile:groupInfo.actions.options", { name: memberName })}
@@ -248,7 +248,7 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
               type="button"
               disabled={isLoading}
               onClick={handleInlineConfirm}
-              className="flex-1 rounded-md bg-primary px-3 py-1.5 text-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+              className="flex-1 rounded-md bg-gradient-to-r from-[#C41E3A] to-[#D32F2F] px-3 py-1.5 text-sm text-white hover:brightness-105 disabled:opacity-60"
             >
               {t("common:actions.confirm")}
             </button>

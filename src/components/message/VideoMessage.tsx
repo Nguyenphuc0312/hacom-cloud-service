@@ -178,7 +178,7 @@ export const VideoMessage: React.FC<VideoMessageProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
               <div className="h-1.5 w-3/4 max-w-[200px] overflow-hidden rounded-full bg-white/30">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  className="h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857] transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>

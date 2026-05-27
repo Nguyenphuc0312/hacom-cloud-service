@@ -137,10 +137,8 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
         <div className="flex items-stretch">
           {/* Left accent stripe */}
           <div
-            className={clsx(
-              "w-[3px] flex-shrink-0 self-stretch rounded-full",
-              isOwn ? "bg-white/70" : "bg-primary",
-            )}
+            className="w-[3px] flex-shrink-0 self-stretch rounded-full"
+            style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
           />
 
           {/* Thumbnail for image/video */}
