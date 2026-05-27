@@ -19,6 +19,7 @@ import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
@@ -213,14 +214,15 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             fetchedAt: now,
           });
 
-          // Cache URL when: ready (thumbnail exists) OR failed/fallback_original (original URL exists)
-          // This ensures images render even when thumbnail generation failed
+          // Use URL when: ready (thumbnail) OR failed/fallback_original (original file URL fallback)
+          // Apply resolvePublicResourceUrl so relative paths are resolved against FILE_BASE_URL
           const hasRenderableUrl =
             (item.status === 'ready' && url) ||
             (url && ['failed', 'fallback_original'].includes(item.status));
 
           if (hasRenderableUrl && url) {
-            newUrls[item.fileId] = url;
+            const resolved = resolvePublicResourceUrl(url, { context: 'image' });
+            if (resolved) newUrls[item.fileId] = resolved;
           }
         }
 
@@ -466,7 +468,7 @@ const DrawerMediaTab: React.FC<{
         >
           {overlayItem && (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
             <img
-              src={overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]}
+              src={resolvePublicResourceUrl(overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId], { context: 'image' }) ?? undefined}
               alt={overlayItem.fileName}
               className="h-full w-full object-cover opacity-40"
               loading="lazy"
@@ -490,7 +492,8 @@ const DrawerMediaThumb: React.FC<{
 }> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const src = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
 
   return (
     <button

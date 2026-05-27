@@ -1,4 +1,5 @@
-﻿import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -7,7 +8,6 @@ import {
   MagnifyingGlassPlusIcon,
   MagnifyingGlassMinusIcon,
 } from "@heroicons/react/24/outline";
-import { IconButton } from "../ui";
 
 interface ImagePreviewModalProps {
   isOpen: boolean;
@@ -16,6 +16,17 @@ interface ImagePreviewModalProps {
   alt?: string;
 }
 
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
+
+type ZoomState = { scale: number; x: number; y: number };
+const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
+
+// Shared viewer button style — white icon on semi-transparent dark pill
+// Gives clear contrast against BOTH dark overlay AND bright images
+const VIEWER_BTN =
+  "flex items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:bg-white/35";
+
 export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   isOpen,
   onClose,
@@ -23,23 +34,53 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   alt,
 }) => {
   const { t } = useTranslation();
-  const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0 });
 
-  if (!isOpen) return null;
+  // Reset zoom whenever the image URL changes or viewer opens fresh
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setZoom(DEFAULT_ZOOM);
+  }, [imageUrl, isOpen]);
 
-  const resolvedAlt = alt || t("profile:imagePreview.defaultAlt");
+  // Lock body scroll while viewer is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [isOpen]);
 
-  const handleZoomIn = () => setScale((prev) => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () => setScale((prev) => Math.max(prev - 0.25, 0.5));
-  const handleResetZoom = () => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-  };
+  // Keyboard shortcuts — attached to document so no focus required
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      } else if (e.key === "+" || e.key === "=") {
+        setZoom((z) => ({ ...z, scale: Math.min(+(z.scale + 0.25).toFixed(2), MAX_SCALE) }));
+      } else if (e.key === "-") {
+        setZoom((z) => ({ ...z, scale: Math.max(+(z.scale - 0.25).toFixed(2), MIN_SCALE) }));
+      } else if (e.key === "0") {
+        setZoom(DEFAULT_ZOOM);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
 
-  const handleDownload = async () => {
+  const handleZoomIn = useCallback(
+    () => setZoom((z) => ({ ...z, scale: Math.min(+(z.scale + 0.25).toFixed(2), MAX_SCALE) })),
+    [],
+  );
+  const handleZoomOut = useCallback(
+    () => setZoom((z) => ({ ...z, scale: Math.max(+(z.scale - 0.25).toFixed(2), MIN_SCALE) })),
+    [],
+  );
+  const handleResetZoom = useCallback(() => setZoom(DEFAULT_ZOOM), []);
+
+  const handleDownload = useCallback(async () => {
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
@@ -54,117 +95,126 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     } catch {
       window.open(imageUrl, "_blank");
     }
-  };
+  }, [imageUrl]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (scale > 1) {
-      setIsDragging(true);
-      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && scale > 1) {
-      setPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    if (e.deltaY < 0) {
-      handleZoomIn();
-    } else {
-      handleZoomOut();
-    }
-  };
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    setZoom((z) => ({
+      ...z,
+      scale: Math.min(Math.max(+(z.scale + delta).toFixed(2), MIN_SCALE), MAX_SCALE),
+    }));
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose();
-    } else if (e.key === "+" || e.key === "=") {
-      handleZoomIn();
-    } else if (e.key === "-") {
-      handleZoomOut();
-    } else if (e.key === "0") {
-      handleResetZoom();
-    }
-  };
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (zoom.scale <= 1) return;
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartRef.current = { x: e.clientX - zoom.x, y: e.clientY - zoom.y };
+    },
+    [zoom.scale, zoom.x, zoom.y],
+  );
 
-  return (
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDragging) return;
+      setZoom((z) => ({
+        ...z,
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y,
+      }));
+    },
+    [isDragging],
+  );
+
+  const handleMouseUp = useCallback(() => setIsDragging(false), []);
+
+  if (!isOpen || typeof document === "undefined") return null;
+
+  const resolvedAlt = alt || t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
+  const { scale, x, y } = zoom;
+
+  const content = (
     <div
-      className="fixed inset-0 z-modal bg-text-primary/95 flex items-center justify-center"
+      className="fixed inset-0 flex flex-col"
+      // Hard-coded dark color so it's theme-independent — never light in any mode
+      style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
       onClick={onClose}
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
     >
-      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-        <IconButton
-          icon={<MagnifyingGlassMinusIcon className="w-5 h-5" />}
-          aria-label={t("profile:imagePreview.zoomOut")}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleZoomOut();
-          }}
-          variant="ghost"
-          className="text-text-inverse hover:bg-text-inverse/10"
-        />
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <div
+        className="flex h-14 shrink-0 items-center justify-between gap-3 px-4"
+        // Slightly darker stripe so toolbar visually separates from image area
+        style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* File name */}
+        <span className="min-w-0 truncate text-sm font-medium text-white/70" title={resolvedAlt}>
+          {resolvedAlt}
+        </span>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleResetZoom();
-          }}
-          className="px-3 py-2 text-sm text-text-inverse hover:bg-text-inverse/10 rounded-lg"
-        >
-          {Math.round(scale * 100)}%
-        </button>
+        {/* Controls */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Zoom out */}
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            aria-label={t("profile:imagePreview.zoomOut", { defaultValue: "Thu nhỏ" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <MagnifyingGlassMinusIcon className="h-4 w-4" />
+          </button>
 
-        <IconButton
-          icon={<MagnifyingGlassPlusIcon className="w-5 h-5" />}
-          aria-label={t("profile:imagePreview.zoomIn")}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleZoomIn();
-          }}
-          variant="ghost"
-          className="text-text-inverse hover:bg-text-inverse/10"
-        />
+          {/* Zoom level — click to reset */}
+          <button
+            type="button"
+            onClick={handleResetZoom}
+            className="min-w-[52px] rounded-full bg-white/15 px-2 py-1 text-xs font-semibold tabular-nums text-white hover:bg-white/25"
+          >
+            {Math.round(scale * 100)}%
+          </button>
 
-        <div className="w-px h-6 bg-text-inverse/20 mx-2" />
+          {/* Zoom in */}
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            aria-label={t("profile:imagePreview.zoomIn", { defaultValue: "Phóng to" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <MagnifyingGlassPlusIcon className="h-4 w-4" />
+          </button>
 
-        <IconButton
-          icon={<ArrowDownTrayIcon className="w-5 h-5" />}
-          aria-label={t("profile:imagePreview.download")}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDownload();
-          }}
-          variant="ghost"
-          className="text-text-inverse hover:bg-text-inverse/10"
-        />
+          {/* Divider */}
+          <div className="mx-1 h-5 w-px bg-white/20" />
 
-        <IconButton
-          icon={<XMarkIcon className="w-5 h-5" />}
-          aria-label={t("profile:imagePreview.close")}
-          onClick={onClose}
-          variant="ghost"
-          className="text-text-inverse hover:bg-text-inverse/10"
-        />
+          {/* Download */}
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            aria-label={t("profile:imagePreview.download", { defaultValue: "Tải về" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+          </button>
+
+          {/* Close — larger, higher contrast */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("profile:imagePreview.close", { defaultValue: "Đóng" })}
+            className={clsx(VIEWER_BTN, "h-9 w-9 ml-1")}
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
+      {/* ── Image area ──────────────────────────────────────────── */}
       <div
         className={clsx(
-          "relative max-w-full max-h-full overflow-hidden",
-          scale > 1 ? "cursor-grab" : "cursor-zoom-in",
-          isDragging && "cursor-grabbing",
+          "flex min-h-0 flex-1 items-center justify-center overflow-hidden",
+          scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
         )}
         onClick={(e) => e.stopPropagation()}
         onWheel={handleWheel}
@@ -177,19 +227,27 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
         <img
           src={imageUrl}
           alt={resolvedAlt}
-          className="max-w-[90vw] max-h-[90vh] object-contain transition-transform duration-200"
+          className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-32px)] select-none object-contain"
           style={{
-            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+            transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px)`,
+            transition: isDragging ? "none" : "transform 0.12s ease",
           }}
           draggable={false}
         />
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-text-inverse/60 text-sm">
-        {t("profile:imagePreview.instructions")}
+      {/* ── Hint bar ────────────────────────────────────────────── */}
+      <div className="flex h-9 shrink-0 items-center justify-center">
+        <span className="text-xs text-white/30">
+          {t("profile:imagePreview.instructions", {
+            defaultValue: "ESC / click ngoài để đóng · Scroll để zoom · Nhấn 0 để reset",
+          })}
+        </span>
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default ImagePreviewModal;

@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { PhotoIcon, ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
@@ -109,6 +110,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   useEffect(() => {
     if (!isThumbnailPending) {
       retryCountRef.current = 0;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRetryExhausted(false);
     }
   }, [isThumbnailPending]);
@@ -446,6 +448,20 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
     attachment.id,
   );
 
+  // ESC to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Lock body scroll
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   useEffect(() => {
     const loadImage = async () => {
       setIsLoading(true);
@@ -482,71 +498,97 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
     }
   }, [imageUrl, attachment]);
 
-  return (
+  // Portal so fixed positioning anchors to viewport regardless of parent transforms
+  const overlay = (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-surface-overlay/95 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 flex flex-col"
+      style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
       onClick={onClose}
     >
-      <button
-        className="absolute right-4 top-4 rounded-full border border-border bg-surface/80 p-2 text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
-        onClick={onClose}
-        aria-label={t("chat:image.close", { defaultValue: "Close" })}
+      {/* Toolbar */}
+      <div
+        className="flex h-14 shrink-0 items-center justify-between gap-3 px-4"
+        style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-
-      {isLoading && (
-        <div className="flex flex-col items-center gap-4">
-          <ArrowPathIcon className="h-12 w-12 animate-spin text-text-muted" />
-          <span className="text-text-muted">{t("chat:image.loading", { defaultValue: "Đang tải..." })}</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="flex flex-col items-center gap-4">
-          <PhotoIcon className="h-12 w-12 text-text-muted" />
-          <span className="text-text-muted">{error}</span>
+        <span className="min-w-0 truncate text-sm font-medium text-white/70">
+          {attachment.fileName || t("chat:image.previewAlt")}
+        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {imageUrl && !isLoading && !error && (
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/25"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              {t("chat:image.downloadOriginal", { defaultValue: "Tải ảnh gốc" })}
+            </button>
+          )}
+          {/* Close — prominent circular background so it's always visible */}
           <button
             type="button"
-            onClick={() => {
-              setIsLoading(true);
-              setError(null);
-              void fetchPreview().then(setImageUrl).catch((e) => setError(e.message)).finally(() => setIsLoading(false));
-            }}
-            className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-primary/80"
+            onClick={onClose}
+            aria-label={t("chat:image.close", { defaultValue: "Đóng" })}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 active:bg-white/35"
           >
-            {t("chat:image.retry", { defaultValue: "Thử lại" })}
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-      )}
+      </div>
 
-      {imageUrl && !isLoading && !error && (
-        <img
-          src={imageUrl}
-          alt={attachment.fileName || t("chat:image.previewAlt")}
-          className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
-          onClick={(e) => e.stopPropagation()}
-        />
-      )}
+      {/* Image / loading / error */}
+      <div
+        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isLoading && (
+          <div className="flex flex-col items-center gap-4">
+            <ArrowPathIcon className="h-12 w-12 animate-spin text-white/50" />
+            <span className="text-sm text-white/50">{t("chat:image.loading", { defaultValue: "Đang tải..." })}</span>
+          </div>
+        )}
+        {error && (
+          <div className="flex flex-col items-center gap-4">
+            <PhotoIcon className="h-12 w-12 text-white/40" />
+            <span className="text-sm text-white/50">{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLoading(true);
+                setError(null);
+                void fetchPreview()
+                  .then(setImageUrl)
+                  .catch((e: Error) => setError(e.message))
+                  .finally(() => setIsLoading(false));
+              }}
+              className="rounded-full bg-white/15 px-4 py-2 text-sm text-white hover:bg-white/25"
+            >
+              {t("chat:image.retry", { defaultValue: "Thử lại" })}
+            </button>
+          </div>
+        )}
+        {imageUrl && !isLoading && !error && (
+          <img
+            src={imageUrl}
+            alt={attachment.fileName || t("chat:image.previewAlt")}
+            className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-32px)] select-none object-contain"
+            draggable={false}
+          />
+        )}
+      </div>
 
-      {/* Download button */}
-      {imageUrl && !isLoading && !error && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleDownload();
-          }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-surface/90 px-4 py-2 text-sm shadow-lg backdrop-blur transition-colors hover:bg-surface"
-        >
-          <ArrowDownTrayIcon className="h-4 w-4" />
-          {t("chat:image.downloadOriginal", { defaultValue: "Tải ảnh gốc" })}
-        </button>
-      )}
+      <div className="flex h-9 shrink-0 items-center justify-center">
+        <span className="text-xs text-white/30">
+          {t("chat:image.hint", { defaultValue: "ESC / click ngoài để đóng" })}
+        </span>
+      </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 };
 
 /**

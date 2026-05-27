@@ -23,6 +23,7 @@ import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 
 export type SharedContentTab = "media" | "files" | "links";
@@ -241,15 +242,16 @@ const ModalMediaTab: React.FC<{
             fetchedAt: now,
           });
 
-          // Cache URL when: ready (thumbnail exists) OR failed/fallback_original (original URL exists)
-          // This ensures images render even when thumbnail generation failed
+          // Use URL when: ready (thumbnail) OR failed/fallback_original (original file URL fallback)
+          // Apply resolvePublicResourceUrl so relative paths are resolved against FILE_BASE_URL
           const url = item.url ?? null;
           const hasRenderableUrl =
             (item.status === 'ready' && url) ||
             (url && ['failed', 'fallback_original'].includes(item.status));
 
           if (hasRenderableUrl && url) {
-            newUrls[item.fileId] = url;
+            const resolved = resolvePublicResourceUrl(url, { context: 'image' });
+            if (resolved) newUrls[item.fileId] = resolved;
           }
         }
 
@@ -356,7 +358,8 @@ const ModalMediaThumb: React.FC<{
 }> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const src = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
 
   return (
     <button
