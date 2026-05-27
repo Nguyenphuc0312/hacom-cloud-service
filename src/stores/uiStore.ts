@@ -95,6 +95,11 @@ interface UIState {
   // Keyboard shortcuts
   isKeyboardShortcutsOpen: boolean;
   toggleKeyboardShortcuts: () => void;
+
+  // Pinned conversations (client-side, persisted)
+  pinnedConversationIds: string[];
+  togglePinnedConversation: (conversationId: string) => void;
+  isConversationPinned: (conversationId: string) => boolean;
 }
 
 // ============================================
@@ -273,6 +278,25 @@ export const useUIStore = create<UIState>()(
           isKeyboardShortcutsOpen: !state.isKeyboardShortcutsOpen,
         }));
       },
+
+      // ============================================
+      // PINNED CONVERSATIONS
+      // ============================================
+      pinnedConversationIds: [],
+
+      togglePinnedConversation: (conversationId) => {
+        set((state) => {
+          const pinned = state.pinnedConversationIds;
+          const next = pinned.includes(conversationId)
+            ? pinned.filter((id) => id !== conversationId)
+            : [...pinned, conversationId];
+          return { pinnedConversationIds: next };
+        });
+      },
+
+      isConversationPinned: (conversationId) => {
+        return useUIStore.getState().pinnedConversationIds.includes(conversationId);
+      },
     }),
     {
       name: "ui-storage",
@@ -282,6 +306,7 @@ export const useUIStore = create<UIState>()(
         brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
         chatDensity: state.chatDensity,
+        pinnedConversationIds: state.pinnedConversationIds,
       }),
     },
   ),

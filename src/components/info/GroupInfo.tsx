@@ -33,13 +33,13 @@ import {
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
+import { useUIStore } from "../../stores/uiStore";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
 import uploadClient from "../../services/uploadClient";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
-import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
 import {
   canAddGroupMembers,
   canLeaveGroup,
@@ -54,6 +54,7 @@ import { transferOwnershipUseCase } from "../../features/chat/usecases/transferO
 import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
 import { banMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+import { APP_BASE_PATH } from "../../config";
 
 import {
   AddMemberModal,
@@ -364,26 +365,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
-  const [isPinned, setIsPinned] = useState(() => Boolean(conversation.isPinned));
 
-  // Security settings local state
+  const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
+  const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
+  const isPinned = pinnedConversationIds.includes(conversation.id);
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
 
-  const handleTogglePin = useCallback(async () => {
-    const next = !isPinned;
-    setIsPinned(next);
-    updateConversation(conversation.id, { isPinned: next });
-    try {
-      await updateConversationUseCase(conversation.id, { isPinned: next });
-    } catch {
-      setIsPinned(!next);
-      updateConversation(conversation.id, { isPinned: !next });
-      toast.error(next ? "Ghim hội thoại thất bại" : "Bỏ ghim hội thoại thất bại");
-    }
-  }, [isPinned, conversation.id, updateConversation]);
+  const handleTogglePin = useCallback(() => {
+    togglePinnedConversation(conversation.id);
+    toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+  }, [isPinned, conversation.id, togglePinnedConversation]);
 
   const inviteLinks = useGroupStore(
     (state) => state.inviteLinksByConversation[conversation.id] ?? EMPTY_INVITE_LINKS,
@@ -576,12 +570,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           ? inviteLinksPayload.reduce<InviteLinkItem[]>((items, item) => {
               if (!isRecord(item) || typeof item.id !== "string") return items;
               if (asString(item.revokedAt)) return items;
+              const linkToken = asString(item.token);
+              const linkInviteUrl = asString(item.inviteUrl)
+                ?? (linkToken ? `${window.location.origin}${APP_BASE_PATH}/join/${linkToken}` : undefined);
               items.push({
                 id: item.id,
                 conversationId: resolveConversationId(item, { source: "GroupInfo.inviteLinks" }) ?? conversation.id,
                 name: asString(item.name),
-                inviteUrl: asString(item.inviteUrl),
-                token: asString(item.token),
+                inviteUrl: linkInviteUrl,
+                token: linkToken,
                 tokenPreview: asString(item.tokenPreview),
                 usageCount: typeof item.usageCount === "number" ? item.usageCount : 0,
                 usageLimit: typeof item.usageLimit === "number" ? item.usageLimit : null,
@@ -1341,7 +1338,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     ) : (
                       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
                         {inviteLinks.map((link) => {
-                          const shareValue = link.inviteUrl || link.token || link.tokenPreview || "";
+                          const shareValue = link.inviteUrl || link.token || "";
                           const isRevoked = Boolean(link.revokedAt);
                           return (
                             <div key={link.id} className="flex flex-col gap-2 px-3 py-3">

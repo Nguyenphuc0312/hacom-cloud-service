@@ -1,4 +1,5 @@
 import type { Conversation, UserSummary } from "../types";
+import { useUIStore } from "../stores/uiStore";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -239,6 +240,11 @@ export const compareConversationsByActivity = (
   a: Conversation,
   b: Conversation,
 ): number => {
+  const pinnedIds = useUIStore.getState().pinnedConversationIds;
+  const aPinned = pinnedIds.includes(a.id);
+  const bPinned = pinnedIds.includes(b.id);
+  if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
   const aActivity = getConversationActivityTimestamp(a);
   const bActivity = getConversationActivityTimestamp(b);
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useDebounce } from "../../../hooks";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
@@ -375,6 +375,16 @@ export const useFriendSuggestions = (options?: UseFriendSuggestionsOptions) => {
   const rawFriends = useFriendshipStore((state) => state.friends);
   const isLoading = useFriendshipStore((state) => state.isFriendsLoading);
   const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
+  const fetchFriends = useFriendshipStore((state) => state.fetchFriends);
+
+  // Trigger fetch một lần khi store chưa hydrate (chưa vào trang Danh bạ)
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (enabled && !hasHydrated && !isLoading && !fetchedRef.current) {
+      fetchedRef.current = true;
+      void fetchFriends();
+    }
+  }, [enabled, hasHydrated, isLoading, fetchFriends]);
 
   const suggestions = useMemo(() => {
     if (!enabled) return [];
