@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -138,7 +138,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
           {/* Left accent stripe */}
           <div
             className="w-[3px] flex-shrink-0 self-stretch rounded-full"
-            style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
+            style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
           />
 
           {/* Thumbnail for image/video */}

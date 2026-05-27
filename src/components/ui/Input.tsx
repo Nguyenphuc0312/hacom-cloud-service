@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Input component
  * Form input with semantic tokens.
  */
@@ -94,7 +94,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               "focus:outline-none",
               !error &&
                 !isValid &&
-                "border-border focus:border-[#FFC857]/60 focus:ring-2 focus:ring-[#FFC857]/15",
+                "border-border focus:border-[#1976D2]/60 focus:ring-2 focus:ring-[#1976D2]/15",
               error &&
                 "border-danger pr-10 focus:border-danger focus:ring-danger/16",
               isValid &&
@@ -214,7 +214,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             "w-full resize-none rounded-md border border-border bg-surface px-4 py-3",
             "text-body-sm text-text-primary placeholder:text-text-muted",
             "transition-all duration-200",
-            "focus:border-[#FFC857]/60 focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15 focus:ring-offset-0",
+            "focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15 focus:ring-offset-0",
             error && "border-danger focus:border-danger focus:ring-danger/16",
             disabled &&
               "cursor-not-allowed border-disabled-border bg-disabled-bg text-text-disabled opacity-70",

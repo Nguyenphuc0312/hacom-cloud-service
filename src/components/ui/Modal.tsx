@@ -297,11 +297,11 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       button: "danger" as const,
     },
     warning: {
-      icon: "bg-[#FFC857]/20 text-[#C41E3A]",
+      icon: "bg-[#1976D2]/10 text-[#1565C0]",
       button: "brand" as const,
     },
     info: {
-      icon: "bg-[#FFC857]/20 text-[#C41E3A]",
+      icon: "bg-[#1976D2]/10 text-[#1565C0]",
       button: "brand" as const,
     },
   };

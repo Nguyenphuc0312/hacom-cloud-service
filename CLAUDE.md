@@ -310,17 +310,21 @@ npm run build && node scripts/verify-dist-assets.mjs
 
 ## 14. Lưu ý cá nhân hóa (memory)
 
-- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBUI.md`** trước để lấy đúng bảng màu brand (đỏ/vàng), pattern gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc (theo feedback đã lưu).
+- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBUI.md`** trước để lấy đúng bảng màu, pattern gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc.
 
-- **Button variants brand** (đã thêm vào `src/components/ui/Button.tsx`):
-  - `variant="brand"` → CTA chính (gradient đỏ→vàng). Thay thế `variant="primary"` cho các nút submit/save quan trọng.
-  - `variant="brand-outline"` → nút phụ/hủy. Thay thế `variant="outline"` / `variant="secondary"` đi kèm CTA.
-  - `variant="danger"` / `variant="ghost"` / `variant="secondary"` → giữ nguyên cho semantic action (xóa, toolbar, phụ trợ).
+- **Hai vùng màu tách biệt** (xem `WEBUI.md` mục 1):
+  - **SideRail + LoginPage**: đỏ `#D32F2F/#C41E3A` + vàng `#FFC857` — **không đổi**.
+  - **Toàn bộ app còn lại**: xanh dương `#1976D2` (medium) / `#1565C0` (dark).
 
-- **Focus ring** trên mọi input mới: `focus:border-[#FFC857]/60 focus:ring-[#FFC857]/15` (không dùng `focus:border-focus focus:ring-focus/*`).
+- **Button variants** (`src/components/ui/Button.tsx`):
+  - `variant="brand"` → gradient xanh `#1976D2 → #1565C0`, CTA chính.
+  - `variant="brand-outline"` → viền xanh, nút phụ/hủy.
+  - `variant="danger"` / `variant="ghost"` / `variant="secondary"` → giữ nguyên.
 
-- **Badge/pill brand**: đếm số → `bg-[#C41E3A]/10 text-[#C41E3A]`; filter active → `bg-[#FFC857]/20 text-[#C41E3A]`.
+- **Badge unread** (RoomItem sidebar): `bg-[#FFC857] text-[#C41E3A]` — vàng+đỏ khớp với badge trên SideRail.
 
-- **Active/hover state**: active item list → `bg-[#FFC857]/10`; hover row → `rgb(255 200 87 / 0.08)`.
+- **Focus ring**: `focus:border-[#1976D2]/60 focus:ring-[#1565C0]/25`.
 
-- Xem bảng đầy đủ tại **`WEBUI.md` mục 4.5 & 4.6**.
+- **Active item / badge filter**: `bg-[#DBEAFE]/10` hoặc `bg-[#1976D2]/10 text-[#1565C0]`.
+
+- Xem đầy đủ tại **`WEBUI.md`**.

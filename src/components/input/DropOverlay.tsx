@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview DropOverlay — full-area overlay shown when dragging files
  * over the chat window.
  *
@@ -63,13 +63,13 @@ const DropOverlayComponent: React.FC<DropOverlayProps> = ({
     >
       <div
         className={clsx(
-          "flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-[#FFC857]/60 p-10",
-          "bg-[#FFC857]/5",
+          "flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-[#1976D2]/60 p-10",
+          "bg-[#DBEAFE]/5",
           "transition-transform",
         )}
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#FFC857]/15">
-          <ArrowUpTrayIcon className="h-7 w-7 text-[#C41E3A] animate-bounce-subtle" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1976D2]/10">
+          <ArrowUpTrayIcon className="h-7 w-7 text-[#1565C0] animate-bounce-subtle" />
         </div>
         <div className="text-center">
           <p className="text-base font-semibold text-text-primary">

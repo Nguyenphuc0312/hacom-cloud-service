@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Theme Toggle Component
  * Toggle between light, dark and system themes.
  */
@@ -58,7 +58,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
             className={clsx(
               "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               theme === item.id
-                ? "bg-gradient-to-r from-[#C41E3A] to-[#D32F2F] text-white shadow-xs"
+                ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-xs"
                 : "text-text-secondary hover:bg-surface hover:text-text-primary",
             )}
               title={t(item.labelKey)}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview SearchPanel - Message search modal/panel
  * Opens from ChatHeader search icon. Debounced search with result highlighting,
  * click-to-navigate, paging, loading/error/empty states.
@@ -220,7 +220,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             className={clsx(
               "w-full rounded-lg border border-border bg-background py-2 pl-9 pr-8 text-sm text-text-primary",
               "placeholder:text-text-muted",
-              "focus:border-[#FFC857]/60 focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
+              "focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15",
             )}
             aria-label={t("chat:search.placeholder")}
           />
@@ -274,7 +274,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               <button
                 type="button"
                 onClick={goToPrevious}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30"
+                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
                 aria-label={t("chat:search.previousResult", {
                   defaultValue: "Previous result",
                 })}
@@ -284,7 +284,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               <button
                 type="button"
                 onClick={goToNext}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30"
+                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
                 aria-label={t("chat:search.nextResult", {
                   defaultValue: "Next result",
                 })}
@@ -312,8 +312,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               className={clsx(
                 "flex w-full items-start gap-3 px-4 py-3 text-left",
                 "transition-colors hover:bg-surface-overlay",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30 focus-visible:ring-inset",
-                isActive && "bg-[#FFC857]/15",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 focus-visible:ring-inset",
+                isActive && "bg-[#1976D2]/10",
               )}
               aria-current={isActive ? "true" : undefined}
             >

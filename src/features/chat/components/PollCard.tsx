@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 
 export interface PollCardOption {
@@ -41,7 +41,7 @@ export const PollCard: React.FC<PollCardProps> = ({
         className,
       )}
     >
-      <p className="text-[11px] font-bold uppercase tracking-normal text-[#C41E3A]">
+      <p className="text-[11px] font-bold uppercase tracking-normal text-[#1565C0]">
         Bình chọn nhóm
       </p>
       <h3 className="mt-1 text-base font-semibold leading-6 text-text-primary">
@@ -63,7 +63,7 @@ export const PollCard: React.FC<PollCardProps> = ({
             className={clsx(
               "w-full rounded-lg border p-3 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
               option.isSelected
-                ? "border-[#C41E3A]/40 bg-[#FFC857]/8"
+                ? "border-[#1976D2]/40 bg-[#1976D2]/8"
                 : "border-border/70 bg-surface hover:bg-surface-hover",
             )}
           >
@@ -77,7 +77,7 @@ export const PollCard: React.FC<PollCardProps> = ({
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-overlay">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857]"
+                className="h-full rounded-full bg-gradient-to-r from-[#1565C0] to-[#DBEAFE]"
                 style={{ width: `${Math.max(0, Math.min(100, option.percent))}%` }}
               />
             </div>
@@ -96,14 +96,14 @@ export const PollCard: React.FC<PollCardProps> = ({
           <button
             type="button"
             onClick={onViewDetails}
-            className="text-[#C41E3A] hover:underline"
+            className="text-[#1565C0] hover:underline"
           >
             Xem chi tiết
           </button>
           <button
             type="button"
             onClick={onRevote}
-            className="text-[#C41E3A] hover:underline"
+            className="text-[#1565C0] hover:underline"
           >
             Bình chọn lại
           </button>

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -44,7 +44,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             isDense
               ? "pl-9 pr-8 text-[13px]"
               : "pl-10 pr-9 text-[13px]",
-            "focus:border-[#FFC857]/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
+            "focus:border-[#1976D2]/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15",
           )}
           aria-label={t("sidebar:search.aria")}
         />

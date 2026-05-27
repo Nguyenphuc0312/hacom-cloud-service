@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { clsx } from "clsx";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
@@ -89,7 +89,7 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
               "border border-transparent",
               "transition-all duration-100",
               "hover:scale-125 hover:bg-surface-hover",
-              isActive && "scale-110 border-[#FFC857]/50 bg-[#FFC857]/15",
+              isActive && "scale-110 border-[#1976D2]/50 bg-[#1976D2]/10",
             )}
           >
             {emoji}

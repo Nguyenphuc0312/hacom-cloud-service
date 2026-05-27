@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview FileProgress - Progress bar component for file upload/download.
  *
  * Features:
@@ -40,7 +40,7 @@ export const FileProgress: React.FC<FileProgressProps> = ({
 
         {/* Fill */}
         <div
-          className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857] transition-all duration-300 ease-out"
+          className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-[#1565C0] to-[#DBEAFE] transition-all duration-300 ease-out"
           style={{ width: `${clampedProgress}%` }}
         />
       </div>

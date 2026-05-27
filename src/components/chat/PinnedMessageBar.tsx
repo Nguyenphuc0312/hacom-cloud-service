@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview PinnedMessageBar
  * Slim bar shown above the chat timeline that previews the latest pinned
  * message. Click to jump to it; when several messages are pinned, a counter
@@ -61,15 +61,15 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             <span
               aria-hidden="true"
               className="h-7 w-0.5 shrink-0 rounded-full"
-              style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
+              style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
             />
             <HugeiconsIcon
               icon={PinIcon}
-              className="h-[18px] w-[18px] shrink-0 text-[#C41E3A]"
+              className="h-[18px] w-[18px] shrink-0 text-[#1565C0]"
               strokeWidth={1.5}
             />
             <span className="flex min-w-0 flex-col">
-              <span className="text-[11px] font-medium leading-4 text-[#C41E3A]">
+              <span className="text-[11px] font-medium leading-4 text-[#1565C0]">
                 {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
               </span>
               <span className="truncate text-xs leading-4 text-text-secondary">
@@ -87,11 +87,11 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             <button
               type="button"
               onClick={onOpenList}
-              style={{ background: "linear-gradient(135deg, #C41E3A 0%, #FFC857 100%)" }}
+              style={{ background: "linear-gradient(135deg, #1976D2 0%, #1565C0 100%)" }}
               className={clsx(
                 "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-white",
                 "transition-micro hover:brightness-105 active:scale-95",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C41E3A]/40",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40",
               )}
               aria-label={t("chat:pinned.title", {
                 defaultValue: "Tin nhắn ghim",

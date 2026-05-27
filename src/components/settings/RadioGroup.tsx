@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview RadioGroup component for settings
  * Used for theme, font-size, density selectors.
  */
@@ -61,9 +61,9 @@ export function RadioGroup<T extends string>({
               className={clsx(
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium",
                 "transition-micro",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                 value === opt.value
-                  ? "bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-white shadow-xs"
+                  ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-xs"
                   : "bg-surface-overlay text-text-secondary hover:bg-surface-hover",
               )}
             >
@@ -91,9 +91,9 @@ export function RadioGroup<T extends string>({
               className={clsx(
                 "flex flex-col items-center gap-2 rounded-[1rem] border px-3 py-3.5",
                 "transition-micro",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                 value === opt.value
-                  ? "border-[#C41E3A]/25 bg-[#FFC857]/8 shadow-xs"
+                  ? "border-[#1976D2]/25 bg-[#1976D2]/8 shadow-xs"
                   : "border-border/70 bg-surface hover:border-border-strong hover:bg-surface-hover",
               )}
             >
@@ -102,7 +102,7 @@ export function RadioGroup<T extends string>({
                   className={clsx(
                     "flex h-10 w-10 items-center justify-center rounded-[0.9rem]",
                     value === opt.value
-                      ? "bg-[#C41E3A]/10 text-[#C41E3A]"
+                      ? "bg-[#1976D2]/10 text-[#1565C0]"
                       : "bg-surface-overlay text-text-muted",
                   )}
                 >
@@ -112,7 +112,7 @@ export function RadioGroup<T extends string>({
               <span
                 className={clsx(
                   "text-sm font-medium",
-                  value === opt.value ? "text-[#C41E3A]" : "text-text-primary",
+                  value === opt.value ? "text-[#1565C0]" : "text-text-primary",
                 )}
               >
                 {opt.label}
@@ -142,20 +142,20 @@ export function RadioGroup<T extends string>({
               aria-checked={value === opt.value}
               onClick={() => onChange(opt.value)}
               className={clsx(
-                "flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                "flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                 value === opt.value
-                  ? "border-[#C41E3A]/20 bg-[#FFC857]/8"
+                  ? "border-[#1976D2]/20 bg-[#1976D2]/8"
                   : "border-border/70 bg-surface hover:bg-surface-hover",
               )}
             >
               <span
                 className={clsx(
                   "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
-                  value === opt.value ? "border-[#C41E3A]" : "border-border-strong",
+                  value === opt.value ? "border-[#1565C0]" : "border-border-strong",
                 )}
               >
                 {value === opt.value ? (
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#C41E3A]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#1565C0]" />
                 ) : null}
               </span>
               {opt.icon ? (
@@ -163,7 +163,7 @@ export function RadioGroup<T extends string>({
                   className={clsx(
                     "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
                     value === opt.value
-                      ? "border-[#C41E3A]/20 bg-[#C41E3A]/10 text-[#C41E3A]"
+                      ? "border-[#1976D2]/20 bg-[#1976D2]/10 text-[#1565C0]"
                       : "border-border/70 bg-surface-overlay text-text-muted",
                   )}
                 >
@@ -202,18 +202,18 @@ export function RadioGroup<T extends string>({
             className={clsx(
               "flex cursor-pointer items-center gap-3 rounded-[1rem] px-3 py-2.5",
               "transition-micro hover:bg-surface-hover",
-              value === opt.value && "bg-[#FFC857]/8",
+              value === opt.value && "bg-[#1976D2]/8",
             )}
           >
             <div
               className={clsx(
                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
                 "transition-all duration-200",
-                value === opt.value ? "border-[#C41E3A]" : "border-border-strong",
+                value === opt.value ? "border-[#1565C0]" : "border-border-strong",
               )}
             >
               {value === opt.value && (
-                <div className="h-2.5 w-2.5 rounded-full bg-[#C41E3A]" />
+                <div className="h-2.5 w-2.5 rounded-full bg-[#1565C0]" />
               )}
             </div>
             <input

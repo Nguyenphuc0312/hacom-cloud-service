@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Empty State components
  */
 
@@ -345,7 +345,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               <span>Người tạo:</span>
               <span className="font-medium text-text-primary">
                 {m!.createdByName}
-                {isCreator && <span className="ml-1 text-[#C41E3A]">(bạn)</span>}
+                {isCreator && <span className="ml-1 text-[#1565C0]">(bạn)</span>}
               </span>
             </div>
           )}
@@ -455,7 +455,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-micro",
                       hasMarkedRead
                         ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
-                        : "bg-[#FFC857]/20 text-[#C41E3A] hover:bg-[#FFC857]/30",
+                        : "bg-[#1976D2]/10 text-[#1565C0] hover:bg-[#1976D2]/12",
                     )}
                   >
                     {hasMarkedRead ? (
@@ -717,14 +717,14 @@ const WeeklyCalendarWidget: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <CalendarDaysIcon className="h-5 w-5 text-[#C41E3A]" />
+          <CalendarDaysIcon className="h-5 w-5 text-[#1565C0]" />
           <span className="text-sm font-bold text-text-primary">Lịch tuần</span>
           <span className="text-sm text-text-muted">{weekLabel}</span>
           {isCurrentWeek && (
             <button
               type="button"
               onClick={() => setWeekOffset(0)}
-              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]"
+              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
               style={{
                 boxShadow: "0 1px 4px rgba(196, 30, 58, 0.3)",
               }}
@@ -801,7 +801,7 @@ const WeeklyCalendarWidget: React.FC = () => {
       {/* Loading state */}
       {storeIsLoading && (
         <div className="flex items-center justify-center py-8">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#C41E3A] border-t-transparent" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
         </div>
       )}
 
@@ -817,7 +817,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                 void fetchEvents(weekRange.start, weekRange.end);
               }
             }}
-            className="text-xs text-[#C41E3A] hover:underline"
+            className="text-xs text-[#1565C0] hover:underline"
           >
             Thử lại
           </button>
@@ -881,7 +881,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                     "text-[11px] font-semibold sm:text-xs",
                     isWeekend ? "text-rose-500" : "text-text-muted",
                   )}
-                  style={todayDay && !isWeekend ? { color: "#C41E3A" } : undefined}
+                  style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
                 >
                   {WEEKDAY_LABELS[i]}
                 </span>
@@ -895,7 +895,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                       )}
                       style={
                         todayDay
-                          ? { background: "#FFC857", color: "#C41E3A", boxShadow: "0 1px 4px rgba(255,200,87,0.45)" }
+                          ? { background: "#DBEAFE", color: "#1565C0", boxShadow: "0 1px 4px rgba(255,200,87,0.45)" }
                           : undefined
                       }
                     >
@@ -946,7 +946,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate("/calendar")}
-                    className="text-left text-[10px] font-semibold text-[#C41E3A] hover:underline sm:text-[11px]"
+                    className="text-left text-[10px] font-semibold text-[#1565C0] hover:underline sm:text-[11px]"
                   >
                     +{overflowCount} mục khác
                   </button>
@@ -967,7 +967,7 @@ const WeeklyCalendarWidget: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/calendar")}
-          className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-xs font-semibold text-transparent transition-micro hover:brightness-110 active:scale-95"
+          className="bg-gradient-to-r from-[#1976D2] to-[#1565C0] bg-clip-text text-xs font-semibold text-transparent transition-micro hover:brightness-110 active:scale-95"
         >
           Xem lịch đầy đủ →
         </button>
@@ -1065,14 +1065,14 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
         <div className="mt-4 text-center">
           <h2 className="text-[clamp(22px,2.8vw,32px)] font-extrabold leading-tight text-text-primary">
             Chào mừng đến với{" "}
-            <span className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#1976D2] to-[#1565C0] bg-clip-text text-transparent">
               Hacom Chat
             </span>
           </h2>
           <div className="mt-3 flex justify-center">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]"
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
               style={{
                 boxShadow: "0 2px 8px rgba(196, 30, 58, 0.35), 0 1px 3px rgba(255, 200, 87, 0.3)",
               }}

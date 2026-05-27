@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 
 import type { User as UserType } from "../../types";
@@ -32,7 +32,7 @@ export const UserSearchResultItem: React.FC<UserSearchResultItemProps> = ({
       className={clsx(
         "flex min-h-[72px] items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
         selected
-          ? "border-[#FFC857]/40 bg-[#FFC857]/10"
+          ? "border-[#1976D2]/40 bg-[#DBEAFE]/10"
           : "border-transparent bg-transparent hover:border-border hover:bg-surface-overlay",
         disabled && "opacity-60",
       )}
@@ -42,7 +42,7 @@ export const UserSearchResultItem: React.FC<UserSearchResultItemProps> = ({
         type="button"
         onClick={onSelect}
         disabled={disabled || !onSelect}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/30"
+        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
       >
         <Avatar
           src={avatarUrl}

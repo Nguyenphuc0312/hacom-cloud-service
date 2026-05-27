@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Security settings section.
  */
 
@@ -99,7 +99,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             type="password"
             label={t("security.currentPassword")}
             placeholder="********"
-            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
+            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
             error={errors.currentPassword?.message}
             disabled={isLoading}
             autoComplete="current-password"
@@ -111,7 +111,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
               type="password"
               label={t("security.newPassword")}
               placeholder="********"
-              leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
+              leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
               error={errors.newPassword?.message}
               disabled={isLoading}
               autoComplete="new-password"
@@ -123,18 +123,18 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             type="password"
             label={t("security.confirmPassword")}
             placeholder="********"
-            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
+            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
             error={errors.confirmPassword?.message}
             disabled={isLoading}
             autoComplete="new-password"
           />
 
-          <div className="rounded-lg border border-[#FFC857]/20 bg-[#FFC857]/6 px-4 py-3">
+          <div className="rounded-lg border border-[#1976D2]/20 bg-[#DBEAFE]/6 px-4 py-3">
             <label className="flex cursor-pointer items-start gap-3">
               <div className="relative mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
                 <input
                   type="checkbox"
-                  className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-border-strong checked:border-[#C41E3A] checked:bg-gradient-to-br checked:from-[#C41E3A] checked:to-[#D32F2F] focus:outline-none focus:ring-2 focus:ring-[#FFC857]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-border-strong checked:border-[#1565C0] checked:bg-gradient-to-br checked:from-[#1565C0] checked:to-[#1976D2] focus:outline-none focus:ring-2 focus:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:opacity-50"
                   checked={logoutOtherDevicesField.value}
                   onChange={(e) => logoutOtherDevicesField.onChange(e.target.checked)}
                   disabled={isLoading}

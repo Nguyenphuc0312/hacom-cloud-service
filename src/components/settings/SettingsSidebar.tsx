@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -88,7 +88,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               placeholder={t("searchPlaceholder", {
                 defaultValue: "Tìm cài đặt",
               })}
-              className="h-10 w-full rounded-lg border border-border bg-surface-overlay pl-9 pr-3 text-sm text-text-primary placeholder:text-text-secondary focus:border-[#FFC857]/60 focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15"
+              className="h-10 w-full rounded-lg border border-border bg-surface-overlay pl-9 pr-3 text-sm text-text-primary placeholder:text-text-secondary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
             />
           </label>
         </div>
@@ -115,10 +115,10 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => onSelect(item.id)}
                     className={clsx(
-                      "group flex w-full items-center gap-3 rounded-lg text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                      "group flex w-full items-center gap-3 rounded-lg text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                       isListMode ? "px-3 py-3" : "px-3 py-2.5",
                       isActive
-                        ? "bg-[#FFC857]/10 text-text-primary"
+                        ? "bg-[#DBEAFE]/10 text-text-primary"
                         : item.tone === "danger"
                           ? "text-danger hover:bg-danger/10"
                           : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
@@ -129,7 +129,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                         className={clsx(
                           "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
                           isActive
-                            ? "text-[#C41E3A]"
+                            ? "text-[#1565C0]"
                             : item.tone === "danger"
                               ? "text-danger"
                               : "text-text-secondary",

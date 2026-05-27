@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useRef } from "react";
+﻿import React, { forwardRef, useCallback, useRef } from "react";
 import clsx from "clsx";
 import {
   ArrowUpIcon,
@@ -141,12 +141,12 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     return (
       <div className="relative w-full">
-        <div className="relative flex flex-col rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-[#FFC857]/60 focus-within:ring-2 focus-within:ring-[#FFC857]/15 focus-within:shadow-md">
+        <div className="relative flex flex-col rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-[#1976D2]/60 focus-within:ring-2 focus-within:ring-[#1976D2]/15 focus-within:shadow-md">
           {/* Attachment chip (above textarea) */}
           {pendingAttachment && (
             <div className="px-3 pt-3">
               <div className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C41E3A]/10 text-[#C41E3A]">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
                   {isUploading ? (
                     <Loader2Icon
                       size={16}
@@ -251,7 +251,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                   type="button"
                   onClick={onStop}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:brightness-105"
-                  style={{ background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }}
+                  style={{ background: "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)" }}
                   aria-label="Dừng phản hồi"
                 >
                   <SquareIcon size={14} fill="white" />
@@ -275,7 +275,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                       : "bg-surface-active text-text-disabled cursor-not-allowed",
                   )}
                   style={canSend ? {
-                    background: "linear-gradient(to right, #C41E3A, #D32F2F, #FFC857)",
+                    background: "linear-gradient(to right, #1565C0, #1976D2, #DBEAFE)",
                     boxShadow: "0 2px 8px rgba(196,30,58,0.3)",
                   } : undefined}
                   aria-label={

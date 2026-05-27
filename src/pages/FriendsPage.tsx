@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -21,7 +21,7 @@ import {
   toast,
 } from "../components/ui";
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
-import { useAuthStore, usePresenceStore } from "../stores";
+import { useAuthStore, useChatStore, usePresenceStore } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
@@ -227,8 +227,9 @@ const proximityScore = (
   myDept?: string,
 ): number => {
   let score = 0;
-  if (myOrg && user.orgUnit?.trim().toLowerCase() === myOrg) score += 2;
-  if (myDept && user.departmentName?.trim().toLowerCase() === myDept) score += 1;
+  // Ưu tiên cùng văn phòng (department) trước, sau đó cùng công ty (orgUnit)
+  if (myDept && user.departmentName?.trim().toLowerCase() === myDept) score += 3;
+  if (myOrg && user.orgUnit?.trim().toLowerCase() === myOrg) score += 1;
   return score;
 };
 
@@ -332,6 +333,7 @@ export const FriendsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id ?? null;
+  const conversationsFromStore = useChatStore((state) => state.conversations);
 
   const {
     friends,
@@ -443,40 +445,116 @@ export const FriendsPage: React.FC = () => {
     void searchUsers(debouncedQuery);
   }, [activeTab, debouncedQuery, searchUsers]);
 
+  const friendIdSet = useMemo(
+    () => new Set(friends.map((f) => f.id)),
+    [friends],
+  );
+
+  // Trích participants từ các conversation đã có làm fallback nguồn gợi ý
+  // — bảo đảm có người hiện ra ngay cả khi API search/suggestions không trả gì.
+  const participantsFromConversations = useMemo<ContactUser[]>(() => {
+    const map = new Map<string, ContactUser>();
+    for (const conv of conversationsFromStore) {
+      const list = (conv as { participants?: Array<Record<string, unknown>> })
+        .participants;
+      if (!Array.isArray(list)) continue;
+      for (const p of list) {
+        const id = typeof p.id === "string" ? p.id : "";
+        if (!id || map.has(id)) continue;
+        map.set(
+          id,
+          toContactUser({
+            id,
+            username: typeof p.username === "string" ? p.username : undefined,
+            displayName:
+              typeof p.displayName === "string" ? p.displayName : undefined,
+            firstName:
+              typeof p.firstName === "string" ? p.firstName : undefined,
+            lastName: typeof p.lastName === "string" ? p.lastName : undefined,
+            avatar:
+              (typeof p.avatar === "string" && p.avatar) ||
+              (typeof p.avatarUrl === "string" ? p.avatarUrl : undefined),
+            status: normalizeStatus(p.status),
+            departmentName:
+              typeof p.departmentName === "string"
+                ? p.departmentName
+                : undefined,
+            orgUnit: typeof p.orgUnit === "string" ? p.orgUnit : undefined,
+            unitCode: typeof p.unitCode === "string" ? p.unitCode : undefined,
+            title: typeof p.title === "string" ? p.title : undefined,
+          }),
+        );
+      }
+    }
+    return Array.from(map.values());
+  }, [conversationsFromStore]);
+
   useEffect(() => {
-    if (activeTab !== "discover" || suggestions.length > 0) return;
+    if (activeTab !== "discover") return;
     const controller = new AbortController();
     setIsSuggestionsLoading(true);
 
-    const loadSuggestions = async () => {
-      // 1. Try dedicated suggestions endpoint
+    const tryFetch = async (
+      fn: () => Promise<unknown>,
+    ): Promise<ContactUser[]> => {
       try {
-        const res = await userApi.getSuggestions(30, { signal: controller.signal });
-        const items = normalizeSearchResults(unwrapApiSuccess(res));
-        if (items.length > 0) {
-          setSuggestions(sortByProximity(items, currentUser));
-          return;
-        }
+        const res = await fn();
+        return normalizeSearchResults(unwrapApiSuccess(res));
       } catch {
-        // endpoint may not exist — fall through to search fallback
-      }
-
-      // 2. Fallback: search by current user's department name
-      const fallbackQuery = currentUser?.departmentName?.trim() ?? currentUser?.orgUnit?.trim() ?? "";
-      if (fallbackQuery.length >= 2) {
-        try {
-          const res = await userApi.searchUsers(fallbackQuery, 1, 30, { signal: controller.signal });
-          const items = normalizeSearchResults(unwrapApiSuccess(res));
-          setSuggestions(sortByProximity(items.filter((u) => u.id !== currentUser?.id), currentUser));
-        } catch {
-          // silent
-        }
+        return [];
       }
     };
 
-    loadSuggestions().finally(() => setIsSuggestionsLoading(false));
+    const loadSuggestions = async () => {
+      const collected = new Map<string, ContactUser>();
+      const addAll = (items: ContactUser[]) => {
+        for (const u of items) {
+          if (!u.id) continue;
+          if (u.id === currentUser?.id) continue;
+          if (friendIdSet.has(u.id)) continue;
+          if (!collected.has(u.id)) collected.set(u.id, u);
+        }
+      };
+
+      // 0. Seed ngay từ participants của các conversation hiện có
+      //    → list không trống trong lúc network đang chạy.
+      addAll(participantsFromConversations);
+
+      // 1. Endpoint suggestions chính thức (nếu có)
+      addAll(
+        await tryFetch(() =>
+          userApi.getSuggestions(30, { signal: controller.signal }),
+        ),
+      );
+
+      // 2. Quét toàn bộ tài khoản: gọi search theo từng chữ cái a-z + ký tự VN
+      //    (backend chưa có endpoint list-all) → gom dedup → sort theo tên.
+      const ALPHABET = "abcdefghijklmnopqrstuvwxyzăâđêôơư".split("");
+      const results = await Promise.all(
+        ALPHABET.map((ch) =>
+          tryFetch(() =>
+            userApi.searchUsers(ch, 1, 50, { signal: controller.signal }),
+          ),
+        ),
+      );
+      results.forEach(addAll);
+
+      if (!controller.signal.aborted) {
+        const sorted = Array.from(collected.values()).sort((a, b) =>
+          toDisplayName(a).localeCompare(toDisplayName(b), "vi"),
+        );
+        setSuggestions(sorted);
+      }
+    };
+
+    loadSuggestions().finally(() => {
+      if (!controller.signal.aborted) setIsSuggestionsLoading(false);
+    });
     return () => controller.abort();
-  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+    // participantsFromConversations dùng làm seed nhanh — không đưa vào deps
+    // để tránh re-fetch alphabet mỗi khi conversations đổi (presence/typing).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentUser, friendIdSet]);
 
   const handleMessage = useCallback(
     async (userId: string) => {
@@ -867,7 +945,7 @@ export const FriendsPage: React.FC = () => {
         subtitle={t("friends:subtitle")}
         badge={
           pendingCount > 0 ? (
-            <span className="inline-flex items-center rounded-full bg-[#C41E3A]/10 px-2 py-1 text-[11px] font-semibold text-[#C41E3A]">
+            <span className="inline-flex items-center rounded-full bg-[#1976D2]/10 px-2 py-1 text-[11px] font-semibold text-[#1565C0]">
               {t("friends:requests.incoming")} {pendingCount}
             </span>
           ) : null

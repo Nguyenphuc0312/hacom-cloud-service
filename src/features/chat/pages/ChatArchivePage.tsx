@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import {
   DocumentTextIcon,
@@ -63,7 +63,7 @@ export const ChatArchivePage: React.FC<ChatArchivePageProps> = ({
                 className={clsx(
                   "inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-medium transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                   isActive
-                    ? "bg-[#FFC857]/20 text-[#C41E3A]"
+                    ? "bg-[#1976D2]/10 text-[#1565C0]"
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
                 )}
               >

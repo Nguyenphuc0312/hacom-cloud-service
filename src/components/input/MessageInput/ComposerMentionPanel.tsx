@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { MentionCandidate } from "./types";
@@ -60,7 +60,7 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
                 "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
                 "transition-colors",
                 isActive
-                  ? "bg-[#FFC857]/15 text-text-primary"
+                  ? "bg-[#1976D2]/10 text-text-primary"
                   : "text-text-secondary hover:bg-surface-hover",
               )}
               onMouseDown={(event) => {
