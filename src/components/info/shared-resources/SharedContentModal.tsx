@@ -44,7 +44,7 @@ const modalInFlightRequests = new Map<string, Promise<unknown>>();
 
 // Module-level cache for thumbnail URLs with status tracking
 const modalThumbnailStatusCache = new Map<string, {
-  status: 'ready' | 'processing' | 'queued' | 'failed';
+  status: 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original';
   url?: string | null;
   retryAfterMs?: number | null;
   fetchedAt: number;
@@ -196,6 +196,16 @@ const ModalMediaTab: React.FC<{
     batchAbortRef.current = controller;
 
     const requestPromise = (async () => {
+      // Debug logging for QA (dev only)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[ThumbnailQA] Fetching batch-thumbnail-urls (modal)`, {
+          conversationId,
+          fileIds: needingFallback.map((i) => i.fileId),
+          needingCount: needingFallback.length,
+          timestamp: Date.now(),
+        });
+      }
+
       try {
         const response = await fileApi.batchThumbnailUrls({
           conversationId,
@@ -206,22 +216,41 @@ const ModalMediaTab: React.FC<{
 
         if (controller.signal.aborted) return null;
 
+        // Debug logging for QA (dev only)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[ThumbnailQA] Received batch-thumbnail-urls response (modal)`, {
+            conversationId,
+            totalItems: payload.items.length,
+            readyCount: payload.items.filter((i) => i.status === 'ready').length,
+            fallbackOriginalCount: payload.items.filter(
+              (i) => i.status === 'fallback_original',
+            ).length,
+            failedCount: payload.items.filter((i) => i.status === 'failed').length,
+            withUrlCount: payload.items.filter((i) => i.url).length,
+          });
+        }
+
         const newUrls: Record<string, string> = {};
         const now = Date.now();
 
         for (const item of payload.items) {
-          // Update module-level cache
+          // Update module-level cache with full status for retry logic
           modalThumbnailStatusCache.set(item.fileId, {
-            status: item.status as 'ready' | 'processing' | 'queued' | 'failed',
+            status: item.status as 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original',
             url: item.url ?? null,
             retryAfterMs: item.retryAfterMs ?? null,
             fetchedAt: now,
           });
 
-          // Use URL whenever backend provides one — status 'failed' still includes
-          // the original file URL as a fallback (variant: "original")
-          if (item.url) {
-            const resolved = resolvePublicResourceUrl(item.url, { context: 'image' });
+          // Use URL when: ready (thumbnail) OR failed/fallback_original (original file URL fallback)
+          // Apply resolvePublicResourceUrl so relative paths are resolved against FILE_BASE_URL
+          const url = item.url ?? null;
+          const hasRenderableUrl =
+            (item.status === 'ready' && url) ||
+            (url && ['failed', 'fallback_original'].includes(item.status));
+
+          if (hasRenderableUrl && url) {
+            const resolved = resolvePublicResourceUrl(url, { context: 'image' });
             if (resolved) newUrls[item.fileId] = resolved;
           }
         }
@@ -257,7 +286,7 @@ const ModalMediaTab: React.FC<{
       });
 
     return () => controller.abort();
-  }, [itemsKey, items, conversationId, thumbnailUrls]);
+  }, [itemsKey, items, conversationId]);
 
   if (isLoading) {
     return (
@@ -326,7 +355,7 @@ const ModalMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string, alt: string) => void;
-}> = ({ item, fallbackUrl, onImageClick }) => {
+}> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
@@ -364,7 +393,7 @@ const ModalMediaThumb: React.FC<{
       )}
     </button>
   );
-};
+});
 
 // ─── Modal Files Tab ──────────────────────────────────────────────────────────
 
