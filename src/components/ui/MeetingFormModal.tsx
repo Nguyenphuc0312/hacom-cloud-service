@@ -8,6 +8,7 @@ import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline"
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 import { useFriendshipStore } from "../../stores/friendshipStore";
+import { useAuthStore } from "../../stores/authStore";
 import { Avatar } from "../common/Avatar";
 import { resolvePublicResourceUrl } from "../../config";
 
@@ -146,6 +147,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const friends = useFriendshipStore((s) => s.friends);
   const isFriendsLoading = useFriendshipStore((s) => s.isFriendsLoading);
   const fetchFriends = useFriendshipStore((s) => s.fetchFriends);
+  const currentUser = useAuthStore((s) => s.user);
 
   React.useEffect(() => {
     if (isOpen && friends.length === 0 && !isFriendsLoading) {
@@ -153,9 +155,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     }
   }, [isOpen, friends.length, isFriendsLoading, fetchFriends]);
 
+  const looksLikeCode = (s: string): boolean =>
+    /^[a-z0-9._-]+$/i.test(s) && !/\s/.test(s);
+
   const friendOptions = React.useMemo(() => {
-    const looksLikeCode = (s: string): boolean =>
-      /^[a-z0-9._-]+$/i.test(s) && !/\s/.test(s);
     const pickName = (f: typeof friends[number]): string => {
       const hr =
         (f.fullNameFromHR ?? "").trim() ||
@@ -166,7 +169,6 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         [f.firstName, f.lastName].filter(Boolean).join(" ").trim();
       const display =
         (f.effectiveDisplayName ?? "").trim() || (f.displayName ?? "").trim();
-      // Ưu tiên tên người (có dấu cách, không giống mã/email)
       if (hr) return hr;
       if (full) return full;
       if (display && !looksLikeCode(display)) return display;
@@ -180,10 +182,38 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         employeeCode: f.employeeCode || f.employee_code || "",
         department: f.departmentName || f.orgUnit || "",
         title: f.title || "",
+        isSelf: false as const,
       }))
       .filter((f) => f.name)
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-  }, [friends]);
+  }, [friends, looksLikeCode]);
+
+  // Tùy chọn "bản thân" đặt ở đầu danh sách
+  const selfOption = React.useMemo(() => {
+    if (!currentUser) return null;
+    const hr =
+      (currentUser.fullNameFromHR ?? "").trim() ||
+      (currentUser.full_name_from_hr ?? "").trim() ||
+      (currentUser.hrLegalName ?? "").trim();
+    const full =
+      (currentUser.fullName ?? "").trim() ||
+      [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ").trim();
+    const display =
+      (currentUser.effectiveDisplayName ?? "").trim() ||
+      (currentUser.displayName ?? "").trim();
+    const name =
+      hr || full || (display && !looksLikeCode(display) ? display : "") || display || currentUser.username || "";
+    if (!name) return null;
+    return {
+      id: currentUser.id,
+      name,
+      avatar: currentUser.avatar || "",
+      employeeCode: currentUser.employeeCode || currentUser.employee_code || "",
+      department: currentUser.departmentName || currentUser.orgUnit || "",
+      title: currentUser.title || "",
+      isSelf: true as const,
+    };
+  }, [currentUser, looksLikeCode]);
   const [showFriendPicker, setShowFriendPicker] = React.useState(false);
   const mentionQuery = participantInput.startsWith("@")
     ? participantInput.slice(1).trim().toLowerCase()
@@ -199,24 +229,45 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const chairmanPickerOpen = showChairmanPicker || isChairmanMentioning;
   const filteredChairmanOptions = React.useMemo(() => {
     const q = isChairmanMentioning ? chairmanMentionQuery : chairmanInput.trim().toLowerCase();
-    if (!q) return friendOptions;
-    return friendOptions.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.employeeCode.toLowerCase().includes(q) ||
-        f.department.toLowerCase().includes(q),
-    );
-  }, [friendOptions, chairmanMentionQuery, isChairmanMentioning, chairmanInput]);
+    const matchesSelf = (opt: NonNullable<typeof selfOption>) =>
+      !q ||
+      opt.name.toLowerCase().includes(q) ||
+      opt.employeeCode.toLowerCase().includes(q) ||
+      opt.department.toLowerCase().includes(q);
+    const friendsFiltered = !q
+      ? friendOptions
+      : friendOptions.filter(
+          (f) =>
+            f.name.toLowerCase().includes(q) ||
+            f.employeeCode.toLowerCase().includes(q) ||
+            f.department.toLowerCase().includes(q),
+        );
+    if (selfOption && matchesSelf(selfOption)) {
+      return [selfOption, ...friendsFiltered.filter((f) => f.id !== selfOption.id)];
+    }
+    return friendsFiltered;
+  }, [friendOptions, selfOption, chairmanMentionQuery, isChairmanMentioning, chairmanInput]);
+
   const filteredFriendOptions = React.useMemo(() => {
     const q = isMentioning ? mentionQuery : participantInput.trim().toLowerCase();
-    if (!q) return friendOptions;
-    return friendOptions.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.employeeCode.toLowerCase().includes(q) ||
-        f.department.toLowerCase().includes(q),
-    );
-  }, [friendOptions, mentionQuery, isMentioning, participantInput]);
+    const matchesSelf = (opt: NonNullable<typeof selfOption>) =>
+      !q ||
+      opt.name.toLowerCase().includes(q) ||
+      opt.employeeCode.toLowerCase().includes(q) ||
+      opt.department.toLowerCase().includes(q);
+    const friendsFiltered = !q
+      ? friendOptions
+      : friendOptions.filter(
+          (f) =>
+            f.name.toLowerCase().includes(q) ||
+            f.employeeCode.toLowerCase().includes(q) ||
+            f.department.toLowerCase().includes(q),
+        );
+    if (selfOption && matchesSelf(selfOption)) {
+      return [selfOption, ...friendsFiltered.filter((f) => f.id !== selfOption.id)];
+    }
+    return friendsFiltered;
+  }, [friendOptions, selfOption, mentionQuery, isMentioning, participantInput]);
 
   // Reset / pre-fill form khi mở modal
   React.useEffect(() => {
@@ -604,13 +655,20 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                             className="shrink-0"
                           />
                           <div className="min-w-0 flex-1">
-                            <span
-                              className={clsx(
-                                "block truncate text-sm font-medium",
-                                selected ? "text-[#1565C0]" : "text-text-primary",
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span
+                                className={clsx(
+                                  "truncate text-sm font-medium",
+                                  selected ? "text-[#1565C0]" : "text-text-primary",
+                                )}
+                              >
+                                {f.name}
+                              </span>
+                              {f.isSelf && (
+                                <span className="shrink-0 rounded-full bg-[#1976D2]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1565C0]">
+                                  Bạn
+                                </span>
                               )}
-                            >
-                              {f.name}
                             </span>
                             {(f.department || f.title) && (
                               <p className="truncate text-[11px] text-text-muted">
@@ -748,15 +806,22 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                             className="shrink-0"
                           />
                           <div className="min-w-0 flex-1">
-                            <span
-                              className={clsx(
-                                "block truncate text-sm font-medium",
-                                checked
-                                  ? "text-teal-700 dark:text-teal-300"
-                                  : "text-text-primary",
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span
+                                className={clsx(
+                                  "truncate text-sm font-medium",
+                                  checked
+                                    ? "text-teal-700 dark:text-teal-300"
+                                    : "text-text-primary",
+                                )}
+                              >
+                                {f.name}
+                              </span>
+                              {f.isSelf && (
+                                <span className="shrink-0 rounded-full bg-[#1976D2]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1565C0]">
+                                  Bạn
+                                </span>
                               )}
-                            >
-                              {f.name}
                             </span>
                             {(f.department || f.title) && (
                               <p className="truncate text-[11px] text-text-muted">

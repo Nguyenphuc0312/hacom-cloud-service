@@ -202,8 +202,9 @@ const EventDetailModal: React.FC<{
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onRequestDelete?: () => void;
-}> = ({ event, currentUserId, onClose, onEdit, onDelete, onRequestDelete }) => {
+}> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [showEditConfirm, setShowEditConfirm] = React.useState(false);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -346,7 +347,7 @@ const EventDetailModal: React.FC<{
                 <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
                   <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
-                    Thành phần ({attendees.length})
+                    Thành viên ({attendees.length})
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {attendees.slice(0, 10).map((name, idx) => (
@@ -372,7 +373,7 @@ const EventDetailModal: React.FC<{
               <div className="flex items-center gap-3">
                 <ExclamationCircleIcon className="h-5 w-5 shrink-0 text-text-muted" />
                 <p className="text-xs text-text-muted">
-                  {visibility === "PRIVATE" ? "Riêng tư" :
+                  {visibility === "PRIVATE" ? "Ghi chú" :
                     visibility === "TEAM" ? "Nhóm" :
                     visibility === "UNIT" ? "Đơn vị" :
                     visibility === "PUBLIC" ? "Công khai" :
@@ -397,7 +398,7 @@ const EventDetailModal: React.FC<{
               {canDelete && (
                 <button
                   type="button"
-                  onClick={onRequestDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
                 >
                   <TrashIcon className="h-4 w-4" />
@@ -407,7 +408,7 @@ const EventDetailModal: React.FC<{
               {canEdit && (
                 <button
                   type="button"
-                  onClick={onEdit}
+                  onClick={() => setShowEditConfirm(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
                 >
                   <PencilSquareIcon className="h-4 w-4" />
@@ -418,6 +419,32 @@ const EventDetailModal: React.FC<{
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          onDelete?.();
+        }}
+        title="Xóa sự kiện"
+        message="Bạn có chắc muốn xóa sự kiện này? Hành động không thể hoàn tác."
+        confirmText="Xóa"
+        variant="danger"
+      />
+      <ConfirmDialog
+        isOpen={showEditConfirm}
+        onClose={() => setShowEditConfirm(false)}
+        onConfirm={() => {
+          setShowEditConfirm(false);
+          onEdit?.();
+        }}
+        title="Chỉnh sửa sự kiện"
+        message="Bạn có muốn chỉnh sửa sự kiện này không?"
+        confirmText="Chỉnh sửa"
+        cancelText="Hủy"
+        variant="info"
+      />
     </div>
   );
 };
@@ -984,12 +1011,7 @@ export const CalendarPage: React.FC = () => {
     }
   }, [selectedEvent, deleteEvent]);
 
-  // Handle request delete — open confirm dialog
-  const handleRequestDelete = useCallback(() => {
-    setShowDeleteConfirm(true);
-  }, []);
-
-  // Handle successful edit — close modal, refresh events
+// Handle successful edit — close modal, refresh events
   const handleEditSuccess = useCallback(() => {
     setEditingEvent(null);
     setSelectedEvent(null);
@@ -1352,7 +1374,6 @@ export const CalendarPage: React.FC = () => {
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
-          onRequestDelete={handleRequestDelete}
         />
       )}
 

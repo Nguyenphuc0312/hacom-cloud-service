@@ -37,6 +37,7 @@ import {
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
 import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
+import { ConfirmDialog } from "./Modal";
 import { useAuthStore } from "../../stores";
 import { useCalendarStore } from "../../stores/calendarStore";
 import { toast } from "../../utils/toast";
@@ -304,6 +305,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   const m = detail.meeting;
   const apiEvent = detail.apiEvent;
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [showApiDeleteConfirm, setShowApiDeleteConfirm] = React.useState(false);
 
   const isCreator = !!(m && currentUserId && m.createdById === currentUserId);
   const isApiOwner = !!(apiEvent && currentUserId && apiEvent.ownerUserId === currentUserId);
@@ -398,7 +400,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
                   <div className="font-semibold text-teal-600 dark:text-teal-400">
-                    Thành phần ({m!.participants.length}):
+                    Thành viên ({m!.participants.length}):
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {m!.participants.map((p, idx) => (
@@ -473,7 +475,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                     <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
                     <div className="flex-1">
                       <div className="font-semibold text-teal-600 dark:text-teal-400">
-                        Thành phần ({apiEvent.attendees.length})
+                        Thành viên ({apiEvent.attendees.length})
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         {apiEvent.attendees.slice(0, 10).map((name, idx) => (
@@ -603,16 +605,25 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 size="sm"
                 leftIcon={<TrashIcon className="h-4 w-4" />}
                 className="text-danger hover:bg-danger/10"
-                onClick={async () => {
-                  if (window.confirm("Bạn có chắc muốn xóa sự kiện này?")) {
-                    await onDeleteApiEvent?.(detail.id);
-                  }
-                }}
+                onClick={() => setShowApiDeleteConfirm(true)}
               >
                 Xóa
               </Button>
             </div>
           )}
+
+          <ConfirmDialog
+            isOpen={showApiDeleteConfirm}
+            onClose={() => setShowApiDeleteConfirm(false)}
+            onConfirm={async () => {
+              setShowApiDeleteConfirm(false);
+              await onDeleteApiEvent?.(detail.id);
+            }}
+            title="Xóa sự kiện"
+            message="Bạn có chắc muốn xóa sự kiện này? Hành động không thể hoàn tác."
+            confirmText="Xóa"
+            variant="danger"
+          />
 
           {/* Action footer: chỉ người tạo mới có Sửa/Xóa */}
           {isLocalMeeting && isCreator && (

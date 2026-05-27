@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -29,6 +29,7 @@ import {
 } from "../../features/chat/hooks/useChatUserSearch";
 import { sendFriendRequestUseCase } from "../../features/chat/usecases/sendFriendRequest";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -70,6 +71,14 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     () => Object.values(selectedUsersById),
     [selectedUsersById],
   );
+
+  const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
+  const refreshDirectory = useFriendshipStore((state) => state.refreshDirectory);
+  useEffect(() => {
+    if (isOpen && !hasHydrated) {
+      void refreshDirectory();
+    }
+  }, [isOpen, hasHydrated, refreshDirectory]);
 
   const { results, isLoading: isSearchLoading, errorMessage, debouncedQuery } = useChatUserSearch(
     searchQuery,
@@ -204,19 +213,27 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   }, [groupName, onClose, onCreateGroup, selectedUsers, t]);
 
   /* ── Footer: nút tạo nhóm luôn nằm ngoài vùng scroll ── */
+  const canCreate = selectedUsers.length > 0 && groupName.trim().length > 0;
   const modalFooter = isGroupMode ? (
-    <Button
-      fullWidth
-      size="md"
-      variant="brand"
-      onClick={() => void handleCreateGroup()}
-      isLoading={isBusy}
-      disabled={isBusy || selectedUsers.length < 1 || !groupName.trim()}
-    >
-      {selectedUsers.length > 0
-        ? t("profile:newChatModal.createGroupButton", { count: selectedUsers.length })
-        : t("profile:newChatModal.selectMembersHint", { defaultValue: "Chọn thành viên để tạo nhóm" })}
-    </Button>
+    <div className="flex flex-col gap-2">
+      {selectedUsers.length === 0 && (
+        <p className="text-center text-xs text-text-secondary">
+          {t("profile:newChatModal.selectMembersHint", { defaultValue: "Chọn ít nhất 1 thành viên để tạo nhóm" })}
+        </p>
+      )}
+      <Button
+        fullWidth
+        size="md"
+        variant={canCreate ? "brand" : "secondary"}
+        onClick={() => void handleCreateGroup()}
+        isLoading={isBusy}
+        disabled={isBusy || !canCreate}
+      >
+        {selectedUsers.length > 0
+          ? t("profile:newChatModal.createGroupButton", { count: selectedUsers.length })
+          : t("profile:newChatModal.createGroupButtonEmpty", { defaultValue: "Tạo nhóm" })}
+      </Button>
+    </div>
   ) : undefined;
 
   return (

@@ -255,7 +255,7 @@ export const Modal: React.FC<ModalProps> = ({
           {children}
         </div>
         {footer ? (
-          <div className="border-t border-border px-5 py-4 sm:px-6">{footer}</div>
+          <div className="flex-shrink-0 border-t border-border px-5 py-4 sm:px-6">{footer}</div>
         ) : null}
       </div>
     </div>
