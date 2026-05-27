@@ -14,6 +14,7 @@ import {
   UsersIcon,
   ShieldCheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PencilEdit01Icon } from "@hugeicons/core-free-icons";
@@ -27,7 +28,6 @@ import {
   Input,
   toast,
 } from "../ui";
-import { InfoMenuRow } from "./InfoMenuRow";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
@@ -120,6 +120,8 @@ const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.ADMIN]: 1,
   [RoomMemberRole.MEMBER]: 2,
 };
+
+const MEMBER_PREVIEW_COUNT = 8;
 
 const VALID_ROLES = new Set<string>([
   RoomMemberRole.OWNER,
@@ -343,6 +345,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [transferOwnershipTarget, setTransferOwnershipTarget] = useState<ModalMemberTarget>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState(false);
 
+  // Member filter / search state
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberFilterRole, setMemberFilterRole] = useState<"all" | "owner" | "admin" | "member">("all");
+  const [membersShowAll, setMembersShowAll] = useState(false);
+
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
@@ -404,6 +411,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       return aName.localeCompare(bName);
     });
   }, [createdBy, membersByUserId, participants]);
+
+  const filteredMembers = React.useMemo(() => {
+    let result = members;
+    if (memberFilterRole !== "all") {
+      result = result.filter((m) => m.role === memberFilterRole);
+    }
+    if (memberSearch.trim()) {
+      const q = memberSearch.toLowerCase();
+      result = result.filter(
+        (m) =>
+          (m.fullNameFromHR || m.displayName || m.username || "").toLowerCase().includes(q) ||
+          m.username.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [members, memberFilterRole, memberSearch]);
 
   const activeOwnerCount = React.useMemo(
     () =>
@@ -598,6 +621,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       revokeBlobUrl(current);
       return null;
     });
+    setMemberSearch("");
+    setMemberFilterRole("all");
+    setMembersShowAll(false);
   }, [conversation.id, conversation.name]);
 
   React.useEffect(
@@ -1176,7 +1202,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      {/* ── Sticky Header ── */}
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border bg-surface/95 px-4 py-3 backdrop-blur-sm">
         <h3 className="text-sm font-semibold text-text-primary">
           {t("profile:groupInfo.title")}
         </h3>
@@ -1186,121 +1213,114 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           className="icon-button-surface h-9 w-9"
           aria-label={t("common:actions.close")}
         >
-          <XMarkIcon className="w-5 h-5 text-text-muted" />
+          <XMarkIcon className="h-5 w-5 text-text-muted" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4">
-          <div className="flex flex-col items-center text-center">
-            <div className="relative mb-3">
+        {/* ── Group Hero Card ── */}
+        <div className="flex flex-col items-center px-4 pb-4 pt-6 text-center">
+          <div className="relative mb-4">
+            <div className="overflow-hidden rounded-full ring-4 ring-surface/80">
               <Avatar
                 src={groupAvatarPreview || conversation.avatar}
                 alt={conversation.name}
                 size="xl"
               />
-              {isAdmin && !isRenamingGroup && (
+            </div>
+            {isAdmin && !isRenamingGroup && (
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={isSubmitting || groupAvatarStage === "uploading"}
+                className="absolute bottom-0.5 right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-overlay shadow-sm transition-colors hover:bg-surface-hover disabled:opacity-50"
+                aria-label={t("profile:groupInfo.changeAvatar", {
+                  defaultValue: "Change group avatar",
+                })}
+              >
+                <CameraIcon className="h-3.5 w-3.5 text-text-secondary" />
+              </button>
+            )}
+          </div>
+
+          {isRenamingGroup ? (
+            <div className="w-full max-w-xs space-y-2">
+              <Input
+                type="text"
+                value={groupNameDraft}
+                onChange={(event) => setGroupNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleRenameGroup();
+                  }
+                  if (event.key === "Escape") {
+                    setIsRenamingGroup(false);
+                    setGroupNameDraft(conversation.name || "");
+                  }
+                }}
+                placeholder={t("profile:groupInfo.renamePlaceholder")}
+                disabled={isSubmitting}
+              />
+              <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={isSubmitting || groupAvatarStage === "uploading"}
-                  className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-sm transition-colors hover:bg-surface-hover"
-                  aria-label={t("profile:groupInfo.changeAvatar", {
-                    defaultValue: "Change group avatar",
-                  })}
+                  onClick={() => {
+                    setIsRenamingGroup(false);
+                    setGroupNameDraft(conversation.name || "");
+                  }}
+                  className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
                 >
-                  <CameraIcon className="h-3.5 w-3.5 text-text-secondary" />
+                  {t("common:actions.cancel")}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => void handleRenameGroup()}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+                >
+                  <CheckIcon className="h-4 w-4" />
+                  {t("common:actions.save")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <h2 className="line-clamp-2 max-w-[220px] text-base font-semibold text-text-primary">
+                {conversation.name || t("common:labels.group")}
+              </h2>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsRenamingGroup(true)}
+                  disabled={isSubmitting}
+                  className="shrink-0 rounded-md p-1 hover:bg-surface-overlay"
+                  aria-label={t("profile:groupInfo.renameGroup")}
+                >
+                  <HugeiconsIcon
+                    icon={PencilEdit01Icon}
+                    className="h-3.5 w-3.5 text-text-muted"
+                    strokeWidth={1.5}
+                  />
                 </button>
               )}
             </div>
+          )}
 
-            {isRenamingGroup ? (
-              <div className="w-full max-w-xs space-y-2">
-                <Input
-                  type="text"
-                  value={groupNameDraft}
-                  onChange={(event) => setGroupNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleRenameGroup();
-                    }
-                    if (event.key === "Escape") {
-                      setIsRenamingGroup(false);
-                      setGroupNameDraft(conversation.name || "");
-                    }
-                  }}
-                  placeholder={t("profile:groupInfo.renamePlaceholder")}
-                  disabled={isSubmitting}
-                />
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsRenamingGroup(false);
-                      setGroupNameDraft(conversation.name || "");
-                    }}
-                    className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
-                  >
-                    {t("common:actions.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleRenameGroup()}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
-                  >
-                    <CheckIcon className="w-4 h-4" />
-                    {t("common:actions.save")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-semibold text-text-primary">
-                  {conversation.name || t("common:labels.group")}
-                </h2>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setIsRenamingGroup(true)}
-                    disabled={isSubmitting}
-                    className="rounded-md p-1 hover:bg-surface-overlay"
-                    aria-label={t("profile:groupInfo.renameGroup")}
-                  >
-                    <HugeiconsIcon
-                      icon={PencilEdit01Icon}
-                      className="h-3.5 w-3.5 text-text-muted"
-                      strokeWidth={1.5}
-                    />
-                  </button>
-                )}
-              </div>
-            )}
-
-            <p className="mt-1 text-sm text-text-muted">
-              {t("profile:groupInfo.membersCount", {
-                count: participantCount,
-              })}
+          <p className="mt-1 text-sm text-text-muted">
+            {t("profile:groupInfo.membersCount", { count: participantCount })}
+          </p>
+          {groupAvatarStage !== "idle" && (
+            <p className="mt-1 text-xs text-text-muted">
+              {resolveGroupAvatarStageLabel(groupAvatarStage, groupAvatarProgress)}
             </p>
-            {groupAvatarStage !== "idle" && (
-              <p className="mt-1 text-xs text-text-muted">
-                {resolveGroupAvatarStageLabel(groupAvatarStage, groupAvatarProgress)}
-              </p>
-            )}
-          </div>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              void handleGroupAvatarChange(event);
-            }}
-          />
+          )}
+        </div>
 
-          {(canAddMembers || isAdmin) && (
-            <div className="mt-4 grid grid-cols-2 gap-2">
+        {/* ── Quick Actions Grid ── */}
+        {(canAddMembers || isAdmin) && (
+          <div className="px-4 pb-5">
+            <div className="grid grid-cols-4 gap-2">
               {canAddMembers && (
                 <button
                   type="button"
@@ -1309,12 +1329,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     setMembersExpanded(true);
                     setShowAddMember((prev) => !prev);
                   }}
-                  className="flex flex-col items-center gap-1.5 rounded-xl bg-surface-overlay py-3 transition-colors hover:bg-surface-hover"
+                  className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/15">
                     <UserPlusIcon className="h-5 w-5 text-primary" />
                   </div>
-                  <span className="text-xs font-medium text-text-secondary">
+                  <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
                     {t("profile:groupInfo.addMember")}
                   </span>
                 </button>
@@ -1326,43 +1346,77 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     setSecurityExpanded(true);
                     setShowCreateInviteForm((prev) => !prev);
                   }}
-                  className="flex flex-col items-center gap-1.5 rounded-xl bg-surface-overlay py-3 transition-colors hover:bg-surface-hover"
+                  className="group flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/15">
                     <LinkIcon className="h-5 w-5 text-primary" />
                   </div>
-                  <span className="text-xs font-medium text-text-secondary">
-                    {t("profile:groupInfo.invite.create")}
+                  <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+                    Link mời
+                  </span>
+                </button>
+              )}
+              {isAdmin && pendingJoinRequestsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSecurityExpanded(true)}
+                  className="group relative flex flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+                >
+                  <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 transition-colors group-hover:bg-warning/15">
+                    <UsersIcon className="h-5 w-5 text-warning" />
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-bold text-white">
+                      {pendingJoinRequestsCount}
+                    </span>
+                  </div>
+                  <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+                    Yêu cầu vào
                   </span>
                 </button>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="space-y-3 bg-background px-3 py-3">
-          <div className="rounded-xl border border-border bg-surface">
-            <InfoMenuRow
-              icon={<UsersIcon />}
-              label={t("profile:groupInfo.sections.members")}
-              count={participantCount}
-              expandable
-              expanded={membersExpanded}
+        {/* ── Sections ── */}
+        <div className="space-y-2 px-3 pb-6">
+          {/* Members Section */}
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <button
+              type="button"
               onClick={() => setMembersExpanded((prev) => !prev)}
-            />
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+              aria-expanded={membersExpanded}
+            >
+              <UsersIcon className="h-4 w-4 shrink-0 text-text-muted" />
+              <span className="flex-1 text-sm font-medium text-text-primary">
+                {t("profile:groupInfo.sections.members")}
+              </span>
+              <span className="text-xs text-text-muted">{participantCount}</span>
+              <ChevronDownIcon
+                className={clsx(
+                  "h-4 w-4 shrink-0 text-text-muted transition-transform duration-200",
+                  membersExpanded && "rotate-180",
+                )}
+              />
+            </button>
+
             {membersExpanded && (
-              <div className="border-t border-border py-1">
+              <div className="border-t border-border">
+                {/* Add Member Panel */}
                 {showAddMember && (
-                  <div className="space-y-2 px-4 pb-3">
+                  <div className="space-y-2 border-b border-border px-3 py-3">
+                    <p className="text-xs font-semibold text-text-muted">
+                      Thêm thành viên mới
+                    </p>
                     <Input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={t("profile:groupInfo.searchMemberPlaceholder")}
-                      leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                      leftIcon={<MagnifyingGlassIcon className="h-4 w-4" />}
                       disabled={isSubmitting}
                     />
-                    <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
+                    <div className="max-h-44 overflow-y-auto rounded-xl border border-border">
                       {isSearching ? (
                         <DirectorySkeleton count={3} />
                       ) : searchErrorMessage ? (
@@ -1405,273 +1459,347 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   </div>
                 )}
 
+                {/* Filter + Search existing members */}
+                <div className="space-y-2 px-3 py-2.5">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                    <input
+                      type="text"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      placeholder="Tìm thành viên..."
+                      className="w-full rounded-lg border border-border bg-surface-overlay py-2 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+                    {(["all", "owner", "admin", "member"] as const).map((role) => {
+                      const labels: Record<string, string> = {
+                        all: "Tất cả",
+                        owner: t("profile:groupInfo.roles.owner"),
+                        admin: t("profile:groupInfo.roles.admin"),
+                        member: t("profile:groupInfo.roles.member"),
+                      };
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => setMemberFilterRole(role)}
+                          className={clsx(
+                            "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                            memberFilterRole === role
+                              ? "bg-primary text-text-inverse"
+                              : "bg-surface-overlay text-text-muted hover:bg-surface-hover",
+                          )}
+                        >
+                          {labels[role]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Member List */}
                 {isLoadingMembers ? (
                   <DirectorySkeleton count={5} />
-                ) : members.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-text-muted">
-                    {t("profile:groupInfo.noMembers")}
+                ) : filteredMembers.length === 0 ? (
+                  <p className="px-4 py-5 text-center text-sm text-text-muted">
+                    {memberSearch.trim()
+                      ? "Không tìm thấy thành viên phù hợp"
+                      : t("profile:groupInfo.noMembers")}
                   </p>
                 ) : (
-                  <MembersList
-                    members={members}
-                    isLoading={isLoadingMembers}
-                    currentUserId={currentUserId}
-                    currentUserRole={currentUserRole}
-                    capabilities={groupCapabilities}
-                    actingMemberId={actingMemberId}
-                    onMakeAdmin={(memberId) => {
-                      const member = members.find((m) => m.id === memberId);
-                      if (member) void handleToggleMemberRole(member);
-                    }}
-                    onRemoveAdmin={(memberId) => {
-                      const member = members.find((m) => m.id === memberId);
-                      if (member) void handleToggleMemberRole(member);
-                    }}
-                    onTransferOwnership={(memberId) => {
-                      const member = members.find((m) => m.id === memberId);
-                      if (member) handleTransferOwnership(member);
-                    }}
-                    onBanMember={(memberId) => {
-                      const member = members.find((m) => m.id === memberId);
-                      if (member) handleBanMember(member);
-                    }}
-                    onRemoveMember={(memberId) => {
-                      const member = members.find((m) => m.id === memberId);
-                      if (member) handleRemoveMember(member);
-                    }}
-                  />
+                  <>
+                    <MembersList
+                      members={
+                        membersShowAll
+                          ? filteredMembers
+                          : filteredMembers.slice(0, MEMBER_PREVIEW_COUNT)
+                      }
+                      isLoading={false}
+                      currentUserId={currentUserId}
+                      currentUserRole={currentUserRole}
+                      capabilities={groupCapabilities}
+                      actingMemberId={actingMemberId}
+                      onMakeAdmin={(memberId) => {
+                        const member = members.find((m) => m.id === memberId);
+                        if (member) void handleToggleMemberRole(member);
+                      }}
+                      onRemoveAdmin={(memberId) => {
+                        const member = members.find((m) => m.id === memberId);
+                        if (member) void handleToggleMemberRole(member);
+                      }}
+                      onTransferOwnership={(memberId) => {
+                        const member = members.find((m) => m.id === memberId);
+                        if (member) handleTransferOwnership(member);
+                      }}
+                      onBanMember={(memberId) => {
+                        const member = members.find((m) => m.id === memberId);
+                        if (member) handleBanMember(member);
+                      }}
+                      onRemoveMember={(memberId) => {
+                        const member = members.find((m) => m.id === memberId);
+                        if (member) handleRemoveMember(member);
+                      }}
+                    />
+                    {filteredMembers.length > MEMBER_PREVIEW_COUNT && (
+                      <button
+                        type="button"
+                        onClick={() => setMembersShowAll((prev) => !prev)}
+                        className="flex w-full items-center justify-center gap-1.5 py-3 text-sm text-primary transition-colors hover:bg-surface-hover"
+                      >
+                        {membersShowAll ? (
+                          <>
+                            Thu gọn
+                            <ChevronDownIcon className="h-4 w-4" />
+                          </>
+                        ) : (
+                          <>
+                            Xem tất cả {filteredMembers.length} thành viên
+                            <ChevronRightIcon className="h-4 w-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
           </div>
 
+          {/* Shared Resources */}
           <SharedResourcesPreview conversationId={conversation.id} />
 
+          {/* Security Section — admin only */}
           {isAdmin && (
-            <div className="overflow-hidden rounded-xl border border-border bg-surface">
-              <InfoMenuRow
-                icon={<ShieldCheckIcon />}
-                label={t("profile:groupInfo.sections.security")}
-                badge={
-                  pendingJoinRequestsCount > 0
-                    ? pendingJoinRequestsCount
-                    : undefined
-                }
-                expandable
-                expanded={securityExpanded}
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+              <button
+                type="button"
                 onClick={() => setSecurityExpanded((prev) => !prev)}
-              />
-              {securityExpanded && (
-                <div className="space-y-4 border-t border-border p-4">
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                      {t("profile:groupInfo.tabs.inviteLinks")}
-                    </p>
-                  {showCreateInviteForm && (
-                    <div className="space-y-2 rounded-lg border border-border p-3">
-                      <Input
-                        type="text"
-                        value={inviteNameDraft}
-                        onChange={(event) =>
-                          setInviteNameDraft(event.target.value)
-                        }
-                        placeholder={t(
-                          "profile:groupInfo.invite.namePlaceholder",
-                        )}
-                        disabled={isCreatingInvite}
-                      />
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          disabled={isCreatingInvite}
-                          onClick={() => {
-                            setShowCreateInviteForm(false);
-                            setInviteNameDraft("");
-                          }}
-                          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
-                        >
-                          {t("common:actions.cancel")}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isCreatingInvite}
-                          onClick={() => void handleCreateInviteLink()}
-                          className="rounded-md bg-primary px-3 py-1.5 text-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
-                        >
-                          {isCreatingInvite
-                            ? t("common:loading.processing")
-                            : t("profile:groupInfo.invite.create")}
-                        </button>
-                      </div>
-                    </div>
+                className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+                aria-expanded={securityExpanded}
+              >
+                <ShieldCheckIcon className="h-4 w-4 shrink-0 text-text-muted" />
+                <span className="flex-1 text-sm font-medium text-text-primary">
+                  {t("profile:groupInfo.sections.security")}
+                </span>
+                {pendingJoinRequestsCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold text-white">
+                    {pendingJoinRequestsCount}
+                  </span>
+                )}
+                <ChevronDownIcon
+                  className={clsx(
+                    "h-4 w-4 shrink-0 text-text-muted transition-transform duration-200",
+                    securityExpanded && "rotate-180",
                   )}
+                />
+              </button>
 
-                  {inviteLinks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <LinkIcon className="mb-3 h-10 w-10 text-text-muted" />
-                      <p className="mb-4 text-sm text-text-muted">
-                        {t("profile:groupInfo.invite.empty")}
+              {securityExpanded && (
+                <div className="space-y-5 border-t border-border p-4">
+                  {/* Invite Links */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                        {t("profile:groupInfo.tabs.inviteLinks")}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateInviteForm(true)}
-                        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-text-inverse hover:opacity-90"
-                      >
-                        <LinkIcon className="h-4 w-4" />
-                        {t("profile:groupInfo.invite.create")}
-                      </button>
+                      {!showCreateInviteForm && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateInviteForm(true)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20"
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          {t("profile:groupInfo.invite.create")}
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="divide-y divide-border rounded-lg border border-border">
-                      {inviteLinks.map((link) => {
-                        const shareValue = link.inviteUrl || link.token || "";
-                        const isRevoked = Boolean(link.revokedAt);
-                        return (
-                          <div
-                            key={link.id}
-                            className="flex items-start justify-between gap-3 px-3 py-3"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="truncate text-sm font-medium text-text-primary">
-                                  {link.name ||
-                                    t("profile:groupInfo.invite.unnamed")}
-                                </p>
-                                {isRevoked && (
-                                  <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
-                                    {t("profile:groupInfo.invite.revokedLabel")}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 truncate text-xs text-text-muted">
-                                {link.inviteUrl || link.tokenPreview || link.id}
-                              </p>
-                              <p className="mt-1 text-xs text-text-muted">
-                                {t("profile:groupInfo.invite.usage", {
-                                  count: link.usageCount || 0,
-                                  limit:
-                                    typeof link.usageLimit === "number"
-                                      ? link.usageLimit
-                                      : "unlimited",
-                                })}
-                              </p>
-                            </div>
 
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                disabled={!shareValue}
-                                onClick={() =>
-                                  void handleCopyInviteLink(shareValue)
-                                }
-                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
-                              >
-                                <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-                                {t("common:actions.copy")}
-                              </button>
-                              {!isRevoked && (
+                    {showCreateInviteForm && (
+                      <div className="space-y-2 rounded-xl border border-border p-3">
+                        <Input
+                          type="text"
+                          value={inviteNameDraft}
+                          onChange={(event) => setInviteNameDraft(event.target.value)}
+                          placeholder={t("profile:groupInfo.invite.namePlaceholder")}
+                          disabled={isCreatingInvite}
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={isCreatingInvite}
+                            onClick={() => {
+                              setShowCreateInviteForm(false);
+                              setInviteNameDraft("");
+                            }}
+                            className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                          >
+                            {t("common:actions.cancel")}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isCreatingInvite}
+                            onClick={() => void handleCreateInviteLink()}
+                            className="rounded-md bg-primary px-3 py-1.5 text-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+                          >
+                            {isCreatingInvite
+                              ? t("common:loading.processing")
+                              : t("profile:groupInfo.invite.create")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {inviteLinks.length === 0 ? (
+                      <div className="flex flex-col items-center py-6 text-center">
+                        <LinkIcon className="mb-2 h-8 w-8 text-text-muted/50" />
+                        <p className="text-sm text-text-muted">
+                          {t("profile:groupInfo.invite.empty")}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                        {inviteLinks.map((link) => {
+                          const shareValue = link.inviteUrl || link.token || "";
+                          const isRevoked = Boolean(link.revokedAt);
+                          return (
+                            <div
+                              key={link.id}
+                              className="flex items-start justify-between gap-3 px-3 py-3"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="truncate text-sm font-medium text-text-primary">
+                                    {link.name || t("profile:groupInfo.invite.unnamed")}
+                                  </p>
+                                  {isRevoked && (
+                                    <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
+                                      {t("profile:groupInfo.invite.revokedLabel")}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-1 truncate text-xs text-text-muted">
+                                  {link.inviteUrl || link.tokenPreview || link.id}
+                                </p>
+                                <p className="mt-1 text-xs text-text-muted">
+                                  {t("profile:groupInfo.invite.usage", {
+                                    count: link.usageCount || 0,
+                                    limit:
+                                      typeof link.usageLimit === "number"
+                                        ? link.usageLimit
+                                        : "unlimited",
+                                  })}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
                                 <button
                                   type="button"
-                                  disabled={revokingInviteId === link.id}
-                                  onClick={() =>
-                                    void handleRevokeInvite(link.id)
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
+                                  disabled={!shareValue}
+                                  onClick={() => void handleCopyInviteLink(shareValue)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                                 >
-                                  <NoSymbolIcon className="h-3.5 w-3.5" />
-                                  {revokingInviteId === link.id
-                                    ? t("common:loading.processing")
-                                    : t("profile:groupInfo.invite.revoke")}
+                                  <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+                                  {t("common:actions.copy")}
                                 </button>
-                              )}
+                                {!isRevoked && (
+                                  <button
+                                    type="button"
+                                    disabled={revokingInviteId === link.id}
+                                    onClick={() => void handleRevokeInvite(link.id)}
+                                    className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
+                                  >
+                                    <NoSymbolIcon className="h-3.5 w-3.5" />
+                                    {revokingInviteId === link.id
+                                      ? t("common:loading.processing")
+                                      : t("profile:groupInfo.invite.revoke")}
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Join Requests */}
                   <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
                       {t("profile:groupInfo.tabs.joinRequests")}
+                      {pendingJoinRequestsCount > 0 && (
+                        <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger/15 px-1 text-[10px] font-bold text-danger">
+                          {pendingJoinRequestsCount}
+                        </span>
+                      )}
                     </p>
                     {joinRequests.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <CheckIcon className="mb-3 h-10 w-10 text-text-muted" />
-                  <p className="text-sm text-text-muted">
-                    {t("profile:groupInfo.joinRequests.empty")}
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border rounded-lg border border-border">
-                  {joinRequests.map((request) => {
-                    const user =
-                      membersByUserId[request.userId] ||
-                      members.find((member) => member.id === request.userId);
-                    const displayName =
-                      resolveMemberName(user) || request.userId;
-
-                    return (
-                      <div
-                        key={request.id}
-                        className="flex items-start justify-between gap-3 px-3 py-3"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <Avatar
-                            src={user?.avatar}
-                            alt={displayName}
-                            size="md"
-                            status={user?.status}
-                            showStatus
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-text-primary">
-                              {displayName}
-                            </p>
-                            <p className="truncate text-xs text-text-muted">
-                              @{user?.username || request.userId}
-                            </p>
-                            {request.note && (
-                              <p className="mt-1 truncate text-xs text-text-secondary">
-                                {request.note}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={resolvingRequestId === request.id}
-                            onClick={() =>
-                              void handleResolveJoinRequest(
-                                request.id,
-                                "approved",
-                              )
-                            }
-                            className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
-                          >
-                            {t("common:actions.approve")}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={resolvingRequestId === request.id}
-                            onClick={() =>
-                              void handleResolveJoinRequest(
-                                request.id,
-                                "rejected",
-                              )
-                            }
-                            className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
-                          >
-                            {t("common:actions.reject")}
-                          </button>
-                        </div>
+                      <div className="flex flex-col items-center py-6 text-center">
+                        <CheckIcon className="mb-2 h-8 w-8 text-text-muted/50" />
+                        <p className="text-sm text-text-muted">
+                          {t("profile:groupInfo.joinRequests.empty")}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    ) : (
+                      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                        {joinRequests.map((request) => {
+                          const user =
+                            membersByUserId[request.userId] ||
+                            members.find((member) => member.id === request.userId);
+                          const displayName = resolveMemberName(user) || request.userId;
+                          return (
+                            <div
+                              key={request.id}
+                              className="flex items-start justify-between gap-3 px-3 py-3"
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                <Avatar
+                                  src={user?.avatar}
+                                  alt={displayName}
+                                  size="md"
+                                  status={user?.status}
+                                  showStatus
+                                />
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-text-primary">
+                                    {displayName}
+                                  </p>
+                                  <p className="truncate text-xs text-text-muted">
+                                    @{user?.username || request.userId}
+                                  </p>
+                                  {request.note && (
+                                    <p className="mt-1 truncate text-xs text-text-secondary">
+                                      {request.note}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={resolvingRequestId === request.id}
+                                  onClick={() =>
+                                    void handleResolveJoinRequest(request.id, "approved")
+                                  }
+                                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
+                                >
+                                  {t("common:actions.approve")}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={resolvingRequestId === request.id}
+                                  onClick={() =>
+                                    void handleResolveJoinRequest(request.id, "rejected")
+                                  }
+                                  className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
+                                >
+                                  {t("common:actions.reject")}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1679,53 +1807,67 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
         </div>
 
+        {/* ── Danger Zone ── */}
         {(canLeaveCurrentGroup || currentUserRole === RoomMemberRole.OWNER) && (
-          <div className="border-t border-border">
-            <button
-              type="button"
-              onClick={() => setDangerZoneOpen((prev) => !prev)}
-              className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-danger/10"
-            >
-              <ExclamationTriangleIcon className="h-4 w-4 text-danger" />
-              <span className="flex-1 text-xs font-medium text-danger">
-                {t("profile:groupInfo.dangerZone", { defaultValue: "Tuỳ chọn khác" })}
-              </span>
-              <ChevronDownIcon
-                className={clsx(
-                  "h-4 w-4 text-danger transition-transform duration-200",
-                  dangerZoneOpen && "rotate-180",
-                )}
-              />
-            </button>
-            {dangerZoneOpen && (
-              <div className="space-y-1 px-4 pb-3">
-                {canLeaveCurrentGroup && (
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleLeaveGroup()}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
-                  >
-                    <ArrowRightOnRectangleIcon className="h-5 w-5" />
-                    <span>{t("profile:groupInfo.leaveGroup")}</span>
-                  </button>
-                )}
-                {currentUserRole === RoomMemberRole.OWNER && (
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleDeleteGroup()}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
-                  >
-                    <ExclamationTriangleIcon className="h-5 w-5" />
-                    <span>{t("profile:groupInfo.deleteGroup")}</span>
-                  </button>
-                )}
-              </div>
-            )}
+          <div className="px-3 pb-8">
+            <div className="overflow-hidden rounded-2xl border border-danger/20 bg-danger/5">
+              <button
+                type="button"
+                onClick={() => setDangerZoneOpen((prev) => !prev)}
+                className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-danger/10"
+              >
+                <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-danger" />
+                <span className="flex-1 text-sm font-medium text-danger">
+                  {t("profile:groupInfo.dangerZone", { defaultValue: "Tuỳ chọn khác" })}
+                </span>
+                <ChevronDownIcon
+                  className={clsx(
+                    "h-4 w-4 shrink-0 text-danger transition-transform duration-200",
+                    dangerZoneOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {dangerZoneOpen && (
+                <div className="space-y-1 border-t border-danger/20 px-4 py-3">
+                  {canLeaveCurrentGroup && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => void handleLeaveGroup()}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                    >
+                      <ArrowRightOnRectangleIcon className="h-4 w-4 shrink-0" />
+                      <span>{t("profile:groupInfo.leaveGroup")}</span>
+                    </button>
+                  )}
+                  {currentUserRole === RoomMemberRole.OWNER && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => void handleDeleteGroup()}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                    >
+                      <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+                      <span>{t("profile:groupInfo.deleteGroup")}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          void handleGroupAvatarChange(event);
+        }}
+      />
+
       <ConfirmDialog
         isOpen={pendingConfirm !== null}
         onClose={() => {
@@ -1761,7 +1903,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         variant="danger"
       />
 
-      {/* New refined modals */}
       <RemoveMemberModal
         isOpen={removeMemberTarget !== null}
         onClose={() => setRemoveMemberTarget(null)}

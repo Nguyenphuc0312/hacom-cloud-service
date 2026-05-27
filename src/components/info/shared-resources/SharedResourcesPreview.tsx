@@ -70,7 +70,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
   if (isLoading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 px-3.5 py-3">
             <Skeleton className="h-9 w-9 rounded-full" />
@@ -128,7 +128,7 @@ const ResourceCard: React.FC<{
   onToggle: () => void;
   children: React.ReactNode;
 }> = ({ icon, label, count, open, onToggle, children }) => (
-  <div className="overflow-hidden rounded-xl border border-border bg-surface">
+  <div className="overflow-hidden rounded-2xl border border-border bg-surface">
     <InfoMenuRow
       icon={icon}
       label={label}
