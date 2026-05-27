@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { RoomMemberRole } from "../../../../types";
@@ -8,36 +8,41 @@ interface MemberRoleBadgeProps {
   className?: string;
 }
 
+// Only elevated roles get a visual badge. MEMBER and RESTRICTED are implicit.
+const BADGE_CONFIG: Partial<Record<RoomMemberRole, { label: (t: (k: string) => string) => string; style: string }>> = {
+  [RoomMemberRole.OWNER]: {
+    label: (t) => t("profile:groupInfo.roles.owner"),
+    style: "bg-amber-50 text-amber-700",
+  },
+  [RoomMemberRole.ADMIN]: {
+    label: (t) => t("profile:groupInfo.roles.admin"),
+    style: "bg-[#1976D2]/8 text-[#1565C0]",
+  },
+  [RoomMemberRole.MODERATOR]: {
+    label: () => "Mod",
+    style: "bg-purple-50 text-purple-600",
+  },
+  [RoomMemberRole.BANNED]: {
+    label: () => "Banned",
+    style: "bg-danger/8 text-danger",
+  },
+};
+
 export const MemberRoleBadge: React.FC<MemberRoleBadgeProps> = ({ role, className }) => {
   const { t } = useTranslation("profile");
 
-  const roleLabels: Record<RoomMemberRole, string> = {
-    [RoomMemberRole.OWNER]: t("profile:groupInfo.roles.owner"),
-    [RoomMemberRole.ADMIN]: t("profile:groupInfo.roles.admin"),
-    [RoomMemberRole.MODERATOR]: "Mod",
-    [RoomMemberRole.MEMBER]: t("profile:groupInfo.roles.member"),
-    [RoomMemberRole.RESTRICTED]: "Hạn chế",
-    [RoomMemberRole.BANNED]: "Banned",
-  };
-
-  const roleClasses: Record<RoomMemberRole, string> = {
-    [RoomMemberRole.OWNER]: "bg-warning/15 text-warning",
-    [RoomMemberRole.ADMIN]: "bg-[#1976D2]/10 text-[#1565C0]",
-    [RoomMemberRole.MODERATOR]: "bg-purple-500/15 text-purple-600",
-    [RoomMemberRole.MEMBER]: "bg-surface-overlay text-text-muted",
-    [RoomMemberRole.RESTRICTED]: "bg-orange-500/15 text-orange-600",
-    [RoomMemberRole.BANNED]: "bg-danger/15 text-danger",
-  };
+  const config = BADGE_CONFIG[role];
+  if (!config) return null;
 
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-caption",
-        roleClasses[role] || roleClasses[RoomMemberRole.MEMBER],
+        "inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none",
+        config.style,
         className,
       )}
     >
-      {roleLabels[role] || roleLabels[RoomMemberRole.MEMBER]}
+      {config.label(t)}
     </span>
   );
 };
