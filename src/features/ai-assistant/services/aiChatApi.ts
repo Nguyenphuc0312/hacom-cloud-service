@@ -3,7 +3,11 @@ const ENDPOINTS = {
   company: `${BASE_URL}/api/chat/stream`,
   personal: `${BASE_URL}/api/chat/personal/stream`,
 };
+const UPLOAD_ENDPOINTS = {
+  personalWeeklyReport: `${BASE_URL}/api/chat/personal/weekly-report/upload`,
+};
 const TIMEOUT_MS = 60_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 import type { AiChatRequest, AiChatResponse } from "../types";
 
@@ -128,4 +132,194 @@ export async function sendAiChatMessage(
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export interface WeeklyReportUploadRequest {
+  /** Câu hỏi của user về báo cáo — required, min length 1. */
+  question: string;
+  /** Mặc định "default" nếu không có session đang hoạt động. */
+  session_id?: string;
+  company?: string;
+  week_start?: string;
+  week_end?: string;
+}
+
+export interface WeeklyReportUploadResponse extends AiChatResponse {
+  /** Trường mở rộng tuỳ backend trả về. */
+  filename?: string;
+  file_id?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Parse phần body trả về của endpoint upload weekly-report.
+ * Endpoint có thể trả về JSON thường HOẶC SSE buffered text (cùng schema
+ * với `/chat/personal/stream`). Hàm này thử cả hai để rút ra
+ * `AiChatResponse`-compatible payload.
+ */
+function parseWeeklyReportUploadBody(
+  text: string,
+): WeeklyReportUploadResponse {
+  const trimmed = text.trim();
+  if (!trimmed) return { session_id: "", answer: "" };
+
+  // 1) JSON trực tiếp
+  try {
+    const json = JSON.parse(trimmed);
+    if (json && typeof json === "object") {
+      return normalizeUploadResponse(json);
+    }
+  } catch {
+    // fallthrough
+  }
+
+  // 2) SSE buffered — tìm event "done" cuối cùng
+  const doneMatches = [
+    ...trimmed.matchAll(/event:\s*done\s*\n\s*data:\s*(.+)/g),
+  ];
+  if (doneMatches.length > 0) {
+    const lastData = doneMatches[doneMatches.length - 1][1].trim();
+    try {
+      return normalizeUploadResponse(JSON.parse(lastData));
+    } catch {
+      // fallthrough
+    }
+  }
+
+  // 3) Fallback — gom text token nếu có
+  const tokenChunks: string[] = [];
+  const tokenMatches = trimmed.matchAll(/event:\s*token\s*\n\s*data:\s*(.+)/g);
+  for (const match of tokenMatches) {
+    const raw = match[1].trim();
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && "token" in parsed) {
+        tokenChunks.push(String((parsed as { token?: unknown }).token ?? ""));
+      } else if (typeof parsed === "string") {
+        tokenChunks.push(parsed);
+      }
+    } catch {
+      tokenChunks.push(raw);
+    }
+  }
+
+  if (tokenChunks.length > 0) {
+    return { session_id: "", answer: tokenChunks.join("") };
+  }
+
+  // 4) Last resort — trả raw text dưới dạng answer
+  return { session_id: "", answer: trimmed };
+}
+
+function normalizeUploadResponse(value: unknown): WeeklyReportUploadResponse {
+  const obj = (value ?? {}) as Record<string, unknown>;
+  const answer =
+    typeof obj.answer === "string"
+      ? obj.answer
+      : typeof obj.message === "string"
+        ? (obj.message as string)
+        : "";
+  const sessionId =
+    typeof obj.session_id === "string" ? (obj.session_id as string) : "";
+  const sources = Array.isArray(obj.sources)
+    ? (obj.sources as WeeklyReportUploadResponse["sources"])
+    : undefined;
+  return {
+    ...obj,
+    session_id: sessionId,
+    answer,
+    sources,
+  } as WeeklyReportUploadResponse;
+}
+
+/**
+ * Upload weekly report file kèm câu hỏi lên endpoint AI cá nhân.
+ * Dùng XHR để có upload progress; response (JSON hoặc SSE buffered)
+ * sẽ được chuẩn hoá thành `AiChatResponse`.
+ */
+export function uploadPersonalWeeklyReport(
+  file: File,
+  body: WeeklyReportUploadRequest,
+  options?: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<WeeklyReportUploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = UPLOAD_ENDPOINTS.personalWeeklyReport;
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new AiApiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      if (options?.signal) {
+        options.signal.removeEventListener("abort", handleAbort);
+      }
+    };
+
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new AiApiError(0, "timeout"));
+    };
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new AiApiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    // ── Field order theo schema multipart/form-data của backend ──
+    form.append("session_id", body.session_id?.trim() || "default");
+    form.append("question", body.question);
+    form.append("company", body.company ?? "");
+    form.append("week_start", body.week_start ?? "");
+    form.append("week_end", body.week_end ?? "");
+    form.append("file", file, file.name);
+
+    xhr.open("POST", url, true);
+    xhr.responseType = "text";
+
+    if (options?.onProgress) {
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable && event.total > 0) {
+          const percent = Math.min(
+            100,
+            Math.round((event.loaded / event.total) * 100),
+          );
+          options.onProgress?.(percent);
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      const status = xhr.status;
+      const text = xhr.responseText ?? "";
+      if (status >= 200 && status < 300) {
+        resolve(parseWeeklyReportUploadBody(text));
+        return;
+      }
+      reject(new AiApiError(status, "http"));
+    });
+
+    xhr.addEventListener("error", () => {
+      cleanup();
+      reject(new AiApiError(0, "network"));
+    });
+
+    xhr.addEventListener("abort", () => {
+      cleanup();
+      reject(new AiApiError(0, "timeout"));
+    });
+
+    xhr.send(form);
+  });
 }
