@@ -415,7 +415,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               className={clsx(
                 "p-2 rounded-lg transition-colors flex-shrink-0",
                 activeCategory === category.id
-                  ? "bg-primary/15 text-primary"
+                  ? "bg-[#FFC857]/20 text-[#C41E3A]"
                   : "text-text-muted hover:bg-surface-overlay",
               )}
               title={category.name}

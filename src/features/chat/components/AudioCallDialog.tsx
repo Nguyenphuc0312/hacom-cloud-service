@@ -42,7 +42,7 @@ export const AudioCallDialog: React.FC<AudioCallDialogProps> = ({
         aria-modal="true"
         aria-label={`Gọi thoại ${name}`}
       >
-        <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-primary/12 text-xl font-semibold text-primary">
+        <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-[#C41E3A]/12 text-xl font-semibold text-[#C41E3A]">
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (

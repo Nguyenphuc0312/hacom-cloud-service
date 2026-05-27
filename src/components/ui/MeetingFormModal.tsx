@@ -357,10 +357,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             </p>
           )}
           <div className="ml-auto flex gap-2">
-            <Button variant="secondary" onClick={onClose} type="button">
+            <Button variant="brand-outline" onClick={onClose} type="button">
               Hủy
             </Button>
-            <Button variant="primary" onClick={handleSave} type="button">
+            <Button variant="brand" onClick={handleSave} type="button">
               {isEditMode ? "Cập nhật" : "Lưu & Gửi"}
             </Button>
           </div>
@@ -380,7 +380,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             placeholder="VD: Họp tổng kết tháng 5"
             className={clsx(
               "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
-              "focus:outline-none focus:ring-2 focus:ring-primary/30",
+              "focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
               errors.title ? "border-danger" : "border-border",
             )}
           />
@@ -409,7 +409,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             <div
               className={clsx(
                 "flex items-center gap-1 rounded-lg border bg-surface-overlay px-2 py-1.5",
-                "focus-within:ring-2 focus-within:ring-primary/30",
+                "focus-within:ring-2 focus-within:ring-[#FFC857]/15",
                 errors.date ? "border-danger" : "border-border",
               )}
             >
@@ -472,7 +472,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 onChange={(e) => setStartTime(e.target.value)}
                 className={clsx(
                   "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm font-mono text-text-primary tabular-nums",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                  "focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
                   errors.startTime ? "border-danger" : "border-border",
                 )}
               />
@@ -489,7 +489,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 onChange={(e) => setEndTime(e.target.value)}
                 className={clsx(
                   "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm font-mono text-text-primary tabular-nums",
-                  "focus:outline-none focus:ring-2 focus:ring-primary/30",
+                  "focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
                   errors.endTime ? "border-danger" : "border-border",
                 )}
               />
@@ -526,8 +526,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               className={clsx(
                 "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
                 chairmanPickerOpen
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+                  ? "border-[#C41E3A]/60 bg-[#C41E3A]/10 text-[#C41E3A]"
+                  : "border-border bg-surface-overlay text-text-secondary hover:border-[#C41E3A]/50 hover:text-[#C41E3A]",
               )}
             >
               @ Chọn từ bạn bè
@@ -549,7 +549,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             placeholder="Họ và tên người chủ trì (gõ @ để tag từ bạn bè)"
             className={clsx(
               "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
-              "focus:outline-none focus:ring-2 focus:ring-primary/30",
+              "focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15",
               errors.chairman ? "border-danger" : "border-border",
             )}
           />
@@ -581,7 +581,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                           }}
                           className={clsx(
                             "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors",
-                            selected ? "bg-teal-500/10" : "hover:bg-surface-hover",
+                            selected ? "bg-[#C41E3A]/8" : "hover:bg-surface-hover",
                           )}
                         >
                           <Avatar
@@ -594,7 +594,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                             <span
                               className={clsx(
                                 "block truncate text-sm font-medium",
-                                selected ? "text-teal-700 dark:text-teal-300" : "text-text-primary",
+                                selected ? "text-[#C41E3A]" : "text-text-primary",
                               )}
                             >
                               {f.name}
@@ -628,8 +628,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               className={clsx(
                 "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
                 pickerOpen
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+                  ? "border-[#C41E3A]/60 bg-[#C41E3A]/10 text-[#C41E3A]"
+                  : "border-border bg-surface-overlay text-text-secondary hover:border-[#C41E3A]/50 hover:text-[#C41E3A]",
               )}
             >
               @ Chọn từ bạn bè
@@ -638,7 +638,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           <div
             className={clsx(
               "flex min-h-[40px] flex-wrap gap-1.5 rounded-lg border border-border bg-surface-overlay px-2.5 py-1.5",
-              "focus-within:ring-2 focus-within:ring-primary/30",
+              "focus-within:ring-2 focus-within:ring-[#FFC857]/15",
             )}
           >
             {participants.map((p) => (
@@ -718,7 +718,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                             className={clsx(
                               "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
                               checked
-                                ? "border-teal-600 bg-teal-600 text-white"
+                                ? "border-[#C41E3A] bg-[#C41E3A] text-white"
                                 : "border-border bg-surface-overlay",
                             )}
                           >
@@ -776,9 +776,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 onClick={() => setFormat(f)}
                 className={clsx(
                   "rounded-lg border px-4 py-1.5 text-sm font-medium transition-micro",
-                  format === f
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-surface-overlay text-text-secondary hover:border-primary/50 hover:text-primary",
+                  format === f && f === "offline" && "border-[#C41E3A]/60 bg-[#C41E3A]/10 text-[#C41E3A]",
+                  format === f && f === "online" && "border-teal-500/60 bg-teal-500/10 text-teal-600 dark:text-teal-400",
+                  format !== f && "border-border bg-surface-overlay text-text-secondary hover:bg-surface-hover",
                 )}
               >
                 {f === "offline" ? "Trực tiếp (Offline)" : "Trực tuyến (Online)"}
@@ -803,7 +803,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 onFocus={() => setShowLocationSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
                 placeholder="Nhập địa điểm hoặc chọn từ danh sách đã lưu"
-                className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15"
               />
               {showLocationSuggestions && filteredSavedLocations.length > 0 && (
                 <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-surface shadow-elev2">
@@ -838,7 +838,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Thêm ghi chú cho cuộc họp (nếu có)..."
             rows={3}
-            className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+            className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#FFC857]/15 resize-none"
           />
         </div>
       </div>

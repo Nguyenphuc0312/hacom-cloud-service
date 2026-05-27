@@ -99,7 +99,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             type="password"
             label={t("security.currentPassword")}
             placeholder="********"
-            leftIcon={<LockClosedIcon className="h-4 w-4" />}
+            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
             error={errors.currentPassword?.message}
             disabled={isLoading}
             autoComplete="current-password"
@@ -111,7 +111,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
               type="password"
               label={t("security.newPassword")}
               placeholder="********"
-              leftIcon={<LockClosedIcon className="h-4 w-4" />}
+              leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
               error={errors.newPassword?.message}
               disabled={isLoading}
               autoComplete="new-password"
@@ -123,26 +123,33 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             type="password"
             label={t("security.confirmPassword")}
             placeholder="********"
-            leftIcon={<LockClosedIcon className="h-4 w-4" />}
+            leftIcon={<LockClosedIcon className="h-4 w-4 text-[#C41E3A]" />}
             error={errors.confirmPassword?.message}
             disabled={isLoading}
             autoComplete="new-password"
           />
 
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-800/50">
+          <div className="rounded-lg border border-[#FFC857]/20 bg-[#FFC857]/6 px-4 py-3">
             <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-                checked={logoutOtherDevicesField.value}
-                onChange={(e) => logoutOtherDevicesField.onChange(e.target.checked)}
-                disabled={isLoading}
-              />
+              <div className="relative mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-border-strong checked:border-[#C41E3A] checked:bg-gradient-to-br checked:from-[#C41E3A] checked:to-[#D32F2F] focus:outline-none focus:ring-2 focus:ring-[#FFC857]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  checked={logoutOtherDevicesField.value}
+                  onChange={(e) => logoutOtherDevicesField.onChange(e.target.checked)}
+                  disabled={isLoading}
+                />
+                {logoutOtherDevicesField.value && (
+                  <svg className="pointer-events-none absolute h-2.5 w-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                <p className="text-sm font-medium text-text-primary">
                   Đăng xuất khỏi các thiết bị khác
                 </p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                <p className="text-xs text-text-secondary">
                   Chọn mục này nếu bạn nghi ngờ người khác từng sử dụng tài khoản của bạn. Bạn vẫn sẽ tiếp tục đăng nhập trên thiết bị hiện tại.
                 </p>
               </div>
@@ -152,6 +159,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
           <div className="flex justify-start pt-2">
             <Button
               type="submit"
+              variant="brand"
               size="sm"
               isLoading={isLoading}
               disabled={isLoading}

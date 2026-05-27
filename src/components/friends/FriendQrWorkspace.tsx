@@ -502,6 +502,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           {capabilities.canMessage ? (
             <Button
               type="button"
+              variant="brand-yellow"
               leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
               isLoading={isProfileActionLoading === "message"}
               onClick={() => void handleOpenMessage()}
@@ -519,6 +520,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           {capabilities.canAccept ? (
             <Button
               type="button"
+              variant="brand"
               isLoading={isProfileActionLoading === "accept"}
               onClick={() =>
                 void handleProfileAction(
@@ -534,7 +536,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           {capabilities.canDecline ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="brand-outline"
               isLoading={isProfileActionLoading === "decline"}
               onClick={() =>
                 void handleProfileAction(
@@ -560,7 +562,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           {capabilities.canCancel ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="brand-outline"
               isLoading={isProfileActionLoading === "cancel"}
               onClick={() =>
                 void handleProfileAction(
@@ -582,6 +584,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         {capabilities.canSendRequest ? (
           <Button
             type="button"
+            variant="brand"
             leftIcon={<UserPlusIcon className="h-4 w-4" />}
             isLoading={isProfileActionLoading === "add"}
             onClick={() =>
@@ -691,6 +694,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           <div className="flex flex-wrap justify-center gap-2">
             <Button
               type="button"
+              variant="brand"
               leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
               onClick={handleDownloadQr}
               disabled={!myQrImageUrl}
@@ -699,7 +703,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             </Button>
             <Button
               type="button"
-              variant="secondary"
+              variant="brand-outline"
               leftIcon={<LinkIcon className="h-4 w-4" />}
               onClick={() =>
                 myQr
@@ -715,7 +719,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             </Button>
             <Button
               type="button"
-              variant="secondary"
+              variant="brand-outline"
               onClick={() => void handleShare()}
               disabled={!myQr}
             >
@@ -736,7 +740,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
       <section className="rounded-3xl border border-border bg-surface p-5">
         <div className="flex items-center gap-2">
-          <QrCodeIcon className="h-5 w-5 text-primary" />
+          <QrCodeIcon className="h-5 w-5 text-[#C41E3A]" />
           <h3 className="text-base font-semibold text-text-primary">
             {t("friends:qr.resolveTitle")}
           </h3>
@@ -755,6 +759,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           />
           <Button
             type="button"
+            variant="brand"
             isLoading={isResolving}
             leftIcon={<CheckCircleIcon className="h-4 w-4" />}
             onClick={() => void resolveCode(resolveInput)}
@@ -763,7 +768,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="brand-outline"
             leftIcon={<CameraIcon className="h-4 w-4" />}
             disabled={!supportsImageScan || isScanningImage}
             isLoading={isScanningImage}

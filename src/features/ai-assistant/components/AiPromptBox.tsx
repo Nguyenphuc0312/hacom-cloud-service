@@ -141,12 +141,12 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     return (
       <div className="relative w-full">
-        <div className="relative flex flex-col rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-border-strong focus-within:shadow-md">
+        <div className="relative flex flex-col rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-[#FFC857]/60 focus-within:ring-2 focus-within:ring-[#FFC857]/15 focus-within:shadow-md">
           {/* Attachment chip (above textarea) */}
           {pendingAttachment && (
             <div className="px-3 pt-3">
               <div className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C41E3A]/10 text-[#C41E3A]">
                   {isUploading ? (
                     <Loader2Icon
                       size={16}
@@ -250,7 +250,8 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                 <button
                   type="button"
                   onClick={onStop}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-hover transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:brightness-105"
+                  style={{ background: "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)" }}
                   aria-label="Dừng phản hồi"
                 >
                   <SquareIcon size={14} fill="white" />
@@ -270,9 +271,13 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                   className={clsx(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all",
                     canSend
-                      ? "bg-primary text-white hover:bg-primary-hover cursor-pointer"
+                      ? "text-white hover:brightness-105 cursor-pointer"
                       : "bg-surface-active text-text-disabled cursor-not-allowed",
                   )}
+                  style={canSend ? {
+                    background: "linear-gradient(to right, #C41E3A, #D32F2F, #FFC857)",
+                    boxShadow: "0 2px 8px rgba(196,30,58,0.3)",
+                  } : undefined}
                   aria-label={
                     pendingAttachment
                       ? "Gửi câu hỏi kèm tệp"

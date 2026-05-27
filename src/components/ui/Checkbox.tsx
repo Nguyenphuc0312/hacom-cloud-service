@@ -63,8 +63,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
               className={clsx(
                 "flex h-5 w-5 items-center justify-center rounded border-2 transition-all duration-200",
                 "border-border bg-surface",
-                "peer-checked:border-primary peer-checked:bg-primary",
-                "peer-focus:ring-2 peer-focus:ring-focus/20 peer-focus:ring-offset-2",
+                "peer-checked:border-[#C41E3A] peer-checked:bg-gradient-to-br peer-checked:from-[#C41E3A] peer-checked:to-[#D32F2F]",
+                "peer-focus:ring-2 peer-focus:ring-[#FFC857]/30 peer-focus:ring-offset-2",
                 !disabled && "hover:border-border-strong",
                 error &&
                   "border-danger peer-checked:border-danger peer-checked:bg-danger",

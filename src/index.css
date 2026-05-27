@@ -1199,7 +1199,7 @@ a:focus-visible {
 
   @media (hover: hover) and (pointer: fine) {
     .msg-row-hover:hover {
-      background-color: hsl(var(--color-surface-hover) / 0.18);
+      background-color: rgb(255 200 87 / 0.08);
     }
   }
 
@@ -1742,8 +1742,8 @@ a:focus-visible {
   }
 
   .input-surface:focus-within {
-    border-color: hsl(var(--color-border-focus) / 0.92);
-    box-shadow: 0 0 0 3px hsl(var(--color-focus-ring) / 0.12);
+    border-color: rgb(255 200 87 / 0.6);
+    box-shadow: 0 0 0 3px rgb(255 200 87 / 0.15);
   }
 
   .scrollbar-stable {

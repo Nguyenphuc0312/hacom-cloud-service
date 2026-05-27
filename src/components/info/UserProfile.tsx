@@ -96,7 +96,7 @@ const formatRelationshipLabel = (
 };
 
 const badgeToneByRelationship: Record<string, string> = {
-  self: "bg-primary/12 text-primary",
+  self: "bg-[#C41E3A]/10 text-[#C41E3A]",
   friend: "bg-success/12 text-success",
   incoming_request: "bg-warning/12 text-warning",
   outgoing_request: "bg-surface-overlay text-text-secondary",
@@ -286,6 +286,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <Button
             ref={editButtonRef}
             type="button"
+            variant="brand"
             fullWidth
             leftIcon={<PencilSquareIcon className="h-4 w-4" />}
             onClick={() => setIsEditOpen(true)}
@@ -324,6 +325,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {shouldShowMessageAction ? (
             <Button
               type="button"
+              variant="brand-yellow"
               fullWidth
               leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
               isLoading={actingKey === "message"}
@@ -347,6 +349,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {capabilities.canAccept ? (
             <Button
               type="button"
+              variant="brand"
               fullWidth
               isLoading={actingKey === "accept"}
               onClick={() =>
@@ -364,7 +367,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {capabilities.canDecline ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="brand-outline"
               fullWidth
               isLoading={actingKey === "decline"}
               onClick={() =>
@@ -393,7 +396,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             <Button
               type="button"
               fullWidth
-              variant="secondary"
+              variant="brand-outline"
               isLoading={actingKey === "cancel"}
               onClick={() =>
                 void handleAsyncAction(
@@ -416,6 +419,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         {capabilities.canSendRequest ? (
           <Button
             type="button"
+            variant="brand"
             fullWidth
             leftIcon={<UserPlusIcon className="h-4 w-4" />}
             isLoading={actingKey === "add"}
@@ -521,7 +525,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {user?.phone ? (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
-                        <PhoneIcon className="mt-0.5 h-5 w-5 text-text-muted" />
+                        <PhoneIcon className="mt-0.5 h-5 w-5 text-[#C41E3A]" />
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                             {t("profile:editProfileModal.phone")}
@@ -537,7 +541,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {user?.createdAt ? (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
-                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-text-muted" />
+                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-[#C41E3A]" />
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                             {t("friends:joined")}

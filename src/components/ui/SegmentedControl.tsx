@@ -51,8 +51,8 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
                 ? "min-h-[var(--control-height-sm)] px-3 text-[12px]"
                 : "min-h-[var(--control-height-md)] px-3 text-body-sm",
               active
-                ? "bg-surface-hover text-text-primary"
-                : "text-text-secondary hover:bg-surface-hover/80 hover:text-text-primary",
+                ? "bg-[#FFC857]/30 text-text-primary"
+                : "text-text-secondary hover:bg-[#FFC857]/10 hover:text-text-primary",
             )}
           >
             {option.icon ? (
@@ -66,7 +66,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
                 className={clsx(
                   "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold transition-fast",
                   active
-                    ? "bg-primary/12 text-primary"
+                    ? "bg-[#C41E3A]/10 text-[#C41E3A]"
                     : "bg-surface-overlay text-text-muted",
                 )}
               >

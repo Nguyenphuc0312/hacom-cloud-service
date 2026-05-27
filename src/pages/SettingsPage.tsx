@@ -340,7 +340,7 @@ export const SettingsPage: React.FC = () => {
           })}
           badge={
             currentUser ? (
-              <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
+              <span className="hidden rounded-full bg-[#C41E3A]/10 px-2 py-1 text-[11px] font-semibold text-[#C41E3A] sm:inline-flex">
                 {resolveUserDisplayName(currentUser, {
                   allowLegacyFallback: true,
                 })}

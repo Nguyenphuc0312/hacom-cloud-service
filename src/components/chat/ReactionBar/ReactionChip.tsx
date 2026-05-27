@@ -99,7 +99,7 @@ export const ReactionChip: React.FC<ReactionChipProps> = ({
           "border transition-all duration-100",
           "hover:scale-105 hover:shadow-xs active:scale-100",
           reactedByMe
-            ? "bg-[#EBF4FF] border-[#B5D4F4] hover:bg-[#D6E8FA]"
+            ? "bg-[#FFC857]/15 border-[#FFC857]/40 hover:bg-[#FFC857]/20"
             : "bg-surface border-border hover:bg-surface-hover",
           className,
         )}
@@ -114,7 +114,7 @@ export const ReactionChip: React.FC<ReactionChipProps> = ({
         <span
           className={clsx(
             "font-medium tabular-nums",
-            reactedByMe ? "text-[#185FA5]" : "text-text-secondary",
+            reactedByMe ? "text-[#C41E3A]" : "text-text-secondary",
           )}
         >
           {reaction.count}

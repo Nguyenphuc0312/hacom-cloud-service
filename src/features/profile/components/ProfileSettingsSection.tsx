@@ -18,7 +18,7 @@ interface SummaryItemProps {
 }
 
 const SummaryItem: React.FC<SummaryItemProps> = ({ label, value }) => (
-  <div className="grid min-w-0 gap-1 border-b border-border px-5 py-3.5 last:border-b-0 sm:grid-cols-[180px,minmax(0,1fr)] sm:gap-4">
+  <div className="grid min-w-0 gap-1 border-b border-border px-5 py-3.5 last:border-b-0 hover:bg-[#FFC857]/4 sm:grid-cols-[180px,minmax(0,1fr)] sm:gap-4">
     <dt className="text-sm font-medium text-text-secondary">
       {label}
     </dt>
@@ -96,6 +96,7 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
           <Button
             ref={actionButtonRef}
             type="button"
+            variant="brand"
             size="sm"
             leftIcon={<PencilSquareIcon className="h-4 w-4" />}
             onClick={() => setIsDialogOpen(true)}
@@ -105,18 +106,20 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
         }
       >
         <SettingsCard bodyClassName="p-0">
-          <div className="flex flex-col gap-5 border-b border-border p-5 sm:flex-row sm:items-center">
-            <Avatar
-              src={user?.avatar}
-              alt={displayName}
-              size="xl"
-              className="h-16 w-16 rounded-2xl"
-            />
+          <div className="flex flex-col gap-5 border-b border-border bg-[#FFC857]/4 p-5 sm:flex-row sm:items-center">
+            <div className="relative shrink-0">
+              <Avatar
+                src={user?.avatar}
+                alt={displayName}
+                size="xl"
+                className="h-16 w-16 rounded-2xl ring-2 ring-[#C41E3A]/20"
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <p className="break-words text-lg font-semibold leading-7 text-text-primary">
                 {displayName}
               </p>
-              <p className="mt-1 break-words text-sm font-medium text-text-secondary">
+              <p className="mt-1 break-words text-sm font-medium text-[#C41E3A]">
                 {jobTitle}
               </p>
               <p className="mt-1 break-words text-sm text-text-secondary">

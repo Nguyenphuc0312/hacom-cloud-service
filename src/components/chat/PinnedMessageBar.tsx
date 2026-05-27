@@ -60,15 +60,16 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
           >
             <span
               aria-hidden="true"
-              className="h-7 w-0.5 shrink-0 rounded-full bg-primary"
+              className="h-7 w-0.5 shrink-0 rounded-full"
+              style={{ background: "linear-gradient(180deg, #C41E3A 0%, #FFC857 100%)" }}
             />
             <HugeiconsIcon
               icon={PinIcon}
-              className="h-[18px] w-[18px] shrink-0 text-primary"
+              className="h-[18px] w-[18px] shrink-0 text-[#C41E3A]"
               strokeWidth={1.5}
             />
             <span className="flex min-w-0 flex-col">
-              <span className="text-[11px] font-medium leading-4 text-primary">
+              <span className="text-[11px] font-medium leading-4 text-[#C41E3A]">
                 {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
               </span>
               <span className="truncate text-xs leading-4 text-text-secondary">
@@ -86,10 +87,11 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             <button
               type="button"
               onClick={onOpenList}
+              style={{ background: "linear-gradient(135deg, #C41E3A 0%, #FFC857 100%)" }}
               className={clsx(
-                "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary",
-                "transition-micro hover:bg-primary/20 active:scale-95",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-white",
+                "transition-micro hover:brightness-105 active:scale-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C41E3A]/40",
               )}
               aria-label={t("chat:pinned.title", {
                 defaultValue: "Tin nhắn ghim",

@@ -357,7 +357,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               <span>Người tạo:</span>
               <span className="font-medium text-text-primary">
                 {m!.createdByName}
-                {isCreator && <span className="ml-1 text-primary">(bạn)</span>}
+                {isCreator && <span className="ml-1 text-[#C41E3A]">(bạn)</span>}
               </span>
             </div>
           )}
@@ -467,7 +467,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                       "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-micro",
                       hasMarkedRead
                         ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
-                        : "bg-primary/10 text-primary hover:bg-primary/15",
+                        : "bg-[#FFC857]/20 text-[#C41E3A] hover:bg-[#FFC857]/30",
                     )}
                   >
                     {hasMarkedRead ? (
@@ -516,7 +516,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               {!confirmDelete ? (
                 <>
                   <Button
-                    variant="outline"
+                    variant="brand-outline"
                     size="sm"
                     leftIcon={<PencilSquareIcon className="h-4 w-4" />}
                     onClick={() => m && onEdit?.(m)}
@@ -539,7 +539,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                     Xác nhận xóa lịch họp này?
                   </span>
                   <Button
-                    variant="secondary"
+                    variant="brand-outline"
                     size="sm"
                     onClick={() => setConfirmDelete(false)}
                   >
@@ -745,14 +745,17 @@ const WeeklyCalendarWidget: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <CalendarDaysIcon className="h-5 w-5 text-primary" />
+          <CalendarDaysIcon className="h-5 w-5 text-[#C41E3A]" />
           <span className="text-sm font-bold text-text-primary">Lịch tuần</span>
           <span className="text-sm text-text-muted">{weekLabel}</span>
           {isCurrentWeek && (
             <button
               type="button"
               onClick={() => setWeekOffset(0)}
-              className="rounded-full bg-primary/8 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-micro"
+              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]"
+              style={{
+                boxShadow: "0 1px 4px rgba(196, 30, 58, 0.3)",
+              }}
             >
               Hôm nay · {todayLabel}
             </button>
@@ -775,7 +778,7 @@ const WeeklyCalendarWidget: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setWeekOffset(0)}
-                className="rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-micro"
+                className="rounded px-2 py-1 text-xs font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro"
               >
                 Tuần này
               </button>
@@ -877,8 +880,8 @@ const WeeklyCalendarWidget: React.FC = () => {
                 "flex flex-col p-2 sm:p-2.5",
                 "min-h-[140px]",
                 isWeekend && "bg-surface-overlay",
-                todayDay && !isWeekend && "bg-primary/5",
               )}
+              style={todayDay && !isWeekend ? { backgroundColor: "rgba(255, 200, 87, 0.08)" } : undefined}
             >
               {/* Day header */}
               <div className="mb-2 flex flex-col items-center gap-1">
@@ -886,8 +889,9 @@ const WeeklyCalendarWidget: React.FC = () => {
                 <span
                   className={clsx(
                     "text-[11px] font-semibold sm:text-xs",
-                    isWeekend ? "text-rose-500" : todayDay ? "text-primary" : "text-text-muted",
+                    isWeekend ? "text-rose-500" : "text-text-muted",
                   )}
+                  style={todayDay && !isWeekend ? { color: "#C41E3A" } : undefined}
                 >
                   {WEEKDAY_LABELS[i]}
                 </span>
@@ -897,12 +901,13 @@ const WeeklyCalendarWidget: React.FC = () => {
                     <span
                       className={clsx(
                         "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold sm:h-6 sm:w-6 sm:text-xs",
-                        todayDay
-                          ? "bg-primary text-white"
-                          : isWeekend
-                            ? "text-rose-500"
-                            : "text-text-primary",
+                        !todayDay && (isWeekend ? "text-rose-500" : "text-text-primary"),
                       )}
+                      style={
+                        todayDay
+                          ? { background: "#FFC857", color: "#C41E3A", boxShadow: "0 1px 4px rgba(255,200,87,0.45)" }
+                          : undefined
+                      }
                     >
                       {day.getDate()}
                     </span>
@@ -951,7 +956,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate("/calendar")}
-                    className="text-left text-[10px] font-semibold text-primary hover:underline sm:text-[11px]"
+                    className="text-left text-[10px] font-semibold text-[#C41E3A] hover:underline sm:text-[11px]"
                   >
                     +{overflowCount} mục khác
                   </button>
@@ -971,7 +976,7 @@ const WeeklyCalendarWidget: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/calendar")}
-          className="text-xs font-semibold text-primary hover:underline transition-micro"
+          className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-xs font-semibold text-transparent transition-micro hover:brightness-110 active:scale-95"
         >
           Xem lịch đầy đủ →
         </button>
@@ -1068,18 +1073,23 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
 
         <div className="mt-4 text-center">
           <h2 className="text-[clamp(22px,2.8vw,32px)] font-extrabold leading-tight text-text-primary">
-            Chào mừng đến với <span className="text-primary">Hacom Chat</span>
+            Chào mừng đến với{" "}
+            <span className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-transparent">
+              Hacom Chat
+            </span>
           </h2>
           <div className="mt-3 flex justify-center">
-            <Button
-              variant="outline"
-              size="lg"
-              className="rounded-full border-primary/20 hover:bg-primary/5 hover:text-primary transition-all duration-300"
-              leftIcon={<ComputerDesktopIcon className="h-5 w-5" />}
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857]"
+              style={{
+                boxShadow: "0 2px 8px rgba(196, 30, 58, 0.35), 0 1px 3px rgba(255, 200, 87, 0.3)",
+              }}
               onClick={() => window.open("https://hacomholding-my.sharepoint.com/:f:/g/personal/admin_hacomholdings_vn/IgC3kG0k8ccjS7N7Yai-VOEXARcTnkT1pggFa0Fdn2wUEGc?e=a8UzP1", "_blank")}
             >
+              <ComputerDesktopIcon className="h-5 w-5 shrink-0" />
               {t("common:emptyState.downloadPC")}
-            </Button>
+            </button>
           </div>
         </div>
 

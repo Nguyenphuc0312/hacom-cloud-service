@@ -33,7 +33,7 @@ const KindIcon: React.FC<{
     case "pdf":
       return <DocumentTextIcon className={clsx(className, "text-danger")} />;
     case "doc":
-      return <DocumentTextIcon className={clsx(className, "text-primary")} />;
+      return <DocumentTextIcon className={clsx(className, "text-[#C41E3A]")} />;
     default:
       return <DocumentTextIcon className={className} />;
   }
@@ -55,7 +55,7 @@ const StatusBadge: React.FC<{
     case "uploading":
     case "completing":
       return (
-        <span className="text-[10px] font-medium text-primary">
+        <span className="text-[10px] font-medium text-[#C41E3A]">
           {t("chat:attachmentTray.uploading")}
         </span>
       );
@@ -198,7 +198,7 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
       ) && (
         <div className="h-1 w-full overflow-hidden rounded-full bg-border">
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-200"
+            className="h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857] transition-[width] duration-200"
             style={{ width: `${draft.progress}%` }}
             role="progressbar"
             aria-valuenow={draft.progress}
