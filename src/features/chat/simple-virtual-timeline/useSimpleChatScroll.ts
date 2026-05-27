@@ -4,7 +4,10 @@ import {
   classifySimpleMessageChange,
   type SimpleMessageChange,
 } from "./simpleMessageChange";
-import { logSimpleTimeline } from "./simpleTimelineDebug";
+import {
+  logSimpleTimeline,
+  logSimpleTimelineWithScrollState,
+} from "./simpleTimelineDebug";
 
 /**
  * Single owner for the simple timeline's scroll behavior.
@@ -29,6 +32,7 @@ import { logSimpleTimeline } from "./simpleTimelineDebug";
  */
 
 const BOTTOM_THRESHOLD_PX = 96;
+const INITIAL_SCROLL_THRESHOLD_PX = 2;
 const USER_SCROLL_IDLE_MS = 180;
 const LOAD_OLDER_THRESHOLD_PX = 160;
 
@@ -115,6 +119,10 @@ export function useSimpleChatScroll(
   // Mirrors isInitialSettled state so Rule 9's stable callback can read it
   // without capturing a stale closure.
   const isInitialSettledRef = React.useRef(false);
+  // Tracks whether Rule 1's initial scroll has fired so Rule 9 knows whether
+  // it's re-anchoring after initial settle (2px threshold) or after user
+  // interaction (96px threshold).
+  const hasCompletedInitialScrollRef = React.useRef(false);
 
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
@@ -126,6 +134,7 @@ export function useSimpleChatScroll(
   React.useLayoutEffect(() => {
     initialSettledConversationRef.current = null;
     isInitialSettledRef.current = false;
+    hasCompletedInitialScrollRef.current = false;
     prevMessagesRef.current = [];
     pendingPrependRestoreRef.current = null;
     isLoadingOlderRef.current = false;
@@ -149,9 +158,18 @@ export function useSimpleChatScroll(
     // the RAF. Keeping the ref unset lets Rule 1 retry on the next render
     // instead of being permanently blocked by a stale guard.
     const raf = requestAnimationFrame(() => {
+      // Double-check guards inside RAF to handle race conditions where
+      // isInitialLoading or conversationId changed between effect scheduling
+      // and RAF execution.
+      if (isInitialLoading) return;
+      if (messages.length === 0) return;
+      if (initialSettledConversationRef.current === conversationId) return;
+
       initialSettledConversationRef.current = conversationId;
       isInitialSettledRef.current = true;
+      hasCompletedInitialScrollRef.current = true;
       scrollElementToBottom(el, "auto");
+      // Rule 3 checks wasAtBottomRef to decide whether to auto-scroll on new messages.
       wasAtBottomRef.current = true;
       setIsAtBottom(true);
       setPendingNewMessages(0);
@@ -293,17 +311,43 @@ export function useSimpleChatScroll(
   }, [hasOlder, isFetchingOlder, loadOlder, onBottomVisible]);
 
   // Rule 6: media settled.
+  // After media/image loads, the row height increases. If we're in the initial
+  // scroll phase, we must re-anchor to the bottom using the tight 2px threshold
+  // to ensure the last message remains visible. After user interaction, we use
+  // the relaxed 96px threshold to avoid annoying scroll jumps.
   const handleMediaLoad = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (!wasAtBottomRef.current || userScrollingRef.current) {
-      logSimpleTimeline("media_load_detached_noop", {});
+      logSimpleTimelineWithScrollState(
+        "media_load_detached_noop",
+        el,
+        { wasAtBottom: wasAtBottomRef.current, userScrolling: userScrollingRef.current },
+      );
+      return;
+    }
+    // Use tight threshold for initial scroll phase to ensure last message is visible.
+    // After user has scrolled, use the larger threshold to avoid annoyance.
+    const threshold = hasCompletedInitialScrollRef.current
+      ? BOTTOM_THRESHOLD_PX
+      : INITIAL_SCROLL_THRESHOLD_PX;
+    const distanceToBottom = getDistanceToBottom(el);
+    if (distanceToBottom > threshold) {
+      logSimpleTimelineWithScrollState(
+        "media_load_noop_distance",
+        el,
+        { distanceToBottom, threshold, reason: "too_far_from_bottom" },
+      );
       return;
     }
     const raf = requestAnimationFrame(() => {
       scrollElementToBottom(el, "auto");
+      logSimpleTimelineWithScrollState(
+        "media_load_keep_bottom",
+        el,
+        { distanceToBottom, threshold },
+      );
     });
-    logSimpleTimeline("media_load_keep_bottom", {});
     // raf is intentionally not cancelled — media handlers are sparse.
     void raf;
   }, []);
@@ -332,29 +376,79 @@ export function useSimpleChatScroll(
   // prop (virtualizer.getScrollElement needs scrollRef from this hook).
   //
   // Guards:
-  //   • isInitialSettledRef — prevents firing before Rule 1 completes.
-  //   • wasAtBottomRef      — respects the user having scrolled away.
-  //   • userScrollingRef    — prevents fighting an active user scroll.
-  //   • distanceToBottom    — skips the RAF if we're already at the bottom.
+  //   • isInitialSettledRef       — prevents firing before Rule 1 completes.
+  //   • wasAtBottomRef           — respects the user having scrolled away.
+  //   • userScrollingRef         — prevents fighting an active user scroll.
+  //   • hasCompletedInitialScroll — uses 2px threshold for initial, 96px after.
+  //   • distanceToBottom > threshold — only re-anchor if user is actually near
+  //     the bottom (not detached).
   const notifyTotalSizeChanged = React.useCallback(
     (totalSize: number): (() => void) => {
-      if (!isInitialSettledRef.current) return () => undefined;
-      if (!wasAtBottomRef.current) return () => undefined;
-      if (userScrollingRef.current) return () => undefined;
+      if (!isInitialSettledRef.current) {
+        logSimpleTimelineWithScrollState(
+          "rule9_guard_skipped",
+          scrollRef.current,
+          { reason: "not_initial_settled", totalSize },
+        );
+        return () => undefined;
+      }
+      if (!wasAtBottomRef.current) {
+        logSimpleTimelineWithScrollState(
+          "rule9_guard_skipped",
+          scrollRef.current,
+          { reason: "not_at_bottom", totalSize },
+        );
+        return () => undefined;
+      }
+      if (userScrollingRef.current) {
+        logSimpleTimelineWithScrollState(
+          "rule9_guard_skipped",
+          scrollRef.current,
+          { reason: "user_scrolling", totalSize },
+        );
+        return () => undefined;
+      }
       const el = scrollRef.current;
-      if (!el) return () => undefined;
+      if (!el) {
+        return () => undefined;
+      }
       const distanceToBottom = getDistanceToBottom(el);
-      if (distanceToBottom <= BOTTOM_THRESHOLD_PX) return () => undefined;
+
+      // Use tighter threshold for initial scroll to ensure last message is visible.
+      // After user interaction, use the larger threshold to avoid annoying scroll.
+      const threshold = hasCompletedInitialScrollRef.current
+        ? BOTTOM_THRESHOLD_PX
+        : INITIAL_SCROLL_THRESHOLD_PX;
+
+      if (distanceToBottom <= threshold) {
+        logSimpleTimelineWithScrollState(
+          "rule9_guard_skipped",
+          el,
+          { reason: "near_bottom", totalSize, threshold, distanceToBottom },
+        );
+        return () => undefined;
+      }
       const raf = requestAnimationFrame(() => {
         if (!wasAtBottomRef.current || userScrollingRef.current) return;
         const elNow = scrollRef.current;
         if (!elNow) return;
-        if (getDistanceToBottom(elNow) <= BOTTOM_THRESHOLD_PX) return;
+        const currentDistance = getDistanceToBottom(elNow);
+        if (currentDistance <= threshold) return;
         scrollElementToBottom(elNow, "auto");
-        logSimpleTimeline("measurement_grow_recorrect_bottom", {
-          totalSize,
-          distanceToBottom,
-        });
+        logSimpleTimelineWithScrollState(
+          "measurement_grow_recorrect_bottom",
+          elNow,
+          {
+            totalSize,
+            distanceToBottom,
+            wasInitialScroll: !hasCompletedInitialScrollRef.current,
+          },
+        );
+      });
+      logSimpleTimelineWithScrollState("rule9_guard_passed", el, {
+        totalSize,
+        threshold,
+        distanceToBottom,
       });
       return () => cancelAnimationFrame(raf);
     },

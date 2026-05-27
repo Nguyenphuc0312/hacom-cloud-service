@@ -17,7 +17,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Attachment, Conversation, Message } from "../../../types";
+import { FileType, type Attachment, type Conversation, type Message } from "../../../types";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type { ChatLayoutState } from "../../../utils/densityPolicy";
 import type { UnreadTimelineMarker } from "../../../utils/timelinePlanner";
@@ -75,14 +75,59 @@ const EMPTY_SELECTED = new Set<string>();
 const EMPTY_INSERTED = new Set<string>();
 const EMPTY_EXPANDED = new Set<string>();
 
-const estimateRowHeight = (row: ConversationThreadRow | undefined): number => {
+/** Height multipliers for rows with media/attachments (estimated, not actual). */
+const MEDIA_HEIGHT_MULTIPLIER = 1.3;
+const LONG_TEXT_HEIGHT_MULTIPLIER = 1.15;
+const LONG_TEXT_THRESHOLD_CHARS = 200;
+
+/** Whether any item in the row has a media attachment (image/video/audio). */
+const rowHasMediaAttachment = (
+  row: ConversationThreadRow | undefined,
+): boolean => {
+  if (!row || row.kind !== "group") return false;
+  return row.items.some((item) =>
+    item.message.attachments?.some(
+      (a) =>
+        a.type === FileType.IMAGE ||
+        a.type === FileType.VIDEO ||
+        a.type === FileType.AUDIO,
+    ),
+  );
+};
+
+/** Whether any item in the row has a long text content. */
+const rowHasLongText = (
+  row: ConversationThreadRow | undefined,
+): boolean => {
+  if (!row || row.kind !== "group") return false;
+  return row.items.some(
+    (item) =>
+      item.message.content != null &&
+      item.message.content.length > LONG_TEXT_THRESHOLD_CHARS,
+  );
+};
+
+const estimateRowHeight = (
+  row: ConversationThreadRow | undefined,
+): number => {
   if (!row) return 72;
   if (row.kind === "date") return 56;
   if (row.kind === "unread") return 44;
   if (row.kind === "system") return 64;
   // group — coarse heuristic; measureElement corrects it after first paint.
   const items = row.items.length;
-  return 56 + items * 56;
+  let baseHeight = 56 + items * 56;
+
+  if (rowHasMediaAttachment(row)) {
+    // Images/videos/audio need more vertical space.
+    // The actual render expands beyond the base estimate.
+    baseHeight = Math.round(baseHeight * MEDIA_HEIGHT_MULTIPLIER);
+  } else if (rowHasLongText(row)) {
+    // Long text wraps more, increasing row height.
+    baseHeight = Math.round(baseHeight * LONG_TEXT_HEIGHT_MULTIPLIER);
+  }
+
+  return baseHeight;
 };
 
 const noopToggleExpand: (id: string) => void = () => undefined;
