@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import clsx from "clsx";
 import {
   PhotoIcon,
@@ -11,7 +11,6 @@ import {
   useGetConversationMediaQuery,
   useGetConversationFilesQuery,
   useGetConversationLinksQuery,
-  useBatchThumbnailUrlsMutation,
 } from "../../../features/api/chatApi";
 import type {
   ConversationResourcesMediaItem,
@@ -38,6 +37,17 @@ interface SharedContentModalProps {
 const MODAL_MEDIA_PAGE_SIZE = 18;
 const MODAL_FILES_PAGE_SIZE = 15;
 const MODAL_LINKS_PAGE_SIZE = 15;
+
+// Module-level in-flight request tracking to prevent duplicate calls
+const modalInFlightRequests = new Map<string, Promise<unknown>>();
+
+// Module-level cache for thumbnail URLs with status tracking
+const modalThumbnailStatusCache = new Map<string, {
+  status: 'ready' | 'processing' | 'queued' | 'failed';
+  url?: string | null;
+  retryAfterMs?: number | null;
+  fetchedAt: number;
+}>();
 
 function truncateFilename(name: string, maxLength = 32): string {
   if (name.length <= maxLength) return name;
@@ -132,7 +142,6 @@ const ModalMediaTab: React.FC<{
     forConversationId: string;
     urls: Record<string, string>;
   }>({ forConversationId: conversationId, urls: {} });
-  const [batchThumbnailUrls] = useBatchThumbnailUrlsMutation();
   const batchAbortRef = useRef<AbortController | null>(null);
 
   const { data, isLoading, isFetching } = useGetConversationMediaQuery(
@@ -141,30 +150,93 @@ const ModalMediaTab: React.FC<{
   );
 
   const hasNext = data?.pagination.hasNext ?? false;
-  const items = data?.data ?? [];
-  const thumbnailUrls =
-    urlCache.forConversationId === conversationId ? urlCache.urls : {};
 
+  // Memoize items to create stable reference
+  const items = useMemo(() => {
+    return data?.data ?? [];
+  }, [data?.data]);
+
+  // Memoize thumbnailUrls to ensure stable reference
+  const thumbnailUrls = useMemo(() => {
+    return urlCache.forConversationId === conversationId ? urlCache.urls : {};
+  }, [urlCache.forConversationId, conversationId, urlCache.urls]);
+
+  // Create stable request key from items
+  const itemsKey = useMemo(() => {
+    if (items.length === 0) return null;
+    return `${conversationId}:page${page}:${items.map((i) => i.fileId).sort().join("|")}`;
+  }, [conversationId, page, items]);
+
+  // Reset page and cache when conversation changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+    setUrlCache({ forConversationId: conversationId, urls: {} });
+    return () => { batchAbortRef.current?.abort(); };
+  }, [conversationId]);
+
+  // Batch thumbnail loading with deduplication
+  useEffect(() => {
+    if (!itemsKey) return;
+
+    // Skip if this exact request is already in-flight
+    if (modalInFlightRequests.has(itemsKey)) {
+      return;
+    }
+
+    // Build the list of items needing thumbnails
     const needingFallback = items.filter(
       (item) => !item.thumbnailUrl && !thumbnailUrls[item.fileId],
     );
+
     if (needingFallback.length === 0) return;
 
     const controller = new AbortController();
     batchAbortRef.current = controller;
 
-    batchThumbnailUrls({
-      conversationId,
-      fileIds: needingFallback.map((i) => i.fileId),
-    })
-      .unwrap()
-      .then((result) => {
-        if (controller.signal.aborted) return;
+    const requestPromise = (async () => {
+      try {
+        const response = await fileApi.batchThumbnailUrls({
+          conversationId,
+          fileIds: needingFallback.map((i) => i.fileId),
+          signal: controller.signal,
+        });
+        const payload = unwrapApiSuccess(response);
+
+        if (controller.signal.aborted) return null;
+
         const newUrls: Record<string, string> = {};
-        for (const item of result.items) {
-          if (item.status === "ok" && item.url) newUrls[item.fileId] = item.url;
+        const now = Date.now();
+
+        for (const item of payload.items) {
+          // Update module-level cache
+          modalThumbnailStatusCache.set(item.fileId, {
+            status: item.status as 'ready' | 'processing' | 'queued' | 'failed',
+            url: item.url ?? null,
+            retryAfterMs: item.retryAfterMs ?? null,
+            fetchedAt: now,
+          });
+
+          if (item.status === 'ready' && item.url) {
+            newUrls[item.fileId] = item.url;
+          }
         }
+
+        return newUrls;
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return null;
+        }
+        throw error;
+      }
+    })();
+
+    modalInFlightRequests.set(itemsKey, requestPromise);
+
+    requestPromise
+      .then((newUrls) => {
+        if (!newUrls || controller.signal.aborted) return;
+
         if (Object.keys(newUrls).length > 0) {
           setUrlCache((prev) => ({
             forConversationId: conversationId,
@@ -175,18 +247,13 @@ const ModalMediaTab: React.FC<{
           }));
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        modalInFlightRequests.delete(itemsKey);
+      });
 
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, conversationId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPage(1);
-    setUrlCache({ forConversationId: conversationId, urls: {} });
-    return () => { batchAbortRef.current?.abort(); };
-  }, [conversationId]);
+  }, [itemsKey, items, conversationId, thumbnailUrls]);
 
   if (isLoading) {
     return (
