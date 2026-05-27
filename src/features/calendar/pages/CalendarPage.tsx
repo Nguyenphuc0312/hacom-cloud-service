@@ -21,7 +21,6 @@ import {
   type CalendarEvent as LocalCalendarEvent,
   type EventType,
 } from "../data/calendarEvents";
-import type { CalendarEvent as CalendarEventApi } from "../../api/calendarApi";
 import {
   hrApi,
   type AttendanceCalendarDay,
@@ -349,15 +348,58 @@ export const CalendarPage: React.FC = () => {
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
-  const [localMeetings, setLocalMeetings] = useState<MeetingFormData[]>([]);
+  const [localMeetings] = useState<MeetingFormData[]>([]);
 
   // User search modal state
   const [userSearchModalOpen, setUserSearchModalOpen] = useState(false);
+
+  // Create event loading state
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
   // Handle select user from search
   const handleSelectUser = (userId: string, userName: string) => {
     setViewingUser(userId, userName);
   };
+
+  // Handle create event from MeetingFormModal
+  const handleCreateEvent = useCallback(async (data: MeetingFormData) => {
+    try {
+      setIsCreatingEvent(true);
+
+      // Map MeetingFormData to CreateCalendarEventInput
+      const startAt = `${data.date}T${data.startTime}:00.000Z`;
+      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        type: "MEETING" as const,
+        source: "MEETING" as const,
+        startAt,
+        endAt,
+        timezone: "Asia/Ho_Chi_Minh",
+        isAllDay: false,
+        visibility: "PRIVATE" as const,
+        status: "CONFIRMED" as const,
+        attendees: data.participants.map(p => p.name),
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
+        meetingLocation: data.location || undefined,
+      };
+
+      // Use store's createEvent which handles API call + state update
+      const result = await useCalendarStore.getState().createEvent(input);
+
+      if (result) {
+        toast.success("Đã thêm lịch họp");
+      }
+    } catch (error) {
+      console.error("Failed to create event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  }, []);
 
   // Fetch calendar events from API when month changes
   useEffect(() => {
@@ -366,7 +408,7 @@ export const CalendarPage: React.FC = () => {
 
   // Convert API CalendarEvent to LocalCalendarEvent
   const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
-    return apiEvents.map((event: CalendarEventApi): LocalCalendarEvent => ({
+    return apiEvents.map((event): LocalCalendarEvent => ({
       id: event.id,
       title: event.title,
       date: event.startAt.slice(0, 10),
@@ -915,9 +957,10 @@ export const CalendarPage: React.FC = () => {
       <MeetingFormModal
         isOpen={meetingModalOpen}
         onClose={() => setMeetingModalOpen(false)}
-        onSave={(data) => setLocalMeetings((prev) => [...prev, data])}
+        onSave={handleCreateEvent}
         defaultDate={meetingModalDate}
         existingMeetings={localMeetings}
+        isLoading={isCreatingEvent}
       />
 
       {/* User search modal */}
