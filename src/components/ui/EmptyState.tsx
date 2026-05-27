@@ -400,7 +400,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
                   <div className="font-semibold text-teal-600 dark:text-teal-400">
-                    Thành phần ({m!.participants.length}):
+                    Thành viên ({m!.participants.length}):
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {m!.participants.map((p, idx) => (
@@ -475,7 +475,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                     <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
                     <div className="flex-1">
                       <div className="font-semibold text-teal-600 dark:text-teal-400">
-                        Thành phần ({apiEvent.attendees.length})
+                        Thành viên ({apiEvent.attendees.length})
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         {apiEvent.attendees.slice(0, 10).map((name, idx) => (
