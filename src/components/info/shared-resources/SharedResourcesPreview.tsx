@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import clsx from "clsx";
 import {
   PhotoIcon,
@@ -59,8 +59,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SharedContentTab>("media");
   const [modalOpen, setModalOpen] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [lightboxAlt, setLightboxAlt] = useState("");
+  const [lightbox, setLightbox] = useState<{
+    images: Array<{ url: string; alt?: string }>;
+    index: number;
+  } | null>(null);
 
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
@@ -373,10 +375,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               items={mediaPreview}
               total={mediaTotal}
               thumbnailUrls={thumbnailUrls}
-              onImageClick={(url, alt) => {
-                setLightboxUrl(url);
-                setLightboxAlt(alt);
-              }}
+              onImageOpen={(index, images) => setLightbox({ images, index })}
               onViewAll={() => {
                 setActiveTab("media");
                 setModalOpen(true);
@@ -409,10 +408,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       </div>
 
       <ImagePreviewModal
-        isOpen={lightboxUrl !== null}
-        onClose={() => setLightboxUrl(null)}
-        imageUrl={lightboxUrl ?? ""}
-        alt={lightboxAlt}
+        isOpen={lightbox !== null}
+        onClose={() => setLightbox(null)}
+        images={lightbox?.images}
+        initialIndex={lightbox?.index ?? 0}
       />
 
       <SharedContentModal
@@ -431,9 +430,36 @@ const DrawerMediaTab: React.FC<{
   items: ConversationResourcesMediaItem[];
   total: number;
   thumbnailUrls: Record<string, string>;
-  onImageClick: (url: string, alt: string) => void;
+  onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
   onViewAll: () => void;
-}> = ({ items, total, thumbnailUrls, onImageClick, onViewAll }) => {
+}> = ({ items, total, thumbnailUrls, onImageOpen, onViewAll }) => {
+  // When total > preview limit, replace last slot with "+N" overlay
+  const showOverlay = total > DRAWER_MEDIA_PREVIEW;
+  const visibleItems = showOverlay ? items.slice(0, DRAWER_MEDIA_PREVIEW - 1) : items;
+  const overlayItem = showOverlay ? items[DRAWER_MEDIA_PREVIEW - 1] ?? null : null;
+  const remainingCount = total - (DRAWER_MEDIA_PREVIEW - 1);
+
+  // Pre-resolve all URLs so the lightbox can navigate between them
+  const gallery = useMemo(
+    () =>
+      visibleItems
+        .map((item) => {
+          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+          return { url, alt: item.fileName };
+        })
+        .filter((img) => img.url),
+    [visibleItems, thumbnailUrls],
+  );
+
+  const handleThumbClick = useCallback(
+    (clickedUrl: string) => {
+      const idx = gallery.findIndex((img) => img.url === clickedUrl);
+      onImageOpen(idx >= 0 ? idx : 0, gallery);
+    },
+    [gallery, onImageOpen],
+  );
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -443,12 +469,6 @@ const DrawerMediaTab: React.FC<{
     );
   }
 
-  // When total > preview limit, replace last slot with "+N" overlay
-  const showOverlay = total > DRAWER_MEDIA_PREVIEW;
-  const visibleItems = showOverlay ? items.slice(0, DRAWER_MEDIA_PREVIEW - 1) : items;
-  const overlayItem = showOverlay ? items[DRAWER_MEDIA_PREVIEW - 1] ?? null : null;
-  const remainingCount = total - (DRAWER_MEDIA_PREVIEW - 1);
-
   return (
     <div className="grid grid-cols-3 gap-1">
       {visibleItems.map((item) => (
@@ -456,7 +476,7 @@ const DrawerMediaTab: React.FC<{
           key={`${item.messageId}-${item.fileId}`}
           item={item}
           fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-          onImageClick={onImageClick}
+          onImageClick={handleThumbClick}
         />
       ))}
       {showOverlay && (
@@ -488,19 +508,19 @@ const DrawerMediaTab: React.FC<{
 const DrawerMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
-  onImageClick: (url: string, alt: string) => void;
+  onImageClick: (url: string) => void;
 }> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
-  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
 
   return (
     <button
       type="button"
       disabled={!src}
       onClick={() => {
-        if (src) onImageClick(src, item.fileName);
+        if (src) onImageClick(src);
       }}
       className={clsx(
         "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",

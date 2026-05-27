@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import clsx from "clsx";
 import {
   PhotoIcon,
@@ -68,8 +68,10 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
   defaultTab = "media",
 }) => {
   const [activeTab, setActiveTab] = useState<SharedContentTab>(defaultTab);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [lightboxAlt, setLightboxAlt] = useState("");
+  const [lightbox, setLightbox] = useState<{
+    images: Array<{ url: string; alt?: string }>;
+    index: number;
+  } | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -110,7 +112,7 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
           {activeTab === "media" && (
             <ModalMediaTab
               conversationId={conversationId}
-              onImageClick={(url, alt) => { setLightboxUrl(url); setLightboxAlt(alt); }}
+              onImageOpen={(index, images) => setLightbox({ images, index })}
             />
           )}
           {activeTab === "files" && (
@@ -123,10 +125,10 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
       </Modal>
 
       <ImagePreviewModal
-        isOpen={lightboxUrl !== null}
-        onClose={() => setLightboxUrl(null)}
-        imageUrl={lightboxUrl ?? ""}
-        alt={lightboxAlt}
+        isOpen={lightbox !== null}
+        onClose={() => setLightbox(null)}
+        images={lightbox?.images}
+        initialIndex={lightbox?.index ?? 0}
       />
     </>
   );
@@ -136,8 +138,8 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
 
 const ModalMediaTab: React.FC<{
   conversationId: string;
-  onImageClick: (url: string, alt: string) => void;
-}> = ({ conversationId, onImageClick }) => {
+  onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
+}> = ({ conversationId, onImageOpen }) => {
   const [page, setPage] = useState(1);
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
@@ -288,6 +290,27 @@ const ModalMediaTab: React.FC<{
     return () => controller.abort();
   }, [itemsKey, items, conversationId]);
 
+  // Pre-resolve all URLs for gallery navigation
+  const gallery = useMemo(
+    () =>
+      items
+        .map((item) => {
+          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+          return { url, alt: item.fileName };
+        })
+        .filter((img) => img.url),
+    [items, thumbnailUrls],
+  );
+
+  const handleThumbClick = useCallback(
+    (clickedUrl: string) => {
+      const idx = gallery.findIndex((img) => img.url === clickedUrl);
+      onImageOpen(idx >= 0 ? idx : 0, gallery);
+    },
+    [gallery, onImageOpen],
+  );
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-3 gap-1 p-3 sm:grid-cols-4">
@@ -315,7 +338,7 @@ const ModalMediaTab: React.FC<{
             key={`${item.messageId}-${item.fileId}`}
             item={item}
             fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-            onImageClick={onImageClick}
+            onImageClick={handleThumbClick}
           />
         ))}
       </div>
@@ -354,18 +377,18 @@ const ModalMediaTab: React.FC<{
 const ModalMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
-  onImageClick: (url: string, alt: string) => void;
+  onImageClick: (url: string) => void;
 }> = React.memo(({ item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
-  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: 'image' }) ?? null) : null;
+  const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
 
   return (
     <button
       type="button"
       disabled={!src}
-      onClick={() => { if (src) onImageClick(src, item.fileName); }}
+      onClick={() => { if (src) onImageClick(src); }}
       className={clsx(
         "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",
         src && "cursor-pointer hover:ring-2 hover:ring-primary/50",
