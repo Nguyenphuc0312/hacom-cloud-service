@@ -10,6 +10,13 @@ import {
   UserIcon,
   BuildingOfficeIcon,
   CalendarIcon,
+  ClockIcon,
+  MapPinIcon,
+  VideoCameraIcon,
+  UsersIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -19,6 +26,7 @@ import {
   VIETNAMESE_MONTHS,
   VIETNAMESE_WEEKDAYS,
   type CalendarEvent as LocalCalendarEvent,
+  type ExtendedCalendarEvent,
   type EventType,
 } from "../data/calendarEvents";
 import {
@@ -29,6 +37,7 @@ import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/M
 import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
+import { useAuthStore } from "../../../stores";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
@@ -102,14 +111,109 @@ const formatTime = (time: string | null | undefined): string => {
 
 
 /**
- * Event detail modal component.
- * Works with LocalCalendarEvent (merged events: holidays + tasks + API).
+ * Helper to format date string to Vietnamese format
+ */
+const formatDateVN = (dateStr: string): string => {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("vi-VN", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+/**
+ * Format time string (HH:mm:ss or HH:mm) for modal display
+ */
+const formatTimeStr = (timeStr: string): string => {
+  if (!timeStr) return "";
+  const parts = timeStr.split(":");
+  if (parts.length >= 2) {
+    return `${parts[0]}:${parts[1]}`;
+  }
+  return timeStr;
+};
+
+/**
+ * Calculate duration between two timestamps
+ */
+const calculateDuration = (startAt: string, endAt: string): string => {
+  try {
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+    const diffMs = end.getTime() - start.getTime();
+    const diffMins = Math.round(diffMs / 60000);
+
+    if (diffMins < 60) {
+      return `${diffMins} phút`;
+    }
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    if (mins === 0) {
+      return `${hours} giờ`;
+    }
+    return `${hours} giờ ${mins} phút`;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Get status badge color
+ */
+const getStatusBadge = (status?: string): { bg: string; text: string; label: string } => {
+  switch (status) {
+    case "CONFIRMED":
+      return { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-300", label: "Đã xác nhận" };
+    case "TENTATIVE":
+      return { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-300", label: "Dự kiến" };
+    case "CANCELLED":
+      return { bg: "bg-rose-500/10", text: "text-rose-600 dark:text-rose-300", label: "Đã hủy" };
+    default:
+      return { bg: "bg-gray-500/10", text: "text-gray-600 dark:text-gray-300", label: status ?? "Không xác định" };
+  }
+};
+
+/**
+ * Event detail modal component with rich display.
+ * Works with both LocalCalendarEvent and ExtendedCalendarEvent.
  */
 const EventDetailModal: React.FC<{
-  event: LocalCalendarEvent;
+  event: LocalCalendarEvent | ExtendedCalendarEvent;
+  currentUserId?: string;
   onClose: () => void;
-}> = ({ event, onClose }) => {
+  onEdit?: () => void;
+  onDelete?: () => void;
+}> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
   const colors = getEventColor(event.type);
+  const isExtended = "startAt" in event && event.startAt;
+
+  // Check if current user is the owner
+  const isOwner = "ownerUserId" in event && event.ownerUserId === currentUserId;
+  const canEdit = isOwner && onEdit;
+  const canDelete = isOwner && onDelete;
+
+  // Get status badge info
+  const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
+
+  // Time display
+  const startTime = isExtended && "startAt" in event ? formatTimeStr(event.startAt!) : event.time;
+  const endTime = isExtended && "endAt" in event ? formatTimeStr(event.endAt!) : null;
+  const duration = isExtended && "startAt" in event && "endAt" in event && event.startAt && event.endAt
+    ? calculateDuration(event.startAt, event.endAt)
+    : null;
+
+  // Location/Meeting URL
+  const location = "meetingLocation" in event ? event.meetingLocation : null;
+  const format = "meetingFormat" in event ? event.meetingFormat : null;
+  const chairman = "meetingChairman" in event ? event.meetingChairman : null;
+  const attendees = "attendees" in event ? event.attendees : null;
+  const visibility = "visibility" in event ? event.visibility : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -118,7 +222,7 @@ const EventDetailModal: React.FC<{
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
+      <div className="relative z-10 w-full max-w-lg animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
         <button
           type="button"
           onClick={onClose}
@@ -128,29 +232,179 @@ const EventDetailModal: React.FC<{
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
-          <div
-            className={clsx(
-              "mb-3 inline-block rounded-full px-3 py-1 text-xs font-medium",
-              colors.bg,
-              colors.text
+        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-8">
+          {/* Header: Type badge + Status badge */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div
+              className={clsx(
+                "inline-block rounded-full px-3 py-1 text-xs font-medium",
+                colors.bg,
+                colors.text
+              )}
+            >
+              {getEventTypeLabel(event.type)}
+            </div>
+            {statusInfo && (
+              <div
+                className={clsx(
+                  "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+                  statusInfo.bg,
+                  statusInfo.text
+                )}
+              >
+                {statusInfo.label}
+              </div>
             )}
-          >
-            {getEventTypeLabel(event.type)}
           </div>
 
+          {/* Title */}
           <h3 className="text-xl font-semibold text-text-primary">
             {event.title}
           </h3>
 
-          <p className="mt-1 text-sm text-text-secondary">
-            {event.date}
-          </p>
+          {/* Date and Time Section */}
+          <div className="mt-4 space-y-2">
+            {/* Date */}
+            <div className="flex items-start gap-3">
+              <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+              <div>
+                <p className="text-sm font-medium text-text-primary">
+                  {event.date}
+                </p>
+                {isExtended && event.startAt && (
+                  <p className="text-xs text-text-muted">
+                    {formatDateVN(event.startAt)}
+                  </p>
+                )}
+              </div>
+            </div>
 
+            {/* Time (for API events with startAt) */}
+            {isExtended && startTime && (
+              <div className="flex items-start gap-3">
+                <ClockIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                <div>
+                  <p className="text-sm text-text-primary">
+                    {startTime}
+                    {endTime && ` — ${endTime}`}
+                  </p>
+                  {duration && (
+                    <p className="text-xs text-text-muted">
+                      Thời lượng: {duration}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Location / Meeting Link */}
+            {location && (
+              <div className="flex items-start gap-3">
+                {format === "online" ? (
+                  <VideoCameraIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                ) : (
+                  <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                )}
+                <p className="text-sm text-text-primary break-all">
+                  {location}
+                </p>
+              </div>
+            )}
+
+            {/* Chairman */}
+            {chairman && (
+              <div className="flex items-start gap-3">
+                <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <div>
+                  <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                    Chủ trì
+                  </p>
+                  <p className="text-sm text-text-primary">
+                    {chairman}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Attendees */}
+            {attendees && attendees.length > 0 && (
+              <div className="flex items-start gap-3">
+                <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                    Thành phần ({attendees.length})
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {attendees.slice(0, 10).map((name, idx) => (
+                      <span
+                        key={`${name}-${idx}`}
+                        className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-primary"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                    {attendees.length > 10 && (
+                      <span className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
+                        +{attendees.length - 10} người khác
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Visibility */}
+            {visibility && (
+              <div className="flex items-center gap-3">
+                <ExclamationCircleIcon className="h-5 w-5 shrink-0 text-text-muted" />
+                <p className="text-xs text-text-muted">
+                  {visibility === "PRIVATE" ? "Riêng tư" :
+                    visibility === "TEAM" ? "Nhóm" :
+                    visibility === "UNIT" ? "Đơn vị" :
+                    visibility === "PUBLIC" ? "Công khai" :
+                    "Chỉ hiển thị trạng thái bận"}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
           {event.description && (
-            <p className="mt-3 text-sm text-text-secondary">
-              {event.description}
-            </p>
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-sm text-text-secondary whitespace-pre-wrap">
+                {event.description}
+              </p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          {(canEdit || canDelete) && (
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Bạn có chắc muốn xóa sự kiện này?")) {
+                      onDelete?.();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  Xóa
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
+                >
+                  <PencilSquareIcon className="h-4 w-4" />
+                  Chỉnh sửa
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -318,8 +572,8 @@ export const CalendarPage: React.FC = () => {
   
   // Calendar store
   const storeState = useCalendarStore();
-  const { 
-    mode, 
+  const {
+    mode,
     view: currentView,
     setView,
     events: apiEvents,
@@ -329,12 +583,17 @@ export const CalendarPage: React.FC = () => {
     setFilters,
     setViewingUser,
     fetchEvents,
+    deleteEvent,
   } = storeState;
+
+  // Current user for permission checks
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id;
 
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedEvent, setSelectedEvent] = useState<LocalCalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<LocalCalendarEvent | ExtendedCalendarEvent | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Attendance data state
@@ -344,6 +603,9 @@ export const CalendarPage: React.FC = () => {
 
   // Task events state
   const [taskEvents, setTaskEvents] = useState<LocalCalendarEvent[]>([]);
+
+  // Extended API events state (for detail view)
+  const [apiEventsMap, setApiEventsMap] = useState<Record<string, ExtendedCalendarEvent>>({});
 
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
@@ -405,6 +667,31 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     void fetchEvents();
   }, [currentYear, currentMonth, mode]);
+
+  // Build extended events map from API events
+  useEffect(() => {
+    const map: Record<string, ExtendedCalendarEvent> = {};
+    apiEvents.forEach((event) => {
+      map[event.id] = {
+        id: event.id,
+        title: event.title,
+        date: event.startAt.slice(0, 10),
+        type: mapApiEventTypeToLocal(event.type),
+        description: event.description ?? undefined,
+        time: event.startAt.slice(11, 16),
+        startAt: event.startAt,
+        endAt: event.endAt,
+        meetingFormat: (event.meetingFormat as "offline" | "online") ?? undefined,
+        meetingLocation: event.meetingLocation ?? undefined,
+        meetingChairman: event.meetingChairman ?? undefined,
+        attendees: event.attendees ?? [],
+        visibility: event.visibility,
+        status: event.status,
+        ownerUserId: event.ownerUserId,
+      };
+    });
+    setApiEventsMap(map);
+  }, [apiEvents]);
 
   // Convert API CalendarEvent to LocalCalendarEvent
   const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
@@ -620,11 +907,36 @@ export const CalendarPage: React.FC = () => {
       if (event.type === "task" && event.taskId) {
         navigate(`/tasks?taskId=${event.taskId}`);
       } else {
-        setSelectedEvent(event);
+        // Get extended event data if available
+        const extended = apiEventsMap[event.id];
+        setSelectedEvent(extended ?? event);
       }
     },
-    [navigate]
+    [navigate, apiEventsMap]
   );
+
+  // Handle edit event
+  const handleEditEvent = useCallback(() => {
+    // TODO: Open meeting form modal with event data pre-filled
+    toast.info("Chỉnh sửa sự kiện - tính năng đang phát triển");
+    setSelectedEvent(null);
+  }, []);
+
+  // Handle delete event
+  const handleDeleteEvent = useCallback(async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const success = await deleteEvent(selectedEvent.id);
+      if (success) {
+        setSelectedEvent(null);
+        // Refresh events
+        await fetchEvents();
+      }
+    } catch (error) {
+      console.error("Failed to delete event:", error);
+    }
+  }, [selectedEvent, deleteEvent, fetchEvents]);
 
   // Toggle filter
   const toggleFilter = useCallback((type: EventType) => {
@@ -949,7 +1261,10 @@ export const CalendarPage: React.FC = () => {
       {selectedEvent && (
         <EventDetailModal
           event={selectedEvent}
+          currentUserId={currentUserId}
           onClose={() => setSelectedEvent(null)}
+          onEdit={handleEditEvent}
+          onDelete={handleDeleteEvent}
         />
       )}
 
