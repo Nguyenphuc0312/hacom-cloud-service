@@ -91,7 +91,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium",
           "transition-micro",
           "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
-          "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
+          resolvedVariant === "brand" || resolvedVariant === "brand-yellow" || resolvedVariant === "brand-outline"
+            ? "disabled:cursor-not-allowed disabled:opacity-40"
+            : "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
           resolvedVariant !== "link" && variantClasses[resolvedVariant as keyof typeof variantClasses],
           resolvedVariant !== "link" && sizeClasses[size],
           variant === "link" && variantClasses.link,

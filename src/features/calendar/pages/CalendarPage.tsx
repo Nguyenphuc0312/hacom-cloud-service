@@ -202,8 +202,14 @@ const EventDetailModal: React.FC<{
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+<<<<<<< HEAD
+}> = ({ event, currentUserId, onClose, onEdit, onDelete }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [showEditConfirm, setShowEditConfirm] = React.useState(false);
+=======
   onRequestDelete?: () => void;
 }> = ({ event, currentUserId, onClose, onEdit, onDelete, onRequestDelete }) => {
+>>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -397,7 +403,11 @@ const EventDetailModal: React.FC<{
               {canDelete && (
                 <button
                   type="button"
+<<<<<<< HEAD
+                  onClick={() => setShowDeleteConfirm(true)}
+=======
                   onClick={onRequestDelete}
+>>>>>>> 7bea08057431aa4694938aaaed99ee9c5166ba3b
                   className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
                 >
                   <TrashIcon className="h-4 w-4" />
@@ -407,7 +417,7 @@ const EventDetailModal: React.FC<{
               {canEdit && (
                 <button
                   type="button"
-                  onClick={onEdit}
+                  onClick={() => setShowEditConfirm(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
                 >
                   <PencilSquareIcon className="h-4 w-4" />
@@ -418,6 +428,32 @@ const EventDetailModal: React.FC<{
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          onDelete?.();
+        }}
+        title="Xóa sự kiện"
+        message="Bạn có chắc muốn xóa sự kiện này? Hành động không thể hoàn tác."
+        confirmText="Xóa"
+        variant="danger"
+      />
+      <ConfirmDialog
+        isOpen={showEditConfirm}
+        onClose={() => setShowEditConfirm(false)}
+        onConfirm={() => {
+          setShowEditConfirm(false);
+          onEdit?.();
+        }}
+        title="Chỉnh sửa sự kiện"
+        message="Bạn có muốn chỉnh sửa sự kiện này không?"
+        confirmText="Chỉnh sửa"
+        cancelText="Hủy"
+        variant="info"
+      />
     </div>
   );
 };
