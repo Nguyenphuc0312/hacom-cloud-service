@@ -1,0 +1,259 @@
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  SparklesIcon,
+  UserIcon,
+  AlertCircleIcon,
+  CopyIcon,
+  CheckIcon,
+  ThumbsUpIcon,
+  ThumbsDownIcon,
+  FileTextIcon,
+  SearchIcon,
+  BrainCircuitIcon,
+} from "lucide-react";
+import clsx from "clsx";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import type { PersonalChatMessage, PersonalCitation } from "../../types";
+
+interface PersonalMessageBubbleProps {
+  message: PersonalChatMessage;
+  isLast?: boolean;
+}
+
+const ThinkingIndicator: React.FC<{
+  phase: PersonalChatMessage["thinkingPhase"];
+}> = ({ phase }) => {
+  if (!phase) return null;
+
+  const label =
+    phase === "searching"
+      ? "Đang tìm kiếm trong tài liệu…"
+      : "Đang phân tích và suy luận…";
+
+  const Icon = phase === "searching" ? SearchIcon : BrainCircuitIcon;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-2 mb-3"
+    >
+      <div className="flex items-center gap-1.5 rounded-full bg-surface-hover px-3 py-1.5">
+        <Icon size={12} strokeWidth={2} className="text-text-muted animate-pulse" />
+        <span className="text-xs text-text-muted">{label}</span>
+        <div className="flex gap-0.5">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-1.5 w-1.5 rounded-full bg-text-muted animate-bounce"
+              style={{ animationDelay: `${i * 0.15}s`, animationDuration: "1s" }}
+            />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const CitationChips: React.FC<{ citations: PersonalCitation[] }> = ({
+  citations,
+}) => {
+  if (!citations.length) return null;
+  const unique = citations.filter(
+    (c, i, arr) =>
+      arr.findIndex((x) => x.document_id === c.document_id) === i,
+  );
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      <span className="text-[11px] text-text-muted self-center">Nguồn:</span>
+      {unique.map((c, idx) => (
+        <div
+          key={`${c.document_id}-${idx}`}
+          className="flex items-center gap-1 rounded-lg border border-[#FFC857]/25 bg-[#FFC857]/8 px-2 py-1"
+          title={c.excerpt}
+        >
+          <FileTextIcon size={11} strokeWidth={2} className="text-[#C41E3A] shrink-0" />
+          <span className="max-w-[150px] truncate text-[11px] font-medium text-[#C41E3A]">
+            {c.document_name.replace(/\.pdf$/i, "")}
+          </span>
+          {c.page != null && (
+            <span className="text-[10px] text-text-disabled">tr.{c.page}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const StreamingCursor: React.FC = () => (
+  <span className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] animate-[pulse_0.8s_ease-in-out_infinite] rounded-sm bg-text-primary" />
+);
+
+export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
+  message,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const isUser = message.role === "user";
+  const isAssistant = message.role === "assistant";
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className={clsx(
+        "group w-full",
+        isAssistant ? "bg-surface-overlay/40" : "bg-surface",
+      )}
+    >
+      <div className="mx-auto max-w-[760px] px-4 py-5">
+        <div
+          className={clsx(
+            "flex gap-3.5",
+            isUser ? "flex-row-reverse" : "flex-row",
+          )}
+        >
+          {/* Avatar */}
+          <div
+            className={clsx(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
+            )}
+            style={
+              isAssistant && !message.isError
+                ? {
+                    background:
+                      "linear-gradient(135deg, #C41E3A 0%, #D32F2F 60%, #FFC857 100%)",
+                  }
+                : isAssistant && message.isError
+                  ? undefined
+                  : { background: "rgba(196,30,58,0.7)" }
+            }
+          >
+            {isAssistant ? (
+              message.isError ? (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+                  <AlertCircleIcon size={16} className="text-danger" />
+                </div>
+              ) : (
+                <SparklesIcon size={15} strokeWidth={2.5} className="text-white" />
+              )
+            ) : (
+              <UserIcon size={15} strokeWidth={2.5} className="text-white" />
+            )}
+          </div>
+
+          {/* Content */}
+          <div
+            className={clsx(
+              "flex min-w-0 flex-1 flex-col",
+              isUser ? "items-end" : "items-start",
+            )}
+          >
+            {/* Role label */}
+            <span className="mb-1 text-xs font-semibold text-text-muted">
+              {isUser ? "Bạn" : "Trợ lý ảo cá nhân"}
+            </span>
+
+            {/* Thinking phase indicator */}
+            {isAssistant && message.thinkingPhase && (
+              <ThinkingIndicator phase={message.thinkingPhase} />
+            )}
+
+            {/* Message body */}
+            <div
+              className={clsx(
+                isUser
+                  ? "w-fit max-w-[76%] rounded-2xl rounded-tr-sm bg-surface-hover px-4 py-3 text-[15px] leading-relaxed text-text-primary break-words"
+                  : "w-full",
+              )}
+            >
+              {isAssistant &&
+              message.isStreaming &&
+              !message.content &&
+              !message.thinkingPhase ? (
+                <div className="flex items-center gap-1.5 py-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="h-2 w-2 rounded-full bg-text-muted animate-bounce"
+                      style={{
+                        animationDelay: `${i * 0.15}s`,
+                        animationDuration: "1s",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : isAssistant ? (
+                <div className="prose-chatgpt">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeSanitize]}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                  {message.isStreaming && message.content && <StreamingCursor />}
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                  {message.content}
+                </div>
+              )}
+            </div>
+
+            {/* Citations */}
+            {isAssistant &&
+              !message.isStreaming &&
+              message.citations &&
+              message.citations.length > 0 && (
+                <div className="w-full max-w-[680px]">
+                  <CitationChips citations={message.citations} />
+                </div>
+              )}
+
+            {/* Action bar */}
+            {isAssistant && !message.isStreaming && (
+              <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+                  title="Sao chép"
+                >
+                  {copied ? (
+                    <CheckIcon size={13} className="text-green-600" />
+                  ) : (
+                    <CopyIcon size={13} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center p-1 rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+                  title="Hữu ích"
+                >
+                  <ThumbsUpIcon size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center p-1 rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+                  title="Không hữu ích"
+                >
+                  <ThumbsDownIcon size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};

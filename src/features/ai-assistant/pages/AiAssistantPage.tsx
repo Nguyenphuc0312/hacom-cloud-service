@@ -18,6 +18,7 @@ import { AiChatHeader } from "../components/AiChatHeader";
 import { AiWeeklyReportFilesDialog } from "../components/AiWeeklyReportFilesDialog";
 import { toast } from "../../../utils/toast";
 import type { AiMessage } from "../types";
+import { PersonalAiWorkspacePage } from "../../personal-ai/pages/PersonalAiWorkspacePage";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const WEEKLY_REPORT_ACCEPT =
@@ -365,6 +366,11 @@ export const AiAssistantPage: React.FC = () => {
   useEffect(() => {
     textareaRef.current?.focus();
   }, [activeConversationId]);
+
+  // Personal mode → NotebookLM-style workspace (after all hooks)
+  if (isPersonal) {
+    return <PersonalAiWorkspacePage />;
+  }
 
   return (
     <AiLayout>
