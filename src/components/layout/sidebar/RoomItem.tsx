@@ -1,9 +1,11 @@
 ﻿import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { MapPinIcon } from "@heroicons/react/16/solid";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
 import { useChatStore, usePresenceStore } from "../../../stores";
+import { useUIStore } from "../../../stores/uiStore";
 import type { Conversation, UserStatus, UserSummary } from "../../../types";
 import {
   getConversationAvatar,
@@ -44,6 +46,7 @@ interface RoomItemViewProps {
   isDirect: boolean;
   isActive: boolean;
   isKeyboardActive: boolean;
+  isPinned: boolean;
   onSelect: (conversationId: string) => void;
 }
 
@@ -217,6 +220,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   isDirect,
   isActive,
   isKeyboardActive,
+  isPinned,
   onSelect,
 }) => {
   const { t } = useTranslation();
@@ -343,7 +347,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             {timeLabel}
           </span>
 
-          {unreadCount > 0 && (
+          {unreadCount > 0 ? (
             <span
               className={clsx(
                 "inline-flex items-center justify-center rounded-full font-semibold tabular-nums",
@@ -354,7 +358,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             >
               {unreadCount > 99 ? "99+" : String(unreadCount)}
             </span>
-          )}
+          ) : isPinned ? (
+            <MapPinIcon className="h-3.5 w-3.5 text-[#1976D2]/70" aria-label="Đã ghim" />
+          ) : null}
         </div>
       </div>
     </button>
@@ -378,6 +384,7 @@ const RoomItemView = React.memo(
     prev.isDirect === next.isDirect &&
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
+    prev.isPinned === next.isPinned &&
     prev.onSelect === next.onSelect,
 );
 
@@ -395,6 +402,9 @@ export const RoomItemContainer = React.memo(
         () => (state) => state.conversationById[conversationId] ?? null,
         [conversationId],
       ),
+    );
+    const isPinned = useUIStore(
+      useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
     );
     const directPartnerId = useMemo(
       () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
@@ -467,6 +477,7 @@ export const RoomItemContainer = React.memo(
         isDirect={viewModel.isDirect}
         isActive={isActive}
         isKeyboardActive={isKeyboardActive}
+        isPinned={isPinned}
         onSelect={onSelect}
       />
     );
