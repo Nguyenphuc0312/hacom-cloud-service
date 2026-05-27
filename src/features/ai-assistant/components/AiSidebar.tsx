@@ -7,7 +7,6 @@ import {
   PinIcon,
   Edit2Icon,
   MessageSquareIcon,
-  Building2Icon,
   UserCircle2Icon,
   PinOffIcon,
 } from "lucide-react";
@@ -136,7 +135,7 @@ export const AiSidebar: React.FC = () => {
                 : "text-text-muted hover:text-text-secondary",
             )}
           >
-            <Building2Icon size={14} strokeWidth={2} />
+            <img src="/Logo_noname.png" alt="HACOM" className="h-4 w-4 object-contain" />
             <span>Công ty</span>
           </button>
           <button
