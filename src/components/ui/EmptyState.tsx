@@ -235,8 +235,8 @@ interface SelectedEventDetail {
   time?: string;
   /** Có giá trị khi click vào lịch local (đã tạo qua MeetingFormModal) */
   meeting?: MeetingFormData;
-  /** Có giá trị khi click vào sự kiện API */
-  apiEvent?: {
+  /** Có giá trị khi click vào sự kiện API (HR calendar hoặc chat calendar) */
+  apiEvent?: Partial<{
     id: string;
     title: string;
     startAt: string;
@@ -250,7 +250,7 @@ interface SelectedEventDetail {
     status: string;
     ownerUserId: string;
     ownerEmployeeId: string | null;
-  };
+  }>;
   /** Có giá trị khi click vào sự kiện demo (getCalendarEvents) */
   source?: CalendarEvent;
 }
@@ -699,20 +699,22 @@ const WeeklyCalendarWidget: React.FC = () => {
   const apiEventsMap = React.useMemo(() => {
     const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
     storeEvents.forEach((event) => {
+      // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail
+      const attendeeNames = event.participants
+        ? event.participants
+            .filter((p) => p.employee?.fullName)
+            .map((p) => p.employee!.fullName)
+        : [];
       map[event.id] = {
         id: event.id,
         title: event.title,
         startAt: event.startAt,
         endAt: event.endAt,
         description: event.description,
-        meetingChairman: event.meetingChairman,
-        meetingFormat: event.meetingFormat as "offline" | "online" | null,
-        meetingLocation: event.meetingLocation,
-        attendees: event.attendees ?? [],
+        meetingLocation: event.location ?? null,
+        attendees: attendeeNames,
         visibility: event.visibility,
-        status: event.status,
-        ownerUserId: event.ownerUserId,
-        ownerEmployeeId: event.ownerEmployeeId,
+        ownerUserId: event.ownerId,
       };
     });
     return map;
@@ -761,7 +763,7 @@ const WeeklyCalendarWidget: React.FC = () => {
       id: event.id,
       title: event.title,
       date: event.startAt.slice(0, 10),
-      type: event.type === "MEETING" ? "meeting" : event.type === "PERSONAL" ? "personal" : "meeting",
+      type: event.eventType === "MEETING" ? "meeting" : "work",
       description: event.description ?? undefined,
       time: event.startAt.slice(11, 16),
     }));

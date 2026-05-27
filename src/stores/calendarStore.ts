@@ -1,9 +1,10 @@
 /**
  * Calendar Store - Manages calendar events state
+ * Uses hr-api-service for all calendar operations (supports viewing others' calendars)
  */
 
 import { create } from "zustand";
-import { calendarApi, type CalendarEvent, type CalendarEventFilters } from "../features/api/calendarApi";
+import { hrCalendarApi, type HRCalendarEvent } from "../features/api/hrCalendarApi";
 import { toast } from "../utils/toast";
 
 export type CalendarMode = "my" | "other" | "unit";
@@ -20,8 +21,8 @@ interface CalendarState {
   currentMonth: number;
   selectedDate: Date;
 
-  // Data state
-  events: CalendarEvent[];
+  // Data state — stores HR calendar events
+  events: HRCalendarEvent[];
   isLoading: boolean;
   error: string | null;
 
@@ -49,8 +50,8 @@ interface CalendarState {
 
   // Data operations
   fetchEvents: (start?: string, end?: string) => Promise<void>;
-  createEvent: (input: Parameters<typeof calendarApi.createEvent>[0]) => Promise<CalendarEvent | null>;
-  updateEvent: (eventId: string, input: Parameters<typeof calendarApi.updateEvent>[1]) => Promise<boolean>;
+  createEvent: (input: Parameters<typeof hrCalendarApi.createEvent>[0]) => Promise<HRCalendarEvent | null>;
+  updateEvent: (eventId: string, input: Parameters<typeof hrCalendarApi.updateEvent>[1]) => Promise<boolean>;
   deleteEvent: (eventId: string) => Promise<boolean>;
 
   // Helpers
@@ -103,23 +104,30 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     get().fetchEvents();
   },
 
-  setViewingUser: (userId, userName) => set({
-    mode: "other",
-    viewingUserId: userId,
-    viewingUserName: userName,
-    viewingUnitId: null,
-    viewingUnitName: null,
-  }),
+  setViewingUser: (userId, userName) => {
+    set({
+      mode: "other",
+      viewingUserId: userId,
+      viewingUserName: userName,
+      viewingUnitId: null,
+      viewingUnitName: null,
+    });
+    // Trigger refetch immediately when viewing user changes
+    get().fetchEvents();
+  },
 
-  setViewingUnit: (unitId, unitName) => set({
-    mode: "unit",
-    viewingUserId: null,
-    viewingUserName: null,
-    viewingUnitId: unitId,
-    viewingUnitName: unitName,
-  }),
+  setViewingUnit: (unitId, unitName) => {
+    set({
+      mode: "unit",
+      viewingUserId: null,
+      viewingUserName: null,
+      viewingUnitId: unitId,
+      viewingUnitName: unitName,
+    });
+  },
 
   // Data operations
+  // Uses hr-api-service for all calendar events (supports viewing others' calendars)
   fetchEvents: async (start?: string, end?: string) => {
     const state = get();
     const { mode, viewingUserId } = state;
@@ -128,46 +136,68 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     const startDate = start || state.getStartOfMonth();
     const endDate = end || state.getEndOfMonth();
 
-    const apiFilters: CalendarEventFilters = {
-      start: startDate,
-      end: endDate,
-    };
-
     set({ isLoading: true, error: null });
 
     try {
-      let events: CalendarEvent[] = [];
+      let events: HRCalendarEvent[] = [];
 
       switch (mode) {
-        case "my":
-          events = await calendarApi.getMyEvents(apiFilters);
+        case "my": {
+          // Current user's own calendar — no ownerId means "my calendar"
+          const myResponse = await hrCalendarApi.listEvents({
+            from: startDate,
+            to: endDate,
+          });
+          events = myResponse.data;
           break;
-        case "other":
+        }
+        case "other": {
           if (viewingUserId) {
-            events = await calendarApi.getUserEvents(viewingUserId, apiFilters);
+            // Viewing another user's calendar — pass ownerId to hr-api-service
+            // hr-api-service checks permission and returns 403 if not allowed
+            const otherResponse = await hrCalendarApi.listEvents({
+              ownerId: viewingUserId,
+              from: startDate,
+              to: endDate,
+              includeParticipantEvents: true,
+            });
+            events = otherResponse.data;
           }
           break;
-        case "unit":
-          // TODO: Implement unit calendar API
-          // events = await calendarApi.getUnitEvents(viewingUnitId, apiFilters);
+        }
+        case "unit": {
+          // TODO: Implement unit calendar API via hr-api-service
           toast.warning("Tính năng lịch đơn vị đang phát triển");
-          break;
+          set({ isLoading: false });
+          return;
+        }
       }
 
-      set({ events, isLoading: false });
+      set({ events, isLoading: false, error: null });
     } catch (error) {
       console.error("Failed to fetch calendar events:", error);
-      set({
-        error: error instanceof Error ? error.message : "Không thể tải lịch",
-        isLoading: false,
-      });
-      toast.error("Không thể tải lịch");
+      // Distinguish 403 (permission denied) from other errors
+      const axiosError = error as { response?: { status?: number; data?: { message?: string } } };
+      if (axiosError.response?.status === 403) {
+        set({
+          error: axiosError.response?.data?.message || "Bạn không có quyền xem lịch của người này.",
+          isLoading: false,
+          events: [], // Clear events on permission denied
+        });
+        toast.error("Bạn không có quyền xem lịch của người này.");
+      } else {
+        set({
+          error: error instanceof Error ? error.message : "Không thể tải lịch",
+          isLoading: false,
+        });
+        toast.error("Không thể tải lịch");
+      }
     }
   },
 
   createEvent: async (input) => {
     try {
-      const event = await calendarApi.createEvent(input);
+      const event = await hrCalendarApi.createEvent(input);
       const state = get();
 
       // Add to events list if within current view range
@@ -190,7 +220,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   updateEvent: async (eventId, input) => {
     try {
-      const updatedEvent = await calendarApi.updateEvent(eventId, input);
+      const updatedEvent = await hrCalendarApi.updateEvent(eventId, input);
       const state = get();
 
       // Update in events list
@@ -209,7 +239,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   deleteEvent: async (eventId) => {
     try {
-      await calendarApi.deleteEvent(eventId);
+      await hrCalendarApi.deleteEvent(eventId);
       const state = get();
 
       // Remove from events list

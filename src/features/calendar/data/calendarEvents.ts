@@ -43,8 +43,14 @@ export interface ExtendedCalendarEvent extends CalendarEvent {
   visibility?: "PRIVATE" | "BUSY_ONLY" | "TEAM" | "UNIT" | "PUBLIC";
   /** Event status */
   status?: "CONFIRMED" | "TENTATIVE" | "CANCELLED";
-  /** Owner user ID for permission checks */
+  /** Owner employee ID (from hr-api-service CalendarEvent.ownerId) */
+  ownerId?: string;
+  /** Owner user ID (from chat-api-service CalendarEvent.ownerUserId) */
   ownerUserId?: string;
+  /** Can current user edit this event */
+  canEdit?: boolean;
+  /** Can current user delete this event */
+  canDelete?: boolean;
   /** Whether current user is the owner */
   isOwner?: boolean;
 }
