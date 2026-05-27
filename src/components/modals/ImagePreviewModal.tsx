@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -7,13 +7,24 @@ import {
   ArrowDownTrayIcon,
   MagnifyingGlassPlusIcon,
   MagnifyingGlassMinusIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
+
+interface GalleryImage {
+  url: string;
+  alt?: string;
+}
 
 interface ImagePreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  imageUrl: string;
+  /** Single-image mode (backward-compatible) */
+  imageUrl?: string;
   alt?: string;
+  /** Gallery mode: pass all images + which one to open */
+  images?: GalleryImage[];
+  initialIndex?: number;
 }
 
 const MIN_SCALE = 0.25;
@@ -22,8 +33,6 @@ const MAX_SCALE = 4;
 type ZoomState = { scale: number; x: number; y: number };
 const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
 
-// Shared viewer button style — white icon on semi-transparent dark pill
-// Gives clear contrast against BOTH dark overlay AND bright images
 const VIEWER_BTN =
   "flex items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:bg-white/35";
 
@@ -32,19 +41,40 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   onClose,
   imageUrl,
   alt,
+  images,
+  initialIndex = 0,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
   const [isDragging, setIsDragging] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const dragStartRef = useRef({ x: 0, y: 0 });
 
-  // Reset zoom whenever the image URL changes or viewer opens fresh
+  // Normalise to gallery array regardless of which props were used
+  const gallery = useMemo<GalleryImage[]>(() => {
+    if (images && images.length > 0) return images;
+    if (imageUrl) return [{ url: imageUrl, alt }];
+    return [];
+  }, [images, imageUrl, alt]);
+
+  const current = gallery[currentIndex] ?? gallery[0];
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < gallery.length - 1;
+  const showNav = gallery.length > 1;
+
+  // Sync index when caller changes initialIndex or reopens
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentIndex(initialIndex);
+  }, [isOpen, initialIndex]);
+
+  // Reset zoom whenever the displayed image changes
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setZoom(DEFAULT_ZOOM);
-  }, [imageUrl, isOpen]);
+  }, [currentIndex, isOpen]);
 
-  // Lock body scroll while viewer is open
+  // Body scroll lock
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.body.style.overflow;
@@ -52,12 +82,24 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     return () => { document.body.style.overflow = prev; };
   }, [isOpen]);
 
-  // Keyboard shortcuts — attached to document so no focus required
+  const goNext = useCallback(() => {
+    setCurrentIndex((i) => Math.min(gallery.length - 1, i + 1));
+  }, [gallery.length]);
+
+  const goPrev = useCallback(() => {
+    setCurrentIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  // Keyboard: ESC, arrows, zoom +/-/0
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
+      } else if (e.key === "ArrowLeft") {
+        goPrev();
+      } else if (e.key === "ArrowRight") {
+        goNext();
       } else if (e.key === "+" || e.key === "=") {
         setZoom((z) => ({ ...z, scale: Math.min(+(z.scale + 0.25).toFixed(2), MAX_SCALE) }));
       } else if (e.key === "-") {
@@ -68,7 +110,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, goPrev, goNext]);
 
   const handleZoomIn = useCallback(
     () => setZoom((z) => ({ ...z, scale: Math.min(+(z.scale + 0.25).toFixed(2), MAX_SCALE) })),
@@ -81,8 +123,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const handleResetZoom = useCallback(() => setZoom(DEFAULT_ZOOM), []);
 
   const handleDownload = useCallback(async () => {
+    if (!current?.url) return;
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch(current.url);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -93,9 +136,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      window.open(imageUrl, "_blank");
+      if (current?.url) window.open(current.url, "_blank");
     }
-  }, [imageUrl]);
+  }, [current]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -130,33 +173,37 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
-  if (!isOpen || typeof document === "undefined") return null;
+  if (!isOpen || !current || typeof document === "undefined") return null;
 
-  const resolvedAlt = alt || t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
+  const resolvedAlt = current.alt ?? t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
   const { scale, x, y } = zoom;
 
   const content = (
     <div
       className="fixed inset-0 flex flex-col"
-      // Hard-coded dark color so it's theme-independent — never light in any mode
-      style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
+      style={{ zIndex: "var(--hc-z-overlay)", backgroundColor: "rgba(0, 0, 0, 0.92)" }}
       onClick={onClose}
     >
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       <div
         className="flex h-14 shrink-0 items-center justify-between gap-3 px-4"
-        // Slightly darker stripe so toolbar visually separates from image area
         style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* File name */}
-        <span className="min-w-0 truncate text-sm font-medium text-white/70" title={resolvedAlt}>
-          {resolvedAlt}
-        </span>
+        {/* Left: file name + counter */}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate text-sm font-medium text-white/70" title={resolvedAlt}>
+            {resolvedAlt}
+          </span>
+          {showNav && (
+            <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-xs tabular-nums text-white/70">
+              {currentIndex + 1} / {gallery.length}
+            </span>
+          )}
+        </div>
 
-        {/* Controls */}
+        {/* Right: zoom + download + close */}
         <div className="flex shrink-0 items-center gap-1.5">
-          {/* Zoom out */}
           <button
             type="button"
             onClick={handleZoomOut}
@@ -165,8 +212,6 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           >
             <MagnifyingGlassMinusIcon className="h-4 w-4" />
           </button>
-
-          {/* Zoom level — click to reset */}
           <button
             type="button"
             onClick={handleResetZoom}
@@ -174,8 +219,6 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           >
             {Math.round(scale * 100)}%
           </button>
-
-          {/* Zoom in */}
           <button
             type="button"
             onClick={handleZoomIn}
@@ -184,11 +227,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           >
             <MagnifyingGlassPlusIcon className="h-4 w-4" />
           </button>
-
-          {/* Divider */}
           <div className="mx-1 h-5 w-px bg-white/20" />
-
-          {/* Download */}
           <button
             type="button"
             onClick={() => void handleDownload()}
@@ -197,51 +236,93 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           >
             <ArrowDownTrayIcon className="h-4 w-4" />
           </button>
-
-          {/* Close — larger, higher contrast */}
           <button
             type="button"
             onClick={onClose}
             aria-label={t("profile:imagePreview.close", { defaultValue: "Đóng" })}
-            className={clsx(VIEWER_BTN, "h-9 w-9 ml-1")}
+            className={clsx(VIEWER_BTN, "ml-1 h-9 w-9")}
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* ── Image area ──────────────────────────────────────────── */}
-      <div
-        className={clsx(
-          "flex min-h-0 flex-1 items-center justify-center overflow-hidden",
-          scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
+      {/* ── Image area with side-nav arrows ─────────────────────── */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        {/* Prev arrow */}
+        {showNav && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            disabled={!hasPrev}
+            aria-label="Ảnh trước"
+            className={clsx(
+              "absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full transition-all",
+              hasPrev
+                ? "bg-black/50 text-white hover:bg-black/70"
+                : "pointer-events-none opacity-0",
+            )}
+          >
+            <ChevronLeftIcon className="h-6 w-6" />
+          </button>
         )}
-        onClick={(e) => e.stopPropagation()}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onDoubleClick={handleResetZoom}
-      >
-        <img
-          src={imageUrl}
-          alt={resolvedAlt}
-          className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-32px)] select-none object-contain"
-          style={{
-            transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px)`,
-            transition: isDragging ? "none" : "transform 0.12s ease",
-          }}
-          draggable={false}
-        />
+
+        {/* Image — drag/zoom area */}
+        <div
+          className={clsx(
+            "flex h-full w-full items-center justify-center",
+            scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
+          )}
+          onClick={(e) => e.stopPropagation()}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onDoubleClick={handleResetZoom}
+        >
+          <img
+            key={current.url}
+            src={current.url}
+            alt={resolvedAlt}
+            className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-112px)] select-none object-contain"
+            style={{
+              transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px)`,
+              transition: isDragging ? "none" : "transform 0.12s ease",
+            }}
+            draggable={false}
+          />
+        </div>
+
+        {/* Next arrow */}
+        {showNav && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            disabled={!hasNext}
+            aria-label="Ảnh tiếp theo"
+            className={clsx(
+              "absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full transition-all",
+              hasNext
+                ? "bg-black/50 text-white hover:bg-black/70"
+                : "pointer-events-none opacity-0",
+            )}
+          >
+            <ChevronRightIcon className="h-6 w-6" />
+          </button>
+        )}
       </div>
 
-      {/* ── Hint bar ────────────────────────────────────────────── */}
+      {/* ── Hint bar ─────────────────────────────────────────────── */}
       <div className="flex h-9 shrink-0 items-center justify-center">
         <span className="text-xs text-white/30">
-          {t("profile:imagePreview.instructions", {
-            defaultValue: "ESC / click ngoài để đóng · Scroll để zoom · Nhấn 0 để reset",
-          })}
+          {showNav
+            ? t("profile:imagePreview.instructionsGallery", {
+                defaultValue: "← → để chuyển ảnh · ESC để đóng · Scroll để zoom",
+              })
+            : t("profile:imagePreview.instructions", {
+                defaultValue: "ESC / click ngoài để đóng · Scroll để zoom · 0 để reset",
+              })}
         </span>
       </div>
     </div>

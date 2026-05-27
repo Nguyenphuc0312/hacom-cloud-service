@@ -232,7 +232,7 @@ export const ImageFileAttachment: React.FC<ImageFileAttachmentProps> = ({
       {showFullScreen && thumbnailUrl && createPortal(
         <div
           className="fixed inset-0 flex flex-col"
-          style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
+          style={{ zIndex: "var(--hc-z-overlay)", backgroundColor: "rgba(0, 0, 0, 0.92)" }}
           onClick={handleClose}
         >
           {/* Toolbar */}

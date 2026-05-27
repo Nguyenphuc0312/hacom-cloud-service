@@ -228,6 +228,12 @@ export const useMultiTabCoordination = () => {
 
     // Start heartbeat interval
     heartbeatRef.current = setInterval(() => {
+      if (document.hidden) {
+        // Skip heartbeat write when hidden - only read to detect other tabs' state
+        const tabs = parseTabStates();
+        updateStateFromTabs(tabs);
+        return;
+      }
       sendHeartbeat();
       const tabs = parseTabStates();
       updateStateFromTabs(tabs);
