@@ -181,7 +181,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const content = (
     <div
       className="fixed inset-0 flex flex-col"
-      style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
+      style={{ zIndex: "var(--hc-z-overlay)", backgroundColor: "rgba(0, 0, 0, 0.92)" }}
       onClick={onClose}
     >
       {/* ── Toolbar ─────────────────────────────────────────────── */}

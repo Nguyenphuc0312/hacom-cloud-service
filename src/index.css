@@ -433,6 +433,7 @@
   --hc-empty-max-width: 1280px;
   --hc-z-modal: 100;
   --hc-z-popover: 80;
+  --hc-z-overlay: 9999;
   --app-sidebar-width: var(--hc-sidebar-width);
   --app-sidebar-width-compact: 320px;
   --app-rail-width: var(--hc-rail-width);

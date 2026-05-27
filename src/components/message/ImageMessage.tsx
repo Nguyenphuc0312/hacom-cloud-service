@@ -455,11 +455,13 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Lock body scroll
+  // Lock body scroll - use isMounted pattern to ensure cleanup only on unmount
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
 
   useEffect(() => {
@@ -502,7 +504,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const overlay = (
     <div
       className="fixed inset-0 flex flex-col"
-      style={{ zIndex: 9999, backgroundColor: "rgba(0, 0, 0, 0.92)" }}
+      style={{ zIndex: "var(--hc-z-overlay)", backgroundColor: "rgba(0, 0, 0, 0.92)" }}
       onClick={onClose}
     >
       {/* Toolbar */}

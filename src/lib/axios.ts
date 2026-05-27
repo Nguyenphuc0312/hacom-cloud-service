@@ -389,7 +389,7 @@ apiClient.interceptors.response.use(
         typeof window !== "undefined" &&
         window.location.pathname !== "/force-change-password"
       ) {
-        window.location.assign("/force-change-password");
+        window.location.replace("/force-change-password");
       }
       return Promise.reject(error);
     }
