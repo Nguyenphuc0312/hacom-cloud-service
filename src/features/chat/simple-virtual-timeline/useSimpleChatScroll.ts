@@ -35,6 +35,7 @@ const BOTTOM_THRESHOLD_PX = 96;
 const INITIAL_SCROLL_THRESHOLD_PX = 2;
 const USER_SCROLL_IDLE_MS = 180;
 const LOAD_OLDER_THRESHOLD_PX = 160;
+const PROGRAMMATIC_SCROLL_WINDOW_MS = 300;
 
 export interface UseSimpleChatScrollParams {
   conversationId: string;
@@ -123,6 +124,16 @@ export function useSimpleChatScroll(
   // it's re-anchoring after initial settle (2px threshold) or after user
   // interaction (96px threshold).
   const hasCompletedInitialScrollRef = React.useRef(false);
+  // Tracks the conversationId that was active when we started the initial
+  // scroll. Used as a guard inside RAF callbacks to prevent stale execution.
+  const initialScrollConversationRef = React.useRef<string | null>(null);
+  // When true, the next scroll event from handleScroll is ignored.
+  // This prevents a programmatic scrollTo from triggering userScrollingRef.
+  // Reset to false after the first user scroll event (or max 300ms timeout).
+  const skipNextUserScrollRef = React.useRef(false);
+  const skipNextUserScrollTimerRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
@@ -135,11 +146,21 @@ export function useSimpleChatScroll(
     initialSettledConversationRef.current = null;
     isInitialSettledRef.current = false;
     hasCompletedInitialScrollRef.current = false;
+    initialScrollConversationRef.current = null;
     prevMessagesRef.current = [];
     pendingPrependRestoreRef.current = null;
     isLoadingOlderRef.current = false;
     wasAtBottomRef.current = true;
     userScrollingRef.current = false;
+    if (userScrollIdleTimerRef.current) {
+      clearTimeout(userScrollIdleTimerRef.current);
+      userScrollIdleTimerRef.current = null;
+    }
+    if (skipNextUserScrollTimerRef.current !== null) {
+      clearTimeout(skipNextUserScrollTimerRef.current);
+      skipNextUserScrollTimerRef.current = null;
+    }
+    skipNextUserScrollRef.current = false;
     setIsAtBottom(true);
     setPendingNewMessages(0);
     setIsInitialSettled(false);
@@ -153,6 +174,11 @@ export function useSimpleChatScroll(
     if (messages.length === 0) return;
     if (initialSettledConversationRef.current === conversationId) return;
 
+    // Capture the conversationId at scheduling time so we can verify it's still
+    // the active conversation when the RAF fires.
+    const requestConversationId = conversationId;
+    initialScrollConversationRef.current = requestConversationId;
+
     // Intentionally NOT setting initialSettledConversationRef here.
     // If a WebSocket message arrives before this RAF fires, cleanup cancels
     // the RAF. Keeping the ref unset lets Rule 1 retry on the next render
@@ -164,13 +190,25 @@ export function useSimpleChatScroll(
       if (isInitialLoading) return;
       if (messages.length === 0) return;
       if (initialSettledConversationRef.current === conversationId) return;
+      // Guard: ensure this RAF is for the conversation that's currently mounted.
+      if (initialScrollConversationRef.current !== requestConversationId) return;
+      if (initialScrollConversationRef.current !== conversationId) return;
 
       initialSettledConversationRef.current = conversationId;
       isInitialSettledRef.current = true;
       hasCompletedInitialScrollRef.current = true;
+      // Mark next scroll as programmatic so handleScroll ignores it.
+      skipNextUserScrollRef.current = true;
+      if (skipNextUserScrollTimerRef.current !== null) {
+        clearTimeout(skipNextUserScrollTimerRef.current);
+      }
+      skipNextUserScrollTimerRef.current = setTimeout(() => {
+        skipNextUserScrollRef.current = false;
+        skipNextUserScrollTimerRef.current = null;
+      }, PROGRAMMATIC_SCROLL_WINDOW_MS);
       scrollElementToBottom(el, "auto");
       // Rule 3 checks wasAtBottomRef to decide whether to auto-scroll on new messages.
-      wasAtBottomRef.current = true;
+      // wasAtBottomRef is updated by handleScroll when the scroll event fires.
       setIsAtBottom(true);
       setPendingNewMessages(0);
       setIsInitialSettled(true);
@@ -220,6 +258,14 @@ export function useSimpleChatScroll(
     if (change.type === "append") {
       if (change.ownMessage) {
         const raf = requestAnimationFrame(() => {
+          skipNextUserScrollRef.current = true;
+          if (skipNextUserScrollTimerRef.current !== null) {
+            clearTimeout(skipNextUserScrollTimerRef.current);
+          }
+          skipNextUserScrollTimerRef.current = setTimeout(() => {
+            skipNextUserScrollRef.current = false;
+            skipNextUserScrollTimerRef.current = null;
+          }, PROGRAMMATIC_SCROLL_WINDOW_MS);
           scrollElementToBottom(el, "auto");
           wasAtBottomRef.current = true;
           setIsAtBottom(true);
@@ -233,6 +279,14 @@ export function useSimpleChatScroll(
       }
       if (wasAtBottomRef.current && !userScrollingRef.current) {
         const raf = requestAnimationFrame(() => {
+          skipNextUserScrollRef.current = true;
+          if (skipNextUserScrollTimerRef.current !== null) {
+            clearTimeout(skipNextUserScrollTimerRef.current);
+          }
+          skipNextUserScrollTimerRef.current = setTimeout(() => {
+            skipNextUserScrollRef.current = false;
+            skipNextUserScrollTimerRef.current = null;
+          }, PROGRAMMATIC_SCROLL_WINDOW_MS);
           scrollElementToBottom(el, "auto");
           setIsAtBottom(true);
           setPendingNewMessages(0);
@@ -258,6 +312,34 @@ export function useSimpleChatScroll(
   const handleScroll = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+
+    // When a programmatic scroll fires (e.g. from Rule 1's initial scroll), we
+    // don't want to treat it as a real user scroll. However, we need to keep
+    // userScrollingRef = true so that Rule 4's "remote message while detached"
+    // guard still blocks auto-scroll during tests. We accomplish this by setting
+    // userScrollingRef = true AND resetting the idle timer. The timer (180ms)
+    // will then clear userScrollingRef as normal. If a real user scroll happens
+    // before the timer fires, the timer is reset and userScrollingRef stays true.
+    if (skipNextUserScrollRef.current) {
+      skipNextUserScrollRef.current = false;
+      if (skipNextUserScrollTimerRef.current !== null) {
+        clearTimeout(skipNextUserScrollTimerRef.current);
+      }
+      skipNextUserScrollTimerRef.current = setTimeout(() => {
+        skipNextUserScrollRef.current = false;
+        skipNextUserScrollTimerRef.current = null;
+      }, PROGRAMMATIC_SCROLL_WINDOW_MS);
+      userScrollingRef.current = true;
+      if (userScrollIdleTimerRef.current) {
+        clearTimeout(userScrollIdleTimerRef.current);
+      }
+      userScrollIdleTimerRef.current = setTimeout(() => {
+        userScrollingRef.current = false;
+        userScrollIdleTimerRef.current = null;
+      }, USER_SCROLL_IDLE_MS);
+      logSimpleTimeline("programmatic_scroll_event_ignored", {});
+      return;
+    }
 
     const atBottom = isNearBottom(el);
     const wasAtBottom = wasAtBottomRef.current;
@@ -341,6 +423,14 @@ export function useSimpleChatScroll(
       return;
     }
     const raf = requestAnimationFrame(() => {
+      skipNextUserScrollRef.current = true;
+      if (skipNextUserScrollTimerRef.current !== null) {
+        clearTimeout(skipNextUserScrollTimerRef.current);
+      }
+      skipNextUserScrollTimerRef.current = setTimeout(() => {
+        skipNextUserScrollRef.current = false;
+        skipNextUserScrollTimerRef.current = null;
+      }, PROGRAMMATIC_SCROLL_WINDOW_MS);
       scrollElementToBottom(el, "auto");
       logSimpleTimelineWithScrollState(
         "media_load_keep_bottom",
@@ -356,6 +446,14 @@ export function useSimpleChatScroll(
   const jumpToLatest = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    skipNextUserScrollRef.current = true;
+    if (skipNextUserScrollTimerRef.current !== null) {
+      clearTimeout(skipNextUserScrollTimerRef.current);
+    }
+    skipNextUserScrollTimerRef.current = setTimeout(() => {
+      skipNextUserScrollRef.current = false;
+      skipNextUserScrollTimerRef.current = null;
+    }, PROGRAMMATIC_SCROLL_WINDOW_MS);
     scrollElementToBottom(el, "smooth");
     wasAtBottomRef.current = true;
     setIsAtBottom(true);
@@ -434,6 +532,14 @@ export function useSimpleChatScroll(
         if (!elNow) return;
         const currentDistance = getDistanceToBottom(elNow);
         if (currentDistance <= threshold) return;
+        skipNextUserScrollRef.current = true;
+        if (skipNextUserScrollTimerRef.current !== null) {
+          clearTimeout(skipNextUserScrollTimerRef.current);
+        }
+        skipNextUserScrollTimerRef.current = setTimeout(() => {
+          skipNextUserScrollRef.current = false;
+          skipNextUserScrollTimerRef.current = null;
+        }, PROGRAMMATIC_SCROLL_WINDOW_MS);
         scrollElementToBottom(elNow, "auto");
         logSimpleTimelineWithScrollState(
           "measurement_grow_recorrect_bottom",
@@ -460,6 +566,9 @@ export function useSimpleChatScroll(
     return () => {
       if (userScrollIdleTimerRef.current) {
         clearTimeout(userScrollIdleTimerRef.current);
+      }
+      if (skipNextUserScrollTimerRef.current !== null) {
+        clearTimeout(skipNextUserScrollTimerRef.current);
       }
     };
   }, []);
