@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useChatStore } from "../../../stores";
+import { useUIStore } from "../../../stores/uiStore";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
+import { compareConversationsByActivity } from "../../../utils/conversationRanking";
 import type { Conversation } from "../../../types";
 
 interface SidebarConversationSummariesResult {
@@ -19,13 +21,15 @@ export const useSidebarConversationSummaries =
       (state) => state.orderedConversationIds,
     );
     const conversationById = useChatStore((state) => state.conversationById);
+    const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
 
     return useMemo(() => {
       const orderedConversations = orderedConversationIds
         .map((conversationId) => conversationById[conversationId])
         .filter((conversation): conversation is Conversation =>
           Boolean(conversation),
-        );
+        )
+        .sort(compareConversationsByActivity);
 
       const counts = orderedConversations.reduce(
         (accumulator, conversation) => {
@@ -48,7 +52,7 @@ export const useSidebarConversationSummaries =
         ),
         counts,
       };
-    }, [conversationById, orderedConversationIds]);
+    }, [conversationById, orderedConversationIds, pinnedConversationIds]);
   };
 
 export default useSidebarConversationSummaries;
