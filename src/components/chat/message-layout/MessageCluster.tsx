@@ -412,54 +412,77 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               shouldAnimateInsert && "motion-message-insert",
             )}
           >
-            <div className="relative w-full">
-              <div
-                onPointerDown={handlePointerDown}
-                onPointerUp={clearLongPressTimer}
-                onPointerLeave={clearLongPressTimer}
-                onPointerCancel={clearLongPressTimer}
-                className={clsx(
-                  "flex w-full",
-                  isOwn ? "justify-end" : "justify-start",
-                )}
-              >
-                <MessageSurface
-                  isOwn={isOwn}
-                  isGroupStart={isGroupStart}
-                  isGroupEnd={isGroupEnd}
-                  mergeLevel={mergeLevel}
-                  hasError={isFailedMessage(message)}
-                  isPending={isPendingMessage(message)}
+            <div
+              className={clsx(
+                "flex w-full",
+                isOwn ? "justify-end" : "justify-start",
+              )}
+            >
+              {/* Wrapper inline để pill absolute neo đúng vào bubble */}
+              <div className={clsx("relative", message.reactions && message.reactions.length > 0 && "mb-2")}>
+                <div
+                  onPointerDown={handlePointerDown}
+                  onPointerUp={clearLongPressTimer}
+                  onPointerLeave={clearLongPressTimer}
+                  onPointerCancel={clearLongPressTimer}
                 >
-                  {isGroupConversation && !isOwn && showSenderName && (
-                    <p className={clsx(contract.cluster.senderLabel, "truncate")}>
-                      {senderDisplayName}
-                    </p>
-                  )}
-
-                  {message.replyToMessage && (
-                    <ReplyPreview
-                      replyToMessage={message.replyToMessage}
-                      replySenderDisplayName={replySenderDisplayName}
-                      replyTargetMessageId={replyTargetMessageId}
-                      isSelectionMode={isSelectionMode}
-                      isOwn={isOwn}
-                      replyPreviewClass={contract.cluster.replyPreview}
-                      onClick={handleReplyPreviewClick}
-                    />
-                  )}
-
-                  <MessageBodyRenderer
-                    message={message}
+                  <MessageSurface
                     isOwn={isOwn}
-                    currentUsername={currentUsername}
-                    textRenderMode={textRenderMode}
-                    isCollapsibleText={isCollapsibleText}
-                    onToggleTextExpand={onToggleTextExpand}
-                    onImageClick={onImageClick}
-                    onFilePreview={onFilePreview}
-                  />
-                </MessageSurface>
+                    isGroupStart={isGroupStart}
+                    isGroupEnd={isGroupEnd}
+                    mergeLevel={mergeLevel}
+                    hasError={isFailedMessage(message)}
+                    isPending={isPendingMessage(message)}
+                  >
+                    {isGroupConversation && !isOwn && showSenderName && (
+                      <p className={clsx(contract.cluster.senderLabel, "truncate")}>
+                        {senderDisplayName}
+                      </p>
+                    )}
+
+                    {message.replyToMessage && (
+                      <ReplyPreview
+                        replyToMessage={message.replyToMessage}
+                        replySenderDisplayName={replySenderDisplayName}
+                        replyTargetMessageId={replyTargetMessageId}
+                        isSelectionMode={isSelectionMode}
+                        isOwn={isOwn}
+                        replyPreviewClass={contract.cluster.replyPreview}
+                        onClick={handleReplyPreviewClick}
+                      />
+                    )}
+
+                    <MessageBodyRenderer
+                      message={message}
+                      isOwn={isOwn}
+                      currentUsername={currentUsername}
+                      textRenderMode={textRenderMode}
+                      isCollapsibleText={isCollapsibleText}
+                      onToggleTextExpand={onToggleTextExpand}
+                      onImageClick={onImageClick}
+                      onFilePreview={onFilePreview}
+                    />
+                  </MessageSurface>
+                </div>
+
+                {/* Reaction pill neo vào góc dưới của bubble */}
+                {message.reactions && message.reactions.length > 0 && (
+                  <div
+                    className={clsx(
+                      "absolute bottom-0 translate-y-1/2 z-10",
+                      isOwn ? "right-0" : "left-0",
+                    )}
+                  >
+                    <ReactionBar
+                      reactions={message.reactions}
+                      currentUserId={currentUserId}
+                      isOutgoing={isOwn}
+                      onReact={handleReactionSelect}
+                      onToggleReaction={handleReactionToggle}
+                      conversationId={message.conversationId}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -476,22 +499,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 }
               />
             )}
-
-            <div
-              className={clsx(
-                contract.cluster.reactionOffset,
-                isOwn ? "self-end" : "self-start",
-              )}
-            >
-              {/* New unified ReactionBar */}
-              <ReactionBar
-                reactions={message.reactions}
-                currentUserId={currentUserId}
-                isOutgoing={isOwn}
-                onReact={handleReactionSelect}
-                onToggleReaction={handleReactionToggle}
-              />
-            </div>
 
             {threadCountValue > 0 && (
               <ThreadIndicator

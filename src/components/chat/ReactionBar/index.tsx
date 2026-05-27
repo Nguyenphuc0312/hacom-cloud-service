@@ -1,18 +1,14 @@
 /**
- * ReactionBar - Container for reaction chips below a message bubble.
+ * ReactionBar - Zalo-style unified reaction pill.
  *
- * Features:
- * - Position: margin-top 4px, align flex-end for outgoing, flex-start for incoming
- * - Shows up to 3 chips, then "+N" overflow chip
- * - Uses ReactionChip for each reaction
- * - Animate chips on appear
+ * All emojis are stacked together in one pill with a total count,
+ * e.g.: 😂❤️ 8 — click to open reaction detail modal.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { clsx } from "clsx";
 import type { Reaction } from "@hacom/chat-shared-types/chat";
-import { ReactionChip } from "./ReactionChip";
-import { useReactionBar } from "./useReactionBar";
+import { ReactionDetailModal } from "./ReactionDetailModal";
 
 interface ReactionBarProps {
   reactions?: Reaction[];
@@ -20,154 +16,86 @@ interface ReactionBarProps {
   isOutgoing: boolean;
   onReact: (emoji: string) => void;
   onToggleReaction: (emoji: string) => void;
+  conversationId?: string;
   className?: string;
 }
+
+const MAX_SHOWN_EMOJIS = 3;
 
 export const ReactionBar: React.FC<ReactionBarProps> = ({
   reactions = [],
   currentUserId,
-  isOutgoing,
-  onReact,
-  onToggleReaction,
+  isOutgoing: _isOutgoing,
+  onReact: _onReact,
+  onToggleReaction: _onToggleReaction,
+  conversationId,
   className,
 }) => {
+  const [showModal, setShowModal] = useState(false);
+
   const hasReactions = reactions.length > 0;
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef<HTMLDivElement>(null);
 
-  const {
-    visibleReactions,
-    overflowCount,
-    hasOverflow,
-  } = useReactionBar({
-    reactions,
-    currentUserId,
-    maxVisible: 3,
-  });
+  // Total count across all reactions
+  const totalCount = reactions.reduce((sum, r) => sum + r.count, 0);
 
-  const hiddenReactions = hasOverflow ? reactions.slice(3) : [];
+  // Top emojis to show (sorted by count)
+  const shownEmojis = [...reactions].sort((a, b) => b.count - a.count).slice(0, MAX_SHOWN_EMOJIS);
 
-  const handleChipClick = useCallback(
-    (emoji: string) => {
-      onReact(emoji);
-      setOverflowOpen(false);
-    },
-    [onReact],
-  );
+  const reactedByMe = currentUserId
+    ? reactions.some((r) => r.userIds.includes(currentUserId))
+    : false;
 
-  const handleChipToggle = useCallback(
-    (emoji: string) => {
-      onToggleReaction(emoji);
-      setOverflowOpen(false);
-    },
-    [onToggleReaction],
-  );
-
-  const handleOverflowClick = useCallback(() => {
-    setOverflowOpen((prev) => !prev);
+  const handlePillClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowModal(true);
   }, []);
 
-  // Close popover on outside click
-  useEffect(() => {
-    if (!overflowOpen) return;
-    const handleOutside = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setOverflowOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [overflowOpen]);
-
-  if (!hasReactions) {
-    return null;
-  }
+  if (!hasReactions) return null;
 
   return (
-    <div
-      className={clsx(
-        "mt-1 flex flex-wrap items-center gap-1",
-        isOutgoing ? "justify-end" : "justify-start",
-        className,
-      )}
-    >
-      {/* Visible reaction chips */}
-      {visibleReactions.map((reaction, index) => {
-        const isMyReaction = currentUserId
-          ? reaction.userIds.includes(currentUserId)
-          : false;
-
-        return (
-          <div
-            key={reaction.emoji}
-            className="animate-reaction-pop"
-            style={{
-              animationDelay: `${index * 50}ms`,
-              animationFillMode: "both",
-            }}
-          >
-            <ReactionChip
-              reaction={reaction}
-              reactedByMe={isMyReaction}
-              currentUserId={currentUserId}
-              onClick={handleChipClick}
-              onToggle={handleChipToggle}
-            />
-          </div>
-        );
-      })}
-
-      {/* Overflow chip + popover */}
-      {hasOverflow && (
-        <div ref={overflowRef} className="relative">
-          <button
-            type="button"
-            onClick={handleOverflowClick}
-            aria-expanded={overflowOpen}
-            aria-label={`${overflowCount} reactions thêm`}
-            className={clsx(
-              "inline-flex items-center rounded-full",
-              "px-2 py-0.5 text-xs",
-              "border border-border bg-surface",
-              "text-text-secondary hover:bg-[hsl(var(--surface-hover))]",
-              "transition-all duration-100 hover:scale-105 active:scale-100",
-              overflowOpen && "bg-[hsl(var(--surface-hover))]",
-            )}
-          >
-            <span className="font-medium">+{overflowCount}</span>
-          </button>
-
-          {overflowOpen && (
-            <div
-              className={clsx(
-                "absolute bottom-full mb-1.5 z-50",
-                isOutgoing ? "right-0" : "left-0",
-                "flex flex-wrap gap-1 p-2",
-                "min-w-max max-w-[200px]",
-                "rounded-xl border border-border bg-surface shadow-elev3",
-                "animate-scale-in-emoji",
-              )}
+    <>
+      <button
+        type="button"
+        onClick={handlePillClick}
+        className={clsx(
+          "inline-flex items-center gap-0.5 rounded-full",
+          "h-[22px] px-2",
+          "border text-xs font-medium",
+          "transition-all duration-100 hover:scale-105 active:scale-100 select-none",
+          "z-10 relative",
+          reactedByMe
+            ? "border-[#1976D2]/40 bg-[#EBF4FF] text-[#1565C0] shadow-sm"
+            : "border-border bg-white text-text-secondary shadow-md",
+          className,
+        )}
+        aria-label={`${totalCount} reaction${totalCount !== 1 ? "s" : ""}`}
+      >
+        {/* Stacked emojis */}
+        <span className="flex items-center leading-none">
+          {shownEmojis.map((r, i) => (
+            <span
+              key={r.emoji}
+              className={clsx("inline-block text-[13px]", i > 0 && "-ml-0.5")}
             >
-              {hiddenReactions.map((reaction) => {
-                const isMyReaction = currentUserId
-                  ? reaction.userIds.includes(currentUserId)
-                  : false;
-                return (
-                  <ReactionChip
-                    key={reaction.emoji}
-                    reaction={reaction}
-                    reactedByMe={isMyReaction}
-                    currentUserId={currentUserId}
-                    onClick={handleChipClick}
-                    onToggle={handleChipToggle}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+              {r.emoji}
+            </span>
+          ))}
+        </span>
+
+        {/* Total count */}
+        <span className="ml-0.5 tabular-nums text-[11px]">
+          {totalCount}
+        </span>
+      </button>
+
+      <ReactionDetailModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        reactions={reactions}
+        currentUserId={currentUserId}
+        conversationId={conversationId}
+      />
+    </>
   );
 };
 
