@@ -76,14 +76,14 @@ export const SourceHubPanel: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* Add PDF button */}
+          {/* Add document button */}
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#C41E3A]/30 bg-[#C41E3A]/4 px-3 py-2.5 text-sm font-medium text-[#C41E3A] transition-all hover:border-[#C41E3A]/50 hover:bg-[#C41E3A]/8 active:scale-[0.98]"
           >
             <PlusIcon size={16} strokeWidth={2.5} />
-            Thêm PDF
+            Thêm tài liệu
           </button>
         </div>
 
@@ -140,7 +140,7 @@ export const SourceHubPanel: React.FC = () => {
                   Chưa có tài liệu
                 </p>
                 <p className="mt-1 max-w-[200px] text-xs leading-relaxed text-text-muted">
-                  Thêm tệp PDF để AI có thể trả lời dựa trên nội dung của bạn
+                  Thêm tài liệu để AI có thể trả lời dựa trên nội dung của bạn
                 </p>
               </div>
             </div>

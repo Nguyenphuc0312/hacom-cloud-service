@@ -138,7 +138,7 @@ export async function listPersonalDocuments(options?: {
   return normalizeDocumentList(payload);
 }
 
-/** POST /api/chat/personal/documents/upload — PDF only */
+/** POST /api/chat/personal/documents/upload */
 export function uploadPersonalDocument(
   file: File,
   options?: { onProgress?: (pct: number) => void; signal?: AbortSignal },
@@ -191,7 +191,9 @@ export function uploadPersonalDocument(
           const data = JSON.parse(xhr.responseText);
           const doc = normalizeDocument(data);
           if (doc) {
-            resolve(doc as UploadDocumentResponse);
+            const resolvedName =
+              doc.name && doc.name !== "Untitled.pdf" ? doc.name : file.name;
+            resolve({ ...doc, name: resolvedName } as UploadDocumentResponse);
           } else {
             // Backend returned something unexpected — create a minimal response
             resolve({

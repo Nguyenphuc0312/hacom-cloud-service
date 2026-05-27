@@ -9,7 +9,24 @@ import {
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { toast } from "../../../utils/toast";
 
-const MAX_PDF_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+function isAllowedFile(file: File): boolean {
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (ALLOWED_EXTENSIONS.includes(ext)) return true;
+  // Fallback: check MIME (some OS/browsers report empty type)
+  if (file.type && ALLOWED_MIME_TYPES.has(file.type)) return true;
+  return false;
+}
 
 export function usePersonalDocuments() {
   const {
@@ -49,17 +66,19 @@ export function usePersonalDocuments() {
     void loadDocuments();
   }, [loadDocuments]);
 
-  /** Upload a single PDF file */
+  /** Upload a single document file */
   const uploadDocument = useCallback(
     async (
       file: File,
       options?: { onProgress?: (pct: number) => void },
     ): Promise<boolean> => {
-      if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
-        toast.error("Chỉ hỗ trợ tệp PDF. Vui lòng chọn tệp .pdf hợp lệ.");
+      if (!isAllowedFile(file)) {
+        toast.error(
+          "Chỉ hỗ trợ PDF/DOC/DOCX/XLS/XLSX. Vui lòng chọn tệp hợp lệ.",
+        );
         return false;
       }
-      if (file.size > MAX_PDF_BYTES) {
+      if (file.size > MAX_FILE_BYTES) {
         toast.error(
           `Tệp "${file.name}" quá lớn (tối đa 50 MB). Vui lòng chọn tệp nhỏ hơn.`,
         );

@@ -64,7 +64,12 @@ export const PersonalChatInput = forwardRef<
   const canSend = value.trim().length > 0 && !isStreaming;
 
   const placeholder = isRagMode
-    ? `Hỏi AI về ${activeDocuments.length > 1 ? `${activeDocuments.length} tài liệu` : activeDocuments[0]?.name.replace(/\.pdf$/i, "") ?? "tài liệu"}…`
+    ? `Hỏi AI về ${
+        activeDocuments.length > 1
+          ? `${activeDocuments.length} tài liệu`
+          : activeDocuments[0]?.name.replace(/\.(pdf|doc|docx|xls|xlsx)$/i, "") ??
+            "tài liệu"
+      }…`
     : "Hỏi bất cứ điều gì…";
 
   return (
