@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import clsx from "clsx";
 import { SparklesIcon, BookOpenIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PersonalMessageBubble } from "./PersonalMessageBubble";
@@ -82,7 +83,7 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { activeConversationId } = usePersonalAiStore();
+  const { activeConversationId, isSourcePanelOpen } = usePersonalAiStore();
 
   const hasMessages = messages.length > 0;
 
@@ -130,7 +131,10 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
           messages.length > 0 &&
           messages[messages.length - 1].role === "user" && (
             <div className="w-full bg-surface-overlay/40">
-              <div className="mx-auto max-w-[760px] px-4 py-5">
+              <div className={clsx(
+                    "mx-auto w-full px-4 py-5 transition-[max-width] duration-300 ease-out",
+                    isSourcePanelOpen ? "max-w-[640px]" : "max-w-[960px]",
+                  )}>
                 <div className="flex gap-3.5">
                   <div
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
