@@ -58,7 +58,7 @@ interface PersonalAiState {
 
 export const usePersonalAiStore = create<PersonalAiState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       documents: [],
       selectedDocumentIds: [],
       documentsLoaded: false,
@@ -255,12 +255,6 @@ export const usePersonalAiStore = create<PersonalAiState>()(
             c.id === id ? { ...c, isPinned: !c.isPinned } : c,
           ),
         })),
-
-      // Derived helper used by hooks
-      get activeConversation() {
-        const s = get();
-        return s.conversations.find((c) => c.id === s.activeConversationId) ?? null;
-      },
     }),
     {
       name: "hacom-personal-ai-workspace",

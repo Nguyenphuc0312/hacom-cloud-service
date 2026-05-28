@@ -158,7 +158,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             from: startDate,
             to: endDate,
           });
-          events = myResponse.data;
+          events = Array.isArray(myResponse.data) ? myResponse.data : [];
           break;
         }
         case "other": {
@@ -171,7 +171,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
               to: endDate,
               includeParticipantEvents: true,
             });
-            events = otherResponse.data;
+            events = Array.isArray(otherResponse.data) ? otherResponse.data : [];
           }
           break;
         }

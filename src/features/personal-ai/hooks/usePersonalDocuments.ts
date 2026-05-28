@@ -69,7 +69,16 @@ export function usePersonalDocuments() {
   /** Load document list cho session hiện tại. Reload khi conversation đổi. */
   const loadDocuments = useCallback(
     async (force = false) => {
-      const sessionId = ensureSessionId();
+      // KHÔNG tạo conversation khi chỉ tải danh sách tài liệu lúc mount —
+      // nếu không, mỗi lần reload sẽ sinh ra một "Cuộc trò chuyện mới" rỗng
+      // và đè lên hội thoại đã khôi phục từ localStorage. Chỉ load khi đã có
+      // session; việc tạo session để dành cho action upload/hỏi.
+      const sessionId = usePersonalAiStore.getState().activeConversationId;
+      if (!sessionId) {
+        setDocuments([]);
+        setDocumentsLoaded(true);
+        return;
+      }
       if (loadedSessionRef.current === sessionId && !force) return;
       loadedSessionRef.current = sessionId;
       try {
@@ -83,7 +92,7 @@ export function usePersonalDocuments() {
         setDocumentsLoaded(true);
       }
     },
-    [employeeCode, ensureSessionId, setDocuments, setDocumentsLoaded],
+    [employeeCode, setDocuments, setDocumentsLoaded],
   );
 
   // Reload mỗi khi activeConversationId thay đổi để doc list khớp session.
@@ -97,6 +106,15 @@ export function usePersonalDocuments() {
       file: File,
       options?: { onProgress?: (pct: number) => void },
     ): Promise<boolean> => {
+      // BE định danh tài liệu theo employee_code. Thiếu mã NV (user chưa link HR)
+      // thì request lên sẽ thiếu field này → BE lỗi / tra sai phòng ban-công ty.
+      // Chặn sớm và báo rõ thay vì gửi request rỗng.
+      if (!employeeCode) {
+        toast.error(
+          "Tài khoản chưa có mã nhân viên (chưa liên kết HR). Không thể tải tài liệu lên.",
+        );
+        return false;
+      }
       if (!isAllowedFile(file)) {
         toast.error(
           "Chỉ hỗ trợ PDF/DOC/DOCX/XLS/XLSX. Vui lòng chọn tệp hợp lệ.",
