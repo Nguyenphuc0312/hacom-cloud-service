@@ -60,6 +60,7 @@ export interface User {
   effectiveDisplayName?: string;
   fullName?: string | null;
   fullNameFromHR?: string;
+  fullNameFromHr?: string;
   full_name_from_hr?: string;
   employeeCode?: string;
   employee_code?: string;
@@ -71,6 +72,8 @@ export interface User {
   bio?: string;
   phone?: string;
   departmentName?: string;
+  companyName?: string;
+  company_name?: string;
   orgUnit?: string;
   title?: string;
   unitCode?: string;
