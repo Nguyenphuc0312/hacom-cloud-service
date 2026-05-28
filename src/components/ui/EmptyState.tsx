@@ -678,6 +678,32 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   );
 };
 
+class WidgetErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error("[WidgetErrorBoundary] WeeklyCalendarWidget render error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
+          Không tải được lịch tuần. Vui lòng thử lại sau.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const WeeklyCalendarWidget: React.FC = () => {
   const navigate = useNavigate();
   const today = React.useMemo(() => new Date(), []);
@@ -697,9 +723,10 @@ const WeeklyCalendarWidget: React.FC = () => {
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
 
   // Store full API events for detail view
+  const safeStoreEvents = Array.isArray(storeEvents) ? storeEvents : [];
   const apiEventsMap = React.useMemo(() => {
     const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
-    storeEvents.forEach((event) => {
+    safeStoreEvents.forEach((event) => {
       // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail
       const attendeeNames = event.participants
         ? event.participants
@@ -719,7 +746,7 @@ const WeeklyCalendarWidget: React.FC = () => {
       };
     });
     return map;
-  }, [storeEvents]);
+  }, [safeStoreEvents]);
 
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id;
@@ -760,7 +787,7 @@ const WeeklyCalendarWidget: React.FC = () => {
 
   // Map store events to CalendarEvent format for display
   const events: CalendarEvent[] = React.useMemo(() => {
-    return storeEvents.map((event) => ({
+    return safeStoreEvents.map((event) => ({
       id: event.id,
       title: event.title,
       date: event.startAt.slice(0, 10),
@@ -768,7 +795,7 @@ const WeeklyCalendarWidget: React.FC = () => {
       description: event.description ?? undefined,
       time: event.startAt.slice(11, 16),
     }));
-  }, [storeEvents]);
+  }, [safeStoreEvents]);
 
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
@@ -1269,7 +1296,9 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
           </div>
         </div>
 
-        <WeeklyCalendarWidget />
+        <WidgetErrorBoundary>
+          <WeeklyCalendarWidget />
+        </WidgetErrorBoundary>
       </div>
     </section>
   );

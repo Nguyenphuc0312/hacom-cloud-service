@@ -127,10 +127,33 @@ export const hrCalendarApi = {
     if (params.pageSize) searchParams.append("pageSize", String(params.pageSize));
 
     const query = searchParams.toString();
-    const response = await hrApiClient.get<HRCalendarEventsResponse>(
+    const response = await hrApiClient.get(
       `/calendar/events${query ? `?${query}` : ""}`
     );
-    return response.data;
+    // ResponseEnvelopeInterceptor wraps the list as:
+    // { success, statusCode, data: { items: HRCalendarEvent[], pagination: {...} } }
+    // (legacy-list normalization converts { data: [], pagination } → { items: [], pagination })
+    const body = response.data as {
+      success?: boolean;
+      data?: { items?: HRCalendarEvent[]; pagination?: Record<string, number | boolean> };
+    };
+    const items: HRCalendarEvent[] = Array.isArray(body?.data?.items)
+      ? body.data!.items!
+      : Array.isArray(body?.data)
+        ? (body.data as unknown as HRCalendarEvent[])
+        : [];
+    const pg = body?.data?.pagination as Record<string, number | boolean> | undefined;
+    return {
+      data: items,
+      pagination: {
+        page:       typeof pg?.page       === "number"  ? pg.page       : 1,
+        pageSize:   typeof pg?.pageSize   === "number"  ? pg.pageSize   : 50,
+        totalItems: typeof pg?.total      === "number"  ? pg.total      : 0,
+        totalPages: typeof pg?.totalPages === "number"  ? pg.totalPages : 0,
+        hasNextPage:  pg?.hasNextPage  === true,
+        hasPrevPage:  pg?.hasPreviousPage === true,
+      },
+    };
   },
 
   /**
