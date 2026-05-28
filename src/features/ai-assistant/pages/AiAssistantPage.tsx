@@ -163,7 +163,14 @@ export const AiAssistantPage: React.FC = () => {
             {
               question: trimmed,
               session_id: sessionId,
-              company: "",
+              employee_code: user?.employeeCode ?? user?.employee_code ?? "",
+              employee_name:
+                user?.fullNameFromHR ??
+                user?.displayName ??
+                user?.username ??
+                "",
+              department: user?.departmentName ?? "",
+              company: user?.companyName ?? user?.company_name ?? "",
               week_start: "",
               week_end: "",
             },

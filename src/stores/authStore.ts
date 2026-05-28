@@ -71,6 +71,8 @@ export interface User {
   bio?: string;
   phone?: string;
   departmentName?: string;
+  companyName?: string;
+  company_name?: string;
   orgUnit?: string;
   title?: string;
   unitCode?: string;
