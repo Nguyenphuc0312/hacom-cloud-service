@@ -39,7 +39,6 @@ export function usePersonalDocuments() {
     addDocument,
     updateDocument,
     removeDocument,
-    toggleDocumentSelection,
     setSelectedDocumentIds,
     selectAllDocuments,
     deselectAllDocuments,
