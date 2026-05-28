@@ -99,7 +99,6 @@ interface UIState {
   // Pinned conversations (client-side, persisted)
   pinnedConversationIds: string[];
   togglePinnedConversation: (conversationId: string) => void;
-  isConversationPinned: (conversationId: string) => boolean;
 }
 
 // ============================================
@@ -294,9 +293,6 @@ export const useUIStore = create<UIState>()(
         });
       },
 
-      isConversationPinned: (conversationId) => {
-        return useUIStore.getState().pinnedConversationIds.includes(conversationId);
-      },
     }),
     {
       name: "ui-storage",

@@ -13,6 +13,14 @@ export type CalendarView = "day" | "week" | "month";
 // Use EventType (local lowercase) for UI filters
 export type CalendarEventFilterType = "vietnam_holiday" | "international" | "work" | "personal" | "task" | "meeting" | "attendance";
 
+export type CalendarErrorCode =
+  | "EMPLOYEE_LINK_REQUIRED"
+  | "FORBIDDEN"
+  | "UNAUTHORIZED"
+  | "NOT_FOUND"
+  | "NETWORK_ERROR"
+  | "UNKNOWN_ERROR";
+
 interface CalendarState {
   // Current view state
   mode: CalendarMode;
@@ -25,6 +33,7 @@ interface CalendarState {
   events: HRCalendarEvent[];
   isLoading: boolean;
   error: string | null;
+  errorCode: CalendarErrorCode | null;
 
   // Other user's calendar
   viewingUserId: string | null;
@@ -79,6 +88,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   events: [],
   isLoading: false,
   error: null,
+  errorCode: null,
   viewingUserId: null,
   viewingUserName: null,
   viewingUnitId: null,
@@ -89,7 +99,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   // Setters
   setMode: (mode) => {
-    set({ mode, viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null });
+    set({ mode, viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null, error: null, errorCode: null });
     get().fetchEvents();
   },
 
@@ -173,24 +183,45 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         }
       }
 
-      set({ events, isLoading: false, error: null });
+      set({ events, isLoading: false, error: null, errorCode: null });
     } catch (error) {
       console.error("Failed to fetch calendar events:", error);
-      // Distinguish 403 (permission denied) from other errors
-      const axiosError = error as { response?: { status?: number; data?: { message?: string } } };
-      if (axiosError.response?.status === 403) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string; errorCode?: string } };
+      };
+      const status = axiosError.response?.status;
+      const serverErrorCode = axiosError.response?.data?.errorCode;
+
+      if (status === 422 && serverErrorCode === "EMPLOYEE_LINK_REQUIRED") {
+        // Account not linked to an HR employee record — this is a config issue, not a transient
+        // error. Keep existing stale events visible; show a soft notice in the widget instead
+        // of a disruptive toast.
         set({
-          error: axiosError.response?.data?.message || "Bạn không có quyền xem lịch của người này.",
+          error: "Tài khoản của bạn chưa được liên kết với hồ sơ nhân sự nên chưa thể tải lịch cá nhân.",
+          errorCode: "EMPLOYEE_LINK_REQUIRED",
           isLoading: false,
-          events: [], // Clear events on permission denied
         });
-        toast.error("Bạn không có quyền xem lịch của người này.");
+      } else if (status === 403) {
+        set({
+          error: "Bạn không có quyền xem lịch này.",
+          errorCode: "FORBIDDEN",
+          isLoading: false,
+          events: [],
+        });
+        toast.error("Bạn không có quyền xem lịch này.");
+      } else if (status === 401) {
+        set({
+          error: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+          errorCode: "UNAUTHORIZED",
+          isLoading: false,
+        });
       } else {
         set({
-          error: error instanceof Error ? error.message : "Không thể tải lịch",
+          error: "Chưa thể tải lịch. Vui lòng thử lại.",
+          errorCode: "NETWORK_ERROR",
           isLoading: false,
         });
-        toast.error("Không thể tải lịch");
+        toast.error("Chưa thể tải lịch");
       }
     }
   },
