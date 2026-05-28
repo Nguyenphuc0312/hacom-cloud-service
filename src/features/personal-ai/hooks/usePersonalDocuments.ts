@@ -188,23 +188,38 @@ export function usePersonalDocuments() {
   const handleToggleSource = useCallback(
     async (documentId: string) => {
       toggleDocumentSelection(documentId);
-      const current = usePersonalAiStore.getState().selectedDocumentIds;
-      const next = current.includes(documentId)
-        ? current.filter((id) => id !== documentId)
-        : [...current, documentId];
+
+      const state = usePersonalAiStore.getState();
+      // Only send IDs that exist in the currently loaded documents list.
+      // This prevents stale IDs (persisted from old sessions in localStorage)
+      // from being included, which causes the backend to 404.
+      const validIds = new Set(state.documents.map((d) => d.id));
+      const next = state.selectedDocumentIds.filter((id) => validIds.has(id));
 
       try {
         await selectPersonalSources(next, {
           employeeCode,
           sessionId: ensureSessionId(),
         });
-      } catch {
+        // Silently remove stale IDs from store if any were filtered out
+        if (next.length !== state.selectedDocumentIds.length) {
+          setSelectedDocumentIds(next);
+        }
+      } catch (err) {
         // Revert toggle on failure
         toggleDocumentSelection(documentId);
-        toast.error("Không thể cập nhật nguồn. Vui lòng thử lại.");
+        if (err instanceof PersonalAiError && err.status === 404) {
+          // One or more document IDs are no longer valid for this session
+          // (backend inconsistency: listed but not accepted as source).
+          // Force reload to get the canonical list and clean up stale state.
+          toast.error("Tài liệu không còn hợp lệ trong phiên này. Đang làm mới danh sách…");
+          void loadDocuments(true);
+        } else {
+          toast.error("Không thể cập nhật nguồn. Vui lòng thử lại.");
+        }
       }
     },
-    [employeeCode, ensureSessionId, toggleDocumentSelection],
+    [employeeCode, ensureSessionId, toggleDocumentSelection, setSelectedDocumentIds, loadDocuments],
   );
 
   /** Sync selected sources with backend */
