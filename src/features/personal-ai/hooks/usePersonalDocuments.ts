@@ -39,7 +39,6 @@ export function usePersonalDocuments() {
     addDocument,
     updateDocument,
     removeDocument,
-    toggleDocumentSelection,
     setSelectedDocumentIds,
     selectAllDocuments,
     deselectAllDocuments,
@@ -187,31 +186,27 @@ export function usePersonalDocuments() {
   /** Toggle source selection and sync with backend */
   const handleToggleSource = useCallback(
     async (documentId: string) => {
-      toggleDocumentSelection(documentId);
-
       const state = usePersonalAiStore.getState();
-      // Only send IDs that exist in the currently loaded documents list.
-      // This prevents stale IDs (persisted from old sessions in localStorage)
-      // from being included, which causes the backend to 404.
       const validIds = new Set(state.documents.map((d) => d.id));
-      const next = state.selectedDocumentIds.filter((id) => validIds.has(id));
+      const currentIds = state.selectedDocumentIds.filter((id) => validIds.has(id));
+
+      // Tính next list TRƯỚC khi update store để tránh race condition Zustand async
+      const isSelected = currentIds.includes(documentId);
+      const next = isSelected
+        ? currentIds.filter((id) => id !== documentId)
+        : [...currentIds, documentId];
+
+      setSelectedDocumentIds(next);
 
       try {
         await selectPersonalSources(next, {
           employeeCode,
           sessionId: ensureSessionId(),
         });
-        // Silently remove stale IDs from store if any were filtered out
-        if (next.length !== state.selectedDocumentIds.length) {
-          setSelectedDocumentIds(next);
-        }
       } catch (err) {
-        // Revert toggle on failure
-        toggleDocumentSelection(documentId);
+        // Revert on failure
+        setSelectedDocumentIds(currentIds);
         if (err instanceof PersonalAiError && err.status === 404) {
-          // One or more document IDs are no longer valid for this session
-          // (backend inconsistency: listed but not accepted as source).
-          // Force reload to get the canonical list and clean up stale state.
           toast.error("Tài liệu không còn hợp lệ trong phiên này. Đang làm mới danh sách…");
           void loadDocuments(true);
         } else {
@@ -219,7 +214,7 @@ export function usePersonalDocuments() {
         }
       }
     },
-    [employeeCode, ensureSessionId, toggleDocumentSelection, setSelectedDocumentIds, loadDocuments],
+    [employeeCode, ensureSessionId, setSelectedDocumentIds, loadDocuments],
   );
 
   /** Sync selected sources with backend */
