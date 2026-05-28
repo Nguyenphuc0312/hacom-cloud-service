@@ -77,10 +77,8 @@ export function usePersonalChat() {
               "",
             department_name: user?.departmentName ?? "",
             org_unit: user?.orgUnit ?? "",
-            document_ids:
-              selectedDocumentIds.length > 0
-                ? selectedDocumentIds
-                : undefined,
+            // Gửi [] khi không chọn doc để BE dùng chitchat, không fallback session.
+            document_ids: selectedDocumentIds.length > 0 ? selectedDocumentIds : [],
           },
           {
             onToken: (token) => {

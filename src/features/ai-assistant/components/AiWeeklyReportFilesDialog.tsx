@@ -29,11 +29,15 @@ function cellValue(value: string | undefined): string {
   return value?.trim() ? value : "—";
 }
 
-function formatWeekRange(item: WeeklyReportFileItem): string {
-  if (item.week_start || item.week_end) {
-    return [item.week_start, item.week_end].filter(Boolean).join(" → ");
+function parseWeekDates(item: WeeklyReportFileItem): [string, string] | [string] | null {
+  if (item.week_start && item.week_end) return [item.week_start, item.week_end];
+  if (item.week_start) {
+    const parts = item.week_start.split(/\s*(?:->|→|–|-)\s*/);
+    if (parts.length === 2 && parts[1]) return [parts[0], parts[1]];
+    return [item.week_start];
   }
-  return "—";
+  if (item.week_end) return [item.week_end];
+  return null;
 }
 
 export const AiWeeklyReportFilesDialog: React.FC<
@@ -230,8 +234,17 @@ export const AiWeeklyReportFilesDialog: React.FC<
                         <td className="px-3 py-2.5 text-text-secondary">
                           {cellValue(department)}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-text-secondary">
-                          {formatWeekRange(item)}
+                        <td className="px-3 py-2.5 text-text-secondary">
+                          {(() => {
+                            const dates = parseWeekDates(item);
+                            if (!dates) return "—";
+                            return (
+                              <div className="flex flex-col gap-0.5 text-xs">
+                                <span>{dates[0]}</span>
+                                {dates[1] && <span className="text-text-muted">{dates[1]}</span>}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="max-w-[240px] px-3 py-2.5">
                           <button

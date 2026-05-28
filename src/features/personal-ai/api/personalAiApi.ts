@@ -280,20 +280,19 @@ export async function selectPersonalSources(
     signal?: AbortSignal;
   },
 ): Promise<void> {
-  const debugToken = getAccessToken();
-  // eslint-disable-next-line no-console
-  console.debug("[PersonalAI] selectPersonalSources", {
-    documentIds,
-    hasToken: !!debugToken,
-    tokenPrefix: debugToken ? debugToken.slice(0, 30) + "…" : null,
-    employeeCode: options?.employeeCode,
-  });
   const body: Record<string, unknown> = { document_ids: documentIds };
   if (options?.employeeCode) body.employee_code = options.employeeCode;
   if (options?.sessionId) body.session_id = options.sessionId;
+
+  // BE cần xác thực để biết session của ai cần cập nhật.
+  // Ngoài Bearer token (đã có trong buildAuthHeaders), gửi thêm X-Employee-Code
+  // để BE có thể fallback khi Bearer không decode được employee_code.
+  const extraHeaders: Record<string, string> = { "Content-Type": "application/json" };
+  if (options?.employeeCode) extraHeaders["X-Employee-Code"] = options.employeeCode;
+
   await aiRequest(`${DOCS_BASE}/source`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: extraHeaders,
     body: JSON.stringify(body),
     signal: options?.signal,
   });

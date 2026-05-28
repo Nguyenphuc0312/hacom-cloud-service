@@ -24,8 +24,7 @@ export const SourceHubPanel: React.FC = () => {
     uploadDocument,
     deleteDocument,
     handleToggleSource,
-    selectAllDocuments,
-    deselectAllDocuments,
+    syncSelectedSources,
   } = usePersonalDocuments();
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -100,7 +99,9 @@ export const SourceHubPanel: React.FC = () => {
 
             <button
               type="button"
-              onClick={allSelected ? deselectAllDocuments : selectAllDocuments}
+              onClick={() =>
+                syncSelectedSources(allSelected ? [] : documents.filter((d) => d.status !== "uploading" && d.status !== "error").map((d) => d.id))
+              }
               className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
               title={allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
             >
