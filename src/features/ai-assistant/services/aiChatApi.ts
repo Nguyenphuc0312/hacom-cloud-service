@@ -1,6 +1,9 @@
-const BASE_URL = (
-  import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined
-)?.trim() || "https://ai-chat.fitora.id.vn";
+import { AI_CHAT_BASE_URL as BASE_URL } from "../../../services/ai-chat/constants";
+import { getAccessToken } from "../../../services/tokenService";
+import { fetchWithAuth } from "../../../services/ai-chat/fetchWithAuth";
+import { openSSEStream } from "../../../services/ai-chat/sseWithAuth";
+import aiChatClient from "../../../services/ai-chat/aiChatClient";
+
 const ENDPOINTS = {
   company: `${BASE_URL}/api/chat/stream`,
   personal: `${BASE_URL}/api/chat/personal/stream`,
@@ -8,6 +11,7 @@ const ENDPOINTS = {
 const WEEKLY_REPORT_BASE = `${BASE_URL}/api/chat/personal/weekly-report`;
 const UPLOAD_ENDPOINTS = {
   personalWeeklyReport: `${WEEKLY_REPORT_BASE}/upload`,
+  personalDocument: `${BASE_URL}/api/chat/personal/documents/upload`,
 };
 const WEEKLY_REPORT_FILES = {
   list: `${WEEKLY_REPORT_BASE}/files`,
@@ -37,110 +41,103 @@ export class AiApiError extends Error {
 
 /**
  * Sends a message to the AI chat API and handles the real-time SSE stream.
+ *
+ * Transport is delegated to `openSSEStream` (auth, retry, AbortController,
+ * reader cleanup).  This function owns only domain-level event parsing.
  */
-export async function sendAiChatMessage(
+export function sendAiChatMessage(
   request: AiChatRequest,
   endpoint: "company" | "personal" = "company",
   options?: {
+    /** External cancellation signal — wired to SSE cleanup on abort. */
+    signal?: AbortSignal;
     onToken?: (token: string) => void;
     onThinking?: (thinking: string) => void;
-  }
+  },
 ): Promise<AiChatResponse> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  return new Promise((resolve, reject) => {
+    let finalResponse: AiChatResponse | null = null;
+    // Raw accumulated text is kept for the fallback regex parse — some AI
+    // Chat service builds occasionally omit the `done` event's blank-line
+    // separator, causing it to be missed during streaming chunk processing.
+    let accumulatedRawData = "";
+    // Token buffer used as last-resort answer when `done` event is absent.
+    let tokenBuffer = "";
 
-  const url = ENDPOINTS[endpoint];
+    const cleanup = openSSEStream(ENDPOINTS[endpoint], request, {
+      signal: options?.signal,
+      onEvent: (type, data) => {
+        // Track raw for fallback regex
+        accumulatedRawData += `event: ${type}\ndata: ${data}\n\n`;
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal: controller.signal,
+        if (type === "token") {
+          try {
+            const parsed = JSON.parse(data) as { token?: unknown } | string;
+            const token = String(
+              typeof parsed === "object" && parsed !== null
+                ? (parsed as { token?: unknown }).token ?? ""
+                : parsed ?? "",
+            );
+            tokenBuffer += token;
+            options?.onToken?.(token);
+          } catch {
+            tokenBuffer += data;
+            options?.onToken?.(data);
+          }
+        } else if (type === "thinking") {
+          options?.onThinking?.(data);
+        } else if (type === "done") {
+          try {
+            finalResponse = JSON.parse(data) as AiChatResponse;
+          } catch {
+            // Malformed done payload — fallback below
+          }
+        }
+      },
+
+      onComplete: () => {
+        if (finalResponse) {
+          resolve(finalResponse);
+          return;
+        }
+
+        // Fallback: regex extraction for malformed SSE streams
+        const doneMatch = accumulatedRawData.match(
+          /event:\s*done\s*\ndata:\s*(.+)/,
+        );
+        if (doneMatch?.[1]) {
+          try {
+            resolve(JSON.parse(doneMatch[1]) as AiChatResponse);
+            return;
+          } catch {
+            // ignore — fall through to token buffer
+          }
+        }
+
+        // Last resort: synthesise a response from accumulated tokens
+        if (tokenBuffer) {
+          resolve({ session_id: request.session_id ?? "", answer: tokenBuffer });
+          return;
+        }
+
+        reject(new AiApiError(0, "network"));
+      },
+
+      onError: (err) => {
+        const kind: AiApiError["kind"] =
+          err.kind === "timeout"
+            ? "timeout"
+            : err.kind === "network"
+              ? "network"
+              : "http";
+        reject(new AiApiError(err.status, kind));
+      },
     });
 
-    if (!response.ok) {
-      throw new AiApiError(response.status, "http");
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("Response body is null");
-
-    const decoder = new TextDecoder();
-    let accumulatedText = "";
-    let finalResponse: AiChatResponse | null = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      accumulatedText += chunk;
-
-      // Handle multiple SSE events in one chunk
-      const events = chunk.split("\n\n");
-      for (const event of events) {
-        if (!event.trim()) continue;
-
-        const lines = event.split("\n");
-        let eventType = "";
-        let data = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            eventType = line.replace("event: ", "").trim();
-          } else if (line.startsWith("data: ")) {
-            data = line.replace("data: ", "").trim();
-          }
-        }
-
-        if (eventType === "token" && options?.onToken) {
-          try {
-            const tokenData = JSON.parse(data);
-            options.onToken(tokenData.token);
-          } catch (e) {
-            // Fallback if not JSON
-            options.onToken(data);
-          }
-        } else if (eventType === "thinking" && options?.onThinking) {
-          options.onThinking(data);
-        } else if (eventType === "done") {
-          try {
-            finalResponse = JSON.parse(data);
-          } catch {
-            // Malformed SSE done payload — finalResponse stays null,
-            // fallback regex parse below will attempt recovery.
-          }
-        }
-      }
-    }
-
-    if (!finalResponse) {
-      // Final attempt to parse from accumulated text if done event wasn't caught
-      const doneMatch = accumulatedText.match(/event: done\s*data: (.*)/);
-      if (doneMatch && doneMatch[1]) {
-        try {
-          finalResponse = JSON.parse(doneMatch[1]);
-        } catch {
-          // Unrecoverable — caller will throw "No final response received"
-        }
-      }
-    }
-
-    if (!finalResponse) {
-      throw new Error("No final response received from AI stream");
-    }
-
-    return finalResponse;
-  } catch (err) {
-    if (err instanceof AiApiError) throw err;
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new AiApiError(0, "timeout");
-    }
-    throw new AiApiError(0, "network");
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    // Wire caller's signal to SSE cleanup so aborting the signal also stops
+    // the underlying stream reader.
+    options?.signal?.addEventListener("abort", cleanup, { once: true });
+  });
 }
 
 export interface WeeklyReportFileItem {
@@ -170,6 +167,12 @@ export interface WeeklyReportUploadRequest {
   company?: string;
   week_start?: string;
   week_end?: string;
+  /** Mã nhân sự */
+  employee_code?: string;
+  /** Tên nhân viên */
+  employee_name?: string;
+  /** Phòng ban */
+  department?: string;
 }
 
 export interface WeeklyReportUploadResponse extends AiChatResponse {
@@ -310,10 +313,20 @@ export function uploadPersonalWeeklyReport(
     form.append("company", body.company ?? "");
     form.append("week_start", body.week_start ?? "");
     form.append("week_end", body.week_end ?? "");
+    form.append("employee_code", body.employee_code ?? "");
+    form.append("employee_name", body.employee_name ?? "");
+    form.append("department", body.department ?? "");
     form.append("file", file, file.name);
 
     xhr.open("POST", url, true);
     xhr.responseType = "text";
+
+    // Inject Bearer token — XHR cannot participate in the Axios interceptor
+    // chain, so we read the token directly and set the header manually.
+    const xhrToken = getAccessToken();
+    if (xhrToken) {
+      xhr.setRequestHeader("Authorization", `Bearer ${xhrToken}`);
+    }
 
     if (options?.onProgress) {
       xhr.upload.addEventListener("progress", (event) => {
@@ -375,38 +388,25 @@ async function aiGetRequest(
   url: string,
   options?: { signal?: AbortSignal },
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-  const onAbort = () => controller.abort();
-  if (options?.signal) {
-    if (options.signal.aborted) {
-      window.clearTimeout(timeoutId);
-      throw new AiApiError(0, "timeout");
-    }
-    options.signal.addEventListener("abort", onAbort);
-  }
-
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      signal: options?.signal ?? controller.signal,
-    });
+    const response = await fetchWithAuth(
+      url,
+      { method: "GET" },
+      { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+    );
     if (!response.ok) {
       throw new AiApiError(response.status, "http");
     }
     return response;
   } catch (err) {
     if (err instanceof AiApiError) throw err;
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new AiApiError(0, "timeout");
+    }
     if (err instanceof Error && err.name === "AbortError") {
       throw new AiApiError(0, "timeout");
     }
     throw new AiApiError(0, "network");
-  } finally {
-    window.clearTimeout(timeoutId);
-    if (options?.signal) {
-      options.signal.removeEventListener("abort", onAbort);
-    }
   }
 }
 
@@ -816,4 +816,70 @@ function triggerBrowserDownload(
   if (revokeObjectUrl) {
     window.setTimeout(() => URL.revokeObjectURL(href), 0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Personal Document Upload
+// ---------------------------------------------------------------------------
+
+/** Response trả về từ endpoint upload tài liệu cá nhân. */
+export interface PersonalDocumentUploadResponse {
+  /** Thông báo từ server (thành công / lỗi). */
+  message?: string;
+  /** ID tài liệu được lưu trên server (nếu có). */
+  document_id?: string;
+  /** Tên file gốc mà server ghi nhận. */
+  filename?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Upload một tài liệu cá nhân lên endpoint `/api/chat/personal/documents/upload`.
+ *
+ * Sử dụng `aiChatClient` (Axios instance đã cấu hình interceptor) để request
+ * tự động được gắn `Authorization: Bearer <token>` mà không cần xử lý thủ công.
+ *
+ * **Lưu ý quan trọng về Content-Type:**
+ * KHÔNG được set `'Content-Type': 'multipart/form-data'` thủ công.
+ * Khi truyền `FormData`, Axios + Browser sẽ tự sinh header chuẩn kèm `boundary`
+ * chính xác. Set cứng sẽ khiến backend không parse được multipart payload.
+ */
+export async function uploadPersonalDocument(
+  file: File,
+  options?: {
+    /** Callback nhận phần trăm tiến độ upload (0–100) để cập nhật UI. */
+    onProgress?: (pct: number) => void;
+    /** AbortSignal từ AbortController để hủy request giữa chừng nếu cần. */
+    signal?: AbortSignal;
+  },
+): Promise<PersonalDocumentUploadResponse> {
+  // Đóng gói file vào FormData — chỉ đúng 1 field "file" theo yêu cầu backend
+  const form = new FormData();
+  form.append("file", file, file.name);
+
+  const { data } = await aiChatClient.post<PersonalDocumentUploadResponse>(
+    UPLOAD_ENDPOINTS.personalDocument,
+    form,
+    {
+      // Truyền AbortSignal vào Axios để hủy request khi component unmount
+      // hoặc khi user bấm nút hủy upload
+      signal: options?.signal,
+
+      // Theo dõi tiến độ upload và thông báo ra UI qua callback onProgress
+      onUploadProgress: options?.onProgress
+        ? (event) => {
+            if (event.total && event.total > 0) {
+              const pct = Math.min(
+                100,
+                Math.round((event.loaded / event.total) * 100),
+              );
+              options.onProgress!(pct);
+            }
+          }
+        : undefined,
+    },
+  );
+
+  // Trả về trực tiếp data từ response — interceptor đã xử lý lỗi 4xx/5xx
+  return data;
 }
