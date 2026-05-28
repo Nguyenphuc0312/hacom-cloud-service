@@ -691,6 +691,7 @@ const WeeklyCalendarWidget: React.FC = () => {
   const storeEvents = useCalendarStore((s) => s.events);
   const storeIsLoading = useCalendarStore((s) => s.isLoading);
   const storeError = useCalendarStore((s) => s.error);
+  const storeErrorCode = useCalendarStore((s) => s.errorCode);
   const fetchEvents = useCalendarStore((s) => s.fetchEvents);
   const createEvent = useCalendarStore((s) => s.createEvent);
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
@@ -843,9 +844,9 @@ const WeeklyCalendarWidget: React.FC = () => {
   };
 
   // Note: handleToggleRead is not supported by API yet - disabled for API-based events
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleToggleRead = (_meetingId: string) => {
-    // Read receipts are stored locally for now
-    // This functionality will be implemented when backend supports it
+    // Read receipts not yet supported by backend
   };
 
   const isToday = (d: Date) =>
@@ -954,34 +955,47 @@ const WeeklyCalendarWidget: React.FC = () => {
         />
       )}
 
-      {/* Loading state */}
+      {/* Loading indicator — subtle bar, never hides the grid */}
       {storeIsLoading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
+        <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-1.5">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
+          <span className="text-[11px] text-text-muted">Đang tải lịch...</span>
         </div>
       )}
 
-      {/* Error state */}
+      {/* Error notice banner — soft, inline, never replaces the grid */}
       {storeError && !storeIsLoading && (
-        <div className="flex flex-col items-center justify-center gap-2 py-8 px-4">
-          <ExclamationTriangleIcon className="h-8 w-8 text-danger" />
-          <p className="text-sm text-danger">{storeError}</p>
-          <button
-            type="button"
-            onClick={() => {
-              if (weekRange.start && weekRange.end) {
-                void fetchEvents(weekRange.start, weekRange.end);
-              }
-            }}
-            className="text-xs text-[#1565C0] hover:underline"
-          >
-            Thử lại
-          </button>
+        <div className="mx-3 my-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-900/20">
+          <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-amber-800 dark:text-amber-200">{storeError}</p>
+            {storeErrorCode !== "FORBIDDEN" && storeErrorCode !== "UNAUTHORIZED" && (
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (weekRange.start && weekRange.end) {
+                      void fetchEvents(weekRange.start, weekRange.end);
+                    }
+                  }}
+                  className="text-[11px] font-semibold text-amber-700 hover:underline dark:text-amber-300"
+                >
+                  Thử lại
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/calendar")}
+                  className="text-[11px] font-semibold text-[#1565C0] hover:underline"
+                >
+                  Xem lịch đầy đủ →
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Grid */}
-      {!storeIsLoading && !storeError && (
+      {/* Grid — always rendered so the calendar shell is never lost due to an API error */}
       <div className="grid grid-cols-7 divide-x divide-border">
         {weekDays.map((day, i) => {
           const todayDay = isToday(day);
@@ -1128,7 +1142,6 @@ const WeeklyCalendarWidget: React.FC = () => {
           );
         })}
       </div>
-      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
