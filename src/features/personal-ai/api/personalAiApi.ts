@@ -5,6 +5,7 @@ import type {
   UploadDocumentResponse,
   PersonalCitation,
 } from "../types";
+import { getAccessToken } from "../../../services/tokenService";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -14,6 +15,11 @@ const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
 const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
 const TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
+
+function buildAuthHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}`, "x-api-contract": "3" } : { "x-api-contract": "3" };
+}
 
 export class PersonalAiError extends Error {
   readonly status: number;
@@ -76,9 +82,12 @@ async function aiRequest(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const authHeaders = buildAuthHeaders();
+  const mergedHeaders = { ...authHeaders, ...(init.headers as Record<string, string> | undefined) };
   try {
     const response = await fetch(url, {
       ...init,
+      headers: mergedHeaders,
       signal: init.signal ?? controller.signal,
     });
     if (!response.ok) throw new PersonalAiError(response.status, "http");
@@ -194,6 +203,11 @@ export function uploadPersonalDocument(
 
     xhr.open("POST", url, true);
     xhr.responseType = "text";
+
+    const authHeaders = buildAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      xhr.setRequestHeader(key, value);
+    }
 
     if (options?.onProgress) {
       xhr.upload.addEventListener("progress", (evt) => {
@@ -347,7 +361,7 @@ export async function streamPersonalChat(
   try {
     const response = await fetch(CHAT_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
       body: JSON.stringify(request),
       signal: options?.signal ?? controller.signal,
     });
