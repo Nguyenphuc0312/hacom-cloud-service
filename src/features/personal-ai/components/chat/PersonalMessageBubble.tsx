@@ -11,7 +11,12 @@ import {
   FileTextIcon,
   SearchIcon,
   BrainCircuitIcon,
+  DownloadIcon,
+  EyeIcon,
+  Loader2Icon,
 } from "lucide-react";
+import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
+import { openWeeklyReportFile } from "../../api/personalAiApi";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -97,8 +102,69 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   message,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
+
+  const markdownComponents = React.useMemo(
+    () => ({
+      a: ({ href, children }: React.ComponentPropsWithoutRef<"a">) => {
+        const label = (React.Children.toArray(children) as React.ReactNode[])
+          .map((c) => (typeof c === "string" ? c : ""))
+          .join("");
+        const action = resolveWeeklyReportFileAction(href, label);
+
+        if (!action) {
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#1565C0] underline hover:text-[#1976D2] transition-colors"
+            >
+              {children}
+            </a>
+          );
+        }
+
+        const isThisLoading = loadingFileId === action.fileId;
+        const isDownload = action.mode === "download";
+
+        const handleClick = (e: React.MouseEvent) => {
+          e.preventDefault();
+          if (isThisLoading) return;
+          // Mở tab ngay trong gesture context để tránh popup blocker.
+          // Không dùng noopener ở đây vì noopener khiến window.open trả về null
+          // — ta cần reference để navigate sau khi fetch xong.
+          const viewTab = !isDownload ? window.open("about:blank", "_blank") : null;
+          setLoadingFileId(action.fileId);
+          openWeeklyReportFile(action.fileId, action.mode, viewTab)
+            .catch(() => { viewTab?.close(); })
+            .finally(() => setLoadingFileId(null));
+        };
+
+        return (
+          <button
+            type="button"
+            onClick={handleClick}
+            disabled={isThisLoading}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-[#1565C0] hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 transition-colors disabled:opacity-60"
+            title={isDownload ? "Tải về máy" : "Xem file"}
+          >
+            {isThisLoading ? (
+              <Loader2Icon size={12} strokeWidth={2} className="animate-spin shrink-0" />
+            ) : isDownload ? (
+              <DownloadIcon size={12} strokeWidth={2} className="shrink-0" />
+            ) : (
+              <EyeIcon size={12} strokeWidth={2} className="shrink-0" />
+            )}
+            {children}
+          </button>
+        );
+      },
+    }),
+    [loadingFileId],
+  );
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(message.content);
@@ -198,6 +264,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeSanitize]}
+                    components={markdownComponents}
                   >
                     {message.content}
                   </ReactMarkdown>

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { PersonalAiSidebar } from "../components/layout/PersonalAiSidebar";
 import { SourceHubPanel } from "../components/source-hub/SourceHubPanel";
@@ -8,6 +8,9 @@ import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceH
 import { usePersonalChat } from "../hooks/usePersonalChat";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
+import { toast } from "../../../utils/toast";
+
+const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 /**
  * Full-page Personal AI Workspace — NotebookLM-inspired three-panel layout.
@@ -18,20 +21,42 @@ import { usePersonalAiStore } from "../stores/personalAiStore";
  * └──────────────┴──────────────────────────────┴──────────────┘
  */
 export const PersonalAiWorkspacePage: React.FC = () => {
-  const { messages, isStreaming, sendMessage, stopStreaming } = usePersonalChat();
+  const { messages, isStreaming, sendMessage, sendWithFile, stopStreaming } = usePersonalChat();
   const { isRagMode } = usePersonalDocuments();
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
 
   const [inputValue, setInputValue] = React.useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleAttachFile = useCallback((file: File) => {
+    if (file.size > WEEKLY_REPORT_MAX_BYTES) {
+      toast.error(`Tệp "${file.name}" quá lớn (giới hạn 25 MB). Vui lòng chọn tệp nhỏ hơn.`);
+      return;
+    }
+    setPendingFile(file);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
+  const handleRemoveFile = useCallback(() => {
+    if (!isUploading) setPendingFile(null);
+  }, [isUploading]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
       setInputValue("");
-      await sendMessage(text);
+      if (pendingFile) {
+        setPendingFile(null);
+        setIsUploading(true);
+        await sendWithFile(text, pendingFile);
+        setIsUploading(false);
+      } else {
+        await sendMessage(text);
+      }
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [sendMessage],
+    [sendMessage, sendWithFile, pendingFile],
   );
 
   const handleSuggestionSelect = useCallback((value: string) => {
@@ -75,6 +100,10 @@ export const PersonalAiWorkspacePage: React.FC = () => {
               onStop={stopStreaming}
               isStreaming={isStreaming}
               isRagMode={isRagMode}
+              pendingFile={pendingFile}
+              onAttachFile={handleAttachFile}
+              onRemoveFile={handleRemoveFile}
+              isUploading={isUploading}
             />
           </div>
         </div>

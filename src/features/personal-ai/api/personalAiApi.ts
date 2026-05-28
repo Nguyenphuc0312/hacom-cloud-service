@@ -12,6 +12,7 @@ const BASE_URL =
   "https://ai-chat.fitora.id.vn";
 
 const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
+const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;
 const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
 const TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
@@ -314,6 +315,85 @@ export async function deletePersonalDocument(
     method: "DELETE",
     signal: options?.signal,
   });
+}
+
+/**
+ * GET /api/chat/personal/weekly-report/files/{fileId}       → download
+ * GET /api/chat/personal/weekly-report/files/{fileId}/view  → xem
+ *
+ * viewTab: tab đã mở sẵn từ click handler (tránh popup bị chặn vì gọi
+ * window.open sau await). Với mode="download" không cần truyền.
+ */
+export async function openWeeklyReportFile(
+  fileId: number,
+  mode: "view" | "download",
+  viewTab?: Window | null,
+): Promise<void> {
+  const url =
+    mode === "view"
+      ? `${WEEKLY_REPORT_FILES_BASE}/${fileId}/view`
+      : `${WEEKLY_REPORT_FILES_BASE}/${fileId}`;
+
+  const response = await aiRequest(url);
+  const contentType = response.headers.get("content-type") ?? "";
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = `bao-cao-tuan-${fileId}`;
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  // Đọc body một lần duy nhất
+  let resolvedUrl: string | null = null;
+  let blob: Blob | null = null;
+
+  if (contentType.includes("application/json") || contentType.includes("text/")) {
+    const text = await response.text();
+    let candidate = text.trim().replace(/^"|"$/g, "");
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (typeof parsed === "string") candidate = parsed;
+    } catch { /* not JSON — use raw text */ }
+
+    if (candidate.startsWith("http")) {
+      resolvedUrl = candidate;
+    } else {
+      blob = new Blob([text], { type: contentType || "application/octet-stream" });
+    }
+  } else {
+    blob = await response.blob();
+  }
+
+  if (resolvedUrl) {
+    if (mode === "view") {
+      if (viewTab) viewTab.location.href = resolvedUrl;
+      else window.open(resolvedUrl, "_blank");
+    } else {
+      const a = document.createElement("a");
+      a.href = resolvedUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    return;
+  }
+
+  if (!blob) return;
+
+  const objectUrl = URL.createObjectURL(blob);
+  if (mode === "view") {
+    if (viewTab) viewTab.location.href = objectUrl;
+    else window.open(objectUrl, "_blank");
+  } else {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 function normalizeCitation(raw: unknown): PersonalCitation | null {

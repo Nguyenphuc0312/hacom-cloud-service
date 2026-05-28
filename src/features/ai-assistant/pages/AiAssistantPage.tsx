@@ -165,12 +165,14 @@ export const AiAssistantPage: React.FC = () => {
               session_id: sessionId,
               employee_code: user?.employeeCode ?? user?.employee_code ?? "",
               employee_name:
+                user?.fullNameFromHr ??
                 user?.fullNameFromHR ??
                 user?.displayName ??
                 user?.username ??
                 "",
               department: user?.departmentName ?? "",
-              company: user?.companyName ?? user?.company_name ?? "",
+              company:
+                user?.companyName ?? user?.company_name ?? user?.orgUnit ?? "",
               week_start: "",
               week_end: "",
             },
@@ -216,6 +218,7 @@ export const AiAssistantPage: React.FC = () => {
           if (isCompany) {
             request.user_id = user?.id || "";
             request.user_name =
+              user?.fullNameFromHr ||
               user?.fullNameFromHR ||
               user?.displayName ||
               user?.username ||
@@ -224,6 +227,7 @@ export const AiAssistantPage: React.FC = () => {
             request.employee_code =
               user?.employeeCode || user?.employee_code || "";
             request.employee_name =
+              user?.fullNameFromHr ||
               user?.fullNameFromHR ||
               user?.displayName ||
               user?.username ||
@@ -359,7 +363,8 @@ export const AiAssistantPage: React.FC = () => {
     openWeeklyReportFilePickerRef.current = open;
   }, []);
 
-  const defaultCompany = user?.departmentName || "";
+  const defaultCompany =
+    user?.companyName ?? user?.company_name ?? user?.orgUnit ?? "";
 
   const weeklyReportPromptProps = isPersonal
     ? {
