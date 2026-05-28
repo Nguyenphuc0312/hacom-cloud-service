@@ -8,6 +8,7 @@ interface PersonalWorkspaceConversation {
   messages: PersonalChatMessage[];
   createdAt: string;
   updatedAt: string;
+  isPinned?: boolean;
 }
 
 interface PersonalAiState {
@@ -19,6 +20,10 @@ interface PersonalAiState {
   // Conversations
   conversations: PersonalWorkspaceConversation[];
   activeConversationId: string | null;
+
+  // UI
+  isSourcePanelOpen: boolean;
+  toggleSourcePanel: () => void;
 
   // Actions — documents
   setDocuments: (docs: PersonalDocument[]) => void;
@@ -48,6 +53,7 @@ interface PersonalAiState {
   ) => void;
   markMessageError: (conversationId: string) => void;
   renameConversation: (id: string, title: string) => void;
+  togglePinConversation: (id: string) => void;
 }
 
 export const usePersonalAiStore = create<PersonalAiState>()(
@@ -58,9 +64,23 @@ export const usePersonalAiStore = create<PersonalAiState>()(
       documentsLoaded: false,
       conversations: [],
       activeConversationId: null,
+      isSourcePanelOpen: true,
+
+      toggleSourcePanel: () =>
+        set((s) => ({ isSourcePanelOpen: !s.isSourcePanelOpen })),
 
       setDocuments: (docs) =>
-        set({ documents: docs }),
+        set((s) => {
+          const docIds = new Set(docs.map((d) => d.id));
+          return {
+            documents: docs,
+            // Loại bỏ các selection trỏ tới doc không còn trong session hiện tại
+            // (tránh leak doc từ conversation cũ sang query mới qua localStorage).
+            selectedDocumentIds: s.selectedDocumentIds.filter((id) =>
+              docIds.has(id),
+            ),
+          };
+        }),
 
       addDocument: (doc) =>
         set((s) => ({
@@ -226,6 +246,13 @@ export const usePersonalAiStore = create<PersonalAiState>()(
         set((s) => ({
           conversations: s.conversations.map((c) =>
             c.id === id ? { ...c, title } : c,
+          ),
+        })),
+
+      togglePinConversation: (id) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, isPinned: !c.isPinned } : c,
           ),
         })),
 

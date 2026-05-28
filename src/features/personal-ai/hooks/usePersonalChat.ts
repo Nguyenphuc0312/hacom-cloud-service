@@ -67,6 +67,8 @@ export function usePersonalChat() {
             employee_code: user?.employeeCode ?? user?.employee_code ?? "",
             employee_name:
               user?.fullNameFromHR ?? user?.displayName ?? user?.username ?? "",
+            department_name: user?.departmentName ?? "",
+            org_unit: user?.orgUnit ?? "",
             document_ids:
               selectedDocumentIds.length > 0
                 ? selectedDocumentIds

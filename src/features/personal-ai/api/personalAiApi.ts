@@ -129,11 +129,22 @@ function normalizeDocumentList(payload: unknown): PersonalDocument[] {
   return [];
 }
 
-/** GET /api/chat/personal/documents */
+/**
+ * GET /api/chat/personal/documents
+ *
+ * BE đọc employee_code + session_id qua query string.
+ */
 export async function listPersonalDocuments(options?: {
+  employeeCode?: string;
+  sessionId?: string;
   signal?: AbortSignal;
 }): Promise<PersonalDocument[]> {
-  const response = await aiRequest(DOCS_BASE, { signal: options?.signal });
+  const params = new URLSearchParams();
+  if (options?.employeeCode) params.set("employee_code", options.employeeCode);
+  if (options?.sessionId) params.set("session_id", options.sessionId);
+  const qs = params.toString();
+  const url = qs ? `${DOCS_BASE}?${qs}` : DOCS_BASE;
+  const response = await aiRequest(url, { signal: options?.signal });
   const payload = await response.json();
   return normalizeDocumentList(payload);
 }
@@ -141,10 +152,17 @@ export async function listPersonalDocuments(options?: {
 /** POST /api/chat/personal/documents/upload */
 export function uploadPersonalDocument(
   file: File,
-  options?: { onProgress?: (pct: number) => void; signal?: AbortSignal },
+  options?: {
+    employeeCode?: string;
+    sessionId?: string;
+    onProgress?: (pct: number) => void;
+    signal?: AbortSignal;
+  },
 ): Promise<UploadDocumentResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    // BE đọc employee_code + session_id qua FormData field (cùng giá trị
+    // employee_code đang gửi ở chat endpoint).
     const url = `${DOCS_BASE}/upload`;
     const timeoutId = window.setTimeout(() => {
       xhr.abort();
@@ -171,6 +189,8 @@ export function uploadPersonalDocument(
 
     const form = new FormData();
     form.append("file", file, file.name);
+    if (options?.employeeCode) form.append("employee_code", options.employeeCode);
+    if (options?.sessionId) form.append("session_id", options.sessionId);
 
     xhr.open("POST", url, true);
     xhr.responseType = "text";
@@ -239,22 +259,44 @@ export function uploadPersonalDocument(
 /** POST /api/chat/personal/documents/source — set active sources */
 export async function selectPersonalSources(
   documentIds: string[],
-  options?: { signal?: AbortSignal },
+  options?: {
+    employeeCode?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+  },
 ): Promise<void> {
+  const body: Record<string, unknown> = { document_ids: documentIds };
+  if (options?.employeeCode) body.employee_code = options.employeeCode;
+  if (options?.sessionId) body.session_id = options.sessionId;
   await aiRequest(`${DOCS_BASE}/source`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ document_ids: documentIds }),
+    body: JSON.stringify(body),
     signal: options?.signal,
   });
 }
 
-/** DELETE /api/chat/personal/documents/{id} */
+/**
+ * DELETE /api/chat/personal/documents/{id}
+ *
+ * Document xoá là thao tác cấp user (theo employee_code, qua query string),
+ * KHÔNG kèm session_id. Nếu kèm session_id thì BE chỉ tìm doc trong phạm vi
+ * 1 conversation và sẽ báo "không tìm thấy" khi user đã chuyển conversation.
+ */
 export async function deletePersonalDocument(
   documentId: string,
-  options?: { signal?: AbortSignal },
+  options?: {
+    employeeCode?: string;
+    signal?: AbortSignal;
+  },
 ): Promise<void> {
-  await aiRequest(`${DOCS_BASE}/${documentId}`, {
+  const params = new URLSearchParams();
+  if (options?.employeeCode) params.set("employee_code", options.employeeCode);
+  const qs = params.toString();
+  const url = qs
+    ? `${DOCS_BASE}/${documentId}?${qs}`
+    : `${DOCS_BASE}/${documentId}`;
+  await aiRequest(url, {
     method: "DELETE",
     signal: options?.signal,
   });
