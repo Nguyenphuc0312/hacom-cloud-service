@@ -137,15 +137,33 @@ export function usePersonalDocuments() {
         status: "uploading",
       });
 
+      const sessionId = ensureSessionId();
+
       try {
         const doc = await uploadPersonalDocument(file, {
           employeeCode,
-          sessionId: ensureSessionId(),
+          sessionId,
           onProgress: options?.onProgress,
         });
-        // Replace optimistic entry with real doc
+        // Replace optimistic entry with real doc (addDocument tự động chọn doc mới)
         removeDocument(tempId);
         addDocument({ ...doc, status: "indexed" });
+
+        // Đồng bộ session state với BE: tài liệu mới upload phải được kích hoạt
+        // qua /documents/source, nếu không BE vẫn coi như chưa có nguồn nào dùng.
+        const nextSelected = usePersonalAiStore.getState().selectedDocumentIds;
+        try {
+          await selectPersonalSources(nextSelected, { employeeCode, sessionId });
+        } catch {
+          // Upload đã thành công nhưng đồng bộ nguồn thất bại — bỏ chọn doc mới
+          // để FE khớp với BE và báo cho user.
+          setSelectedDocumentIds(
+            usePersonalAiStore
+              .getState()
+              .selectedDocumentIds.filter((id) => id !== doc.id),
+          );
+          toast.error("Đã tải lên nhưng chưa kích hoạt được nguồn. Vui lòng bật lại thủ công.");
+        }
         return true;
       } catch (err) {
         removeDocument(tempId);
@@ -164,7 +182,13 @@ export function usePersonalDocuments() {
         return false;
       }
     },
-    [employeeCode, ensureSessionId, addDocument, removeDocument],
+    [
+      employeeCode,
+      ensureSessionId,
+      addDocument,
+      removeDocument,
+      setSelectedDocumentIds,
+    ],
   );
 
   /** Remove a document from the knowledge base */

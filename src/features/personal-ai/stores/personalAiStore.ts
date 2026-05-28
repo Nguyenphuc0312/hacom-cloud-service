@@ -123,7 +123,20 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       setDocumentsLoaded: (loaded) => set({ documentsLoaded: loaded }),
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) =>
+        set((s) =>
+          s.activeConversationId === id
+            ? s
+            : {
+                activeConversationId: id,
+                // Mỗi hội thoại có nguồn riêng — dọn doc + selection của session
+                // cũ ngay khi đổi để panel không "leak" tài liệu sang hội thoại
+                // khác. loadDocuments sẽ nạp lại đúng tài liệu của session này.
+                documents: [],
+                selectedDocumentIds: [],
+                documentsLoaded: false,
+              },
+        ),
 
       createConversation: () => {
         const id = crypto.randomUUID();
@@ -140,19 +153,32 @@ export const usePersonalAiStore = create<PersonalAiState>()(
             ...s.conversations,
           ],
           activeConversationId: id,
+          // Conversation mới chưa có nguồn nào — dọn cả danh sách tài liệu lẫn
+          // selection của session cũ để không "leak" nguồn sang hội thoại mới
+          // (loadDocuments sẽ nạp lại đúng tài liệu của session này).
           selectedDocumentIds: [],
+          documents: [],
         }));
         return id;
       },
 
       deleteConversation: (id) =>
-        set((s) => ({
-          conversations: s.conversations.filter((c) => c.id !== id),
-          activeConversationId:
-            s.activeConversationId === id
+        set((s) => {
+          const isActive = s.activeConversationId === id;
+          return {
+            conversations: s.conversations.filter((c) => c.id !== id),
+            activeConversationId: isActive
               ? s.conversations.find((c) => c.id !== id)?.id ?? null
               : s.activeConversationId,
-        })),
+            // Xoá hội thoại đang mở → chuyển sang hội thoại khác: dọn nguồn của
+            // session vừa xoá để loadDocuments nạp lại theo session mới.
+            ...(isActive && {
+              documents: [],
+              selectedDocumentIds: [],
+              documentsLoaded: false,
+            }),
+          };
+        }),
 
       addMessage: (conversationId, message) => {
         const now = new Date().toISOString();
