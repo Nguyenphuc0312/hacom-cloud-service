@@ -1,11 +1,13 @@
 import React, { useRef, useCallback } from "react";
-import { AiSidebar } from "../../ai-assistant/components/AiSidebar";
+import { AnimatePresence } from "framer-motion";
+import { PersonalAiSidebar } from "../components/layout/PersonalAiSidebar";
 import { SourceHubPanel } from "../components/source-hub/SourceHubPanel";
 import { PersonalChatArea } from "../components/chat/PersonalChatArea";
 import { PersonalChatInput } from "../components/chat/PersonalChatInput";
 import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceHeader";
 import { usePersonalChat } from "../hooks/usePersonalChat";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
+import { usePersonalAiStore } from "../stores/personalAiStore";
 
 /**
  * Full-page Personal AI Workspace — NotebookLM-inspired three-panel layout.
@@ -18,6 +20,7 @@ import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 export const PersonalAiWorkspacePage: React.FC = () => {
   const { messages, isStreaming, sendMessage, stopStreaming } = usePersonalChat();
   const { isRagMode } = usePersonalDocuments();
+  const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
 
   const [inputValue, setInputValue] = React.useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,7 +49,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     <div className="flex h-full w-full overflow-hidden bg-surface font-sans">
       {/* ── Left: Conversation Sidebar ── */}
       <aside className="h-full w-[260px] flex-shrink-0">
-        <AiSidebar />
+        <PersonalAiSidebar />
       </aside>
 
       {/* ── Center: Chat workspace ── */}
@@ -78,7 +81,13 @@ export const PersonalAiWorkspacePage: React.FC = () => {
       </main>
 
       {/* ── Right: Source Hub ── */}
-      <SourceHubPanel />
+      <AnimatePresence>
+        {isSourcePanelOpen && (
+          <div className="flex-shrink-0">
+            <SourceHubPanel />
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

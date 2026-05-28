@@ -1,13 +1,13 @@
 import React from "react";
-import { SparklesIcon, PlusIcon, BookMarkedIcon } from "lucide-react";
+import { SparklesIcon, BookMarkedIcon, PanelRightIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
 
 export const PersonalWorkspaceHeader: React.FC = () => {
-  const { createConversation } = usePersonalAiStore();
   const { isRagMode, activeDocuments } = usePersonalDocuments();
+  const { isSourcePanelOpen, toggleSourcePanel } = usePersonalAiStore();
 
   return (
     <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 sticky top-0 z-20">
@@ -46,19 +46,23 @@ export const PersonalWorkspaceHeader: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Right — new conversation */}
-      <button
-        type="button"
-        onClick={() => createConversation()}
-        className={clsx(
-          "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-          "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
-        )}
-        title="Cuộc trò chuyện mới"
-      >
-        <PlusIcon size={14} strokeWidth={2.5} />
-        Mới
-      </button>
+      {/* Right — source panel toggle */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => toggleSourcePanel()}
+          className={clsx(
+            "flex h-8 w-8 items-center justify-center rounded-lg transition-all",
+            isSourcePanelOpen
+              ? "bg-surface-active text-text-secondary"
+              : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
+          )}
+          title="Tài liệu tham chiếu"
+          aria-label="Toggle source panel"
+        >
+          <PanelRightIcon size={18} strokeWidth={1.8} />
+        </button>
+      </div>
     </header>
   );
 };
