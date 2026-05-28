@@ -63,10 +63,22 @@ export interface HRCalendarEvent {
   updatedAt: string;
 }
 
+export type HRCalendarMode = 'HR_LINKED' | 'NO_HR_PROFILE';
+
+export interface HRCalendarCapabilities {
+  canCreatePersonalEvent: boolean;
+  canViewHrEvents: boolean;
+  canViewDepartmentEvents: boolean;
+  canRetryHrLink: boolean;
+}
+
 /**
- * Calendar event response with pagination
+ * Calendar event response with pagination.
+ * `mode` is set when the backend returns a graceful fallback (e.g. HR profile not linked).
+ * When absent, assume HR_LINKED for backward compatibility.
  */
 export interface HRCalendarEventsResponse {
+  mode?: HRCalendarMode;
   data: HRCalendarEvent[];
   pagination: {
     page: number;
@@ -76,6 +88,8 @@ export interface HRCalendarEventsResponse {
     hasNextPage: boolean;
     hasPrevPage: boolean;
   };
+  capabilities?: HRCalendarCapabilities;
+  warnings?: Array<{ code: string; message: string }>;
 }
 
 /**
@@ -133,17 +147,28 @@ export const hrCalendarApi = {
     // ResponseEnvelopeInterceptor wraps the list as:
     // { success, statusCode, data: { items: HRCalendarEvent[], pagination: {...} } }
     // (legacy-list normalization converts { data: [], pagination } → { items: [], pagination })
+    // When user has no HR profile the backend returns:
+    // { success, data: { mode: 'NO_HR_PROFILE', data: [], pagination, capabilities, warnings } }
     const body = response.data as {
       success?: boolean;
-      data?: { items?: HRCalendarEvent[]; pagination?: Record<string, number | boolean> };
+      data?: {
+        mode?: HRCalendarMode;
+        items?: HRCalendarEvent[];
+        pagination?: Record<string, number | boolean>;
+        capabilities?: HRCalendarCapabilities;
+        warnings?: Array<{ code: string; message: string }>;
+      };
     };
-    const items: HRCalendarEvent[] = Array.isArray(body?.data?.items)
-      ? body.data!.items!
-      : Array.isArray(body?.data)
-        ? (body.data as unknown as HRCalendarEvent[])
+    const innerData = body?.data;
+    const mode = innerData?.mode;
+    const items: HRCalendarEvent[] = Array.isArray(innerData?.items)
+      ? innerData!.items!
+      : Array.isArray(innerData)
+        ? (innerData as unknown as HRCalendarEvent[])
         : [];
-    const pg = body?.data?.pagination as Record<string, number | boolean> | undefined;
+    const pg = innerData?.pagination as Record<string, number | boolean> | undefined;
     return {
+      mode,
       data: items,
       pagination: {
         page:       typeof pg?.page       === "number"  ? pg.page       : 1,
@@ -153,6 +178,8 @@ export const hrCalendarApi = {
         hasNextPage:  pg?.hasNextPage  === true,
         hasPrevPage:  pg?.hasPreviousPage === true,
       },
+      capabilities: innerData?.capabilities,
+      warnings: innerData?.warnings,
     };
   },
 

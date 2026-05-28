@@ -153,11 +153,21 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
       switch (mode) {
         case "my": {
-          // Current user's own calendar — no ownerId means "my calendar"
           const myResponse = await hrCalendarApi.listEvents({
             from: startDate,
             to: endDate,
           });
+          // Backend returns mode:'NO_HR_PROFILE' (200) when the auth user has no HR employee record.
+          // Show a soft notice instead of a hard error — the grid stays visible and empty.
+          if (myResponse.mode === 'NO_HR_PROFILE') {
+            set({
+              events: [],
+              isLoading: false,
+              error: "Tài khoản chưa liên kết hồ sơ nhân sự. Lịch phòng ban và công ty sẽ khả dụng sau khi liên kết.",
+              errorCode: "EMPLOYEE_LINK_REQUIRED",
+            });
+            return;
+          }
           events = Array.isArray(myResponse.data) ? myResponse.data : [];
           break;
         }

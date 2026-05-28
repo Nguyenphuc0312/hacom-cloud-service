@@ -995,8 +995,14 @@ const WeeklyCalendarWidget: React.FC = () => {
         <div className="mx-3 my-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-900/20">
           <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-amber-800 dark:text-amber-200">{storeError}</p>
-            {storeErrorCode !== "FORBIDDEN" && storeErrorCode !== "UNAUTHORIZED" && (
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {storeErrorCode === "EMPLOYEE_LINK_REQUIRED"
+                ? "Tài khoản chưa liên kết hồ sơ nhân sự. Lịch họp và phòng ban sẽ hiển thị sau khi liên kết."
+                : storeError}
+            </p>
+            {storeErrorCode !== "FORBIDDEN" &&
+              storeErrorCode !== "UNAUTHORIZED" &&
+              storeErrorCode !== "EMPLOYEE_LINK_REQUIRED" && (
               <div className="mt-1 flex items-center gap-3">
                 <button
                   type="button"
@@ -1017,6 +1023,15 @@ const WeeklyCalendarWidget: React.FC = () => {
                   Xem lịch đầy đủ →
                 </button>
               </div>
+            )}
+            {storeErrorCode === "EMPLOYEE_LINK_REQUIRED" && (
+              <button
+                type="button"
+                onClick={() => navigate("/calendar")}
+                className="mt-1 text-[11px] font-semibold text-[#1565C0] hover:underline"
+              >
+                Xem lịch →
+              </button>
             )}
           </div>
         </div>
