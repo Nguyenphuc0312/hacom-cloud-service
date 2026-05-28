@@ -710,9 +710,14 @@ export const CalendarPage: React.FC = () => {
     }
   }, []);
 
-  // Fetch calendar events from API when month changes or mode changes
+  // Fetch calendar events from API when month changes or mode changes.
+  // Always pass explicit date range from component state so the store doesn't
+  // use its own (potentially stale) currentYear/currentMonth.
   useEffect(() => {
-    void fetchEvents();
+    const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    void fetchEvents(fromDate, toDate);
   }, [currentYear, currentMonth, mode]);
 
   // Build extended events map from API events
@@ -758,8 +763,16 @@ export const CalendarPage: React.FC = () => {
     }));
   }, [apiEvents]);
 
-  // Fetch attendance data when month changes
+  // Fetch attendance data when month changes.
+  // Skip when viewing another user's calendar — never show current user's attendance
+  // alongside someone else's events. A future phase can fetch target user's attendance here.
   useEffect(() => {
+    if (mode === "other") {
+      setAttendanceData([]);
+      setAttendanceError(null);
+      return;
+    }
+
     const fetchAttendance = async () => {
       setIsLoadingAttendance(true);
       setAttendanceError(null);
@@ -799,7 +812,7 @@ export const CalendarPage: React.FC = () => {
     };
 
     void fetchAttendance();
-  }, [currentYear, currentMonth]);
+  }, [currentYear, currentMonth, mode]);
 
   // Fetch tasks with dueDate in current month range
   useEffect(() => {
@@ -1355,8 +1368,8 @@ export const CalendarPage: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Attendance badge */}
-                      {attendance && isAttendanceFilterActive && (
+                      {/* Attendance badge — only show for own calendar */}
+                      {attendance && isAttendanceFilterActive && mode !== "other" && (
                         <div className="mb-1">
                           <AttendanceBadge attendance={attendance} />
                         </div>
@@ -1396,7 +1409,7 @@ export const CalendarPage: React.FC = () => {
             <DayView
               date={selectedDate}
               events={searchedEvents}
-              attendance={getAttendanceForDate(selectedDate)}
+              attendance={mode !== "other" ? getAttendanceForDate(selectedDate) : undefined}
               onEventClick={handleEventClick}
             />
           )}
@@ -1407,7 +1420,7 @@ export const CalendarPage: React.FC = () => {
               year={currentYear}
               month={currentMonth}
               events={searchedEvents}
-              attendanceData={attendanceData}
+              attendanceData={mode !== "other" ? attendanceData : []}
               onDateClick={handleDateClick}
               onEventClick={handleEventClick}
               isToday={isToday}
