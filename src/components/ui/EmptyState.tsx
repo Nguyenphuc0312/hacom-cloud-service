@@ -1130,7 +1130,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                       {day.getDate()}
                     </span>
                     {totalCount > 0 && (
-                      <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-text-muted/20 px-0.5 text-[9px] font-bold text-text-muted">
+                      <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#FFC857] px-0.5 text-[9px] font-bold text-[#C41E3A]">
                         {totalCount}
                       </span>
                     )}

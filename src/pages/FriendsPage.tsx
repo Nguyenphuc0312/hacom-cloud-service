@@ -515,33 +515,26 @@ export const FriendsPage: React.FC = () => {
         for (const u of items) {
           if (!u.id) continue;
           if (u.id === currentUser?.id) continue;
-          if (friendIdSet.has(u.id)) continue;
           if (!collected.has(u.id)) collected.set(u.id, u);
         }
       };
 
-      // 0. Seed ngay từ participants của các conversation hiện có
-      //    → list không trống trong lúc network đang chạy.
+      // Seed ngay từ participants của các conversation hiện có
       addAll(participantsFromConversations);
 
-      // 1. Endpoint suggestions chính thức (nếu có)
-      addAll(
-        await tryFetch(() =>
-          userApi.getSuggestions(30, { signal: controller.signal }),
-        ),
-      );
-
-      // 2. Quét toàn bộ tài khoản: gọi search theo từng chữ cái a-z + ký tự VN
-      //    (backend chưa có endpoint list-all) → gom dedup → sort theo tên.
-      const ALPHABET = "abcdefghijklmnopqrstuvwxyzăâđêôơư".split("");
-      const results = await Promise.all(
-        ALPHABET.map((ch) =>
-          tryFetch(() =>
-            userApi.searchUsers(ch, 1, 50, { signal: controller.signal }),
+      // Gợi ý theo phòng ban / tên — dùng searchUsers vì server không có /suggestions
+      const searchQuery =
+        currentUser?.departmentName?.trim() ||
+        currentUser?.orgUnit?.trim() ||
+        currentUser?.firstName?.trim() ||
+        "";
+      if (searchQuery.length >= 2) {
+        addAll(
+          await tryFetch(() =>
+            userApi.searchUsers(searchQuery, 1, 30, { signal: controller.signal }),
           ),
-        ),
-      );
-      results.forEach(addAll);
+        );
+      }
 
       if (!controller.signal.aborted) {
         const sorted = Array.from(collected.values()).sort((a, b) =>
@@ -558,7 +551,7 @@ export const FriendsPage: React.FC = () => {
     // participantsFromConversations dùng làm seed nhanh — không đưa vào deps
     // để tránh re-fetch alphabet mỗi khi conversations đổi (presence/typing).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentUser, friendIdSet]);
+  }, [activeTab, currentUser?.id]);
 
   const handleMessage = useCallback(
     async (userId: string) => {
@@ -879,6 +872,11 @@ export const FriendsPage: React.FC = () => {
     [searchResults, currentUser],
   );
 
+  const filteredSuggestions = useMemo(
+    () => suggestions.filter((u) => u.id !== currentUser?.id && !friendIdSet.has(u.id)),
+    [suggestions, currentUser?.id, friendIdSet],
+  );
+
   const renderDiscoverTab = () => {
     const hasQuery = debouncedQuery.trim().length >= 2;
 
@@ -913,13 +911,13 @@ export const FriendsPage: React.FC = () => {
           <DirectorySkeleton count={4} />
         ) : (
           <div className="space-y-2">
-            {suggestions.length > 0 && (
+            {filteredSuggestions.length > 0 && (
               <p className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
                 {t("friends:suggestions")}
               </p>
             )}
             <div className="space-y-1">
-              {suggestions.map((user) => (
+              {filteredSuggestions.map((user) => (
                 <ContactRow
                   key={user.id}
                   user={user}

@@ -550,14 +550,6 @@ export const userApi = {
     return response.data;
   },
 
-  getSuggestions: async (limit = 30, options?: { signal?: AbortSignal }) => {
-    const response = await apiClient.get<ApiResponse<User[]>>(
-      `/users/suggestions?limit=${limit}`,
-      { signal: options?.signal },
-    );
-    return response.data;
-  },
-
   getUserById: async (userId: string) => {
     const response = await apiClient.get<ApiResponse<User>>(`/users/${userId}`);
     return response.data;

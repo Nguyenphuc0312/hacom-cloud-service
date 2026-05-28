@@ -77,8 +77,12 @@ export function usePersonalChat() {
               "",
             department_name: user?.departmentName ?? "",
             org_unit: user?.orgUnit ?? "",
-            // Gửi [] khi không chọn doc để BE dùng chitchat, không fallback session.
-            document_ids: selectedDocumentIds.length > 0 ? selectedDocumentIds : [],
+            // Omit document_ids entirely when none selected — sending [] causes
+            // some backend builds to still use session RAG context instead of
+            // switching to chitchat mode. Omitting the field is the cleaner signal.
+            ...(selectedDocumentIds.length > 0 && {
+              document_ids: selectedDocumentIds,
+            }),
           },
           {
             onToken: (token) => {
