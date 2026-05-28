@@ -10,7 +10,10 @@ import type { Socket } from "node:net";
 // ---------------------------------------------------------------------------
 // Custom logger — suppress benign WS disconnect noise from vite's proxy
 // ---------------------------------------------------------------------------
-const BENIGN_WS_PATTERNS = [/EPIPE/, /ECONNRESET/, /ERR_STREAM_DESTROYED/];
+// ECONNABORTED: browser aborts the HTTP→WS upgrade mid-flight (page refresh,
+// React StrictMode double-mount cleanup, tab close during connection attempt).
+// This is normal client-initiated teardown — not a backend or config error.
+const BENIGN_WS_PATTERNS = [/EPIPE/, /ECONNRESET/, /ERR_STREAM_DESTROYED/, /ECONNABORTED/];
 const isBenignWsLog = (msg: string) => BENIGN_WS_PATTERNS.some((re) => re.test(msg));
 
 const baseLogger = createLogger();
@@ -54,10 +57,18 @@ const resolveWsTarget = (value: string | undefined, fallback: string): string =>
   return fallback;
 };
 
-/** EPIPE / ECONNRESET happen when the browser closes the connection — benign. */
+/**
+ * EPIPE / ECONNRESET / ERR_STREAM_DESTROYED / ECONNABORTED:
+ * all fired when the browser closes (or aborts) a connection — benign.
+ */
 const isBenignError = (err: Error): boolean => {
   const code = (err as NodeJS.ErrnoException).code;
-  return code === "EPIPE" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED";
+  return (
+    code === "EPIPE" ||
+    code === "ECONNRESET" ||
+    code === "ERR_STREAM_DESTROYED" ||
+    code === "ECONNABORTED"
+  );
 };
 
 /**

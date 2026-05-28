@@ -34,6 +34,8 @@ export interface PersonalChatRequest {
   session_id: string;
   employee_code?: string;
   employee_name?: string;
+  department_name?: string;
+  org_unit?: string;
   document_ids?: string[];
 }
 

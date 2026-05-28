@@ -7,6 +7,7 @@ import {
   PersonalAiError,
 } from "../api/personalAiApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
+import { useAuthStore } from "../../../stores/authStore";
 import { toast } from "../../../utils/toast";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -33,6 +34,7 @@ export function usePersonalDocuments() {
     documents,
     selectedDocumentIds,
     documentsLoaded,
+    createConversation,
     setDocuments,
     addDocument,
     updateDocument,
@@ -44,27 +46,50 @@ export function usePersonalDocuments() {
     setDocumentsLoaded,
   } = usePersonalAiStore();
 
-  const loadedRef = useRef(false);
+  const user = useAuthStore((s) => s.user);
+  const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
+  const activeConversationId = usePersonalAiStore(
+    (s) => s.activeConversationId,
+  );
 
-  /** Load document list from backend on first mount */
+  // Track session đã load để tránh fetch trùng khi component re-render
+  // nhưng vẫn fetch lại khi user chuyển conversation.
+  const loadedSessionRef = useRef<string | null>(null);
+
+  /**
+   * Resolve current session id, creating a conversation if none exists.
+   * Ensures upload and chat share the same session_id so BE can find docs.
+   */
+  const ensureSessionId = useCallback((): string => {
+    const current = usePersonalAiStore.getState().activeConversationId;
+    if (current) return current;
+    return createConversation();
+  }, [createConversation]);
+
+  /** Load document list cho session hiện tại. Reload khi conversation đổi. */
   const loadDocuments = useCallback(
     async (force = false) => {
-      if (loadedRef.current && !force) return;
-      loadedRef.current = true;
+      const sessionId = ensureSessionId();
+      if (loadedSessionRef.current === sessionId && !force) return;
+      loadedSessionRef.current = sessionId;
       try {
-        const docs = await listPersonalDocuments();
+        const docs = await listPersonalDocuments({
+          employeeCode,
+          sessionId,
+        });
         setDocuments(docs);
         setDocumentsLoaded(true);
       } catch {
         setDocumentsLoaded(true);
       }
     },
-    [setDocuments, setDocumentsLoaded],
+    [employeeCode, ensureSessionId, setDocuments, setDocumentsLoaded],
   );
 
+  // Reload mỗi khi activeConversationId thay đổi để doc list khớp session.
   useEffect(() => {
     void loadDocuments();
-  }, [loadDocuments]);
+  }, [loadDocuments, activeConversationId]);
 
   /** Upload a single document file */
   const uploadDocument = useCallback(
@@ -97,6 +122,8 @@ export function usePersonalDocuments() {
 
       try {
         const doc = await uploadPersonalDocument(file, {
+          employeeCode,
+          sessionId: ensureSessionId(),
           onProgress: options?.onProgress,
         });
         // Replace optimistic entry with real doc
@@ -120,7 +147,7 @@ export function usePersonalDocuments() {
         return false;
       }
     },
-    [addDocument, removeDocument],
+    [employeeCode, ensureSessionId, addDocument, removeDocument],
   );
 
   /** Remove a document from the knowledge base */
@@ -129,14 +156,14 @@ export function usePersonalDocuments() {
       const doc = documents.find((d) => d.id === documentId);
       removeDocument(documentId);
       try {
-        await deletePersonalDocument(documentId);
+        await deletePersonalDocument(documentId, { employeeCode });
       } catch {
         // Restore on failure
         if (doc) addDocument(doc);
         toast.error("Không thể xóa tài liệu. Vui lòng thử lại.");
       }
     },
-    [documents, removeDocument, addDocument],
+    [documents, employeeCode, removeDocument, addDocument],
   );
 
   /** Toggle source selection and sync with backend */
@@ -149,14 +176,17 @@ export function usePersonalDocuments() {
         : [...current, documentId];
 
       try {
-        await selectPersonalSources(next);
+        await selectPersonalSources(next, {
+          employeeCode,
+          sessionId: ensureSessionId(),
+        });
       } catch {
         // Revert toggle on failure
         toggleDocumentSelection(documentId);
         toast.error("Không thể cập nhật nguồn. Vui lòng thử lại.");
       }
     },
-    [toggleDocumentSelection],
+    [employeeCode, ensureSessionId, toggleDocumentSelection],
   );
 
   /** Sync selected sources with backend */
@@ -164,12 +194,15 @@ export function usePersonalDocuments() {
     async (ids: string[]) => {
       setSelectedDocumentIds(ids);
       try {
-        await selectPersonalSources(ids);
+        await selectPersonalSources(ids, {
+          employeeCode,
+          sessionId: ensureSessionId(),
+        });
       } catch {
         toast.error("Đồng bộ nguồn thất bại.");
       }
     },
-    [setSelectedDocumentIds],
+    [employeeCode, ensureSessionId, setSelectedDocumentIds],
   );
 
   const activeDocuments = documents.filter((d) =>
