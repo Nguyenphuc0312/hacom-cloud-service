@@ -105,9 +105,21 @@ export interface HRCalendarPermission {
 
 /**
  * List calendar events params
+ *
+ * Owner identity precedence:
+ *  1. ownerAuthUserId — preferred; use the auth-domain UUID (externalAuthUserId from JWT).
+ *     Backend resolves to the correct employee/HR user automatically.
+ *  2. ownerId — legacy fallback; backend auto-detects whether it is an authUserId,
+ *     employeeId, or HR userId and resolves it accordingly.
+ *  3. Neither — returns the current authenticated user's own events.
+ *
+ * DO NOT pass `ownerId` equal to the auth user's UUID — use `ownerAuthUserId` instead.
  */
 export interface ListHREventsParams {
+  /** @deprecated Use ownerAuthUserId for explicit auth-domain filtering */
   ownerId?: string;
+  /** Filter by auth user ID (externalAuthUserId / UUID from JWT) — preferred over ownerId */
+  ownerAuthUserId?: string;
   from?: string;
   to?: string;
   type?: string;
@@ -123,13 +135,15 @@ export interface ListHREventsParams {
 export const hrCalendarApi = {
   /**
    * List calendar events
-   * - No ownerId: returns current user's events
-   * - ownerId = current user: returns current user's events
-   * - ownerId != current user: checks permission, returns owner's events or 403
+   * - No owner params: returns current user's events
+   * - ownerAuthUserId: filter by auth user UUID, backend resolves identity
+   * - ownerId: legacy, backend auto-resolves (authUserId / employeeId / userId)
    */
   listEvents: async (params: ListHREventsParams = {}): Promise<HRCalendarEventsResponse> => {
     const searchParams = new URLSearchParams();
-    if (params.ownerId) searchParams.append("ownerId", params.ownerId);
+    if (params.ownerAuthUserId) searchParams.append("ownerAuthUserId", params.ownerAuthUserId);
+    // Only append ownerId if ownerAuthUserId is not provided (backward compat)
+    if (params.ownerId && !params.ownerAuthUserId) searchParams.append("ownerId", params.ownerId);
     if (params.from) searchParams.append("from", params.from);
     if (params.to) searchParams.append("to", params.to);
     if (params.type) searchParams.append("type", params.type);

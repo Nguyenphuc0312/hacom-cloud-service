@@ -173,10 +173,11 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         }
         case "other": {
           if (viewingUserId) {
-            // Viewing another user's calendar — pass ownerId to hr-api-service
-            // hr-api-service checks permission and returns 403 if not allowed
+            // Viewing another user's calendar.
+            // Use ownerAuthUserId (auth-domain UUID) — backend resolves to correct employee/HR user.
+            // DO NOT use ownerId here: it is ambiguous (backend expects employeeId, not authUserId).
             const otherResponse = await hrCalendarApi.listEvents({
-              ownerId: viewingUserId,
+              ownerAuthUserId: viewingUserId,
               from: startDate,
               to: endDate,
               includeParticipantEvents: true,
