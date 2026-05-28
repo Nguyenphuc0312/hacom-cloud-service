@@ -141,11 +141,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Modal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2 overflow-hidden rounded-3xl border border-border bg-surface shadow-2xl"
+            style={{ x: "-50%", y: "-50%" }}
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-md overflow-hidden rounded-3xl border border-border bg-surface shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4">
