@@ -187,7 +187,15 @@ export function usePersonalChat() {
           (response.answer && response.answer.trim()) ||
           `Đã nhận tệp "${file.name}". Bạn muốn hỏi gì thêm?`;
 
-        finalizeMessage(convIdSnapshot, answerText, response.sources);
+        const citations = response.sources
+          ?.filter((s) => s.document_id != null)
+          .map((s) => ({
+            document_id: s.document_id!,
+            document_name: s.document_name ?? s.source_name ?? s.source_file ?? "",
+            page: s.page_number,
+            citation_index: s.citation_index,
+          }));
+        finalizeMessage(convIdSnapshot, answerText, citations);
       } catch (err) {
         const content =
           err instanceof AiApiError
