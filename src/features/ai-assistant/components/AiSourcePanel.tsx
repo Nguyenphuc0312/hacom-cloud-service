@@ -59,10 +59,12 @@ export const AiSourcePanel: React.FC = () => {
 
       if (isCompany) {
         request.user_id = user?.id ?? "";
-        request.user_name = user?.fullNameFromHR ?? user?.displayName ?? user?.username ?? "";
+        request.user_name =
+          user?.fullNameFromHr ?? user?.fullNameFromHR ?? user?.displayName ?? user?.username ?? "";
       } else {
         request.employee_code = user?.employeeCode ?? user?.employee_code ?? "";
-        request.employee_name = user?.fullNameFromHR ?? user?.displayName ?? user?.username ?? "";
+        request.employee_name =
+          user?.fullNameFromHr ?? user?.fullNameFromHR ?? user?.displayName ?? user?.username ?? "";
       }
 
       const response = await sendAiChatMessage(request as never, selectedEndpoint);

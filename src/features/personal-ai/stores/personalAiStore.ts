@@ -64,7 +64,7 @@ export const usePersonalAiStore = create<PersonalAiState>()(
       documentsLoaded: false,
       conversations: [],
       activeConversationId: null,
-      isSourcePanelOpen: true,
+      isSourcePanelOpen: false,
 
       toggleSourcePanel: () =>
         set((s) => ({ isSourcePanelOpen: !s.isSourcePanelOpen })),

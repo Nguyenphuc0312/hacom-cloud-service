@@ -138,6 +138,11 @@ export const useAiAssistantStore = create<AiAssistantState>()(
     {
       name: "hacom-ai-assistant-storage",
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
+        isSidebarOpen: state.isSidebarOpen,
+      }),
     }
   )
 );
