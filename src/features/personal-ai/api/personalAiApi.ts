@@ -280,6 +280,14 @@ export async function selectPersonalSources(
     signal?: AbortSignal;
   },
 ): Promise<void> {
+  const debugToken = getAccessToken();
+  // eslint-disable-next-line no-console
+  console.debug("[PersonalAI] selectPersonalSources", {
+    documentIds,
+    hasToken: !!debugToken,
+    tokenPrefix: debugToken ? debugToken.slice(0, 30) + "…" : null,
+    employeeCode: options?.employeeCode,
+  });
   const body: Record<string, unknown> = { document_ids: documentIds };
   if (options?.employeeCode) body.employee_code = options.employeeCode;
   if (options?.sessionId) body.session_id = options.sessionId;

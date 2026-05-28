@@ -12,7 +12,6 @@ import {
   SearchIcon,
   BrainCircuitIcon,
   DownloadIcon,
-  EyeIcon,
   Loader2Icon,
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
@@ -22,6 +21,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { PersonalChatMessage, PersonalCitation } from "../../types";
+import { usePersonalAiStore } from "../../stores/personalAiStore";
 
 interface PersonalMessageBubbleProps {
   message: PersonalChatMessage;
@@ -103,11 +103,39 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
+  const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
   const markdownComponents = React.useMemo(
     () => ({
+      // ── Table ──────────────────────────────────────────────────────────
+      table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
+        <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
+          <table className="w-full border-collapse text-[13px]">{children}</table>
+        </div>
+      ),
+      thead: ({ children }: React.ComponentPropsWithoutRef<"thead">) => (
+        <thead className="bg-gradient-to-r from-surface-active to-surface-hover">{children}</thead>
+      ),
+      tbody: ({ children }: React.ComponentPropsWithoutRef<"tbody">) => (
+        <tbody className="divide-y divide-border/40">{children}</tbody>
+      ),
+      tr: ({ children }: React.ComponentPropsWithoutRef<"tr">) => (
+        <tr className="transition-colors hover:bg-[#1976D2]/4">{children}</tr>
+      ),
+      th: ({ children }: React.ComponentPropsWithoutRef<"th">) => (
+        <th className="whitespace-nowrap border-b border-border/60 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          {children}
+        </th>
+      ),
+      td: ({ children }: React.ComponentPropsWithoutRef<"td">) => (
+        <td className="px-4 py-2.5 align-middle text-text-primary" style={{ maxWidth: "220px" }}>
+          <div className="overflow-hidden text-ellipsis whitespace-nowrap">{children}</div>
+        </td>
+      ),
+
+      // ── Links ──────────────────────────────────────────────────────────
       a: ({ href, children }: React.ComponentPropsWithoutRef<"a">) => {
         const label = (React.Children.toArray(children) as React.ReactNode[])
           .map((c) => (typeof c === "string" ? c : ""))
@@ -133,9 +161,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         const handleClick = (e: React.MouseEvent) => {
           e.preventDefault();
           if (isThisLoading) return;
-          // Mở tab ngay trong gesture context để tránh popup blocker.
-          // Không dùng noopener ở đây vì noopener khiến window.open trả về null
-          // — ta cần reference để navigate sau khi fetch xong.
           const viewTab = !isDownload ? window.open("about:blank", "_blank") : null;
           setLoadingFileId(action.fileId);
           openWeeklyReportFile(action.fileId, action.mode, viewTab)
@@ -148,17 +173,18 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
             type="button"
             onClick={handleClick}
             disabled={isThisLoading}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-[#1565C0] hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 transition-colors disabled:opacity-60"
-            title={isDownload ? "Tải về máy" : "Xem file"}
+            className={clsx(
+              "inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 disabled:opacity-60",
+              !isDownload && "max-w-full",
+            )}
+            title={label || (isDownload ? "Tải về máy" : "Xem file")}
           >
             {isThisLoading ? (
-              <Loader2Icon size={12} strokeWidth={2} className="animate-spin shrink-0" />
+              <Loader2Icon size={12} strokeWidth={2} className="shrink-0 animate-spin" />
             ) : isDownload ? (
               <DownloadIcon size={12} strokeWidth={2} className="shrink-0" />
-            ) : (
-              <EyeIcon size={12} strokeWidth={2} className="shrink-0" />
-            )}
-            {children}
+            ) : null}
+            <span className={clsx(!isDownload && "truncate")}>{children}</span>
           </button>
         );
       },
@@ -182,7 +208,12 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         isAssistant ? "bg-surface-overlay/40" : "bg-surface",
       )}
     >
-      <div className="mx-auto max-w-[760px] px-4 py-5">
+      <div
+        className={clsx(
+          "mx-auto w-full px-4 py-5 transition-[max-width] duration-300 ease-out",
+          isSourcePanelOpen ? "max-w-[640px]" : "max-w-[960px]",
+        )}
+      >
         <div
           className={clsx(
             "flex gap-3.5",
