@@ -140,6 +140,7 @@ export const usePersonalAiStore = create<PersonalAiState>()(
             ...s.conversations,
           ],
           activeConversationId: id,
+          selectedDocumentIds: [],
         }));
         return id;
       },
