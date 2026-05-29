@@ -1,6 +1,10 @@
 # Claude Code local config
 .claude/
-
+# Documentation
+WEBAPI.md
+WEBBE.md
+WEBFE.md
+CLAUDE.md
 # Logs
 logs
 *.log

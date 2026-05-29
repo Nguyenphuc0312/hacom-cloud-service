@@ -1,10 +1,16 @@
 # CLAUDE.md — chat-web-client
 
-@WEBUI.md
+@WEBFE.md
 
 Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File này mô tả chi tiết kiến trúc để AI hiểu context mà **không cần đọc lại toàn bộ source**. Đọc file này trước; chỉ mở file cụ thể khi cần sửa.
 
 > Khi sửa code mà phát hiện file này sai/lỗi thời, hãy cập nhật lại nó.
+
+### Hệ tài liệu (đọc đúng file theo việc)
+- **`CLAUDE.md`** (file này) — kiến trúc FE web client.
+- **`WEBFE.md`** — bảng màu / UI tokens (đã `@import` ở trên). Đọc trước khi chỉnh UI/UX.
+- **`WEBBE.md`** — backend `chat-api-service` (kiến trúc, endpoint, DB, auth, env). Đọc khi sửa/đụng backend.
+- **`WEBAPI.md`** — hợp đồng API FE↔BE (map `services/api.ts` ↔ endpoint BE, RTK Query, WS realtime, envelope). Đọc khi thêm/sửa API hoặc nối FE↔BE.
 
 ---
 
@@ -301,30 +307,14 @@ Errors pages: `pages/errors/` (Forbidden, Unauthorized, NotFound, ServerError, O
 
 **KHÔNG tự động chạy build.** Chỉ chạy `npm run build` (hoặc bất kỳ lệnh build nào) khi user yêu cầu rõ ràng. Nếu thấy cần build để verify, **phải hỏi và được user đồng ý trước**, không được tự ý chạy.
 
-Trước khi push, đọc **`BUILD.md`** ở root để tránh các lỗi build đã từng dính (đặc biệt: casing import sai giữa Windows local và Linux CI — TS1261). Lệnh tối thiểu (chỉ chạy khi được yêu cầu):
+Lưu ý lỗi build đã từng dính: **casing import sai** giữa Windows local và Linux CI (TS1261) — import phải khớp đúng hoa/thường tên file. Lệnh tối thiểu trước khi push (chỉ chạy khi được yêu cầu):
 ```bash
 npm run build && node scripts/verify-dist-assets.mjs
 ```
 
 ---
 
-## 14. Lưu ý cá nhân hóa (memory)
+## 14. Chỉnh UI/UX — đọc `WEBFE.md`
 
-- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBUI.md`** trước để lấy đúng bảng màu, pattern gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc.
-
-- **Hai vùng màu tách biệt** (xem `WEBUI.md` mục 1):
-  - **SideRail + LoginPage**: đỏ `#D32F2F/#C41E3A` + vàng `#FFC857` — **không đổi**.
-  - **Toàn bộ app còn lại**: xanh dương `#1976D2` (medium) / `#1565C0` (dark).
-
-- **Button variants** (`src/components/ui/Button.tsx`):
-  - `variant="brand"` → gradient xanh `#1976D2 → #1565C0`, CTA chính.
-  - `variant="brand-outline"` → viền xanh, nút phụ/hủy.
-  - `variant="danger"` / `variant="ghost"` / `variant="secondary"` → giữ nguyên.
-
-- **Badge unread** (RoomItem sidebar): `bg-[#FFC857] text-[#C41E3A]` — vàng+đỏ khớp với badge trên SideRail.
-
-- **Focus ring**: `focus:border-[#1976D2]/60 focus:ring-[#1565C0]/25`.
-
-- **Active item / badge filter**: `bg-[#DBEAFE]/10` hoặc `bg-[#1976D2]/10 text-[#1565C0]`.
-
-- Xem đầy đủ tại **`WEBUI.md`**.
+- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBFE.md`** trước (đã `@import` ở đầu file) để lấy đúng bảng màu, gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc.
+- Ghi nhớ nhanh **hai vùng màu tách biệt**: SideRail + LoginPage = đỏ/vàng (**không đổi**); toàn bộ app còn lại = xanh dương. Chi tiết token (Button variants, badge unread, focus ring, active item…) xem đầy đủ trong **`WEBFE.md`**.
