@@ -1303,7 +1303,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
               style={{
                 boxShadow: "0 2px 8px rgba(196, 30, 58, 0.35), 0 1px 3px rgba(255, 200, 87, 0.3)",
               }}
-              onClick={() => window.open("https://hacomholding-my.sharepoint.com/:f:/g/personal/admin_hacomholdings_vn/IgC3kG0k8ccjS7N7Yai-VOEXARcTnkT1pggFa0Fdn2wUEGc?e=a8UzP1", "_blank")}
+              onClick={() => window.open("https://drive.google.com/drive/u/2/folders/1sHWGuyh8oU70KfiqK5x_q3fBV4xhPE0u", "_blank")}
             >
               <ComputerDesktopIcon className="h-5 w-5 shrink-0" />
               {t("common:emptyState.downloadPC")}
