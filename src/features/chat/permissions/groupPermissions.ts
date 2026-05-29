@@ -32,9 +32,7 @@ export const canRenameGroup = (
 export const canAddGroupMembers = (
   role: RoomMemberRole | null | undefined,
   capabilities?: GroupCapabilityMatrix | null,
-): boolean =>
-  fromCapability(capabilities, "canAddMember") ??
-  (role === RoomMemberRole.OWNER || role === RoomMemberRole.ADMIN);
+): boolean => fromCapability(capabilities, "canAddMember") ?? Boolean(role);
 
 export const canManageGroupAdmins = (role: RoomMemberRole | null | undefined): boolean =>
   role === RoomMemberRole.OWNER;
