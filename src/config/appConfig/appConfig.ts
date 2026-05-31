@@ -1,6 +1,7 @@
 type AppEnvironment = 'DEV' | 'TEST' | 'STAGING' | 'PROD';
 
 const DEFAULT_DASHBOARD_REFETCH_INTERVAL_MS = 15_000;
+const DEFAULT_BACKGROUND_REFETCH_INTERVAL_MS = 60_000;
 
 const normalizeEnvironment = (value: string | undefined): AppEnvironment => {
   const normalized = value?.trim().toUpperCase();
@@ -35,6 +36,29 @@ const normalizeOptionalUrl = (value: string | undefined): string | null => {
   return normalized ? normalized : null;
 };
 
+interface PollingConfig {
+  default: number;
+  background: number;
+}
+
+const getPollingConfig = (): PollingConfig => {
+  const env = normalizeEnvironment(import.meta.env.VITE_APP_ENV);
+  const isProduction = env === 'PROD' || env === 'STAGING';
+
+  return {
+    default: parsePositiveInteger(
+      import.meta.env.VITE_DASHBOARD_REFETCH_INTERVAL_MS,
+      DEFAULT_DASHBOARD_REFETCH_INTERVAL_MS,
+    ),
+    background: isProduction
+      ? parsePositiveInteger(
+          import.meta.env.VITE_DASHBOARD_BACKGROUND_INTERVAL_MS,
+          DEFAULT_BACKGROUND_REFETCH_INTERVAL_MS,
+        )
+      : DEFAULT_BACKGROUND_REFETCH_INTERVAL_MS,
+  };
+};
+
 const environment = normalizeEnvironment(import.meta.env.VITE_APP_ENV);
 const liveUpdatesUrl =
   normalizeOptionalUrl(import.meta.env.VITE_LIVE_UPDATES_URL) ??
@@ -54,6 +78,7 @@ export const appConfig = {
     import.meta.env.VITE_DASHBOARD_REFETCH_INTERVAL_MS,
     DEFAULT_DASHBOARD_REFETCH_INTERVAL_MS,
   ),
+  pollingConfig: getPollingConfig(),
   adminWriteActionsEnabled:
     (import.meta.env.VITE_ADMIN_WRITE_ACTIONS_ENABLED ?? 'false').toLowerCase() === 'true',
   liveUpdatesUrl,

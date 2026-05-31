@@ -19,6 +19,7 @@ import {
   formatPercent,
   formatRate,
 } from '@/utils/formatters/formatters';
+import { MonitoringAvailabilityBanner } from '../../components/MonitoringAvailabilityBanner/MonitoringAvailabilityBanner';
 import { useMonitoringOverview } from '../../hooks/useMonitoringOverview/useMonitoringOverview';
 
 const formatOptional = (
@@ -127,6 +128,12 @@ export const MonitoringOverviewPage = () => {
         </div>
       }
     >
+      <MonitoringAvailabilityBanner
+        freshness={overview.freshness}
+        warnings={overview.warnings}
+        prometheusStatus={overview.sources.prometheus.status}
+        lokiStatus={overview.sources.loki?.status}
+      />
       <div className="ds-monitoring-stack">
         <div className="ds-monitoring-kpi-grid">
           <MetricCard
