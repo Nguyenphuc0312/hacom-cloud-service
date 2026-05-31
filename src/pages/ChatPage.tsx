@@ -37,7 +37,7 @@ import {
   useFriendshipStore,
 } from "../stores";
 import { useGlobalWebSocket } from "../features/realtime/GlobalWebSocketProvider";
-import type { Attachment, UserSummary } from "../types";
+import type { Attachment, Conversation, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
@@ -90,6 +90,25 @@ const FilePreviewModal = React.lazy(
 type InfoPanelMode = "conversation" | "self-profile" | "contact-profile";
 
 const CONVERSATIONS_PAGE_SIZE = 100;
+
+/**
+ * Minimal shape check: is this payload complete enough to drop straight into
+ * the sidebar without a follow-up fetch? We require the identity (`id`), the
+ * room `type` (drives direct/group rendering) and a `participants` array
+ * (drives display name/avatar for direct chats). Fields are derived from the
+ * `Conversation` type + `conversationAdapter` normalization, not hardcoded.
+ */
+const isCompleteConversation = (value: unknown): value is Conversation => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<Conversation> & {
+    participants?: unknown;
+  };
+  return Boolean(
+    candidate.id &&
+      candidate.type &&
+      Array.isArray(candidate.participants),
+  );
+};
 
 const DeferredPanelFallback: React.FC = () => (
   <div className="h-full px-1 py-2" aria-busy="true">
@@ -598,6 +617,41 @@ export const ChatPage: React.FC = () => {
     navigate("/chat");
   }, [navigate]);
 
+  /**
+   * Merge a just-created conversation into the sidebar instead of refetching
+   * the whole list. If the create response already carries a full shape we use
+   * it directly (instant sidebar + makes the room "cached" so ChatWindow can
+   * render immediately). If it doesn't, we deliberately do NOT fetch the detail
+   * here: navigating to `/chat/:id` makes `useConversationValidation` fetch the
+   * authoritative conversation via `getConversationById` exactly once and merge
+   * it. Fetching here too would re-introduce a duplicate detail call — the very
+   * thing this optimization removes.
+   */
+  const mergeCreatedConversation = useCallback(
+    (conversationId: string, createdPayload: unknown, context: string) => {
+      if (isCompleteConversation(createdPayload)) {
+        addConversation(createdPayload);
+        if (import.meta.env.DEV) {
+          logger.debug("conversation", "created_conversation_merged", {
+            conversationId,
+            context,
+            source: "create_response",
+          });
+        }
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        logger.debug("conversation", "created_conversation_deferred_to_validation", {
+          conversationId,
+          context,
+          reason: "create_response_incomplete",
+        });
+      }
+    },
+    [addConversation],
+  );
+
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
@@ -637,12 +691,9 @@ export const ChatPage: React.FC = () => {
           throw new Error(t("error:chat.conversationIdMissing"));
         }
 
-        // Refresh list to get full conversation shape (participants, display fields...)
-        fetchConversations().catch((error) => {
-          logger.warn("conversation", "refresh_after_direct_create_failed", {
-            error,
-          });
-        });
+        // Merge the new room into the sidebar (no full-list refetch). The route
+        // validation hook fetches the authoritative shape once after navigate.
+        mergeCreatedConversation(conversationId, payload, "create_direct");
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
       } catch (error) {
@@ -660,11 +711,9 @@ export const ChatPage: React.FC = () => {
           (apiError.code === ErrorCode.CONFLICT ||
             apiError.code === ErrorCode.ROOM_ALREADY_EXISTS)
         ) {
-          fetchConversations().catch((refreshError) => {
-            logger.warn("conversation", "refresh_after_conflict_failed", {
-              refreshError,
-            });
-          });
+          // Existing room — no full conversation payload to merge here. The
+          // route validation hook fetches + merges it via getConversationById
+          // once after navigate, so we skip the full-list refetch.
           selectConversation(existingConversationId);
           navigate(`/chat/${existingConversationId}`);
           return;
@@ -686,8 +735,8 @@ export const ChatPage: React.FC = () => {
       }
     },
     [
-      fetchConversations,
       isCreatingRoom,
+      mergeCreatedConversation,
       navigate,
       refreshFriendshipDirectory,
       selectConversation,
@@ -727,11 +776,13 @@ export const ChatPage: React.FC = () => {
           throw new Error(t("error:chat.conversationIdMissing"));
         }
 
-        fetchConversations().catch((error) => {
-          logger.warn("conversation", "refresh_after_group_create_failed", {
-            error,
-          });
-        });
+        // Merge the new group into the sidebar (no full-list refetch). The route
+        // validation hook fetches the authoritative shape once after navigate.
+        mergeCreatedConversation(
+          conversationId,
+          conversationPayload,
+          "create_group",
+        );
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
       } catch (error) {
@@ -743,7 +794,13 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
+    [
+      isCreatingRoom,
+      mergeCreatedConversation,
+      navigate,
+      selectConversation,
+      t,
+    ],
   );
 
   // Handle new chat modal
