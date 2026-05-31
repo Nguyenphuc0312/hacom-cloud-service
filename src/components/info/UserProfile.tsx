@@ -15,10 +15,14 @@ import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore } from "../../stores";
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { extractApiError } from "../../lib/apiContract";
 import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
-import { getUserByIdUseCase } from "../../features/chat/usecases/getUserById";
+import {
+  fetchUserProfileOnce,
+  getCachedUserProfile,
+  type CachedUserProfile,
+} from "../../services/userProfileCache";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 
@@ -53,6 +57,21 @@ const formatDisplayName = (user: ProfileUser | null | undefined): string => {
 
   return getUserDisplayName(user, { allowTechnicalFallback: true }) || user.id;
 };
+
+/** Map a fetched user-detail payload to the panel's ProfileUser shape. */
+const toProfileUser = (payload: CachedUserProfile): ProfileUser => ({
+  ...(payload as Partial<ProfileUser>),
+  id: payload.id,
+  username: payload.username,
+  firstName: payload.firstName,
+  lastName: payload.lastName,
+  displayName: payload.displayName,
+  avatar: payload.avatar,
+  bio: payload.bio,
+  phone: payload.phone,
+  createdAt: payload.createdAt,
+  status: (payload.status as UserStatus) || UserStatus.OFFLINE,
+});
 
 const formatPresenceLabel = (
   status: UserStatus | undefined,
@@ -125,10 +144,21 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         : null,
     [initialUser, userId],
   );
-  const [user, setUser] = React.useState<ProfileUser | null>(
-    resolvedInitialUser,
+  const isSelf = userId === currentUserId;
+
+  // Profile fetched from GET /users/{id} for the *other* user. Updated only via
+  // the async fetch below — never synchronously in an effect — so it never
+  // reacts to message/conversation/render churn.
+  const [fetchedUser, setFetchedUser] = React.useState<ProfileUser | null>(
+    () => {
+      if (isSelf || !userId) return null;
+      const cached = getCachedUserProfile(userId);
+      return cached ? toProfileUser(cached) : null;
+    },
   );
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState<boolean>(
+    () => !isSelf && Boolean(userId) && !getCachedUserProfile(userId),
+  );
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
   const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -143,8 +173,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     removeFriend,
   } = useFriendship();
 
-  const isSelf = userId === currentUserId;
-
   usePresence({
     userIds: !isSelf ? [userId] : undefined,
     enabled: !isSelf && Boolean(userId),
@@ -154,68 +182,59 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     userId ? state.presenceMap[userId] : undefined,
   );
 
-  React.useEffect(() => {
-    if (isSelf && authUser) {
-      setUser({
-        ...(authUser as Partial<ProfileUser>),
-        id: authUser.id,
-        username: authUser.username,
-        firstName: authUser.firstName,
-        lastName: authUser.lastName,
-        displayName: authUser.displayName,
-        avatar: authUser.avatar,
-        bio: authUser.bio,
-        phone: authUser.phone,
-        createdAt: authUser.createdAt,
-        status: authUser.status as UserStatus,
-      });
-      return;
-    }
+  // Self profile is derived from the auth store, never the /users endpoint.
+  const selfProfile = React.useMemo<ProfileUser | null>(() => {
+    if (!isSelf || !authUser) return null;
+    return {
+      ...(authUser as Partial<ProfileUser>),
+      id: authUser.id,
+      username: authUser.username,
+      firstName: authUser.firstName,
+      lastName: authUser.lastName,
+      displayName: authUser.displayName,
+      avatar: authUser.avatar,
+      bio: authUser.bio,
+      phone: authUser.phone,
+      createdAt: authUser.createdAt,
+      status: authUser.status as UserStatus,
+    };
+  }, [authUser, isSelf]);
 
-    setUser(resolvedInitialUser);
-  }, [authUser, isSelf, resolvedInitialUser]);
+  // Single resolved user for rendering. For the other user we prefer the
+  // fetched detail (only when it matches the current target), else fall back to
+  // the placeholder — this stays correct even if `userId` changes without a
+  // remount (e.g. the friends preview panel).
+  const user: ProfileUser | null = isSelf
+    ? selfProfile
+    : fetchedUser && fetchedUser.id === userId
+      ? fetchedUser
+      : (resolvedInitialUser ?? null);
 
+  // Fetch the target user's detail ONCE per userId (cached + in-flight deduped
+  // in userProfileCache). Depends only on `userId`/`isSelf` — NOT on the
+  // conversation, messages, lastMessage or initialUser object — so new
+  // messages, realtime events and re-renders never re-trigger GET /users/{id}.
+  // setState happens only in the async callbacks, never synchronously here.
   React.useEffect(() => {
+    if (isSelf || !userId) return;
+
     let isMounted = true;
 
-    const loadUser = async () => {
-      if (!userId || isSelf) return;
-      setUser(resolvedInitialUser);
-      setIsLoading(true);
-      try {
-        const response = await getUserByIdUseCase(userId);
-        const payload = unwrapApiSuccess(response);
-        if (!isMounted) return;
-
-        setUser({
-          ...(payload as Partial<ProfileUser>),
-          id: payload.id,
-          username: payload.username,
-          firstName: payload.firstName,
-          lastName: payload.lastName,
-          displayName: payload.displayName,
-          avatar: payload.avatar,
-          bio: payload.bio,
-          phone: payload.phone,
-          createdAt: payload.createdAt,
-          status: (payload.status as UserStatus) || UserStatus.OFFLINE,
-        });
-      } catch {
-        if (!isMounted) return;
-        setUser((current) => current ?? resolvedInitialUser ?? null);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadUser();
+    fetchUserProfileOnce(userId)
+      .then((payload) => {
+        if (isMounted) setFetchedUser(toProfileUser(payload));
+      })
+      .catch(() => {
+        // Keep whatever placeholder/cached value is already displayed.
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [isSelf, resolvedInitialUser, userId]);
+  }, [isSelf, userId]);
 
   React.useEffect(() => {
     void refreshDirectory();
