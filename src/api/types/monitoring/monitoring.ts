@@ -47,7 +47,7 @@ export interface MonitoringWarning {
     | 'exporter_down'
     | 'redis_down'
     | 'service_health_unavailable';
-  source: 'prometheus' | 'service_health' | 'redis' | 'node_exporter';
+  source: 'prometheus' | 'service_health' | 'redis' | 'node_exporter' | 'loki';
   key: string;
   message: string;
   severity: 'warning' | 'error';
@@ -97,6 +97,7 @@ export interface MonitoringOverviewResponse {
   sources: {
     serviceHealth: MonitoringSourceStatus;
     prometheus: MonitoringSourceStatus;
+    loki?: MonitoringSourceStatus;
   };
   dataQuality: {
     systemOverview: MonitoringAvailabilitySummary;
