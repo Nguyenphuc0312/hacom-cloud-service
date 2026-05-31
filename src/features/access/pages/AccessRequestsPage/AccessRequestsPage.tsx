@@ -1,5 +1,5 @@
 import { keepPreviousData, useQueries, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Popconfirm, Select, Space, message } from 'antd';
+import { Alert, Button, Form, Input, Popconfirm, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 
@@ -25,6 +25,9 @@ import { EmptyState } from '@/components/ui/EmptyState/EmptyState';
 import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
 import { formatDateTime } from '@/utils/date/date';
 import './AccessRequestsPage.css';
+
+// Feature flag: IP approval feature is enabled
+const isIpApprovalEnabled = import.meta.env.VITE_ADMIN_IP_APPROVAL_ENABLED !== 'false';
 
 type AccessAction = 'approve' | 'reject' | 'revoke';
 
@@ -294,6 +297,20 @@ export const AccessRequestsPage = () => {
           onRetry={() => {
             void listQuery.refetch();
           }}
+        />
+      </PageShell>
+    );
+  }
+
+  // Render disabled notice when feature is turned off
+  if (!isIpApprovalEnabled) {
+    return (
+      <PageShell {...pageHeader}>
+        <Alert
+          type="warning"
+          showIcon
+          message="Tính năng duyệt IP đang tạm tắt"
+          description="Tính năng kiểm soát truy cập IP hiện đang bị vô hiệu hóa. Tất cả admin có thể truy cập console mà không cần duyệt IP. Để bật lại, hãy cập nhật biến môi trường VITE_ADMIN_IP_APPROVAL_ENABLED=true và khởi động lại ứng dụng."
         />
       </PageShell>
     );

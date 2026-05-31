@@ -1,6 +1,9 @@
 import type { Role } from '@/api/types/auth/auth';
 import type { AppIconKey } from '@/components/AppIcon/AppIcon';
 
+// Feature flag: IP approval feature is enabled
+const isIpApprovalEnabled = import.meta.env.VITE_ADMIN_IP_APPROVAL_ENABLED !== 'false';
+
 export interface NavItem {
   key: string;
   label: string;
@@ -8,6 +11,7 @@ export interface NavItem {
   section: SidebarSectionKey;
   route: string;
   roles?: Role[];
+  disabled?: boolean;
   children?: NavItem[];
 }
 
@@ -75,6 +79,7 @@ export const navItems: NavItem[] = [
     iconKey: 'access',
     section: 'access-control',
     route: '/access-requests',
+    disabled: !isIpApprovalEnabled,
   },
   {
     key: 'audit',
@@ -291,6 +296,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     iconKey: 'access',
     keywords: ['ip', 'access', 'requests', 'approval', 'review'],
     route: '/access-requests',
+    disabled: !isIpApprovalEnabled,
   },
   {
     id: 'go-conversations',
