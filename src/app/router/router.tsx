@@ -79,6 +79,11 @@ const ProfilePage = lazy(() =>
     default: module.ProfilePage,
   })),
 );
+const BackupRestorePage = lazy(() =>
+  import('@/features/backup/pages/BackupRestorePage/BackupRestorePage').then((module) => ({
+    default: module.BackupRestorePage,
+  })),
+);
 const NotFoundPage = lazy(() =>
   import('@/features/errors/NotFoundPage/NotFoundPage').then((module) => ({
     default: module.NotFoundPage,
@@ -185,6 +190,10 @@ const routes = [
       {
         path: 'profile',
         element: withSuspense(<ProfilePage />),
+      },
+      {
+        path: 'backup-restore',
+        element: withSuspense(<BackupRestorePage />),
       },
       {
         path: '*',
