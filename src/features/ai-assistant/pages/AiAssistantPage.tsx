@@ -48,6 +48,7 @@ export const AiAssistantPage: React.FC = () => {
     activeConversationId,
     addMessage,
     updateLastMessage,
+    updateMessage,
     setThinking,
     createNewConversation,
   } = useAiAssistantStore();
@@ -241,6 +242,38 @@ export const AiAssistantPage: React.FC = () => {
             onThinking: (thinking) => {
               setThinking(currentId!, thinking);
             },
+            onFormRequest: (formData) => {
+              useAiAssistantStore.setState((state) => ({
+                conversations: state.conversations.map((c) =>
+                  c.id === currentId
+                    ? {
+                        ...c,
+                        messages: c.messages.map((m) =>
+                          m.id === assistantMessageId
+                            ? { ...m, content: "", formRequest: formData, isStreaming: false }
+                            : m,
+                        ),
+                      }
+                    : c,
+                ),
+              }));
+            },
+            onSelectionRequest: (selectionData) => {
+              useAiAssistantStore.setState((state) => ({
+                conversations: state.conversations.map((c) =>
+                  c.id === currentId
+                    ? {
+                        ...c,
+                        messages: c.messages.map((m) =>
+                          m.id === assistantMessageId
+                            ? { ...m, content: "", selectionRequest: selectionData, isStreaming: false }
+                            : m,
+                        ),
+                      }
+                    : c,
+                ),
+              }));
+            },
           });
 
           updateLastMessage(currentId, response.answer, false);
@@ -308,6 +341,7 @@ export const AiAssistantPage: React.FC = () => {
       user,
       addMessage,
       updateLastMessage,
+      updateMessage,
       setThinking,
       createNewConversation,
       buildUserMessageContent,
@@ -442,7 +476,14 @@ export const AiAssistantPage: React.FC = () => {
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* Scrollable messages */}
             <div className="flex-1 overflow-y-auto ai-scrollbar">
-              <AiChatPreview messages={messages} isLoading={isLoading} />
+              <AiChatPreview
+                messages={messages}
+                isLoading={isLoading}
+                onUpdateMessage={(msgId, patch) =>
+                  activeConversationId &&
+                  updateMessage(activeConversationId, msgId, patch)
+                }
+              />
             </div>
 
             {/* Input sticky bottom */}

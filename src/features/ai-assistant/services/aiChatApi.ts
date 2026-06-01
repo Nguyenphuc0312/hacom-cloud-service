@@ -21,7 +21,13 @@ const WEEKLY_REPORT_FILES = {
 const TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
 
-import type { AiChatRequest, AiChatResponse } from "../types";
+import type {
+  AiChatRequest,
+  AiChatResponse,
+  WorkReportFormRequest,
+  DepartmentSelectionRequest,
+  WorkReportRecord,
+} from "../types";
 import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
 
 export class AiApiError extends Error {
@@ -53,6 +59,8 @@ export function sendAiChatMessage(
     signal?: AbortSignal;
     onToken?: (token: string) => void;
     onThinking?: (thinking: string) => void;
+    onFormRequest?: (data: WorkReportFormRequest) => void;
+    onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
   },
 ): Promise<AiChatResponse> {
   return new Promise((resolve, reject) => {
@@ -86,6 +94,24 @@ export function sendAiChatMessage(
           }
         } else if (type === "thinking") {
           options?.onThinking?.(data);
+        } else if (type === "form_request") {
+          try {
+            const parsed = JSON.parse(data) as WorkReportFormRequest;
+            if (parsed.form_type === "daily_work_report") {
+              options?.onFormRequest?.(parsed);
+            }
+          } catch {
+            // ignore malformed event
+          }
+        } else if (type === "selection_request") {
+          try {
+            const parsed = JSON.parse(data) as DepartmentSelectionRequest;
+            if (parsed.selection_type === "department_report") {
+              options?.onSelectionRequest?.(parsed);
+            }
+          } catch {
+            // ignore malformed event
+          }
         } else if (type === "done") {
           try {
             finalResponse = JSON.parse(data) as AiChatResponse;
@@ -882,4 +908,95 @@ export async function uploadPersonalDocument(
 
   // Trả về trực tiếp data từ response — interceptor đã xử lý lỗi 4xx/5xx
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Work Report API
+// ---------------------------------------------------------------------------
+
+const WORK_REPORTS_URL = `${BASE_URL}/api/work-reports`;
+
+export interface WorkReportSubmitBody {
+  employee_code: string;
+  report_date: string;
+  task_name: string;
+  requirements?: string;
+  completed?: string;
+  difficulties?: string;
+}
+
+export interface WorkReportSubmitResponse {
+  ok: boolean;
+  report: {
+    id: number;
+    user_id: string;
+    report_date: string;
+    task_name: string;
+    requirements: string;
+    completed: string;
+    difficulties: string;
+    created_at: string;
+    updated_at: string;
+  };
+}
+
+export async function submitWorkReport(
+  body: WorkReportSubmitBody,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportSubmitResponse> {
+  const response = await fetchWithAuth(
+    WORK_REPORTS_URL,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    let detail = "Lỗi không xác định";
+    try {
+      const err = await response.json() as { detail?: string };
+      if (err.detail) detail = err.detail;
+    } catch { /* ignore */ }
+    if (response.status === 503) {
+      throw new Error("Chức năng chưa được cấu hình, liên hệ quản trị viên");
+    }
+    throw new Error(detail);
+  }
+  return response.json() as Promise<WorkReportSubmitResponse>;
+}
+
+export interface FetchWorkReportsParams {
+  department?: string;
+  employee_code?: string;
+  company?: string;
+  start?: string;
+  end?: string;
+}
+
+export interface WorkReportsResponse {
+  mode: string;
+  department?: string;
+  company?: string;
+  start: string;
+  end: string;
+  count: number;
+  reports: WorkReportRecord[];
+}
+
+export async function fetchWorkReports(
+  params: FetchWorkReportsParams,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportsResponse> {
+  const search = new URLSearchParams();
+  if (params.department) search.set("department", params.department);
+  if (params.employee_code) search.set("employee_code", params.employee_code);
+  if (params.company) search.set("company", params.company);
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  const qs = search.toString();
+  const url = qs ? `${WORK_REPORTS_URL}?${qs}` : WORK_REPORTS_URL;
+  const response = await aiGetRequest(url, options);
+  return response.json() as Promise<WorkReportsResponse>;
 }
