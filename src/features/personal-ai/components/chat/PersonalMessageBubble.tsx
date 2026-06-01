@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
 import { openWeeklyReportFile } from "../../api/personalAiApi";
+import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
+import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -104,6 +106,8 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
+  const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
+  const patchMessage = usePersonalAiStore((s) => s.patchMessage);
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
@@ -290,6 +294,38 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     />
                   ))}
                 </div>
+              ) : message.formRequest ? (
+                <WorkReportForm
+                  data={message.formRequest}
+                  onSuccess={(msg) =>
+                    activeConversationId &&
+                    patchMessage(activeConversationId, message.id, {
+                      content: msg,
+                      formRequest: undefined,
+                      isStreaming: false,
+                    })
+                  }
+                  onCancel={() =>
+                    activeConversationId &&
+                    patchMessage(activeConversationId, message.id, {
+                      content: "Đã hủy báo cáo.",
+                      formRequest: undefined,
+                      isStreaming: false,
+                    })
+                  }
+                />
+              ) : message.selectionRequest ? (
+                <DepartmentSelector
+                  data={message.selectionRequest}
+                  onCancel={() =>
+                    activeConversationId &&
+                    patchMessage(activeConversationId, message.id, {
+                      content: "Đã hủy.",
+                      selectionRequest: undefined,
+                      isStreaming: false,
+                    })
+                  }
+                />
               ) : isAssistant ? (
                 <div className="prose-chatgpt">
                   <ReactMarkdown
