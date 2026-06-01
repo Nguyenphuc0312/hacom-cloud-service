@@ -1,5 +1,6 @@
 import { Button, Progress, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error/error';
 import type { TimeRange } from '@/api/types/metrics/metrics';
@@ -248,7 +249,7 @@ export const DashboardPage = () => {
           <div className={`dashboard-health-banner health-${systemHealthStatus}`}>
             <div className="health-banner-content">
               <AppIcon
-                name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alert-circle'}
+                name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alertCircle'}
                 size={24}
                 aria-hidden
               />

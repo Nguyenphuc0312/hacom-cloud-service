@@ -168,7 +168,9 @@ export const OnlineUsersPage: React.FC = () => {
                 setPageSize(ps);
               },
             }}
-            emptyNode={<EmptyState title="Không có người dùng online" description="Không có người dùng nào đang hoạt động." compact />}
+            locale={{
+              emptyText: <EmptyState title="Không có người dùng online" description="Không có người dùng nào đang hoạt động." compact />,
+            }}
             scroll={{ x: 900 }}
           />
         </DataTableShell>

@@ -1,3 +1,5 @@
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
 import { adminAxiosInstance } from '@/api/axios/axios';
 import { unwrapApiEnvelope } from '@/api/envelope/envelope';
 
@@ -152,4 +154,40 @@ export const realtimeClient = {
     const response = await adminAxiosInstance.get('/admin/traffic/api', { params });
     return unwrapApiEnvelope<ApiTrafficResponse>(response);
   },
+};
+
+/**
+ * React Query hook for message traffic
+ */
+export const useMessageTrafficQuery = (
+  range: '15m' | '1h' | '6h' | '24h' = '1h',
+  bucket: '1m' | '5m' | '15m' = '1m',
+) => {
+  return useQuery({
+    queryKey: ['message-traffic', range, bucket],
+    queryFn: () => realtimeClient.getMessageTraffic(range, bucket),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  });
+};
+
+/**
+ * React Query hook for API traffic
+ */
+export const useApiTrafficQuery = (
+  range: '15m' | '1h' | '6h' | '24h' = '1h',
+  service: string = 'chat-api-service',
+) => {
+  return useQuery({
+    queryKey: ['api-traffic', range, service],
+    queryFn: () => realtimeClient.getApiTraffic(range, service),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  });
 };

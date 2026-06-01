@@ -27,11 +27,11 @@ interface AdminTopbarProps {
 }
 
 const ConnectionStatusIndicator: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
-  const statusConfig = {
+  const statusConfig: Record<ConnectionStatus, { color: string; label: string; icon: 'check' | 'refresh' | 'wifiOff' | 'alertCircle' }> = {
     connected: { color: 'var(--color-success)', label: 'Kết nối', icon: 'check' },
     connecting: { color: 'var(--color-warning)', label: 'Đang kết nối', icon: 'refresh' },
-    disconnected: { color: 'var(--color-muted)', label: 'Mất kết nối', icon: 'wifi-off' },
-    error: { color: 'var(--color-danger)', label: 'Lỗi kết nối', icon: 'alert-circle' },
+    disconnected: { color: 'var(--color-muted)', label: 'Mất kết nối', icon: 'wifiOff' },
+    error: { color: 'var(--color-danger)', label: 'Lỗi kết nối', icon: 'alertCircle' },
   };
 
   const config = statusConfig[status];

@@ -2,7 +2,12 @@ import { Button, Card, Select, Space, Typography } from 'antd';
 import { useState } from 'react';
 
 import { getErrorMessage } from '@/api/error/error';
-import { realtimeClient } from '@/api/clients/realtimeClient/realtimeClient';
+import {
+  useMessageTrafficQuery,
+  useApiTrafficQuery,
+  type MessageTrafficPoint,
+  type ApiTrafficPoint,
+} from '@/api/clients/realtimeClient/realtimeClient';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
@@ -18,12 +23,12 @@ type TimeRange = '15m' | '1h' | '6h' | '24h';
 export const TrafficPage: React.FC = () => {
   const [range, setRange] = useState<TimeRange>('1h');
 
-  const messageTrafficQuery = realtimeClient.getMessageTraffic(range, '1m');
-  const apiTrafficQuery = realtimeClient.getApiTraffic(range, 'chat-api-service');
+  const messageTrafficQuery = useMessageTrafficQuery(range, '1m');
+  const apiTrafficQuery = useApiTrafficQuery(range, 'chat-api-service');
 
   const isLoading = messageTrafficQuery.isLoading || apiTrafficQuery.isLoading;
 
-  if (isLoading) {
+  if (isLoading && !messageTrafficQuery.data && !apiTrafficQuery.data) {
     return (
       <PageShell
         eyebrow="Realtime"
@@ -61,13 +66,25 @@ export const TrafficPage: React.FC = () => {
   const messageData = messageTrafficQuery.data;
   const apiData = apiTrafficQuery.data;
 
-  // Calculate totals
-  const totalMessages = messageData?.points.reduce((sum, p) => sum + p.sent, 0) ?? 0;
-  const totalDelivered = messageData?.points.reduce((sum, p) => sum + p.delivered, 0) ?? 0;
-  const totalFailed = messageData?.points.reduce((sum, p) => sum + p.failed, 0) ?? 0;
-  const avgRequests = apiData?.points.length
+  // Calculate totals with explicit types
+  const messagePoints = messageData?.points ?? [];
+  const apiPoints = apiData?.points ?? [];
+
+  const totalMessages = messagePoints.reduce(
+    (sum: number, p: MessageTrafficPoint) => sum + p.sent,
+    0,
+  );
+  const totalDelivered = messagePoints.reduce(
+    (sum: number, p: MessageTrafficPoint) => sum + p.delivered,
+    0,
+  );
+  const totalFailed = messagePoints.reduce(
+    (sum: number, p: MessageTrafficPoint) => sum + p.failed,
+    0,
+  );
+  const avgRequests = apiPoints.length
     ? Math.round(
-        apiData.points.reduce((sum, p) => sum + p.requests, 0) / apiData.points.length,
+        apiPoints.reduce((sum: number, p: ApiTrafficPoint) => sum + p.requests, 0) / apiPoints.length,
       )
     : 0;
 
@@ -120,7 +137,7 @@ export const TrafficPage: React.FC = () => {
         </Card>
         <Card size="small" className="traffic-summary-card">
           <div className="traffic-summary-header">
-            <AppIcon name="alert-circle" size={18} aria-hidden />
+            <AppIcon name="alertCircle" size={18} aria-hidden />
             <Text type="secondary">Failed</Text>
           </div>
           <Text strong className="traffic-summary-value traffic-summary-failed">
