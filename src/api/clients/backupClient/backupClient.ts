@@ -5,7 +5,9 @@ import type { BackupStatusResponse } from '@/api/types/backup/backup';
 
 export const backupClient = {
   async getStatus(): Promise<BackupStatusResponse> {
-    const response: AxiosResponse<ApiEnvelope<BackupStatusResponse>> = await adminAxiosInstance.get('/api/v1/admin/backup/status');
+    // NOTE: adminAxiosInstance already has baseURL '/api/v1/admin'
+    // Do NOT include the prefix in the path
+    const response: AxiosResponse<ApiEnvelope<BackupStatusResponse>> = await adminAxiosInstance.get('/backup/status');
     const payload = response.data;
 
     if (payload && typeof payload === 'object' && 'success' in payload) {

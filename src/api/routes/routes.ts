@@ -68,3 +68,29 @@ const resolveAuthApiBaseUrl = (adminApiBaseUrl: string): string => {
 
 export const adminApiBaseUrl = resolveAdminApiBaseUrl();
 export const authApiBaseUrl = resolveAuthApiBaseUrl(adminApiBaseUrl);
+
+/**
+ * Asserts that the path does not include admin API prefix.
+ * Use this in API clients to catch duplicate prefix bugs early.
+ */
+export function assertAdminApiPath(path: string): void {
+  if (path.startsWith('/api/v1/admin')) {
+    throw new Error(
+      `Do not include admin API prefix in path: ${path}. ` +
+        `adminAxiosInstance already has baseURL '/api/v1/admin'.`,
+    );
+  }
+}
+
+/**
+ * Asserts that the path does not include auth API prefix.
+ * Use this in API clients to catch duplicate prefix bugs early.
+ */
+export function assertAuthApiPath(path: string): void {
+  if (path.startsWith('/api/v1/auth')) {
+    throw new Error(
+      `Do not include auth API prefix in path: ${path}. ` +
+        `authAxiosInstance already has baseURL '/api/v1/auth'.`,
+    );
+  }
+}
