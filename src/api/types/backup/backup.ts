@@ -1,7 +1,7 @@
 export interface BackupLastBackup {
   timestamp: string | null;
   ageHours: number | null;
-  status: 'healthy' | 'stale' | 'missing' | 'failed';
+  status: 'healthy' | 'stale' | 'missing' | 'failed' | 'in_progress' | 'running';
   sizeBytes: number | null;
 }
 

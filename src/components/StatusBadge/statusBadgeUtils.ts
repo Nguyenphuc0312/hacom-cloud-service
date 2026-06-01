@@ -1,4 +1,4 @@
-interface StatusBadgeConfig {
+export interface StatusBadgeConfig {
   color: string;
   text: string;
   rawStatus?: string;

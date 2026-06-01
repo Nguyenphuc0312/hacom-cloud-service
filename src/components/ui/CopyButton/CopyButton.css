@@ -1,0 +1,21 @@
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.copy-button:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.copy-button--copied {
+  color: var(--color-success);
+}
+
+.copy-button--copied:hover {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}

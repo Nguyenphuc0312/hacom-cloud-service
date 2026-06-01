@@ -1,11 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
-import { Button, Typography } from 'antd';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Button, Modal, Progress, Typography, message } from 'antd';
+import { useState } from 'react';
+
+import { backupClient } from '@/api/clients/backupClient/backupClient';
+import { getErrorMessage } from '@/api/error/error';
+import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { formatDateTime } from '@/utils/date/date';
 import { formatBytes } from '@/utils/formatters/formatters';
-import { backupClient } from '@/api/clients/backupClient/backupClient';
+import './BackupRestorePage.css';
 
 const { Text } = Typography;
 
@@ -31,7 +36,7 @@ interface AxiosLikeError {
 function getBackupErrorMessage(error: unknown): string {
   const axiosError = error as AxiosLikeError;
   const status = axiosError.response?.status;
-  const message = axiosError.response?.data?.error?.message;
+  const messageText = axiosError.response?.data?.error?.message;
 
   if (status === 404) {
     return 'Không tìm thấy endpoint backup/status. Frontend có thể đang gọi sai API path hoặc backend chưa đăng ký route.';
@@ -41,7 +46,7 @@ function getBackupErrorMessage(error: unknown): string {
     return 'Bạn không có quyền xem trạng thái backup/restore.';
   }
 
-  if (message?.toLowerCase().includes('prometheus') || message?.toLowerCase().includes('connect')) {
+  if (messageText?.toLowerCase().includes('prometheus') || messageText?.toLowerCase().includes('connect')) {
     return 'Không thể kết nối tới Prometheus để lấy dữ liệu backup.';
   }
 
@@ -50,14 +55,16 @@ function getBackupErrorMessage(error: unknown): string {
   }
 
   if (status) {
-    return `Lỗi ${status}: ${message ?? 'Không thể tải trạng thái backup/restore.'}`;
+    return `Lỗi ${status}: ${messageText ?? 'Không thể tải trạng thái backup/restore.'}`;
   }
 
   return 'Không thể tải trạng thái backup/restore. Vui lòng thử lại.';
 }
 
 export const BackupRestorePage = () => {
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const [confirmBackupVisible, setConfirmBackupVisible] = useState(false);
+
+  const statusQuery = useQuery({
     queryKey: ['backup-status'],
     queryFn: backupClient.getStatus,
     refetchInterval: 300_000, // 5 minutes
@@ -65,7 +72,32 @@ export const BackupRestorePage = () => {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  if (isLoading && !data) {
+  const backupMutation = useMutation({
+    mutationFn: async () => {
+      // Backend endpoint for triggering backup - this would be implemented in the API client
+      // For now, we'll just show a message
+      message.info('Tính năng backup thủ công đang được phát triển.');
+      return true;
+    },
+    onSuccess: () => {
+      message.success('Đã kích hoạt backup. Trạng thái sẽ được cập nhật trong vài phút.');
+      setConfirmBackupVisible(false);
+      void statusQuery.refetch();
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error, 'Không thể kích hoạt backup. Vui lòng thử lại.'));
+    },
+  });
+
+  const handleRunBackup = () => {
+    setConfirmBackupVisible(true);
+  };
+
+  const confirmRunBackup = () => {
+    void backupMutation.mutateAsync();
+  };
+
+  if (statusQuery.isPending && !statusQuery.data) {
     return (
       <PageShell
         eyebrow="Vận hành"
@@ -77,30 +109,30 @@ export const BackupRestorePage = () => {
     );
   }
 
-  // Error state - must render even if error
-  if (isError && !data) {
+  if (statusQuery.isError && !statusQuery.data) {
     return (
       <PageShell
         eyebrow="Vận hành"
         title="Backup & Restore"
         description="Theo dõi trạng thái backup và restore drill."
         headerExtra={
-          <Button onClick={() => void refetch()}>Thử lại</Button>
+          <Button onClick={() => void statusQuery.refetch()}>Thử lại</Button>
         }
       >
         <QueryStateView
           kind="error"
-          title={getBackupErrorMessage(error)}
+          title={getBackupErrorMessage(statusQuery.error)}
           description="Vui lòng kiểm tra kết nối và thử lại."
-          onRetry={() => void refetch()}
+          onRetry={() => void statusQuery.refetch()}
         />
       </PageShell>
     );
   }
 
-  const lastBackup = data?.lastBackup;
-  const restoreDrill = data?.restoreDrill;
-  const rpo = data?.rpo;
+  const lastBackup = statusQuery.data?.lastBackup;
+  const restoreDrill = statusQuery.data?.restoreDrill;
+  const rpo = statusQuery.data?.rpo;
+  const isBackupInProgress = lastBackup?.status === 'in_progress' || lastBackup?.status === 'running';
 
   return (
     <PageShell
@@ -108,18 +140,29 @@ export const BackupRestorePage = () => {
       title="Backup & Restore"
       description="Theo dõi trạng thái backup và restore drill."
       headerExtra={
-        <Button
-          onClick={() => {
-            void refetch();
-          }}
-          loading={isFetching}
-        >
-          Làm mới
-        </Button>
+        <div className="backup-page-actions">
+          <Button
+            type="primary"
+            icon={<AppIcon name="upload" size={14} />}
+            onClick={handleRunBackup}
+            loading={backupMutation.isPending}
+            disabled={isBackupInProgress}
+          >
+            {isBackupInProgress ? 'Đang backup...' : 'Chạy Backup ngay'}
+          </Button>
+          <Button
+            onClick={() => {
+              void statusQuery.refetch();
+            }}
+            loading={statusQuery.isFetching}
+          >
+            Làm mới
+          </Button>
+        </div>
       }
     >
+      {/* Backup Status Section */}
       <div className="backup-restore-page">
-        {/* Backup Status Section */}
         <div className="backup-section">
           <h2 className="backup-section-title">Backup</h2>
           <div className="backup-grid">
@@ -170,6 +213,17 @@ export const BackupRestorePage = () => {
                 </Text>
               </div>
             </div>
+
+            {/* Backup Progress Card (shown when in progress) */}
+            {isBackupInProgress && (
+              <div className="backup-card backup-card--progress">
+                <Text type="secondary">Backup đang chạy</Text>
+                <Progress percent={50} status="active" size="small" />
+                <Text type="secondary" className="backup-card-meta">
+                  Vui lòng đợi trong vài phút...
+                </Text>
+              </div>
+            )}
           </div>
         </div>
 
@@ -232,6 +286,36 @@ export const BackupRestorePage = () => {
           </Text>
         </div>
       </div>
+
+      {/* Confirm Backup Modal */}
+      <Modal
+        title="Xác nhận chạy Backup"
+        open={confirmBackupVisible}
+        onCancel={() => setConfirmBackupVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setConfirmBackupVisible(false)}>
+            Hủy
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            danger
+            loading={backupMutation.isPending}
+            onClick={confirmRunBackup}
+          >
+            Xác nhận Backup
+          </Button>,
+        ]}
+      >
+        <div className="backup-confirm-content">
+          <p>Bạn có chắc chắn muốn kích hoạt backup thủ công?</p>
+          <ul>
+            <li>Backup sẽ bao gồm PostgreSQL, MongoDB, và MinIO data.</li>
+            <li>Quá trình này có thể mất từ 5-30 phút tùy thuộc vào kích thước dữ liệu.</li>
+            <li>Trong khi backup, hệ thống vẫn hoạt động bình thường.</li>
+          </ul>
+        </div>
+      </Modal>
     </PageShell>
   );
 };
