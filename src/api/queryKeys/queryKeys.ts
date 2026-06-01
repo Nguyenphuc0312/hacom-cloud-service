@@ -47,4 +47,15 @@ export const queryKeys = {
   adminConfigStatus: ['admin-config-status'] as const,
   monitoringOverview: (range: string) => ['monitoring-overview', range] as const,
   dashboardSummary: (stamp: string) => ['dashboard-summary', stamp] as const,
+
+  // Realtime monitoring
+  realtimeOverview: ['realtime-overview'] as const,
+  realtimeOnlineUsers: (params: QueryParams) => ['realtime-online-users', params] as const,
+  realtimeTypingUsers: (params: QueryParams) => ['realtime-typing-users', params] as const,
+  realtimeActiveRooms: (params: QueryParams) => ['realtime-active-rooms', params] as const,
+  realtimeUserLiveState: (userId: string) => ['realtime-user-live-state', userId] as const,
+  realtimeRoomLiveState: (roomId: string) => ['realtime-room-live-state', roomId] as const,
+  realtimeMessageTraffic: (params: QueryParams) => ['realtime-message-traffic', params] as const,
+  realtimeApiTraffic: (params: QueryParams) => ['realtime-api-traffic', params] as const,
+  realtimeObservabilityStatus: ['realtime-observability-status'] as const,
 };
