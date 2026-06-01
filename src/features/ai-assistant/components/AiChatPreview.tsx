@@ -14,11 +14,14 @@ import type { AiMessage } from "../types";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { AiAnswerContent } from "./AiAnswerContent";
 import { AiSourceList } from "./AiSourceList";
+import { WorkReportForm } from "./WorkReportForm";
+import { DepartmentSelector } from "./DepartmentSelector";
 import "../styles/ai-animations.css";
 
 interface AiChatPreviewProps {
   messages: AiMessage[];
   isLoading?: boolean;
+  onUpdateMessage?: (messageId: string, patch: Partial<AiMessage>) => void;
 }
 
 const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
@@ -54,6 +57,7 @@ const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
 export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   messages,
   isLoading = false,
+  onUpdateMessage,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { selectedEndpoint } = useChatUiStore();
@@ -154,6 +158,35 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                       <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
                       <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
                     </div>
+                  ) : message.formRequest ? (
+                    <WorkReportForm
+                      data={message.formRequest}
+                      onSuccess={(msg) =>
+                        onUpdateMessage?.(message.id, {
+                          content: msg,
+                          formRequest: undefined,
+                          isStreaming: false,
+                        })
+                      }
+                      onCancel={() =>
+                        onUpdateMessage?.(message.id, {
+                          content: "Đã hủy báo cáo.",
+                          formRequest: undefined,
+                          isStreaming: false,
+                        })
+                      }
+                    />
+                  ) : message.selectionRequest ? (
+                    <DepartmentSelector
+                      data={message.selectionRequest}
+                      onCancel={() =>
+                        onUpdateMessage?.(message.id, {
+                          content: "Đã hủy.",
+                          selectionRequest: undefined,
+                          isStreaming: false,
+                        })
+                      }
+                    />
                   ) : message.role === "assistant" ? (
                     <AiAnswerContent
                       content={message.content}
