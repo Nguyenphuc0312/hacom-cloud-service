@@ -1,261 +1,155 @@
-/**
- * API client for realtime monitoring endpoints
- */
 import { adminAxiosInstance } from '@/api/axios/axios';
-import type {
-  RealtimeOverview,
-  OnlineUsersResponse,
-  TypingUsersResponse,
-  ActiveRoomsResponse,
-  UserLiveState,
-  RoomLiveState,
-  MessageTrafficResponse,
-  ApiTrafficResponse,
-  ObservabilityStatus,
-} from '@/api/types/realtime/realtime';
-import type { TimeRange } from '@/api/types/metrics/metrics';
+import { unwrapApiEnvelope } from '@/api/envelope/envelope';
 
-export interface RealtimeApiEnvelope<T> {
-  success: boolean;
-  data?: T;
-  meta?: Record<string, unknown>;
-  error?: {
-    code?: string;
-    message?: string;
-  };
+export interface OnlineUser {
+  userId: string;
+  displayName: string;
+  email: string;
+  department?: string;
+  device?: string;
+  browser?: string;
+  ip?: string;
+  lastActive: string;
+  status: 'online' | 'idle' | 'disconnected';
+  currentRoom?: string;
+}
+
+export interface OnlineUsersResponse {
+  users: OnlineUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface RealtimeOverview {
+  onlineUsers: number;
+  activeConnections: number;
+  messagesPerMinute: number;
+  apiRequestsPerMinute: number;
+  errorRate: number;
+  avgLatencyMs: number;
+  wsDeliveryFailures: number;
+  redisStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
+  databaseStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
+  systemUptime: string;
+  lastUpdated: string;
+}
+
+export interface TypingUser {
+  userId: string;
+  displayName: string;
+  roomId: string;
+  roomName?: string;
+  startedAt: string;
+}
+
+export interface TypingUsersResponse {
+  users: TypingUser[];
+  total: number;
+}
+
+export interface ActiveRoom {
+  roomId: string;
+  roomName?: string;
+  type: 'dm' | 'group';
+  onlineMembers: number;
+  totalMembers: number;
+  lastActivity: string;
+}
+
+export interface ActiveRoomsResponse {
+  rooms: ActiveRoom[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface MessageTrafficPoint {
+  timestamp: string;
+  sent: number;
+  delivered: number;
+  failed: number;
+}
+
+export interface MessageTrafficResponse {
+  points: MessageTrafficPoint[];
+  range: string;
+  bucket: string;
+}
+
+export interface ApiTrafficPoint {
+  timestamp: string;
+  requests: number;
+  errors: number;
+  avgLatencyMs: number;
+}
+
+export interface ApiTrafficResponse {
+  points: ApiTrafficPoint[];
+  range: string;
+  service: string;
 }
 
 export const realtimeClient = {
-  /**
-   * Get realtime overview summary
-   */
   async getOverview(): Promise<RealtimeOverview> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<RealtimeOverview>>(
-      '/admin/realtime/overview',
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Realtime overview unavailable');
+    const response = await adminAxiosInstance.get('/admin/realtime/overview');
+    return unwrapApiEnvelope<RealtimeOverview>(response);
   },
 
-  /**
-   * Get online users list with pagination
-   */
-  async getOnlineUsers(params?: {
-    page?: number;
-    pageSize?: number;
-    q?: string;
-    departmentId?: string;
-    device?: string;
-    order?: 'asc' | 'desc';
-  }): Promise<OnlineUsersResponse> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<OnlineUsersResponse>>(
-      '/admin/realtime/online-users',
-      { params },
-    );
+  async getOnlineUsers(
+    page: number = 1,
+    pageSize: number = 50,
+    search?: string,
+    departmentId?: string,
+  ): Promise<OnlineUsersResponse> {
+    const params: Record<string, string | number> = { page, pageSize };
+    if (search) params.q = search;
+    if (departmentId) params.departmentId = departmentId;
 
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Online users list unavailable');
+    const response = await adminAxiosInstance.get('/admin/realtime/online-users', { params });
+    return unwrapApiEnvelope<OnlineUsersResponse>(response);
   },
 
-  /**
-   * Get typing users list
-   */
-  async getTypingUsers(params?: {
-    page?: number;
-    pageSize?: number;
-    roomId?: string;
-    userId?: string;
-  }): Promise<TypingUsersResponse> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<TypingUsersResponse>>(
-      '/admin/realtime/typing-users',
-      { params },
-    );
+  async getTypingUsers(
+    page: number = 1,
+    pageSize: number = 50,
+    roomId?: string,
+    userId?: string,
+  ): Promise<TypingUsersResponse> {
+    const params: Record<string, string | number> = { page, pageSize };
+    if (roomId) params.roomId = roomId;
+    if (userId) params.userId = userId;
 
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Typing users list unavailable');
+    const response = await adminAxiosInstance.get('/admin/realtime/typing-users', { params });
+    return unwrapApiEnvelope<TypingUsersResponse>(response);
   },
 
-  /**
-   * Get active rooms list
-   */
-  async getActiveRooms(params?: {
-    page?: number;
-    pageSize?: number;
-    sortBy?: 'onlineMembers' | 'lastActivity' | 'messages';
-    order?: 'asc' | 'desc';
-  }): Promise<ActiveRoomsResponse> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<ActiveRoomsResponse>>(
-      '/admin/realtime/active-rooms',
-      { params },
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Active rooms list unavailable');
+  async getActiveRooms(
+    page: number = 1,
+    pageSize: number = 50,
+    sortBy: 'onlineMembers' | 'lastActivity' = 'onlineMembers',
+    order: 'asc' | 'desc' = 'desc',
+  ): Promise<ActiveRoomsResponse> {
+    const params: Record<string, string | number> = { page, pageSize, sortBy, order };
+    const response = await adminAxiosInstance.get('/admin/realtime/active-rooms', { params });
+    return unwrapApiEnvelope<ActiveRoomsResponse>(response);
   },
 
-  /**
-   * Get detailed user live state
-   * Requires audit reason
-   */
-  async getUserLiveState(
-    userId: string,
-    reason: string,
-  ): Promise<UserLiveState> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<UserLiveState>>(
-      `/admin/realtime/users/${userId}/live-state`,
-      {
-        params: { reason },
-        headers: { 'X-Audit-Reason': reason },
-      },
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'User live state unavailable');
+  async getMessageTraffic(
+    range: '15m' | '1h' | '6h' | '24h' = '1h',
+    bucket: '1m' | '5m' | '15m' = '1m',
+  ): Promise<MessageTrafficResponse> {
+    const params = { range, bucket };
+    const response = await adminAxiosInstance.get('/admin/traffic/messages', { params });
+    return unwrapApiEnvelope<MessageTrafficResponse>(response);
   },
 
-  /**
-   * Get detailed room live state
-   * Requires audit reason
-   */
-  async getRoomLiveState(
-    roomId: string,
-    reason: string,
-  ): Promise<RoomLiveState> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<RoomLiveState>>(
-      `/admin/realtime/rooms/${roomId}/live-state`,
-      {
-        params: { reason },
-        headers: { 'X-Audit-Reason': reason },
-      },
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Room live state unavailable');
-  },
-
-  /**
-   * Get message traffic over time
-   */
-  async getMessageTraffic(params?: {
-    range?: TimeRange;
-    bucket?: string;
-  }): Promise<MessageTrafficResponse> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<MessageTrafficResponse>>(
-      '/admin/traffic/messages',
-      { params },
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Message traffic unavailable');
-  },
-
-  /**
-   * Get API traffic metrics
-   */
-  async getApiTraffic(params?: {
-    range?: TimeRange;
-    service?: string;
-  }): Promise<ApiTrafficResponse> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<ApiTrafficResponse>>(
-      '/admin/traffic/api',
-      { params },
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'API traffic unavailable');
-  },
-
-  /**
-   * Get observability infrastructure status
-   */
-  async getObservabilityStatus(): Promise<ObservabilityStatus> {
-    const response = await adminAxiosInstance.get<RealtimeApiEnvelope<ObservabilityStatus>>(
-      '/admin/observability/status',
-    );
-
-    const payload = response.data;
-
-    if (payload.success && payload.data) {
-      return payload.data;
-    }
-
-    if (payload.data) {
-      return payload.data;
-    }
-
-    throw new Error(payload.error?.message ?? 'Observability status unavailable');
+  async getApiTraffic(
+    range: '15m' | '1h' | '6h' | '24h' = '1h',
+    service: string = 'chat-api-service',
+  ): Promise<ApiTrafficResponse> {
+    const params = { range, service };
+    const response = await adminAxiosInstance.get('/admin/traffic/api', { params });
+    return unwrapApiEnvelope<ApiTrafficResponse>(response);
   },
 };

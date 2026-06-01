@@ -1,8 +1,13 @@
 import { App } from 'antd';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCurrentUser } from '@/app/useCurrentUser/useCurrentUser';
+import {
+  getConnectionStatus,
+  onConnectionStatusChange,
+  type ConnectionStatus,
+} from '@/api/axios/axios';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { CommandPalette } from '@/components/CommandPalette/CommandPalette';
 import { useCommandPalette } from '@/hooks/useCommandPalette/useCommandPalette';
@@ -21,6 +26,32 @@ interface AdminTopbarProps {
   onToggleSidebar?: () => void;
 }
 
+const ConnectionStatusIndicator: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
+  const statusConfig = {
+    connected: { color: 'var(--color-success)', label: 'Kết nối', icon: 'check' },
+    connecting: { color: 'var(--color-warning)', label: 'Đang kết nối', icon: 'refresh' },
+    disconnected: { color: 'var(--color-muted)', label: 'Mất kết nối', icon: 'wifi-off' },
+    error: { color: 'var(--color-danger)', label: 'Lỗi kết nối', icon: 'alert-circle' },
+  };
+
+  const config = statusConfig[status];
+
+  return (
+    <div
+      className="connection-status-indicator"
+      title={config.label}
+      aria-label={`Trạng thái kết nối: ${config.label}`}
+    >
+      <span
+        className="connection-status-dot"
+        style={{ backgroundColor: config.color }}
+        aria-hidden
+      />
+      <AppIcon name={config.icon} size={14} aria-hidden />
+    </div>
+  );
+};
+
 export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   mobile = false,
   mobileNavOpen = false,
@@ -35,6 +66,19 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   const { user } = useCurrentUser();
   const { isOpen, openPalette, closePalette } = useCommandPalette();
   const currentPage = resolveNavigationContext(location.pathname);
+
+  // Connection status state
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(getConnectionStatus());
+
+  useEffect(() => {
+    const unsubscribe = onConnectionStatusChange((status) => {
+      setConnectionStatus(status);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const paletteItems = useMemo(
     () => [
@@ -85,6 +129,24 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         keywords: ['hr', 'employees', 'directory'],
         onSelect: () => navigate('/hr-employees'),
       },
+      {
+        id: 'quick-open-alerts',
+        label: 'Mở Cảnh báo',
+        description: 'Xem danh sách cảnh báo và sự cố.',
+        category: 'Thao tác nhanh' as const,
+        icon: <AppIcon name="alert" size={16} aria-hidden />,
+        keywords: ['alerts', 'incidents', 'warnings'],
+        onSelect: () => navigate('/alerts'),
+      },
+      {
+        id: 'quick-open-realtime',
+        label: 'Mở Dashboard Realtime',
+        description: 'Theo dõi KPIs realtime của hệ thống.',
+        category: 'Thao tác nhanh' as const,
+        icon: <AppIcon name="activity" size={16} aria-hidden />,
+        keywords: ['realtime', 'dashboard', 'live', 'online'],
+        onSelect: () => navigate('/realtime'),
+      },
     ],
     [currentRole, navigate],
   );
@@ -127,6 +189,11 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         </div>
 
         <div className="ds-admin-topbar-right">
+          {/* Connection Status Indicator */}
+          <div className="ds-topbar-connection-status">
+            <ConnectionStatusIndicator status={connectionStatus} />
+          </div>
+
           <TopbarActions
             user={user}
             onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}

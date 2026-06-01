@@ -1,0 +1,33 @@
+/* Online Users Page Styles */
+
+.online-users-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.online-users-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name-cell strong {
+  font-size: 14px;
+}
+
+.user-name-cell .ant-typography-secondary {
+  font-size: 12px;
+}
+
+.device-cell {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}

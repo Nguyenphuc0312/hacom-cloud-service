@@ -1,5 +1,4 @@
-import { Button } from 'antd';
-import { useState } from 'react';
+import { Button, Progress, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error/error';
@@ -22,6 +21,8 @@ import './DashboardPage-01.css';
 import './DashboardPage-02.css';
 import './DashboardPage.figma-01.css';
 import './DashboardPage.figma-02.css';
+import './DashboardPage.css';
+
 export const DashboardPage = () => {
   const navigate = useNavigate();
   const [range, setRange] = useState<TimeRange>('1h');
@@ -123,6 +124,29 @@ export const DashboardPage = () => {
   const servicesTotal = servicesSummary?.total ?? 0;
   const apiErrorRate = overview?.systemOverview.partialFailuresPerMinute ?? null;
 
+  // Calculate system health status
+  const getSystemHealthStatus = (): 'healthy' | 'warning' | 'danger' | 'unknown' => {
+    if (!overview && !serviceHealth) return 'unknown';
+    if (overview) {
+      if (overview.freshness === 'unavailable') return 'danger';
+      if (overview.systemOverview.services.down > 0) return 'danger';
+      if (apiErrorRate && apiErrorRate > 5) return 'danger';
+      if (overview.capacityBaseline.currentRiskState === 'near-breaking') return 'warning';
+      if (overview.systemOverview.services.degraded > 0) return 'warning';
+      if (apiErrorRate && apiErrorRate > 1) return 'warning';
+    }
+    if (serviceHealth?.summary.down && serviceHealth.summary.down > 0) return 'danger';
+    if (serviceHealth?.summary.degraded && serviceHealth.summary.degraded > 0) return 'warning';
+    return 'healthy';
+  };
+
+  const systemHealthStatus = getSystemHealthStatus();
+  const systemHealthPercent =
+    systemHealthStatus === 'healthy' ? 100
+      : systemHealthStatus === 'warning' ? 70
+      : systemHealthStatus === 'danger' ? 30
+      : 0;
+
   const metrics = [
     {
       id: 'total-users',
@@ -160,7 +184,7 @@ export const DashboardPage = () => {
           ? 'Chưa có dữ liệu xu hướng'
           : `Delta ${trafficTrend.delta >= 0 ? '+' : ''}${formatNumber(trafficTrend.delta)}`,
       tone: 'default' as const,
-      route: '/monitoring',
+      route: '/realtime',
       icon: 'activity' as const,
     },
     {
@@ -169,7 +193,7 @@ export const DashboardPage = () => {
       value: apiErrorRate === null ? '-' : formatRate(apiErrorRate, '/min'),
       meta: 'Tỷ lệ lỗi một phần',
       tone: (apiErrorRate ?? 0) > 0 ? ('danger' as const) : ('success' as const),
-      route: '/monitoring',
+      route: '/realtime',
       icon: 'warning' as const,
     },
   ];
@@ -182,6 +206,10 @@ export const DashboardPage = () => {
     activeUsers > 0 ||
     pendingUsers > 0 ||
     pendingAdminAccess !== null;
+
+  // Count critical insights for alerts badge
+  const criticalCount = insights.filter(i => i.tone === 'critical').length;
+  const warningCount = insights.filter(i => i.tone === 'warning').length;
 
   return (
     <PageShell
@@ -216,6 +244,66 @@ export const DashboardPage = () => {
         </div>
       ) : (
         <div className="ds-figma-dashboard">
+          {/* System Health Banner - NEW */}
+          <div className={`dashboard-health-banner health-${systemHealthStatus}`}>
+            <div className="health-banner-content">
+              <AppIcon
+                name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alert-circle'}
+                size={24}
+                aria-hidden
+              />
+              <div className="health-banner-text">
+                <Typography.Text strong>
+                  {systemHealthStatus === 'healthy' && 'Hệ thống hoạt động ổn định'}
+                  {systemHealthStatus === 'warning' && 'Hệ thống có cảnh báo'}
+                  {systemHealthStatus === 'danger' && 'Hệ thống gặp sự cố'}
+                  {systemHealthStatus === 'unknown' && 'Trạng thái không xác định'}
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  {servicesTotal > 0
+                    ? `${servicesSummary?.up ?? 0}/${servicesTotal} dịch vụ online`
+                    : overview?.systemOverview.services.total
+                      ? `${overview.systemOverview.services.healthy}/${overview.systemOverview.services.total} dịch vụ`
+                      : 'Đang theo dõi...'}
+                </Typography.Text>
+              </div>
+            </div>
+            <div className="health-banner-actions">
+              <Button
+                type="link"
+                icon={<AppIcon name="activity" size={14} />}
+                onClick={() => navigate('/realtime')}
+              >
+                Realtime
+              </Button>
+              {(criticalCount > 0 || warningCount > 0) && (
+                <Button
+                  type="link"
+                  danger={criticalCount > 0}
+                  icon={<AppIcon name="alert" size={14} />}
+                  onClick={() => navigate('/alerts')}
+                >
+                  {criticalCount > 0 ? `${criticalCount} nghiêm trọng` : `${warningCount} cảnh báo`}
+                </Button>
+              )}
+            </div>
+            <Progress
+              type="circle"
+              percent={systemHealthPercent}
+              size={56}
+              strokeColor={
+                systemHealthStatus === 'healthy'
+                  ? 'var(--color-success)'
+                  : systemHealthStatus === 'warning'
+                    ? 'var(--color-warning)'
+                    : systemHealthStatus === 'danger'
+                      ? 'var(--color-danger)'
+                      : 'var(--color-muted)'
+              }
+              format={() => `${systemHealthPercent}%`}
+            />
+          </div>
+
           <section className="ds-figma-summary-grid" aria-label="Chỉ số vận hành chính">
             {metrics.map((metric) => (
               <button
@@ -255,7 +343,7 @@ export const DashboardPage = () => {
 
             <DashboardCard
               title="Tổng quan lưu lượng"
-              action={<Button type="link" onClick={() => navigate('/monitoring')}>Mở</Button>}
+              action={<Button type="link" onClick={() => navigate('/realtime')}>Mở</Button>}
               className="ds-figma-card ds-figma-traffic-card"
             >
               <DashboardHighchartsPanel
@@ -304,7 +392,7 @@ export const DashboardPage = () => {
 
             <DashboardCard
               title="Tỷ lệ Lỗi API"
-              action={<Button type="link" onClick={() => navigate('/monitoring')}>Mở</Button>}
+              action={<Button type="link" onClick={() => navigate('/realtime')}>Mở</Button>}
               className="ds-figma-card ds-figma-api-card"
             >
               <div className="ds-figma-api-state">

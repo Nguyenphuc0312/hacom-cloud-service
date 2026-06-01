@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Button, Input, Select, Typography, message } from 'antd';
+import { Button, Input, Select, Switch, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
@@ -25,6 +25,7 @@ import './SystemLogsPage.css';
 
 const LOG_FETCH_LIMIT = 200;
 const KEYWORD_DEBOUNCE_MS = 250;
+const AUTO_REFRESH_INTERVAL_MS = 30000; // 30 seconds
 
 const LEVEL_OPTIONS = [
   { label: 'Tất cả cấp độ', value: 'all' },
@@ -49,6 +50,7 @@ export const SystemLogsPage = () => {
   const [service, setService] = useState<string>('all');
   const [timeRange, setTimeRange] = useState<SystemLogRange>('1h');
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const deferredKeyword = useDeferredValue(keyword.trim());
   const [debouncedKeyword, setDebouncedKeyword] = useState(deferredKeyword);
 
@@ -77,6 +79,8 @@ export const SystemLogsPage = () => {
     queryKey: queryKeys.systemLogs(queryParams),
     queryFn: () => systemLogsClient.list(queryParams),
     placeholderData: keepPreviousData,
+    refetchInterval: autoRefresh ? AUTO_REFRESH_INTERVAL_MS : false,
+    refetchIntervalInBackground: false,
   });
 
   const logs = useMemo(() => query.data?.items ?? [], [query.data?.items]);
@@ -110,6 +114,12 @@ export const SystemLogsPage = () => {
     service !== 'all' ? service : null,
     timeRange !== '1h' ? timeRange : null,
   ].filter(Boolean).length;
+
+  // Count errors in current logs
+  const errorCount = useMemo(
+    () => logs.filter((log) => log.level === 'error').length,
+    [logs],
+  );
 
   const copyValue = async (value: string | null) => {
     if (!value) {
@@ -233,6 +243,23 @@ export const SystemLogsPage = () => {
       {...pageHeader}
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          {/* Auto-refresh toggle */}
+          <div className="system-logs-auto-refresh">
+            <AppTooltip title="Tự động làm mới mỗi 30 giây">
+              <Switch
+                checked={autoRefresh}
+                onChange={setAutoRefresh}
+                size="small"
+              />
+            </AppTooltip>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Auto refresh
+            </Typography.Text>
+            {autoRefresh && query.isFetching && (
+              <AppIcon name="refresh" size={14} className="system-logs-refreshing" aria-hidden />
+            )}
+          </div>
+
           <Button
             icon={<AppIcon name="refresh" size={14} />}
             loading={query.isFetching}
@@ -287,7 +314,14 @@ export const SystemLogsPage = () => {
               </div>
             </div>
             <div className="ds-filter-toolbar-meta">
-              <span>{logs.length} bản ghi</span>
+              <span>
+                {logs.length} bản ghi
+                {errorCount > 0 && (
+                  <Typography.Text type="danger" style={{ marginLeft: 8 }}>
+                    ({errorCount} lỗi)
+                  </Typography.Text>
+                )}
+              </span>
               <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Chưa lọc'}</span>
               <span>
                 Đồng bộ:{' '}
@@ -311,6 +345,7 @@ export const SystemLogsPage = () => {
               onRow={(record) => ({
                 onClick: () => setSelectedLogId(record.id),
                 style: { cursor: 'pointer' },
+                className: record.level === 'error' ? 'system-logs-row-error' : '',
               })}
             />
           </DataTableShell>

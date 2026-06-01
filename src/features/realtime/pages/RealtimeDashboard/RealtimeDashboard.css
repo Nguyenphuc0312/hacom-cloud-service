@@ -1,0 +1,208 @@
+/* Realtime Dashboard Styles */
+
+.realtime-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.realtime-last-updated {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Health Banner */
+.realtime-health-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.realtime-health-banner.health-healthy {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.realtime-health-banner.health-warning {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(234, 179, 8, 0.05) 100%);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.realtime-health-banner.health-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.realtime-health-banner.health-unknown {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.1) 0%, rgba(156, 163, 175, 0.05) 100%);
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.health-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.health-banner-content .anticon,
+.health-banner-content svg {
+  color: inherit;
+}
+
+.health-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.health-banner-text strong {
+  font-size: 16px;
+}
+
+/* KPI Grid */
+.realtime-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.realtime-kpi-card {
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.realtime-kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.realtime-kpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.realtime-kpi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.realtime-kpi-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.realtime-kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.realtime-kpi-subtitle {
+  font-size: 12px;
+}
+
+.realtime-kpi-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.realtime-kpi-trend.trend-up {
+  color: var(--color-success);
+}
+
+.realtime-kpi-trend.trend-down {
+  color: var(--color-danger);
+}
+
+.realtime-kpi-trend.trend-neutral {
+  color: var(--color-muted);
+}
+
+/* Services Section */
+.realtime-services-section {
+  margin-bottom: 24px;
+}
+
+.realtime-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.service-status-card {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.service-status-card.status-healthy {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.service-status-card.status-warning,
+.service-status-card.status-degraded {
+  border-color: rgba(234, 179, 8, 0.3);
+  background: rgba(234, 179, 8, 0.05);
+}
+
+.service-status-card.status-down {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.service-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.service-latency {
+  font-size: 12px;
+  display: block;
+}
+
+.service-last-checked {
+  font-size: 11px;
+  display: block;
+  margin-top: 4px;
+}
+
+/* Footer */
+.realtime-footer {
+  text-align: center;
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 24px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .realtime-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .realtime-health-banner {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .health-banner-content {
+    flex-direction: column;
+  }
+}

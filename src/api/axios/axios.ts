@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosRequestConfig } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 import { adminApiBaseUrl, authApiBaseUrl } from '@/api/routes/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore/authStore';
@@ -9,6 +9,39 @@ const normalizedBasePath = rawBasePath.endsWith('/') ? rawBasePath : `${rawBaseP
 const loginPath = `${normalizedBasePath}login`;
 const loginPathname = new URL(loginPath, window.location.origin).pathname;
 
+// Tab visibility state
+let isTabVisible = true;
+const visibilityChangeListeners = new Set<(visible: boolean) => void>();
+
+// Initialize tab visibility detection
+if (typeof document !== 'undefined') {
+  const handleVisibilityChange = () => {
+    isTabVisible = !document.hidden;
+
+    // Notify listeners about visibility change
+    visibilityChangeListeners.forEach((listener) => {
+      listener(isTabVisible);
+    });
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
+/**
+ * Hook to get current tab visibility state
+ */
+export const isTabActive = (): boolean => isTabVisible;
+
+/**
+ * Subscribe to tab visibility changes
+ */
+export const onTabVisibilityChange = (callback: (visible: boolean) => void): (() => void) => {
+  visibilityChangeListeners.add(callback);
+  return () => {
+    visibilityChangeListeners.delete(callback);
+  };
+};
+
 const createJsonClient = (baseURL: string): AxiosInstance =>
   axios.create({
     baseURL,
@@ -16,6 +49,11 @@ const createJsonClient = (baseURL: string): AxiosInstance =>
       'Content-Type': 'application/json',
     },
     timeout: 15000,
+    // Retry configuration
+    retry: 3,
+    retryDelay: (retryCount) => {
+      return Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
+    },
   });
 
 export const adminAxiosInstance = createJsonClient(adminApiBaseUrl);
@@ -23,6 +61,8 @@ export const authAxiosInstance = createJsonClient(authApiBaseUrl);
 
 export interface ApiRequestConfig extends AxiosRequestConfig {
   skipAuthRedirect?: boolean;
+  skipTabVisibilityPause?: boolean;
+  retryOnVisibilityChange?: boolean;
 }
 
 const buildRequestId = (): string => {
@@ -78,8 +118,119 @@ const attachUnauthorizedRedirect = (client: AxiosInstance) => {
   );
 };
 
+/**
+ * Attach retry logic for failed requests
+ * Only retries on network errors or 5xx errors, not on 4xx
+ */
+const attachRetryLogic = (client: AxiosInstance) => {
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const config = error.config as (AxiosRequestConfig & ApiRequestConfig) | undefined;
+
+      if (!config || !config.retry) {
+        return Promise.reject(error);
+      }
+
+      const retryCount = (config.retryCount as number) || 0;
+      const shouldRetry =
+        retryCount < (config.retry as number) &&
+        (!error.response || (error.response.status >= 500 && error.response.status < 600));
+
+      if (shouldRetry) {
+        // Check if we should pause retry when tab is hidden
+        if (!config.skipTabVisibilityPause && !isTabVisible && !config.retryOnVisibilityChange) {
+          // Wait for tab to become visible again before retrying
+          return new Promise((resolve, reject) => {
+            const handleVisibilityChange = () => {
+              if (isTabVisible) {
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+                config.retryCount = retryCount + 1;
+
+                // Exponential backoff before retry
+                const retryDelay = Math.pow(2, retryCount + 1) * 1000;
+                setTimeout(() => {
+                  resolve(client(config));
+                }, retryDelay);
+              }
+            };
+
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+
+            // Also timeout after 60 seconds
+            setTimeout(() => {
+              document.removeEventListener('visibilitychange', handleVisibilityChange);
+              reject(error);
+            }, 60000);
+          });
+        }
+
+        config.retryCount = retryCount + 1;
+
+        // Exponential backoff
+        const retryDelay = Math.pow(2, retryCount + 1) * 1000;
+
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+
+        return client(config);
+      }
+
+      return Promise.reject(error);
+    },
+  );
+};
+
 [adminAxiosInstance, authAxiosInstance].forEach((client) => {
   attachRequestId(client);
   attachAuthHeader(client);
   attachUnauthorizedRedirect(client);
+  attachRetryLogic(client);
 });
+
+/**
+ * Create a cancellable request using AbortController
+ */
+export const createCancellableRequest = () => {
+  const abortController = new AbortController();
+
+  return {
+    signal: abortController.signal,
+    cancel: () => abortController.abort(),
+  };
+};
+
+/**
+ * API connection status tracking
+ */
+export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
+
+let currentConnectionStatus: ConnectionStatus = 'connecting';
+const connectionStatusListeners = new Set<(status: ConnectionStatus) => void>();
+
+export const getConnectionStatus = (): ConnectionStatus => currentConnectionStatus;
+
+export const setConnectionStatus = (status: ConnectionStatus) => {
+  currentConnectionStatus = status;
+  connectionStatusListeners.forEach((listener) => listener(status));
+};
+
+export const onConnectionStatusChange = (callback: (status: ConnectionStatus) => void): (() => void) => {
+  connectionStatusListeners.add(callback);
+  return () => {
+    connectionStatusListeners.delete(callback);
+  };
+};
+
+// Track successful requests to update connection status
+adminAxiosInstance.interceptors.response.use(
+  (response: AxiosResponse) => {
+    setConnectionStatus('connected');
+    return response;
+  },
+  (error) => {
+    if (!error.response || error.response.status >= 500) {
+      setConnectionStatus('error');
+    }
+    return Promise.reject(error);
+  },
+);
