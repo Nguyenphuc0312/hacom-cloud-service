@@ -16,11 +16,53 @@ const formatHours = (hours: number | null): string => {
   return `${Math.round(hours / 24)} ngày`;
 };
 
+interface AxiosLikeError {
+  response?: {
+    status?: number;
+    data?: {
+      error?: {
+        message?: string;
+      };
+    };
+  };
+  message?: string;
+}
+
+function getBackupErrorMessage(error: unknown): string {
+  const axiosError = error as AxiosLikeError;
+  const status = axiosError.response?.status;
+  const message = axiosError.response?.data?.error?.message;
+
+  if (status === 404) {
+    return 'Không tìm thấy endpoint backup/status. Frontend có thể đang gọi sai API path hoặc backend chưa đăng ký route.';
+  }
+
+  if (status === 401 || status === 403) {
+    return 'Bạn không có quyền xem trạng thái backup/restore.';
+  }
+
+  if (message?.toLowerCase().includes('prometheus') || message?.toLowerCase().includes('connect')) {
+    return 'Không thể kết nối tới Prometheus để lấy dữ liệu backup.';
+  }
+
+  if (status === 500 || status === 503) {
+    return 'Backend gặp lỗi khi lấy dữ liệu backup. Vui lòng thử lại sau.';
+  }
+
+  if (status) {
+    return `Lỗi ${status}: ${message ?? 'Không thể tải trạng thái backup/restore.'}`;
+  }
+
+  return 'Không thể tải trạng thái backup/restore. Vui lòng thử lại.';
+}
+
 export const BackupRestorePage = () => {
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['backup-status'],
     queryFn: backupClient.getStatus,
     refetchInterval: 300_000, // 5 minutes
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   if (isLoading && !data) {
@@ -35,20 +77,22 @@ export const BackupRestorePage = () => {
     );
   }
 
-  if (error && !data) {
+  // Error state - must render even if error
+  if (isError && !data) {
     return (
       <PageShell
         eyebrow="Vận hành"
         title="Backup & Restore"
         description="Theo dõi trạng thái backup và restore drill."
+        headerExtra={
+          <Button onClick={() => void refetch()}>Thử lại</Button>
+        }
       >
         <QueryStateView
           kind="error"
-          title="Không thể tải trạng thái backup"
-          description="Không thể kết nối tới Prometheus để lấy dữ liệu backup."
-          onRetry={() => {
-            void refetch();
-          }}
+          title={getBackupErrorMessage(error)}
+          description="Vui lòng kiểm tra kết nối và thử lại."
+          onRetry={() => void refetch()}
         />
       </PageShell>
     );

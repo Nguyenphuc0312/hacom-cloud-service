@@ -21,6 +21,8 @@ export const useMonitoringOverview = (range: TimeRange) => {
     refetchInterval: effectiveInterval,
     refetchIntervalInBackground: false,
     placeholderData: keepPreviousData,
+    // Don't throw on error - we handle partial data in the page
+    throwOnError: false,
     retry: (failureCount, error) => {
       if (failureCount >= MAX_RETRIES) {
         return false;
