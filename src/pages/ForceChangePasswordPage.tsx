@@ -119,18 +119,29 @@ export const ForceChangePasswordPage: React.FC = () => {
             autoComplete="new-password"
           />
 
-          <Button
-            type="submit"
-            fullWidth
-            size="md"
-            className="h-11 rounded-lg bg-primary text-sm font-semibold text-text-inverse hover:bg-primary-hover mt-2"
-            isLoading={isSubmitting}
-            disabled={
-              isSubmitting || !hasMinimumPasswordLength(newPasswordValue ?? "")
-            }
-          >
-            Đổi mật khẩu
-          </Button>
+          <div className="flex gap-3 mt-2">
+            <Button
+              type="button"
+              variant="brand-outline"
+              size="md"
+              className="h-11 flex-1 rounded-lg text-sm font-semibold"
+              disabled={isSubmitting}
+              onClick={() => logout()}
+            >
+              Quay lại đăng nhập
+            </Button>
+            <Button
+              type="submit"
+              size="md"
+              className="h-11 flex-1 rounded-lg bg-primary text-sm font-semibold text-text-inverse hover:bg-primary-hover"
+              isLoading={isSubmitting}
+              disabled={
+                isSubmitting || !hasMinimumPasswordLength(newPasswordValue ?? "")
+              }
+            >
+              Đổi mật khẩu
+            </Button>
+          </div>
         </form>
       </div>
     </AuthShell>
