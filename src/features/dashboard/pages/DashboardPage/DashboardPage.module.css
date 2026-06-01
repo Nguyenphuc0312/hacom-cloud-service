@@ -1,0 +1,561 @@
+/* Dashboard Page - Consolidated Styles */
+
+/* ========================================
+   0. Utility & Shared Classes
+   ======================================== */
+.emptyState {
+  padding: var(--space-6);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+}
+
+/* Tone modifier classes */
+.toneHealthy .summaryIcon {
+  border-color: #c8f1df;
+  background: linear-gradient(180deg, #ecfdf5 0%, #f7fffb 100%);
+  color: #059669;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, 0.12);
+}
+
+.toneWarning .summaryIcon {
+  border-color: #fde7c4;
+  background: linear-gradient(180deg, #fff7ed 0%, #fffbf5 100%);
+  color: #d97706;
+  box-shadow: 0 10px 22px rgba(217, 119, 6, 0.12);
+}
+
+.toneDanger .summaryIcon {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fef2f2 0%, #fffafa 100%);
+  color: #dc2626;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.12);
+}
+
+/* Card wrapper classes */
+.healthCard,
+.trafficCard,
+.apiCard {
+  border: 1px solid var(--figma-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--figma-shadow-card);
+}
+
+/* ========================================
+   1. Dashboard Layout Grid
+   ======================================== */
+.dashboardLayout {
+  display: grid;
+  gap: var(--figma-dashboard-gap);
+  max-width: 100%;
+}
+
+/* Summary Metrics Grid - 5 columns */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--figma-dashboard-gap);
+}
+
+/* Main Content Grid - 2 columns (62% / 38%) */
+.mainGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.62fr) minmax(440px, 1.38fr);
+  gap: var(--figma-dashboard-gap);
+}
+
+/* Bottom Grid - 2 columns equal */
+.bottomGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+  gap: var(--figma-dashboard-gap);
+}
+
+/* ========================================
+   2. Summary Metric Cards
+   ======================================== */
+.summaryCard {
+  position: relative;
+  display: grid;
+  min-height: 104px;
+  overflow: hidden;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  column-gap: 14px;
+  padding: 18px 18px 15px;
+  border: 1px solid var(--figma-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--figma-shadow-card);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.summaryCard:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--figma-shadow-card-hover);
+}
+
+.summaryCard.toneHealthy .summaryIcon {
+  border-color: #c8f1df;
+  background: linear-gradient(180deg, #ecfdf5 0%, #f7fffb 100%);
+  color: #059669;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, 0.12);
+}
+
+.summaryCard.toneWarning .summaryIcon {
+  border-color: #fde7c4;
+  background: linear-gradient(180deg, #fff7ed 0%, #fffbf5 100%);
+  color: #d97706;
+  box-shadow: 0 10px 22px rgba(217, 119, 6, 0.12);
+}
+
+.summaryCard.toneDanger .summaryIcon {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fef2f2 0%, #fffafa 100%);
+  color: #dc2626;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.12);
+}
+
+.summaryIcon {
+  position: static;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #c8f1df;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ecfdf5 0%, #f7fffb 100%);
+  color: #059669;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, 0.12);
+  filter: none;
+}
+
+.summaryIcon .icon {
+  width: 21px;
+  height: 21px;
+  stroke-width: 2.1;
+}
+
+.summaryLabel {
+  grid-column: 1;
+  grid-row: 1;
+  max-width: 150px;
+  color: #66758b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  color: var(--figma-text);
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.summaryMeta {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  color: #9aa7ba;
+  font-size: 12px;
+}
+
+/* ========================================
+   3. Dashboard Health Banner
+   ======================================== */
+.healthBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.healthHealthy {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.03) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.healthWarning {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(234, 179, 8, 0.03) 100%);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+
+.healthDanger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.03) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.healthUnknown {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.1) 0%, rgba(156, 163, 175, 0.03) 100%);
+  border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
+.healthBannerContent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.healthBannerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.healthBannerText strong {
+  font-size: 16px;
+}
+
+.healthBannerActions {
+  display: flex;
+  gap: 8px;
+  margin-right: 16px;
+}
+
+/* ========================================
+   4. Service Health Card
+   ======================================== */
+.healthVisual {
+  position: relative;
+  width: min(300px, 100%);
+  transform: translateY(-4px);
+}
+
+.healthCenter {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  gap: 4px;
+  width: 110px;
+  transform: translate(-50%, -30%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.healthCenter strong {
+  color: #0f172a;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.healthCenter span {
+  color: #8b96a8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ========================================
+   5. Service List
+   ======================================== */
+.serviceList {
+  display: grid;
+  gap: 2px;
+}
+
+.serviceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid #f3f6fa;
+  background: transparent;
+  color: #40516b;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.serviceRow:hover {
+  background: #f8fafc;
+}
+
+.serviceRow.isStatic {
+  cursor: default;
+}
+
+.serviceRow.isStatic:hover {
+  background: transparent;
+}
+
+/* ========================================
+   6. API State Card
+   ======================================== */
+.apiState {
+  display: grid;
+  place-items: center;
+  min-height: 176px;
+  gap: 16px;
+  text-align: center;
+}
+
+.apiState > strong {
+  color: #79a99b;
+  font-size: 18px;
+}
+
+.apiStateIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.apiStateIndicator.isOk {
+  background: #e9fbf3;
+  color: #3ab88a;
+}
+
+.apiStateIndicator.isWarning {
+  background: #fff7ed;
+  color: #d97706;
+}
+
+.apiStateDl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  margin: 0;
+  gap: 12px;
+}
+
+.apiStateDl > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #eef3f8;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.apiStateDt {
+  color: #8b96a8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.apiStateDd {
+  margin: 0;
+}
+
+/* ========================================
+   7. Activity & List Cards
+   ======================================== */
+.activityList,
+.opsList {
+  display: grid;
+  gap: 10px;
+}
+
+.activityRow,
+.listRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  background: #fbfdff;
+  color: #334155;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.activityRow:hover,
+.listRow:hover,
+.activityRow.isHighlighted {
+  border-color: #d9e4f2;
+  background: #ffffff;
+}
+
+.activityMain,
+.listMain {
+  min-width: 0;
+}
+
+.activityMain strong,
+.listMain strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.activityMain p,
+.listMain p {
+  margin: 5px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.activitySide {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ========================================
+   8. Chart Styles
+   ======================================== */
+.chart {
+  width: 100%;
+}
+
+.chartPanel {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+}
+
+.chartPanelHealth {
+  justify-items: center;
+}
+
+.chartHealth {
+  height: 250px;
+}
+
+.chartTraffic {
+  height: 250px;
+}
+
+/* Highcharts overrides */
+.chart :global(.highcharts-background),
+.chart :global(.highcharts-plot-background),
+.chart :global(.highcharts-plot-border) {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.chart :global(.highcharts-3d-frame),
+.chart :global(.highcharts-axis),
+.chart :global(.highcharts-grid-line) {
+  display: none;
+}
+
+.chartLegend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  width: 100%;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.chartLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.chartLegendItem > span {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+}
+
+/* ========================================
+   9. Loading States
+   ======================================== */
+.skeletonGrid {
+  display: grid;
+  gap: var(--figma-dashboard-gap);
+}
+
+.skeleton {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonMetric {
+  min-height: 104px;
+}
+
+.skeletonPanel {
+  min-height: 200px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ========================================
+   10. Responsive Breakpoints
+   ======================================== */
+@media (max-width: 1180px) {
+  .summaryGrid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+
+  .mainGrid,
+  .bottomGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 991px) {
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .healthBanner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .healthBannerActions {
+    margin-right: 0;
+    flex-wrap: wrap;
+  }
+
+  .apiStateDl {
+    grid-template-columns: 1fr;
+  }
+}

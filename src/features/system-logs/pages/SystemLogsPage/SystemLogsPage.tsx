@@ -51,6 +51,7 @@ export const SystemLogsPage = () => {
   const [timeRange, setTimeRange] = useState<SystemLogRange>('1h');
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [isAtLatest, setIsAtLatest] = useState(true);
   const deferredKeyword = useDeferredValue(keyword.trim());
   const [debouncedKeyword, setDebouncedKeyword] = useState(deferredKeyword);
 
@@ -85,11 +86,17 @@ export const SystemLogsPage = () => {
 
   const logs = useMemo(() => query.data?.items ?? [], [query.data?.items]);
 
+  // Track if we're at the latest log based on auto-refresh
   useEffect(() => {
-    if (selectedLogId && !logs.some((item) => item.id === selectedLogId)) {
-      setSelectedLogId(null);
+    if (autoRefresh) {
+      setIsAtLatest(true);
     }
-  }, [logs, selectedLogId]);
+  }, [autoRefresh, query.dataUpdatedAt]);
+
+  const jumpToLatest = () => {
+    setIsAtLatest(true);
+    setSelectedLogId(null);
+  };
 
   const selectedLog = selectedLogId ? logs.find((entry) => entry.id === selectedLogId) ?? null : null;
 
@@ -243,6 +250,18 @@ export const SystemLogsPage = () => {
       {...pageHeader}
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          {/* Jump to Latest button - shown when not at latest */}
+          {!isAtLatest && autoRefresh && (
+            <Button
+              type="primary"
+              icon={<AppIcon name="arrowDown" size={14} />}
+              onClick={jumpToLatest}
+              size="small"
+            >
+              Mới nhất
+            </Button>
+          )}
+
           {/* Auto-refresh toggle */}
           <div className="system-logs-auto-refresh">
             <AppTooltip title="Tự động làm mới mỗi 30 giây">

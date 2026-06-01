@@ -169,6 +169,51 @@
   --chart-tooltip-bg: rgba(15, 23, 42, 0.92);
   --chart-tooltip-text: #f8fafc;
 
+  /* Figma Design System Variables (Dashboard) */
+  --figma-font-xs: 12px;
+  --figma-font-sm: 13px;
+  --figma-font-md: 14px;
+  --figma-font-lg: 16px;
+  --figma-font-xl: 18px;
+
+  --figma-control-height: 36px;
+  --figma-control-height-sm: 32px;
+  --figma-control-height-lg: 40px;
+  --figma-control-radius: 8px;
+
+  --figma-border-soft: #edf2f7;
+  --figma-border-medium: #d8e0ea;
+  --figma-border-strong: #aeb8c4;
+
+  --figma-text: #0f172a;
+  --figma-text-secondary: #475569;
+  --figma-text-muted: #94a3b8;
+  --figma-text-caption: #64748b;
+
+  --figma-surface: #ffffff;
+  --figma-surface-muted: #f7fafc;
+  --figma-surface-hover: #f8fafc;
+
+  --figma-success: #059669;
+  --figma-success-soft: #ecfdf5;
+  --figma-warning: #d97706;
+  --figma-warning-soft: #fff7ed;
+  --figma-danger: #dc2626;
+  --figma-danger-soft: #fef2f2;
+  --figma-info: #0891b2;
+  --figma-info-soft: #ecfeff;
+
+  --figma-primary: #6d4df2;
+  --figma-primary-hover: #5f3edb;
+  --figma-primary-soft: #f5f3ff;
+
+  --figma-dashboard-gap: 16px;
+
+  --figma-shadow-card: 0 14px 30px rgba(15, 23, 42, 0.05);
+  --figma-shadow-card-hover: 0 18px 38px rgba(15, 23, 42, 0.08);
+  --figma-shadow-button: 0 10px 22px rgba(104, 70, 232, 0.22);
+  --figma-shadow-dropdown: 0 18px 42px rgba(15, 23, 42, 0.18);
+
   /* Shadows and focus */
   --focus-ring: 0 0 0 3px rgba(39, 84, 197, 0.14);
   --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.03);

@@ -19,8 +19,6 @@ import { formatMs } from '@/utils/formatters/formatters';
 
 import './ServicesPage.css';
 
-import './ServicesPage.css';
-
 const { Text } = Typography;
 
 interface ServiceStatusCardProps {

@@ -1,17 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Col, Form, Input, InputNumber, Row, Space, Switch, message } from 'antd';
-import { useEffect } from 'react';
+import { Button, Col, Form, Input, InputNumber, Modal, Row, Space, Switch, message } from 'antd';
+import { useEffect, useState } from 'react';
 
 import { smtpClient } from '@/api/clients/smtpClient/smtpClient';
 import { queryKeys } from '@/api/queryKeys/queryKeys';
 import type { UpdateSmtpSettingsRequest } from '@/api/types/smtp/smtp';
 import { FormSection } from '@/components/FormSection/FormSection';
-import { EmptyState, QueryStateView } from '@/components/QueryStates/QueryStates';
+import { QueryStateView } from '@/components/QueryStates/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
 import { formatDateTime } from '@/utils/date/date';
 
 import '../../../settings/pages/SettingsPage/SettingsPage.css';
+
 const emptyFormValues: UpdateSmtpSettingsRequest = {
   host: '',
   port: 587,
@@ -25,6 +26,8 @@ const emptyFormValues: UpdateSmtpSettingsRequest = {
 export const SmtpSettingsCard = () => {
   const [form] = Form.useForm<UpdateSmtpSettingsRequest>();
   const queryClient = useQueryClient();
+  const [isDirty, setIsDirty] = useState(false);
+  const [confirmDiscardVisible, setConfirmDiscardVisible] = useState(false);
 
   const settingsQuery = useQuery({
     queryKey: queryKeys.smtpSettings,
@@ -49,7 +52,41 @@ export const SmtpSettingsCard = () => {
       fromEmail: draft.fromEmail,
       replyTo: draft.replyTo ?? '',
     });
+    setIsDirty(false);
   }, [form, settingsQuery.data]);
+
+  // Track form changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentValues = form.getFieldsValue();
+      const hasChanges =
+        currentValues.host !== (settingsQuery.data?.draft?.host ?? settingsQuery.data?.active?.host) ||
+        currentValues.port !== (settingsQuery.data?.draft?.port ?? settingsQuery.data?.active?.port) ||
+        currentValues.secure !== (settingsQuery.data?.draft?.secure ?? settingsQuery.data?.active?.secure) ||
+        currentValues.user !== (settingsQuery.data?.draft?.user ?? settingsQuery.data?.active?.user) ||
+        currentValues.fromName !== (settingsQuery.data?.draft?.fromName ?? settingsQuery.data?.active?.fromName) ||
+        currentValues.fromEmail !== (settingsQuery.data?.draft?.fromEmail ?? settingsQuery.data?.active?.fromEmail) ||
+        currentValues.replyTo !== (settingsQuery.data?.draft?.replyTo ?? settingsQuery.data?.active?.replyTo ?? '');
+
+      setIsDirty(hasChanges);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [form, settingsQuery.data]);
+
+  // Browser navigation warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = 'Bạn có thay đổi chưa lưu. Bạn có chắc muốn rời khỏi trang này?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   const refreshSettings = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.smtpSettings });
@@ -59,6 +96,7 @@ export const SmtpSettingsCard = () => {
     mutationFn: smtpClient.updateSettings,
     onSuccess: async () => {
       message.success('Đã lưu bản nháp SMTP.');
+      setIsDirty(false);
       await refreshSettings();
     },
   });
@@ -67,6 +105,7 @@ export const SmtpSettingsCard = () => {
     mutationFn: smtpClient.activateDraft,
     onSuccess: async () => {
       message.success('Đã kích hoạt bản nháp SMTP.');
+      setIsDirty(false);
       await refreshSettings();
     },
   });
@@ -75,6 +114,7 @@ export const SmtpSettingsCard = () => {
     mutationFn: smtpClient.deactivateActive,
     onSuccess: async () => {
       message.success('Đã tắt cấu hình SMTP đang hoạt động.');
+      setIsDirty(false);
       await refreshSettings();
     },
   });
@@ -83,6 +123,9 @@ export const SmtpSettingsCard = () => {
     mutationFn: smtpClient.testConnection,
     onSuccess: () => {
       message.success('Kết nối SMTP thành công.');
+    },
+    onError: () => {
+      message.error('Kết nối SMTP thất bại. Vui lòng kiểm tra lại cấu hình.');
     },
   });
 
@@ -94,6 +137,30 @@ export const SmtpSettingsCard = () => {
   const handleTestConnection = async () => {
     const values = await form.validateFields();
     await testConnectionMutation.mutateAsync(values);
+  };
+
+  const handleDiscardChanges = () => {
+    setConfirmDiscardVisible(true);
+  };
+
+  const confirmDiscard = () => {
+    const draft = settingsQuery.data?.draft ?? settingsQuery.data?.active;
+    if (draft) {
+      form.setFieldsValue({
+        host: draft.host,
+        port: draft.port,
+        secure: draft.secure,
+        user: draft.user,
+        password: '',
+        fromName: draft.fromName,
+        fromEmail: draft.fromEmail,
+        replyTo: draft.replyTo ?? '',
+      });
+    } else {
+      form.setFieldsValue(emptyFormValues);
+    }
+    setIsDirty(false);
+    setConfirmDiscardVisible(false);
   };
 
   if (settingsQuery.isLoading) {
@@ -138,7 +205,9 @@ export const SmtpSettingsCard = () => {
                 <span>Mật khẩu: {active.passMasked || '-'}</span>
               </div>
             ) : (
-              <EmptyState description="Chưa có cấu hình SMTP đang hoạt động." />
+              <div className="ds-settings-empty">
+                <span>Chưa có cấu hình SMTP đang hoạt động.</span>
+              </div>
             )}
           </div>
 
@@ -157,7 +226,9 @@ export const SmtpSettingsCard = () => {
                 <span>Mật khẩu: {draft.passMasked || '-'}</span>
               </div>
             ) : (
-              <EmptyState description="Chưa có bản nháp SMTP nào được chuẩn bị." />
+              <div className="ds-settings-empty">
+                <span>Chưa có bản nháp SMTP nào được chuẩn bị.</span>
+              </div>
             )}
           </div>
 
@@ -186,9 +257,7 @@ export const SmtpSettingsCard = () => {
           onFinish={handleSaveDraft}
         >
           <div className="ds-settings-form-grid">
-            <FormSection
-              title="Transport"
-            >
+            <FormSection title="Transport">
               <Row gutter={16}>
                 <Col xs={24} md={12}>
                   <Form.Item
@@ -237,9 +306,7 @@ export const SmtpSettingsCard = () => {
               </Row>
             </FormSection>
 
-            <FormSection
-              title="Danh tính người gửi"
-            >
+            <FormSection title="Danh tính người gửi">
               <Row gutter={16}>
                 <Col xs={24} md={12}>
                   <Form.Item
@@ -266,14 +333,24 @@ export const SmtpSettingsCard = () => {
                 name="replyTo"
                 rules={[{ type: 'email', message: 'Nhập email reply-to hợp lệ.' }]}
               >
-              <Input placeholder="support@example.com" />
+                <Input placeholder="support@example.com" />
               </Form.Item>
             </FormSection>
           </div>
 
           <div className="ds-settings-action-bar">
+            {isDirty && (
+              <span className="ds-settings-dirty-indicator">
+                Có thay đổi chưa lưu
+              </span>
+            )}
             <Space wrap>
-              <Button type="primary" htmlType="submit" loading={saveDraftMutation.isPending}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={saveDraftMutation.isPending}
+                disabled={!isDirty}
+              >
                 Lưu bản nháp
               </Button>
               <Button onClick={handleTestConnection} loading={testConnectionMutation.isPending}>
@@ -290,10 +367,33 @@ export const SmtpSettingsCard = () => {
               >
                 Tắt cấu hình đang chạy
               </Button>
+              {isDirty && (
+                <Button onClick={handleDiscardChanges}>
+                  Hủy thay đổi
+                </Button>
+              )}
             </Space>
           </div>
         </Form>
       </SurfaceCard>
+
+      {/* Confirm Discard Modal */}
+      <Modal
+        title="Xác nhận hủy thay đổi"
+        open={confirmDiscardVisible}
+        onCancel={() => setConfirmDiscardVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setConfirmDiscardVisible(false)}>
+            Tiếp tục chỉnh sửa
+          </Button>,
+          <Button key="discard" danger onClick={confirmDiscard}>
+            Hủy thay đổi
+          </Button>,
+        ]}
+      >
+        <p>Bạn có chắc muốn hủy các thay đổi chưa lưu không?</p>
+        <p>Các thay đổi của bạn sẽ bị mất.</p>
+      </Modal>
     </div>
   );
 };

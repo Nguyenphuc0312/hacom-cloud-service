@@ -18,11 +18,24 @@ import { DashboardHighchartsPanel } from '../../components/DashboardHighchartsPa
 import { useDashboardOverview } from '../../hooks/useDashboardOverview/useDashboardOverview';
 import { buildActivityTimeline, buildInsights, summarizeTrend } from '../../utils/dashboardView/dashboardView';
 
-import './DashboardPage-01.css';
-import './DashboardPage-02.css';
-import './DashboardPage.figma-01.css';
-import './DashboardPage.figma-02.css';
-import './DashboardPage.css';
+import styles from './DashboardPage.module.css';
+
+// Helper function to capitalize first letter
+const capitalize = (str: string): string => str.charAt(0).toUpperCase() + str.slice(1);
+
+// Helper function to get tone class
+const getToneClass = (tone: string): string => {
+  switch (tone) {
+    case 'success':
+      return styles.toneHealthy;
+    case 'warning':
+      return styles.toneWarning;
+    case 'danger':
+      return styles.toneDanger;
+    default:
+      return '';
+  }
+};
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
@@ -77,13 +90,13 @@ export const DashboardPage = () => {
   if (isInitialLoading) {
     return (
       <PageShell {...pageHeader}>
-        <div className="ds-ops-skeleton-grid" aria-hidden>
-          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
-          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
-          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
-          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
-          <div className="ds-ops-skeleton ds-ops-skeleton--panel" />
-          <div className="ds-ops-skeleton ds-ops-skeleton--panel" />
+        <div className={styles.skeletonGrid} aria-hidden>
+          <div className={`${styles.skeleton} ${styles.skeletonMetric}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonMetric}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonMetric}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonMetric}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonPanel}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonPanel}`} />
         </div>
       </PageShell>
     );
@@ -212,6 +225,12 @@ export const DashboardPage = () => {
   const criticalCount = insights.filter(i => i.tone === 'critical').length;
   const warningCount = insights.filter(i => i.tone === 'warning').length;
 
+  // Health banner class
+  const healthBannerClass = [
+    styles.healthBanner,
+    styles[`health${capitalize(systemHealthStatus)}`],
+  ].join(' ');
+
   return (
     <PageShell
       {...pageHeader}
@@ -240,20 +259,20 @@ export const DashboardPage = () => {
       }
     >
       {!hasOverviewData ? (
-        <div className="ds-ops-panel">
+        <div className={styles.emptyState}>
           <EmptyState description="Chưa có dữ liệu vận hành." />
         </div>
       ) : (
-        <div className="ds-figma-dashboard">
-          {/* System Health Banner - NEW */}
-          <div className={`dashboard-health-banner health-${systemHealthStatus}`}>
-            <div className="health-banner-content">
+        <div className={styles.dashboardLayout}>
+          {/* System Health Banner */}
+          <div className={healthBannerClass}>
+            <div className={styles.healthBannerContent}>
               <AppIcon
                 name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alertCircle'}
                 size={24}
                 aria-hidden
               />
-              <div className="health-banner-text">
+              <div className={styles.healthBannerText}>
                 <Typography.Text strong>
                   {systemHealthStatus === 'healthy' && 'Hệ thống hoạt động ổn định'}
                   {systemHealthStatus === 'warning' && 'Hệ thống có cảnh báo'}
@@ -269,7 +288,7 @@ export const DashboardPage = () => {
                 </Typography.Text>
               </div>
             </div>
-            <div className="health-banner-actions">
+            <div className={styles.healthBannerActions}>
               <Button
                 type="link"
                 icon={<AppIcon name="activity" size={14} />}
@@ -305,33 +324,35 @@ export const DashboardPage = () => {
             />
           </div>
 
-          <section className="ds-figma-summary-grid" aria-label="Chỉ số vận hành chính">
+          {/* Summary Metrics Grid */}
+          <section className={styles.summaryGrid} aria-label="Chỉ số vận hành chính">
             {metrics.map((metric) => (
               <button
                 key={metric.id}
                 type="button"
-                className={`ds-figma-summary-card tone-${metric.tone}`}
+                className={`${styles.summaryCard} ${getToneClass(metric.tone)}`}
                 onClick={() => navigate(metric.route)}
               >
-                <span className="ds-figma-summary-icon" aria-hidden>
-                  <AppIcon name={metric.icon} size={34} strokeWidth={1.6} />
+                <span className={styles.summaryIcon} aria-hidden>
+                  <AppIcon name={metric.icon} size={34} strokeWidth={1.6} className={styles.icon} />
                 </span>
-                <span className="ds-figma-summary-label">{metric.label}</span>
-                <strong className="ds-figma-summary-value">{metric.value}</strong>
-                <span className="ds-figma-summary-meta">{metric.meta}</span>
+                <span className={styles.summaryLabel}>{metric.label}</span>
+                <strong className={styles.summaryValue}>{metric.value}</strong>
+                <span className={styles.summaryMeta}>{metric.meta}</span>
               </button>
             ))}
           </section>
 
-          <div className="ds-figma-main-grid">
+          {/* Main Grid */}
+          <div className={styles.mainGrid}>
             <DashboardCard
               title="Sức khỏe dịch vụ"
               action={<Button type="link" onClick={() => navigate('/services/health')}>Mở</Button>}
-              className="ds-figma-card ds-figma-health-card"
+              className={styles.healthCard}
             >
-              <div className="ds-figma-health-visual">
+              <div className={styles.healthVisual}>
                 <DashboardHighchartsPanel type="health" summary={servicesSummary} />
-                <div className="ds-figma-health-center" aria-hidden>
+                <div className={styles.healthCenter} aria-hidden>
                   <strong>
                     {servicesTotal > 0
                       ? formatPercent(((servicesSummary?.up ?? 0) / servicesTotal) * 100, 0)
@@ -345,7 +366,7 @@ export const DashboardPage = () => {
             <DashboardCard
               title="Tổng quan lưu lượng"
               action={<Button type="link" onClick={() => navigate('/realtime')}>Mở</Button>}
-              className="ds-figma-card ds-figma-traffic-card"
+              className={styles.trafficCard}
             >
               <DashboardHighchartsPanel
                 type="traffic"
@@ -354,18 +375,18 @@ export const DashboardPage = () => {
             </DashboardCard>
           </div>
 
-          <div className="ds-figma-bottom-grid">
+          {/* Bottom Grid */}
+          <div className={styles.bottomGrid}>
             <DashboardCard
               title="Trạng thái Dịch vụ"
               action={<Button type="link" onClick={() => navigate('/services/health')}>Mở</Button>}
-              className="ds-figma-card"
             >
-              <div className="ds-figma-service-list">
+              <div className={styles.serviceList}>
                 {(serviceHealth?.items ?? []).slice(0, 4).map((service) => (
                   <button
                     key={service.name}
                     type="button"
-                    className="ds-figma-service-row"
+                    className={styles.serviceRow}
                     onClick={() => navigate('/services/health')}
                   >
                     <span>{service.name}</span>
@@ -383,7 +404,7 @@ export const DashboardPage = () => {
                   </button>
                 ))}
                 {!serviceHealth?.items?.length ? (
-                  <div className="ds-figma-service-row is-static">
+                  <div className={`${styles.serviceRow} ${styles.isStatic}`}>
                     <span>Telemetry</span>
                     <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
                   </div>
@@ -394,26 +415,26 @@ export const DashboardPage = () => {
             <DashboardCard
               title="Tỷ lệ Lỗi API"
               action={<Button type="link" onClick={() => navigate('/realtime')}>Mở</Button>}
-              className="ds-figma-card ds-figma-api-card"
+              className={styles.apiCard}
             >
-              <div className="ds-figma-api-state">
+              <div className={styles.apiState}>
                 <strong>{apiErrorRate === null ? '-' : formatRate(apiErrorRate, '/phút')}</strong>
-                <span className={(apiErrorRate ?? 0) > 0 ? 'is-warning' : 'is-ok'}>
+                <span className={`${styles.apiStateIndicator} ${(apiErrorRate ?? 0) > 0 ? styles.isWarning : styles.isOk}`}>
                   <AppIcon name={(apiErrorRate ?? 0) > 0 ? 'warning' : 'check'} size={14} aria-hidden />
                   {(apiErrorRate ?? 0) > 0
                     ? 'Có lỗi cần kiểm tra'
                     : 'Hệ thống hoạt động ổn định'}
                 </span>
-                <dl>
+                <dl className={styles.apiStateDl}>
                   <div>
-                    <dt>Telemetry</dt>
-                    <dd>
+                    <dt className={styles.apiStateDt}>Telemetry</dt>
+                    <dd className={styles.apiStateDd}>
                       <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
                     </dd>
                   </div>
                   <div>
-                    <dt>Nền tải</dt>
-                    <dd>
+                    <dt className={styles.apiStateDt}>Nền tải</dt>
+                    <dd className={styles.apiStateDd}>
                       <StatusBadge
                         status={
                           overview
@@ -428,25 +449,22 @@ export const DashboardPage = () => {
             </DashboardCard>
           </div>
 
-          <DashboardCard
-            title="Hoạt động vận hành gần đây"
-            action={<Button type="link" onClick={() => navigate('/audit')}>Mở audit</Button>}
-            className="ds-figma-card"
-          >
-            <div className="ds-ops-activity-list">
+          {/* Activity Timeline */}
+          <DashboardCard title="Hoạt động vận hành gần đây" action={<Button type="link" onClick={() => navigate('/audit')}>Mở audit</Button>}>
+            <div className={styles.activityList}>
               {activityTimeline.slice(0, 4).length > 0 ? (
                 activityTimeline.slice(0, 4).map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    className={`ds-ops-activity-row ${item.highlight ? 'is-highlighted' : ''}`}
+                    className={`${styles.activityRow} ${item.highlight ? styles.isHighlighted : ''}`}
                     onClick={() => navigate(item.route)}
                   >
-                    <div className="ds-ops-activity-main">
+                    <div className={styles.activityMain}>
                       <strong>{item.title}</strong>
                       <p>{item.description}</p>
                     </div>
-                    <div className="ds-ops-activity-side">
+                    <div className={styles.activitySide}>
                       <span>{formatDateTime(item.timestamp)}</span>
                     </div>
                   </button>
@@ -457,8 +475,9 @@ export const DashboardPage = () => {
             </div>
           </DashboardCard>
 
-          <DashboardCard title="Hàng đợi xử lý" className="ds-figma-card">
-            <div className="ds-ops-list">
+          {/* Action Queue */}
+          <DashboardCard title="Hàng đợi xử lý">
+            <div className={styles.opsList}>
               {[
                 ...(pendingUsers > 0
                   ? [
@@ -467,7 +486,7 @@ export const DashboardPage = () => {
                         title: `${pendingUsers} tài khoản chờ xác minh`,
                         description: 'Rà soát trạng thái trước khi bật truy cập.',
                         route: '/users',
-                        status: 'warning',
+                        status: 'warning' as const,
                       },
                     ]
                   : []),
@@ -478,19 +497,19 @@ export const DashboardPage = () => {
                   route: item.ctaTo,
                   status:
                     item.tone === 'critical'
-                      ? 'down'
+                      ? 'down' as const
                       : item.tone === 'warning'
-                        ? 'warning'
-                        : 'healthy',
+                        ? 'warning' as const
+                        : 'healthy' as const,
                 })),
               ].map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  className="ds-ops-list-row"
+                  className={styles.listRow}
                   onClick={() => navigate(item.route)}
                 >
-                  <div>
+                  <div className={styles.listMain}>
                     <strong>{item.title}</strong>
                     <p>{item.description}</p>
                   </div>

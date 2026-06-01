@@ -13,6 +13,7 @@ import { CommandPalette } from '@/components/CommandPalette/CommandPalette';
 import { useCommandPalette } from '@/hooks/useCommandPalette/useCommandPalette';
 import { useAuthStore } from '@/store/authStore/authStore';
 import { hasSomeRole } from '@/utils/role/role';
+import { getEnvironmentDisplayConfig } from '@/config/environment';
 import { TopbarActions } from '../TopbarActions/TopbarActions';
 import { TopbarSearch } from '../TopbarSearch/TopbarSearch';
 import { commandRouteItems, resolveNavigationContext } from '../navigationConfig/navigationConfig';
@@ -48,6 +49,30 @@ const ConnectionStatusIndicator: React.FC<{ status: ConnectionStatus }> = ({ sta
         aria-hidden
       />
       <AppIcon name={config.icon} size={14} aria-hidden />
+    </div>
+  );
+};
+
+const EnvironmentBadge: React.FC = () => {
+  const envConfig = getEnvironmentDisplayConfig();
+
+  // Only show for non-production environments
+  if (envConfig.value === 'production') {
+    return null;
+  }
+
+  return (
+    <div
+      className="environment-badge"
+      style={{
+        backgroundColor: envConfig.bgColor,
+        color: envConfig.color,
+        borderColor: envConfig.color,
+      }}
+      aria-label={`Môi trường: ${envConfig.label}`}
+    >
+      <span className="environment-badge-dot" style={{ backgroundColor: envConfig.color }} />
+      <span className="environment-badge-label">{envConfig.label}</span>
     </div>
   );
 };
@@ -189,6 +214,9 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         </div>
 
         <div className="ds-admin-topbar-right">
+          {/* Environment Badge */}
+          <EnvironmentBadge />
+
           {/* Connection Status Indicator */}
           <div className="ds-topbar-connection-status">
             <ConnectionStatusIndicator status={connectionStatus} />

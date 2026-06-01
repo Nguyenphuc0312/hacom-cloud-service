@@ -7,6 +7,8 @@ import {
   PageHeaderMeta,
   PageHeaderTitle,
 } from '@/components/PageHeader/PageHeader';
+import { Breadcrumbs, LastUpdated } from '@/components/Breadcrumbs';
+import type { BreadcrumbItem } from '@/components/Breadcrumbs';
 
 interface PageShellProps {
   title: string;
@@ -14,6 +16,11 @@ interface PageShellProps {
   headerExtra?: ReactNode;
   children: ReactNode;
   eyebrow?: ReactNode;
+  breadcrumbs?: BreadcrumbItem[];
+  showBreadcrumbs?: boolean;
+  lastUpdated?: string | Date | null;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export const PageShell = ({
@@ -22,16 +29,33 @@ export const PageShell = ({
   headerExtra,
   children,
   eyebrow,
+  breadcrumbs = [],
+  showBreadcrumbs = true,
+  lastUpdated,
+  isRefreshing = false,
+  onRefresh,
 }: PageShellProps) => {
   return (
     <section className="ds-page-shell">
+      {showBreadcrumbs && breadcrumbs.length > 0 && (
+        <Breadcrumbs items={breadcrumbs} />
+      )}
       <PageHeader>
         <div>
           {eyebrow ? <div className="ds-page-eyebrow">{eyebrow}</div> : null}
           <PageHeaderTitle>{title}</PageHeaderTitle>
           {description ? <PageHeaderDescription>{description}</PageHeaderDescription> : null}
         </div>
-        {headerExtra ? <PageHeaderMeta>{headerExtra}</PageHeaderMeta> : null}
+        <PageHeaderMeta>
+          {lastUpdated && (
+            <LastUpdated
+              timestamp={lastUpdated}
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+            />
+          )}
+          {headerExtra}
+        </PageHeaderMeta>
       </PageHeader>
       <div className="ds-page-shell-body">{children}</div>
     </section>
