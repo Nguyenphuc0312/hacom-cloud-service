@@ -1226,7 +1226,7 @@ export const CalendarPage: React.FC = () => {
         </aside>
 
         {/* Main calendar area */}
-        <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div className="relative flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
           {/* Loading overlay */}
           {storeLoading && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60">

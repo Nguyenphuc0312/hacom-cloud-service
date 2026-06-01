@@ -316,9 +316,15 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     });
   };
 
+  type DeferredVoid = {
+    resolve: () => void;
+    reject: (reason?: unknown) => void;
+    promise: Promise<void>;
+  };
+  const pendingMarkReadDeferreds = new Map<string, DeferredVoid>();
+
   // Debounced markAsRead entry: coalesce rapid scroll-triggered calls into one.
-  // The in-flight queue below still handles the case where a debounced call
-  // arrives while an existing request is pending.
+  // Returns the real API promise so callers can react to failure (e.g. reset dedup refs).
   const debouncedMarkRead = (
     conversationId: string,
     input: MarkAsReadInput,
@@ -329,16 +335,35 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
       clearTimeout(existingTimer);
     }
     pendingMarkReadInputs.set(conversationId, input);
+
+    // Reuse the existing deferred so all callers within the debounce window
+    // share the same promise and see the real resolve/reject outcome.
+    let deferred = pendingMarkReadDeferreds.get(conversationId);
+    if (!deferred) {
+      let resolve!: () => void;
+      let reject!: (reason?: unknown) => void;
+      const promise = new Promise<void>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      deferred = { resolve, reject, promise };
+      pendingMarkReadDeferreds.set(conversationId, deferred);
+    }
+
     const timer = setTimeout(() => {
       markReadDebounceTimers.delete(conversationId);
       const pendingInput = pendingMarkReadInputs.get(conversationId);
       pendingMarkReadInputs.delete(conversationId);
-      if (pendingInput) {
-        void flushMarkAsRead(conversationId, pendingInput);
+      const d = pendingMarkReadDeferreds.get(conversationId);
+      pendingMarkReadDeferreds.delete(conversationId);
+      if (pendingInput && d) {
+        flushMarkAsRead(conversationId, pendingInput).then(d.resolve, d.reject);
+      } else if (d) {
+        d.resolve();
       }
     }, markReadDebounceMs);
     markReadDebounceTimers.set(conversationId, timer);
-    return Promise.resolve();
+    return deferred.promise;
   };
 
   const flushMarkAsRead = async (
@@ -654,6 +679,8 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
       markReadDebounceTimers.forEach((t) => clearTimeout(t));
       markReadDebounceTimers.clear();
       pendingMarkReadInputs.clear();
+      pendingMarkReadDeferreds.forEach((d) => d.resolve());
+      pendingMarkReadDeferreds.clear();
       if (unreadSummaryTimer) {
         clearTimeout(unreadSummaryTimer);
         unreadSummaryTimer = null;
