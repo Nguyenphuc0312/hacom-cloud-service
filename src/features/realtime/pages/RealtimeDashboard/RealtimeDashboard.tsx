@@ -2,6 +2,7 @@ import { Button, Card, Progress, Typography } from 'antd';
 
 import { getErrorMessage } from '@/api/error/error';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
+import type { AppIconKey } from '@/components/AppIcon/AppIcon';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
@@ -12,6 +13,7 @@ import {
   formatPercent,
   formatRate,
 } from '@/utils/formatters/formatters';
+import { appConfig } from '@/config/appConfig/appConfig';
 import { useRealtimeOverview } from '../../hooks/useRealtimeOverview/useRealtimeOverview';
 
 import './RealtimeDashboard.css';
@@ -28,7 +30,7 @@ interface KpiCardProps {
     label: string;
   };
   status?: 'healthy' | 'warning' | 'danger' | 'unknown';
-  icon: string;
+  icon: AppIconKey;
 }
 
 const KpiCard: React.FC<KpiCardProps> = ({
@@ -61,7 +63,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       {trend && (
         <div className={`realtime-kpi-trend trend-${trend.direction}`}>
           <AppIcon
-            name={trend.direction === 'up' ? 'trending-up' : trend.direction === 'down' ? 'trending-down' : 'minus'}
+            name={trend.direction === 'up' ? 'trendingUp' : trend.direction === 'down' ? 'trendingDown' : 'minus'}
             size={14}
             aria-hidden
           />
@@ -183,7 +185,7 @@ export const RealtimeDashboardPage: React.FC = () => {
       <div className={`realtime-health-banner health-${systemHealthStatus}`}>
         <div className="health-banner-content">
           <AppIcon
-            name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alert-circle'}
+            name={systemHealthStatus === 'healthy' ? 'check' : systemHealthStatus === 'warning' ? 'alert' : 'alertCircle'}
             size={24}
             aria-hidden
           />
@@ -275,7 +277,7 @@ export const RealtimeDashboardPage: React.FC = () => {
           title="WS Delivery Failures"
           value={formatNumber(overview?.wsDeliveryFailures)}
           status={(overview?.wsDeliveryFailures ?? 0) > 0 ? 'danger' : 'healthy'}
-          icon="alert-circle"
+          icon="alertCircle"
         />
         <KpiCard
           title="Redis Status"
@@ -287,7 +289,7 @@ export const RealtimeDashboardPage: React.FC = () => {
                 ? 'warning'
                 : 'danger'
           }
-          icon="database"
+          icon="server"
         />
       </div>
 

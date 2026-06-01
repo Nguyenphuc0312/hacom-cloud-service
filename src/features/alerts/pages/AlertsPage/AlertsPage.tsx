@@ -2,7 +2,7 @@ import { Button, Empty, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
 
-import { alertsClient, type Alert, type AlertFilters } from '@/api/clients/alertsClient/alertsClient';
+import { useAlertsQuery, type Alert, type AlertFilters } from '@/api/clients/alertsClient/alertsClient';
 import { getErrorMessage } from '@/api/error/error';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { DataTableShell } from '@/components/DataTableShell/DataTableShell';
@@ -47,7 +47,7 @@ export const AlertsPage: React.FC = () => {
     status: statusFilter as AlertFilters['status'],
   };
 
-  const query = alertsClient.getAlerts(filters);
+  const query = useAlertsQuery(filters);
 
   const columns: ColumnsType<Alert> = [
     {
@@ -203,12 +203,14 @@ export const AlertsPage: React.FC = () => {
               showSizeChanger: true,
               showTotal: (total) => `${total} cảnh báo`,
             }}
-            emptyNode={
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Không có cảnh báo nào"
-              />
-            }
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Không có cảnh báo nào"
+                />
+              ),
+            }}
             rowClassName={(record) =>
               record.severity === 'critical' && record.status === 'active'
                 ? 'alert-row-critical'

@@ -4,6 +4,17 @@ import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { adminApiBaseUrl, authApiBaseUrl } from '@/api/routes/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore/authStore';
 
+/**
+ * Extended Axios config with custom retry properties
+ */
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  skipAuthRedirect?: boolean;
+  skipTabVisibilityPause?: boolean;
+  retryOnVisibilityChange?: boolean;
+  retry?: number;
+  retryCount?: number;
+}
+
 const rawBasePath = import.meta.env.BASE_URL || '/';
 const normalizedBasePath = rawBasePath.endsWith('/') ? rawBasePath : `${rawBasePath}/`;
 const loginPath = `${normalizedBasePath}login`;
@@ -42,6 +53,8 @@ export const onTabVisibilityChange = (callback: (visible: boolean) => void): (()
   };
 };
 
+const DEFAULT_RETRY_COUNT = 3;
+
 const createJsonClient = (baseURL: string): AxiosInstance =>
   axios.create({
     baseURL,
@@ -49,21 +62,10 @@ const createJsonClient = (baseURL: string): AxiosInstance =>
       'Content-Type': 'application/json',
     },
     timeout: 15000,
-    // Retry configuration
-    retry: 3,
-    retryDelay: (retryCount) => {
-      return Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
-    },
   });
 
 export const adminAxiosInstance = createJsonClient(adminApiBaseUrl);
 export const authAxiosInstance = createJsonClient(authApiBaseUrl);
-
-export interface ApiRequestConfig extends AxiosRequestConfig {
-  skipAuthRedirect?: boolean;
-  skipTabVisibilityPause?: boolean;
-  retryOnVisibilityChange?: boolean;
-}
 
 const buildRequestId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -126,15 +128,17 @@ const attachRetryLogic = (client: AxiosInstance) => {
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
-      const config = error.config as (AxiosRequestConfig & ApiRequestConfig) | undefined;
+      const config = error.config as ApiRequestConfig | undefined;
 
-      if (!config || !config.retry) {
+      if (!config) {
         return Promise.reject(error);
       }
 
-      const retryCount = (config.retryCount as number) || 0;
+      const retryLimit = config.retry ?? DEFAULT_RETRY_COUNT;
+      const retryCount = config.retryCount ?? 0;
+
       const shouldRetry =
-        retryCount < (config.retry as number) &&
+        retryCount < retryLimit &&
         (!error.response || (error.response.status >= 500 && error.response.status < 600));
 
       if (shouldRetry) {
