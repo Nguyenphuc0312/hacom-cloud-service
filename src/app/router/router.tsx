@@ -89,6 +89,28 @@ const NotFoundPage = lazy(() =>
     default: module.NotFoundPage,
   })),
 );
+// Realtime pages
+const RealtimeDashboardPage = lazy(() =>
+  import('@/features/realtime/pages/RealtimeDashboard/RealtimeDashboard').then((module) => ({
+    default: module.RealtimeDashboardPage,
+  })),
+);
+const OnlineUsersPage = lazy(() =>
+  import('@/features/realtime/pages/OnlineUsersPage/OnlineUsersPage').then((module) => ({
+    default: module.OnlineUsersPage,
+  })),
+);
+const TrafficPage = lazy(() =>
+  import('@/features/realtime/pages/TrafficPage/TrafficPage').then((module) => ({
+    default: module.TrafficPage,
+  })),
+);
+// Alerts page
+const AlertsPage = lazy(() =>
+  import('@/features/alerts/pages/AlertsPage/AlertsPage').then((module) => ({
+    default: module.AlertsPage,
+  })),
+);
 
 const withSuspense = (element: ReactNode) => (
   <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
@@ -123,6 +145,29 @@ const routes = [
         index: true,
         element: withSuspense(<DashboardPage />),
       },
+      // Realtime routes
+      {
+        path: 'realtime',
+        element: <Navigate to="/realtime/dashboard" replace />,
+      },
+      {
+        path: 'realtime/dashboard',
+        element: withSuspense(<RealtimeDashboardPage />),
+      },
+      {
+        path: 'realtime/online-users',
+        element: withSuspense(<OnlineUsersPage />),
+      },
+      {
+        path: 'realtime/traffic',
+        element: withSuspense(<TrafficPage />),
+      },
+      // Alerts routes
+      {
+        path: 'alerts',
+        element: withSuspense(<AlertsPage />),
+      },
+      // Existing routes
       {
         path: 'services',
         element: <Navigate to="/services/health" replace />,

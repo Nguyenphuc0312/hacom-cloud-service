@@ -1,0 +1,60 @@
+/* Traffic Page Styles */
+
+.traffic-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.traffic-summary-card {
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+.traffic-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.traffic-summary-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.traffic-summary-failed {
+  color: var(--color-danger);
+}
+
+.traffic-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+}
+
+.traffic-chart-card {
+  min-height: 300px;
+}
+
+.traffic-chart-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+  gap: 8px;
+}
+
+.traffic-chart-hint {
+  font-size: 12px;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .traffic-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}

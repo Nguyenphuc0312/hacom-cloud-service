@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { Alert, Button, Card, Form, Input, Space, Tabs, Typography, message } from 'antd';
-import { useMemo, useState } from 'react';
+import { Alert, Button, Card, Checkbox, Form, Input, Space, Tabs, Tooltip, Typography, message } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -24,14 +24,40 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+const REMEMBER_ME_STORAGE_KEY = 'chat-admin-remember-me';
+
 export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+
+  // Remember me state - persist preference separately
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem(REMEMBER_ME_STORAGE_KEY);
+    if (stored === null) return false;
+    try {
+      return JSON.parse(stored) === true;
+    } catch {
+      return false;
+    }
+  });
+
   const [qrCode, setQrCode] = useState('');
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [savedEmail, setSavedEmail] = useState<string>('');
+
+  // Load saved email if remember me was checked
+  useEffect(() => {
+    if (rememberMe) {
+      const savedEmailValue = localStorage.getItem('chat-admin-saved-email');
+      if (savedEmailValue) {
+        setSavedEmail(savedEmailValue);
+      }
+    }
+  }, [rememberMe]);
 
   const from = useMemo(() => {
     const state = location.state as { from?: { pathname?: string } } | null;
@@ -49,13 +75,27 @@ export const LoginPage = () => {
           },
         });
 
-        setAuth({ accessToken: data.accessToken, user: admin });
+        // Save remember me preference
+        localStorage.setItem(REMEMBER_ME_STORAGE_KEY, JSON.stringify(rememberMe));
+
+        // Save email if remember me is checked
+        if (rememberMe) {
+          const emailInput = document.querySelector<HTMLInputElement>('input[type="email"]');
+          if (emailInput?.value) {
+            localStorage.setItem('chat-admin-saved-email', emailInput.value);
+          }
+        } else {
+          localStorage.removeItem('chat-admin-saved-email');
+        }
+
+        setAuth({ accessToken: data.accessToken, user: admin, rememberMe });
         setAdminLoginError(null);
         message.success('Đăng nhập thành công.');
         navigate(from, { replace: true });
       } catch (error) {
         if (isAdminAccessIpPendingError(error)) {
-          setAuth({ accessToken: data.accessToken, user: data.user ?? null });
+          localStorage.setItem(REMEMBER_ME_STORAGE_KEY, JSON.stringify(rememberMe));
+          setAuth({ accessToken: data.accessToken, user: data.user ?? null, rememberMe });
           setAdminLoginError(null);
           message.info(getAdminLoginErrorMessage(error));
           navigate('/access', { replace: true });
@@ -85,6 +125,12 @@ export const LoginPage = () => {
     }
 
     loginMutation.mutate(parsed.data);
+  };
+
+  const handleRememberMeChange = (e: { target: { checked: boolean } }) => {
+    setRememberMe(e.target.checked);
+    // Save preference immediately
+    localStorage.setItem(REMEMBER_ME_STORAGE_KEY, JSON.stringify(e.target.checked));
   };
 
   if (accessToken) {
@@ -119,9 +165,17 @@ export const LoginPage = () => {
                   requiredMark={false}
                   onFinish={onFinish}
                   style={{ marginTop: 8 }}
+                  initialValues={{
+                    email: savedEmail,
+                  }}
                 >
                   <Form.Item label="Email" name="email" rules={[{ required: true, message: 'Nhập email.' }]}>
-                    <Input placeholder="admin@company.com" size="large" autoComplete="email" />
+                    <Input
+                      placeholder="admin@company.com"
+                      size="large"
+                      autoComplete="email"
+                      defaultValue={savedEmail}
+                    />
                   </Form.Item>
 
                   <Form.Item
@@ -131,6 +185,22 @@ export const LoginPage = () => {
                   >
                     <Input.Password size="large" autoComplete="current-password" />
                   </Form.Item>
+
+                  <div className="login-remember-me-row">
+                    <Checkbox
+                      checked={rememberMe}
+                      onChange={handleRememberMeChange}
+                      aria-label="Ghi nhớ đăng nhập"
+                    >
+                      Ghi nhớ đăng nhập
+                    </Checkbox>
+                    <Tooltip
+                      title="Khi bật, bạn sẽ duy trì phiên đăng nhập lâu hơn trên thiết bị này. Không nên dùng trên máy công cộng."
+                      placement="top"
+                    >
+                      <Button type="text" size="small" icon="?" className="login-remember-tooltip-btn" />
+                    </Tooltip>
+                  </div>
 
                   {formErrorMessage ? (
                     <Alert

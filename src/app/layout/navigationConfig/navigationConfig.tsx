@@ -17,10 +17,12 @@ export interface NavItem {
 
 export type SidebarSectionKey =
   | 'overview'
+  | 'realtime'
   | 'identity'
   | 'chat-system'
-  | 'access-control'
-  | 'operations';
+  | 'operations'
+  | 'alerts'
+  | 'access-control';
 
 export interface SidebarSection {
   key: SidebarSectionKey;
@@ -30,10 +32,12 @@ export interface SidebarSection {
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
   { key: 'overview', label: 'Tổng quan', iconKey: 'dashboard' },
+  { key: 'realtime', label: 'Realtime', iconKey: 'activity' },
   { key: 'identity', label: 'Danh tính', iconKey: 'users' },
   { key: 'chat-system', label: 'Hệ thống chat', iconKey: 'messages' },
-  { key: 'access-control', label: 'Kiểm soát truy cập', iconKey: 'shield' },
   { key: 'operations', label: 'Vận hành', iconKey: 'settings' },
+  { key: 'alerts', label: 'Cảnh báo', iconKey: 'alert' },
+  { key: 'access-control', label: 'Kiểm soát truy cập', iconKey: 'shield' },
 ];
 
 export const navItems: NavItem[] = [
@@ -44,6 +48,29 @@ export const navItems: NavItem[] = [
     section: 'overview',
     route: '/',
   },
+  // Realtime Section
+  {
+    key: 'realtime-dashboard',
+    label: 'Dashboard Realtime',
+    iconKey: 'activity',
+    section: 'realtime',
+    route: '/realtime',
+  },
+  {
+    key: 'online-users',
+    label: 'Người dùng Online',
+    iconKey: 'users',
+    section: 'realtime',
+    route: '/realtime/online-users',
+  },
+  {
+    key: 'traffic',
+    label: 'Traffic',
+    iconKey: 'trending',
+    section: 'realtime',
+    route: '/realtime/traffic',
+  },
+  // Identity Section
   {
     key: 'users',
     label: 'Người dùng',
@@ -66,6 +93,7 @@ export const navItems: NavItem[] = [
     route: '/authority',
     roles: ['super_admin'],
   },
+  // Chat System Section
   {
     key: 'conversations',
     label: 'Hội thoại',
@@ -73,6 +101,44 @@ export const navItems: NavItem[] = [
     section: 'chat-system',
     route: '/conversations',
   },
+  // Operations Section
+  {
+    key: 'services',
+    label: 'Dịch vụ',
+    iconKey: 'server',
+    section: 'operations',
+    route: '/services/health',
+  },
+  {
+    key: 'logs',
+    label: 'Nhật ký hệ thống',
+    iconKey: 'fileText',
+    section: 'operations',
+    route: '/logs',
+  },
+  {
+    key: 'monitoring-overview',
+    label: 'Giám sát vận hành',
+    iconKey: 'activity',
+    section: 'operations',
+    route: '/monitoring',
+  },
+  {
+    key: 'backup-restore',
+    label: 'Backup & Restore',
+    iconKey: 'archive',
+    section: 'operations',
+    route: '/backup-restore',
+  },
+  // Alerts Section
+  {
+    key: 'alerts',
+    label: 'Cảnh báo & Sự cố',
+    iconKey: 'alert',
+    section: 'alerts',
+    route: '/alerts',
+  },
+  // Access Control Section
   {
     key: 'access-requests',
     label: 'Truy cập admin',
@@ -88,34 +154,7 @@ export const navItems: NavItem[] = [
     section: 'access-control',
     route: '/audit',
   },
-  {
-    key: 'logs',
-    label: 'Nhật ký hệ thống',
-    iconKey: 'fileText',
-    section: 'operations',
-    route: '/logs',
-  },
-  {
-    key: 'monitoring-overview',
-    label: 'Kiểm tra sức khỏe',
-    iconKey: 'activity',
-    section: 'operations',
-    route: '/monitoring',
-  },
-  {
-    key: 'backup-restore',
-    label: 'Backup & Restore',
-    iconKey: 'server',
-    section: 'operations',
-    route: '/backup-restore',
-  },
-  {
-    key: 'services',
-    label: 'Dịch vụ',
-    iconKey: 'server',
-    section: 'operations',
-    route: '/services/health',
-  },
+  // Settings (kept in operations)
   {
     key: 'settings',
     label: 'Cài đặt',
@@ -150,22 +189,34 @@ export const navItems: NavItem[] = [
 
 export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Tổng quan hệ thống',
+  // Realtime
+  '/realtime': 'Dashboard Realtime',
+  '/realtime/online-users': 'Người dùng Online',
+  '/realtime/traffic': 'Traffic',
+  // Identity
   '/authority': 'Vai trò',
   '/users': 'Người dùng',
+  '/users/:id': 'Chi tiết người dùng',
   '/hr-employees': 'Nhân sự HR',
-  '/access-requests': 'Truy cập admin',
+  // Chat System
   '/conversations': 'Hội thoại',
-  '/logs': 'Nhật ký hệ thống',
-  '/audit': 'Nhật ký audit',
-  '/monitoring': 'Kiểm tra sức khỏe',
+  // Operations
   '/services': 'Dịch vụ',
   '/services/health': 'Dịch vụ',
+  '/logs': 'Nhật ký hệ thống',
+  '/monitoring': 'Giám sát vận hành',
+  '/backup-restore': 'Backup & Restore',
+  // Alerts
+  '/alerts': 'Cảnh báo & Sự cố',
+  // Access Control
+  '/access-requests': 'Truy cập admin',
+  '/audit': 'Nhật ký audit',
+  // Settings
   '/settings': 'Cài đặt',
   '/settings/smtp': 'SMTP',
   '/settings/email-templates': 'Mẫu email',
   '/settings/system': 'Cài đặt hệ thống',
   '/profile': 'Hồ sơ cá nhân',
-  '/backup-restore': 'Backup & Restore',
 };
 
 const flattenNavItems = (items: NavItem[]): NavItem[] =>
@@ -227,25 +278,37 @@ export const resolveNavigationContext = (pathname: string) => {
 
 export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname === '/') return 'dashboard';
+  // Realtime
+  if (pathname.startsWith('/realtime')) {
+    if (pathname.startsWith('/realtime/online-users')) return 'online-users';
+    if (pathname.startsWith('/realtime/traffic')) return 'traffic';
+    return 'realtime-dashboard';
+  }
+  // Identity
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/access-requests')) return 'access-requests';
   if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
+  // Chat System
   if (pathname.startsWith('/conversations')) return 'conversations';
+  // Operations
   if (pathname.startsWith('/logs')) return 'logs';
   if (pathname.startsWith('/audit')) return 'audit';
   if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
   if (pathname.startsWith('/services')) return 'services';
+  if (pathname.startsWith('/backup-restore')) return 'backup-restore';
+  // Alerts
+  if (pathname.startsWith('/alerts')) return 'alerts';
+  // Settings
   if (pathname.startsWith('/settings/email-templates')) return 'settings-email-templates';
   if (pathname.startsWith('/settings/system')) return 'settings-system';
   if (pathname.startsWith('/settings/smtp')) return 'settings-smtp';
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/profile')) return 'profile';
-  if (pathname.startsWith('/backup-restore')) return 'backup-restore';
   return 'dashboard';
 };
 
-export type CommandCategory = 'Điều hướng' | 'Thao tác nhanh' | 'Vận hành' | 'Cài đặt';
+export type CommandCategory = 'Điều hướng' | 'Thao tác nhanh' | 'Vận hành' | 'Realtime' | 'Cài đặt';
 
 export interface CommandRouteItem {
   id: string;
@@ -269,6 +332,35 @@ export const commandRouteItems: CommandRouteItem[] = [
     keywords: ['home', 'overview', 'dashboard'],
     route: '/',
   },
+  // Realtime
+  {
+    id: 'go-realtime-dashboard',
+    label: 'Dashboard Realtime',
+    description: 'Theo dõi KPIs realtime: online users, connections, messages.',
+    category: 'Realtime',
+    iconKey: 'activity',
+    keywords: ['realtime', 'dashboard', 'live', 'online'],
+    route: '/realtime',
+  },
+  {
+    id: 'go-online-users',
+    label: 'Người dùng Online',
+    description: 'Danh sách người dùng đang online, thiết bị, trạng thái.',
+    category: 'Realtime',
+    iconKey: 'users',
+    keywords: ['online', 'users', 'active', 'connected'],
+    route: '/realtime/online-users',
+  },
+  {
+    id: 'go-traffic',
+    label: 'Traffic',
+    description: 'Biểu đồ traffic: messages, API requests, errors.',
+    category: 'Realtime',
+    iconKey: 'trending',
+    keywords: ['traffic', 'messages', 'requests', 'chart'],
+    route: '/realtime/traffic',
+  },
+  // Identity
   {
     id: 'go-users',
     label: 'Người dùng',
@@ -297,16 +389,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     route: '/authority',
     roles: ['super_admin'],
   },
-  {
-    id: 'go-access-requests',
-    label: 'Truy cập admin',
-    description: 'Duyệt IP, yêu cầu truy cập và trạng thái vào console admin.',
-    category: 'Điều hướng',
-    iconKey: 'access',
-    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
-    route: '/access-requests',
-    disabled: !isIpApprovalEnabled,
-  },
+  // Chat System
   {
     id: 'go-conversations',
     label: 'Hội thoại',
@@ -315,6 +398,16 @@ export const commandRouteItems: CommandRouteItem[] = [
     iconKey: 'messages',
     keywords: ['chat', 'conversation', 'messages', 'support'],
     route: '/conversations',
+  },
+  // Operations
+  {
+    id: 'go-service-health',
+    label: 'Dịch vụ',
+    description: 'Kiểm tra sức khỏe phụ thuộc, độ trễ, phiên bản và build đang chạy.',
+    category: 'Vận hành',
+    iconKey: 'server',
+    keywords: ['health', 'monitoring', 'status', 'services'],
+    route: '/services/health',
   },
   {
     id: 'go-logs',
@@ -326,6 +419,45 @@ export const commandRouteItems: CommandRouteItem[] = [
     route: '/logs',
   },
   {
+    id: 'go-monitoring-overview',
+    label: 'Giám sát vận hành',
+    description: 'Theo dõi telemetry, độ mới dữ liệu và sức khỏe runtime.',
+    category: 'Vận hành',
+    iconKey: 'activity',
+    keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
+    route: '/monitoring',
+  },
+  {
+    id: 'go-backup-restore',
+    label: 'Backup & Restore',
+    description: 'Theo dõi trạng thái backup và restore drill.',
+    category: 'Vận hành',
+    iconKey: 'archive',
+    keywords: ['backup', 'restore', 'drill', 'rto', 'rpo'],
+    route: '/backup-restore',
+  },
+  // Alerts
+  {
+    id: 'go-alerts',
+    label: 'Cảnh báo & Sự cố',
+    description: 'Danh sách cảnh báo, incidents và gợi ý hành động.',
+    category: 'Vận hành',
+    iconKey: 'alert',
+    keywords: ['alerts', 'incidents', 'warnings', 'errors'],
+    route: '/alerts',
+  },
+  // Access Control
+  {
+    id: 'go-access-requests',
+    label: 'Truy cập admin',
+    description: 'Duyệt IP, yêu cầu truy cập và trạng thái vào console admin.',
+    category: 'Điều hướng',
+    iconKey: 'access',
+    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
+    route: '/access-requests',
+    disabled: !isIpApprovalEnabled,
+  },
+  {
     id: 'go-audit',
     label: 'Nhật ký audit',
     description: 'Theo dõi thao tác quản trị, quyết định truy cập và sự kiện hệ thống.',
@@ -334,33 +466,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     keywords: ['audit', 'events', 'history'],
     route: '/audit',
   },
-  {
-    id: 'go-monitoring-overview',
-    label: 'Kiểm tra sức khỏe',
-    description: 'Theo dõi telemetry, độ mới dữ liệu và sức khỏe runtime.',
-    category: 'Vận hành',
-    iconKey: 'activity',
-    keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
-    route: '/monitoring',
-  },
-  {
-    id: 'go-service-health',
-    label: 'Dịch vụ',
-    description: 'Kiểm tra sức khỏe phụ thuộc, độ trễ, phiên bản và build đang chạy.',
-    category: 'Vận hành',
-    iconKey: 'server',
-    keywords: ['health', 'monitoring', 'status', 'services'],
-    route: '/services/health',
-  },
-  {
-    id: 'go-backup-restore',
-    label: 'Backup & Restore',
-    description: 'Theo dõi trạng thái backup và restore drill.',
-    category: 'Vận hành',
-    iconKey: 'server',
-    keywords: ['backup', 'restore', 'drill', 'rto', 'rpo'],
-    route: '/backup-restore',
-  },
+  // Settings
   {
     id: 'go-smtp-settings',
     label: 'SMTP',

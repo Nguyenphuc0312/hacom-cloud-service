@@ -1,0 +1,129 @@
+/* Dashboard Health Banner Styles */
+
+.dashboard-health-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.dashboard-health-banner.health-healthy {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.03) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.dashboard-health-banner.health-warning {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(234, 179, 8, 0.03) 100%);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+
+.dashboard-health-banner.health-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.03) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.dashboard-health-banner.health-unknown {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.1) 0%, rgba(156, 163, 175, 0.03) 100%);
+  border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
+.dashboard-health-banner .health-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.dashboard-health-banner .health-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-health-banner .health-banner-text strong {
+  font-size: 16px;
+}
+
+.dashboard-health-banner .health-banner-actions {
+  display: flex;
+  gap: 8px;
+  margin-right: 16px;
+}
+
+/* System Logs Auto Refresh */
+.system-logs-auto-refresh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.system-logs-refreshing {
+  animation: spin 1s linear infinite;
+  color: var(--color-primary);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.system-logs-row-error {
+  background-color: rgba(239, 68, 68, 0.03) !important;
+}
+
+.system-logs-row-error:hover td {
+  background-color: rgba(239, 68, 68, 0.06) !important;
+}
+
+/* Connection Status Indicator */
+.connection-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  cursor: default;
+}
+
+.connection-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.ds-topbar-connection-status {
+  margin-right: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard-health-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .dashboard-health-banner .health-banner-actions {
+    margin-right: 0;
+    flex-wrap: wrap;
+  }
+}

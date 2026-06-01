@@ -1,6 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  AlertCircle,
+  AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -13,10 +16,13 @@ import {
   Eye,
   FileStack,
   FileText,
+  Grid3X3,
+  HeartPulse,
   History,
   IdCard,
   Inbox,
   LayoutDashboard,
+  List,
   Lock,
   LockOpen,
   LogOut,
@@ -25,6 +31,8 @@ import {
   MessagesSquare,
   Minus,
   MoreHorizontal,
+  Pause,
+  Play,
   Plus,
   RotateCw,
   Search,
@@ -32,10 +40,14 @@ import {
   Settings2,
   Shield,
   SlidersHorizontal,
+  TrendingDown,
+  TrendingUp,
   TriangleAlert,
   Upload,
   UserCircle2,
   Users,
+  Wifi,
+  WifiOff,
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -43,6 +55,9 @@ import clsx from 'clsx';
 const icons = {
   activity: Activity,
   access: BadgeCheck,
+  alert: AlertTriangle,
+  alertCircle: AlertCircle,
+  archive: Archive,
   arrowDown: ArrowDown,
   arrowRight: ArrowRight,
   arrowUp: ArrowUp,
@@ -50,14 +65,18 @@ const icons = {
   check: Check,
   chevronDown: ChevronDown,
   chevronsUpDown: ChevronsUpDown,
+  clock: Activity, // Using Activity as clock
   copy: Copy,
   dashboard: LayoutDashboard,
   eye: Eye,
   fileStack: FileStack,
   fileText: FileText,
+  grid: Grid3X3,
+  health: HeartPulse,
   history: History,
   hr: IdCard,
   inbox: Inbox,
+  list: List,
   lock: Lock,
   logout: LogOut,
   mail: Mail,
@@ -65,6 +84,8 @@ const icons = {
   messages: MessagesSquare,
   minus: Minus,
   more: MoreHorizontal,
+  pause: Pause,
+  play: Play,
   plus: Plus,
   refresh: RotateCw,
   search: Search,
@@ -72,11 +93,16 @@ const icons = {
   settings: Settings2,
   shield: Shield,
   sliders: SlidersHorizontal,
+  trending: TrendingUp,
+  trendingDown: TrendingDown,
+  trendingUp: TrendingUp,
   unlock: LockOpen,
   upload: Upload,
   user: UserCircle2,
   users: Users,
   warning: TriangleAlert,
+  wifi: Wifi,
+  wifiOff: WifiOff,
   close: X,
 } satisfies Record<string, LucideIcon>;
 
@@ -98,6 +124,11 @@ export const AppIcon = ({
   ...props
 }: AppIconProps) => {
   const Icon = icons[name];
+
+  if (!Icon) {
+    console.warn(`AppIcon: icon "${name}" not found, using fallback`);
+    return <Activity size={size} strokeWidth={strokeWidth} className={clsx('ds-app-icon', className)} {...props} />;
+  }
 
   return (
     <Icon

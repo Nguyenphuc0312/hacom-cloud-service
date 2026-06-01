@@ -78,6 +78,32 @@
   box-shadow: 0 10px 26px rgba(2, 6, 23, 0.08);
 }
 
+/* Remember me checkbox styling */
+.login-remember-me-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.login-remember-me-row .ant-checkbox-wrapper {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.login-remember-tooltip-btn {
+  padding: 0 4px !important;
+  height: auto !important;
+  min-height: auto !important;
+  color: var(--text-tertiary) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+.login-remember-tooltip-btn:hover {
+  color: var(--text-secondary) !important;
+}
+
 /* From src/styles/global/global.css */
 .login-qr-placeholder {
   border: 1px dashed var(--admin-border-strong);
