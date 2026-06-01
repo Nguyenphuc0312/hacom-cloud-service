@@ -14,6 +14,7 @@ interface AiAssistantState {
   createNewConversation: (endpoint: AiEndpoint) => string;
   addMessage: (conversationId: string, message: AiMessage) => void;
   updateLastMessage: (conversationId: string, content: string, partial?: boolean) => void;
+  updateMessage: (conversationId: string, messageId: string, patch: Partial<AiMessage>) => void;
   setThinking: (conversationId: string, thinking: string | undefined) => void;
   deleteConversation: (id: string) => void;
   toggleSidebar: () => void;
@@ -63,6 +64,22 @@ export const useAiAssistantStore = create<AiAssistantState>()(
                   title: (c.messages.length === 0 && message.role === "user") 
                     ? (message.content.length > 30 ? message.content.substring(0, 30) + "..." : message.content)
                     : c.title
+                }
+              : c
+          ),
+        }));
+      },
+
+      updateMessage: (conversationId, messageId, patch) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === messageId ? { ...m, ...patch } : m
+                  ),
+                  updatedAt: new Date(),
                 }
               : c
           ),

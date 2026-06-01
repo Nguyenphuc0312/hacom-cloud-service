@@ -37,6 +37,55 @@ export interface AiChatResponse {
   sources?: AiSource[];
 }
 
+// ---------------------------------------------------------------------------
+// Work Report types
+// ---------------------------------------------------------------------------
+
+export interface WorkReportFormRequest {
+  form_type: "daily_work_report";
+  date: string;
+  employee_code: string;
+  fields: string[];
+  field_labels: Record<string, string>;
+  existing: {
+    task_name: string;
+    requirements: string;
+    completed: string;
+    difficulties: string;
+  } | null;
+  submit_endpoint: string;
+}
+
+export interface DepartmentOption {
+  label: string;
+  value: string;
+  type: string;
+  company: string;
+  count: number;
+}
+
+export interface DepartmentSelectionRequest {
+  selection_type: "department_report";
+  title: string;
+  options: DepartmentOption[];
+  multi_select: boolean;
+  date_range: boolean;
+  fetch_endpoint: string;
+}
+
+export interface WorkReportRecord {
+  user_id: string;
+  user_name: string;
+  department: string;
+  date: string;
+  task_name: string;
+  requirements: string;
+  completed: string;
+  difficulties: string;
+}
+
+// ---------------------------------------------------------------------------
+
 export interface AiMessage {
   id: string;
   role: "user" | "assistant";
@@ -46,6 +95,10 @@ export interface AiMessage {
   isStreaming?: boolean;
   isError?: boolean;
   thinking?: string;
+  /** Set when backend sends form_request SSE event */
+  formRequest?: WorkReportFormRequest;
+  /** Set when backend sends selection_request SSE event */
+  selectionRequest?: DepartmentSelectionRequest;
 }
 
 export interface AiConversation {
