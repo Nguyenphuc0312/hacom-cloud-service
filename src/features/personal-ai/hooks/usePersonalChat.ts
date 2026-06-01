@@ -3,10 +3,14 @@ import { streamPersonalChat, PersonalAiError } from "../api/personalAiApi";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
+  fetchDepartments,
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import type { PersonalChatMessage } from "../types";
+import type { DepartmentSelectionRequest } from "../../ai-assistant/types";
+
+const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 
 export function usePersonalChat() {
   const user = useAuthStore((s) => s.user);
@@ -20,6 +24,7 @@ export function usePersonalChat() {
     finalizeMessage,
     setMessageThinkingPhase,
     markMessageError,
+    patchMessage,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -46,6 +51,52 @@ export function usePersonalChat() {
         timestamp: new Date(),
       };
       addMessage(conversationId, userMessage);
+
+      // Detect #baocaocv — FE tự xử lý, không cần SSE từ backend
+      if (BAOCAOCV_TRIGGER.test(trimmed)) {
+        const assistantId = crypto.randomUUID();
+        const loadingMsg: PersonalChatMessage = {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          isStreaming: true,
+          thinkingPhase: "searching",
+        };
+        addMessage(conversationId, loadingMsg);
+        const convIdSnapshot = conversationId;
+        try {
+          const res = await fetchDepartments();
+          const options = (res.departments ?? []).map((d) => ({
+            label: d.department,
+            value: d.department,
+            type: "department",
+            company: d.company,
+            count: d.count,
+          }));
+          const selectionData: DepartmentSelectionRequest = {
+            selection_type: "department_report",
+            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc:",
+            options,
+            multi_select: true,
+            date_range: true,
+            fetch_endpoint: "GET /api/work-reports",
+          };
+          patchMessage(convIdSnapshot, assistantId, {
+            content: "",
+            selectionRequest: selectionData,
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+        } catch {
+          patchMessage(convIdSnapshot, assistantId, {
+            content: "Không thể tải danh sách phòng ban. Vui lòng thử lại.",
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+        }
+        return;
+      }
 
       const assistantMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
@@ -92,6 +143,22 @@ export function usePersonalChat() {
             onThinking: (phase) => {
               setMessageThinkingPhase(convIdSnapshot, phase);
             },
+            onFormRequest: (formData) => {
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                content: "",
+                formRequest: formData,
+                isStreaming: false,
+                thinkingPhase: null,
+              });
+            },
+            onSelectionRequest: (selectionData) => {
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                content: "",
+                selectionRequest: selectionData,
+                isStreaming: false,
+                thinkingPhase: null,
+              });
+            },
             signal: controller.signal,
           },
         );
@@ -125,6 +192,7 @@ export function usePersonalChat() {
       finalizeMessage,
       setMessageThinkingPhase,
       markMessageError,
+      patchMessage,
     ],
   );
 

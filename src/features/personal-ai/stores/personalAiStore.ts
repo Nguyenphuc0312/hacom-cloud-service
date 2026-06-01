@@ -52,6 +52,7 @@ interface PersonalAiState {
     phase: PersonalChatMessage["thinkingPhase"],
   ) => void;
   markMessageError: (conversationId: string) => void;
+  patchMessage: (conversationId: string, messageId: string, patch: Partial<PersonalChatMessage>) => void;
   renameConversation: (id: string, title: string) => void;
   togglePinConversation: (id: string) => void;
 }
@@ -265,6 +266,20 @@ export const usePersonalAiStore = create<PersonalAiState>()(
               thinkingPhase: null,
             };
             return { ...c, messages };
+          }),
+        }));
+      },
+
+      patchMessage: (conversationId, messageId, patch) => {
+        set((s) => ({
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            return {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === messageId ? { ...m, ...patch } : m,
+              ),
+            };
           }),
         }));
       },
