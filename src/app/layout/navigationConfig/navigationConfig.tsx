@@ -103,6 +103,13 @@ export const navItems: NavItem[] = [
     route: '/monitoring',
   },
   {
+    key: 'backup-restore',
+    label: 'Backup & Restore',
+    iconKey: 'server',
+    section: 'operations',
+    route: '/backup-restore',
+  },
+  {
     key: 'services',
     label: 'Dịch vụ',
     iconKey: 'server',
@@ -158,6 +165,7 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/settings/email-templates': 'Mẫu email',
   '/settings/system': 'Cài đặt hệ thống',
   '/profile': 'Hồ sơ cá nhân',
+  '/backup-restore': 'Backup & Restore',
 };
 
 const flattenNavItems = (items: NavItem[]): NavItem[] =>
@@ -233,6 +241,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/settings/smtp')) return 'settings-smtp';
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/profile')) return 'profile';
+  if (pathname.startsWith('/backup-restore')) return 'backup-restore';
   return 'dashboard';
 };
 
@@ -342,6 +351,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     iconKey: 'server',
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
+  },
+  {
+    id: 'go-backup-restore',
+    label: 'Backup & Restore',
+    description: 'Theo dõi trạng thái backup và restore drill.',
+    category: 'Vận hành',
+    iconKey: 'server',
+    keywords: ['backup', 'restore', 'drill', 'rto', 'rpo'],
+    route: '/backup-restore',
   },
   {
     id: 'go-smtp-settings',

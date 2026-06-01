@@ -3,6 +3,18 @@ import type { TimeRange } from '../metrics/metrics';
 export type MonitoringAvailability = 'available' | 'partial' | 'unavailable';
 export type MonitoringCapacityRiskState = 'comfortable' | 'warning' | 'near-breaking' | 'pending';
 
+/**
+ * Error classification for monitoring warnings
+ */
+export type MonitoringErrorType =
+  | 'target_down'
+  | 'not_instrumented'
+  | 'no_traffic_yet'
+  | 'query_mismatch'
+  | 'no_sample_in_range'
+  | 'prometheus_error'
+  | 'unknown';
+
 export interface MonitoringPoint {
   timestamp: string;
   value: number | null;
@@ -35,6 +47,12 @@ export interface MonitoringServiceItem {
   version?: string;
   build?: string;
   env?: string;
+  /** Prometheus scrape target health */
+  prometheusTargetStatus?: 'up' | 'down' | 'unknown';
+  /** Whether metrics are available for this service */
+  metricsStatus?: 'available' | 'partial' | 'unavailable' | 'not_instrumented';
+  /** Reason for degraded/unhealthy status */
+  degradedReason?: string[];
 }
 
 export interface MonitoringWarning {
@@ -46,11 +64,28 @@ export interface MonitoringWarning {
     | 'parse_error'
     | 'exporter_down'
     | 'redis_down'
-    | 'service_health_unavailable';
+    | 'redis_degraded'
+    | 'service_health_unavailable'
+    | 'target_down'
+    | 'not_instrumented'
+    | 'no_traffic_yet'
+    | 'query_mismatch'
+    | 'no_sample_in_range'
+    | 'prometheus_error';
   source: 'prometheus' | 'service_health' | 'redis' | 'node_exporter' | 'loki';
   key: string;
   message: string;
-  severity: 'warning' | 'error';
+  severity: 'info' | 'warning' | 'error';
+  /** Classification of why this metric is unavailable/missing */
+  errorType?: MonitoringErrorType;
+  /** The metric name that triggered this warning */
+  metricName?: string;
+  /** The PromQL query that failed */
+  promql?: string;
+  /** The scrape target name */
+  targetName?: string;
+  /** Suggested action to resolve this warning */
+  suggestedAction?: string;
 }
 
 export interface MonitoringAvailabilitySummary {
@@ -66,6 +101,15 @@ export interface MonitoringSourceStatus {
   baseUrl?: string | null;
 }
 
+/**
+ * Grafana integration status
+ */
+export interface MonitoringGrafanaStatus {
+  status: 'available' | 'unavailable';
+  baseUrl: string;
+  isPubliclyAccessible: boolean;
+}
+
 export interface MonitoringCapacityBaselineSummary {
   status: 'configured' | 'pending';
   generatedAt: string | null;
@@ -79,6 +123,12 @@ export interface MonitoringCapacityBaselineSummary {
   currentMsgLoadRatio: number | null;
   currentLatencyVsBaseline: number | null;
   currentRiskState: MonitoringCapacityRiskState;
+}
+
+export interface MonitoringOverviewMeta {
+  dataQualityStatus: 'live' | 'partial' | 'unavailable';
+  criticalUnavailableCount: number;
+  warningCount: number;
 }
 
 export interface MonitoringOverviewResponse {
@@ -98,6 +148,7 @@ export interface MonitoringOverviewResponse {
     serviceHealth: MonitoringSourceStatus;
     prometheus: MonitoringSourceStatus;
     loki?: MonitoringSourceStatus;
+    grafana?: MonitoringGrafanaStatus;
   };
   dataQuality: {
     systemOverview: MonitoringAvailabilitySummary;
