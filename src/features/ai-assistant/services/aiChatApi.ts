@@ -1000,3 +1000,21 @@ export async function fetchWorkReports(
   const response = await aiGetRequest(url, options);
   return response.json() as Promise<WorkReportsResponse>;
 }
+
+export interface DepartmentListItem {
+  department: string;
+  company: string;
+  count: number;
+}
+
+export interface DepartmentsResponse {
+  departments: DepartmentListItem[];
+  count: number;
+}
+
+export async function fetchDepartments(
+  options?: { signal?: AbortSignal },
+): Promise<DepartmentsResponse> {
+  const response = await aiGetRequest(`${WORK_REPORTS_URL}/departments`, options);
+  return response.json() as Promise<DepartmentsResponse>;
+}

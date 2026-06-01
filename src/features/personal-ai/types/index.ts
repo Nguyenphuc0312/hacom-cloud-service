@@ -1,3 +1,5 @@
+import type { WorkReportFormRequest, DepartmentSelectionRequest } from "../../ai-assistant/types";
+
 export type PersonalDocumentStatus = "uploading" | "indexed" | "error";
 
 export interface PersonalDocument {
@@ -19,6 +21,8 @@ export interface PersonalChatMessage {
   isError?: boolean;
   thinking?: string;
   thinkingPhase?: "searching" | "reasoning" | null;
+  formRequest?: WorkReportFormRequest;
+  selectionRequest?: DepartmentSelectionRequest;
 }
 
 export interface PersonalCitation {

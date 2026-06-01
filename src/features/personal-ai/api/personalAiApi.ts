@@ -5,6 +5,10 @@ import type {
   UploadDocumentResponse,
   PersonalCitation,
 } from "../types";
+import type {
+  WorkReportFormRequest,
+  DepartmentSelectionRequest,
+} from "../../ai-assistant/types";
 import { getAccessToken } from "../../../services/tokenService";
 
 const BASE_URL =
@@ -431,6 +435,8 @@ export async function streamPersonalChat(
   options?: {
     onToken?: (token: string) => void;
     onThinking?: (phase: "searching" | "reasoning", text?: string) => void;
+    onFormRequest?: (data: WorkReportFormRequest) => void;
+    onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -502,6 +508,20 @@ export async function streamPersonalChat(
           options?.onThinking
         ) {
           options.onThinking("searching");
+        } else if (eventType === "form_request" && options?.onFormRequest) {
+          try {
+            const parsed = JSON.parse(data) as WorkReportFormRequest;
+            if (parsed.form_type === "daily_work_report") {
+              options.onFormRequest(parsed);
+            }
+          } catch { /* malformed payload — ignore */ }
+        } else if (eventType === "selection_request" && options?.onSelectionRequest) {
+          try {
+            const parsed = JSON.parse(data) as DepartmentSelectionRequest;
+            if (parsed.selection_type === "department_report") {
+              options.onSelectionRequest(parsed);
+            }
+          } catch { /* malformed payload — ignore */ }
         } else if (eventType === "done") {
           try {
             const parsed = JSON.parse(data);
