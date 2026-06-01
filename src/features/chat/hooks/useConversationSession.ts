@@ -416,6 +416,15 @@ export const useConversationSession = ({
     lastVisibleReadAnchorKeyRef.current = null;
   }, [selectedConversationId]);
 
+  // Reset dedup ref khi reconnect để re-fire mark-read ngay sau khi WS khôi phục.
+  // Nếu user offline trong lúc có tin mới, ref cũ có thể kẹt với key đã fire
+  // nhưng API chưa thành công — cần fire lại khi connection được lập lại.
+  useEffect(() => {
+    if (connectionState === "connected") {
+      lastVisibleReadAnchorKeyRef.current = null;
+    }
+  }, [connectionState]);
+
   const handleLoadOlderMessages = useCallback(async () => {
     if (isChatRtkqMessagesRuntimeEnabled()) {
       return;
@@ -590,6 +599,12 @@ export const useConversationSession = ({
           conversationId: selectedConversationId,
           lastReadSeq: anchor.seq,
         });
+        // Reset ref sau khi API thành công để nếu server snapshot sau đó ghi
+        // đè unreadCount về > 0 với cùng seq (projection chưa kịp catch up),
+        // lần gọi fireMarkReadToLatest tiếp theo sẽ không bị dedup block.
+        if (lastVisibleReadAnchorKeyRef.current === latestKey) {
+          lastVisibleReadAnchorKeyRef.current = null;
+        }
       })
       .catch((error: unknown) => {
         logger.warn("chat-session", "markRead.failed", {
