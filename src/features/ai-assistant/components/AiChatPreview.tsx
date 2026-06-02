@@ -63,9 +63,14 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   const { selectedEndpoint } = useChatUiStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Không scroll khi message cuối đang hiển thị form/selector — user đang tương tác
+  const lastMsg = messages[messages.length - 1];
+  const hasInteractiveWidget = !!(lastMsg?.formRequest || lastMsg?.selectionRequest);
+
   useEffect(() => {
+    if (hasInteractiveWidget) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, hasInteractiveWidget]);
 
   const handleCopy = (message: AiMessage) => {
     navigator.clipboard.writeText(message.content);

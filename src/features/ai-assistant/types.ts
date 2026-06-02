@@ -65,7 +65,7 @@ export interface DepartmentOption {
 }
 
 export interface DepartmentSelectionRequest {
-  selection_type: "department_report";
+  selection_type: "department_report" | "company_department_report";
   title: string;
   options: DepartmentOption[];
   multi_select: boolean;
