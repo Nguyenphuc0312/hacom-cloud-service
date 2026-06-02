@@ -60,17 +60,33 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   onUpdateMessage,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const scrolledWidgetIdRef = useRef<string | null>(null);
   const { selectedEndpoint } = useChatUiStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Không scroll khi message cuối đang hiển thị form/selector — user đang tương tác
+  // Message cuối có đang hiển thị form/selector tương tác (#baocaocv) không?
   const lastMsg = messages[messages.length - 1];
   const hasInteractiveWidget = !!(lastMsg?.formRequest || lastMsg?.selectionRequest);
 
   useEffect(() => {
-    if (hasInteractiveWidget) return;
+    // Khi message cuối là form/selector: đưa ĐỈNH widget vào tầm nhìn ĐÚNG MỘT LẦN
+    // lúc nó vừa xuất hiện. Lệnh này ghi đè animation smooth-scroll xuống đáy còn
+    // chạy dở (từ lúc streaming) — chính nó là nguyên nhân khiến widget "nhảy lên"
+    // khi nội dung load bất đồng bộ và cao dần. Neo theo đỉnh widget (không theo
+    // bottomRef) nên nội dung load thêm bên dưới không còn gây giật.
+    if (hasInteractiveWidget) {
+      if (lastMsg && scrolledWidgetIdRef.current !== lastMsg.id) {
+        scrolledWidgetIdRef.current = lastMsg.id;
+        requestAnimationFrame(() => {
+          widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+      return;
+    }
+    scrolledWidgetIdRef.current = null;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading, hasInteractiveWidget]);
+  }, [messages, isLoading, hasInteractiveWidget, lastMsg]);
 
   const handleCopy = (message: AiMessage) => {
     navigator.clipboard.writeText(message.content);
@@ -80,9 +96,14 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
 
   return (
     <div className="flex w-full flex-col gap-0 py-4">
-      {messages.map((message, index) => (
+      {messages.map((message, index) => {
+        const isWidgetMessage =
+          index === messages.length - 1 &&
+          !!(message.formRequest || message.selectionRequest);
+        return (
         <div
           key={message.id}
+          ref={isWidgetMessage ? widgetRef : undefined}
           className={clsx(
             "group w-full animate-fade-in-up",
             message.role === "user" ? "bg-surface" : "bg-surface-overlay/50",
@@ -255,7 +276,8 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {/* Loading ghost – khi đang chờ AI response */}
       {isLoading &&

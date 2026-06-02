@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
 import {
   BarChart2Icon,
   XIcon,
@@ -10,7 +9,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { DepartmentSelectionRequest, WorkReportRecord } from "../types";
-import { fetchWorkReports, fetchDepartments } from "../services/aiChatApi";
+import { fetchWorkReports, fetchDepartments, AiApiError } from "../services/aiChatApi";
 import type { DepartmentListItem } from "../services/aiChatApi";
 import { WorkReportTable } from "./WorkReportTable";
 
@@ -26,6 +25,25 @@ function todayStr(): string {
 function firstDayOfMonthStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** Chuyển lỗi fetch báo cáo thành thông báo có ý nghĩa (kèm status để debug). */
+function describeFetchError(err: unknown): string {
+  if (err instanceof AiApiError) {
+    if (err.kind === "timeout")
+      return "Tải báo cáo quá lâu (hết thời gian chờ), vui lòng thử lại.";
+    if (err.kind === "network")
+      return "Không kết nối được máy chủ báo cáo. Kiểm tra mạng rồi thử lại.";
+    if (err.status === 401)
+      return "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.";
+    if (err.status === 403)
+      return "Bạn không có quyền xem báo cáo của phòng ban này.";
+    if (err.status === 404) return "Máy chủ chưa hỗ trợ xem báo cáo (404).";
+    if (err.status >= 500)
+      return `Máy chủ báo cáo gặp lỗi (${err.status}), vui lòng thử lại sau.`;
+    if (err.status > 0) return `Không thể tải báo cáo (lỗi ${err.status}).`;
+  }
+  return "Không thể tải báo cáo, vui lòng thử lại.";
 }
 
 const Checkbox: React.FC<{ checked: boolean }> = ({ checked }) => (
@@ -44,34 +62,6 @@ const Checkbox: React.FC<{ checked: boolean }> = ({ checked }) => (
     )}
   </span>
 );
-
-const ReportModal: React.FC<{
-  reports: WorkReportRecord[];
-  departments: string[];
-  startDate: string;
-  endDate: string;
-  onClose: () => void;
-}> = ({ reports, departments, startDate, endDate, onClose }) =>
-  createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="relative w-full max-w-4xl max-h-[85vh] flex flex-col rounded-2xl bg-surface shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-[#1976D2]/8 shrink-0">
-          <span className="text-sm font-semibold text-[#1565C0]">Kết quả báo cáo công việc</span>
-          <button type="button" onClick={onClose} title="Đóng"
-            className="flex items-center justify-center h-7 w-7 rounded-lg text-text-muted hover:bg-surface-hover transition-colors">
-            <XIcon size={15} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          <WorkReportTable reports={reports} departments={departments} startDate={startDate} endDate={endDate} />
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
 
 export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, onCancel }) => {
   // Data từ API departments (đầy đủ hơn SSE options)
@@ -182,12 +172,17 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
       for (const res of results) {
         if (res.reports) all.push(...res.reports);
       }
-      all.sort((a, b) =>
-        a.date.localeCompare(b.date) || a.user_name.localeCompare(b.user_name),
+      // Sort null-safe: backend đôi khi trả thiếu date/user_name → gọi
+      // .localeCompare trên undefined sẽ ném TypeError và rơi vào catch
+      // (hiện "không tải được" dù request đã trả 200 kèm dữ liệu).
+      all.sort(
+        (a, b) =>
+          (a.date ?? "").localeCompare(b.date ?? "") ||
+          (a.user_name ?? "").localeCompare(b.user_name ?? ""),
       );
       setReports(all);
-    } catch {
-      setError("Không thể tải báo cáo, vui lòng thử lại");
+    } catch (err) {
+      setError(describeFetchError(err));
     } finally {
       setIsLoading(false);
     }
@@ -216,20 +211,31 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
     );
   }
 
-  const step: "company" | "department" = selectedCompany ? "department" : "company";
-
-  return (
-    <>
-      {reports !== null && (
-        <ReportModal
+  // Đã có kết quả → render bảng báo cáo NGAY TRONG CHAT (không dùng modal/overlay).
+  if (reports !== null) {
+    return (
+      <div className="w-full flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setReports(null)}
+          className="self-start flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-[#1565C0] hover:bg-[#1976D2]/10 transition-colors"
+        >
+          <ChevronLeftIcon size={14} />
+          Chọn lại phòng ban / thời gian
+        </button>
+        <WorkReportTable
           reports={reports}
           departments={selectedDepts}
           startDate={startDate}
           endDate={endDate}
-          onClose={() => setReports(null)}
         />
-      )}
+      </div>
+    );
+  }
 
+  const step: "company" | "department" = selectedCompany ? "department" : "company";
+
+  return (
       <div className="w-full rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
         {/* Header */}
         <div className="px-4 py-3 bg-[#1976D2]/8 border-b border-border">
@@ -300,27 +306,25 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
                   {deptsForCompany.map((d) => {
                     const checked = selectedDepts.includes(d.department);
                     return (
-                      <label
+                      <button
                         key={d.department}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked}
+                        onClick={() => toggleDept(d.department)}
                         className={clsx(
-                          "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                          "flex w-full items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors",
                           checked
                             ? "bg-[#1976D2]/8 border border-[#1976D2]/30"
                             : "border border-transparent hover:bg-surface-hover",
                         )}
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleDept(d.department)}
-                          className="sr-only"
-                        />
                         <Checkbox checked={checked} />
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm text-text-primary truncate">{d.department}</span>
                         </span>
                         <span className="text-xs text-text-muted shrink-0">({d.count} báo cáo)</span>
-                      </label>
+                      </button>
                     );
                   })}
                   {deptsForCompany.length === 0 && (
@@ -370,6 +374,5 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
           )}
         </div>
       </div>
-    </>
   );
 };
