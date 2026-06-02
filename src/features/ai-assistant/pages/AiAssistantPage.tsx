@@ -156,6 +156,27 @@ export const AiAssistantPage: React.FC = () => {
         setIsLoading(true);
       }
 
+      // Tracked ở ngoài try/catch để catch block biết có widget đặc biệt hay không
+      let hasSpecialEvent = false;
+
+      // Helper — ghi đè message assistant, bảo vệ widget đặc biệt đã set
+      const finalizeAssistantMessage = (patch: Partial<AiMessage>) => {
+        useAiAssistantStore.setState((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === currentId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, ...patch }
+                      : m,
+                  ),
+                }
+              : c,
+          ),
+        }));
+      };
+
       try {
         if (usingUpload && fileToSend) {
           const sessionId = resolvePersonalSessionId(currentId);
@@ -184,26 +205,11 @@ export const AiAssistantPage: React.FC = () => {
             (response.answer && response.answer.trim()) ||
             `Đã nhận tệp "${fileToSend.name}". Bạn muốn hỏi gì thêm về tệp này?`;
 
-          updateLastMessage(currentId, answerText, false);
-          useAiAssistantStore.setState((state) => ({
-            conversations: state.conversations.map((c) =>
-              c.id === currentId
-                ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantMessageId
-                      ? {
-                        ...m,
-                        content: answerText,
-                        sources: response.sources,
-                        isStreaming: false,
-                      }
-                      : m,
-                  ),
-                }
-                : c,
-            ),
-          }));
+          finalizeAssistantMessage({
+            content: answerText,
+            sources: response.sources,
+            isStreaming: false,
+          });
 
           setPendingFile(null);
           invalidateWeeklyReportFilenameCache();
@@ -243,79 +249,34 @@ export const AiAssistantPage: React.FC = () => {
               setThinking(currentId!, thinking);
             },
             onFormRequest: (formData) => {
-              useAiAssistantStore.setState((state) => ({
-                conversations: state.conversations.map((c) =>
-                  c.id === currentId
-                    ? {
-                        ...c,
-                        messages: c.messages.map((m) =>
-                          m.id === assistantMessageId
-                            ? { ...m, content: "", formRequest: formData, isStreaming: false }
-                            : m,
-                        ),
-                      }
-                    : c,
-                ),
-              }));
+              hasSpecialEvent = true;
+              finalizeAssistantMessage({ content: "", formRequest: formData, isStreaming: false });
             },
             onSelectionRequest: (selectionData) => {
-              useAiAssistantStore.setState((state) => ({
-                conversations: state.conversations.map((c) =>
-                  c.id === currentId
-                    ? {
-                        ...c,
-                        messages: c.messages.map((m) =>
-                          m.id === assistantMessageId
-                            ? { ...m, content: "", selectionRequest: selectionData, isStreaming: false }
-                            : m,
-                        ),
-                      }
-                    : c,
-                ),
-              }));
+              hasSpecialEvent = true;
+              finalizeAssistantMessage({ content: "", selectionRequest: selectionData, isStreaming: false });
             },
           });
 
-          updateLastMessage(currentId, response.answer, false);
-
-          useAiAssistantStore.setState((state) => ({
-            conversations: state.conversations.map((c) =>
-              c.id === currentId
-                ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantMessageId
-                      ? {
-                        ...m,
-                        content: response.answer,
-                        sources: response.sources,
-                        isStreaming: false,
-                      }
-                      : m,
-                  ),
-                }
-                : c,
-            ),
-          }));
+          // Chỉ update content khi không có widget đặc biệt
+          if (!hasSpecialEvent) {
+            finalizeAssistantMessage({
+              content: response.answer,
+              sources: response.sources,
+              isStreaming: false,
+            });
+          }
         }
       } catch (err) {
         const content = describeApiError(err, t("chat.errorNetwork"));
 
-        updateLastMessage(currentId, content, false);
-        useAiAssistantStore.setState((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === currentId
-              ? {
-                ...c,
-                messages: c.messages.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, isError: true, isStreaming: false }
-                    : m,
-                ),
-              }
-              : c,
-          ),
-        }));
+        // Không ghi đè widget đặc biệt đã render nếu lỗi xảy ra sau onSelectionRequest/onFormRequest
+        if (!hasSpecialEvent) {
+          finalizeAssistantMessage({ content, isError: true, isStreaming: false });
+        } else {
+          // Chỉ tắt spinner, giữ nguyên widget
+          finalizeAssistantMessage({ isStreaming: false });
+        }
 
         if (usingUpload && fileToSend) {
           toast.error(`Tải lên "${fileToSend.name}" thất bại: ${content}`);
