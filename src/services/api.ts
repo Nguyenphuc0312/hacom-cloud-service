@@ -50,6 +50,7 @@ import {
 } from "./tokenService";
 import { isUuid } from "../utils/isUuid"; 
 import { logger } from "../utils/logger"; 
+import { createNormalizedURLSearchParams } from "../utils/unicodeNormalize"; 
 
 const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
@@ -535,14 +536,12 @@ export const userApi = {
     limit = 20,
     options?: { signal?: AbortSignal; includeSelf?: boolean },
   ) => {
-    const searchParams = new URLSearchParams({
+    const searchParams = createNormalizedURLSearchParams({
       q: query,
       page: String(page),
       limit: String(limit),
+      ...(options?.includeSelf && { includeSelf: "true" }),
     });
-    if (options?.includeSelf) {
-      searchParams.set("includeSelf", "true");
-    }
     const response = await apiClient.get<ApiResponse<User[]>>(
       `/users/search?${searchParams.toString()}`,
       { signal: options?.signal },

@@ -3,6 +3,7 @@ import { PrinterIcon } from "lucide-react";
 import type { WorkReportRecord } from "../types";
 import { AI_CHAT_BASE_URL } from "../../../services/ai-chat/constants";
 import { getAccessToken } from "../../../services/tokenService";
+import { createNormalizedURLSearchParams } from "../../../utils/unicodeNormalize";
 
 interface WorkReportTableProps {
   reports: WorkReportRecord[];
@@ -17,12 +18,11 @@ function formatDateVN(dateStr: string): string {
 }
 
 function buildPrintUrl(departments: string[], start: string, end: string): string {
-  const search = new URLSearchParams();
-  if (departments.length === 1) {
-    search.set("department", departments[0]);
-  }
-  search.set("start", start);
-  search.set("end", end);
+  const search = createNormalizedURLSearchParams({
+    ...(departments.length === 1 && { department: departments[0] }),
+    start,
+    end,
+  });
   return `${AI_CHAT_BASE_URL}/api/work-reports/print?${search.toString()}`;
 }
 
