@@ -3,6 +3,7 @@ import { getAccessToken } from "../../../services/tokenService";
 import { fetchWithAuth } from "../../../services/ai-chat/fetchWithAuth";
 import { openSSEStream } from "../../../services/ai-chat/sseWithAuth";
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
+import { createNormalizedURLSearchParams } from "../../../utils/unicodeNormalize";
 
 const ENDPOINTS = {
   company: `${BASE_URL}/api/chat/stream`,
@@ -397,18 +398,12 @@ export function uploadPersonalWeeklyReport(
 function buildWeeklyReportFilesQuery(
   params?: ListWeeklyReportFilesParams,
 ): string {
-  const search = new URLSearchParams();
-  if (params?.week_start?.trim()) {
-    search.set("week_start", params.week_start.trim());
-  }
-  if (params?.week_end?.trim()) {
-    search.set("week_end", params.week_end.trim());
-  }
-  if (params?.company?.trim()) {
-    search.set("company", params.company.trim());
-  }
-  const limit = params?.limit ?? 200;
-  search.set("limit", String(Math.min(500, Math.max(1, limit))));
+  const search = createNormalizedURLSearchParams({
+    week_start: params?.week_start?.trim(),
+    week_end: params?.week_end?.trim(),
+    company: params?.company?.trim(),
+    limit: String(Math.min(500, Math.max(1, params?.limit ?? 200))),
+  });
   const qs = search.toString();
   return qs ? `?${qs}` : "";
 }
@@ -992,12 +987,13 @@ export async function fetchWorkReports(
   params: FetchWorkReportsParams,
   options?: { signal?: AbortSignal },
 ): Promise<WorkReportsResponse> {
-  const search = new URLSearchParams();
-  if (params.department) search.set("department", params.department);
-  if (params.employee_code) search.set("employee_code", params.employee_code);
-  if (params.company) search.set("company", params.company);
-  if (params.start) search.set("start", params.start);
-  if (params.end) search.set("end", params.end);
+  const search = createNormalizedURLSearchParams({
+    department: params.department,
+    employee_code: params.employee_code,
+    company: params.company,
+    start: params.start,
+    end: params.end,
+  });
   const qs = search.toString();
   const url = qs ? `${WORK_REPORTS_URL}?${qs}` : WORK_REPORTS_URL;
   const response = await aiGetRequest(url, options);
