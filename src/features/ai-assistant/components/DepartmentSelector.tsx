@@ -33,7 +33,7 @@ function describeFetchError(err: unknown): string {
     if (err.kind === "timeout")
       return "Tải báo cáo quá lâu (hết thời gian chờ), vui lòng thử lại.";
     if (err.kind === "network")
-      return "Không kết nối được máy chủ báo cáo. Kiểm tra mạng rồi thử lại.";
+      return "Không nhận được phản hồi từ máy chủ báo cáo (máy chủ lỗi hoặc mất kết nối). Thử lại sau hoặc báo quản trị viên.";
     if (err.status === 401)
       return "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.";
     if (err.status === 403)
