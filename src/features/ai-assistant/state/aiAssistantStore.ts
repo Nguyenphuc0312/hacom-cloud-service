@@ -88,19 +88,23 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
       updateLastMessage: (conversationId, content, partial = false) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  messages: c.messages.map((m, index) =>
-                    index === c.messages.length - 1
-                      ? { ...m, content: partial ? m.content + content : content, isStreaming: partial }
-                      : m
-                  ),
-                  updatedAt: new Date(),
-                }
-              : c
-          ),
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            return {
+              ...c,
+              messages: c.messages.map((m, index) => {
+                if (index !== c.messages.length - 1) return m;
+                // Không ghi đè message đã có widget đặc biệt (selector/form)
+                if (m.selectionRequest || m.formRequest) return m;
+                return {
+                  ...m,
+                  content: partial ? m.content + content : content,
+                  isStreaming: partial,
+                };
+              }),
+              updatedAt: new Date(),
+            };
+          }),
         }));
       },
 
