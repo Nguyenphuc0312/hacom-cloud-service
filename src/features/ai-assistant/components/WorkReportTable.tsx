@@ -4,6 +4,7 @@ import type { WorkReportRecord } from "../types";
 import { AI_CHAT_BASE_URL } from "../../../services/ai-chat/constants";
 import { getAccessToken } from "../../../services/tokenService";
 import { createNormalizedURLSearchParams } from "../../../utils/unicodeNormalize";
+import { useAuthStore } from "../../../stores/authStore";
 
 interface WorkReportTableProps {
   reports: WorkReportRecord[];
@@ -17,8 +18,16 @@ function formatDateVN(dateStr: string): string {
   return `${d}/${m}/${y}`;
 }
 
-function buildPrintUrl(departments: string[], start: string, end: string): string {
+function buildPrintUrl(
+  departments: string[],
+  start: string,
+  end: string,
+  employeeCode: string,
+  employeeName?: string
+): string {
   const search = createNormalizedURLSearchParams({
+    employee_code: employeeCode,
+    ...(employeeName && { employee_name: employeeName }),
     ...(departments.length === 1 && { department: departments[0] }),
     start,
     end,
@@ -32,17 +41,30 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
   startDate,
   endDate,
 }) => {
+  const user = useAuthStore((s) => s.user);
+  
   const title =
     departments.length === 1
       ? departments[0]
       : `${departments.length} phòng ban`;
 
   const handlePrint = () => {
+    const employeeCode = user?.employeeCode ?? user?.employee_code;
+    if (!employeeCode) {
+      console.error("Employee code not available for print");
+      return;
+    }
+
     const token = getAccessToken();
-    const url = buildPrintUrl(departments, startDate, endDate);
+    const employeeName = user?.fullNameFromHr ?? user?.fullNameFromHR ?? user?.displayName ?? "";
+    const url = buildPrintUrl(departments, startDate, endDate, employeeCode, employeeName);
+    
     // Open with token as query param (fallback) since window.open can't set headers
     const separator = url.includes("?") ? "&" : "?";
-    window.open(token ? `${url}${separator}token=${encodeURIComponent(token)}` : url, "_blank");
+    window.open(
+      token ? `${url}${separator}token=${encodeURIComponent(token)}` : url,
+      "_blank"
+    );
   };
 
   if (reports.length === 0) {
