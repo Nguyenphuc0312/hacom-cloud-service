@@ -3,6 +3,16 @@ type NavigatorBadgeApi = Navigator & {
   clearAppBadge?: () => Promise<void>;
 };
 
+// Electron desktop bridge — injected by preload.js when running as a packaged app
+type ChatDesktopBridge = {
+  setUnreadBadge?: (count: number) => void;
+};
+declare global {
+  interface Window {
+    chatDesktop?: ChatDesktopBridge;
+  }
+}
+
 export interface BroadcastUnreadConversationSnapshot {
   conversationId: string;
   unreadCount: number;
@@ -66,6 +76,12 @@ export const syncDocumentTitleBadge = (totalUnreadCount: number): void => {
 };
 
 export const syncAppBadge = async (totalUnreadCount: number): Promise<void> => {
+  // Electron desktop: use branded gold/red overlay icon drawn by preload.js
+  if (typeof window !== "undefined" && typeof window.chatDesktop?.setUnreadBadge === "function") {
+    window.chatDesktop.setUnreadBadge(totalUnreadCount);
+    return;
+  }
+
   if (typeof navigator === "undefined") {
     return;
   }
