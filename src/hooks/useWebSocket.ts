@@ -75,6 +75,7 @@ import {
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import {
   realtimeMessageDeleted,
   realtimeMessageDelivered,
@@ -2196,13 +2197,16 @@ export const useWebSocket = (
       const currentUserId = useAuthStore.getState().user?.id;
       if (currentUserId && userId === currentUserId) return;
 
-      const userName =
-        asString(payload.displayName) ??
-        asString(payload.senderName) ??
-        asString(payload.userName) ??
-        asString(payload.username) ??
-        asString(payload.user_name) ??
-        "";
+      const conversation = useChatStore.getState().conversationById[conversationId];
+      const participant = conversation?.participants?.find((p) => p.id === userId);
+      const userName = participant
+        ? resolveUserDisplayName(participant, { allowLegacyFallback: true })
+        : (asString(payload.displayName) ??
+           asString(payload.senderName) ??
+           asString(payload.userName) ??
+           asString(payload.username) ??
+           asString(payload.user_name) ??
+           "");
       const expiresAt =
         asString(payload.expiresAt) ??
         new Date(Date.now() + REMOTE_TYPING_TTL_MS).toISOString();
