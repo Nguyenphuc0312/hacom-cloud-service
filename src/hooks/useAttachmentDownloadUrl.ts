@@ -4,6 +4,7 @@ import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
+import { createSingleFlight } from "../utils/singleFlight";
 
 interface UseAttachmentDownloadUrlOptions {
   autoResolve?: boolean;
@@ -26,42 +27,17 @@ const SIGNED_URL_CACHE = new ExpiringLruCache<SignedUrlCacheEntry>({
 const CACHE_SKEW_MS = 30_000;
 
 /**
- * In-flight single-flight map keyed by cacheKey (`conversationId:attachmentId`).
- * When the same attachment is rendered in several places at once (e.g. a file
- * shown in the timeline and the shared-resources panel), all of them share a
- * single signed-URL request instead of each firing their own.
+ * Single-flight by cacheKey (`conversationId:attachmentId`). When the same
+ * attachment is rendered in several places at once (e.g. a file in the timeline
+ * and in the shared-resources panel), they share one signed-URL request instead
+ * of each firing their own. Empty key → no dedupe.
  */
-const inFlightSignedUrlRequests = new Map<string, Promise<string | undefined>>();
+const signedUrlSingleFlight = createSingleFlight<string | undefined>();
 
 export const dedupeSignedUrlRequest = (
   cacheKey: string,
   fetcher: () => Promise<string | undefined>,
-): Promise<string | undefined> => {
-  if (!cacheKey) {
-    // No stable identity → cannot safely dedupe; just run it.
-    return fetcher();
-  }
-
-  const existing = inFlightSignedUrlRequests.get(cacheKey);
-  if (existing) {
-    return existing;
-  }
-
-  const request = fetcher();
-  inFlightSignedUrlRequests.set(cacheKey, request);
-  const cleanup = () => {
-    // Only clear if we're still the active request for this key (avoid races
-    // where a newer request replaced ours).
-    if (inFlightSignedUrlRequests.get(cacheKey) === request) {
-      inFlightSignedUrlRequests.delete(cacheKey);
-    }
-  };
-  // Settle (resolve or reject) clears the slot; both branches are handled so a
-  // rejected request never surfaces as an unhandled rejection here. The actual
-  // caller still awaits `request` and handles the error in its own try/catch.
-  request.then(cleanup, cleanup);
-  return request;
-};
+): Promise<string | undefined> => signedUrlSingleFlight(cacheKey, fetcher);
 
 const parseExpiry = (expiresAt?: string): number => {
   if (!expiresAt) return Date.now();

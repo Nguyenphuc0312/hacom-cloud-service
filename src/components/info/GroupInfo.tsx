@@ -39,6 +39,7 @@ import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
 import uploadClient from "../../services/uploadClient";
+import { createSingleFlight } from "../../utils/singleFlight";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   canAddGroupMembers,
@@ -171,6 +172,12 @@ const resolveGroupAvatarStageLabel = (
     default: return null;
   }
 };
+
+// Dedupe concurrent member fetches for the same conversation (overlapping
+// refreshGroupState / memberListVersion bumps / remounts share one request).
+const groupMembersSingleFlight = createSingleFlight<
+  Awaited<ReturnType<typeof chatApi.group.getMembers>>
+>();
 
 const extractMemberRows = (payload: unknown): unknown[] => {
   if (Array.isArray(payload)) return payload;
@@ -474,7 +481,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await chatApi.group.getMembers(conversation.id, 1, 200);
+      const response = await groupMembersSingleFlight(conversation.id, () =>
+        chatApi.group.getMembers(conversation.id, 1, 200),
+      );
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows.map((row) => normalizeMember(row)).filter((m): m is GroupMember => m !== null);
