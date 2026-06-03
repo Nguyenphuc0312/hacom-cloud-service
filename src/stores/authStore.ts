@@ -19,6 +19,13 @@ import {
   storeTokens,
 } from "../services/tokenService";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { AUTH_CONFIG } from "../config";
+import {
+  compareIdentity,
+  reportAuthIdentityMismatch,
+  resetAuthIdentityGuard,
+  setAuthIdentityMismatchHandler,
+} from "../services/authIdentityGuard";
 import { toast } from "../components/ui";
 import {
   initializeAuthSync,
@@ -511,6 +518,9 @@ export const useAuthStore = create<AuthState>()(
 
           storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
           resetAuthFailureState();
+          // A fresh, validated token+user pair is now in sync — re-arm the
+          // one-shot identity guard so a future account switch is detectable.
+          resetAuthIdentityGuard();
 
           const mustChangePassword = parseMustChangePasswordFromToken(accessToken);
           const userWithFlag: User = { ...user, mustChangePassword };
@@ -1258,3 +1268,38 @@ setAuthFailureHandler((reason) => {
 initializeAuthSync((reason) => {
   void useAuthStore.getState().handleRemoteLogout(reason);
 });
+
+// When the access token's identity no longer matches the current user (cross-
+// account token contamination), force a clean re-login of THIS tab only. Not
+// broadcast: other tabs match their own token and must stay logged in.
+setAuthIdentityMismatchHandler((info) => {
+  void useAuthStore.getState().handleAuthFailure({
+    reason: "identity_mismatch",
+    definitive: true,
+    broadcast: false,
+  });
+  // info is already logged at the detection site (hr-api / storage listener).
+  void info;
+});
+
+// Cross-tab reconciliation: another tab logging in/out/refreshing as a
+// different account mutates the shared token/user storage. Re-check identity
+// and force a clean re-login here if our user no longer matches the token.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (
+      event.key !== null &&
+      event.key !== AUTH_CONFIG.ACCESS_TOKEN_KEY &&
+      event.key !== AUTH_CONFIG.REFRESH_TOKEN_KEY &&
+      event.key !== "auth-storage"
+    ) {
+      return;
+    }
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const identity = compareIdentity(getAccessToken(), user);
+    if (identity.mismatch) {
+      reportAuthIdentityMismatch(identity);
+    }
+  });
+}
