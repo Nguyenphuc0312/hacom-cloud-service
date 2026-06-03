@@ -4,7 +4,6 @@ interface UseTypingIndicatorOptions {
   enabled?: boolean;
   onTyping?: (isTyping: boolean) => void;
   startDelayMs?: number;
-  stopDelayMs?: number;
   heartbeatIntervalMs?: number;
 }
 
@@ -23,23 +22,16 @@ export const useTypingIndicator = ({
   enabled = true,
   onTyping,
   startDelayMs = 250,
-  stopDelayMs = 1500,
-  heartbeatIntervalMs = 1500,
+  heartbeatIntervalMs = 2500,
 }: UseTypingIndicatorOptions): UseTypingIndicatorResult => {
   const startTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stopTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const isTypingRef = React.useRef(false);
-  const lastTypingEmitAtRef = React.useRef(0);
 
-  const clearTimers = React.useCallback(() => {
-    if (startTimerRef.current) {
-      clearTimeout(startTimerRef.current);
-      startTimerRef.current = null;
-    }
-
-    if (stopTimerRef.current) {
-      clearTimeout(stopTimerRef.current);
-      stopTimerRef.current = null;
+  const clearHeartbeat = React.useCallback(() => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
     }
   }, []);
 
@@ -49,16 +41,30 @@ export const useTypingIndicator = ({
       if (!force && isTypingRef.current === nextValue) return;
 
       isTypingRef.current = nextValue;
-      lastTypingEmitAtRef.current = Date.now();
       onTyping(nextValue);
+
+      if (nextValue) {
+        // Start heartbeat to keep typing status alive while user has text
+        clearHeartbeat();
+        heartbeatRef.current = setInterval(() => {
+          if (isTypingRef.current && onTyping) {
+            onTyping(true);
+          }
+        }, heartbeatIntervalMs);
+      } else {
+        clearHeartbeat();
+      }
     },
-    [enabled, onTyping],
+    [clearHeartbeat, enabled, heartbeatIntervalMs, onTyping],
   );
 
   const stopTypingNow = React.useCallback(() => {
-    clearTimers();
+    if (startTimerRef.current) {
+      clearTimeout(startTimerRef.current);
+      startTimerRef.current = null;
+    }
     emitTyping(false);
-  }, [clearTimers, emitTyping]);
+  }, [emitTyping]);
 
   const notifyInput = React.useCallback(
     ({ hasText, isFocused }: TypingInputState) => {
@@ -69,40 +75,18 @@ export const useTypingIndicator = ({
         return;
       }
 
-      const now = Date.now();
-      if (
-        isTypingRef.current &&
-        now - lastTypingEmitAtRef.current >= heartbeatIntervalMs
-      ) {
-        emitTyping(true, true);
-      }
+      // Already typing — heartbeat keeps the remote status alive, nothing more to do
+      if (isTypingRef.current) return;
 
+      // Not yet typing — schedule the start event
       if (startTimerRef.current) {
         clearTimeout(startTimerRef.current);
       }
-
-      if (!isTypingRef.current) {
-        startTimerRef.current = setTimeout(() => {
-          emitTyping(true);
-        }, startDelayMs);
-      }
-
-      if (stopTimerRef.current) {
-        clearTimeout(stopTimerRef.current);
-      }
-      stopTimerRef.current = setTimeout(() => {
-        emitTyping(false);
-      }, stopDelayMs);
+      startTimerRef.current = setTimeout(() => {
+        emitTyping(true);
+      }, startDelayMs);
     },
-    [
-      emitTyping,
-      enabled,
-      heartbeatIntervalMs,
-      onTyping,
-      startDelayMs,
-      stopDelayMs,
-      stopTypingNow,
-    ],
+    [emitTyping, enabled, onTyping, startDelayMs, stopTypingNow],
   );
 
   const notifyBlur = React.useCallback(() => {
@@ -128,13 +112,14 @@ export const useTypingIndicator = ({
 
   React.useEffect(() => {
     return () => {
-      clearTimers();
+      if (startTimerRef.current) clearTimeout(startTimerRef.current);
+      clearHeartbeat();
       if (isTypingRef.current && onTyping) {
         onTyping(false);
       }
       isTypingRef.current = false;
     };
-  }, [clearTimers, onTyping]);
+  }, [clearHeartbeat, onTyping]);
 
   return {
     notifyInput,
