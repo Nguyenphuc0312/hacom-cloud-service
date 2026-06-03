@@ -15,8 +15,9 @@ export type CalendarEventFilterType = "vietnam_holiday" | "international" | "wor
 
 export type CalendarErrorCode =
   | "EMPLOYEE_LINK_REQUIRED"
+  | "EMPLOYEE_INACTIVE"
   | "FORBIDDEN"
-  | "UNAUTHORIZED"
+  | "UNAVAILABLE"
   | "NOT_FOUND"
   | "NETWORK_ERROR"
   | "UNKNOWN_ERROR";
@@ -34,6 +35,12 @@ interface CalendarState {
   isLoading: boolean;
   error: string | null;
   errorCode: CalendarErrorCode | null;
+  /**
+   * True when the calendar feature could not load for any reason (HR/auth/
+   * network). The chat app stays fully usable; the calendar widget just shows
+   * a soft "unavailable" state. NEVER implies the chat session is expired.
+   */
+  calendarUnavailable: boolean;
 
   // Other user's calendar
   viewingUserId: string | null;
@@ -89,6 +96,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   isLoading: false,
   error: null,
   errorCode: null,
+  calendarUnavailable: false,
   viewingUserId: null,
   viewingUserName: null,
   viewingUnitId: null,
@@ -99,7 +107,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   // Setters
   setMode: (mode) => {
-    set({ mode, viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null, error: null, errorCode: null });
+    set({ mode, viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null, error: null, errorCode: null, calendarUnavailable: false });
     get().fetchEvents();
   },
 
@@ -165,6 +173,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
               isLoading: false,
               error: "Tài khoản chưa liên kết hồ sơ nhân sự. Lịch phòng ban và công ty sẽ khả dụng sau khi liên kết.",
               errorCode: "EMPLOYEE_LINK_REQUIRED",
+              calendarUnavailable: true,
             });
             return;
           }
@@ -194,45 +203,76 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         }
       }
 
-      set({ events, isLoading: false, error: null, errorCode: null });
+      set({
+        events,
+        isLoading: false,
+        error: null,
+        errorCode: null,
+        calendarUnavailable: false,
+      });
     } catch (error) {
+      // The calendar is an OPTIONAL feature served by the HR API. Any failure
+      // here — auth (401/403), business (422), server (5xx), or network — must
+      // degrade gracefully WITHOUT logging the user out or claiming the chat
+      // session expired. The chat app keeps working; only the calendar widget
+      // shows a soft unavailable notice.
       console.error("Failed to fetch calendar events:", error);
       const axiosError = error as {
-        response?: { status?: number; data?: { message?: string; errorCode?: string } };
+        response?: { status?: number; data?: { message?: string; errorCode?: string; code?: string } };
       };
       const status = axiosError.response?.status;
-      const serverErrorCode = axiosError.response?.data?.errorCode;
+      const serverErrorCode =
+        axiosError.response?.data?.errorCode ?? axiosError.response?.data?.code;
 
-      if (status === 422 && serverErrorCode === "EMPLOYEE_LINK_REQUIRED") {
-        // Account not linked to an HR employee record — this is a config issue, not a transient
-        // error. Keep existing stale events visible; show a soft notice in the widget instead
-        // of a disruptive toast.
+      if (
+        status === 422 &&
+        (serverErrorCode === "EMPLOYEE_LINK_REQUIRED" || !serverErrorCode)
+      ) {
+        // Account not linked to an HR employee record — config issue, not a
+        // transient error and definitely not a session problem.
         set({
-          error: "Tài khoản của bạn chưa được liên kết với hồ sơ nhân sự nên chưa thể tải lịch cá nhân.",
+          events: [],
+          error:
+            "Tài khoản của bạn chưa được liên kết với hồ sơ nhân sự nên chưa thể tải lịch cá nhân.",
           errorCode: "EMPLOYEE_LINK_REQUIRED",
           isLoading: false,
+          calendarUnavailable: true,
+        });
+      } else if (status === 422 && serverErrorCode === "EMPLOYEE_INACTIVE") {
+        set({
+          events: [],
+          error: "Hồ sơ nhân sự đang bị tạm ngưng nên chưa thể tải lịch.",
+          errorCode: "EMPLOYEE_INACTIVE",
+          isLoading: false,
+          calendarUnavailable: true,
         });
       } else if (status === 403) {
         set({
+          events: [],
           error: "Bạn không có quyền xem lịch này.",
           errorCode: "FORBIDDEN",
           isLoading: false,
-          events: [],
+          calendarUnavailable: true,
         });
-        toast.error("Bạn không có quyền xem lịch này.");
       } else if (status === 401) {
+        // An optional-feature 401 is NOT a chat session expiry. Do not show the
+        // "phiên đăng nhập hết hạn" message and do not trigger any logout — the
+        // chat/auth clients own the auth lifecycle, not the calendar.
         set({
-          error: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
-          errorCode: "UNAUTHORIZED",
+          events: [],
+          error: "Không tải được lịch. Vui lòng thử lại sau.",
+          errorCode: "UNAVAILABLE",
           isLoading: false,
+          calendarUnavailable: true,
         });
       } else {
         set({
-          error: "Chưa thể tải lịch. Vui lòng thử lại.",
+          events: [],
+          error: "Không tải được lịch. Vui lòng thử lại sau.",
           errorCode: "NETWORK_ERROR",
           isLoading: false,
+          calendarUnavailable: true,
         });
-        toast.error("Chưa thể tải lịch");
       }
     }
   },

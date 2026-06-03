@@ -2,10 +2,7 @@ import axios from "axios";
 import type { AxiosInstance } from "axios";
 import { HR_API_BASE_URL } from "../../config";
 import { getAccessToken } from "../../services/tokenService";
-import {
-  compareIdentity,
-  reportAuthIdentityMismatch,
-} from "../../services/authIdentityGuard";
+import { compareIdentity } from "../../services/authIdentityGuard";
 import { useAuthStore } from "../../stores";
 import { logger } from "../../utils/logger";
 
@@ -31,12 +28,19 @@ const createHrApiClient = (): AxiosInstance => {
     },
   });
 
-  // Request interceptor: attach the freshest token AND verify it belongs to the
-  // current user. The HR/calendar 401 is the canary for cross-account token
-  // contamination (shared-localStorage refresh token overwritten by another
-  // tab → stale tab refreshes into another user's session). Sending that token
-  // would silently act as the wrong user, so we block it and force a clean
-  // re-login instead.
+  // Request interceptor: attach the freshest token (read at send-time, never a
+  // cached header) AND verify it belongs to the current user.
+  //
+  // HRM/calendar is an OPTIONAL feature. A failure here MUST NOT tear down the
+  // chat session. Therefore, when the token's identity does not match the
+  // in-app user (cross-account contamination), we ONLY block this single HR
+  // request locally — we deliberately do NOT call reportAuthIdentityMismatch()
+  // here, because that triggers a global logout + "session expired" toast and
+  // was the root cause of an optional HR 401 nuking the whole chat session.
+  //
+  // Genuine cross-account contamination is still detected and acted on by the
+  // authStore "storage" listener (cross-tab token swap) and by the chat/auth
+  // clients, which own the auth lifecycle. HR stays transport-only.
   client.interceptors.request.use(
     (config) => {
       const token = getAccessToken();
@@ -60,11 +64,12 @@ const createHrApiClient = (): AxiosInstance => {
       }
 
       if (identity.mismatch) {
-        logger.warn("hr-api", "auth_identity_mismatch_blocked", {
+        // Block only THIS request — do not log out the app. The caller
+        // (calendar/attendance store) degrades gracefully on rejection.
+        logger.warn("hr-api", "auth_identity_mismatch_blocked_local_only", {
           tokenAuthUserId: identity.tokenAuthUserId,
           userId: identity.userId,
         });
-        reportAuthIdentityMismatch(identity);
         return Promise.reject(new AuthIdentityMismatchError());
       }
 
@@ -74,7 +79,10 @@ const createHrApiClient = (): AxiosInstance => {
     (error) => Promise.reject(error)
   );
 
-  // Response interceptor for error handling
+  // Response interceptor for error handling.
+  // Optional-feature contract: never log out, never escalate to the auth
+  // lifecycle. Just surface the error to the calling store, which decides how
+  // to degrade (empty calendar + soft notice).
   client.interceptors.response.use(
     (response) => {
       if (
@@ -88,8 +96,19 @@ const createHrApiClient = (): AxiosInstance => {
       return response;
     },
     (error) => {
-      if (error.response?.status === 401) {
-        console.error("HR API: Authentication error");
+      const status = error.response?.status as number | undefined;
+      const errorCode =
+        (error.response?.data as { errorCode?: string; code?: string } | undefined)
+          ?.errorCode ??
+        (error.response?.data as { errorCode?: string; code?: string } | undefined)
+          ?.code;
+      if (status === 401 || status === 403) {
+        // Logged for diagnostics only. This is NOT treated as a chat session
+        // failure — HRM is optional and the chat/auth clients own logout.
+        logger.warn("hr-api", "optional_feature_auth_error_ignored_for_session", {
+          status,
+          errorCode: errorCode ?? null,
+        });
       }
       return Promise.reject(error);
     }
