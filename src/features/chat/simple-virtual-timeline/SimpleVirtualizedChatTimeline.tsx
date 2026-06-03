@@ -75,24 +75,46 @@ const EMPTY_SELECTED = new Set<string>();
 const EMPTY_INSERTED = new Set<string>();
 const EMPTY_EXPANDED = new Set<string>();
 
-/** Height multipliers for rows with media/attachments (estimated, not actual). */
-const MEDIA_HEIGHT_MULTIPLIER = 1.3;
 const LONG_TEXT_HEIGHT_MULTIPLIER = 1.15;
 const LONG_TEXT_THRESHOLD_CHARS = 200;
 
-/** Whether any item in the row has a media attachment (image/video/audio). */
-const rowHasMediaAttachment = (
-  row: ConversationThreadRow | undefined,
-): boolean => {
-  if (!row || row.kind !== "group") return false;
-  return row.items.some((item) =>
-    item.message.attachments?.some(
-      (a) =>
-        a.type === FileType.IMAGE ||
-        a.type === FileType.VIDEO ||
-        a.type === FileType.AUDIO,
-    ),
-  );
+// Mirror ImageMessage's reserved-box math so the virtualizer's pre-measure
+// estimate matches what actually renders. A wrong (too-small) estimate is what
+// makes the timeline grow after measureElement runs, which triggers the Rule-9
+// re-anchor "jump" when opening an image-heavy conversation.
+const MEDIA_DISPLAY_MAX_WIDTH = 320;
+const MEDIA_DISPLAY_FALLBACK_WIDTH = 280;
+const MEDIA_FALLBACK_RATIO = 4 / 3;
+const AUDIO_ATTACHMENT_HEIGHT = 56;
+
+/** Reserved render height for one attachment, matching ImageMessage's box. */
+export const estimateAttachmentHeight = (attachment: Attachment): number => {
+  if (attachment.type === FileType.IMAGE || attachment.type === FileType.VIDEO) {
+    const displayWidth = attachment.width
+      ? Math.min(attachment.width, MEDIA_DISPLAY_MAX_WIDTH)
+      : MEDIA_DISPLAY_FALLBACK_WIDTH;
+    const ratio =
+      attachment.width && attachment.height
+        ? attachment.width / attachment.height
+        : MEDIA_FALLBACK_RATIO;
+    return ratio > 0 ? Math.round(displayWidth / ratio) : displayWidth;
+  }
+  if (attachment.type === FileType.AUDIO) {
+    return AUDIO_ATTACHMENT_HEIGHT;
+  }
+  return 0;
+};
+
+/** Sum of reserved media heights across all items in a group row. */
+const estimateRowMediaHeight = (row: ConversationThreadRow): number => {
+  if (row.kind !== "group") return 0;
+  let total = 0;
+  for (const item of row.items) {
+    for (const attachment of item.message.attachments ?? []) {
+      total += estimateAttachmentHeight(attachment);
+    }
+  }
+  return total;
 };
 
 /** Whether any item in the row has a long text content. */
@@ -115,18 +137,19 @@ const estimateRowHeight = (
   if (row.kind === "unread") return 44;
   if (row.kind === "system") return 64;
   // group — coarse heuristic; measureElement corrects it after first paint.
+  // We err slightly HIGH on media (real reserved box height) because an
+  // over-estimate shrinks after measuring (no upward re-anchor needed),
+  // whereas an under-estimate forces the disruptive Rule-9 re-anchor.
   const items = row.items.length;
-  let baseHeight = 56 + items * 56;
+  const baseHeight = 56 + items * 56;
+  const mediaHeight = estimateRowMediaHeight(row);
 
-  if (rowHasMediaAttachment(row)) {
-    // Images/videos/audio need more vertical space.
-    // The actual render expands beyond the base estimate.
-    baseHeight = Math.round(baseHeight * MEDIA_HEIGHT_MULTIPLIER);
-  } else if (rowHasLongText(row)) {
-    // Long text wraps more, increasing row height.
-    baseHeight = Math.round(baseHeight * LONG_TEXT_HEIGHT_MULTIPLIER);
+  if (mediaHeight > 0) {
+    return baseHeight + mediaHeight;
   }
-
+  if (rowHasLongText(row)) {
+    return Math.round(baseHeight * LONG_TEXT_HEIGHT_MULTIPLIER);
+  }
   return baseHeight;
 };
 

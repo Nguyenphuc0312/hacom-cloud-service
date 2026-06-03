@@ -152,6 +152,60 @@ const toConversationTimelineItem = (
   };
 };
 
+const buildItemsByKey = (
+  items: ConversationTimelineItem[],
+): Map<string, ConversationTimelineItem> => {
+  const map = new Map<string, ConversationTimelineItem>();
+  for (const item of items) {
+    map.set(item.key, item);
+  }
+  return map;
+};
+
+/**
+ * In-place mirror of the grouping fast path. When the grouped items array is an
+ * in-place metadata variant of the previous one (same length/order/keys; only
+ * some grouped items swapped to carry an updated message), reuse the previous
+ * wrappers verbatim and rebuild only the swapped positions. This preserves
+ * wrapper identity for the entire suffix after a mid-list change, so a reaction
+ * or read receipt never re-wraps the whole tail.
+ *
+ * Returns null when not eligible, prev wrappers (same ref) when nothing changed,
+ * or a new array preserving identity for all unchanged rows.
+ */
+const tryBuildInPlaceTimelineRows = (
+  previousGroupedItems: TimelineItem[],
+  previousRows: ConversationTimelineItem[],
+  nextGroupedItems: TimelineItem[],
+): ConversationTimelineItem[] | null => {
+  if (
+    previousGroupedItems.length !== nextGroupedItems.length ||
+    previousRows.length !== nextGroupedItems.length
+  ) {
+    return null;
+  }
+
+  let changed = false;
+  const result = new Array<ConversationTimelineItem>(nextGroupedItems.length);
+  for (let index = 0; index < nextGroupedItems.length; index += 1) {
+    const previousGrouped = previousGroupedItems[index];
+    const nextGrouped = nextGroupedItems[index];
+    if (previousGrouped === nextGrouped) {
+      result[index] = previousRows[index];
+      continue;
+    }
+    // Different object at the same slot must be the same row (same key) — any
+    // structural divergence (insert/delete/reorder) bails to the full path.
+    if (previousGrouped.key !== nextGrouped.key) {
+      return null;
+    }
+    result[index] = toConversationTimelineItem(nextGrouped);
+    changed = true;
+  }
+
+  return changed ? result : previousRows;
+};
+
 const areConversationTimelineItemsEqual = (
   previousItem: ConversationTimelineItem,
   nextItem: ConversationTimelineItem,
@@ -260,6 +314,39 @@ export const useConversationTimelineRows = ({
     }
 
     const previousGroupedItems = cache.groupedItems;
+
+    // In-place metadata fast path: reuse wrappers, rebuild only swapped slots.
+    if (previousGroupedItems) {
+      const inPlaceItems = tryBuildInPlaceTimelineRows(
+        previousGroupedItems,
+        cache.items,
+        groupedItems,
+      );
+      if (inPlaceItems) {
+        const reusedPrevItems = inPlaceItems === cache.items;
+        cacheRef.current = {
+          groupedItems,
+          items: inPlaceItems,
+          itemsByKey: reusedPrevItems
+            ? cache.itemsByKey
+            : buildItemsByKey(inPlaceItems),
+        };
+        recordChatPerformanceMeasure(
+          "timeline-row-derive",
+          getChatPerformanceDuration(startedAt),
+          {
+            messageCount: messages.length,
+            groupedItemCount: groupedItems.length,
+            rowCount: inPlaceItems.length,
+            cacheHit: false,
+            inPlaceMetadata: true,
+            inPlaceNoChange: reusedPrevItems,
+          },
+        );
+        return { items: inPlaceItems };
+      }
+    }
+
     const commonPrefixLength = previousGroupedItems
       ? findCommonPrefixLength(previousGroupedItems, groupedItems)
       : 0;

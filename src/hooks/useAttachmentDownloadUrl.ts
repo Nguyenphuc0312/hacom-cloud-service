@@ -25,6 +25,44 @@ const SIGNED_URL_CACHE = new ExpiringLruCache<SignedUrlCacheEntry>({
 });
 const CACHE_SKEW_MS = 30_000;
 
+/**
+ * In-flight single-flight map keyed by cacheKey (`conversationId:attachmentId`).
+ * When the same attachment is rendered in several places at once (e.g. a file
+ * shown in the timeline and the shared-resources panel), all of them share a
+ * single signed-URL request instead of each firing their own.
+ */
+const inFlightSignedUrlRequests = new Map<string, Promise<string | undefined>>();
+
+export const dedupeSignedUrlRequest = (
+  cacheKey: string,
+  fetcher: () => Promise<string | undefined>,
+): Promise<string | undefined> => {
+  if (!cacheKey) {
+    // No stable identity → cannot safely dedupe; just run it.
+    return fetcher();
+  }
+
+  const existing = inFlightSignedUrlRequests.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const request = fetcher();
+  inFlightSignedUrlRequests.set(cacheKey, request);
+  const cleanup = () => {
+    // Only clear if we're still the active request for this key (avoid races
+    // where a newer request replaced ours).
+    if (inFlightSignedUrlRequests.get(cacheKey) === request) {
+      inFlightSignedUrlRequests.delete(cacheKey);
+    }
+  };
+  // Settle (resolve or reject) clears the slot; both branches are handled so a
+  // rejected request never surfaces as an unhandled rejection here. The actual
+  // caller still awaits `request` and handles the error in its own try/catch.
+  request.then(cleanup, cleanup);
+  return request;
+};
+
 const parseExpiry = (expiresAt?: string): number => {
   if (!expiresAt) return Date.now();
   const parsed = Date.parse(expiresAt);
@@ -125,28 +163,33 @@ export const useAttachmentDownloadUrl = (
 
       setIsLoading(true);
       try {
-        const response = await fileApi.getDownloadUrl({
-          conversationId,
-          objectKey: isNonEmptyString(attachment.objectKey)
-            ? attachment.objectKey
-            : undefined,
-          attachmentId: isNonEmptyString(attachment.id)
-            ? attachment.id
-            : undefined,
-        });
-        const payload = unwrapApiSuccess(response);
-        const signedUrl = resolvePublicResourceUrl(payload.url, {
-          context: "download",
-          allowBlob: true,
+        const signedUrl = await dedupeSignedUrlRequest(cacheKey, async () => {
+          const response = await fileApi.getDownloadUrl({
+            conversationId,
+            objectKey: isNonEmptyString(attachment.objectKey)
+              ? attachment.objectKey
+              : undefined,
+            attachmentId: isNonEmptyString(attachment.id)
+              ? attachment.id
+              : undefined,
+          });
+          const payload = unwrapApiSuccess(response);
+          const resolved = resolvePublicResourceUrl(payload.url, {
+            context: "download",
+            allowBlob: true,
+          });
+          if (!resolved) {
+            return undefined;
+          }
+          const expiresAtMs = parseExpiry(payload.expiresAt);
+          if (cacheKey) {
+            SIGNED_URL_CACHE.set(cacheKey, { url: resolved }, expiresAtMs);
+          }
+          return resolved;
         });
         if (!signedUrl) {
           setUrl(fallbackUrl);
           return fallbackUrl;
-        }
-        const expiresAtMs = parseExpiry(payload.expiresAt);
-
-        if (cacheKey) {
-          SIGNED_URL_CACHE.set(cacheKey, { url: signedUrl }, expiresAtMs);
         }
 
         setUrl(signedUrl);

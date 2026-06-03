@@ -362,6 +362,37 @@ export const buildTimelineItems = ({
   return items;
 };
 
+/**
+ * True when two revisions of the SAME logical message would produce identical
+ * timeline grouping/decorator output — i.e. none of the fields consumed by
+ * `resolveClusterBreak` / `buildBoundaryDecorators` changed.
+ *
+ * This is the single source of truth for "is this an in-place metadata update
+ * that the grouping pass can skip recomputing". It MUST list every field those
+ * functions read. Read/delivered receipts and reactions touch none of them
+ * (DELIVERED and READ are both the "settled" transport bucket), so a burst of
+ * those events can reuse the previous grouped structure verbatim.
+ *
+ * Note: caller is responsible for confirming identity (same key) and ordering;
+ * this only compares the grouping-relevant payload.
+ */
+export const messagesHaveSameGroupingInputs = (
+  a: Message,
+  b: Message,
+): boolean => {
+  if (a === b) return true;
+  return (
+    a.senderId === b.senderId &&
+    a.type === b.type &&
+    new Date(a.createdAt).getTime() === new Date(b.createdAt).getTime() &&
+    Boolean(a.isEdited) === Boolean(b.isEdited) &&
+    getMessageSemanticFamily(a) === getMessageSemanticFamily(b) &&
+    getTransportBucket(a) === getTransportBucket(b) &&
+    getReplyContextKey(a) === getReplyContextKey(b) &&
+    getContentWeight(a) === getContentWeight(b)
+  );
+};
+
 export const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean => {
   if (a === b) return true;
   if (a.kind !== b.kind || a.key !== b.key) return false;

@@ -11,6 +11,22 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiPerfLogger } from "../../utils/apiPerfLogger";
+import {
+  getChatPerformanceSummary,
+  type ChatPerformanceSummary,
+} from "../../utils/chatPerformance";
+
+const EMPTY_CHAT_SUMMARY: ChatPerformanceSummary = {
+  realtimeBatch: {
+    conversationFlushes: 0,
+    coalescedEvents: 0,
+    coalesceRatio: 0,
+    avgFlushMs: 0,
+    maxFlushMs: 0,
+  },
+  grouping: { total: 0, cacheHit: 0, inPlace: 0, append: 0, full: 0, avgMs: 0, maxMs: 0 },
+  timelineRows: { total: 0, cacheHit: 0, inPlace: 0, append: 0, full: 0, avgMs: 0, maxMs: 0 },
+};
 
 interface MetricData {
   total: number;
@@ -45,6 +61,8 @@ export const PerformanceDashboard: React.FC = () => {
   });
   const [logs, setLogs] = useState<ApiCallEntry[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [chatSummary, setChatSummary] =
+    useState<ChatPerformanceSummary>(EMPTY_CHAT_SUMMARY);
   const logIdRef = useRef(0);
 
   // Check if dashboard should be enabled
@@ -87,6 +105,7 @@ export const PerformanceDashboard: React.FC = () => {
         markRead: currentMetrics.markReadCalls,
         inFlight: currentMetrics.inFlightCalls,
       });
+      setChatSummary(getChatPerformanceSummary());
     }, 1000);
 
     return () => {
@@ -266,6 +285,93 @@ export const PerformanceDashboard: React.FC = () => {
               value={metrics.misses}
               color="#6b7280"
             />
+          </div>
+
+          {/* Chat realtime / timeline derivation (P0 + P1) */}
+          <div
+            style={{
+              padding: "8px 12px 12px",
+              borderBottom: "1px solid #333",
+            }}
+          >
+            <div
+              style={{
+                color: "#00ff88",
+                fontSize: 10,
+                fontWeight: 600,
+                margin: "2px 0 6px",
+              }}
+            >
+              Realtime batch (P0) · {chatSummary.realtimeBatch.coalesceRatio.toFixed(1)} events/flush
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 8,
+              }}
+            >
+              <MetricBox
+                label="Flushes"
+                value={chatSummary.realtimeBatch.conversationFlushes}
+                color="#4a9eff"
+                subtitle={`${chatSummary.realtimeBatch.coalescedEvents} events`}
+              />
+              <MetricBox
+                label="Avg flush"
+                value={Math.round(chatSummary.realtimeBatch.avgFlushMs * 100) / 100}
+                color="#00ff88"
+                subtitle="ms"
+              />
+              <MetricBox
+                label="Max flush"
+                value={Math.round(chatSummary.realtimeBatch.maxFlushMs * 100) / 100}
+                color={chatSummary.realtimeBatch.maxFlushMs > 50 ? "#ff6b6b" : "#ffaa00"}
+                subtitle="ms"
+              />
+            </div>
+            <div
+              style={{
+                color: "#888",
+                fontSize: 10,
+                fontWeight: 600,
+                margin: "10px 0 6px",
+              }}
+            >
+              Timeline derive (P1) · grouping full:{chatSummary.grouping.full} inPlace:{chatSummary.grouping.inPlace}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 8,
+              }}
+            >
+              <MetricBox
+                label="In-place"
+                value={chatSummary.grouping.inPlace + chatSummary.timelineRows.inPlace}
+                color="#00ff88"
+              />
+              <MetricBox
+                label="Full rebuild"
+                value={chatSummary.grouping.full + chatSummary.timelineRows.full}
+                color={chatSummary.grouping.full > 0 ? "#ffaa00" : "#6b7280"}
+              />
+              <MetricBox
+                label="Max derive"
+                value={
+                  Math.round(
+                    Math.max(chatSummary.grouping.maxMs, chatSummary.timelineRows.maxMs) * 100,
+                  ) / 100
+                }
+                color={
+                  Math.max(chatSummary.grouping.maxMs, chatSummary.timelineRows.maxMs) > 16
+                    ? "#ff6b6b"
+                    : "#00ff88"
+                }
+                subtitle="ms"
+              />
+            </div>
           </div>
 
           {/* Log List */}

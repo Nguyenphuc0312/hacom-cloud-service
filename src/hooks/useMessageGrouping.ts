@@ -3,9 +3,11 @@ import React from "react";
 import {
   areTimelineItemsEqual,
   buildTimelineItems,
+  messagesHaveSameGroupingInputs,
   type TimelineItem,
   type UnreadTimelineMarker,
 } from "../utils/timelinePlanner";
+import { getMessageStableKey } from "../utils/messageTimeline";
 import type { Conversation, Message } from "../types";
 import {
   getChatPerformanceDuration,
@@ -61,6 +63,74 @@ export const isAppendOnlyUpdate = (
   }
 
   return true;
+};
+
+/**
+ * In-place metadata fast path.
+ *
+ * When the message list keeps the same length, order and identity, and every
+ * changed message preserves its grouping inputs (read/delivered/reaction/etc.),
+ * the timeline STRUCTURE is unchanged — only the message payload inside some
+ * rows differs. We reuse the previous items array and swap just the changed
+ * message objects, instead of re-running the full O(n) grouping pass.
+ *
+ * Returns:
+ *  - `null`  → not eligible; caller must fall back to a full/append rebuild.
+ *  - prevItems (same reference) → eligible and nothing changed (lets the
+ *    downstream derive hooks hit their own cache).
+ *  - a new array → eligible; unchanged rows keep identity, changed rows are
+ *    fresh objects carrying the new message.
+ */
+export const tryBuildInPlaceMetadataItems = (
+  prevMessages: Message[],
+  prevItems: TimelineItem[],
+  nextMessages: Message[],
+): TimelineItem[] | null => {
+  if (prevMessages.length !== nextMessages.length) {
+    return null;
+  }
+
+  const swapByKey = new Map<string, Message>();
+  for (let i = 0; i < prevMessages.length; i += 1) {
+    const previous = prevMessages[i];
+    const next = nextMessages[i];
+    if (previous === next) {
+      continue;
+    }
+    // Different object at the same position. It must be the same logical
+    // message (no insert/delete/reorder) AND must not change grouping output.
+    if (getMessageStableKey(previous) !== getMessageStableKey(next)) {
+      return null;
+    }
+    if (!messagesHaveSameGroupingInputs(previous, next)) {
+      return null;
+    }
+    swapByKey.set(getMessageStableKey(next), next);
+  }
+
+  if (swapByKey.size === 0) {
+    // New array reference but every element is identical — reuse prev items so
+    // downstream consumers can short-circuit on reference equality.
+    return prevItems;
+  }
+
+  return prevItems.map((item) => {
+    if (item.kind === "message" || item.kind === "system") {
+      const replacement = swapByKey.get(getMessageStableKey(item.message));
+      if (replacement && replacement !== item.message) {
+        return { ...item, message: replacement };
+      }
+    }
+    return item;
+  });
+};
+
+const buildKeyMap = (items: TimelineItem[]): Map<string, TimelineItem> => {
+  const keyMap = new Map<string, TimelineItem>();
+  for (const item of items) {
+    keyMap.set(item.key, item);
+  }
+  return keyMap;
 };
 
 const findTimelineItemEndIndexForMessage = (
@@ -121,12 +191,54 @@ export const useMessageGrouping = ({
       return result;
     }
 
-    const canIncrementallyAppend = Boolean(
+    const paramsUnchanged = Boolean(
       prevSnapshot &&
         prevSnapshot.currentUserId === currentUserId &&
         prevSnapshot.conversationType === conversationType &&
         prevSnapshot.groupingThresholdMs === groupingThresholdMs &&
-        prevSnapshot.unreadMarker === unreadMarker &&
+        prevSnapshot.unreadMarker === unreadMarker,
+    );
+
+    // In-place metadata update (read/delivered/reaction/edit-without-relayout):
+    // same length/order/identity, grouping inputs preserved → reuse structure.
+    if (paramsUnchanged && prevSnapshot) {
+      const inPlaceItems = tryBuildInPlaceMetadataItems(
+        prevSnapshot.messages,
+        prevSnapshot.items,
+        messages,
+      );
+      if (inPlaceItems) {
+        const reusedPrevItems = inPlaceItems === prevSnapshot.items;
+        cacheRef.current = {
+          keyMap: reusedPrevItems ? cache.keyMap : buildKeyMap(inPlaceItems),
+          snapshot: {
+            messages,
+            items: inPlaceItems,
+            currentUserId,
+            conversationType,
+            groupingThresholdMs,
+            unreadMarker,
+          },
+        };
+        recordChatPerformanceMeasure(
+          "message-grouping-derive",
+          getChatPerformanceDuration(startedAt),
+          {
+            messageCount: messages.length,
+            itemCount: inPlaceItems.length,
+            cacheHit: false,
+            incrementalAppend: false,
+            inPlaceMetadata: true,
+            inPlaceNoChange: reusedPrevItems,
+          },
+        );
+        return { items: inPlaceItems };
+      }
+    }
+
+    const canIncrementallyAppend = Boolean(
+      paramsUnchanged &&
+        prevSnapshot &&
         isAppendOnlyUpdate(prevSnapshot.messages, messages),
     );
 
