@@ -68,7 +68,7 @@ const indexMessagesById = (messages: readonly Message[]) =>
     return accumulator;
   }, {});
 
-const refreshCacheIndex = (cache: ConversationMessagesCache): void => {
+export const refreshCacheIndex = (cache: ConversationMessagesCache): void => {
   const oldest = cache.messages[0] ?? null;
   const newest = cache.messages[cache.messages.length - 1] ?? null;
 
@@ -402,7 +402,15 @@ export const patchReactionSummary = (
   ];
 };
 
-export const patchMessageReactionInCache = (
+/**
+ * Apply a reaction change to the matching message WITHOUT rebuilding the cache
+ * index. Returns true when a message object was actually replaced. Use this
+ * inside a batched draft mutation, then call {@link refreshCacheIndex} once.
+ *
+ * A reaction never changes message ordering (seq/createdAt are untouched), so
+ * we mutate in place and skip the reposition logic in upsertMessageInCache.
+ */
+export const applyReactionMutation = (
   cache: ConversationMessagesCache,
   input: {
     messageId: string;
@@ -410,8 +418,8 @@ export const patchMessageReactionInCache = (
     userId?: string;
   },
   action: "add" | "remove",
-): void => {
-  const currentMessage = cache.messages.find((message) =>
+): boolean => {
+  const index = cache.messages.findIndex((message) =>
     [
       message.id,
       message.localId,
@@ -420,19 +428,54 @@ export const patchMessageReactionInCache = (
     ].some((value) => value === input.messageId),
   );
 
-  if (!currentMessage) return;
+  if (index < 0) return false;
 
-  patchMessageInCache(cache, input.messageId, {
-    reactions: patchReactionSummary(
-      currentMessage,
-      input.emoji,
-      input.userId,
-      action,
-    ),
+  const current = cache.messages[index];
+  const reactions = patchReactionSummary(
+    current,
+    input.emoji,
+    input.userId,
+    action,
+  );
+  // patchReactionSummary returns the same reference for no-op events
+  // (duplicate add / remove of a non-existent reaction) → skip churn.
+  if (reactions === current.reactions) return false;
+
+  cache.messages[index] = mergeMessageRecords(current, {
+    ...current,
+    reactions,
   });
+  return true;
 };
 
-export const patchReadCursorInCache = (
+export const patchMessageReactionInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    messageId: string;
+    emoji: string;
+    userId?: string;
+  },
+  action: "add" | "remove",
+): boolean => {
+  const changed = applyReactionMutation(cache, input, action);
+  if (changed) {
+    refreshCacheIndex(cache);
+  }
+  return changed;
+};
+
+/**
+ * Mark the current user's own messages READ up to the read cursor WITHOUT
+ * rebuilding the cache index. Returns true when at least one message changed.
+ *
+ * Previous implementation called patchMessageInCache() per matching message,
+ * and each call rebuilt the entire messageById/messageIds index → O(n²) for a
+ * cursor that advances over many unread messages. This version walks the list
+ * exactly once and mutates in place; callers (or the batch flush) rebuild the
+ * index a single time via {@link refreshCacheIndex}. Read state never changes
+ * ordering, so no reposition is needed.
+ */
+export const applyReadCursorMutations = (
   cache: ConversationMessagesCache,
   input: {
     lastReadMessageId?: string;
@@ -440,9 +483,9 @@ export const patchReadCursorInCache = (
     currentUserId?: string;
     readerId?: string;
   },
-): void => {
-  if (!input.currentUserId) return;
-  if (input.readerId && input.readerId === input.currentUserId) return;
+): boolean => {
+  if (!input.currentUserId) return false;
+  if (input.readerId && input.readerId === input.currentUserId) return false;
 
   const boundaryIndex = input.lastReadMessageId
     ? findMessageIdentityIndex(cache.messages, {
@@ -453,9 +496,12 @@ export const patchReadCursorInCache = (
       })
     : -1;
   const readAt = new Date().toISOString() as unknown as Date;
-  const messagesToPatch = cache.messages.filter((message, index) => {
-    if (message.senderId !== input.currentUserId) return false;
-    if (message.status === MessageStatus.READ) return false;
+  let changed = false;
+
+  for (let index = 0; index < cache.messages.length; index += 1) {
+    const message = cache.messages[index];
+    if (message.senderId !== input.currentUserId) continue;
+    if (message.status === MessageStatus.READ) continue;
 
     const messageRecord = message as {
       messageSeq?: unknown;
@@ -475,29 +521,115 @@ export const patchReadCursorInCache = (
       messageSeq !== null &&
       messageSeq <= input.lastReadSeq;
 
-    if (boundaryIndex < 0) {
-      return (
-        withinSeqBoundary ||
-        (input.lastReadMessageId
-          ? messagesShareIdentity(message, {
-              id: input.lastReadMessageId,
-              localId: input.lastReadMessageId,
-              stableId: input.lastReadMessageId,
-              clientMessageId: input.lastReadMessageId,
-            })
-          : false)
-      );
-    }
+    const shouldPatch =
+      boundaryIndex < 0
+        ? withinSeqBoundary ||
+          (input.lastReadMessageId
+            ? messagesShareIdentity(message, {
+                id: input.lastReadMessageId,
+                localId: input.lastReadMessageId,
+                stableId: input.lastReadMessageId,
+                clientMessageId: input.lastReadMessageId,
+              })
+            : false)
+        : withinSeqBoundary || index <= boundaryIndex;
 
-    return withinSeqBoundary || index <= boundaryIndex;
-  });
+    if (!shouldPatch) continue;
 
-  for (const message of messagesToPatch) {
-    patchMessageInCache(cache, message.id, {
+    cache.messages[index] = mergeMessageRecords(message, {
+      ...message,
       status: MessageStatus.READ,
       readAt,
     });
+    changed = true;
   }
+
+  return changed;
+};
+
+export const patchReadCursorInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    lastReadMessageId?: string;
+    lastReadSeq?: number;
+    currentUserId?: string;
+    readerId?: string;
+  },
+): boolean => {
+  const changed = applyReadCursorMutations(cache, input);
+  if (changed) {
+    refreshCacheIndex(cache);
+  }
+  return changed;
+};
+
+/**
+ * Apply a delivered receipt to the matching own-message WITHOUT rebuilding the
+ * cache index. Returns true when a message object was replaced. Delivered state
+ * never changes ordering, so we mutate in place. Callers refresh the index once.
+ */
+export const applyDeliveredReceiptMutation = (
+  cache: ConversationMessagesCache,
+  input: {
+    messageId: string;
+    messageSeq?: number;
+    currentUserId?: string;
+    deliveredAt?: string;
+  },
+): boolean => {
+  if (!input.currentUserId) return false;
+
+  let index = findMessageIdentityIndex(cache.messages, {
+    id: input.messageId,
+    localId: input.messageId,
+    stableId: input.messageId,
+    clientMessageId: input.messageId,
+  });
+  if (index < 0) {
+    index = cache.messages.findIndex((candidate) => {
+      const candidateRecord = candidate as unknown as {
+        messageSeq?: number;
+      };
+      const candidateSeq =
+        typeof candidateRecord.messageSeq === "number" &&
+        Number.isFinite(candidateRecord.messageSeq)
+          ? candidateRecord.messageSeq
+          : typeof candidate.serverSeq === "number" &&
+              Number.isFinite(candidate.serverSeq)
+            ? candidate.serverSeq
+            : null;
+      return (
+        typeof input.messageSeq === "number" &&
+        candidateSeq === input.messageSeq &&
+        candidate.senderId === input.currentUserId
+      );
+    });
+  }
+
+  if (index < 0) return false;
+
+  const message = cache.messages[index];
+  if (message.senderId !== input.currentUserId) return false;
+  if (message.status === MessageStatus.READ) return false;
+  if (message.status === MessageStatus.FAILED || message.sendState === "failed") return false;
+  if (
+    message.status === MessageStatus.SENDING ||
+    message.sendState === "sending" ||
+    message.sendState === "queued" ||
+    message.sendState === "retrying"
+  ) {
+    return false;
+  }
+
+  cache.messages[index] = mergeMessageRecords(message, {
+    ...message,
+    status: MessageStatus.DELIVERED,
+    sendState: "sent",
+    ...(input.deliveredAt
+      ? { deliveredAt: input.deliveredAt as unknown as Date }
+      : {}),
+  });
+  return true;
 };
 
 export const patchDeliveredReceiptInCache = (
@@ -508,57 +640,12 @@ export const patchDeliveredReceiptInCache = (
     currentUserId?: string;
     deliveredAt?: string;
   },
-): void => {
-  if (!input.currentUserId) return;
-
-  const matchingIndex = findMessageIdentityIndex(cache.messages, {
-    id: input.messageId,
-    localId: input.messageId,
-    stableId: input.messageId,
-    clientMessageId: input.messageId,
-  });
-  const message =
-    matchingIndex >= 0
-      ? cache.messages[matchingIndex]
-      : cache.messages.find((candidate) => {
-          const candidateRecord = candidate as unknown as {
-            messageSeq?: number;
-          };
-          const candidateSeq =
-            typeof candidateRecord.messageSeq === "number" &&
-            Number.isFinite(candidateRecord.messageSeq)
-              ? candidateRecord.messageSeq
-              : typeof candidate.serverSeq === "number" &&
-                  Number.isFinite(candidate.serverSeq)
-                ? candidate.serverSeq
-                : null;
-          return (
-            typeof input.messageSeq === "number" &&
-            candidateSeq === input.messageSeq &&
-            candidate.senderId === input.currentUserId
-          );
-        });
-
-  if (!message) return;
-  if (message.senderId !== input.currentUserId) return;
-  if (message.status === MessageStatus.READ) return;
-  if (message.status === MessageStatus.FAILED || message.sendState === "failed") return;
-  if (
-    message.status === MessageStatus.SENDING ||
-    message.sendState === "sending" ||
-    message.sendState === "queued" ||
-    message.sendState === "retrying"
-  ) {
-    return;
+): boolean => {
+  const changed = applyDeliveredReceiptMutation(cache, input);
+  if (changed) {
+    refreshCacheIndex(cache);
   }
-
-  patchMessageInCache(cache, message.id, {
-    status: MessageStatus.DELIVERED,
-    sendState: "sent",
-    ...(input.deliveredAt
-      ? { deliveredAt: input.deliveredAt as unknown as Date }
-      : {}),
-  });
+  return changed;
 };
 
 export const markMessageFailedInCache = (

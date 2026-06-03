@@ -9,16 +9,17 @@ import { MessageStatus } from "../../types";
 import { chatApi } from "../api/chatApi";
 import {
   buildConversationMessagesCache,
-  patchMessageReactionInCache,
-  patchDeliveredReceiptInCache,
   patchMessageInCache,
-  patchReadCursorInCache,
   removeMessageFromCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
 import { useChatStore } from "../../stores";
 import { markChatPerformance } from "../../utils/chatPerformance";
+import {
+  createRealtimeBatchCoordinator,
+  type RealtimeBatchCoordinator,
+} from "./realtimeBatchCoordinator";
 
 export interface RealtimeMessagePayload {
   conversationId: string;
@@ -134,6 +135,29 @@ type RealtimeDispatch = ThunkDispatch<
   unknown,
   UnknownAction
 >;
+
+// Lazily created once the store is available. High-frequency metadata events
+// (delivered/read/reaction) are coalesced here and flushed once per frame.
+let batchCoordinator: RealtimeBatchCoordinator | null = null;
+const getBatchCoordinator = (
+  dispatch: RealtimeDispatch,
+): RealtimeBatchCoordinator => {
+  if (!batchCoordinator) {
+    batchCoordinator = createRealtimeBatchCoordinator(dispatch);
+  }
+  return batchCoordinator;
+};
+
+/** Test/diagnostic seam: flush any pending realtime batch synchronously. */
+export const flushRealtimeBatchesForTest = (): void => {
+  batchCoordinator?.flush();
+};
+
+/** Test seam: reset the module-level coordinator between test cases. */
+export const __resetRealtimeBatchCoordinator = (): void => {
+  batchCoordinator?.dispose();
+  batchCoordinator = null;
+};
 
 export const realtimeMiddleware: Middleware<
   object,
@@ -285,24 +309,11 @@ export const realtimeMiddleware: Middleware<
     }
   }
 
+  // High-frequency metadata events are coalesced per conversation and flushed
+  // once per animation frame (see realtimeBatchCoordinator). This keeps a burst
+  // of N delivered/read/reaction events from triggering N timeline derivations.
   if (realtimeMessageReactionChanged.match(action)) {
-    storeApi.dispatch(
-      chatApi.util.updateQueryData(
-        "getMessages",
-        getMessageQueryArg(action.payload.conversationId),
-        (draft) => {
-          patchMessageReactionInCache(
-            draft,
-            {
-              messageId: action.payload.messageId,
-              emoji: action.payload.emoji,
-              userId: action.payload.userId,
-            },
-            action.payload.action,
-          );
-        },
-      ),
-    );
+    getBatchCoordinator(storeApi.dispatch).enqueueReaction(action.payload);
   }
 
   if (realtimeReadCursorUpdated.match(action)) {
@@ -310,38 +321,12 @@ export const realtimeMiddleware: Middleware<
       action.payload.lastReadMessageId ||
       typeof action.payload.lastReadSeq === "number"
     ) {
-      storeApi.dispatch(
-        chatApi.util.updateQueryData(
-          "getMessages",
-          getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            patchReadCursorInCache(draft, {
-              lastReadMessageId: action.payload.lastReadMessageId,
-              lastReadSeq: action.payload.lastReadSeq,
-              currentUserId: action.payload.currentUserId,
-              readerId: action.payload.readerId,
-            });
-          },
-        ),
-      );
+      getBatchCoordinator(storeApi.dispatch).enqueueReadCursor(action.payload);
     }
   }
 
   if (realtimeMessageDelivered.match(action)) {
-    storeApi.dispatch(
-      chatApi.util.updateQueryData(
-        "getMessages",
-        getMessageQueryArg(action.payload.conversationId),
-        (draft) => {
-          patchDeliveredReceiptInCache(draft, {
-            messageId: action.payload.messageId,
-            messageSeq: action.payload.messageSeq,
-            currentUserId: action.payload.currentUserId,
-            deliveredAt: action.payload.deliveredAt,
-          });
-        },
-      ),
-    );
+    getBatchCoordinator(storeApi.dispatch).enqueueDelivered(action.payload);
   }
 
   return result;
