@@ -6,6 +6,7 @@ export interface UserIdentityCandidate {
   fullName?: string | null;
   full_name?: string | null;
   fullNameFromHR?: string | null;
+  fullNameFromHr?: string | null;
   full_name_from_hr?: string | null;
   fullNameHR?: string | null;
   hrLegalName?: string | null;
@@ -46,6 +47,7 @@ export const resolveUserDisplayName = (
   const displayName = asString(user.displayName) || asString(user.display_name);
   const fullNameFromHr =
     asString(user.fullNameFromHR) ||
+    asString(user.fullNameFromHr) ||
     asString(user.full_name_from_hr) ||
     asString(user.fullNameHR) ||
     asString(user.hrLegalName);
