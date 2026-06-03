@@ -2,6 +2,20 @@ import axios from "axios";
 import type { AxiosInstance } from "axios";
 import { HR_API_BASE_URL } from "../../config";
 import { getAccessToken } from "../../services/tokenService";
+import {
+  compareIdentity,
+  reportAuthIdentityMismatch,
+} from "../../services/authIdentityGuard";
+import { useAuthStore } from "../../stores";
+import { logger } from "../../utils/logger";
+
+/** Raised when the access token's identity does not match the current user. */
+export class AuthIdentityMismatchError extends Error {
+  constructor() {
+    super("AUTH_IDENTITY_MISMATCH: access token does not match current user");
+    this.name = "AuthIdentityMismatchError";
+  }
+}
 
 /**
  * HR API client for accessing HRM data (attendance, employee info)
@@ -17,13 +31,44 @@ const createHrApiClient = (): AxiosInstance => {
     },
   });
 
-  // Request interceptor to add auth token
+  // Request interceptor: attach the freshest token AND verify it belongs to the
+  // current user. The HR/calendar 401 is the canary for cross-account token
+  // contamination (shared-localStorage refresh token overwritten by another
+  // tab → stale tab refreshes into another user's session). Sending that token
+  // would silently act as the wrong user, so we block it and force a clean
+  // re-login instead.
   client.interceptors.request.use(
     (config) => {
       const token = getAccessToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      if (!token) {
+        return config;
       }
+
+      const user = useAuthStore.getState().user;
+      const identity = compareIdentity(token, user);
+
+      if (import.meta.env.DEV) {
+        // Dev-only, never logs the raw token.
+        logger.debug("hr-api", "auth_identity_check", {
+          userEmail: identity.userEmail,
+          tokenEmail: identity.tokenEmail,
+          tokenAuthUserId: identity.tokenAuthUserId,
+          userId: identity.userId,
+          mismatch: identity.mismatch,
+          baseURL: HR_API_BASE_URL,
+        });
+      }
+
+      if (identity.mismatch) {
+        logger.warn("hr-api", "auth_identity_mismatch_blocked", {
+          tokenAuthUserId: identity.tokenAuthUserId,
+          userId: identity.userId,
+        });
+        reportAuthIdentityMismatch(identity);
+        return Promise.reject(new AuthIdentityMismatchError());
+      }
+
+      config.headers.Authorization = `Bearer ${token}`;
       return config;
     },
     (error) => Promise.reject(error)
