@@ -1001,7 +1001,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                 : storeError}
             </p>
             {storeErrorCode !== "FORBIDDEN" &&
-              storeErrorCode !== "UNAUTHORIZED" &&
+              storeErrorCode !== "EMPLOYEE_INACTIVE" &&
               storeErrorCode !== "EMPLOYEE_LINK_REQUIRED" && (
               <div className="mt-1 flex items-center gap-3">
                 <button
