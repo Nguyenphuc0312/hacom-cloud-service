@@ -22,6 +22,7 @@ import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
+import { useReminderStore } from "../../stores/reminderStore";
 
 type SideRailItem = {
   id: string;
@@ -167,6 +168,7 @@ const SideRailButton: React.FC<{
         }
         aria-label={labelWithBadge}
         title={labelWithBadge}
+        onClick={onClick}
       >
         {({ isActive: routeActive }) => {
           const active = routeActive || isActive;
@@ -209,10 +211,20 @@ export const SideRail: React.FC<SideRailProps> = ({
   const friendRequestPendingCount = useFriendshipStore(
     (s) => s.pendingCount,
   );
+  const hasPendingReminder = useReminderStore((s) => s.hasPendingReminder);
+  const activateReminder = useReminderStore((s) => s.activateReminder);
 
   const getBadge = (itemId: string): number | undefined => {
     if (itemId === "messages") return messagesUnreadCount;
     if (itemId === "contacts") return friendRequestPendingCount;
+    if (itemId === "ai-assistant") return hasPendingReminder ? 1 : undefined;
+    return undefined;
+  };
+
+  const getClickHandler = (itemId: string): (() => void) | undefined => {
+    if (itemId === "ai-assistant" && hasPendingReminder) {
+      return () => { activateReminder(); };
+    }
     return undefined;
   };
 
@@ -240,6 +252,7 @@ export const SideRail: React.FC<SideRailProps> = ({
               activeModule === item.id || Boolean(item.activeWhen?.(pathname))
             }
             badge={getBadge(item.id)}
+            onClick={getClickHandler(item.id)}
           />
         ))}
       </nav>

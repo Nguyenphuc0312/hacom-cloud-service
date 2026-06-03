@@ -10,6 +10,7 @@ import {
   dispatchNotificationClick,
   listenForOpenConversation,
 } from "../features/chat/events/chatUiEvents";
+import { useReminderStore } from "../stores/reminderStore";
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
@@ -19,6 +20,21 @@ export const AuthenticatedLayout: React.FC = () => {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+  const checkReminder = useReminderStore((s) => s.checkReminder);
+
+  React.useEffect(() => {
+    checkReminder();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkReminder();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [checkReminder]);
 
   React.useEffect(() => {
     return listenForOpenConversation(({ conversationId, messageId }) => {
