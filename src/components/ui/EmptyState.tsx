@@ -1297,17 +1297,17 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
             </span>
           </h2>
           <div className="mt-3 flex justify-center">
-            <button
-              type="button"
+            <a
+              href="https://chat.hacomholdings.com.vn/desktop-releases/HACOM-Chat-Setup-latest.exe"
+              download
               className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
               style={{
                 boxShadow: "0 2px 8px rgba(196, 30, 58, 0.35), 0 1px 3px rgba(255, 200, 87, 0.3)",
               }}
-              onClick={() => window.open("https://drive.google.com/drive/u/2/folders/1sHWGuyh8oU70KfiqK5x_q3fBV4xhPE0u", "_blank")}
             >
               <ComputerDesktopIcon className="h-5 w-5 shrink-0" />
               {t("common:emptyState.downloadPC")}
-            </button>
+            </a>
           </div>
         </div>
 
