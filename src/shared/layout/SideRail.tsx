@@ -23,6 +23,7 @@ import { ROUTE_PATHS } from "../../router/paths";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useReminderStore } from "../../stores/reminderStore";
+import { useChatUiStore } from "../../features/chat/state/chatUiStore";
 
 type SideRailItem = {
   id: string;
@@ -213,6 +214,7 @@ export const SideRail: React.FC<SideRailProps> = ({
   );
   const hasPendingReminder = useReminderStore((s) => s.hasPendingReminder);
   const activateReminder = useReminderStore((s) => s.activateReminder);
+  const setSelectedEndpoint = useChatUiStore((s) => s.setSelectedEndpoint);
 
   const getBadge = (itemId: string): number | undefined => {
     if (itemId === "messages") return messagesUnreadCount;
@@ -222,8 +224,11 @@ export const SideRail: React.FC<SideRailProps> = ({
   };
 
   const getClickHandler = (itemId: string): (() => void) | undefined => {
-    if (itemId === "ai-assistant" && hasPendingReminder) {
-      return () => { activateReminder(); };
+    if (itemId === "ai-assistant") {
+      return () => {
+        setSelectedEndpoint("personal");
+        if (hasPendingReminder) activateReminder();
+      };
     }
     return undefined;
   };
