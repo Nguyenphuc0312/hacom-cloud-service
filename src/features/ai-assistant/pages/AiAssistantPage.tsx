@@ -41,6 +41,8 @@ export const AiAssistantPage: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const openWeeklyReportFilePickerRef = useRef<() => void>(() => {});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
   // Global state
   const {
@@ -68,6 +70,19 @@ export const AiAssistantPage: React.FC = () => {
     : undefined;
 
   const isPersonal = selectedEndpoint === "personal";
+
+  const handleScrollContainer = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
+  }, []);
+
+  // Auto-scroll to bottom on streaming token updates, but only when user is near bottom.
+  useEffect(() => {
+    if (!isAtBottomRef.current) return;
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   /** Helper: chuẩn hoá nội dung message của user khi gửi kèm file. */
   const buildUserMessageContent = useCallback(
@@ -135,6 +150,12 @@ export const AiAssistantPage: React.FC = () => {
 
       addMessage(currentId, userMessage);
       setInputValue("");
+      // User sent a message — always scroll to bottom regardless of current position.
+      isAtBottomRef.current = true;
+      requestAnimationFrame(() => {
+        const el = scrollContainerRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
 
       // Tạo placeholder message cho AI
       const assistantMessageId = crypto.randomUUID();
@@ -436,10 +457,15 @@ export const AiAssistantPage: React.FC = () => {
         {hasMessages && (
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* Scrollable messages */}
-            <div className="flex-1 overflow-y-auto ai-scrollbar">
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScrollContainer}
+              className="flex-1 overflow-y-auto ai-scrollbar"
+            >
               <AiChatPreview
                 messages={messages}
                 isLoading={isLoading}
+                autoScroll={false}
                 onUpdateMessage={(msgId, patch) =>
                   activeConversationId &&
                   updateMessage(activeConversationId, msgId, patch)
