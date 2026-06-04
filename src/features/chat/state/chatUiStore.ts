@@ -94,7 +94,7 @@ export const useChatUiStore = create<ChatUiState>((set) => ({
         composerDraftByConversation: nextDrafts,
       };
     }),
-  selectedEndpoint: (typeof window !== "undefined" && window.sessionStorage.getItem("chat:selectedEndpoint") as "company" | "personal") || "company",
+  selectedEndpoint: (typeof window !== "undefined" && window.sessionStorage.getItem("chat:selectedEndpoint") as "company" | "personal") || "personal",
   setSelectedEndpoint: (endpoint) => {
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("chat:selectedEndpoint", endpoint);

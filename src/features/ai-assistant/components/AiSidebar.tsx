@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
+import { useReminderStore } from "../../../stores/reminderStore";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -30,6 +31,7 @@ export const AiSidebar: React.FC = () => {
   } = useAiAssistantStore();
 
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
+  const hasPendingReminder = useReminderStore((s) => s.hasPendingReminder);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -150,7 +152,12 @@ export const AiSidebar: React.FC = () => {
                 : "text-text-muted hover:text-text-secondary",
             )}
           >
-            <UserCircle2Icon size={14} strokeWidth={2} />
+            <span className="relative">
+              <UserCircle2Icon size={14} strokeWidth={2} />
+              {hasPendingReminder && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-[#FFC857] border border-surface-overlay" aria-hidden="true" />
+              )}
+            </span>
             <span>Cá nhân</span>
           </button>
         </div>
