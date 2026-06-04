@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import clsx from "clsx";
 import { SparklesIcon, BookOpenIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -83,17 +83,37 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const prevLengthRef = useRef(messages.length);
   const { activeConversationId, isSourcePanelOpen } = usePersonalAiStore();
 
   const hasMessages = messages.length > 0;
 
-  // Scroll to bottom on new message or stream token
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
+  }, []);
+
+  // Scroll to bottom when new messages are added (always) or streaming ends while near bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = containerRef.current;
+    if (!el) return;
+    const lengthChanged = prevLengthRef.current !== messages.length;
+    prevLengthRef.current = messages.length;
+    if (lengthChanged) {
+      // New message added — always scroll, reset the "detached" flag.
+      isAtBottomRef.current = true;
+      el.scrollTop = el.scrollHeight;
+    } else if (isAtBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages.length, isStreaming]);
 
   // Scroll to bottom on conversation switch
   useEffect(() => {
+    isAtBottomRef.current = true;
+    prevLengthRef.current = messages.length;
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
@@ -113,6 +133,7 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   return (
     <div
       ref={containerRef}
+      onScroll={handleScroll}
       className="flex-1 overflow-y-auto ai-scrollbar"
     >
       <div className="flex flex-col py-4">

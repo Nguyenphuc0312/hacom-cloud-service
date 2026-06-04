@@ -22,6 +22,8 @@ interface AiChatPreviewProps {
   messages: AiMessage[];
   isLoading?: boolean;
   onUpdateMessage?: (messageId: string, patch: Partial<AiMessage>) => void;
+  /** When false, the component skips auto-scroll (parent owns scrolling). */
+  autoScroll?: boolean;
 }
 
 const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
@@ -58,6 +60,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   messages,
   isLoading = false,
   onUpdateMessage,
+  autoScroll = true,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
@@ -85,8 +88,10 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
       return;
     }
     scrolledWidgetIdRef.current = null;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading, hasInteractiveWidget, lastMsg]);
+    if (autoScroll) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isLoading, hasInteractiveWidget, lastMsg, autoScroll]);
 
   const handleCopy = (message: AiMessage) => {
     navigator.clipboard.writeText(message.content);
