@@ -30,6 +30,7 @@ export function usePersonalChat() {
     setMessageThinkingPhase,
     markMessageError,
     patchMessage,
+    updateServerSessionId,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -210,12 +211,17 @@ export function usePersonalChat() {
       setIsStreaming(true);
 
       const convIdSnapshot = conversationId;
+      // Lấy serverSessionId của conversation hiện tại (null = chưa có session trên backend)
+      const targetConv = conversations.find((c) => c.id === conversationId);
+      const serverSessionId = targetConv?.serverSessionId ?? null;
 
       try {
         const response = await streamPersonalChat(
           {
             question: trimmed,
-            session_id: convIdSnapshot,
+            session_id: serverSessionId,
+            // Báo backend tạo session mới khi chưa có serverSessionId
+            ...(!serverSessionId && { new_conversation: true }),
             employee_code: user?.employeeCode ?? user?.employee_code ?? "",
             employee_name:
               user?.fullNameFromHr ??
@@ -261,6 +267,11 @@ export function usePersonalChat() {
         );
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
+
+        // Cập nhật serverSessionId nếu backend trả về session_id mới
+        if (response.session_id && response.session_id !== serverSessionId) {
+          updateServerSessionId(convIdSnapshot, response.session_id);
+        }
       } catch (err) {
         const content =
           err instanceof PersonalAiError
@@ -281,6 +292,7 @@ export function usePersonalChat() {
     [
       isStreaming,
       activeConversationId,
+      conversations,
       selectedDocumentIds,
       user,
       createConversation,
@@ -290,6 +302,7 @@ export function usePersonalChat() {
       setMessageThinkingPhase,
       markMessageError,
       patchMessage,
+      updateServerSessionId,
     ],
   );
 
@@ -327,13 +340,15 @@ export function usePersonalChat() {
       setIsStreaming(true);
 
       const convIdSnapshot = conversationId;
+      const targetConvForFile = conversations.find((c) => c.id === conversationId);
+      const fileServerSessionId = targetConvForFile?.serverSessionId ?? null;
 
       try {
         const response = await uploadPersonalWeeklyReport(
           file,
           {
             question: trimmed,
-            session_id: convIdSnapshot,
+            session_id: fileServerSessionId ?? undefined,
             employee_code: user?.employeeCode ?? user?.employee_code ?? "",
             employee_name:
               user?.fullNameFromHr ??
@@ -363,6 +378,10 @@ export function usePersonalChat() {
             citation_index: s.citation_index,
           }));
         finalizeMessage(convIdSnapshot, answerText, citations);
+
+        if (response.session_id && response.session_id !== fileServerSessionId) {
+          updateServerSessionId(convIdSnapshot, response.session_id);
+        }
       } catch (err) {
         const content =
           err instanceof AiApiError
@@ -387,11 +406,13 @@ export function usePersonalChat() {
     [
       isStreaming,
       activeConversationId,
+      conversations,
       user,
       createConversation,
       addMessage,
       finalizeMessage,
       markMessageError,
+      updateServerSessionId,
     ],
   );
 

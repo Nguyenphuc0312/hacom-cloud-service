@@ -406,7 +406,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
 
           <div
             className={clsx(
-              "min-w-0",
+              "min-w-0 relative",
               isOwn ? "items-end" : "items-start",
               "flex max-w-[var(--chat-bubble-max)] flex-col",
               shouldAnimateInsert && "motion-message-insert",
@@ -464,27 +464,27 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     />
                   </MessageSurface>
                 </div>
-
-                {/* Reaction pill neo vào góc dưới của bubble */}
-                {message.reactions && message.reactions.length > 0 && (
-                  <div
-                    className={clsx(
-                      "absolute bottom-0 translate-y-1/2 z-10",
-                      isOwn ? "right-0" : "left-0",
-                    )}
-                  >
-                    <ReactionBar
-                      reactions={message.reactions}
-                      currentUserId={currentUserId}
-                      isOutgoing={isOwn}
-                      onReact={handleReactionSelect}
-                      onToggleReaction={handleReactionToggle}
-                      conversationId={message.conversationId}
-                    />
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Reaction pill neo vào góc dưới của bubble */}
+            {message.reactions && message.reactions.length > 0 && (
+              <div
+                className={clsx(
+                  "absolute bottom-0 translate-y-1/2 z-10 pointer-events-auto",
+                  isOwn ? "right-0" : "left-0",
+                )}
+              >
+                <ReactionBar
+                  reactions={message.reactions}
+                  currentUserId={currentUserId}
+                  isOutgoing={isOwn}
+                  onReact={handleReactionSelect}
+                  onToggleReaction={handleReactionToggle}
+                  conversationId={message.conversationId}
+                />
+              </div>
+            )}
 
             {showMeta && (
               <MessageMeta

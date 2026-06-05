@@ -1025,3 +1025,45 @@ export async function fetchDepartments(
   const response = await aiGetRequest(`${WORK_REPORTS_URL}/departments`, options);
   return response.json() as Promise<DepartmentsResponse>;
 }
+
+// ---------------------------------------------------------------------------
+// Personal Sessions API
+// ---------------------------------------------------------------------------
+
+export interface PersonalSession {
+  session_id: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface PersonalSessionsResponse {
+  sessions: PersonalSession[];
+}
+
+/**
+ * GET /api/personal/sessions — lấy danh sách session AI cá nhân của user.
+ * Dùng sau đăng nhập để tải lịch sử chat theo tài khoản thay vì localStorage.
+ */
+export async function fetchPersonalSessions(
+  employeeCode: string,
+  options?: { signal?: AbortSignal },
+): Promise<PersonalSessionsResponse> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/personal/sessions`,
+    {
+      method: "GET",
+      headers: { "X-Employee-Code": employeeCode },
+    },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    throw new AiApiError(response.status, "http");
+  }
+  const data = await response.json() as Record<string, unknown>;
+  if (Array.isArray(data?.sessions)) {
+    return data as unknown as PersonalSessionsResponse;
+  }
+  return { sessions: [] };
+}
