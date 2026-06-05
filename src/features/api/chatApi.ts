@@ -488,8 +488,10 @@ export const chatApi = createApi({
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
-            // API expects string[] of userIds
-            mentions: input.mentions?.map((m) => m.userId),
+            // API expects string[] of valid user GUIDs — exclude special "all" token
+            mentions: input.mentions
+              ?.filter((m) => m.userId !== "all")
+              .map((m) => m.userId),
             attachments: input.attachments,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };

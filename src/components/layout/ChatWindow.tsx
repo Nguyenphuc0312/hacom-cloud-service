@@ -48,6 +48,7 @@ import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getConversationDisplayName } from "../../utils/messageHelpers";
+import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
@@ -947,7 +948,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
       ? conversation.participants
       : [];
 
-    return participants
+    const individualCandidates = participants
       .filter((participant) => participant.id !== currentUser.id)
       .map((participant) => {
         const participantRecord = participant as unknown as Record<
@@ -992,7 +993,21 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           resolvedName,
         };
       });
-  }, [conversation.participants, currentUser.id]);
+
+    // Add @all candidate for group conversations (non-direct/private)
+    if (!isDirectConversation(conversation) && individualCandidates.length >= 1) {
+      return [
+        {
+          id: "all",
+          username: "all",
+          displayName: "all",
+        },
+        ...individualCandidates,
+      ];
+    }
+
+    return individualCandidates;
+  }, [conversation, currentUser.id]);
 
   // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
   React.useLayoutEffect(() => {
