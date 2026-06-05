@@ -23,6 +23,7 @@ export interface AiSource {
 export interface AiChatRequest {
   question: string;
   session_id: string | null;
+  new_conversation?: boolean;
   user_id?: string;
   user_name?: string;
   employee_code?: string;
@@ -130,4 +131,6 @@ export interface AiConversation {
   createdAt: Date;
   updatedAt: Date;
   isPinned?: boolean;
+  /** Session ID do backend cấp. null = chưa gửi message nào lên backend. */
+  serverSessionId?: string | null;
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { PersonalAiSidebar } from "../components/layout/PersonalAiSidebar";
 import { SourceHubPanel } from "../components/source-hub/SourceHubPanel";
@@ -8,6 +8,8 @@ import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceH
 import { usePersonalChat } from "../hooks/usePersonalChat";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
+import { useAuthStore } from "../../../stores/authStore";
+import { fetchPersonalSessions } from "../../ai-assistant/services/aiChatApi";
 import { toast } from "../../../utils/toast";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -24,6 +26,27 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const { messages, isStreaming, sendMessage, sendWithFile, stopStreaming } = usePersonalChat();
   const { isRagMode } = usePersonalDocuments();
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
+  const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
+  const user = useAuthStore((s) => s.user);
+
+  // Sau khi mount: tải danh sách session từ backend để lịch sử đi theo tài khoản
+  useEffect(() => {
+    const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
+    if (!employeeCode) return;
+
+    const ac = new AbortController();
+    fetchPersonalSessions(employeeCode, { signal: ac.signal })
+      .then(({ sessions }) => {
+        if (sessions.length > 0) {
+          loadServerSessions(sessions, employeeCode);
+        }
+      })
+      .catch(() => {
+        // Silent — dùng localStorage fallback nếu không kết nối được
+      });
+    return () => ac.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.employeeCode, user?.employee_code]);
 
   const [inputValue, setInputValue] = React.useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);

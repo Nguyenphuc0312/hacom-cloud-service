@@ -9,6 +9,7 @@ import {
   invalidateWeeklyReportFilenameCache,
   AiApiError,
 } from "../services/aiChatApi";
+import { useAiChatSessions } from "../hooks/useAiChatQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
@@ -53,8 +54,29 @@ export const AiAssistantPage: React.FC = () => {
     updateMessage,
     setThinking,
     createNewConversation,
+    loadServerSessions,
+    updateServerSessionId,
   } = useAiAssistantStore();
   const { selectedEndpoint } = useChatUiStore();
+
+  // Tải company sessions từ backend để lịch sử chat đi theo tài khoản
+  const { data: companySessions } = useAiChatSessions();
+  useEffect(() => {
+    if (!companySessions || companySessions.length === 0) return;
+    const ownerId = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
+    if (!ownerId) return;
+    loadServerSessions(
+      companySessions.map((s) => ({
+        session_id: s.id,
+        title: s.title,
+        created_at: s.createdAt,
+        updated_at: s.updatedAt,
+      })),
+      "company",
+      ownerId,
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companySessions, user?.employeeCode, user?.employee_code, user?.id]);
 
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId && c.endpoint === selectedEndpoint,
@@ -237,11 +259,18 @@ export const AiAssistantPage: React.FC = () => {
           setWeeklyReportsRefreshKey((k) => k + 1);
         } else {
           const isCompany = selectedEndpoint === "company";
+          const currentConv = conversations.find((c) => c.id === currentId);
+          const serverSessionId = currentConv?.serverSessionId ?? null;
+
           const request: any = {
             question: trimmed,
-            session_id: currentId || "",
+            session_id: serverSessionId,
             department: user?.departmentName || "",
           };
+
+          if (!serverSessionId) {
+            request.new_conversation = true;
+          }
 
           if (isCompany) {
             request.user_id = user?.id || "";
@@ -287,6 +316,11 @@ export const AiAssistantPage: React.FC = () => {
               isStreaming: false,
             });
           }
+
+          // Cập nhật serverSessionId nếu backend trả về session_id mới
+          if (response.session_id && response.session_id !== serverSessionId && currentId) {
+            updateServerSessionId(currentId, response.session_id);
+          }
         }
       } catch (err) {
         const content = describeApiError(err, t("chat.errorNetwork"));
@@ -326,6 +360,7 @@ export const AiAssistantPage: React.FC = () => {
       updateMessage,
       setThinking,
       createNewConversation,
+      updateServerSessionId,
       buildUserMessageContent,
       resolvePersonalSessionId,
       describeApiError,

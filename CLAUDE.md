@@ -63,7 +63,7 @@ main.tsx
 **Luồng realtime:** WebSocket event → `useWebSocket` + register handlers (`features/chat/realtime/register*Events.ts`) → dispatch Redux action (`realtimeMessageReceived`,…) → `realtimeMiddleware` patch trực tiếp vào RTK Query cache qua `messageMerge.ts` helpers. Một số state (sidebar preview, typing) sync vào Zustand `chatStore`.
 
 **Luồng gửi tin:** `useSendMessage` / `sendMessage` usecase → optimistic message vào cache → `messageApi.sendMessage` → ack thay thế optimistic bằng message thật (đối chiếu qua `clientMessageId`).
-
+to
 ---
 
 ## 3. Cấu trúc thư mục

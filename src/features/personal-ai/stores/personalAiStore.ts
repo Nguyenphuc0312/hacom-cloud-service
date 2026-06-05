@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { PersonalDocument, PersonalChatMessage } from "../types";
+import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface PersonalWorkspaceConversation {
   id: string;
@@ -9,6 +10,15 @@ interface PersonalWorkspaceConversation {
   createdAt: string;
   updatedAt: string;
   isPinned?: boolean;
+  /** Session ID do backend cấp. null = chưa gửi message nào lên backend. */
+  serverSessionId?: string | null;
+}
+
+interface ServerSessionInput {
+  session_id: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface PersonalAiState {
@@ -20,6 +30,8 @@ interface PersonalAiState {
   // Conversations
   conversations: PersonalWorkspaceConversation[];
   activeConversationId: string | null;
+  /** employee_code của tài khoản sở hữu dữ liệu trong store (để phát hiện đổi account). */
+  ownerId: string | null;
 
   // UI
   isSourcePanelOpen: boolean;
@@ -55,6 +67,12 @@ interface PersonalAiState {
   patchMessage: (conversationId: string, messageId: string, patch: Partial<PersonalChatMessage>) => void;
   renameConversation: (id: string, title: string) => void;
   togglePinConversation: (id: string) => void;
+  /** Nạp danh sách session từ backend vào store (giữ messages đã có, clear nếu đổi account). */
+  loadServerSessions: (sessions: ServerSessionInput[], ownerId: string) => void;
+  /** Cập nhật serverSessionId sau khi backend trả về session_id mới. */
+  updateServerSessionId: (localId: string, serverSessionId: string) => void;
+  /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
+  clearStore: () => void;
 }
 
 export const usePersonalAiStore = create<PersonalAiState>()(
@@ -65,6 +83,7 @@ export const usePersonalAiStore = create<PersonalAiState>()(
       documentsLoaded: false,
       conversations: [],
       activeConversationId: null,
+      ownerId: null,
       isSourcePanelOpen: false,
 
       toggleSourcePanel: () =>
@@ -297,6 +316,80 @@ export const usePersonalAiStore = create<PersonalAiState>()(
             c.id === id ? { ...c, isPinned: !c.isPinned } : c,
           ),
         })),
+
+      loadServerSessions: (sessions, ownerId) => {
+        set((s) => {
+          // Đổi tài khoản trên cùng máy → xoá hết dữ liệu cũ
+          const baseConversations =
+            s.ownerId && s.ownerId !== ownerId ? [] : s.conversations;
+
+          const existingByServerId = new Map<string, PersonalWorkspaceConversation>();
+          for (const c of baseConversations) {
+            if (c.serverSessionId) {
+              existingByServerId.set(c.serverSessionId, c);
+            }
+          }
+
+          const serverConvs: PersonalWorkspaceConversation[] = sessions.map((session) => {
+            const existing = existingByServerId.get(session.session_id);
+            if (existing) {
+              return {
+                ...existing,
+                title: session.title || existing.title,
+                updatedAt: session.updated_at || existing.updatedAt,
+              };
+            }
+            const now = new Date().toISOString();
+            return {
+              id: session.session_id,
+              title: session.title || "Cuộc trò chuyện",
+              messages: [],
+              createdAt: session.created_at || now,
+              updatedAt: session.updated_at || now,
+              serverSessionId: session.session_id,
+            };
+          });
+
+          const localOnly = baseConversations.filter((c) => !c.serverSessionId);
+          const merged = [...serverConvs, ...localOnly];
+          const activeExists = merged.some((c) => c.id === s.activeConversationId);
+          const newActiveId = activeExists
+            ? s.activeConversationId
+            : (serverConvs[0]?.id ?? s.activeConversationId);
+          const didSwitch = newActiveId !== s.activeConversationId;
+
+          return {
+            conversations: merged,
+            activeConversationId: newActiveId,
+            ownerId,
+            // Dọn tài liệu chỉ khi đổi conversation (giống setActiveConversation)
+            ...(didSwitch && {
+              documents: [],
+              selectedDocumentIds: [],
+              documentsLoaded: false,
+            }),
+          };
+        });
+      },
+
+      updateServerSessionId: (localId, serverSessionId) => {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === localId ? { ...c, serverSessionId } : c,
+          ),
+        }));
+      },
+
+      clearStore: () => {
+        set({
+          conversations: [],
+          activeConversationId: null,
+          ownerId: null,
+          documents: [],
+          selectedDocumentIds: [],
+          documentsLoaded: false,
+        });
+      },
     }),
     {
       name: "hacom-personal-ai-workspace",
@@ -305,7 +398,12 @@ export const usePersonalAiStore = create<PersonalAiState>()(
         selectedDocumentIds: s.selectedDocumentIds,
         conversations: s.conversations,
         activeConversationId: s.activeConversationId,
+        ownerId: s.ownerId,
       }),
     },
   ),
 );
+
+registerStoreResetter("personal-ai", () => {
+  usePersonalAiStore.getState().clearStore();
+});
