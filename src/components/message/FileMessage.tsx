@@ -13,7 +13,7 @@
  */
 
 import React, { useMemo } from "react";
-import type { Attachment } from "../../types";
+import type { Attachment, ImageClickPayload } from "../../types";
 import type { PreviewType } from "../../utils/formatFileSize";
 import {
   getPreviewType,
@@ -34,7 +34,7 @@ interface FileMessageProps {
   /** Called when user wants to preview the file */
   onPreview?: (attachment: Attachment, previewType: PreviewType) => void;
   /** Called when user wants to preview the image (lightbox) */
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   /** Upload progress (0-100) */
   uploadProgress?: number;
   className?: string;

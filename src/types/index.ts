@@ -406,6 +406,8 @@ export interface ToastNotification {
   duration?: number;
 }
 
+export type { ImageClickPayload } from "./imageClick";
+
 export interface SidebarState {
   isCollapsed: boolean;
   activeSection: "chats" | "contacts" | "settings";

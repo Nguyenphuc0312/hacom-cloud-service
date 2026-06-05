@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { PrinterIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import type { WorkReportRecord, WorkReportTaskItem } from "../types";
-import { AI_CHAT_BASE_URL } from "../../../services/ai-chat/constants";
-import { getAccessToken } from "../../../services/tokenService";
 
 interface WorkReportTableProps {
   reports: WorkReportRecord[];
@@ -16,20 +14,15 @@ function formatDateVN(dateStr: string): string {
   return `${d}/${m}/${y}`;
 }
 
-function buildPrintUrl(
-  departments: string[],
-  start: string,
-  end: string,
-): string {
-  const params = new URLSearchParams();
-  for (const dept of departments) {
-    params.append("department", dept.normalize("NFC"));
-  }
-  params.set("start", start);
-  params.set("end", end);
-  return `${AI_CHAT_BASE_URL}/api/work-reports/print?${params.toString()}`;
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
+// notes nằm ở cấp report (r.notes), không phải trong task
 function getTaskList(r: WorkReportRecord): WorkReportTaskItem[] {
   if (r.tasks && r.tasks.length > 0) return r.tasks;
   return [{
@@ -40,7 +33,7 @@ function getTaskList(r: WorkReportRecord): WorkReportTaskItem[] {
   }];
 }
 
-const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[] }> = ({ tasks }) => (
+const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[]; reportNotes?: string }> = ({ tasks, reportNotes }) => (
   <div className="flex flex-col gap-2">
     {tasks.map((t, i) => (
       <div key={i} className={i > 0 ? "pt-2 border-t border-border/40" : ""}>
@@ -65,6 +58,7 @@ const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[] }> = ({ tasks }) =>
             <span className="font-medium">Khó khăn:</span> {t.difficulties}
           </div>
         )}
+        {/* Ghi chú riêng của task này */}
         {t.notes && (
           <div className="mt-0.5 text-xs text-text-secondary whitespace-pre-wrap break-words">
             <span className="font-medium">Ghi chú:</span> {t.notes}
@@ -72,6 +66,12 @@ const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[] }> = ({ tasks }) =>
         )}
       </div>
     ))}
+    {/* Fallback: nếu backend trả notes ở cấp report (dữ liệu cũ) và không có per-task notes */}
+    {reportNotes && !tasks.some((t) => t.notes) && (
+      <div className="mt-1 pt-2 border-t border-border/40 text-xs text-text-secondary whitespace-pre-wrap break-words">
+        <span className="font-medium">Ghi chú:</span> {reportNotes}
+      </div>
+    )}
   </div>
 );
 
@@ -98,13 +98,76 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
       : `${departments.length} phòng ban`;
 
   const handlePrint = () => {
-    const token = getAccessToken();
-    const url = buildPrintUrl(departments, startDate, endDate);
-    const separator = url.includes("?") ? "&" : "?";
-    window.open(
-      token ? `${url}${separator}token=${encodeURIComponent(token)}` : url,
-      "_blank"
-    );
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const dateRange = `${formatDateVN(startDate)} – ${formatDateVN(endDate)}`;
+
+    const tableRows = reports
+      .map((r) => {
+        const tasks = getTaskList(r);
+        const count = tasks.length;
+        return tasks
+          .map((t, ti) => {
+            const isFirst = ti === 0;
+            const rs = count > 1 ? ` rowspan="${count}"` : "";
+            // notes per-task; fallback về report-level notes cho dữ liệu cũ
+            const taskNotes = t.notes || (isFirst && !tasks.some((x) => x.notes) ? r.notes || "" : "");
+            return `<tr>
+              ${isFirst ? `<td${rs}>${escHtml(r.user_name)}<br/><span class="dept">${escHtml(r.department)}</span></td>` : ""}
+              ${isFirst ? `<td${rs} class="nowrap">${formatDateVN(r.date)}</td>` : ""}
+              <td>${count > 1 ? `<b>${ti + 1}.</b> ` : ""}${escHtml(t.task_name || "—")}</td>
+              <td>${escHtml(t.requirements || "")}</td>
+              <td>${escHtml(t.completed || "")}</td>
+              <td>${escHtml(t.difficulties || "")}</td>
+              <td>${escHtml(taskNotes)}</td>
+            </tr>`;
+          })
+          .join("");
+      })
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <title>Báo cáo công việc – ${escHtml(title)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+    h2{text-align:center;font-size:14px;text-transform:uppercase;margin-bottom:4px}
+    .sub{text-align:center;color:#555;font-size:11px;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #bbb;padding:5px 7px;vertical-align:top;word-break:break-word}
+    th{background:#e8eef7;font-size:11px;text-align:left}
+    .dept{color:#666;font-size:10px}
+    .nowrap{white-space:nowrap}
+    @media print{@page{margin:1.5cm}}
+  </style>
+</head>
+<body>
+  <h2>Báo cáo công việc — ${escHtml(title)}</h2>
+  <p class="sub">${escHtml(dateRange)} · ${reports.length} báo cáo</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Nhân viên</th>
+        <th>Ngày</th>
+        <th>Công việc</th>
+        <th>Yêu cầu</th>
+        <th>Đã làm</th>
+        <th>Khó khăn</th>
+        <th>Ghi chú</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+</body>
+</html>`;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 250);
   };
 
   if (reports.length === 0) {
@@ -160,7 +223,8 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
               const isExpanded = expandedRows.has(i);
               const taskCount = tasks.length;
               const firstTask = tasks[0];
-              const firstNotes = firstTask.notes;
+              // Ưu tiên notes của task đầu; fallback về notes cấp report (dữ liệu cũ)
+              const previewNotes = firstTask.notes || r.notes || "";
 
               return (
                 <React.Fragment key={`${r.user_id}-${r.date}-${i}`}>
@@ -190,9 +254,9 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
                           +{taskCount - 1} công việc khác
                         </div>
                       )}
-                      {firstNotes && !isExpanded && (
+                      {previewNotes && !isExpanded && (
                         <div className="mt-0.5 text-xs text-text-secondary truncate max-w-xs">
-                          <span className="font-medium">Ghi chú:</span> {firstNotes}
+                          <span className="font-medium">Ghi chú:</span> {previewNotes}
                         </div>
                       )}
                     </td>
@@ -203,7 +267,7 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
                     <tr className="border-b border-border last:border-b-0 bg-[#1976D2]/3">
                       <td className="px-2 py-1" />
                       <td colSpan={3} className="px-4 py-3">
-                        <ExpandedDetail tasks={tasks} />
+                        <ExpandedDetail tasks={tasks} reportNotes={r.notes} />
                       </td>
                     </tr>
                   )}

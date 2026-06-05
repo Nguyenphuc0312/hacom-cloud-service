@@ -439,23 +439,24 @@ const DrawerMediaTab: React.FC<{
   const overlayItem = showOverlay ? items[DRAWER_MEDIA_PREVIEW - 1] ?? null : null;
   const remainingCount = total - (DRAWER_MEDIA_PREVIEW - 1);
 
-  // Pre-resolve all URLs so the lightbox can navigate between them
+  // Pre-resolve all URLs so the lightbox can navigate between them — include all items so
+  // indices stay stable even when some thumbnails haven't resolved yet.
   const gallery = useMemo(
     () =>
-      visibleItems
-        .map((item) => {
-          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
-          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
-          return { url, alt: item.fileName };
-        })
-        .filter((img) => img.url),
+      visibleItems.map((item) => {
+        const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+        const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+        return { url, alt: item.fileName, fileId: item.fileId };
+      }),
     [visibleItems, thumbnailUrls],
   );
 
   const handleThumbClick = useCallback(
-    (clickedUrl: string) => {
-      const idx = gallery.findIndex((img) => img.url === clickedUrl);
-      onImageOpen(idx >= 0 ? idx : 0, gallery);
+    (clickedFileId: string, clickedUrl: string) => {
+      let idx = gallery.findIndex((img) => img.fileId === clickedFileId);
+      if (idx < 0) idx = gallery.findIndex((img) => img.url === clickedUrl);
+      const galleryForModal = gallery.map(({ url, alt }) => ({ url, alt }));
+      onImageOpen(idx >= 0 ? idx : 0, galleryForModal);
     },
     [gallery, onImageOpen],
   );
@@ -476,7 +477,7 @@ const DrawerMediaTab: React.FC<{
           key={`${item.messageId}-${item.fileId}`}
           item={item}
           fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-          onImageClick={handleThumbClick}
+          onImageClick={(url) => handleThumbClick(item.fileId, url)}
         />
       ))}
       {showOverlay && (

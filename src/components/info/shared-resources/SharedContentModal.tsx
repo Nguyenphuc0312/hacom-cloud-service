@@ -290,23 +290,25 @@ const ModalMediaTab: React.FC<{
     return () => controller.abort();
   }, [itemsKey, items, conversationId]);
 
-  // Pre-resolve all URLs for gallery navigation
+  // Pre-resolve all URLs for gallery navigation — include all items (even those without a
+  // resolved URL yet) so that indices stay stable as thumbnails arrive asynchronously.
   const gallery = useMemo(
     () =>
-      items
-        .map((item) => {
-          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
-          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
-          return { url, alt: item.fileName };
-        })
-        .filter((img) => img.url),
+      items.map((item) => {
+        const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+        const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+        return { url, alt: item.fileName, fileId: item.fileId };
+      }),
     [items, thumbnailUrls],
   );
 
   const handleThumbClick = useCallback(
-    (clickedUrl: string) => {
-      const idx = gallery.findIndex((img) => img.url === clickedUrl);
-      onImageOpen(idx >= 0 ? idx : 0, gallery);
+    (clickedFileId: string, clickedUrl: string) => {
+      // Match by fileId first (stable); fall back to URL comparison
+      let idx = gallery.findIndex((img) => img.fileId === clickedFileId);
+      if (idx < 0) idx = gallery.findIndex((img) => img.url === clickedUrl);
+      const galleryForModal = gallery.map(({ url, alt }) => ({ url, alt }));
+      onImageOpen(idx >= 0 ? idx : 0, galleryForModal);
     },
     [gallery, onImageOpen],
   );
@@ -338,7 +340,7 @@ const ModalMediaTab: React.FC<{
             key={`${item.messageId}-${item.fileId}`}
             item={item}
             fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-            onImageClick={handleThumbClick}
+            onImageClick={(url) => handleThumbClick(item.fileId, url)}
           />
         ))}
       </div>

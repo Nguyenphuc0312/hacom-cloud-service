@@ -13,6 +13,13 @@ interface WorkReportFormProps {
 const TASK_KEYS = ["task_name", "requirements", "completed", "difficulties"] as const;
 type TaskKey = typeof TASK_KEYS[number];
 
+const FIELD_LABELS_VN: Record<string, string> = {
+  task_name: "Tên công việc",
+  requirements: "Yêu cầu",
+  completed: "Đã làm",
+  difficulties: "Khó khăn",
+};
+
 function autoResize(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "auto";
@@ -42,7 +49,6 @@ function initTasks(data: WorkReportFormRequest): WorkReportTaskItem[] {
       notes: t.notes ?? "",
     }));
   }
-  // Backward compat: old flat-field records
   if (data.existing?.task_name) {
     return [{
       task_name: data.existing.task_name,
@@ -57,19 +63,19 @@ function initTasks(data: WorkReportFormRequest): WorkReportTaskItem[] {
 
 export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess, onCancel }) => {
   const allowMultiple = data.allow_multiple_tasks !== false;
-  const showNotes = data.extra_fields?.includes("notes") ?? false;
-  const notesLabel = data.extra_field_labels?.["notes"] ?? "Ghi chú";
 
   const [tasks, setTasks] = useState<WorkReportTaskItem[]>(() => initTasks(data));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const fieldLabel = (key: string) =>
+    data.field_labels?.[key] ?? FIELD_LABELS_VN[key] ?? key;
 
   const handleTaskChange = (idx: number, field: TaskKey | "notes", value: string) => {
     setTasks((prev) => prev.map((row, i) => i === idx ? { ...row, [field]: value } : row));
   };
 
   const addTask = () => setTasks((prev) => [...prev, { ...EMPTY_TASK }]);
-
   const removeTask = (idx: number) => setTasks((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,7 +94,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         department_name: data.department_name,
         org_unit: data.org_unit,
         report_date: data.date,
-        tasks: validTasks,
+        tasks: validTasks,  // notes nằm trong mỗi task
       });
       onSuccess(`✅ Đã lưu báo cáo ngày ${formatDateVN(data.date)}`);
     } catch (err) {
@@ -136,16 +142,16 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
               key={key}
               className="px-3 py-2 text-xs font-medium text-text-secondary border-r border-border bg-surface-overlay/30"
             >
-              {data.field_labels[key] ?? key}
+              {fieldLabel(key)}
             </div>
           ))}
           <div className="bg-surface-overlay/30" />
         </div>
 
-        {/* Task rows */}
+        {/* Task rows — mỗi task có ghi chú riêng */}
         {tasks.map((task, idx) => (
           <div key={idx} className="border-b border-border">
-            {/* Main fields row */}
+            {/* 4 trường chính */}
             <div
               className="grid"
               style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 2rem" }}
@@ -155,7 +161,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
                   <textarea
                     value={task[key]}
                     onChange={(e) => handleTaskChange(idx, key, e.target.value)}
-                    placeholder={data.field_labels[key] ?? key}
+                    placeholder={fieldLabel(key)}
                     rows={3}
                     disabled={isSubmitting}
                     className={textareaClass}
@@ -177,28 +183,26 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
               </div>
             </div>
 
-            {/* Notes sub-row (full width) */}
-            {showNotes && (
-              <div className="border-t border-border/50 px-3 py-1.5 flex items-start gap-2">
-                <span className="text-xs font-medium text-text-secondary whitespace-nowrap pt-1.5 min-w-[3.5rem]">
-                  {notesLabel}:
-                </span>
-                <textarea
-                  value={task.notes ?? ""}
-                  ref={(el) => autoResize(el)}
-                  onChange={(e) => { handleTaskChange(idx, "notes", e.target.value); autoResize(e.target); }}
-                  placeholder={notesLabel}
-                  rows={1}
-                  disabled={isSubmitting}
-                  className={clsx(
-                    "flex-1 resize-none overflow-hidden px-2 py-1 text-sm bg-transparent text-text-primary",
-                    "placeholder:text-text-muted outline-none rounded",
-                    "focus:bg-[#1976D2]/4 transition-colors",
-                    isSubmitting && "opacity-50",
-                  )}
-                />
-              </div>
-            )}
+            {/* Ghi chú riêng của task này */}
+            <div className="border-t border-border/50 px-3 py-1.5 flex items-start gap-2">
+              <span className="text-xs font-medium text-text-secondary whitespace-nowrap pt-1.5 min-w-[3.5rem]">
+                Ghi chú:
+              </span>
+              <textarea
+                value={task.notes ?? ""}
+                ref={(el) => autoResize(el)}
+                onChange={(e) => { handleTaskChange(idx, "notes", e.target.value); autoResize(e.target); }}
+                placeholder="Ghi chú cho công việc này..."
+                rows={1}
+                disabled={isSubmitting}
+                className={clsx(
+                  "flex-1 resize-none overflow-hidden px-2 py-1 text-sm bg-transparent text-text-primary",
+                  "placeholder:text-text-muted outline-none rounded",
+                  "focus:bg-[#1976D2]/4 transition-colors",
+                  isSubmitting && "opacity-50",
+                )}
+              />
+            </div>
           </div>
         ))}
 
@@ -241,7 +245,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
             {TASK_KEYS.map((key) => (
               <div key={key} className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-text-secondary">
-                  {data.field_labels[key] ?? key}
+                  {fieldLabel(key)}
                   {key === "task_name" && <span className="text-danger ml-1">*</span>}
                 </label>
                 <textarea
@@ -254,19 +258,19 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
               </div>
             ))}
 
-            {showNotes && (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-text-secondary">{notesLabel}</label>
-                <textarea
-                  value={task.notes ?? ""}
-                  ref={(el) => autoResize(el)}
-                  onChange={(e) => { handleTaskChange(idx, "notes", e.target.value); autoResize(e.target); }}
-                  rows={1}
-                  disabled={isSubmitting}
-                  className={clsx(textareaClassMobile, "overflow-hidden")}
-                />
-              </div>
-            )}
+            {/* Ghi chú riêng của task (mobile) */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-text-secondary">Ghi chú</label>
+              <textarea
+                value={task.notes ?? ""}
+                ref={(el) => autoResize(el)}
+                onChange={(e) => { handleTaskChange(idx, "notes", e.target.value); autoResize(e.target); }}
+                placeholder="Ghi chú cho công việc này..."
+                rows={1}
+                disabled={isSubmitting}
+                className={clsx(textareaClassMobile, "overflow-hidden")}
+              />
+            </div>
           </div>
         ))}
 

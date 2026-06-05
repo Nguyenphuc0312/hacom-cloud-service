@@ -4,7 +4,7 @@
  * Ensures consistency and maintainability across the message rendering layer
  */
 
-import type { Message, Attachment } from "../../../types";
+import type { Message, Attachment, ImageClickPayload } from "../../../types";
 import type { ConversationTimelineItem } from "../../../features/chat/hooks/useConversationTimelineRows";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
@@ -30,7 +30,7 @@ export interface MessageItemProps {
   ) => void | Promise<void>;
 
   // UI action callbacks
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
 
   // Display settings
@@ -73,7 +73,7 @@ export interface MessageItemContentProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
   isSelectionMode?: boolean;

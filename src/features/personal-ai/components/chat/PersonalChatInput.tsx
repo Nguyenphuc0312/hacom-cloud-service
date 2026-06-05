@@ -2,12 +2,15 @@ import React, {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 import clsx from "clsx";
 import {
   ArrowUpIcon,
   FileTextIcon,
+  HashIcon,
   Loader2Icon,
   PaperclipIcon,
   SquareIcon,
@@ -15,6 +18,40 @@ import {
 } from "lucide-react";
 import { ActiveSourcePills } from "./ActiveSourcePills";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
+
+interface HashCommand {
+  id: string;
+  label: string;
+  description: string;
+  prompt: string;
+}
+
+const HASH_COMMANDS: HashCommand[] = [
+  {
+    id: "congviectuan",
+    label: "#congviectuan",
+    description: "Gửi báo cáo công việc tuần",
+    prompt: "#congviectuan",
+  },
+  {
+    id: "tongcvtuan",
+    label: "#tongcvtuan",
+    description: "Tổng hợp báo cáo tuần",
+    prompt: "#tongcvtuan",
+  },
+  {
+    id: "baocaocongviec",
+    label: "#baocaocongviec",
+    description: "Gửi báo cáo công việc hằng ngày",
+    prompt: "#baocaocongviec",
+  },
+  {
+    id: "baocaocv",
+    label: "#baocaocv",
+    description: "Tổng hợp báo cáo công việc ngày",
+    prompt: "#baocaocv",
+  },
+];
 
 const WEEKLY_REPORT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv";
 
@@ -67,6 +104,48 @@ export const PersonalChatInput = forwardRef<
     const { activeDocuments, isRagMode, handleToggleSource } =
       usePersonalDocuments();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const hashMenuRef = useRef<HTMLDivElement>(null);
+    const [hashMenuOpen, setHashMenuOpen] = useState(false);
+    const [hashQuery, setHashQuery] = useState("");
+    const [hashSelectedIdx, setHashSelectedIdx] = useState(0);
+
+    const filteredHashCommands = useMemo(() => {
+      if (!hashMenuOpen) return [];
+      const q = hashQuery.toLowerCase();
+      if (!q) return HASH_COMMANDS;
+      return HASH_COMMANDS.filter(
+        (cmd) =>
+          cmd.id.toLowerCase().includes(q) ||
+          cmd.description.toLowerCase().includes(q),
+      );
+    }, [hashMenuOpen, hashQuery]);
+
+    const handleSelectHashCommand = useCallback(
+      (cmd: HashCommand) => {
+        setHashMenuOpen(false);
+        setHashQuery("");
+        onChange("");
+        if (ref && "current" in ref && ref.current) {
+          ref.current.style.height = "52px";
+        }
+        onSubmit(cmd.prompt);
+      },
+      [onChange, onSubmit, ref],
+    );
+
+    useEffect(() => {
+      if (!hashMenuOpen) return;
+      const handlePointerDown = (event: MouseEvent) => {
+        if (
+          hashMenuRef.current &&
+          !hashMenuRef.current.contains(event.target as Node)
+        ) {
+          setHashMenuOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handlePointerDown);
+      return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [hashMenuOpen]);
 
     const adjustHeight = useCallback((el: HTMLTextAreaElement) => {
       el.style.height = "auto";
@@ -75,13 +154,51 @@ export const PersonalChatInput = forwardRef<
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        onChange(e.target.value);
+        const newValue = e.target.value;
+        onChange(newValue);
         adjustHeight(e.target);
+
+        const match = newValue.match(/(#\w*)$/);
+        if (match) {
+          setHashQuery(match[1].slice(1));
+          setHashMenuOpen(true);
+          setHashSelectedIdx(0);
+        } else {
+          setHashMenuOpen(false);
+        }
       },
       [onChange, adjustHeight],
     );
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (hashMenuOpen && filteredHashCommands.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHashSelectedIdx((i) => (i + 1) % filteredHashCommands.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHashSelectedIdx(
+            (i) =>
+              (i - 1 + filteredHashCommands.length) %
+              filteredHashCommands.length,
+          );
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+          e.preventDefault();
+          const selected = filteredHashCommands[hashSelectedIdx];
+          if (selected) handleSelectHashCommand(selected);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setHashMenuOpen(false);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const trimmed = value.trim();
@@ -128,7 +245,66 @@ export const PersonalChatInput = forwardRef<
         : "Hỏi bất cứ điều gì…";
 
     return (
-      <div className="w-full">
+      <div className="relative w-full">
+        {/* Hash command dropdown */}
+        {hashMenuOpen && filteredHashCommands.length > 0 && (
+          <div
+            ref={hashMenuRef}
+            role="listbox"
+            aria-label="Lệnh nhanh"
+            className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl"
+          >
+            <div className="px-3 py-2 border-b border-border/50">
+              <span className="text-xs font-medium text-text-muted">Lệnh nhanh</span>
+            </div>
+            {filteredHashCommands.map((cmd, idx) => (
+              <button
+                key={cmd.id}
+                type="button"
+                role="option"
+                aria-selected={idx === hashSelectedIdx}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelectHashCommand(cmd);
+                }}
+                onMouseEnter={() => setHashSelectedIdx(idx)}
+                className={clsx(
+                  "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                  idx === hashSelectedIdx
+                    ? "bg-[#1976D2]/10"
+                    : "hover:bg-surface-hover",
+                )}
+              >
+                <div
+                  className={clsx(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+                    idx === hashSelectedIdx
+                      ? "bg-[#1976D2]/15 text-[#1565C0]"
+                      : "bg-surface-hover text-text-muted",
+                  )}
+                >
+                  <HashIcon size={14} strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={clsx(
+                      "text-sm font-medium",
+                      idx === hashSelectedIdx
+                        ? "text-[#1565C0]"
+                        : "text-text-primary",
+                    )}
+                  >
+                    {cmd.label}
+                  </div>
+                  <div className="text-xs text-text-muted truncate">
+                    {cmd.description}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Source pills row */}
         <div className="mb-2">
           <ActiveSourcePills

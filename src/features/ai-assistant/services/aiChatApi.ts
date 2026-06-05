@@ -929,6 +929,7 @@ export interface WorkReportSubmitBody {
   org_unit?: string;
   report_date: string;
   tasks: WorkReportTaskSubmit[];
+  notes?: string;
 }
 
 export interface WorkReportSubmitResponse {
