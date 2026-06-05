@@ -488,7 +488,7 @@ export const chatApi = createApi({
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
-            // API expects string[] of valid user GUIDs — exclude special "all" token
+            // API expects string[] of valid user GUIDs — exclude "all" until BE deployed
             mentions: input.mentions
               ?.filter((m) => m.userId !== "all")
               .map((m) => m.userId),
