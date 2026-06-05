@@ -29,6 +29,8 @@ interface ImageMessageProps {
   /** Upload progress (0-100) */
   uploadProgress?: number;
   className?: string;
+  /** When true, fills parent container (used in ImageGallery grid cells) */
+  fillContainer?: boolean;
 }
 
 const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
@@ -41,6 +43,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   onClick,
   uploadProgress,
   className,
+  fillContainer = false,
 }) => {
   const { t } = useTranslation();
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
@@ -191,7 +194,8 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const isUploading = uploadProgress !== undefined && uploadProgress < 100;
 
   // Large image with thumbnail (show thumbnail + HD download button)
-  if (isLargeImage && !showHd) {
+  // Skip this UI in gallery/fillContainer mode — show thumbnail directly instead
+  if (isLargeImage && !showHd && !fillContainer) {
     return (
       <div className={clsx("relative", className)}>
         <div
@@ -280,11 +284,14 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   // Normal inline image
   return (
     <>
-      <div className={clsx("relative", className)}>
+      <div className={clsx("relative", fillContainer && "h-full w-full", className)}>
         <div
           ref={containerRef}
-          className="relative overflow-hidden rounded-xl bg-surface-overlay"
-          style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
+          className={clsx(
+            "relative overflow-hidden bg-surface-overlay",
+            fillContainer ? "h-full w-full" : "rounded-xl",
+          )}
+          style={fillContainer ? undefined : { width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >
           {/* Skeleton — only while we're waiting for a real URL or for the image to load.
                Hidden when thumbnail is pending (has its own UI), terminal, or errored. */}
