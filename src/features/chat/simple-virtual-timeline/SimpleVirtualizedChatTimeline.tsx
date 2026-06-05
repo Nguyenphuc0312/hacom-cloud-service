@@ -17,7 +17,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { FileType, type Attachment, type Conversation, type Message } from "../../../types";
+import { FileType, type Attachment, type Conversation, type ImageClickPayload, type Message } from "../../../types";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type { ChatLayoutState } from "../../../utils/densityPolicy";
 import type { UnreadTimelineMarker } from "../../../utils/timelinePlanner";
@@ -47,7 +47,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   ) => void | Promise<void>;
   onInspect?: (message: Message) => void;
   viewerCanRecallOthers?: boolean;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;

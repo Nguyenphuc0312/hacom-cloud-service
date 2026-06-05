@@ -13,7 +13,7 @@ import { StickerMessage } from "../../message/StickerMessage";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
-import type { Attachment, Message } from "../../../types";
+import type { Attachment, ImageClickPayload, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
@@ -33,7 +33,7 @@ interface MessageBodyRendererProps {
   textRenderMode?: LongMessageRenderMode;
   isCollapsibleText?: boolean;
   onToggleTextExpand?: () => void;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
 }
 
@@ -438,6 +438,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                     attachment={attachments[0]}
                     isOwn={isOwn}
                     onClick={onImageClick}
+                    senderName={message.senderName}
+                    senderAvatar={message.senderAvatar}
+                    sentAt={message.serverTs}
                   />
                 )
               : (
@@ -446,6 +449,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                     attachments={attachments}
                     isOwn={isOwn}
                     onImageClick={onImageClick}
+                    senderName={message.senderName}
+                    senderAvatar={message.senderAvatar}
+                    sentAt={message.serverTs}
                   />
                 )}
           {attachments.length > 0 && hasContent

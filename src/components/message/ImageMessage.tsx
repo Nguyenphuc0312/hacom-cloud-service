@@ -11,26 +11,30 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { PhotoIcon, ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
-import type { Attachment } from "../../types";
+import type { Attachment, ImageClickPayload } from "../../types";
 import { useBatchThumbnailUrl, usePreviewUrl } from "../../hooks";
 import { useInViewport } from "../../hooks/useInViewport";
 import { Skeleton } from "../ui";
+import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 
 interface ImageMessageProps {
   conversationId: string;
   attachment: Attachment;
   caption?: string;
   isOwn: boolean;
-  onClick?: (imageUrl: string) => void;
+  onClick?: (payload: ImageClickPayload) => void;
   /** Upload progress (0-100) */
   uploadProgress?: number;
   className?: string;
   /** When true, fills parent container (used in ImageGallery grid cells) */
   fillContainer?: boolean;
+  /** Sender metadata forwarded to the lightbox bottom bar */
+  senderName?: string;
+  senderAvatar?: string;
+  sentAt?: Date | string;
 }
 
 const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
@@ -44,6 +48,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   uploadProgress,
   className,
   fillContainer = false,
+  senderName,
+  senderAvatar,
+  sentAt,
 }) => {
   const { t } = useTranslation();
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
@@ -150,23 +157,35 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     void refreshThumbnail(true);
   }, [refreshThumbnail]);
 
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   const handleImageClick = useCallback(async () => {
     if (onClick) {
-      // Use thumbnail for click if available, otherwise fetch preview
-      if (activeSource) {
-        onClick(activeSource);
-      } else if (previewUrl) {
-        onClick(previewUrl);
-      } else {
-        const url = await fetchPreview();
-        if (url) {
-          onClick(url);
-        }
+      let url = activeSource;
+      if (!url && previewUrl) url = previewUrl;
+      if (!url) url = await fetchPreview();
+      if (url) {
+        onClick({
+          url,
+          alt: attachment.fileName,
+          senderName,
+          senderAvatar,
+          sentAt,
+          conversationId,
+          groupKey: attachment.id,
+        });
       }
     } else {
+      // Open modal immediately with whatever URL we have; upgrade to preview URL async
+      const immediateUrl = previewUrl ?? activeSource ?? null;
+      setLightboxUrl(immediateUrl);
       setShowFullScreen(true);
+      if (!immediateUrl) {
+        const url = await fetchPreview();
+        if (url) setLightboxUrl(url);
+      }
     }
-  }, [activeSource, previewUrl, fetchPreview, onClick]);
+  }, [activeSource, previewUrl, fetchPreview, onClick, attachment.fileName, attachment.id, senderName, senderAvatar, sentAt, conversationId]);
 
   const handleLoadHd = useCallback(async () => {
     setShowHd(true);
@@ -177,6 +196,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 
   const handleClose = useCallback(() => {
     setShowFullScreen(false);
+    setLightboxUrl(null);
   }, []);
 
   const handleImageError = useCallback(() => {
@@ -419,185 +439,18 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
         )}
       </div>
 
-      {/* Fullscreen lightbox */}
-      {showFullScreen && (
-        <ImageLightbox
-          conversationId={conversationId}
-          attachment={attachment}
-          onClose={handleClose}
-        />
-      )}
+      {/* Fullscreen lightbox — uses the same ImagePreviewModal as the media gallery */}
+      <ImagePreviewModal
+        isOpen={showFullScreen && lightboxUrl !== null}
+        onClose={handleClose}
+        imageUrl={lightboxUrl ?? undefined}
+        alt={attachment.fileName}
+        senderName={senderName}
+        senderAvatar={senderAvatar}
+        sentAt={sentAt}
+      />
     </>
   );
-};
-
-/**
- * Phase 02: Lightbox component that fetches preview URL on demand
- */
-interface ImageLightboxProps {
-  conversationId: string;
-  attachment: Attachment;
-  onClose: () => void;
-}
-
-const ImageLightbox: React.FC<ImageLightboxProps> = ({
-  conversationId,
-  attachment,
-  onClose,
-}) => {
-  const { t } = useTranslation();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const { url: previewUrl, fetchUrl: fetchPreview } = usePreviewUrl(
-    conversationId,
-    attachment.id,
-  );
-
-  // ESC to close
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  // Lock body scroll - use isMounted pattern to ensure cleanup only on unmount
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  useEffect(() => {
-    const loadImage = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const url = previewUrl || await fetchPreview();
-        setImageUrl(url);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load image');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadImage();
-  }, [previewUrl, fetchPreview]);
-
-  const handleDownload = useCallback(async () => {
-    if (!imageUrl) return;
-    
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${attachment.fileName || 'image'}.${attachment.mimeType?.split('/')[1] || 'jpg'}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      window.open(imageUrl, "_blank");
-    }
-  }, [imageUrl, attachment]);
-
-  // Portal so fixed positioning anchors to viewport regardless of parent transforms
-  const overlay = (
-    <div
-      className="fixed inset-0 flex flex-col"
-      style={{ zIndex: "var(--hc-z-overlay)", backgroundColor: "rgba(0, 0, 0, 0.92)" }}
-      onClick={onClose}
-    >
-      {/* Toolbar */}
-      <div
-        className="flex h-14 shrink-0 items-center justify-between gap-3 px-4"
-        style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="min-w-0 truncate text-sm font-medium text-white/70">
-          {attachment.fileName || t("chat:image.previewAlt")}
-        </span>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {imageUrl && !isLoading && !error && (
-            <button
-              type="button"
-              onClick={() => void handleDownload()}
-              className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/25"
-            >
-              <ArrowDownTrayIcon className="h-4 w-4" />
-              {t("chat:image.downloadOriginal", { defaultValue: "Tải ảnh gốc" })}
-            </button>
-          )}
-          {/* Close — prominent circular background so it's always visible */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("chat:image.close", { defaultValue: "Đóng" })}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 active:bg-white/35"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Image / loading / error */}
-      <div
-        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {isLoading && (
-          <div className="flex flex-col items-center gap-4">
-            <ArrowPathIcon className="h-12 w-12 animate-spin text-white/50" />
-            <span className="text-sm text-white/50">{t("chat:image.loading", { defaultValue: "Đang tải..." })}</span>
-          </div>
-        )}
-        {error && (
-          <div className="flex flex-col items-center gap-4">
-            <PhotoIcon className="h-12 w-12 text-white/40" />
-            <span className="text-sm text-white/50">{error}</span>
-            <button
-              type="button"
-              onClick={() => {
-                setIsLoading(true);
-                setError(null);
-                void fetchPreview()
-                  .then(setImageUrl)
-                  .catch((e: Error) => setError(e.message))
-                  .finally(() => setIsLoading(false));
-              }}
-              className="rounded-full bg-white/15 px-4 py-2 text-sm text-white hover:bg-white/25"
-            >
-              {t("chat:image.retry", { defaultValue: "Thử lại" })}
-            </button>
-          </div>
-        )}
-        {imageUrl && !isLoading && !error && (
-          <img
-            src={imageUrl}
-            alt={attachment.fileName || t("chat:image.previewAlt")}
-            className="max-h-[calc(100dvh-96px)] max-w-[calc(100vw-32px)] select-none object-contain"
-            draggable={false}
-          />
-        )}
-      </div>
-
-      <div className="flex h-9 shrink-0 items-center justify-center">
-        <span className="text-xs text-white/30">
-          {t("chat:image.hint", { defaultValue: "ESC / click ngoài để đóng" })}
-        </span>
-      </div>
-    </div>
-  );
-
-  return createPortal(overlay, document.body);
 };
 
 /**

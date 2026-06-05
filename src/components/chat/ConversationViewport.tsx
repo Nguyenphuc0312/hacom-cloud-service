@@ -1,5 +1,5 @@
 import React from "react";
-import type { Attachment, Conversation, Message } from "../../types";
+import type { Attachment, Conversation, ImageClickPayload, Message } from "../../types";
 import { SimpleVirtualizedChatTimeline } from "../../features/chat/simple-virtual-timeline";
 import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import type { ChatDensity } from "../../stores/uiStore";
@@ -23,7 +23,7 @@ interface ConversationViewportProps {
   isLoadingMessages?: boolean;
   isConversationReady?: boolean;
   onLoadOlderMessages?: () => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density: ChatDensity;
   isSelectionMode: boolean;

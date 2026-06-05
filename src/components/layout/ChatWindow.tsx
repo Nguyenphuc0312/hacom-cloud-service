@@ -29,6 +29,7 @@ import {
 import type {
   Attachment,
   Conversation,
+  ImageClickPayload,
   InputMode,
   Message,
   TypingStatus,
@@ -189,7 +190,7 @@ interface ChatWindowProps {
     isPartial: boolean;
   } | null;
   onLoadOlderMessages?: () => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   messageError?: string | null;
   onRetryMessages?: () => void | Promise<void>;
