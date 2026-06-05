@@ -94,6 +94,8 @@
     "mentionTrigger": "Mention someone",
     "mentionList": "Mention suggestions",
     "noMentionResults": "No matching users",
+    "mentionAllLabel": "Everyone",
+    "mentionAllDescription": "Notify all members",
     "placeholder": "Type @, message to...",
     "dynamicPlaceholder": "Type @, message to {{name}}",
     "messageInput": "Message input",

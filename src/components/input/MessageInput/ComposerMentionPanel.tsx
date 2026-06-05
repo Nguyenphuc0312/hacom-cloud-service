@@ -36,19 +36,23 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
       ) : (
         mentionSuggestions.map((candidate, index) => {
           const isActive = index === activeMentionIndex;
+          const isMentionAll = candidate.id === "all";
+
           // Primary: resolved full name / display name
-          const primaryLabel =
-            candidate.resolvedName ||
-            candidate.displayName ||
-            candidate.fullName ||
-            candidate.username;
+          const primaryLabel = isMentionAll
+            ? t("chat:composer.mentionAllLabel")
+            : (candidate.resolvedName ||
+              candidate.displayName ||
+              candidate.fullName ||
+              candidate.username);
           // Secondary: employee code or username for disambiguation
-          const secondaryLabel =
-            candidate.employeeCode && candidate.employeeCode !== primaryLabel
+          const secondaryLabel = isMentionAll
+            ? t("chat:composer.mentionAllDescription")
+            : (candidate.employeeCode && candidate.employeeCode !== primaryLabel
               ? candidate.employeeCode
               : candidate.username && candidate.username !== primaryLabel
                 ? `@${candidate.username}`
-                : null;
+                : null);
           return (
             <button
               key={`${candidate.id}:${candidate.username}`}
@@ -60,7 +64,9 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
                 "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
                 "transition-colors",
                 isActive
-                  ? "bg-[#1976D2]/10 text-text-primary"
+                  ? isMentionAll
+                    ? "bg-amber-500/10 text-text-primary"
+                    : "bg-[#1976D2]/10 text-text-primary"
                   : "text-text-secondary hover:bg-surface-hover",
               )}
               onMouseDown={(event) => {
@@ -68,7 +74,7 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
                 onSelectMention(candidate);
               }}
             >
-              <span className="truncate text-sm font-medium">
+              <span className={clsx("truncate text-sm font-medium", isMentionAll && "text-amber-600 dark:text-amber-400")}>
                 {primaryLabel}
               </span>
               {secondaryLabel && (

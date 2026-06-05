@@ -94,6 +94,8 @@
     "mentionTrigger": "Nhắc người dùng",
     "mentionList": "Gợi ý người dùng",
     "noMentionResults": "Không tìm thấy người dùng phù hợp",
+    "mentionAllLabel": "Tất cả",
+    "mentionAllDescription": "Thông báo tất cả thành viên",
     "placeholder": "Nhập @, tin nhắn tới...",
     "dynamicPlaceholder": "Nhập @, tin nhắn tới {{name}}",
     "messageInput": "Ô nhập tin nhắn",

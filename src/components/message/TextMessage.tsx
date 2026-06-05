@@ -150,18 +150,21 @@ const renderWithMentions = (
           currentUsername &&
             candidate.toLowerCase() === currentUsername.toLowerCase(),
         );
+    const isMentionAll = resolved?.userId === "all" || candidate.toLowerCase() === "all";
     out.push(
       <span
         key={`m-${key++}`}
         className={clsx(
           "inline rounded px-0.5 font-semibold",
-          isSelfMention
-            ? isOwn
-              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
-              : "bg-[#1976D2]/10 text-[#1565C0]"
-            : isOwn
-              ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
-              : "text-[#1565C0]/80",
+          isMentionAll
+            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+            : isSelfMention
+              ? isOwn
+                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
+                : "bg-[#1976D2]/10 text-[#1565C0]"
+              : isOwn
+                ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
+                : "text-[#1565C0]/80",
         )}
         data-mention-user-id={resolved?.userId}
         title={resolved?.employeeCode || undefined}
