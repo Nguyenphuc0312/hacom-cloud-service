@@ -2,6 +2,7 @@ import React, {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,10 +16,45 @@ import {
   XIcon,
   FolderOpenIcon,
   UploadIcon,
+  HashIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 import { toast } from "../../../utils/toast";
+
+interface HashCommand {
+  id: string;
+  label: string;
+  description: string;
+  prompt: string;
+}
+
+const HASH_COMMANDS: HashCommand[] = [
+  {
+    id: "congviectuan",
+    label: "#congviectuan",
+    description: "Gửi báo cáo công việc tuần",
+    prompt: "Gửi báo cáo công việc tuần",
+  },
+  {
+    id: "tongcvtuan",
+    label: "#tongcvtuan",
+    description: "Tổng hợp báo cáo tuần",
+    prompt: "Tổng hợp báo cáo công việc tuần",
+  },
+  {
+    id: "baocaocongviec",
+    label: "#baocaocongviec",
+    description: "Gửi báo cáo công việc hằng ngày",
+    prompt: "Gửi báo cáo công việc hằng ngày",
+  },
+  {
+    id: "baocaocv",
+    label: "#baocaocv",
+    description: "Tổng hợp báo cáo công việc ngày",
+    prompt: "Tổng hợp báo cáo công việc ngày",
+  },
+];
 
 interface AiPromptBoxProps {
   value: string;
@@ -90,8 +126,15 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
     const { t } = useTranslation("aiAssistant");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
+    const hashMenuRef = useRef<HTMLDivElement>(null);
     const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+    const [hashMenuOpen, setHashMenuOpen] = useState(false);
+    const [hashQuery, setHashQuery] = useState("");
+    const [hashSelectedIdx, setHashSelectedIdx] = useState(0);
     const attachDisabled = isLoading || isUploading || !!pendingAttachment;
+
+    const { selectedEndpoint } = useChatUiStore();
+    const isCompany = selectedEndpoint === "company";
 
     /** Tự điều chỉnh chiều cao textarea */
     const adjustHeight = useCallback((textarea: HTMLTextAreaElement) => {
@@ -139,6 +182,20 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       return () => document.removeEventListener("mousedown", handlePointerDown);
     }, [attachMenuOpen]);
 
+    useEffect(() => {
+      if (!hashMenuOpen) return;
+      const handlePointerDown = (event: MouseEvent) => {
+        if (
+          hashMenuRef.current &&
+          !hashMenuRef.current.contains(event.target as Node)
+        ) {
+          setHashMenuOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handlePointerDown);
+      return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, [hashMenuOpen]);
+
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         const fileList = e.target.files;
@@ -162,15 +219,80 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       [onAttachFiles],
     );
 
+    const filteredHashCommands = useMemo(() => {
+      if (!hashMenuOpen) return [];
+      const q = hashQuery.toLowerCase();
+      if (!q) return HASH_COMMANDS;
+      return HASH_COMMANDS.filter(
+        (cmd) =>
+          cmd.id.toLowerCase().includes(q) ||
+          cmd.description.toLowerCase().includes(q),
+      );
+    }, [hashMenuOpen, hashQuery]);
+
+    const handleSelectHashCommand = useCallback(
+      (cmd: HashCommand) => {
+        setHashMenuOpen(false);
+        setHashQuery("");
+        // Clear input and immediately submit the command prompt
+        onChange("");
+        if (ref && "current" in ref && ref.current) {
+          ref.current.style.height = "52px";
+        }
+        onSubmit(cmd.prompt);
+      },
+      [onChange, onSubmit, ref],
+    );
+
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        onChange(e.target.value);
+        const newValue = e.target.value;
+        onChange(newValue);
         adjustHeight(e.target);
+
+        if (!isCompany) {
+          const match = newValue.match(/(#\w*)$/);
+          if (match) {
+            setHashQuery(match[1].slice(1));
+            setHashMenuOpen(true);
+            setHashSelectedIdx(0);
+          } else {
+            setHashMenuOpen(false);
+          }
+        }
       },
-      [onChange, adjustHeight],
+      [onChange, adjustHeight, isCompany],
     );
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (hashMenuOpen && filteredHashCommands.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHashSelectedIdx((i) => (i + 1) % filteredHashCommands.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHashSelectedIdx(
+            (i) =>
+              (i - 1 + filteredHashCommands.length) %
+              filteredHashCommands.length,
+          );
+          return;
+        }
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          const selected = filteredHashCommands[hashSelectedIdx];
+          if (selected) handleSelectHashCommand(selected);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setHashMenuOpen(false);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (value.trim() && !isLoading && !isUploading) {
@@ -184,8 +306,6 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     const hasText = value.trim().length > 0;
     const canSend = hasText && !isLoading && !isUploading;
-    const { selectedEndpoint } = useChatUiStore();
-    const isCompany = selectedEndpoint === "company";
     const textareaDisabled = isLoading || isUploading;
 
     const placeholder = pendingAttachment
@@ -196,6 +316,65 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     return (
       <div className="relative w-full">
+        {/* Hash command dropdown */}
+        {hashMenuOpen && filteredHashCommands.length > 0 && (
+          <div
+            ref={hashMenuRef}
+            role="listbox"
+            aria-label="Lệnh nhanh"
+            className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl"
+          >
+            <div className="px-3 py-2 border-b border-border/50">
+              <span className="text-xs font-medium text-text-muted">Lệnh nhanh</span>
+            </div>
+            {filteredHashCommands.map((cmd, idx) => (
+              <button
+                key={cmd.id}
+                type="button"
+                role="option"
+                aria-selected={idx === hashSelectedIdx}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelectHashCommand(cmd);
+                }}
+                onMouseEnter={() => setHashSelectedIdx(idx)}
+                className={clsx(
+                  "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                  idx === hashSelectedIdx
+                    ? "bg-[#1976D2]/10"
+                    : "hover:bg-surface-hover",
+                )}
+              >
+                <div
+                  className={clsx(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+                    idx === hashSelectedIdx
+                      ? "bg-[#1976D2]/15 text-[#1565C0]"
+                      : "bg-surface-hover text-text-muted",
+                  )}
+                >
+                  <HashIcon size={14} strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={clsx(
+                      "text-sm font-medium",
+                      idx === hashSelectedIdx
+                        ? "text-[#1565C0]"
+                        : "text-text-primary",
+                    )}
+                  >
+                    {cmd.label}
+                  </div>
+                  <div className="text-xs text-text-muted truncate">
+                    {cmd.description}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="relative flex flex-col rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-[#1976D2]/60 focus-within:ring-2 focus-within:ring-[#1976D2]/15 focus-within:shadow-md">
           {/* Attachment chip (above textarea) */}
           {pendingAttachment && (

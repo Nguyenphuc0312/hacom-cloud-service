@@ -8,9 +8,14 @@ import {
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import type { PersonalChatMessage } from "../types";
-import type { DepartmentSelectionRequest } from "../../ai-assistant/types";
+import type {
+  DepartmentSelectionRequest,
+  WorkReportFormRequest,
+} from "../../ai-assistant/types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
+const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
+const TONGCVTUAN_TRIGGER = /^#tongcvtuan\s*$/i;
 
 export function usePersonalChat() {
   const user = useAuthStore((s) => s.user);
@@ -76,7 +81,99 @@ export function usePersonalChat() {
           }));
           const selectionData: DepartmentSelectionRequest = {
             selection_type: "department_report",
-            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc:",
+            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc ngày:",
+            options,
+            multi_select: true,
+            date_range: true,
+            fetch_endpoint: "GET /api/work-reports",
+          };
+          patchMessage(convIdSnapshot, assistantId, {
+            content: "",
+            selectionRequest: selectionData,
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+        } catch {
+          patchMessage(convIdSnapshot, assistantId, {
+            content: "Không thể tải danh sách phòng ban. Vui lòng thử lại.",
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+        }
+        return;
+      }
+
+      // Detect #baocaocongviec — FE trực tiếp hiển thị form báo cáo công việc ngày
+      if (BAOCAOCONGVIEC_TRIGGER.test(trimmed)) {
+        const assistantId = crypto.randomUUID();
+        addMessage(conversationId, {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          isStreaming: false,
+          thinkingPhase: null,
+        });
+        const today = new Date().toISOString().split("T")[0];
+        const formData: WorkReportFormRequest = {
+          form_type: "daily_work_report",
+          date: today,
+          employee_code: user?.employeeCode ?? user?.employee_code ?? "",
+          employee_name:
+            user?.fullNameFromHr ??
+            user?.fullNameFromHR ??
+            user?.displayName ??
+            user?.username ??
+            "",
+          department_name: user?.departmentName ?? "",
+          org_unit: user?.orgUnit ?? "",
+          allow_multiple_tasks: true,
+          fields: ["task_name", "requirements", "completed", "difficulties"],
+          field_labels: {
+            task_name: "Tên công việc",
+            requirements: "Yêu cầu",
+            completed: "Đã làm được",
+            difficulties: "Khó khăn",
+          },
+          extra_fields: ["notes"],
+          extra_field_labels: { notes: "Ghi chú" },
+          existing: null,
+          submit_endpoint: "/api/work-reports",
+        };
+        patchMessage(conversationId, assistantId, {
+          content: "",
+          formRequest: formData,
+          isStreaming: false,
+          thinkingPhase: null,
+        });
+        return;
+      }
+
+      // Detect #tongcvtuan — FE tự xử lý, hiển thị chọn phòng ban xem báo cáo tuần
+      if (TONGCVTUAN_TRIGGER.test(trimmed)) {
+        const assistantId = crypto.randomUUID();
+        const loadingMsg: PersonalChatMessage = {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          isStreaming: true,
+          thinkingPhase: "searching",
+        };
+        addMessage(conversationId, loadingMsg);
+        const convIdSnapshot = conversationId;
+        try {
+          const res = await fetchDepartments();
+          const options = (res.departments ?? []).map((d) => ({
+            label: d.department,
+            value: d.department,
+            type: "department",
+            company: d.company,
+            count: d.count,
+          }));
+          const selectionData: DepartmentSelectionRequest = {
+            selection_type: "department_report",
+            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc tuần:",
             options,
             multi_select: true,
             date_range: true,
