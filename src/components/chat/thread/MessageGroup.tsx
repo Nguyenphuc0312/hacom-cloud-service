@@ -17,7 +17,7 @@ import {
   FaceSmileIcon,
   MusicalNoteIcon,
 } from "@heroicons/react/24/outline";
-import type { Attachment, Message } from "../../../types";
+import type { Attachment, ImageClickPayload, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import { resolvePublicResourceUrl } from "../../../config";
 import { useChatStore, useAuthStore } from "../../../stores";
@@ -91,7 +91,7 @@ interface MessageGroupProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
   isSelectionMode?: boolean;
@@ -203,7 +203,7 @@ const MessageGroupItem: React.FC<{
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode: boolean;
   isSelected: boolean;

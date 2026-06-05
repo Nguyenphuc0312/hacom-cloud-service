@@ -37,7 +37,7 @@ import {
   useFriendshipStore,
 } from "../stores";
 import { useGlobalWebSocket } from "../features/realtime/GlobalWebSocketProvider";
-import type { Attachment, Conversation, UserSummary } from "../types";
+import type { Attachment, Conversation, ImageClickPayload, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
@@ -60,8 +60,10 @@ import {
   useAddReactionMutation,
   useDeleteMessageMutation,
   useEditMessageMutation,
+  useGetMessagesQuery,
   useRemoveReactionMutation,
 } from "../features/api/chatApi";
+import type { GalleryImage } from "../components/modals/ImagePreviewModal";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
 import { useConversationSession } from "../features/chat/hooks/useConversationSession";
 import { useConversationValidation } from "../features/chat/hooks/useConversationValidation";
@@ -86,6 +88,75 @@ const ImagePreviewModal = React.lazy(
 const FilePreviewModal = React.lazy(
   () => import("../components/modals/FilePreviewModal"),
 );
+
+/** Wrapper that builds the full gallery from RTK cache before opening the lightbox */
+const ImagePreviewModalGallery: React.FC<{
+  imagePreview: ImageClickPayload;
+  onClose: () => void;
+}> = ({ imagePreview, onClose }) => {
+  const convId = imagePreview.conversationId ?? "";
+  const { data } = useGetMessagesQuery(
+    { conversationId: convId },
+    { skip: !convId },
+  );
+
+  const { images, initialIndex } = useMemo(() => {
+    const msgs = data?.messages ?? [];
+    const gallery: GalleryImage[] = [];
+    let found = 0;
+
+    for (const msg of msgs) {
+      const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+      const imgAttachments = attachments.filter((a) =>
+        a.mimeType?.startsWith("image/") || /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(a.fileName ?? ""),
+      );
+      for (const att of imgAttachments) {
+        const isCurrentImage =
+          att.id === imagePreview.groupKey ||
+          att.url === imagePreview.url ||
+          att.thumbnailUrl === imagePreview.url;
+        // Clicked image: use already-resolved preview URL.
+        // Other images: best available URL (thumbnail > url). Keep even if empty so
+        // indices stay stable and the thumbnail panel always shows all images.
+        const url = isCurrentImage
+          ? imagePreview.url
+          : (att.thumbnailUrl ?? att.url ?? "");
+        if (isCurrentImage) found = gallery.length;
+        gallery.push({
+          url,
+          alt: att.fileName,
+          senderName: msg.senderName,
+          senderAvatar: msg.senderAvatar,
+          sentAt: msg.serverTs,
+          groupKey: msg.id,
+        });
+      }
+    }
+
+    if (gallery.length === 0) {
+      return {
+        images: [{
+          url: imagePreview.url,
+          alt: imagePreview.alt,
+          senderName: imagePreview.senderName,
+          senderAvatar: imagePreview.senderAvatar,
+          sentAt: imagePreview.sentAt,
+        }],
+        initialIndex: 0,
+      };
+    }
+    return { images: gallery, initialIndex: found };
+  }, [data, imagePreview]);
+
+  return (
+    <ImagePreviewModal
+      isOpen
+      onClose={onClose}
+      images={images}
+      initialIndex={initialIndex}
+    />
+  );
+};
 
 type InfoPanelMode = "conversation" | "self-profile" | "contact-profile";
 
@@ -222,7 +293,7 @@ export const ChatPage: React.FC = () => {
   const [contactProfileUserId, setContactProfileUserId] = useState<string | null>(null);
   const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
@@ -1168,11 +1239,7 @@ export const ChatPage: React.FC = () => {
       {/* Image Preview Modal */}
       {imagePreview && (
         <React.Suspense fallback={<DeferredModalFallback />}>
-          <ImagePreviewModal
-            isOpen={!!imagePreview}
-            onClose={() => setImagePreview(null)}
-            imageUrl={imagePreview}
-          />
+          <ImagePreviewModalGallery imagePreview={imagePreview} onClose={() => setImagePreview(null)} />
         </React.Suspense>
       )}
 

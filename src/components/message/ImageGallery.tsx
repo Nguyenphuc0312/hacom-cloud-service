@@ -1,12 +1,15 @@
 import React from "react";
-import type { Attachment } from "../../types";
+import type { Attachment, ImageClickPayload } from "../../types";
 import { ImageMessage } from "./ImageMessage";
 
 interface ImageGalleryProps {
   conversationId: string;
   attachments: Attachment[];
   isOwn: boolean;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
+  senderName?: string;
+  senderAvatar?: string;
+  sentAt?: Date | string;
 }
 
 const MAX_VISIBLE = 4;
@@ -72,6 +75,9 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
   attachments,
   isOwn,
   onImageClick,
+  senderName,
+  senderAvatar,
+  sentAt,
 }) => {
   const layout = buildLayout(attachments);
 
@@ -103,6 +109,9 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
             isOwn={isOwn}
             onClick={onImageClick}
             fillContainer
+            senderName={senderName}
+            senderAvatar={senderAvatar}
+            sentAt={sentAt}
           />
           {overlay !== undefined && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50">

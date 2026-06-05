@@ -4,7 +4,7 @@ import { Avatar } from "../../common/Avatar";
 import { ReplyPreview } from "./ReplyPreview";
 import { MessageActions } from "../../message/MessageActions";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
-import type { Attachment, Conversation, Message } from "../../../types";
+import type { Attachment, Conversation, ImageClickPayload, Message } from "../../../types";
 import { RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
 import { useAuthStore, useChatStore } from "../../../stores";
@@ -52,7 +52,7 @@ interface MessageClusterProps {
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
   onUnpin?: (messageId: string) => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
   density?: ChatDensity;
