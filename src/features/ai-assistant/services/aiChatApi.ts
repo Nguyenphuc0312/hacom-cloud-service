@@ -914,27 +914,34 @@ export async function uploadPersonalDocument(
 
 const WORK_REPORTS_URL = `${BASE_URL}/api/work-reports`;
 
-export interface WorkReportSubmitBody {
-  employee_code: string;
-  report_date: string;
+export interface WorkReportTaskSubmit {
   task_name: string;
   requirements?: string;
   completed?: string;
   difficulties?: string;
+  notes?: string;
+}
+
+export interface WorkReportSubmitBody {
+  employee_code: string;
+  employee_name?: string;
+  department_name?: string;
+  org_unit?: string;
+  report_date: string;
+  tasks: WorkReportTaskSubmit[];
 }
 
 export interface WorkReportSubmitResponse {
   ok: boolean;
   report: {
     id: number;
-    user_id: string;
     report_date: string;
-    task_name: string;
-    requirements: string;
-    completed: string;
-    difficulties: string;
-    created_at: string;
-    updated_at: string;
+    tasks?: WorkReportTaskSubmit[];
+    notes?: string;
+    task_name?: string;
+    requirements?: string;
+    completed?: string;
+    difficulties?: string;
   };
 }
 
