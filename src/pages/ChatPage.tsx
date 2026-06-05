@@ -76,6 +76,8 @@ import { store } from "../store";
 import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
 import { useResponsive } from "../responsive/responsive";
+import { resolvePublicResourceUrl } from "../config";
+import { fileApi } from "../services/api";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -100,9 +102,13 @@ const ImagePreviewModalGallery: React.FC<{
     { skip: !convId },
   );
 
-  const { images, initialIndex } = useMemo(() => {
+  // Track attachment IDs that need preview URLs
+  const [previewUrls, setPreviewUrls] = React.useState<Record<string, string>>({});
+
+  const { images, initialIndex, attachmentIds } = useMemo(() => {
     const msgs = data?.messages ?? [];
     const gallery: GalleryImage[] = [];
+    const attIds: string[] = [];
     let found = 0;
 
     for (const msg of msgs) {
@@ -115,12 +121,18 @@ const ImagePreviewModalGallery: React.FC<{
           att.id === imagePreview.groupKey ||
           att.url === imagePreview.url ||
           att.thumbnailUrl === imagePreview.url;
-        // Clicked image: use already-resolved preview URL.
-        // Other images: best available URL (thumbnail > url). Keep even if empty so
-        // indices stay stable and the thumbnail panel always shows all images.
-        const url = isCurrentImage
+        
+        // For clicked image, use the already-resolved URL
+        // For other images, use preview URL if available, otherwise use stored URL
+        let url = isCurrentImage
           ? imagePreview.url
-          : (att.thumbnailUrl ?? att.url ?? "");
+          : (previewUrls[att.id] ?? resolvePublicResourceUrl(att.thumbnailUrl ?? att.url) ?? "");
+        
+        // Track attachment IDs to fetch their preview URLs
+        if (!isCurrentImage && att.id && !previewUrls[att.id]) {
+          attIds.push(att.id);
+        }
+        
         if (isCurrentImage) found = gallery.length;
         gallery.push({
           url,
@@ -143,10 +155,60 @@ const ImagePreviewModalGallery: React.FC<{
           sentAt: imagePreview.sentAt,
         }],
         initialIndex: 0,
+        attachmentIds: [],
       };
     }
-    return { images: gallery, initialIndex: found };
-  }, [data, imagePreview]);
+    return { images: gallery, initialIndex: found, attachmentIds: attIds };
+  }, [data, imagePreview, previewUrls]);
+
+  // Fetch preview URLs for all images that don't have them yet
+  React.useEffect(() => {
+    if (!attachmentIds.length || !convId) return;
+
+    const abortController = new AbortController();
+
+    const fetchPreviewsForAttachments = async () => {
+      const newUrls: Record<string, string> = {};
+      
+      // Fetch all preview URLs in parallel
+      const results = await Promise.allSettled(
+        attachmentIds.map(async (attId) => {
+          const response = await fileApi.getPreviewUrl({
+            conversationId: convId,
+            attachmentId: attId,
+            signal: abortController.signal,
+          });
+          
+          const payload = unwrapApiSuccess(response);
+          const resolvedUrl = resolvePublicResourceUrl(payload.url, {
+            context: 'image',
+            allowBlob: true,
+          });
+          
+          return { attId, resolvedUrl };
+        })
+      );
+      
+      // Process results only if not aborted
+      if (!abortController.signal.aborted) {
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value.resolvedUrl) {
+            newUrls[result.value.attId] = result.value.resolvedUrl;
+          }
+        }
+        
+        if (Object.keys(newUrls).length > 0) {
+          setPreviewUrls((prev) => ({ ...prev, ...newUrls }));
+        }
+      }
+    };
+
+    void fetchPreviewsForAttachments();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [attachmentIds, convId]);
 
   return (
     <ImagePreviewModal
