@@ -18,12 +18,18 @@ export type HRParticipantResponse = "PENDING" | "ACCEPTED" | "DECLINED" | "MAYBE
 export interface HRCalendarParticipant {
   id: string;
   employeeId: string;
+  authUserId?: string | null;
+  employeeCode?: string | null;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+  departmentName?: string | null;
   employee: {
     id: string;
     fullName: string;
     employeeCode: string;
   } | null;
   response: HRParticipantResponse;
+  respondedAt?: string | null;
   createdAt: string;
 }
 
@@ -44,6 +50,9 @@ export interface HRCalendarEvent {
   title: string;
   description: string | null;
   ownerId: string;
+  ownerAuthUserId?: string | null;
+  ownerEmployeeCode?: string | null;
+  ownerName?: string | null;
   owner: HRCalendarOwner | null;
   startAt: string;
   endAt: string;
@@ -229,6 +238,7 @@ export const hrCalendarApi = {
     visibility?: string;
     isAllDay?: boolean;
     location?: string;
+    timezone?: string;
     participantIds?: string[];
   }): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.post<{ data: HRCalendarEvent }>(
@@ -252,6 +262,9 @@ export const hrCalendarApi = {
       visibility?: string;
       isAllDay?: boolean;
       location?: string;
+      timezone?: string;
+      /** Full desired participant set (employee cuids); server reconciles. */
+      participantIds?: string[];
     }
   ): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.patch<{ data: HRCalendarEvent }>(

@@ -34,7 +34,7 @@ import {
   hrApi,
   type AttendanceCalendarDay,
 } from "../../api/hrApi";
-import { type HRCalendarEvent } from "../../api/hrCalendarApi";
+import { hrCalendarApi, type HRCalendarEvent } from "../../api/hrCalendarApi";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { ConfirmDialog } from "../../../components/ui/Modal";
 import { taskApi } from "../../tasks/api/taskApi";
@@ -42,6 +42,7 @@ import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
+import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 
 /**
@@ -197,17 +198,61 @@ const getStatusBadge = (status?: string): { bg: string; text: string; label: str
  * Event detail modal component with rich display.
  * Works with both LocalCalendarEvent and ExtendedCalendarEvent.
  */
+const RESP_LABEL: Record<string, string> = {
+  PENDING: "Chưa phản hồi",
+  ACCEPTED: "Tham gia",
+  DECLINED: "Không tham gia",
+  MAYBE: "Có thể",
+};
+
+const respBadgeClass = (response: string): string => {
+  switch (response) {
+    case "ACCEPTED":
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
+    case "DECLINED":
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
+    case "MAYBE":
+      return "bg-blue-500/10 text-blue-600 dark:text-blue-300";
+    default:
+      return "bg-gray-500/10 text-gray-500 dark:text-gray-300";
+  }
+};
+
 const EventDetailModal: React.FC<{
   event: LocalCalendarEvent | ExtendedCalendarEvent;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   isViewingOthers?: boolean;
-}> = ({ event, onClose, onEdit, onDelete, isViewingOthers = false }) => {
+  /** Raw HR event (when available) — carries participant roster + response state. */
+  hrEvent?: HRCalendarEvent;
+  /** Called when the current user (an invitee) accepts/declines. */
+  onRespond?: (response: "ACCEPTED" | "DECLINED") => Promise<void> | void;
+}> = ({ event, onClose, onEdit, onDelete, isViewingOthers = false, hrEvent, onRespond }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
+  const [responding, setResponding] = React.useState<null | "ACCEPTED" | "DECLINED">(null);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
+
+  const hrParticipants = hrEvent?.participants ?? [];
+  const isHrOwner = !!hrEvent?.canEdit;
+  const canRespond = !!hrEvent?.isParticipant && !isHrOwner && !!onRespond;
+  const respSummary = {
+    total: hrParticipants.length,
+    accepted: hrParticipants.filter((p) => p.response === "ACCEPTED").length,
+    declined: hrParticipants.filter((p) => p.response === "DECLINED").length,
+    pending: hrParticipants.filter((p) => p.response === "PENDING").length,
+  };
+  const handleRespondClick = async (response: "ACCEPTED" | "DECLINED") => {
+    if (!onRespond) return;
+    setResponding(response);
+    try {
+      await onRespond(response);
+    } finally {
+      setResponding(null);
+    }
+  };
 
   // Permission: use canEdit/canDelete from API when available (hr-api-service),
   // otherwise fall back to owner check (chat-api-service)
@@ -259,6 +304,12 @@ const EventDetailModal: React.FC<{
               <div className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                 <EyeIcon className="h-3 w-3" />
                 Chỉ xem
+              </div>
+            )}
+            {canRespond && (
+              <div className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                <UsersIcon className="h-3 w-3" />
+                Được mời
               </div>
             )}
             <div
@@ -352,8 +403,8 @@ const EventDetailModal: React.FC<{
               </div>
             )}
 
-            {/* Attendees */}
-            {attendees && attendees.length > 0 && (
+            {/* Attendees (name-only fallback — hidden when rich HR roster is available) */}
+            {!hrEvent && attendees && attendees.length > 0 && (
               <div className="flex items-start gap-3">
                 <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
@@ -393,6 +444,81 @@ const EventDetailModal: React.FC<{
               </div>
             )}
           </div>
+
+          {/* HR participant roster (with response status) */}
+          {hrEvent && hrParticipants.length > 0 && (
+            <div className="mt-4 border-t border-border pt-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-teal-600 dark:text-teal-400">
+                  <UsersIcon className="h-4 w-4" />
+                  Người tham gia ({respSummary.total})
+                </p>
+                {isHrOwner && (
+                  <div className="flex flex-wrap gap-1 text-[11px] font-medium">
+                    <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-300">
+                      {respSummary.accepted} tham gia
+                    </span>
+                    <span className="rounded-full bg-rose-500/10 px-1.5 py-0.5 text-rose-600 dark:text-rose-300">
+                      {respSummary.declined} từ chối
+                    </span>
+                    <span className="rounded-full bg-gray-500/10 px-1.5 py-0.5 text-gray-500 dark:text-gray-300">
+                      {respSummary.pending} chưa
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                {hrParticipants.map((p) => {
+                  const name = p.fullName ?? p.employee?.fullName ?? "N/A";
+                  const sub =
+                    p.departmentName ?? p.employeeCode ?? p.employee?.employeeCode ?? "";
+                  return (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-text-primary">{name}</p>
+                        {sub && <p className="truncate text-[11px] text-text-muted">{sub}</p>}
+                      </div>
+                      <span
+                        className={clsx(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                          respBadgeClass(p.response),
+                        )}
+                      >
+                        {RESP_LABEL[p.response] ?? p.response}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Invitee response actions */}
+          {canRespond && (
+            <div className="mt-4 rounded-lg border border-border bg-surface-overlay p-3">
+              <p className="mb-2 text-sm font-medium text-text-primary">
+                Bạn được mời tham gia lịch họp này
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={responding !== null}
+                  onClick={() => handleRespondClick("ACCEPTED")}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
+                </button>
+                <button
+                  type="button"
+                  disabled={responding !== null}
+                  onClick={() => handleRespondClick("DECLINED")}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                >
+                  {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           {event.description && (
@@ -681,8 +807,20 @@ export const CalendarPage: React.FC = () => {
       setIsCreatingEvent(true);
 
       // Map MeetingFormData to hr-api-service CreateCalendarEventInput
-      const startAt = `${data.date}T${data.startTime}:00.000Z`;
-      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+      // Interpret the picked date+time as LOCAL wall-clock, then convert to an
+      // absolute instant (UTC ISO). Appending "Z" directly would wrongly treat
+      // local time as UTC (a 7h shift in Vietnam).
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      // Participants picked from the friends list carry an HR employeeCode; the
+      // backend resolves those to real HR participants. Free-text names (no code)
+      // are display-only and are skipped here.
+      const participantIds = (data.participants ?? [])
+        .map((p) => p.employeeCode)
+        .filter((c): c is string => !!c);
 
       // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
       const input = {
@@ -694,6 +832,8 @@ export const CalendarPage: React.FC = () => {
         visibility: "PRIVATE",
         isAllDay: false,
         location: data.location || undefined,
+        timezone,
+        participantIds,
       };
 
       // Use store's createEvent which handles API call + state update
@@ -1030,6 +1170,30 @@ export const CalendarPage: React.FC = () => {
     setEditingEvent(data);
   }, [selectedEvent]);
 
+  // Raw HR event for the selected item — carries participant roster + response.
+  const selectedHrEvent = useMemo(
+    () => (selectedEvent ? apiEvents.find((e) => e.id === selectedEvent.id) : undefined),
+    [selectedEvent, apiEvents],
+  );
+
+  // Invitee accepts/declines a meeting → persist via HR API, then refetch.
+  const handleRespond = useCallback(
+    async (response: "ACCEPTED" | "DECLINED") => {
+      if (!selectedEvent) return;
+      try {
+        await hrCalendarApi.updateMyResponse(selectedEvent.id, response);
+        toast.success(
+          response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
+        );
+        await fetchEvents();
+      } catch (error) {
+        console.error("Failed to update participant response:", error);
+        toast.error("Không thể cập nhật phản hồi");
+      }
+    },
+    [selectedEvent, fetchEvents],
+  );
+
   // Handle delete event
   const handleDeleteEvent = useCallback(async () => {
     if (!selectedEvent) return;
@@ -1056,8 +1220,13 @@ export const CalendarPage: React.FC = () => {
   // Handle update event from edit form
   const handleUpdateEvent = useCallback(async (data: MeetingFormData) => {
     try {
-      const startAt = `${data.date}T${data.startTime}:00.000Z`;
-      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+      // Interpret the picked date+time as LOCAL wall-clock, then convert to an
+      // absolute instant (UTC ISO). Appending "Z" directly would wrongly treat
+      // local time as UTC (a 7h shift in Vietnam).
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
       // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
       const input = {
@@ -1066,6 +1235,7 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         location: data.location || undefined,
+        timezone,
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
@@ -1291,7 +1461,9 @@ export const CalendarPage: React.FC = () => {
                 )}
               </div>
 
-              {/* View switcher */}
+              {/* Notifications + View switcher */}
+              <div className="flex items-center gap-2">
+              <HrNotificationBell />
               <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
                 {viewButtons.map((view) => (
                   <button
@@ -1308,6 +1480,7 @@ export const CalendarPage: React.FC = () => {
                     {view.label}
                   </button>
                 ))}
+              </div>
               </div>
             </div>
           </header>
@@ -1438,6 +1611,8 @@ export const CalendarPage: React.FC = () => {
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
           isViewingOthers={mode === "other"}
+          hrEvent={selectedHrEvent}
+          onRespond={handleRespond}
         />
       )}
 
