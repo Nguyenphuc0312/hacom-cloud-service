@@ -35,7 +35,8 @@ export interface PersonalCitation {
 
 export interface PersonalChatRequest {
   question: string;
-  session_id: string;
+  session_id: string | null;
+  new_conversation?: boolean;
   employee_code?: string;
   employee_name?: string;
   department_name?: string;

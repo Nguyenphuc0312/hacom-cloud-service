@@ -1,10 +1,20 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AiConversation, AiEndpoint, AiMessage, AiSource } from "../types";
+import { registerStoreResetter } from "../../../stores/storeResetRegistry";
+
+interface ServerSessionInput {
+  session_id: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface AiAssistantState {
   conversations: AiConversation[];
   activeConversationId: string | null;
+  /** employee_code của tài khoản sở hữu dữ liệu (để phát hiện đổi account). */
+  ownerId: string | null;
   isSidebarOpen: boolean;
   isSourcePanelOpen: boolean;
   selectedSources: AiSource[] | null;
@@ -22,6 +32,12 @@ interface AiAssistantState {
   setSelectedSources: (sources: AiSource[] | null) => void;
   renameConversation: (id: string, title: string) => void;
   togglePinConversation: (id: string) => void;
+  /** Nạp danh sách session từ backend vào store (giữ messages đã có, clear nếu đổi account). */
+  loadServerSessions: (sessions: ServerSessionInput[], endpoint: AiEndpoint, ownerId: string) => void;
+  /** Cập nhật serverSessionId sau khi backend trả về session_id mới. */
+  updateServerSessionId: (localId: string, serverSessionId: string) => void;
+  /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
+  clearStore: () => void;
 }
 
 export const useAiAssistantStore = create<AiAssistantState>()(
@@ -29,6 +45,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
     (set) => ({
       conversations: [],
       activeConversationId: null,
+      ownerId: null,
       isSidebarOpen: true,
       isSourcePanelOpen: false,
       selectedSources: null as AiSource[] | null,
@@ -155,6 +172,73 @@ export const useAiAssistantStore = create<AiAssistantState>()(
           ),
         }));
       },
+
+      loadServerSessions: (sessions, endpoint, ownerId) => {
+        set((state) => {
+          // Đổi tài khoản trên cùng máy → xoá hết conversations của endpoint này
+          const isNewOwner = !!state.ownerId && state.ownerId !== ownerId;
+          const baseConversations = isNewOwner
+            ? state.conversations.filter((c) => c.endpoint !== endpoint)
+            : state.conversations;
+
+          const existingByServerId = new Map<string, AiConversation>();
+          for (const c of baseConversations) {
+            if (c.endpoint === endpoint && c.serverSessionId) {
+              existingByServerId.set(c.serverSessionId, c);
+            }
+          }
+
+          const serverConvs: AiConversation[] = sessions.map((s) => {
+            const existing = existingByServerId.get(s.session_id);
+            if (existing) {
+              return {
+                ...existing,
+                title: s.title || existing.title,
+                updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
+              };
+            }
+            return {
+              id: s.session_id,
+              title: s.title || "Cuộc trò chuyện",
+              endpoint,
+              messages: [],
+              createdAt: s.created_at ? new Date(s.created_at) : new Date(),
+              updatedAt: s.updated_at ? new Date(s.updated_at) : new Date(),
+              serverSessionId: s.session_id,
+            };
+          });
+
+          const localOnly = baseConversations.filter(
+            (c) => c.endpoint === endpoint && !c.serverSessionId,
+          );
+          const otherEndpoints = baseConversations.filter(
+            (c) => c.endpoint !== endpoint,
+          );
+
+          const merged = [...serverConvs, ...localOnly, ...otherEndpoints];
+          const activeExists = merged.some((c) => c.id === state.activeConversationId);
+
+          return {
+            conversations: merged,
+            ownerId,
+            activeConversationId: activeExists
+              ? state.activeConversationId
+              : (serverConvs[0]?.id ?? state.activeConversationId),
+          };
+        });
+      },
+
+      updateServerSessionId: (localId, serverSessionId) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === localId ? { ...c, serverSessionId } : c,
+          ),
+        }));
+      },
+
+      clearStore: () => {
+        set({ conversations: [], activeConversationId: null, ownerId: null });
+      },
     }),
     {
       name: "hacom-ai-assistant-storage",
@@ -163,7 +247,12 @@ export const useAiAssistantStore = create<AiAssistantState>()(
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
         isSidebarOpen: state.isSidebarOpen,
+        ownerId: state.ownerId,
       }),
     }
   )
 );
+
+registerStoreResetter("ai-assistant", () => {
+  useAiAssistantStore.getState().clearStore();
+});
