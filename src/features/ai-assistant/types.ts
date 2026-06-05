@@ -41,17 +41,34 @@ export interface AiChatResponse {
 // Work Report types
 // ---------------------------------------------------------------------------
 
+export interface WorkReportTaskItem {
+  task_name: string;
+  requirements: string;
+  completed: string;
+  difficulties: string;
+  notes?: string;
+}
+
 export interface WorkReportFormRequest {
   form_type: "daily_work_report";
   date: string;
   employee_code: string;
+  employee_name?: string;
+  department_name?: string;
+  org_unit?: string;
+  allow_multiple_tasks?: boolean;
   fields: string[];
   field_labels: Record<string, string>;
+  extra_fields?: string[];
+  extra_field_labels?: Record<string, string>;
   existing: {
-    task_name: string;
-    requirements: string;
-    completed: string;
-    difficulties: string;
+    tasks?: WorkReportTaskItem[];
+    // legacy flat fields (backward compat)
+    task_name?: string;
+    requirements?: string;
+    completed?: string;
+    difficulties?: string;
+    notes?: string;
   } | null;
   submit_endpoint: string;
 }
@@ -78,10 +95,14 @@ export interface WorkReportRecord {
   user_name: string;
   department: string;
   date: string;
-  task_name: string;
-  requirements: string;
-  completed: string;
-  difficulties: string;
+  // Multi-task format (new) — notes per task inside WorkReportTaskItem
+  tasks?: WorkReportTaskItem[];
+  // Legacy flat fields (backward compat)
+  task_name?: string;
+  requirements?: string;
+  completed?: string;
+  difficulties?: string;
+  notes?: string;
 }
 
 // ---------------------------------------------------------------------------
