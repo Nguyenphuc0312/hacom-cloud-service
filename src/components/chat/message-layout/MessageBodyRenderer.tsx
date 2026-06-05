@@ -6,6 +6,7 @@ import { Avatar } from "../../common/Avatar";
 import { TextMessage } from "../../message/TextMessage";
 import { MessageContentRenderer } from "../../message/MessageContentRenderer";
 import { ImageMessage } from "../../message/ImageMessage";
+import { ImageGallery } from "../../message/ImageGallery";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
@@ -419,17 +420,8 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
     case MessageType.IMAGE:
       return (
         <div className="space-y-2">
-          {attachments.length > 0
-            ? attachments.map((attachment, index) => (
-                <ImageMessage
-                  key={attachment.id || `${message.id}-image-${index}`}
-                  conversationId={message.conversationId}
-                  attachment={attachment}
-                  isOwn={isOwn}
-                  onClick={onImageClick}
-                />
-              ))
-            : renderTextContent(
+          {attachments.length === 0
+            ? renderTextContent(
                 message,
                 isOwn,
                 currentUsername,
@@ -437,7 +429,25 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 textRenderMode,
                 isCollapsibleText,
                 onToggleTextExpand,
-              )}
+              )
+            : attachments.length === 1
+              ? (
+                  <ImageMessage
+                    key={attachments[0].id || `${message.id}-image-0`}
+                    conversationId={message.conversationId}
+                    attachment={attachments[0]}
+                    isOwn={isOwn}
+                    onClick={onImageClick}
+                  />
+                )
+              : (
+                  <ImageGallery
+                    conversationId={message.conversationId}
+                    attachments={attachments}
+                    isOwn={isOwn}
+                    onImageClick={onImageClick}
+                  />
+                )}
           {attachments.length > 0 && hasContent
             ? renderTextContent(
                 message,
