@@ -15,6 +15,11 @@ import { resolvePublicResourceUrl } from "../../config";
 export interface MeetingParticipant {
   name: string;
   hasConflict?: boolean;
+  /** HR employee code — present when picked from the friends list; lets the
+   *  backend resolve this person to a real HR participant. */
+  employeeCode?: string;
+  /** Chat user id of the picked friend (diagnostic / future use). */
+  userId?: string;
 }
 
 export interface MeetingReadReceipt {
@@ -333,7 +338,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     setParticipants((prev) => prev.filter((p) => p.name !== name));
   };
 
-  const toggleParticipant = (name: string) => {
+  const toggleParticipant = (
+    name: string,
+    meta?: { employeeCode?: string; userId?: string },
+  ) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     setParticipants((prev) => {
@@ -341,7 +349,15 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       if (exists) {
         return prev.filter((p) => p.name.toLowerCase() !== trimmed.toLowerCase());
       }
-      return [...prev, { name: trimmed, hasConflict: checkConflict(trimmed) }];
+      return [
+        ...prev,
+        {
+          name: trimmed,
+          hasConflict: checkConflict(trimmed),
+          employeeCode: meta?.employeeCode || undefined,
+          userId: meta?.userId || undefined,
+        },
+      ];
     });
   };
 
@@ -775,7 +791,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            toggleParticipant(f.name);
+                            toggleParticipant(f.name, {
+                              employeeCode: f.employeeCode,
+                              userId: f.id,
+                            });
                             if (isMentioning) setParticipantInput("");
                           }}
                           className={clsx(
