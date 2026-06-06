@@ -678,7 +678,15 @@ export const chatApi = createApi({
           const { data } = await queryFulfilled;
           dispatch(
             chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
-              upsertMessageInCache(draft, data);
+              // Chỉ đồng bộ mảng reactions chính thống từ server — KHÔNG upsert
+              // toàn bộ message. Response của endpoint reaction thường thiếu
+              // các field enriched ở FE (vd senderAvatar) nên upsert cả message
+              // sẽ ghi đè và làm avatar biến mất tới khi reload.
+              if (Array.isArray(data.reactions)) {
+                patchMessageInCache(draft, input.messageId, {
+                  reactions: data.reactions,
+                });
+              }
             }),
           );
         } catch {
@@ -713,7 +721,13 @@ export const chatApi = createApi({
           const { data } = await queryFulfilled;
           dispatch(
             chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
-              upsertMessageInCache(draft, data);
+              // Chỉ đồng bộ mảng reactions chính thống từ server — KHÔNG upsert
+              // toàn bộ message (tránh ghi đè senderAvatar/field enriched FE).
+              if (Array.isArray(data.reactions)) {
+                patchMessageInCache(draft, input.messageId, {
+                  reactions: data.reactions,
+                });
+              }
             }),
           );
         } catch {
