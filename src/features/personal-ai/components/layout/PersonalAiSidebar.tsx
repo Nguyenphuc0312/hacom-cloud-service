@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { useChatUiStore } from "../../../chat/state/chatUiStore";
+import { useAuthStore } from "../../../../stores/authStore";
+import { deletePersonalSession } from "../../../ai-assistant/services/aiChatApi";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -30,6 +32,11 @@ export const PersonalAiSidebar: React.FC = () => {
     renameConversation,
   } = usePersonalAiStore();
 
+  const user = useAuthStore((s) => s.user);
+  const currentOwnerId = user
+    ? (user.employeeCode ?? user.employee_code ?? null)
+    : null;
+
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -41,10 +48,11 @@ export const PersonalAiSidebar: React.FC = () => {
   const groupedConversations = useMemo(() => {
     const filtered = conversations.filter(
       (c) =>
-        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.messages.some((m) =>
-          m.content.toLowerCase().includes(searchQuery.toLowerCase()),
-        ),
+        (!currentOwnerId || !c.ownerId || c.ownerId === currentOwnerId) &&
+        (c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.messages.some((m) =>
+            m.content.toLowerCase().includes(searchQuery.toLowerCase()),
+          )),
     );
 
     const groups: { label: string; items: typeof conversations }[] = [
@@ -82,7 +90,7 @@ export const PersonalAiSidebar: React.FC = () => {
     ];
 
     return groups.filter((g) => g.items.length > 0);
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, currentOwnerId]);
 
   /** Bắt đầu đổi tên */
   const handleStartRename = (
@@ -240,6 +248,9 @@ export const PersonalAiSidebar: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (conv.serverSessionId) {
+                            deletePersonalSession(conv.serverSessionId).catch(() => {});
+                          }
                           deleteConversation(conv.id);
                         }}
                         className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"

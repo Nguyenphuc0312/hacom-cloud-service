@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { PersonalDocument, PersonalChatMessage } from "../types";
-import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface PersonalWorkspaceConversation {
   id: string;
@@ -12,6 +11,8 @@ interface PersonalWorkspaceConversation {
   isPinned?: boolean;
   /** Session ID do backend cấp. null = chưa gửi message nào lên backend. */
   serverSessionId?: string | null;
+  /** employee_code/id của tài khoản sở hữu conversation này. */
+  ownerId?: string | null;
 }
 
 interface ServerSessionInput {
@@ -32,6 +33,8 @@ interface PersonalAiState {
   activeConversationId: string | null;
   /** employee_code của tài khoản sở hữu dữ liệu trong store (để phát hiện đổi account). */
   ownerId: string | null;
+  /** serverSessionId của các session đã xóa — ngăn loadServerSessions khôi phục lại. */
+  deletedServerSessionIds: string[];
 
   // UI
   isSourcePanelOpen: boolean;
@@ -71,6 +74,8 @@ interface PersonalAiState {
   loadServerSessions: (sessions: ServerSessionInput[], ownerId: string) => void;
   /** Cập nhật serverSessionId sau khi backend trả về session_id mới. */
   updateServerSessionId: (localId: string, serverSessionId: string) => void;
+  /** Set ownerId ngay khi biết user (trước cả khi sessions load). */
+  setOwnerId: (id: string) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
   clearStore: () => void;
 }
@@ -84,6 +89,7 @@ export const usePersonalAiStore = create<PersonalAiState>()(
       conversations: [],
       activeConversationId: null,
       ownerId: null,
+      deletedServerSessionIds: [],
       isSourcePanelOpen: false,
 
       toggleSourcePanel: () =>
@@ -169,6 +175,7 @@ export const usePersonalAiStore = create<PersonalAiState>()(
               messages: [],
               createdAt: now,
               updatedAt: now,
+              ownerId: s.ownerId,
             },
             ...s.conversations,
           ],
@@ -184,14 +191,17 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       deleteConversation: (id) =>
         set((s) => {
+          const conv = s.conversations.find((c) => c.id === id);
           const isActive = s.activeConversationId === id;
           return {
             conversations: s.conversations.filter((c) => c.id !== id),
             activeConversationId: isActive
               ? s.conversations.find((c) => c.id !== id)?.id ?? null
               : s.activeConversationId,
-            // Xoá hội thoại đang mở → chuyển sang hội thoại khác: dọn nguồn của
-            // session vừa xoá để loadDocuments nạp lại theo session mới.
+            // Ghi nhớ serverSessionId đã xóa để loadServerSessions không khôi phục lại
+            ...(conv?.serverSessionId && {
+              deletedServerSessionIds: [...s.deletedServerSessionIds, conv.serverSessionId],
+            }),
             ...(isActive && {
               documents: [],
               selectedDocumentIds: [],
@@ -319,50 +329,81 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       loadServerSessions: (sessions, ownerId) => {
         set((s) => {
-          // Đổi tài khoản trên cùng máy → xoá hết dữ liệu cũ
-          const baseConversations =
-            s.ownerId && s.ownerId !== ownerId ? [] : s.conversations;
+          const isCurrentOwner = (c: PersonalWorkspaceConversation) =>
+            !c.ownerId || c.ownerId === ownerId;
 
+          // Chỉ tra cứu conversations thuộc tài khoản hiện tại
           const existingByServerId = new Map<string, PersonalWorkspaceConversation>();
-          for (const c of baseConversations) {
-            if (c.serverSessionId) {
+          for (const c of s.conversations) {
+            if (c.serverSessionId && isCurrentOwner(c)) {
               existingByServerId.set(c.serverSessionId, c);
             }
           }
 
-          const serverConvs: PersonalWorkspaceConversation[] = sessions.map((session) => {
-            const existing = existingByServerId.get(session.session_id);
-            if (existing) {
+          const deletedIds = new Set(s.deletedServerSessionIds);
+          const serverIds = new Set(sessions.map((session) => session.session_id));
+          const serverConvs: PersonalWorkspaceConversation[] = sessions
+            .filter((session) => !deletedIds.has(session.session_id))
+            .map((session) => {
+              const existing = existingByServerId.get(session.session_id);
+              if (existing) {
+                return {
+                  ...existing,
+                  title: session.title || existing.title,
+                  updatedAt: session.updated_at || existing.updatedAt,
+                  ownerId,
+                };
+              }
+              const now = new Date().toISOString();
               return {
-                ...existing,
-                title: session.title || existing.title,
-                updatedAt: session.updated_at || existing.updatedAt,
+                id: session.session_id,
+                title: session.title || "Cuộc trò chuyện",
+                messages: [],
+                createdAt: session.created_at || now,
+                updatedAt: session.updated_at || now,
+                serverSessionId: session.session_id,
+                ownerId,
               };
-            }
-            const now = new Date().toISOString();
-            return {
-              id: session.session_id,
-              title: session.title || "Cuộc trò chuyện",
-              messages: [],
-              createdAt: session.created_at || now,
-              updatedAt: session.updated_at || now,
-              serverSessionId: session.session_id,
-            };
-          });
+            });
 
-          const localOnly = baseConversations.filter((c) => !c.serverSessionId);
-          const merged = [...serverConvs, ...localOnly];
-          const activeExists = merged.some((c) => c.id === s.activeConversationId);
-          const newActiveId = activeExists
+          // Conversation của tài khoản hiện tại CÓ serverSessionId nhưng server KHÔNG
+          // trả về (danh sách server có thể thiếu/lỗi network) — GIỮ LẠI, chỉ loại khi
+          // nằm trong blacklist (đã xóa). Đây là nguồn DUY NHẤT để xóa, tránh mất dữ liệu.
+          const localWithServerId = s.conversations.filter(
+            (c) =>
+              c.serverSessionId &&
+              isCurrentOwner(c) &&
+              !serverIds.has(c.serverSessionId) &&
+              !deletedIds.has(c.serverSessionId),
+          );
+
+          // Local-only của tài khoản hiện tại
+          const localOnly = s.conversations.filter(
+            (c) => !c.serverSessionId && isCurrentOwner(c),
+          );
+
+          // Giữ nguyên conversations của tài khoản khác
+          const preserved = s.conversations.filter(
+            (c) => c.ownerId != null && c.ownerId !== ownerId,
+          );
+
+          const merged = [...serverConvs, ...localWithServerId, ...localOnly, ...preserved];
+
+          // activeConversationId chỉ giữ nếu thuộc tài khoản hiện tại
+          const currentOwnerIds = new Set(
+            [...serverConvs, ...localWithServerId, ...localOnly].map((c) => c.id),
+          );
+          const activeIsCurrentOwner =
+            !!s.activeConversationId && currentOwnerIds.has(s.activeConversationId);
+          const newActiveId = activeIsCurrentOwner
             ? s.activeConversationId
-            : (serverConvs[0]?.id ?? s.activeConversationId);
+            : (serverConvs[0]?.id ?? localWithServerId[0]?.id ?? localOnly[0]?.id ?? null);
           const didSwitch = newActiveId !== s.activeConversationId;
 
           return {
             conversations: merged,
             activeConversationId: newActiveId,
             ownerId,
-            // Dọn tài liệu chỉ khi đổi conversation (giống setActiveConversation)
             ...(didSwitch && {
               documents: [],
               selectedDocumentIds: [],
@@ -379,6 +420,8 @@ export const usePersonalAiStore = create<PersonalAiState>()(
           ),
         }));
       },
+
+      setOwnerId: (id) => set({ ownerId: id }),
 
       clearStore: () => {
         set({
@@ -399,11 +442,9 @@ export const usePersonalAiStore = create<PersonalAiState>()(
         conversations: s.conversations,
         activeConversationId: s.activeConversationId,
         ownerId: s.ownerId,
+        deletedServerSessionIds: s.deletedServerSessionIds,
       }),
     },
   ),
 );
 
-registerStoreResetter("personal-ai", () => {
-  usePersonalAiStore.getState().clearStore();
-});
