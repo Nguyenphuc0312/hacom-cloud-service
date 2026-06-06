@@ -13,6 +13,8 @@ import {
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useReminderStore } from "../../../stores/reminderStore";
+import { useAuthStore } from "../../../stores/authStore";
+import aiChatClient from "../../../services/ai-chat/aiChatClient";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -30,6 +32,11 @@ export const AiSidebar: React.FC = () => {
     renameConversation,
   } = useAiAssistantStore();
 
+  const user = useAuthStore((s) => s.user);
+  const currentOwnerId = user
+    ? (user.employeeCode ?? user.employee_code ?? user.id ?? null)
+    : null;
+
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
   const hasPendingReminder = useReminderStore((s) => s.hasPendingReminder);
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,6 +50,7 @@ export const AiSidebar: React.FC = () => {
     const filtered = conversations.filter(
       (c) =>
         c.endpoint === activeTab &&
+        (!currentOwnerId || !c.ownerId || c.ownerId === currentOwnerId) &&
         (c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           c.messages.some((m) =>
             m.content.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -84,7 +92,7 @@ export const AiSidebar: React.FC = () => {
     ];
 
     return groups.filter((g) => g.items.length > 0);
-  }, [conversations, activeTab, searchQuery]);
+  }, [conversations, activeTab, searchQuery, currentOwnerId]);
 
   /** Bắt đầu đổi tên */
   const handleStartRename = (
@@ -253,6 +261,9 @@ export const AiSidebar: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (conv.serverSessionId) {
+                            aiChatClient.delete(`/api/chat/sessions/${conv.serverSessionId}`).catch(() => {});
+                          }
                           deleteConversation(conv.id);
                         }}
                         className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"

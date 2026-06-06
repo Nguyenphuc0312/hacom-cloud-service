@@ -27,7 +27,16 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const { isRagMode } = usePersonalDocuments();
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
+  const setOwnerId = usePersonalAiStore((s) => s.setOwnerId);
   const user = useAuthStore((s) => s.user);
+
+  // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
+  // kể cả trước khi sessions load xong
+  const employeeCodeKey = user?.employeeCode ?? user?.employee_code ?? "";
+  useEffect(() => {
+    if (employeeCodeKey) setOwnerId(employeeCodeKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeCodeKey]);
 
   // Sau khi mount: tải danh sách session từ backend để lịch sử đi theo tài khoản
   useEffect(() => {

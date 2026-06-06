@@ -56,8 +56,17 @@ export const AiAssistantPage: React.FC = () => {
     createNewConversation,
     loadServerSessions,
     updateServerSessionId,
+    setOwnerId,
   } = useAiAssistantStore();
   const { selectedEndpoint } = useChatUiStore();
+
+  // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
+  // kể cả trước khi sessions load xong
+  const ownerIdKey = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
+  useEffect(() => {
+    if (ownerIdKey) setOwnerId(ownerIdKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerIdKey]);
 
   // Tải company sessions từ backend để lịch sử chat đi theo tài khoản
   const { data: companySessions } = useAiChatSessions();

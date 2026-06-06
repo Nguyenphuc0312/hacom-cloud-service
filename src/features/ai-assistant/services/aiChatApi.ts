@@ -1043,6 +1043,24 @@ export interface PersonalSessionsResponse {
 }
 
 /**
+ * DELETE /api/personal/sessions/{session_id} — xóa session AI cá nhân.
+ * 404 được coi là thành công (session đã bị xóa từ trước).
+ */
+export async function deletePersonalSession(
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/personal/sessions/${sessionId}`,
+    { method: "DELETE" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new AiApiError(response.status, "http");
+  }
+}
+
+/**
  * GET /api/personal/sessions — lấy danh sách session AI cá nhân của user.
  * Dùng sau đăng nhập để tải lịch sử chat theo tài khoản thay vì localStorage.
  */
