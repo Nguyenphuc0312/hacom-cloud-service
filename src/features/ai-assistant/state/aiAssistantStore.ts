@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AiConversation, AiEndpoint, AiMessage, AiSource } from "../types";
-import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface ServerSessionInput {
   session_id: string;
@@ -15,6 +14,8 @@ interface AiAssistantState {
   activeConversationId: string | null;
   /** employee_code của tài khoản sở hữu dữ liệu (để phát hiện đổi account). */
   ownerId: string | null;
+  /** serverSessionId của các session đã xóa — ngăn loadServerSessions khôi phục lại. */
+  deletedServerSessionIds: string[];
   isSidebarOpen: boolean;
   isSourcePanelOpen: boolean;
   selectedSources: AiSource[] | null;
@@ -36,6 +37,8 @@ interface AiAssistantState {
   loadServerSessions: (sessions: ServerSessionInput[], endpoint: AiEndpoint, ownerId: string) => void;
   /** Cập nhật serverSessionId sau khi backend trả về session_id mới. */
   updateServerSessionId: (localId: string, serverSessionId: string) => void;
+  /** Set ownerId ngay khi biết user (trước cả khi sessions load). */
+  setOwnerId: (id: string) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
   clearStore: () => void;
 }
@@ -46,6 +49,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       conversations: [],
       activeConversationId: null,
       ownerId: null,
+      deletedServerSessionIds: [],
       isSidebarOpen: true,
       isSourcePanelOpen: false,
       selectedSources: null as AiSource[] | null,
@@ -54,18 +58,21 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
       createNewConversation: (endpoint) => {
         const id = crypto.randomUUID();
-        const newConv: AiConversation = {
-          id,
-          title: "Cuộc trò chuyện mới",
-          endpoint,
-          messages: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        set((state) => ({
-          conversations: [newConv, ...state.conversations],
-          activeConversationId: id,
-        }));
+        set((state) => {
+          const newConv: AiConversation = {
+            id,
+            title: "Cuộc trò chuyện mới",
+            endpoint,
+            messages: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ownerId: state.ownerId,
+          };
+          return {
+            conversations: [newConv, ...state.conversations],
+            activeConversationId: id,
+          };
+        });
         return id;
       },
 
@@ -143,10 +150,16 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       },
 
       deleteConversation: (id) => {
-        set((state) => ({
-          conversations: state.conversations.filter((c) => c.id !== id),
-          activeConversationId: state.activeConversationId === id ? null : state.activeConversationId,
-        }));
+        set((state) => {
+          const conv = state.conversations.find((c) => c.id === id);
+          return {
+            conversations: state.conversations.filter((c) => c.id !== id),
+            activeConversationId: state.activeConversationId === id ? null : state.activeConversationId,
+            ...(conv?.serverSessionId && {
+              deletedServerSessionIds: [...state.deletedServerSessionIds, conv.serverSessionId],
+            }),
+          };
+        });
       },
 
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
@@ -175,55 +188,83 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
       loadServerSessions: (sessions, endpoint, ownerId) => {
         set((state) => {
-          // Đổi tài khoản trên cùng máy → xoá hết conversations của endpoint này
-          const isNewOwner = !!state.ownerId && state.ownerId !== ownerId;
-          const baseConversations = isNewOwner
-            ? state.conversations.filter((c) => c.endpoint !== endpoint)
-            : state.conversations;
+          const isCurrentOwner = (c: AiConversation) =>
+            !c.ownerId || c.ownerId === ownerId;
 
+          // Chỉ tra cứu conversations thuộc tài khoản hiện tại cho endpoint này
           const existingByServerId = new Map<string, AiConversation>();
-          for (const c of baseConversations) {
-            if (c.endpoint === endpoint && c.serverSessionId) {
+          for (const c of state.conversations) {
+            if (c.endpoint === endpoint && c.serverSessionId && isCurrentOwner(c)) {
               existingByServerId.set(c.serverSessionId, c);
             }
           }
 
-          const serverConvs: AiConversation[] = sessions.map((s) => {
-            const existing = existingByServerId.get(s.session_id);
-            if (existing) {
+          const deletedIds = new Set(state.deletedServerSessionIds);
+          const serverIds = new Set(sessions.map((s) => s.session_id));
+          const serverConvs: AiConversation[] = sessions
+            .filter((s) => !deletedIds.has(s.session_id))
+            .map((s) => {
+              const existing = existingByServerId.get(s.session_id);
+              if (existing) {
+                return {
+                  ...existing,
+                  title: s.title || existing.title,
+                  updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
+                  ownerId,
+                };
+              }
               return {
-                ...existing,
-                title: s.title || existing.title,
-                updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
+                id: s.session_id,
+                title: s.title || "Cuộc trò chuyện",
+                endpoint,
+                messages: [],
+                createdAt: s.created_at ? new Date(s.created_at) : new Date(),
+                updatedAt: s.updated_at ? new Date(s.updated_at) : new Date(),
+                serverSessionId: s.session_id,
+                ownerId,
               };
-            }
-            return {
-              id: s.session_id,
-              title: s.title || "Cuộc trò chuyện",
-              endpoint,
-              messages: [],
-              createdAt: s.created_at ? new Date(s.created_at) : new Date(),
-              updatedAt: s.updated_at ? new Date(s.updated_at) : new Date(),
-              serverSessionId: s.session_id,
-            };
-          });
+            });
 
-          const localOnly = baseConversations.filter(
-            (c) => c.endpoint === endpoint && !c.serverSessionId,
-          );
-          const otherEndpoints = baseConversations.filter(
-            (c) => c.endpoint !== endpoint,
+          // Conversation của tài khoản hiện tại CÓ serverSessionId nhưng server KHÔNG
+          // trả về (danh sách server có thể thiếu/lỗi network) — GIỮ LẠI, chỉ loại khi
+          // nằm trong blacklist (đã xóa). Đây là nguồn DUY NHẤT để xóa, tránh mất dữ liệu.
+          const localWithServerId = state.conversations.filter(
+            (c) =>
+              c.endpoint === endpoint &&
+              c.serverSessionId &&
+              isCurrentOwner(c) &&
+              !serverIds.has(c.serverSessionId) &&
+              !deletedIds.has(c.serverSessionId),
           );
 
-          const merged = [...serverConvs, ...localOnly, ...otherEndpoints];
-          const activeExists = merged.some((c) => c.id === state.activeConversationId);
+          // Local-only của tài khoản hiện tại (chưa có serverSessionId)
+          const localOnly = state.conversations.filter(
+            (c) => c.endpoint === endpoint && !c.serverSessionId && isCurrentOwner(c),
+          );
+
+          // Giữ nguyên conversations của tài khoản khác hoặc endpoint khác
+          const preserved = state.conversations.filter(
+            (c) =>
+              c.endpoint !== endpoint ||
+              (c.ownerId != null && c.ownerId !== ownerId),
+          );
+
+          const merged = [...serverConvs, ...localWithServerId, ...localOnly, ...preserved];
+
+          // activeConversationId chỉ giữ nếu thuộc tài khoản hiện tại
+          const currentOwnerIds = new Set(
+            [...serverConvs, ...localWithServerId, ...localOnly].map((c) => c.id),
+          );
+          const activeIsCurrentOwner =
+            !!state.activeConversationId &&
+            currentOwnerIds.has(state.activeConversationId);
 
           return {
             conversations: merged,
             ownerId,
-            activeConversationId: activeExists
+            activeConversationId: activeIsCurrentOwner
               ? state.activeConversationId
-              : (serverConvs[0]?.id ?? state.activeConversationId),
+              : (serverConvs[0]?.id ?? localWithServerId[0]?.id ?? localOnly[0]?.id ?? null),
           };
         });
       },
@@ -235,6 +276,8 @@ export const useAiAssistantStore = create<AiAssistantState>()(
           ),
         }));
       },
+
+      setOwnerId: (id) => set({ ownerId: id }),
 
       clearStore: () => {
         set({ conversations: [], activeConversationId: null, ownerId: null });
@@ -248,11 +291,9 @@ export const useAiAssistantStore = create<AiAssistantState>()(
         activeConversationId: state.activeConversationId,
         isSidebarOpen: state.isSidebarOpen,
         ownerId: state.ownerId,
+        deletedServerSessionIds: state.deletedServerSessionIds,
       }),
     }
   )
 );
 
-registerStoreResetter("ai-assistant", () => {
-  useAiAssistantStore.getState().clearStore();
-});

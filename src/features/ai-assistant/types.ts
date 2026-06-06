@@ -133,4 +133,6 @@ export interface AiConversation {
   isPinned?: boolean;
   /** Session ID do backend cấp. null = chưa gửi message nào lên backend. */
   serverSessionId?: string | null;
+  /** employee_code/id của tài khoản sở hữu conversation này. */
+  ownerId?: string | null;
 }
