@@ -23,6 +23,8 @@ export interface PersonalChatMessage {
   thinkingPhase?: "searching" | "reasoning" | null;
   formRequest?: WorkReportFormRequest;
   selectionRequest?: DepartmentSelectionRequest;
+  /** #tongcvtuan — render danh sách file báo cáo tuần inline trong chat. */
+  weeklyReportList?: boolean;
 }
 
 export interface PersonalCitation {

@@ -163,8 +163,8 @@ export function useAiChatSessions(): QueryState<AiChatSession[]> {
       setError(null);
       try {
         const { data: res } = await aiChatClient.get<unknown>(
-          "/api/chat/sessions",
-          { signal: ac.signal },
+          "/api/sessions",
+          { signal: ac.signal, params: { limit: 100 } },
         );
         if (!ac.signal.aborted) {
           const sessions = normalizeSessionsResponse(res);
@@ -217,7 +217,7 @@ export function useAiChatHistory(
       setError(null);
       try {
         const { data: res } = await aiChatClient.get<unknown>(
-          `/api/chat/sessions/${sessionId}/messages`,
+          `/api/sessions/${sessionId}`,
           { signal: ac.signal },
         );
         if (!ac.signal.aborted) {
@@ -331,7 +331,7 @@ export function usePrefetchSession() {
     const ac = new AbortController();
     void aiChatClient
       .get<unknown>(
-        `/api/chat/sessions/${sessionId}/messages`,
+        `/api/sessions/${sessionId}`,
         { signal: ac.signal },
       )
       .then(({ data }) => {

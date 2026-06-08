@@ -9,6 +9,7 @@ import type {
   WorkReportFormRequest,
   DepartmentSelectionRequest,
 } from "../../ai-assistant/types";
+import type { WeeklyReportFileItem } from "../../ai-assistant/services/aiChatApi";
 import { getAccessToken } from "../../../services/tokenService";
 
 const BASE_URL =
@@ -339,13 +340,19 @@ export async function openWeeklyReportFile(
   fileId: number,
   mode: "view" | "download",
   viewTab?: Window | null,
+  options?: { employeeCode?: string },
 ): Promise<void> {
+  // BE yêu cầu header X-Employee-Code (thiếu → 400), không nhận qua query.
   const url =
     mode === "view"
       ? `${WEEKLY_REPORT_FILES_BASE}/${fileId}/view`
       : `${WEEKLY_REPORT_FILES_BASE}/${fileId}`;
 
-  const response = await aiRequest(url);
+  const response = await aiRequest(url, {
+    headers: options?.employeeCode
+      ? { "X-Employee-Code": options.employeeCode }
+      : undefined,
+  });
   const contentType = response.headers.get("content-type") ?? "";
   const disposition = response.headers.get("content-disposition") ?? "";
   let filename = `bao-cao-tuan-${fileId}`;
@@ -405,6 +412,81 @@ export async function openWeeklyReportFile(
     document.body.removeChild(a);
   }
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function normalizeWeeklyReportFile(raw: unknown): WeeklyReportFileItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const fileIdRaw = obj.file_id ?? obj.id;
+  const file_id =
+    typeof fileIdRaw === "number"
+      ? fileIdRaw
+      : Number.parseInt(String(fileIdRaw), 10);
+  if (!Number.isFinite(file_id)) return null;
+  return {
+    ...obj,
+    file_id,
+    filename:
+      typeof obj.filename === "string"
+        ? obj.filename
+        : typeof obj.original_filename === "string"
+          ? obj.original_filename
+          : typeof obj.file_name === "string"
+            ? obj.file_name
+            : undefined,
+  };
+}
+
+function normalizeWeeklyReportFileList(payload: unknown): WeeklyReportFileItem[] {
+  if (Array.isArray(payload)) {
+    return payload
+      .map(normalizeWeeklyReportFile)
+      .filter((f): f is WeeklyReportFileItem => f !== null);
+  }
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ["files", "items", "data", "results"]) {
+      if (Array.isArray(obj[key])) return normalizeWeeklyReportFileList(obj[key]);
+    }
+  }
+  return [];
+}
+
+/**
+ * GET /api/chat/personal/weekly-report/files
+ *
+ * BE scope danh sách theo mã nhân viên qua HEADER `X-Employee-Code`
+ * (KHÔNG phải query param). Thiếu header → 400 "Không xác định được mã nhân viên".
+ * Query chỉ nhận week_start / week_end / company / limit.
+ */
+export async function listPersonalWeeklyReportFiles(options?: {
+  employeeCode?: string;
+  weekStart?: string;
+  weekEnd?: string;
+  company?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<WeeklyReportFileItem[]> {
+  const params = new URLSearchParams();
+  if (options?.weekStart) params.set("week_start", options.weekStart);
+  if (options?.weekEnd) params.set("week_end", options.weekEnd);
+  if (options?.company) params.set("company", options.company);
+  params.set("limit", String(Math.min(500, Math.max(1, options?.limit ?? 200))));
+  const url = `${WEEKLY_REPORT_FILES_BASE}?${params.toString()}`;
+  const response = await aiRequest(url, {
+    headers: options?.employeeCode
+      ? { "X-Employee-Code": options.employeeCode }
+      : undefined,
+    signal: options?.signal,
+  });
+  const text = await response.text();
+  let payload: unknown = text;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    /* không phải JSON — giữ nguyên text */
+  }
+  return normalizeWeeklyReportFileList(payload);
 }
 
 function normalizeCitation(raw: unknown): PersonalCitation | null {
