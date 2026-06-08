@@ -2,6 +2,9 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { Button } from "../ui";
+import { reportError } from "../../utils/errorReporter";
+import { attemptChunkReloadOnce } from "../../utils/chunkReload";
+import { isChunkLoadError } from "../../utils/errorClassification";
 
 export interface FeatureErrorBoundaryProps {
   children: React.ReactNode;
@@ -27,6 +30,19 @@ class FeatureErrorBoundaryInner extends React.Component<
 
   public static getDerivedStateFromError(error: Error): FeatureErrorBoundaryState {
     return { error };
+  }
+
+  public componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // Isolated panel crash — log it (never swallow), but keep the app shell.
+    reportError(error, {
+      boundary: this.props.name,
+      componentStack: info.componentStack ?? undefined,
+    });
+
+    // A lazily-loaded panel can hit a stale-deploy chunk error; recover once.
+    if (isChunkLoadError(error)) {
+      attemptChunkReloadOnce();
+    }
   }
 
   public componentDidUpdate(prevProps: FeatureErrorBoundaryProps): void {
