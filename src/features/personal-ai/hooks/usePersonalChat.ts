@@ -185,49 +185,18 @@ export function usePersonalChat() {
         return;
       }
 
-      // Detect #tongcvtuan — FE tự xử lý, hiển thị chọn phòng ban xem báo cáo tuần
+      // Detect #tongcvtuan — hiển thị danh sách file báo cáo tuần inline
+      // (GET /api/chat/personal/weekly-report/files). Component tự load dữ liệu.
       if (TONGCVTUAN_TRIGGER.test(trimmed)) {
-        const assistantId = crypto.randomUUID();
-        const loadingMsg: PersonalChatMessage = {
-          id: assistantId,
+        addMessage(conversationId, {
+          id: crypto.randomUUID(),
           role: "assistant",
           content: "",
           timestamp: new Date(),
-          isStreaming: true,
-          thinkingPhase: "searching",
-        };
-        addMessage(conversationId, loadingMsg);
-        const convIdSnapshot = conversationId;
-        try {
-          const res = await fetchDepartments();
-          const options = (res.departments ?? []).map((d) => ({
-            label: d.department,
-            value: d.department,
-            type: "department",
-            company: d.company,
-            count: d.count,
-          }));
-          const selectionData: DepartmentSelectionRequest = {
-            selection_type: "department_report",
-            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc tuần:",
-            options,
-            multi_select: true,
-            date_range: true,
-            fetch_endpoint: "GET /api/work-reports",
-          };
-          patchMessage(convIdSnapshot, assistantId, {
-            content: "",
-            selectionRequest: selectionData,
-            isStreaming: false,
-            thinkingPhase: null,
-          });
-        } catch {
-          patchMessage(convIdSnapshot, assistantId, {
-            content: "Không thể tải danh sách phòng ban. Vui lòng thử lại.",
-            isStreaming: false,
-            thinkingPhase: null,
-          });
-        }
+          isStreaming: false,
+          thinkingPhase: null,
+          weeklyReportList: true,
+        });
         return;
       }
 
