@@ -39,6 +39,8 @@ interface AiAssistantState {
   updateServerSessionId: (localId: string, serverSessionId: string) => void;
   /** Set ownerId ngay khi biết user (trước cả khi sessions load). */
   setOwnerId: (id: string) => void;
+  /** Nạp messages từ server vào conversation (chỉ khi conversation đang rỗng). */
+  loadMessagesForConversation: (conversationId: string, messages: AiMessage[]) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
   clearStore: () => void;
 }
@@ -201,29 +203,47 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
           const deletedIds = new Set(state.deletedServerSessionIds);
           const serverIds = new Set(sessions.map((s) => s.session_id));
-          const serverConvs: AiConversation[] = sessions
-            .filter((s) => !deletedIds.has(s.session_id))
-            .map((s) => {
-              const existing = existingByServerId.get(s.session_id);
-              if (existing) {
-                return {
-                  ...existing,
-                  title: s.title || existing.title,
-                  updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
-                  ownerId,
-                };
-              }
-              return {
-                id: s.session_id,
-                title: s.title || "Cuộc trò chuyện",
-                endpoint,
-                messages: [],
-                createdAt: s.created_at ? new Date(s.created_at) : new Date(),
-                updatedAt: s.updated_at ? new Date(s.updated_at) : new Date(),
-                serverSessionId: s.session_id,
-                ownerId,
-              };
-            });
+
+          // Also index by local id to handle conversations whose id was previously set
+          // to a session_id (legacy behaviour). This prevents duplicates when the backend
+          // creates a double-prefixed session — both session ids would otherwise resolve
+          // to the same local id, producing two sidebar entries.
+          const existingByLocalId = new Map<string, AiConversation>();
+          for (const c of state.conversations) {
+            if (c.endpoint === endpoint && isCurrentOwner(c)) {
+              existingByLocalId.set(c.id, c);
+            }
+          }
+
+          const serverConvsMap = new Map<string, AiConversation>();
+          for (const s of sessions.filter((ss) => !deletedIds.has(ss.session_id))) {
+            const existing = existingByServerId.get(s.session_id)
+              ?? existingByLocalId.get(s.session_id);
+            const convId = existing ? existing.id : s.session_id;
+            const alreadyHas = serverConvsMap.has(convId);
+            if (!alreadyHas || existing) {
+              serverConvsMap.set(convId, existing
+                ? {
+                    ...existing,
+                    serverSessionId: s.session_id,
+                    title: s.title || existing.title,
+                    updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
+                    ownerId,
+                  }
+                : {
+                    id: s.session_id,
+                    title: s.title || "Cuộc trò chuyện",
+                    endpoint,
+                    messages: [],
+                    createdAt: s.created_at ? new Date(s.created_at) : new Date(),
+                    updatedAt: s.updated_at ? new Date(s.updated_at) : new Date(),
+                    serverSessionId: s.session_id,
+                    ownerId,
+                  },
+              );
+            }
+          }
+          const serverConvs = Array.from(serverConvsMap.values());
 
           // Conversation của tài khoản hiện tại CÓ serverSessionId nhưng server KHÔNG
           // trả về (danh sách server có thể thiếu/lỗi network) — GIỮ LẠI, chỉ loại khi
@@ -279,6 +299,16 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
       setOwnerId: (id) => set({ ownerId: id }),
 
+      loadMessagesForConversation: (conversationId, messages) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId && c.messages.length === 0
+              ? { ...c, messages: messages.map((m) => ({ ...m, isStreaming: false })) }
+              : c
+          ),
+        }));
+      },
+
       clearStore: () => {
         set({ conversations: [], activeConversationId: null, ownerId: null });
       },
@@ -287,7 +317,9 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       name: "hacom-ai-assistant-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        conversations: state.conversations,
+        // Strip messages before persisting — server (Redis) is source of truth.
+        // Messages are loaded on-demand via loadMessagesForConversation when needed.
+        conversations: state.conversations.map((c) => ({ ...c, messages: [] })),
         activeConversationId: state.activeConversationId,
         isSidebarOpen: state.isSidebarOpen,
         ownerId: state.ownerId,

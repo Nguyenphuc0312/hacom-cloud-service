@@ -23,7 +23,7 @@ const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
  * └──────────────┴──────────────────────────────┴──────────────┘
  */
 export const PersonalAiWorkspacePage: React.FC = () => {
-  const { messages, isStreaming, sendMessage, sendWithFile, stopStreaming } = usePersonalChat();
+  const { messages, isStreaming, isLoadingHistory, sendMessage, sendWithFile, stopStreaming } = usePersonalChat();
   const { isRagMode } = usePersonalDocuments();
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
@@ -117,6 +117,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
         <PersonalChatArea
           messages={messages}
           isStreaming={isStreaming}
+          isLoadingHistory={isLoadingHistory}
           isRagMode={isRagMode}
           onSuggestionSelect={handleSuggestionSelect}
         />
