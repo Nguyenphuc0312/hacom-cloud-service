@@ -1060,6 +1060,40 @@ export async function deletePersonalSession(
   }
 }
 
+export interface PersonalSessionMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+/**
+ * GET /api/sessions/{session_id} — lấy messages của một session AI cá nhân.
+ * Dùng khi user click vào conversation đã có trên server nhưng chưa có messages trên thiết bị này.
+ */
+export async function fetchPersonalSessionMessages(
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<PersonalSessionMessage[]> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/sessions/${sessionId}`,
+    { method: "GET" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) throw new AiApiError(response.status, "http");
+  const data = await response.json() as unknown;
+  let messages: unknown[] = [];
+  if (Array.isArray(data)) {
+    messages = data;
+  } else if (data && typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.messages)) messages = obj.messages;
+    else if (Array.isArray(obj.data)) messages = obj.data;
+    else if (Array.isArray(obj.items)) messages = obj.items;
+  }
+  return messages as PersonalSessionMessage[];
+}
+
 /**
  * GET /api/personal/sessions — lấy danh sách session AI cá nhân của user.
  * Dùng sau đăng nhập để tải lịch sử chat theo tài khoản thay vì localStorage.
@@ -1079,9 +1113,12 @@ export async function fetchPersonalSessions(
   if (!response.ok) {
     throw new AiApiError(response.status, "http");
   }
-  const data = await response.json() as Record<string, unknown>;
-  if (Array.isArray(data?.sessions)) {
-    return data as unknown as PersonalSessionsResponse;
+  const data = await response.json() as unknown;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.sessions)) return { sessions: obj.sessions as PersonalSession[] };
+    if (Array.isArray(obj.data)) return { sessions: obj.data as PersonalSession[] };
   }
+  if (Array.isArray(data)) return { sessions: data as PersonalSession[] };
   return { sessions: [] };
 }

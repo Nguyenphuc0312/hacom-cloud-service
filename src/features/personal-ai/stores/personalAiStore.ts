@@ -76,6 +76,8 @@ interface PersonalAiState {
   updateServerSessionId: (localId: string, serverSessionId: string) => void;
   /** Set ownerId ngay khi biết user (trước cả khi sessions load). */
   setOwnerId: (id: string) => void;
+  /** Nạp messages từ server vào conversation (chỉ khi conversation đang rỗng). */
+  loadMessagesForConversation: (conversationId: string, messages: PersonalChatMessage[]) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout hoặc đổi tài khoản). */
   clearStore: () => void;
 }
@@ -342,29 +344,50 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
           const deletedIds = new Set(s.deletedServerSessionIds);
           const serverIds = new Set(sessions.map((session) => session.session_id));
-          const serverConvs: PersonalWorkspaceConversation[] = sessions
-            .filter((session) => !deletedIds.has(session.session_id))
-            .map((session) => {
-              const existing = existingByServerId.get(session.session_id);
-              if (existing) {
-                return {
-                  ...existing,
-                  title: session.title || existing.title,
-                  updatedAt: session.updated_at || existing.updatedAt,
-                  ownerId,
-                };
-              }
+
+          // Also index by local id to detect conversations whose id was previously set
+          // to a session_id (e.g. from the first loadServerSessions before any local
+          // UUID was assigned). This prevents duplicate entries when the backend creates
+          // a double-prefixed session and both the old and new session_id appear in the
+          // server list — the old id would otherwise create a second local conversation
+          // with the same id, showing duplicate entries in the sidebar.
+          const existingByLocalId = new Map<string, PersonalWorkspaceConversation>();
+          for (const c of s.conversations) {
+            if (isCurrentOwner(c)) existingByLocalId.set(c.id, c);
+          }
+
+          // Use a Map keyed by local conversation id to deduplicate: if two server
+          // sessions resolve to the same local id, the one matched via existingByServerId
+          // (existing local data) takes priority over a freshly created entry.
+          const serverConvsMap = new Map<string, PersonalWorkspaceConversation>();
+          for (const session of sessions.filter((ss) => !deletedIds.has(ss.session_id))) {
+            const existing = existingByServerId.get(session.session_id)
+              ?? existingByLocalId.get(session.session_id);
+            const convId = existing ? existing.id : session.session_id;
+            const alreadyHas = serverConvsMap.has(convId);
+            if (!alreadyHas || existing) {
               const now = new Date().toISOString();
-              return {
-                id: session.session_id,
-                title: session.title || "Cuộc trò chuyện",
-                messages: [],
-                createdAt: session.created_at || now,
-                updatedAt: session.updated_at || now,
-                serverSessionId: session.session_id,
-                ownerId,
-              };
-            });
+              serverConvsMap.set(convId, existing
+                ? {
+                    ...existing,
+                    serverSessionId: session.session_id,
+                    title: session.title || existing.title,
+                    updatedAt: session.updated_at || existing.updatedAt,
+                    ownerId,
+                  }
+                : {
+                    id: session.session_id,
+                    title: session.title || "Cuộc trò chuyện",
+                    messages: [],
+                    createdAt: session.created_at || now,
+                    updatedAt: session.updated_at || now,
+                    serverSessionId: session.session_id,
+                    ownerId,
+                  },
+              );
+            }
+          }
+          const serverConvs = Array.from(serverConvsMap.values());
 
           // Conversation của tài khoản hiện tại CÓ serverSessionId nhưng server KHÔNG
           // trả về (danh sách server có thể thiếu/lỗi network) — GIỮ LẠI, chỉ loại khi
@@ -423,6 +446,16 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       setOwnerId: (id) => set({ ownerId: id }),
 
+      loadMessagesForConversation: (conversationId, messages) => {
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId && c.messages.length === 0
+              ? { ...c, messages: messages.map((m) => ({ ...m, isStreaming: false, thinkingPhase: null })) }
+              : c
+          ),
+        }));
+      },
+
       clearStore: () => {
         set({
           conversations: [],
@@ -439,7 +472,9 @@ export const usePersonalAiStore = create<PersonalAiState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         selectedDocumentIds: s.selectedDocumentIds,
-        conversations: s.conversations,
+        // Strip messages before persisting — server (Redis) is source of truth.
+        // Messages are loaded on-demand via loadMessagesForConversation when needed.
+        conversations: s.conversations.map((c) => ({ ...c, messages: [] })),
         activeConversationId: s.activeConversationId,
         ownerId: s.ownerId,
         deletedServerSessionIds: s.deletedServerSessionIds,

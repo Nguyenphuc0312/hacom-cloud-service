@@ -9,7 +9,7 @@ import {
   invalidateWeeklyReportFilenameCache,
   AiApiError,
 } from "../services/aiChatApi";
-import { useAiChatSessions } from "../hooks/useAiChatQuery";
+import { useAiChatSessions, useAiChatHistory } from "../hooks/useAiChatQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
@@ -49,6 +49,7 @@ export const AiAssistantPage: React.FC = () => {
   const {
     conversations,
     activeConversationId,
+    setActiveConversation,
     addMessage,
     updateLastMessage,
     updateMessage,
@@ -57,6 +58,7 @@ export const AiAssistantPage: React.FC = () => {
     loadServerSessions,
     updateServerSessionId,
     setOwnerId,
+    loadMessagesForConversation,
   } = useAiAssistantStore();
   const { selectedEndpoint } = useChatUiStore();
 
@@ -87,10 +89,33 @@ export const AiAssistantPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companySessions, user?.employeeCode, user?.employee_code, user?.id]);
 
+  // Auto-select conversation đầu tiên nếu chưa có active (sau khi chuyển tab hoặc load lần đầu)
+  useEffect(() => {
+    if (selectedEndpoint === "personal" || activeConversationId) return;
+    const first = conversations.find((c) => c.endpoint === selectedEndpoint);
+    if (first) setActiveConversation(first.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId, conversations.length, selectedEndpoint]);
+
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId && c.endpoint === selectedEndpoint,
   );
+
+  // Fetch messages từ server khi conversation có serverSessionId nhưng chưa có messages trên thiết bị này
+  const serverSessionIdToFetch =
+    activeConversation?.serverSessionId && activeConversation.messages.length === 0
+      ? activeConversation.serverSessionId
+      : null;
+  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(serverSessionIdToFetch);
+
+  useEffect(() => {
+    if (!historyMessages?.length || !activeConversationId) return;
+    loadMessagesForConversation(activeConversationId, historyMessages);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyMessages, activeConversationId]);
+
   const messages = activeConversation?.messages || [];
+  const isLoadingHistory = historyLoading && !!serverSessionIdToFetch;
 
   const userDisplayName = user
     ? user.effectiveDisplayName ||
@@ -326,8 +351,14 @@ export const AiAssistantPage: React.FC = () => {
             });
           }
 
-          // Cập nhật serverSessionId nếu backend trả về session_id mới
-          if (response.session_id && response.session_id !== serverSessionId && currentId) {
+          // Cập nhật serverSessionId nếu backend trả về session_id mới.
+          // Guard: bỏ qua nếu ID mới chỉ là wrapper của ID cũ (backend double-prefix bug).
+          if (
+            response.session_id &&
+            response.session_id !== serverSessionId &&
+            currentId &&
+            !(serverSessionId && response.session_id.endsWith(serverSessionId))
+          ) {
             updateServerSessionId(currentId, response.session_id);
           }
         }
@@ -457,8 +488,18 @@ export const AiAssistantPage: React.FC = () => {
       <div className="flex h-full flex-col overflow-hidden bg-surface">
         <AiChatHeader />
 
+        {/* ── Loading: đang tải lịch sử từ server ── */}
+        {!hasMessages && isLoadingHistory && (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+              <p className="text-sm text-text-muted">Đang tải lịch sử...</p>
+            </div>
+          </div>
+        )}
+
         {/* ── Empty state: Hero + Input + Suggestions căn giữa ── */}
-        {!hasMessages && (
+        {!hasMessages && !isLoadingHistory && (
           <div className="flex flex-1 items-center justify-center overflow-y-auto px-4">
             <div className="flex w-full max-w-[680px] flex-col items-center gap-8 py-16">
               <AiAssistantHero displayName={userDisplayName} />

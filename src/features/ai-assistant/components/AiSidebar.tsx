@@ -134,10 +134,7 @@ export const AiSidebar: React.FC = () => {
       <div className="px-3 mb-2">
         <div className="flex bg-surface-active/60 rounded-lg p-0.5">
           <button
-            onClick={() => {
-              setSelectedEndpoint("company");
-              setActiveConversation(null);
-            }}
+            onClick={() => setSelectedEndpoint("company")}
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "company"
@@ -149,10 +146,7 @@ export const AiSidebar: React.FC = () => {
             <span>Công ty</span>
           </button>
           <button
-            onClick={() => {
-              setSelectedEndpoint("personal");
-              setActiveConversation(null);
-            }}
+            onClick={() => setSelectedEndpoint("personal")}
             className={clsx(
               "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
               activeTab === "personal"
