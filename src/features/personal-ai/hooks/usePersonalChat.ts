@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { streamPersonalChat, PersonalAiError } from "../api/personalAiApi";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
   fetchDepartments,
+  fetchPersonalSessionMessages,
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
@@ -31,14 +32,48 @@ export function usePersonalChat() {
     markMessageError,
     patchMessage,
     updateServerSessionId,
+    loadMessagesForConversation,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const fetchedSessionIds = useRef(new Set<string>());
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
   const messages = activeConversation?.messages ?? [];
+
+  // Fetch messages từ server khi user chọn conversation có serverSessionId nhưng chưa có messages
+  useEffect(() => {
+    const serverSessionId = activeConversation?.serverSessionId;
+    if (!serverSessionId || !activeConversationId) return;
+    if ((activeConversation?.messages.length ?? 0) > 0) return;
+    if (fetchedSessionIds.current.has(serverSessionId)) return;
+
+    fetchedSessionIds.current.add(serverSessionId);
+    const ac = new AbortController();
+    setIsLoadingHistory(true);
+
+    fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal })
+      .then((fetched) => {
+        if (ac.signal.aborted || !fetched.length) return;
+        const normalized = fetched.map((m) => ({
+          id: m.id || crypto.randomUUID(),
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          timestamp: new Date(m.timestamp),
+          isStreaming: false as const,
+          thinkingPhase: null as null,
+        }));
+        loadMessagesForConversation(activeConversationId, normalized);
+      })
+      .catch(() => { /* Silent — hiển thị empty state làm fallback */ })
+      .finally(() => { if (!ac.signal.aborted) setIsLoadingHistory(false); });
+
+    return () => ac.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId, activeConversation?.serverSessionId]);
 
   const sendMessage = useCallback(
     async (promptText: string) => {
@@ -231,12 +266,9 @@ export function usePersonalChat() {
               "",
             department_name: user?.departmentName ?? "",
             org_unit: user?.orgUnit ?? "",
-            // Omit document_ids entirely when none selected — sending [] causes
-            // some backend builds to still use session RAG context instead of
-            // switching to chitchat mode. Omitting the field is the cleaner signal.
-            ...(selectedDocumentIds.length > 0 && {
-              document_ids: selectedDocumentIds,
-            }),
+            // Luôn gửi document_ids (mảng rỗng khi bỏ tick hết) để backend
+            // chuyển sang chitchat mode thay vì dùng lại RAG context của session.
+            document_ids: selectedDocumentIds,
           },
           {
             onToken: (token) => {
@@ -268,8 +300,14 @@ export function usePersonalChat() {
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
 
-        // Cập nhật serverSessionId nếu backend trả về session_id mới
-        if (response.session_id && response.session_id !== serverSessionId) {
+        // Cập nhật serverSessionId nếu backend trả về session_id mới.
+        // Guard: bỏ qua nếu ID mới chỉ là wrapper của ID cũ (backend double-prefix bug:
+        // "personal-X-personal-X-uuid" khi nhận "personal-X-uuid" mà Redis đã hết hạn).
+        if (
+          response.session_id &&
+          response.session_id !== serverSessionId &&
+          !(serverSessionId && response.session_id.endsWith(serverSessionId))
+        ) {
           updateServerSessionId(convIdSnapshot, response.session_id);
         }
       } catch (err) {
@@ -425,6 +463,7 @@ export function usePersonalChat() {
   return {
     messages,
     isStreaming,
+    isLoadingHistory,
     sendMessage,
     sendWithFile,
     stopStreaming,

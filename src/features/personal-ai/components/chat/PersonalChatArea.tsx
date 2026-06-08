@@ -9,6 +9,7 @@ import { usePersonalAiStore } from "../../stores/personalAiStore";
 interface PersonalChatAreaProps {
   messages: PersonalChatMessage[];
   isStreaming: boolean;
+  isLoadingHistory?: boolean;
   isRagMode: boolean;
   onSuggestionSelect?: (value: string) => void;
 }
@@ -78,6 +79,7 @@ const EmptyState: React.FC<{
 export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   messages,
   isStreaming,
+  isLoadingHistory = false,
   isRagMode,
   onSuggestionSelect,
 }) => {
@@ -118,6 +120,17 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [activeConversationId]);
+
+  if (!hasMessages && isLoadingHistory) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+          <p className="text-sm text-text-muted">Đang tải lịch sử...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasMessages) {
     return (

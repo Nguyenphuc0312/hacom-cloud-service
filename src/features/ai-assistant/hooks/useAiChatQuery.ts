@@ -27,7 +27,7 @@ import {
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
 import { normalizeAiChatError } from "../../../services/ai-chat/aiChatClient";
 import { isRetryableError } from "../../../services/ai-chat/normalizeError";
-import type { ApiResponse, NormalizedError } from "../../../services/ai-chat/types";
+import type { NormalizedError } from "../../../services/ai-chat/types";
 import type { AiMessage } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -86,6 +86,65 @@ export const aiChatKeys = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Response normalizers — handle multiple API response shapes
+// ---------------------------------------------------------------------------
+
+function normalizeSessionsResponse(raw: unknown): AiChatSession[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) arr = obj.data;
+    else if (Array.isArray(obj.sessions)) arr = obj.sessions;
+    else if (Array.isArray(obj.items)) arr = obj.items;
+  }
+
+  return arr
+    .filter((s) => s && typeof s === "object")
+    .map((s) => {
+      const obj = s as Record<string, unknown>;
+      const id = String(obj.id ?? obj.session_id ?? "");
+      if (!id) return null;
+      return {
+        id,
+        title: String(obj.title ?? ""),
+        createdAt: String(obj.createdAt ?? obj.created_at ?? new Date().toISOString()),
+        updatedAt: String(obj.updatedAt ?? obj.updated_at ?? new Date().toISOString()),
+        messageCount: Number(obj.messageCount ?? obj.message_count ?? 0),
+      } satisfies AiChatSession;
+    })
+    .filter((s): s is AiChatSession => s !== null);
+}
+
+function normalizeMessagesResponse(raw: unknown): AiMessage[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) arr = obj.data;
+    else if (Array.isArray(obj.messages)) arr = obj.messages;
+    else if (Array.isArray(obj.items)) arr = obj.items;
+  }
+
+  return arr
+    .filter((m) => m && typeof m === "object")
+    .map((m) => {
+      const obj = m as Record<string, unknown>;
+      const role = String(obj.role ?? "user");
+      const rawTs = obj.timestamp ?? obj.created_at ?? obj.createdAt;
+      return {
+        id: String(obj.id ?? obj.message_id ?? crypto.randomUUID()),
+        role: (role === "assistant" ? "assistant" : "user") as "user" | "assistant",
+        content: String(obj.content ?? obj.message ?? obj.text ?? ""),
+        timestamp: rawTs ? new Date(String(rawTs)) : new Date(),
+        isStreaming: false,
+      } satisfies Pick<AiMessage, "id" | "role" | "content" | "timestamp" | "isStreaming">;
+    }) as AiMessage[];
+}
+
+// ---------------------------------------------------------------------------
 // useAiChatSessions
 // ---------------------------------------------------------------------------
 
@@ -103,11 +162,14 @@ export function useAiChatSessions(): QueryState<AiChatSession[]> {
       setLoading(true);
       setError(null);
       try {
-        const { data: res } = await aiChatClient.get<ApiResponse<AiChatSession[]>>(
+        const { data: res } = await aiChatClient.get<unknown>(
           "/api/chat/sessions",
           { signal: ac.signal },
         );
-        if (!ac.signal.aborted) setData(res.data);
+        if (!ac.signal.aborted) {
+          const sessions = normalizeSessionsResponse(res);
+          setData(sessions.length > 0 ? sessions : undefined);
+        }
       } catch (err) {
         if (ac.signal.aborted) return;
         if (aiChatRetry(err, attempts)) {
@@ -154,11 +216,14 @@ export function useAiChatHistory(
       setLoading(true);
       setError(null);
       try {
-        const { data: res } = await aiChatClient.get<ApiResponse<AiMessage[]>>(
+        const { data: res } = await aiChatClient.get<unknown>(
           `/api/chat/sessions/${sessionId}/messages`,
           { signal: ac.signal },
         );
-        if (!ac.signal.aborted) setData(res.data);
+        if (!ac.signal.aborted) {
+          const messages = normalizeMessagesResponse(res);
+          setData(messages.length > 0 ? messages : undefined);
+        }
       } catch (err) {
         if (ac.signal.aborted) return;
         if (aiChatRetry(err, attempts)) {
@@ -265,15 +330,18 @@ export function usePrefetchSession() {
 
     const ac = new AbortController();
     void aiChatClient
-      .get<ApiResponse<AiMessage[]>>(
+      .get<unknown>(
         `/api/chat/sessions/${sessionId}/messages`,
         { signal: ac.signal },
       )
       .then(({ data }) => {
-        prefetchCache.set(sessionId, {
-          data: data.data,
-          expiresAt: Date.now() + PREFETCH_TTL_MS,
-        });
+        const messages = normalizeMessagesResponse(data);
+        if (messages.length > 0) {
+          prefetchCache.set(sessionId, {
+            data: messages,
+            expiresAt: Date.now() + PREFETCH_TTL_MS,
+          });
+        }
       })
       .catch(() => {
         // Prefetch errors are silently ignored — they're best-effort.
