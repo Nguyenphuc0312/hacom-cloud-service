@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
+import { FeatureErrorBoundary } from "../components/error";
 import { AppShell, ModuleSidebar } from "../shared/layout";
 import {
   ConfirmDialog,
@@ -1107,19 +1108,21 @@ export const ChatPage: React.FC = () => {
           contentClassName="min-h-0"
         >
           <div className="h-full min-h-0 w-full">
-            <Sidebar
-              layoutState={sidebarLayoutState}
-              currentUser={currentUserSummary}
-              selectedId={routeConversationId}
-              isLoadingMoreConversations={isLoadingMoreConversations}
-              hasMoreConversations={hasMoreConversations}
-              showConversationSkeleton={showConversationSkeleton}
-              conversationsError={conversationsError}
-              onSelectConversation={handleSelectConversation}
-              onRetryConversations={fetchConversations}
-              onLoadMoreConversations={handleLoadMoreConversations}
-              onCurrentUserClick={handleOpenCurrentUserProfile}
-            />
+            <FeatureErrorBoundary name="Danh sách hội thoại">
+              <Sidebar
+                layoutState={sidebarLayoutState}
+                currentUser={currentUserSummary}
+                selectedId={routeConversationId}
+                isLoadingMoreConversations={isLoadingMoreConversations}
+                hasMoreConversations={hasMoreConversations}
+                showConversationSkeleton={showConversationSkeleton}
+                conversationsError={conversationsError}
+                onSelectConversation={handleSelectConversation}
+                onRetryConversations={fetchConversations}
+                onLoadMoreConversations={handleLoadMoreConversations}
+                onCurrentUserClick={handleOpenCurrentUserProfile}
+              />
+            </FeatureErrorBoundary>
           </div>
         </ModuleSidebar>
       }

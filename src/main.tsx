@@ -10,6 +10,11 @@ import { store } from "./store";
 import { ThemeProvider, bootstrapThemeAttributes } from "./theme";
 import { ResponsiveProvider } from "./responsive/responsive";
 import { logger } from "./utils/logger";
+import { installChunkReloadGuard } from "./utils/chunkReload";
+
+// Catch stale-deploy chunk failures that surface as uncaught errors / rejected
+// dynamic imports (outside any React error boundary) and reload once.
+installChunkReloadGuard();
 
 bootstrapThemeAttributes();
 logger.info(
