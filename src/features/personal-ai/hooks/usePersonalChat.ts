@@ -51,11 +51,16 @@ export function usePersonalChat() {
     if ((activeConversation?.messages.length ?? 0) > 0) return;
     if (fetchedSessionIds.current.has(serverSessionId)) return;
 
+    // Backend yêu cầu X-Employee-Code để xem session cá nhân (thiếu → 403).
+    // Chưa biết mã nhân viên thì hoãn fetch, đừng đánh dấu đã-fetch để còn retry.
+    const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
+    if (!employeeCode) return;
+
     fetchedSessionIds.current.add(serverSessionId);
     const ac = new AbortController();
     setIsLoadingHistory(true);
 
-    fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal })
+    fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode })
       .then((fetched) => {
         if (ac.signal.aborted || !fetched.length) return;
         const normalized = fetched.map((m) => ({
@@ -73,7 +78,7 @@ export function usePersonalChat() {
 
     return () => ac.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversationId, activeConversation?.serverSessionId]);
+  }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
 
   const sendMessage = useCallback(
     async (promptText: string) => {

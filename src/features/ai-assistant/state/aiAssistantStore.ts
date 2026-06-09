@@ -253,6 +253,9 @@ export const useAiAssistantStore = create<AiAssistantState>()(
               c.endpoint === endpoint &&
               c.serverSessionId &&
               isCurrentOwner(c) &&
+              // Loại session ẩn danh (anon-*) còn sót từ lúc chưa đăng nhập —
+              // chúng không thuộc tài khoản này (backend trả 403 khi fetch).
+              !c.serverSessionId.startsWith("anon-") &&
               !serverIds.has(c.serverSessionId) &&
               !deletedIds.has(c.serverSessionId),
           );
