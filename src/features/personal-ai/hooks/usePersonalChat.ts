@@ -60,7 +60,8 @@ export function usePersonalChat() {
     const ac = new AbortController();
     setIsLoadingHistory(true);
 
-    fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode })
+    const userId = user?.id ?? "";
+    fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode, userId })
       .then((fetched) => {
         if (ac.signal.aborted || !fetched.length) return;
         const normalized = fetched.map((m) => ({
@@ -223,14 +224,17 @@ export function usePersonalChat() {
       // Lấy serverSessionId của conversation hiện tại (null = chưa có session trên backend)
       const targetConv = conversations.find((c) => c.id === conversationId);
       const serverSessionId = targetConv?.serverSessionId ?? null;
+      // Gửi new_conversation: true nếu conversation được tạo mới bằng nút "+"
+      // (pendingNew) HOẶC chưa có serverSessionId — belt-and-suspenders đảm bảo
+      // backend luôn tạo session riêng biệt thay vì redirect vào session cũ nhất.
+      const isNewConversation = (targetConv?.pendingNew ?? false) || !serverSessionId;
 
       try {
         const response = await streamPersonalChat(
           {
             question: trimmed,
             session_id: serverSessionId,
-            // Báo backend tạo session mới khi chưa có serverSessionId
-            ...(!serverSessionId && { new_conversation: true }),
+            ...(isNewConversation && { new_conversation: true }),
             employee_code: user?.employeeCode ?? user?.employee_code ?? "",
             employee_name:
               user?.fullNameFromHr ??

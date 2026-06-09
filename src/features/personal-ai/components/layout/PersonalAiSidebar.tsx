@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   UserCircle2Icon,
   PinOffIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { useChatUiStore } from "../../../chat/state/chatUiStore";
@@ -25,6 +26,7 @@ export const PersonalAiSidebar: React.FC = () => {
   const {
     conversations,
     activeConversationId,
+    sessionsLoaded,
     setActiveConversation,
     createConversation,
     deleteConversation,
@@ -178,6 +180,11 @@ export const PersonalAiSidebar: React.FC = () => {
 
       {/* ── Conversation list ── */}
       <div className="flex-1 overflow-y-auto px-2 pb-4 ai-scrollbar">
+        {activeTab === "personal" && !sessionsLoaded ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2Icon size={24} strokeWidth={1.5} className="animate-spin text-text-disabled" />
+          </div>
+        ) : (<>
         <div className="space-y-4">
           {groupedConversations.map((group) => (
             <div key={group.label}>
@@ -281,6 +288,7 @@ export const PersonalAiSidebar: React.FC = () => {
             </p>
           </div>
         )}
+        </>)}
       </div>
 
       {/* ── Footer ── */}

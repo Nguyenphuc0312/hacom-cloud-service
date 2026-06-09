@@ -7,6 +7,7 @@ import {
   sendAiChatMessage,
   uploadPersonalWeeklyReport,
   invalidateWeeklyReportFilenameCache,
+  fetchPersonalSessions,
   AiApiError,
 } from "../services/aiChatApi";
 import { useAiChatSessions, useAiChatHistory } from "../hooks/useAiChatQuery";
@@ -20,6 +21,7 @@ import { AiWeeklyReportFilesDialog } from "../components/AiWeeklyReportFilesDial
 import { toast } from "../../../utils/toast";
 import type { AiMessage } from "../types";
 import { PersonalAiWorkspacePage } from "../../personal-ai/pages/PersonalAiWorkspacePage";
+import { usePersonalAiStore } from "../../personal-ai/stores/personalAiStore";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const WEEKLY_REPORT_ACCEPT =
@@ -70,6 +72,22 @@ export const AiAssistantPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerIdKey]);
 
+  // Pre-load personal sessions ngay khi AiAssistantPage mount — kể cả khi đang
+  // ở tab Công ty, để khi user chuyển sang Cá nhân sidebar đã có dữ liệu.
+  const loadPersonalSessions = usePersonalAiStore((s) => s.loadServerSessions);
+  useEffect(() => {
+    const empCode = user?.employeeCode ?? user?.employee_code ?? "";
+    if (!empCode) return;
+    const ac = new AbortController();
+    fetchPersonalSessions(empCode, { signal: ac.signal })
+      .then(({ sessions }) => {
+        if (sessions.length > 0) loadPersonalSessions(sessions, empCode);
+      })
+      .catch(() => {});
+    return () => ac.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.employeeCode, user?.employee_code]);
+
   // Tải company sessions từ backend để lịch sử chat đi theo tài khoản.
   // Gửi kèm X-User-Id (= user.id, đúng giá trị user_id khi gọi chat stream)
   // để backend trả về đúng session của tài khoản hiện tại.
@@ -114,7 +132,14 @@ export const AiAssistantPage: React.FC = () => {
     activeConversation?.messages.length === 0
       ? rawServerSessionId
       : null;
-  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(serverSessionIdToFetch, companyUserId);
+  // Gửi cả X-User-Id và X-Employee-Code cho GET /api/sessions/{id} — backend
+  // tự chọn header đúng theo loại session (chat-… / personal-…).
+  const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
+  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(
+    serverSessionIdToFetch,
+    companyUserId,
+    employeeCode,
+  );
 
   useEffect(() => {
     if (!historyMessages?.length || !activeConversationId) return;
