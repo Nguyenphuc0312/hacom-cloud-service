@@ -1070,14 +1070,22 @@ export interface PersonalSessionMessage {
 /**
  * GET /api/sessions/{session_id} — lấy messages của một session AI cá nhân.
  * Dùng khi user click vào conversation đã có trên server nhưng chưa có messages trên thiết bị này.
+ *
+ * Backend scope session cá nhân theo MÃ NHÂN VIÊN: phải gửi header
+ * `X-Employee-Code`, nếu thiếu sẽ trả 403 "Bạn không có quyền xem session này".
  */
 export async function fetchPersonalSessionMessages(
   sessionId: string,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; employeeCode?: string },
 ): Promise<PersonalSessionMessage[]> {
   const response = await fetchWithAuth(
     `${BASE_URL}/api/sessions/${sessionId}`,
-    { method: "GET" },
+    {
+      method: "GET",
+      headers: options?.employeeCode
+        ? { "X-Employee-Code": options.employeeCode }
+        : undefined,
+    },
     { signal: options?.signal, timeoutMs: TIMEOUT_MS },
   );
   if (!response.ok) throw new AiApiError(response.status, "http");
