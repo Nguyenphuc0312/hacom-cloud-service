@@ -70,8 +70,11 @@ export const AiAssistantPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerIdKey]);
 
-  // Tải company sessions từ backend để lịch sử chat đi theo tài khoản
-  const { data: companySessions } = useAiChatSessions();
+  // Tải company sessions từ backend để lịch sử chat đi theo tài khoản.
+  // Gửi kèm X-User-Id (= user.id, đúng giá trị user_id khi gọi chat stream)
+  // để backend trả về đúng session của tài khoản hiện tại.
+  const companyUserId = user?.id ?? "";
+  const { data: companySessions } = useAiChatSessions(companyUserId);
   useEffect(() => {
     if (!companySessions || companySessions.length === 0) return;
     const ownerId = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
@@ -101,18 +104,26 @@ export const AiAssistantPage: React.FC = () => {
     (c) => c.id === activeConversationId && c.endpoint === selectedEndpoint,
   );
 
-  // Fetch messages từ server khi conversation có serverSessionId nhưng chưa có messages trên thiết bị này
+  // Fetch messages từ server khi conversation có serverSessionId nhưng chưa có messages trên thiết bị này.
+  // Bỏ qua session ẩn danh (anon-*): được tạo lúc chưa đăng nhập, không thuộc tài khoản này
+  // nên backend luôn trả 403 — không fetch để tránh lỗi đỏ lặp lại trên F12.
+  const rawServerSessionId = activeConversation?.serverSessionId;
   const serverSessionIdToFetch =
-    activeConversation?.serverSessionId && activeConversation.messages.length === 0
-      ? activeConversation.serverSessionId
+    rawServerSessionId &&
+    !rawServerSessionId.startsWith("anon-") &&
+    activeConversation?.messages.length === 0
+      ? rawServerSessionId
       : null;
-  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(serverSessionIdToFetch);
+  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(serverSessionIdToFetch, companyUserId);
 
   useEffect(() => {
     if (!historyMessages?.length || !activeConversationId) return;
+    // Chỉ nạp khi hội thoại đang active thực sự có server session để tải về —
+    // tránh nạp lịch sử cũ vào hội thoại mới (chưa có serverSessionId).
+    if (!serverSessionIdToFetch) return;
     loadMessagesForConversation(activeConversationId, historyMessages);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyMessages, activeConversationId]);
+  }, [historyMessages, activeConversationId, serverSessionIdToFetch]);
 
   const messages = activeConversation?.messages || [];
   const isLoadingHistory = historyLoading && !!serverSessionIdToFetch;

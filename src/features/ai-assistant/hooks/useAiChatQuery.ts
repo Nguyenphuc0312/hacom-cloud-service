@@ -27,8 +27,19 @@ import {
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
 import { normalizeAiChatError } from "../../../services/ai-chat/aiChatClient";
 import { isRetryableError } from "../../../services/ai-chat/normalizeError";
+import { X_USER_ID_HEADER } from "../../../services/ai-chat/constants";
 import type { NormalizedError } from "../../../services/ai-chat/types";
 import type { AiMessage } from "../types";
+
+/**
+ * Build the `X-User-Id` header carrying the same identifier sent as `user_id`
+ * in the chat-stream body. Empty/undefined → no header (backend falls back to
+ * anonymous scope) instead of sending an empty string.
+ */
+function userIdHeader(userId?: string | null): Record<string, string> | undefined {
+  const trimmed = userId?.trim();
+  return trimmed ? { [X_USER_ID_HEADER]: trimmed } : undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -148,7 +159,9 @@ function normalizeMessagesResponse(raw: unknown): AiMessage[] {
 // useAiChatSessions
 // ---------------------------------------------------------------------------
 
-export function useAiChatSessions(): QueryState<AiChatSession[]> {
+export function useAiChatSessions(
+  userId?: string | null,
+): QueryState<AiChatSession[]> {
   const [data, setData] = useState<AiChatSession[] | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
@@ -164,7 +177,7 @@ export function useAiChatSessions(): QueryState<AiChatSession[]> {
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           "/api/sessions",
-          { signal: ac.signal, params: { limit: 100 } },
+          { signal: ac.signal, params: { limit: 100 }, headers: userIdHeader(userId) },
         );
         if (!ac.signal.aborted) {
           const sessions = normalizeSessionsResponse(res);
@@ -185,7 +198,7 @@ export function useAiChatSessions(): QueryState<AiChatSession[]> {
 
     void run();
     return () => ac.abort("cleanup");
-  }, [trigger]);
+  }, [trigger, userId]);
 
   const refetch = useCallback(() => {
     setTrigger((n) => n + 1);
@@ -200,14 +213,22 @@ export function useAiChatSessions(): QueryState<AiChatSession[]> {
 
 export function useAiChatHistory(
   sessionId: string | null | undefined,
+  userId?: string | null,
 ): QueryState<AiMessage[]> {
-  const [data, setData] = useState<AiMessage[] | undefined>(undefined);
+  // Lưu messages KÈM session_id mà chúng thuộc về. Nhờ vậy khi `sessionId`
+  // đổi (chuyển hội thoại / mở hội thoại mới), `data` được tính lại ngay trong
+  // render → KHÔNG để lịch sử cũ rò sang hội thoại khác (hội thoại mới bị
+  // "dính" nội dung cũ).
+  const [entry, setEntry] = useState<{ sid: string; messages: AiMessage[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
   const [trigger, setTrigger] = useState(0);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setEntry(null);
+      return;
+    }
 
     const ac = new AbortController();
     let attempts = 0;
@@ -218,11 +239,11 @@ export function useAiChatHistory(
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           `/api/sessions/${sessionId}`,
-          { signal: ac.signal },
+          { signal: ac.signal, headers: userIdHeader(userId) },
         );
         if (!ac.signal.aborted) {
           const messages = normalizeMessagesResponse(res);
-          setData(messages.length > 0 ? messages : undefined);
+          setEntry(messages.length > 0 ? { sid: sessionId, messages } : null);
         }
       } catch (err) {
         if (ac.signal.aborted) return;
@@ -239,9 +260,12 @@ export function useAiChatHistory(
 
     void run();
     return () => ac.abort("cleanup");
-  }, [sessionId, trigger]);
+  }, [sessionId, trigger, userId]);
 
   const refetch = useCallback(() => setTrigger((n) => n + 1), []);
+
+  // Chỉ trả về data khi nó đúng với sessionId hiện tại (tránh rò dữ liệu cũ).
+  const data = entry && sessionId && entry.sid === sessionId ? entry.messages : undefined;
 
   return { data, loading, error, refetch };
 }
@@ -323,7 +347,7 @@ export function useRenameSession(): MutationState<void, RenameSessionVars> {
 const prefetchCache = new Map<string, { data: AiMessage[]; expiresAt: number }>();
 const PREFETCH_TTL_MS = 60_000;
 
-export function usePrefetchSession() {
+export function usePrefetchSession(userId?: string | null) {
   const prefetch = useCallback((sessionId: string): void => {
     const existing = prefetchCache.get(sessionId);
     if (existing && existing.expiresAt > Date.now()) return;
@@ -332,7 +356,7 @@ export function usePrefetchSession() {
     void aiChatClient
       .get<unknown>(
         `/api/sessions/${sessionId}`,
-        { signal: ac.signal },
+        { signal: ac.signal, headers: userIdHeader(userId) },
       )
       .then(({ data }) => {
         const messages = normalizeMessagesResponse(data);
@@ -346,7 +370,7 @@ export function usePrefetchSession() {
       .catch(() => {
         // Prefetch errors are silently ignored — they're best-effort.
       });
-  }, []);
+  }, [userId]);
 
   return { prefetch };
 }

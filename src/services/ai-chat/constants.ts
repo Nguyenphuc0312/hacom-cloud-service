@@ -67,6 +67,14 @@ export const AUTHORIZATION_HEADER = "Authorization";
  */
 export const X_REQUEST_ID_HEADER = "X-Request-Id";
 
+/**
+ * Identifies the current user to the AI Chat backend.
+ * Carries the same value sent as `user_id` in the chat-stream request body
+ * (i.e. `user.id`). Required by `GET /api/sessions` and `GET /api/sessions/{id}`
+ * so the backend can scope company-AI session history to the right account.
+ */
+export const X_USER_ID_HEADER = "X-User-Id";
+
 // ---------------------------------------------------------------------------
 // Rate limiting
 // ---------------------------------------------------------------------------
