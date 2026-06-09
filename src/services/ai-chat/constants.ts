@@ -75,6 +75,15 @@ export const X_REQUEST_ID_HEADER = "X-Request-Id";
  */
 export const X_USER_ID_HEADER = "X-User-Id";
 
+/**
+ * Identifies the current user by employee code to the AI Chat backend.
+ * `GET /api/personal/sessions` requires it; `GET /api/sessions/{id}` accepts it
+ * for personal sessions (`personal-<code>-…`). Per backend contract, send BOTH
+ * `X-User-Id` and `X-Employee-Code` on `GET /api/sessions/{id}` — the backend
+ * picks the right one based on the session id kind.
+ */
+export const X_EMPLOYEE_CODE_HEADER = "X-Employee-Code";
+
 // ---------------------------------------------------------------------------
 // Rate limiting
 // ---------------------------------------------------------------------------
