@@ -17,6 +17,9 @@ interface AiAssistantState {
   ownerId: string | null;
   /** serverSessionId của các session đã xóa — ngăn loadServerSessions khôi phục lại. */
   deletedServerSessionIds: string[];
+  /** serverSessionId của session đang active — GIÁ TRỊ DUY NHẤT được persist.
+   * Sau F5: dùng để tìm lại conversation đúng sau khi loadServerSessions chạy. */
+  lastSessionId: string | null;
   isSidebarOpen: boolean;
   isSourcePanelOpen: boolean;
   selectedSources: AiSource[] | null;
@@ -53,11 +56,20 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       activeConversationId: null,
       ownerId: null,
       deletedServerSessionIds: [],
+      lastSessionId: null,
       isSidebarOpen: true,
       isSourcePanelOpen: false,
       selectedSources: null as AiSource[] | null,
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) =>
+        set((state) => {
+          if (state.activeConversationId === id) return state;
+          const conv = id ? state.conversations.find((c) => c.id === id) : null;
+          return {
+            activeConversationId: id,
+            ...(conv?.serverSessionId ? { lastSessionId: conv.serverSessionId } : {}),
+          };
+        }),
 
       createNewConversation: (endpoint) => {
         const id = crypto.randomUUID();
@@ -283,12 +295,19 @@ export const useAiAssistantStore = create<AiAssistantState>()(
             !!state.activeConversationId &&
             currentOwnerIds.has(state.activeConversationId);
 
+          // Restore theo lastSessionId nếu active hiện tại không còn hợp lệ
+          const restoredConv = !activeIsCurrentOwner && state.lastSessionId
+            ? [...serverConvs, ...localWithServerId].find(
+                (c) => c.serverSessionId === state.lastSessionId || c.id === state.lastSessionId,
+              )
+            : null;
+
           return {
             conversations: merged,
             ownerId,
             activeConversationId: activeIsCurrentOwner
               ? state.activeConversationId
-              : (serverConvs[0]?.id ?? localWithServerId[0]?.id ?? localOnly[0]?.id ?? null),
+              : (restoredConv?.id ?? serverConvs[0]?.id ?? localWithServerId[0]?.id ?? localOnly[0]?.id ?? null),
           };
         });
       },
@@ -298,6 +317,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
           conversations: state.conversations.map((c) =>
             c.id === localId ? { ...c, serverSessionId } : c,
           ),
+          ...(state.activeConversationId === localId && { lastSessionId: serverSessionId }),
         }));
       },
 
@@ -314,17 +334,16 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       },
 
       clearStore: () => {
-        set({ conversations: [], activeConversationId: null, ownerId: null });
+        set({ conversations: [], activeConversationId: null, ownerId: null, lastSessionId: null });
       },
     }),
     {
       name: "hacom-ai-assistant-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Strip messages before persisting — server (Redis) is source of truth.
-        // Messages are loaded on-demand via loadMessagesForConversation when needed.
-        conversations: state.conversations.map((c) => ({ ...c, messages: [] })),
-        activeConversationId: state.activeConversationId,
+        // Conversations không persist — API là source of truth, tránh stale cache cross-user.
+        // Chỉ lưu lastSessionId để restore active conversation sau F5.
+        lastSessionId: state.lastSessionId,
         isSidebarOpen: state.isSidebarOpen,
         ownerId: state.ownerId,
         deletedServerSessionIds: state.deletedServerSessionIds,
