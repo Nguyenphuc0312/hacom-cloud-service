@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AiConversation, AiEndpoint, AiMessage, AiSource } from "../types";
+import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface ServerSessionInput {
   session_id: string;
@@ -330,5 +331,9 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       }),
     }
   )
+);
+
+registerStoreResetter("ai-assistant", () =>
+  useAiAssistantStore.getState().clearStore(),
 );
 

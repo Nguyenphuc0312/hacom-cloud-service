@@ -1076,15 +1076,17 @@ export interface PersonalSessionMessage {
  */
 export async function fetchPersonalSessionMessages(
   sessionId: string,
-  options?: { signal?: AbortSignal; employeeCode?: string },
+  options?: { signal?: AbortSignal; employeeCode?: string; userId?: string },
 ): Promise<PersonalSessionMessage[]> {
+  // Gửi cả 2 header theo hợp đồng BE — BE tự chọn theo loại session.
+  const scopeHeaders: Record<string, string> = {};
+  if (options?.employeeCode) scopeHeaders["X-Employee-Code"] = options.employeeCode;
+  if (options?.userId) scopeHeaders["X-User-Id"] = options.userId;
   const response = await fetchWithAuth(
     `${BASE_URL}/api/sessions/${sessionId}`,
     {
       method: "GET",
-      headers: options?.employeeCode
-        ? { "X-Employee-Code": options.employeeCode }
-        : undefined,
+      headers: Object.keys(scopeHeaders).length > 0 ? scopeHeaders : undefined,
     },
     { signal: options?.signal, timeoutMs: TIMEOUT_MS },
   );

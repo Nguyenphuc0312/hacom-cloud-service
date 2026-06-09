@@ -27,7 +27,10 @@ import {
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
 import { normalizeAiChatError } from "../../../services/ai-chat/aiChatClient";
 import { isRetryableError } from "../../../services/ai-chat/normalizeError";
-import { X_USER_ID_HEADER } from "../../../services/ai-chat/constants";
+import {
+  X_USER_ID_HEADER,
+  X_EMPLOYEE_CODE_HEADER,
+} from "../../../services/ai-chat/constants";
 import type { NormalizedError } from "../../../services/ai-chat/types";
 import type { AiMessage } from "../types";
 
@@ -39,6 +42,24 @@ import type { AiMessage } from "../types";
 function userIdHeader(userId?: string | null): Record<string, string> | undefined {
   const trimmed = userId?.trim();
   return trimmed ? { [X_USER_ID_HEADER]: trimmed } : undefined;
+}
+
+/**
+ * Headers for `GET /api/sessions/{id}`. Per backend contract, send BOTH
+ * `X-User-Id` and `X-Employee-Code` — the backend resolves ownership by session
+ * kind (`chat-<userId>-…` → user id, `personal-<code>-…` → employee code).
+ * Each header is omitted when its value is empty.
+ */
+function sessionScopeHeaders(
+  userId?: string | null,
+  employeeCode?: string | null,
+): Record<string, string> | undefined {
+  const headers: Record<string, string> = {};
+  const uid = userId?.trim();
+  const code = employeeCode?.trim();
+  if (uid) headers[X_USER_ID_HEADER] = uid;
+  if (code) headers[X_EMPLOYEE_CODE_HEADER] = code;
+  return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +235,7 @@ export function useAiChatSessions(
 export function useAiChatHistory(
   sessionId: string | null | undefined,
   userId?: string | null,
+  employeeCode?: string | null,
 ): QueryState<AiMessage[]> {
   // Lưu messages KÈM session_id mà chúng thuộc về. Nhờ vậy khi `sessionId`
   // đổi (chuyển hội thoại / mở hội thoại mới), `data` được tính lại ngay trong
@@ -239,7 +261,7 @@ export function useAiChatHistory(
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           `/api/sessions/${sessionId}`,
-          { signal: ac.signal, headers: userIdHeader(userId) },
+          { signal: ac.signal, headers: sessionScopeHeaders(userId, employeeCode) },
         );
         if (!ac.signal.aborted) {
           const messages = normalizeMessagesResponse(res);
@@ -260,7 +282,7 @@ export function useAiChatHistory(
 
     void run();
     return () => ac.abort("cleanup");
-  }, [sessionId, trigger, userId]);
+  }, [sessionId, trigger, userId, employeeCode]);
 
   const refetch = useCallback(() => setTrigger((n) => n + 1), []);
 
@@ -347,7 +369,10 @@ export function useRenameSession(): MutationState<void, RenameSessionVars> {
 const prefetchCache = new Map<string, { data: AiMessage[]; expiresAt: number }>();
 const PREFETCH_TTL_MS = 60_000;
 
-export function usePrefetchSession(userId?: string | null) {
+export function usePrefetchSession(
+  userId?: string | null,
+  employeeCode?: string | null,
+) {
   const prefetch = useCallback((sessionId: string): void => {
     const existing = prefetchCache.get(sessionId);
     if (existing && existing.expiresAt > Date.now()) return;
@@ -356,7 +381,7 @@ export function usePrefetchSession(userId?: string | null) {
     void aiChatClient
       .get<unknown>(
         `/api/sessions/${sessionId}`,
-        { signal: ac.signal, headers: userIdHeader(userId) },
+        { signal: ac.signal, headers: sessionScopeHeaders(userId, employeeCode) },
       )
       .then(({ data }) => {
         const messages = normalizeMessagesResponse(data);
@@ -370,7 +395,7 @@ export function usePrefetchSession(userId?: string | null) {
       .catch(() => {
         // Prefetch errors are silently ignored — they're best-effort.
       });
-  }, [userId]);
+  }, [userId, employeeCode]);
 
   return { prefetch };
 }
