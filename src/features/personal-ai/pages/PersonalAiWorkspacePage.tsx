@@ -44,7 +44,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     if (!employeeCode) return;
 
     const ac = new AbortController();
-    fetchPersonalSessions(employeeCode, { signal: ac.signal })
+    fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
         if (sessions.length > 0) {
           loadServerSessions(sessions, employeeCode);

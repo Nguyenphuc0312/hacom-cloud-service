@@ -65,7 +65,7 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
     if (busyFileId !== null) return;
     const viewTab = mode === "view" ? window.open("about:blank", "_blank") : null;
     setBusyFileId(fileId);
-    openWeeklyReportFile(fileId, mode, viewTab, { employeeCode })
+    openWeeklyReportFile(fileId, mode, viewTab)
       .catch(() => viewTab?.close())
       .finally(() => setBusyFileId(null));
   };

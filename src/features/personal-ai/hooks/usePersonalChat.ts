@@ -51,8 +51,9 @@ export function usePersonalChat() {
     if ((activeConversation?.messages.length ?? 0) > 0) return;
     if (fetchedSessionIds.current.has(serverSessionId)) return;
 
-    // Backend yêu cầu X-Employee-Code để xem session cá nhân (thiếu → 403).
-    // Chưa biết mã nhân viên thì hoãn fetch, đừng đánh dấu đã-fetch để còn retry.
+    // Backend lấy mã nhân viên từ JWT Bearer token để scope session cá nhân.
+    // Chờ tới khi user (đã đăng nhập) sẵn sàng rồi mới fetch; chưa có thì hoãn
+    // và đừng đánh dấu đã-fetch để còn retry.
     const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
     if (!employeeCode) return;
 

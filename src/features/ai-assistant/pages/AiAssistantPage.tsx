@@ -79,7 +79,7 @@ export const AiAssistantPage: React.FC = () => {
     const empCode = user?.employeeCode ?? user?.employee_code ?? "";
     if (!empCode) return;
     const ac = new AbortController();
-    fetchPersonalSessions(empCode, { signal: ac.signal })
+    fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
         if (sessions.length > 0) loadPersonalSessions(sessions, empCode);
       })
@@ -89,10 +89,20 @@ export const AiAssistantPage: React.FC = () => {
   }, [user?.employeeCode, user?.employee_code]);
 
   // Tải company sessions từ backend để lịch sử chat đi theo tài khoản.
-  // Gửi kèm X-User-Id (= user.id, đúng giá trị user_id khi gọi chat stream)
-  // để backend trả về đúng session của tài khoản hiện tại.
+  // Backend xác định tài khoản từ JWT Bearer token; userId chỉ dùng làm khoá
+  // refetch khi đổi tài khoản đăng nhập.
   const companyUserId = user?.id ?? "";
-  const { data: companySessions } = useAiChatSessions(companyUserId);
+  const { data: companySessions, refetch: refetchCompanySessions } =
+    useAiChatSessions(companyUserId);
+
+  // Mỗi lần MỞ tab Công ty → tải lại danh sách session mới nhất (GET /api/sessions),
+  // khớp hợp đồng "gọi GET /api/sessions khi mở tab Công ty". Lần fetch đầu đã chạy
+  // lúc mount; effect này lo các lần user quay lại tab. (Tab Cá nhân tự refetch vì
+  // PersonalAiWorkspacePage remount mỗi lần mở.)
+  useEffect(() => {
+    if (selectedEndpoint === "company") refetchCompanySessions();
+  }, [selectedEndpoint, refetchCompanySessions]);
+
   useEffect(() => {
     if (!companySessions || companySessions.length === 0) return;
     const ownerId = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
@@ -132,8 +142,9 @@ export const AiAssistantPage: React.FC = () => {
     activeConversation?.messages.length === 0
       ? rawServerSessionId
       : null;
-  // Gửi cả X-User-Id và X-Employee-Code cho GET /api/sessions/{id} — backend
-  // tự chọn header đúng theo loại session (chat-… / personal-…).
+  // GET /api/sessions/{id}: backend lấy danh tính từ JWT Bearer token và tự
+  // chọn scope theo loại session (chat-… / personal-…); userId/employeeCode chỉ
+  // còn là khoá refetch.
   const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
   const { data: historyMessages, loading: historyLoading } = useAiChatHistory(
     serverSessionIdToFetch,

@@ -1071,23 +1071,17 @@ export interface PersonalSessionMessage {
  * GET /api/sessions/{session_id} — lấy messages của một session AI cá nhân.
  * Dùng khi user click vào conversation đã có trên server nhưng chưa có messages trên thiết bị này.
  *
- * Backend scope session cá nhân theo MÃ NHÂN VIÊN: phải gửi header
- * `X-Employee-Code`, nếu thiếu sẽ trả 403 "Bạn không có quyền xem session này".
+ * Backend scope session cá nhân theo MÃ NHÂN VIÊN, lấy từ JWT Bearer token —
+ * không còn gửi header `X-Employee-Code` / `X-User-Id`. Các field `employeeCode`
+ * / `userId` trong options được giữ để tương thích chữ ký gọi (không dùng nữa).
  */
 export async function fetchPersonalSessionMessages(
   sessionId: string,
   options?: { signal?: AbortSignal; employeeCode?: string; userId?: string },
 ): Promise<PersonalSessionMessage[]> {
-  // Gửi cả 2 header theo hợp đồng BE — BE tự chọn theo loại session.
-  const scopeHeaders: Record<string, string> = {};
-  if (options?.employeeCode) scopeHeaders["X-Employee-Code"] = options.employeeCode;
-  if (options?.userId) scopeHeaders["X-User-Id"] = options.userId;
   const response = await fetchWithAuth(
     `${BASE_URL}/api/sessions/${sessionId}`,
-    {
-      method: "GET",
-      headers: Object.keys(scopeHeaders).length > 0 ? scopeHeaders : undefined,
-    },
+    { method: "GET" },
     { signal: options?.signal, timeoutMs: TIMEOUT_MS },
   );
   if (!response.ok) throw new AiApiError(response.status, "http");
@@ -1107,17 +1101,14 @@ export async function fetchPersonalSessionMessages(
 /**
  * GET /api/personal/sessions — lấy danh sách session AI cá nhân của user.
  * Dùng sau đăng nhập để tải lịch sử chat theo tài khoản thay vì localStorage.
+ * BE tự lấy `employee_code` từ JWT Bearer token — không gửi header riêng nữa.
  */
 export async function fetchPersonalSessions(
-  employeeCode: string,
   options?: { signal?: AbortSignal },
 ): Promise<PersonalSessionsResponse> {
   const response = await fetchWithAuth(
     `${BASE_URL}/api/personal/sessions`,
-    {
-      method: "GET",
-      headers: { "X-Employee-Code": employeeCode },
-    },
+    { method: "GET" },
     { signal: options?.signal, timeoutMs: TIMEOUT_MS },
   );
   if (!response.ok) {

@@ -18,14 +18,6 @@ export interface ReminderActivateResponse {
   message?: string;
 }
 
-function buildReminderHeaders(employeeCode?: string): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (employeeCode) {
-    headers["X-Employee-Code"] = employeeCode;
-  }
-  return headers;
-}
-
 /**
  * The reminder backend keys on a real personal-AI session id. The literal
  * "default" (and empty/nullish values) are NOT valid sessions — calling the
@@ -43,7 +35,6 @@ export function isCallableReminderSession(
 
 export async function checkPersonalReminder(
   sessionId: string,
-  employeeCode?: string,
 ): Promise<ReminderCheckResponse> {
   const token = getAccessToken();
   if (!token) return { pending: false, unread_count: 0, items: [] };
@@ -53,11 +44,9 @@ export async function checkPersonalReminder(
     return { pending: false, unread_count: 0, items: [] };
   }
 
+  // BE lấy employee_code từ JWT Bearer token — không gửi header riêng.
   const params = new URLSearchParams({ session_id: sessionId });
-  const response = await fetchWithAuth(
-    `${REMINDER_URL}?${params.toString()}`,
-    { headers: buildReminderHeaders(employeeCode) },
-  );
+  const response = await fetchWithAuth(`${REMINDER_URL}?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Reminder check failed: ${response.status}`);
   }
@@ -66,7 +55,6 @@ export async function checkPersonalReminder(
 
 export async function activatePersonalReminder(
   sessionId: string,
-  employeeCode?: string,
 ): Promise<ReminderActivateResponse> {
   // Guard against placeholder/empty sessions — these are business-invalid, not
   // an auth failure, so we short-circuit rather than calling the API.
@@ -74,14 +62,12 @@ export async function activatePersonalReminder(
     return { ok: false, created: false };
   }
 
+  // BE lấy employee_code từ JWT Bearer token — không gửi header riêng.
   const response = await fetchWithAuth(
     `${REMINDER_URL}/activate`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildReminderHeaders(employeeCode),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
     },
   );
