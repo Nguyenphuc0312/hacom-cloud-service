@@ -87,6 +87,7 @@ export const SettingsPage: React.FC = () => {
   const currentUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
+  const syncHRMProfile = useAuthStore((state) => state.syncHRMProfile);
 
   const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") {
@@ -114,6 +115,7 @@ export const SettingsPage: React.FC = () => {
   React.useEffect(() => {
     if (isAuthenticated) {
       void syncFromServer();
+      void syncHRMProfile().catch(() => null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
