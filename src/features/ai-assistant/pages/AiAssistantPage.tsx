@@ -233,12 +233,14 @@ export const AiAssistantPage: React.FC = () => {
       const fileToSend = pendingFile;
       const usingUpload = isPersonal && !!fileToSend;
 
-      let currentId = activeConversationId;
+      // Đọc từ live store state để tránh stale closure sau khi loadServerSessions chạy
+      const liveState = useAiAssistantStore.getState();
+      let currentId = liveState.activeConversationId ?? activeConversationId;
 
       // Tạo conversation mới nếu chưa có hoặc endpoint không khớp
       if (
         !currentId ||
-        conversations.find((c) => c.id === currentId)?.endpoint !==
+        liveState.conversations.find((c) => c.id === currentId)?.endpoint !==
         selectedEndpoint
       ) {
         currentId = createNewConversation(selectedEndpoint);
@@ -340,7 +342,7 @@ export const AiAssistantPage: React.FC = () => {
           setWeeklyReportsRefreshKey((k) => k + 1);
         } else {
           const isCompany = selectedEndpoint === "company";
-          const currentConv = conversations.find((c) => c.id === currentId);
+          const currentConv = useAiAssistantStore.getState().conversations.find((c) => c.id === currentId);
           const serverSessionId = currentConv?.serverSessionId ?? null;
 
           const request: any = {
@@ -439,7 +441,6 @@ export const AiAssistantPage: React.FC = () => {
       pendingFile,
       isPersonal,
       activeConversationId,
-      conversations,
       selectedEndpoint,
       user,
       addMessage,
