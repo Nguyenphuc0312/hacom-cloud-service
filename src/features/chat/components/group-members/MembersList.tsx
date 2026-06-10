@@ -29,6 +29,7 @@ interface MembersListProps {
   onTransferOwnership: (memberId: string) => void;
   onBanMember: (memberId: string) => void;
   onRemoveMember: (memberId: string) => void;
+  onMemberClick?: (memberId: string) => void;
   className?: string;
 }
 
@@ -53,6 +54,7 @@ export const MembersList: React.FC<MembersListProps> = ({
   onTransferOwnership,
   onBanMember,
   onRemoveMember,
+  onMemberClick,
   className,
 }) => {
   const { t } = useTranslation("profile");
@@ -103,6 +105,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           onTransferOwnership={onTransferOwnership}
           onBanMember={onBanMember}
           onRemoveMember={onRemoveMember}
+          onMemberClick={onMemberClick}
           isLoading={actingMemberId === member.id}
         />
       ))}
