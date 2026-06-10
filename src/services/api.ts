@@ -486,11 +486,6 @@ export const userApi = {
     return response.data;
   },
 
-  syncProfile: async () => {
-    const response = await apiClient.post<ApiResponse<User>>("/users/profile/sync");
-    return response.data;
-  },
-
   updateProfile: async (data: Partial<User>) => {
     const response = await apiClient.put<ApiResponse<User>>(
       "/users/profile",
