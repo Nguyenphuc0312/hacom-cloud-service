@@ -2,8 +2,13 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
+  BriefcaseIcon,
+  BuildingLibraryIcon,
+  BuildingOffice2Icon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
+  EnvelopeIcon,
+  IdentificationIcon,
   PencilSquareIcon,
   PhoneIcon,
   UserPlusIcon,
@@ -37,6 +42,16 @@ type ProfileUser = Partial<UserSummary> & {
   full_name_from_hr?: string;
   employeeCode?: string;
   employee_code?: string;
+  departmentName?: string;
+  department_name?: string;
+  orgUnit?: string;
+  org_unit?: string;
+  jobTitle?: string;
+  job_title?: string;
+  title?: string;
+  corporateEmail?: string;
+  emailFromHr?: string;
+  email_from_hr?: string;
 };
 
 type UserProfileConversationContext = "standalone" | "direct" | "group";
@@ -124,6 +139,22 @@ const badgeToneByRelationship: Record<string, string> = {
 
 const statCardClass =
   "app-page-subtle rounded-lg px-3 py-2.5 transition-colors";
+
+const readUserValue = (
+  u: ProfileUser | null | undefined,
+  ...keys: string[]
+): string | null => {
+  if (!u) return null;
+  const rec = u as Record<string, unknown>;
+  for (const key of keys) {
+    const v = rec[key];
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+};
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   userId,
@@ -516,6 +547,24 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </p>
                     )}
 
+                    {readUserValue(user, "title", "jobTitle", "job_title") && (
+                      <p className="truncate text-body-sm font-medium text-text-primary">
+                        {readUserValue(user, "title", "jobTitle", "job_title")}
+                      </p>
+                    )}
+
+                    {(readUserValue(user, "departmentName", "department_name") ||
+                      readUserValue(user, "orgUnit", "org_unit")) && (
+                      <p className="truncate text-body-sm text-text-muted">
+                        {[
+                          readUserValue(user, "departmentName", "department_name"),
+                          readUserValue(user, "orgUnit", "org_unit"),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+
                     <p
                       className={clsx(
                         "text-body-sm",
@@ -572,6 +621,90 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </div>
                     </div>
                   ) : null}
+                </section>
+              )}
+
+              {(readUserValue(user, "title", "jobTitle", "job_title") ||
+                readUserValue(user, "departmentName", "department_name") ||
+                readUserValue(user, "orgUnit", "org_unit") ||
+                readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr") ||
+                readUserValue(user, "employeeCode", "employee_code")) && (
+                <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {readUserValue(user, "title", "jobTitle", "job_title") && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <BriefcaseIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.jobTitle", { defaultValue: "Chức danh" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {readUserValue(user, "title", "jobTitle", "job_title")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {readUserValue(user, "departmentName", "department_name") && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <BuildingOffice2Icon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.departmentName", { defaultValue: "Phòng ban" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {readUserValue(user, "departmentName", "department_name")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {readUserValue(user, "orgUnit", "org_unit") && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <BuildingLibraryIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.orgUnit", { defaultValue: "Công ty" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {readUserValue(user, "orgUnit", "org_unit")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr") && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <EnvelopeIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.corporateEmail", { defaultValue: "Email công ty" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {readUserValue(user, "employeeCode", "employee_code") && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <IdentificationIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.employeeCode", { defaultValue: "Mã nhân viên" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {readUserValue(user, "employeeCode", "employee_code")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
 
