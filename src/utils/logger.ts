@@ -31,6 +31,30 @@ const isDebugEnabled = (): boolean =>
 const isProdConsoleEnabled = (): boolean =>
   envValue("VITE_CHAT_ENABLE_PROD_LOGS") === "true";
 
+const isNotifyDebugEnabled = (): boolean => {
+  if (import.meta.env.DEV) {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem("chat-debug-notifications") === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const notifyDebug = (...args: unknown[]): void => {
+  if (!isNotifyDebugEnabled()) {
+    return;
+  }
+
+  console.debug(...args);
+};
+
 const shouldWriteConsole = (options?: LoggerOptions): boolean => {
   if (isDebugEnabled()) {
     return true;

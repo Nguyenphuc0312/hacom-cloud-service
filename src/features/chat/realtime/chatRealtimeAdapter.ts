@@ -52,6 +52,28 @@ const getConversationId = (
   asString(messagePayload.conversationId) ??
   asString(messagePayload.conversation_id);
 
+const getNestedId = (
+  source: Record<string, unknown>,
+  key: "sender" | "from",
+): string | null => asString(asRecord(source[key])?.id);
+
+const getSenderId = (
+  payload: Record<string, unknown>,
+  messagePayload: Record<string, unknown>,
+): string | null =>
+  asString(messagePayload.senderId) ??
+  asString(messagePayload.sender_id) ??
+  getNestedId(messagePayload, "sender") ??
+  getNestedId(payload, "sender") ??
+  getNestedId(messagePayload, "from") ??
+  getNestedId(payload, "from") ??
+  asString(messagePayload.authorId) ??
+  asString(messagePayload.author_id) ??
+  asString(payload.authorId) ??
+  asString(payload.author_id) ??
+  asString(messagePayload.createdBy) ??
+  asString(payload.createdBy);
+
 export const normalizeMessageRealtimeEvent = (
   data: unknown,
   socketEvent: "message:new" | "message:updated",
@@ -93,8 +115,7 @@ export const normalizeMessageRealtimeEvent = (
     undefined;
   const stableId =
     asString(messagePayload.stableId) ?? localId ?? messageId;
-  const senderId =
-    asString(messagePayload.senderId) ?? asString(payload.senderId) ?? undefined;
+  const senderId = getSenderId(payload, messagePayload) ?? undefined;
   const incomingSeq = asFiniteNumber(
     messagePayload.serverSeq ??
       messagePayload.messageSeq ??

@@ -52,6 +52,10 @@ import {
   syncDocumentTitleBadge,
 } from "../utils/realtimeNotifications";
 import { logMessageDebug } from "../utils/messageDebug";
+import {
+  decideIncomingMessageNotification,
+  normalizeMentionUserIds,
+} from "../utils/incomingMessageNotificationPolicy";
 import { normalizeConversation } from "../lib/conversationAdapter";
 import {
   registerChatEvents,
@@ -112,6 +116,7 @@ import {
 } from "./useWebSocketConnectionLifecycle";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import { markChatPerformance } from "../utils/chatPerformance";
+import { notifyDebug } from "../utils/logger";
 import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import type { Message, TypingStatus } from "../types";
 
@@ -145,6 +150,42 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const getSenderProfile = (
+  payload: Record<string, unknown>,
+  messagePayload: Record<string, unknown>,
+): Record<string, unknown> | null =>
+  asRecord(messagePayload.sender) ??
+  asRecord(payload.sender) ??
+  asRecord(messagePayload.from) ??
+  asRecord(payload.from);
+
+const getRealtimeSenderName = (
+  payload: Record<string, unknown>,
+  messagePayload: Record<string, unknown>,
+): string | null => {
+  const senderProfile = getSenderProfile(payload, messagePayload);
+  return (
+    asString(messagePayload.senderName) ??
+    asString(messagePayload.sender_name) ??
+    asString(payload.senderName) ??
+    asString(payload.sender_name) ??
+    asString(senderProfile?.displayName) ??
+    asString(senderProfile?.name) ??
+    asString(senderProfile?.username)
+  );
+};
+
+const getRealtimeMessageContent = (
+  payload: Record<string, unknown>,
+  messagePayload: Record<string, unknown>,
+): string =>
+  asString(messagePayload.content) ??
+  asString(messagePayload.body) ??
+  asString(messagePayload.text) ??
+  asString(payload.content) ??
+  asString(payload.body) ??
+  "";
 
 const getLatestServerSeq = (messages: unknown[]): number | null => {
   let latest: number | null = null;
@@ -742,11 +783,47 @@ export const useWebSocket = (
       eventId?: string | null;
     }) => {
       const currentUserId = useAuthStore.getState().user?.id ?? null;
-      if (
-        !currentUserId ||
-        !input.senderId ||
-        input.senderId === currentUserId
-      ) {
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === input.conversationId);
+      const notificationSettings = getNotificationPreferences();
+      const hasMention =
+        currentUserId !== null && input.mentions.includes(currentUserId);
+      const visibleAndFocused = isDocumentVisibleAndFocused();
+      const isInMessageModule = isMessageModule(window.location.pathname);
+
+      notifyDebug("[notify] called", {
+        senderId: input.senderId,
+        currentUserId,
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        kind: input.kind,
+        visibilityState:
+          typeof document !== "undefined"
+            ? document.visibilityState
+            : "undefined",
+        hasFocus:
+          typeof document !== "undefined" ? document.hasFocus() : false,
+      });
+
+      const decision = decideIncomingMessageNotification({
+        senderId: input.senderId,
+        currentUserId,
+        notificationsEnabled: notificationSettings.enabled,
+        // Missing conversation must NOT be treated as muted.
+        isMuted: Boolean(conversation?.isMuted),
+        hasMention,
+        isInMessageModule,
+        visibleAndFocused,
+      });
+
+      if (decision.bailReason === "self_message") {
+        notifyDebug("[notify] BAIL self-message", {
+          senderId: input.senderId,
+          currentUserId,
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+        });
         logMessageDebug("useWebSocket", "toast_skipped_from_self", {
           conversationId: input.conversationId,
           messageId: input.messageId,
@@ -762,6 +839,11 @@ export const useWebSocket = (
       // RTK events (for state reconciliation) but suppress duplicate toasts.
       const toastDedupKey = `${input.conversationId}:${input.messageId}`;
       if (processedToastEventIdsRef.current.has(toastDedupKey)) {
+        notifyDebug("[notify] BAIL duplicate", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          toastDedupKey,
+        });
         logMessageDebug("useWebSocket", "toast_skipped_duplicate", {
           conversationId: input.conversationId,
           messageId: input.messageId,
@@ -777,8 +859,11 @@ export const useWebSocket = (
         if (firstKey) processedToastEventIdsRef.current.delete(firstKey);
       }
 
-      const notificationSettings = getNotificationPreferences();
-      if (!notificationSettings.enabled) {
+      if (decision.bailReason === "notifications_disabled") {
+        notifyDebug("[notify] BAIL settings disabled", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+        });
         logMessageDebug("useWebSocket", "toast_skipped_notifications_disabled", {
           conversationId: input.conversationId,
           messageId: input.messageId,
@@ -788,18 +873,18 @@ export const useWebSocket = (
         return;
       }
 
-      const conversation = useChatStore
-        .getState()
-        .conversations.find((item) => item.id === input.conversationId);
-      const hasMention = input.mentions.includes(currentUserId);
-      const isMuted = Boolean(conversation?.isMuted);
-      if (isMuted && !hasMention) {
+      if (decision.bailReason === "muted") {
+        notifyDebug("[notify] BAIL muted", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          hasMention,
+        });
         logMessageDebug("useWebSocket", "toast_skipped_muted", {
           conversationId: input.conversationId,
           messageId: input.messageId,
           senderId: input.senderId,
           pathname: window.location.pathname,
-          isMuted,
+          isMuted: true,
           hasMention,
         });
         return;
@@ -807,7 +892,6 @@ export const useWebSocket = (
 
       const isActiveConversation =
         useChatStore.getState().selectedConversationId === input.conversationId;
-      const visibleAndFocused = isDocumentVisibleAndFocused();
       const conversationLabel =
         conversation?.displayName ||
         conversation?.name ||
@@ -839,7 +923,6 @@ export const useWebSocket = (
       });
 
       // Debug: log full decision tree before showing toast
-      const isInMessageModule = isMessageModule(window.location.pathname);
       logMessageDebug("useWebSocket", "toast_decision_tree", {
         conversationId: input.conversationId,
         messageId: input.messageId,
@@ -850,29 +933,11 @@ export const useWebSocket = (
         isActiveConversation,
         visibleAndFocused,
         hasMention,
-        isMuted,
+        isMuted: Boolean(conversation?.isMuted),
         notificationKind,
-        willShowToast: !isInMessageModule,
-        willShowBrowserNotification: !visibleAndFocused,
+        willShowToast: decision.showInAppToast,
+        willShowBrowserNotification: decision.emitBrowserNotification,
       });
-
-      // If user is on the Messages module, the UI is already updating in realtime —
-      // no toast needed. The sidebar badge still updates via store.
-      // NOTE: Do NOT add a secondary isActiveConversation guard here.
-      // ChatPage does not clear selectedConversationId on unmount, so when the
-      // user navigates to Calendar/Tasks/etc., isActiveConversation stays true
-      // for the last-viewed conversation. That would silently suppress toasts
-      // for exactly the conversation the user was just reading — the most
-      // common case when switching modules.
-      if (isInMessageModule) {
-        logMessageDebug("useWebSocket", "toast_skipped_in_message_module", {
-          conversationId: input.conversationId,
-          messageId: input.messageId,
-          senderId: input.senderId,
-          pathname: window.location.pathname,
-        });
-        return;
-      }
 
       const notificationId =
         input.eventId ||
@@ -882,6 +947,74 @@ export const useWebSocket = (
         : hasMention
           ? "Đã nhắc đến bạn."
           : "Tin nhắn mới";
+
+      // OS-level notification whenever the document is hidden or unfocused —
+      // independent of the SPA route. The desktop thin-client hidden to tray
+      // stays on /chat/..., so this must NOT sit behind the message-module
+      // guard below (that regression silently killed all Windows toasts).
+      if (decision.emitBrowserNotification) {
+        notifyDebug("[notify] emit browser notification", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          currentUserId,
+          visibilityState:
+            typeof document !== "undefined"
+              ? document.visibilityState
+              : "undefined",
+          hasFocus:
+            typeof document !== "undefined" ? document.hasFocus() : false,
+        });
+        logMessageDebug("useWebSocket", "browser_notification_emitting", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+          visibleAndFocused,
+          hasMention,
+        });
+        emitBrowserNotification({
+          id: notificationId,
+          tag: `conversation:${input.conversationId}`,
+          title: hasMention
+            ? `${conversationLabel} · Mention`
+            : conversationLabel,
+          body: preview,
+          silent: !notificationSettings.sound,
+          onClick: () => {
+            dispatchNotificationClick({
+              conversationId: input.conversationId,
+              messageId: input.messageId,
+            });
+          },
+        });
+      } else {
+        notifyDebug("[notify] BAIL active visible focused", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          visibleAndFocused,
+          isInMessageModule,
+          isActiveConversation,
+        });
+      }
+
+      // If user is on the Messages module, the UI is already updating in realtime —
+      // no in-app toast needed. The sidebar badge still updates via store.
+      // NOTE: Do NOT add a secondary isActiveConversation guard here.
+      // ChatPage does not clear selectedConversationId on unmount, so when the
+      // user navigates to Calendar/Tasks/etc., isActiveConversation stays true
+      // for the last-viewed conversation. That would silently suppress toasts
+      // for exactly the conversation the user was just reading — the most
+      // common case when switching modules.
+      if (!decision.showInAppToast) {
+        logMessageDebug("useWebSocket", "toast_skipped_in_message_module", {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          pathname: window.location.pathname,
+        });
+        return;
+      }
 
       logMessageDebug("useWebSocket", "toast_showing", {
         conversationId: input.conversationId,
@@ -907,24 +1040,6 @@ export const useWebSocket = (
         conversationId: input.conversationId,
         messageId: input.messageId,
       });
-
-      if (!visibleAndFocused) {
-        emitBrowserNotification({
-          id: notificationId,
-          tag: `conversation:${input.conversationId}`,
-          title: hasMention
-            ? `${conversationLabel} · Mention`
-            : conversationLabel,
-          body: preview,
-          silent: !notificationSettings.sound,
-          onClick: () => {
-            dispatchNotificationClick({
-              conversationId: input.conversationId,
-              messageId: input.messageId,
-            });
-          },
-        });
-      }
     },
     [getNotificationPreferences],
   );
@@ -1162,7 +1277,7 @@ export const useWebSocket = (
       void handleReauthRequiredEvent({ reason });
     };
 
-    const handleReconnectFailed = (_data: unknown) => {
+    const handleReconnectFailed = () => {
       onError?.(new Error(
         t("chat:websocket.reconnectFailed", {
           defaultValue: "Không thể kết nối lại sau nhiều lần thử. Vui lòng kiểm tra mạng và nhấn Thử lại.",
@@ -1242,18 +1357,12 @@ export const useWebSocket = (
           conversationId,
           messageId,
           senderId: senderId ?? null,
-          senderName:
-            asString(messagePayload.senderName) ?? asString(payload.senderName),
-          content:
-            typeof messagePayload.content === "string"
-              ? messagePayload.content
-              : "",
+          senderName: getRealtimeSenderName(payload, messagePayload),
+          content: getRealtimeMessageContent(payload, messagePayload),
           messageType: asString(messagePayload.type) ?? null,
-          mentions: Array.isArray(messagePayload.mentions)
-            ? messagePayload.mentions.filter(
-                (item): item is string => typeof item === "string",
-              )
-            : [],
+          // Server sends Mention[] objects ({ userId, displayName, ... });
+          // normalize to user-id strings so mention bypass works for muted chats.
+          mentions: normalizeMentionUserIds(messagePayload.mentions),
           kind:
             asString(messagePayload.type) === "system" ? "system" : "message",
           eventId,
