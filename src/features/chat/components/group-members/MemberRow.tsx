@@ -25,6 +25,7 @@ interface MemberRowProps {
   onTransferOwnership: (memberId: string) => void;
   onBanMember: (memberId: string) => void;
   onRemoveMember: (memberId: string) => void;
+  onMemberClick?: (memberId: string) => void;
   isLoading?: boolean;
   isMobile?: boolean;
   className?: string;
@@ -45,6 +46,7 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   onTransferOwnership,
   onBanMember,
   onRemoveMember,
+  onMemberClick,
   isLoading = false,
   className,
 }) => {
@@ -60,17 +62,22 @@ export const MemberRow: React.FC<MemberRowProps> = ({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={clsx(
-        "group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover",
+        "group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
         className,
       )}
+      onClick={() => onMemberClick?.(memberId)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onMemberClick?.(memberId); }}
+      aria-label={`Xem hồ sơ ${resolvedName}`}
     >
-      {/* Avatar — 32px */}
+      {/* Avatar */}
       <div className="shrink-0">
         <Avatar src={avatar} alt={resolvedName} size="sm" />
       </div>
 
-      {/* Name + secondary info — takes remaining space, truncates */}
+      {/* Name + secondary info */}
       <div className="min-w-0 flex-1">
         <p
           className={clsx(
@@ -92,7 +99,10 @@ export const MemberRow: React.FC<MemberRowProps> = ({
       </div>
 
       {/* Right column: role badge + actions kebab */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div
+        className="flex shrink-0 items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         <MemberRoleBadge role={role} />
         <MemberActionsMenu
           memberId={memberId}
