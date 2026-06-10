@@ -1,3 +1,5 @@
+import { notifyDebug } from "./logger";
+
 type NavigatorBadgeApi = Navigator & {
   setAppBadge?: (contents?: number) => Promise<void>;
   clearAppBadge?: () => Promise<void>;
@@ -7,6 +9,7 @@ type NavigatorBadgeApi = Navigator & {
 type ChatDesktopBridge = {
   setUnreadBadge?: (count: number) => void;
 };
+
 declare global {
   interface Window {
     chatDesktop?: ChatDesktopBridge;
@@ -109,11 +112,39 @@ export const emitBrowserNotification = ({
   silent = true,
   onClick,
 }: BrowserNotificationInput): boolean => {
-  if (
-    !canUseDom() ||
-    typeof Notification === "undefined" ||
-    Notification.permission !== "granted"
-  ) {
+  const canUseDocument = canUseDom();
+  const notificationType = typeof Notification;
+  const permission =
+    notificationType !== "undefined" ? Notification.permission : "undefined";
+  const isDesktopBridge =
+    typeof window !== "undefined" && Boolean(window.chatDesktop);
+
+  notifyDebug("[emit] entry", {
+    canUseDom: canUseDocument,
+    notificationType,
+    permission,
+    title,
+    tag,
+  });
+
+  if (!canUseDocument) {
+    notifyDebug("[emit] BAIL dom unavailable", { title, tag });
+    return false;
+  }
+
+  if (notificationType === "undefined") {
+    notifyDebug("[emit] BAIL Notification unavailable", { title, tag });
+    return false;
+  }
+
+  const permissionGranted = permission === "granted" || isDesktopBridge;
+  if (!permissionGranted) {
+    notifyDebug("[emit] BAIL permission", {
+      permission,
+      isDesktopBridge,
+      title,
+      tag,
+    });
     return false;
   }
 
@@ -121,6 +152,10 @@ export const emitBrowserNotification = ({
   const now = Date.now();
   const lastAt = browserNotificationCooldown.get(cooldownKey) ?? 0;
   if (now - lastAt < DEFAULT_BROWSER_NOTIFICATION_COOLDOWN_MS) {
+    notifyDebug("[emit] BAIL cooldown", {
+      cooldownKey,
+      remainingMs: DEFAULT_BROWSER_NOTIFICATION_COOLDOWN_MS - (now - lastAt),
+    });
     return false;
   }
   browserNotificationCooldown.set(cooldownKey, now);
@@ -143,6 +178,7 @@ export const emitBrowserNotification = ({
     };
   }
 
+  notifyDebug("[emit] shown", { title, tag: cooldownKey });
   return true;
 };
 
