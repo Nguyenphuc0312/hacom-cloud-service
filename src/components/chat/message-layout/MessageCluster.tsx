@@ -4,10 +4,12 @@ import { Avatar } from "../../common/Avatar";
 import { ReplyPreview } from "./ReplyPreview";
 import { MessageActions } from "../../message/MessageActions";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
+import ReactDOM from "react-dom";
 import type { Attachment, Conversation, ImageClickPayload, Message } from "../../../types";
 import { RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
 import { useAuthStore, useChatStore } from "../../../stores";
+import { UserProfile } from "../../info/UserProfile";
 import {
   resolveMessageActions,
   type MessageActionId,
@@ -112,6 +114,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const [isHovered, setIsHovered] = React.useState(false);
   const [showReactionPicker, setShowReactionPicker] = React.useState(false);
   const [editHistoryMessageId, setEditHistoryMessageId] = React.useState<string | null>(null);
+  const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -399,6 +402,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                   src={message.senderAvatar}
                   alt={senderDisplayName}
                   size="sm"
+                  onClick={() => setViewingUserId(message.senderId)}
                 />
               ) : null}
             </div>
@@ -524,6 +528,32 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           messageId={editHistoryMessageId}
           onClose={() => setEditHistoryMessageId(null)}
         />
+      )}
+
+      {viewingUserId && ReactDOM.createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingUserId(null)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <UserProfile
+              userId={viewingUserId}
+              currentUserId={currentUserId ?? ""}
+              conversationContext="group"
+              initialUser={
+                viewingUserId === message.senderId
+                  ? { id: message.senderId, username: message.senderId, displayName: message.senderName ?? undefined, avatar: message.senderAvatar ?? undefined }
+                  : null
+              }
+              onClose={() => setViewingUserId(null)}
+            />
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

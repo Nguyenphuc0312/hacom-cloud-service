@@ -32,6 +32,7 @@ import {
 } from "../../../utils/messageTimeline";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
+import { UserProfile } from "../../info/UserProfile";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type {
   ConversationThreadGroupRow,
@@ -802,6 +803,9 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   highlightedMessageId,
 }) => {
   const leadMessage = row.items[0]?.message;
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
+
   if (!leadMessage) {
     return null;
   }
@@ -826,11 +830,34 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               alt={senderDisplayName}
               size="sm"
               className="thread-message-avatar"
+              onClick={() => setViewingUserId(leadMessage.senderId)}
             />
           ) : (
             <div className="h-8 w-8" aria-hidden="true" />
           )}
         </div>
+      )}
+
+      {viewingUserId && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingUserId(null)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <UserProfile
+              userId={viewingUserId}
+              currentUserId={currentUserId ?? ""}
+              conversationContext="group"
+              initialUser={{ id: leadMessage.senderId, username: leadMessage.senderId, displayName: leadMessage.senderName ?? undefined, avatar: leadMessage.senderAvatar ?? undefined }}
+              onClose={() => setViewingUserId(null)}
+            />
+          </div>
+        </div>,
+        document.body,
       )}
 
       <div

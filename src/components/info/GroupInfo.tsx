@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import ReactDOM from "react-dom";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -1604,7 +1605,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       />
 
       {/* Member profile modal */}
-      {viewingMemberId && (
+      {viewingMemberId && ReactDOM.createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setViewingMemberId(null)}
@@ -1625,7 +1626,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               onClose={() => setViewingMemberId(null)}
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
