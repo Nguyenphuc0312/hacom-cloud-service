@@ -31,10 +31,7 @@ export const useReminderStore = create<ReminderState>()((set) => ({
     }
 
     try {
-      const data = await checkPersonalReminder(
-        sessionId,
-        user.employeeCode ?? user.employee_code,
-      );
+      const data = await checkPersonalReminder(sessionId);
       set({ hasPendingReminder: data.pending && data.unread_count > 0 });
     } catch (err) {
       // Reminder is an optional widget — never escalate to logout/session.
@@ -45,7 +42,6 @@ export const useReminderStore = create<ReminderState>()((set) => ({
   activateReminder: async () => {
     set({ hasPendingReminder: false });
 
-    const user = useAuthStore.getState().user;
     const personalStore = usePersonalAiStore.getState();
 
     let conversationId = personalStore.activeConversationId;
@@ -54,10 +50,7 @@ export const useReminderStore = create<ReminderState>()((set) => ({
     }
 
     try {
-      const data = await activatePersonalReminder(
-        conversationId,
-        user?.employeeCode ?? user?.employee_code,
-      );
+      const data = await activatePersonalReminder(conversationId);
       if (data.ok && data.message) {
         personalStore.addMessage(conversationId, {
           id: crypto.randomUUID(),
