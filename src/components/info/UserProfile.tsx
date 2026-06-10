@@ -30,6 +30,7 @@ import {
 } from "../../services/userProfileCache";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
+import { resolvePublicResourceUrl } from "../../config";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -81,7 +82,7 @@ const toProfileUser = (payload: CachedUserProfile): ProfileUser => ({
   firstName: payload.firstName,
   lastName: payload.lastName,
   displayName: payload.displayName,
-  avatar: payload.avatar,
+  avatar: resolvePublicResourceUrl(payload.avatar ?? undefined),
   bio: payload.bio,
   phone: payload.phone,
   createdAt: payload.createdAt,
@@ -238,7 +239,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const user: ProfileUser | null = isSelf
     ? selfProfile
     : fetchedUser && fetchedUser.id === userId
-      ? fetchedUser
+      ? { ...fetchedUser, avatar: resolvedInitialUser?.avatar || fetchedUser.avatar }
       : (resolvedInitialUser ?? null);
 
   // Fetch the target user's detail ONCE per userId (cached + in-flight deduped
@@ -678,12 +679,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr") && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
-                        <EnvelopeIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
-                        <div>
+                        <EnvelopeIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0]" />
+                        <div className="min-w-0">
                           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                             {t("profile:settings.corporateEmail", { defaultValue: "Email công ty" })}
                           </p>
-                          <p className="mt-1 text-sm text-text-primary">
+                          <p className="mt-1 break-all text-sm text-text-primary">
                             {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr")}
                           </p>
                         </div>

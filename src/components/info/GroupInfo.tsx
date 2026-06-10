@@ -66,6 +66,7 @@ import {
   DeleteGroupModal,
 } from "../../features/chat/components/group-members";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
+import { UserProfile } from "./UserProfile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -369,6 +370,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [memberSearch, setMemberSearch] = useState("");
   const [memberFilterRole, setMemberFilterRole] = useState<"all" | "leadership">("all");
   const [membersShowAll, setMembersShowAll] = useState(false);
+
+  // Member profile preview
+  const [viewingMemberId, setViewingMemberId] = useState<string | null>(null);
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
@@ -1220,6 +1224,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   currentUserRole={currentUserRole}
                   capabilities={groupCapabilities}
                   actingMemberId={actingMemberId}
+                  onMemberClick={(memberId) => setViewingMemberId(memberId)}
                   onMakeAdmin={(memberId) => {
                     const member = members.find((m) => m.id === memberId);
                     if (member) void handleToggleMemberRole(member);
@@ -1597,6 +1602,31 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         groupName={conversation.name || ""}
         isLoading={isConfirmActionPending}
       />
+
+      {/* Member profile modal */}
+      {viewingMemberId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingMemberId(null)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <UserProfile
+              userId={viewingMemberId}
+              currentUserId={currentUserId}
+              conversationContext="group"
+              initialUser={(() => {
+                const m = members.find((mem) => mem.id === viewingMemberId);
+                return m ? { id: m.id, username: m.username, displayName: m.displayName, avatar: m.avatar, status: m.status } : null;
+              })()}
+              onClose={() => setViewingMemberId(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
