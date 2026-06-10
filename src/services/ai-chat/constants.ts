@@ -67,22 +67,9 @@ export const AUTHORIZATION_HEADER = "Authorization";
  */
 export const X_REQUEST_ID_HEADER = "X-Request-Id";
 
-/**
- * Identifies the current user to the AI Chat backend.
- * Carries the same value sent as `user_id` in the chat-stream request body
- * (i.e. `user.id`). Required by `GET /api/sessions` and `GET /api/sessions/{id}`
- * so the backend can scope company-AI session history to the right account.
- */
-export const X_USER_ID_HEADER = "X-User-Id";
-
-/**
- * Identifies the current user by employee code to the AI Chat backend.
- * `GET /api/personal/sessions` requires it; `GET /api/sessions/{id}` accepts it
- * for personal sessions (`personal-<code>-…`). Per backend contract, send BOTH
- * `X-User-Id` and `X-Employee-Code` on `GET /api/sessions/{id}` — the backend
- * picks the right one based on the session id kind.
- */
-export const X_EMPLOYEE_CODE_HEADER = "X-Employee-Code";
+// NOTE: identity headers (X-User-Id / X-Employee-Code) were removed — the AI
+// Chat backend now extracts user_id / employee_code from the JWT Bearer token,
+// so the FE sends only `Authorization: Bearer <token>` for identity.
 
 // ---------------------------------------------------------------------------
 // Rate limiting

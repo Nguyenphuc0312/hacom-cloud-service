@@ -27,40 +27,13 @@ import {
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
 import { normalizeAiChatError } from "../../../services/ai-chat/aiChatClient";
 import { isRetryableError } from "../../../services/ai-chat/normalizeError";
-import {
-  X_USER_ID_HEADER,
-  X_EMPLOYEE_CODE_HEADER,
-} from "../../../services/ai-chat/constants";
 import type { NormalizedError } from "../../../services/ai-chat/types";
 import type { AiMessage } from "../types";
 
-/**
- * Build the `X-User-Id` header carrying the same identifier sent as `user_id`
- * in the chat-stream body. Empty/undefined → no header (backend falls back to
- * anonymous scope) instead of sending an empty string.
- */
-function userIdHeader(userId?: string | null): Record<string, string> | undefined {
-  const trimmed = userId?.trim();
-  return trimmed ? { [X_USER_ID_HEADER]: trimmed } : undefined;
-}
-
-/**
- * Headers for `GET /api/sessions/{id}`. Per backend contract, send BOTH
- * `X-User-Id` and `X-Employee-Code` — the backend resolves ownership by session
- * kind (`chat-<userId>-…` → user id, `personal-<code>-…` → employee code).
- * Each header is omitted when its value is empty.
- */
-function sessionScopeHeaders(
-  userId?: string | null,
-  employeeCode?: string | null,
-): Record<string, string> | undefined {
-  const headers: Record<string, string> = {};
-  const uid = userId?.trim();
-  const code = employeeCode?.trim();
-  if (uid) headers[X_USER_ID_HEADER] = uid;
-  if (code) headers[X_EMPLOYEE_CODE_HEADER] = code;
-  return Object.keys(headers).length > 0 ? headers : undefined;
-}
+// Identity (user_id / employee_code) is carried by the JWT Bearer token now;
+// the backend extracts it server-side, so no X-User-Id / X-Employee-Code
+// header is built here. The `userId` / `employeeCode` args are kept only as
+// refetch keys (re-run the query when the signed-in account changes).
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -198,7 +171,7 @@ export function useAiChatSessions(
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           "/api/sessions",
-          { signal: ac.signal, params: { limit: 100 }, headers: userIdHeader(userId) },
+          { signal: ac.signal, params: { limit: 100 } },
         );
         if (!ac.signal.aborted) {
           const sessions = normalizeSessionsResponse(res);
@@ -261,7 +234,7 @@ export function useAiChatHistory(
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           `/api/sessions/${sessionId}`,
-          { signal: ac.signal, headers: sessionScopeHeaders(userId, employeeCode) },
+          { signal: ac.signal },
         );
         if (!ac.signal.aborted) {
           const messages = normalizeMessagesResponse(res);
@@ -381,7 +354,7 @@ export function usePrefetchSession(
     void aiChatClient
       .get<unknown>(
         `/api/sessions/${sessionId}`,
-        { signal: ac.signal, headers: sessionScopeHeaders(userId, employeeCode) },
+        { signal: ac.signal },
       )
       .then(({ data }) => {
         const messages = normalizeMessagesResponse(data);

@@ -289,15 +289,11 @@ export async function selectPersonalSources(
   if (options?.employeeCode) body.employee_code = options.employeeCode;
   if (options?.sessionId) body.session_id = options.sessionId;
 
-  // BE cần xác thực để biết session của ai cần cập nhật.
-  // Ngoài Bearer token (đã có trong buildAuthHeaders), gửi thêm X-Employee-Code
-  // để BE có thể fallback khi Bearer không decode được employee_code.
-  const extraHeaders: Record<string, string> = { "Content-Type": "application/json" };
-  if (options?.employeeCode) extraHeaders["X-Employee-Code"] = options.employeeCode;
-
+  // BE lấy employee_code từ JWT Bearer token (đã có trong buildAuthHeaders) để
+  // biết session nào cần cập nhật — không gửi header X-Employee-Code nữa.
   await aiRequest(`${DOCS_BASE}/source`, {
     method: "POST",
-    headers: extraHeaders,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal: options?.signal,
   });
@@ -340,19 +336,14 @@ export async function openWeeklyReportFile(
   fileId: number,
   mode: "view" | "download",
   viewTab?: Window | null,
-  options?: { employeeCode?: string },
 ): Promise<void> {
-  // BE yêu cầu header X-Employee-Code (thiếu → 400), không nhận qua query.
+  // BE lấy mã nhân viên từ JWT Bearer token — không gửi header X-Employee-Code.
   const url =
     mode === "view"
       ? `${WEEKLY_REPORT_FILES_BASE}/${fileId}/view`
       : `${WEEKLY_REPORT_FILES_BASE}/${fileId}`;
 
-  const response = await aiRequest(url, {
-    headers: options?.employeeCode
-      ? { "X-Employee-Code": options.employeeCode }
-      : undefined,
-  });
+  const response = await aiRequest(url);
   const contentType = response.headers.get("content-type") ?? "";
   const disposition = response.headers.get("content-disposition") ?? "";
   let filename = `bao-cao-tuan-${fileId}`;
@@ -455,9 +446,9 @@ function normalizeWeeklyReportFileList(payload: unknown): WeeklyReportFileItem[]
 /**
  * GET /api/chat/personal/weekly-report/files
  *
- * BE scope danh sách theo mã nhân viên qua HEADER `X-Employee-Code`
- * (KHÔNG phải query param). Thiếu header → 400 "Không xác định được mã nhân viên".
- * Query chỉ nhận week_start / week_end / company / limit.
+ * BE scope danh sách theo mã nhân viên lấy từ JWT Bearer token — không gửi
+ * header `X-Employee-Code` nữa. Query chỉ nhận week_start / week_end / company /
+ * limit. Field `employeeCode` trong options được giữ để tương thích (không dùng).
  */
 export async function listPersonalWeeklyReportFiles(options?: {
   employeeCode?: string;
@@ -474,9 +465,6 @@ export async function listPersonalWeeklyReportFiles(options?: {
   params.set("limit", String(Math.min(500, Math.max(1, options?.limit ?? 200))));
   const url = `${WEEKLY_REPORT_FILES_BASE}?${params.toString()}`;
   const response = await aiRequest(url, {
-    headers: options?.employeeCode
-      ? { "X-Employee-Code": options.employeeCode }
-      : undefined,
     signal: options?.signal,
   });
   const text = await response.text();
