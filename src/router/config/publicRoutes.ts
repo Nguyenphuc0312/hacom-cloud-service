@@ -1,8 +1,8 @@
 import { lazy } from "react";
 import type { AppRouteConfig } from "../types";
 import { ROUTE_PATHS } from "../paths";
+import { LoginPage } from "../../pages/LoginPage";
 
-const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const ActivationFlowPage = lazy(
   () => import("../../features/activation/pages/ActivationFlowPage"),
 );
