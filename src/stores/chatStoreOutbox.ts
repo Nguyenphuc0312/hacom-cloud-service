@@ -8,6 +8,10 @@ type OutboxStateSlice = {
   outboxByConversation: Record<string, string[]>;
   sendRestrictionsByConversation: Record<string, SendRestriction | undefined>;
   messages: Record<string, Message[]>;
+  conversations?: Array<{
+    id: string;
+    sendRestriction?: { code?: string; reason?: string } | null;
+  }>;
 };
 
 type SetState<TState extends OutboxStateSlice> = (
@@ -420,6 +424,51 @@ export const createChatOutboxController = <TState extends OutboxStateSlice>({
           errorCode,
           failureReason: "slow_mode",
           errorMessage: apiError.message || "slow_mode_active",
+        });
+        throw error;
+      }
+
+      if (errorCode === "DIRECT_CHAT_FRIENDSHIP_REQUIRED") {
+        const conversationRestriction = get().conversations?.find(
+          (item) => item.id === conversationId,
+        )?.sendRestriction;
+        const friendshipMessage =
+          conversationRestriction?.reason === "UNFRIENDED"
+            ? i18n.t("chat:composer.unfriendedRestriction", {
+                defaultValue:
+                  "You are no longer friends. Add this person as a friend again to continue messaging.",
+              })
+            : i18n.t("chat:composer.friendshipRequiredRestriction", {
+                defaultValue:
+                  "You can only message friends. Send a friend request to start the conversation.",
+              });
+        setSendRestriction(conversationId, {
+          code: errorCode,
+          reason: friendshipMessage,
+          kind: "permission",
+        });
+        failOutgoingMessage(
+          conversationId,
+          message.clientMessageId ||
+            message.stableId ||
+            message.localId ||
+            message.id,
+          {
+            sendState: "failed",
+            status: MessageStatus.FAILED,
+            failureReason: "permission",
+            errorCode,
+            errorMessage: friendshipMessage,
+          },
+        );
+        logMessageDebug("chatStore", "send_request_failed", {
+          conversationId,
+          queueKey,
+          correlationKey: getCorrelationKeyForMessage(message),
+          messageId: message.id,
+          errorCode,
+          failureReason: "permission",
+          errorMessage: apiError.message || "direct_chat_friendship_required",
         });
         throw error;
       }

@@ -1,4 +1,10 @@
-import type { Conversation, MessageSummary, UserSummary } from "../types";
+import type {
+  Conversation,
+  ConversationSendRestrictionCode,
+  ConversationSendRestrictionDto,
+  MessageSummary,
+  UserSummary,
+} from "../types";
 import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
 
 type UnknownRecord = Record<string, unknown>;
@@ -21,6 +27,35 @@ const asBoolean = (value: unknown, fallback = false): boolean =>
 
 const asNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const SEND_RESTRICTION_CODES: readonly ConversationSendRestrictionCode[] = [
+  "FRIENDSHIP_REQUIRED",
+  "UNFRIENDED",
+  "PERMISSION_DENIED",
+];
+
+const asSendRestriction = (
+  value: unknown,
+): ConversationSendRestrictionDto | null | undefined => {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const code = asString(value.code);
+  if (
+    !code ||
+    !SEND_RESTRICTION_CODES.includes(code as ConversationSendRestrictionCode)
+  ) {
+    return undefined;
+  }
+  return {
+    code: code as ConversationSendRestrictionCode,
+    ...(asString(value.reason) ? { reason: asString(value.reason) } : {}),
+    ...(asString(value.message) ? { message: asString(value.message) } : {}),
+  };
+};
 
 const asNullableDateValue = (
   value: unknown,
@@ -499,6 +534,11 @@ export const normalizeConversation = (
       : {}),
     ...(typeof payload.canCurrentUserSend === "boolean"
       ? { canCurrentUserSend: payload.canCurrentUserSend }
+      : {}),
+    // Sanitize whenever the key is present: malformed payloads collapse to null
+    // (no restriction info) instead of leaking through the raw payload spread.
+    ...(payload.sendRestriction !== undefined
+      ? { sendRestriction: asSendRestriction(payload.sendRestriction) ?? null }
       : {}),
     ...(asNumber(payload.summaryVersion) !== undefined
       ? { summaryVersion: asNumber(payload.summaryVersion) }
