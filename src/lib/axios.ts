@@ -30,6 +30,7 @@ import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 import { isDefiniteAuthRefreshFailure } from "../services/authRefreshErrorClassifier";
 import { logger } from "../utils/logger";
 import { apiPerfLogger } from "../utils/apiPerfLogger";
+import { softNavigate } from "./softNavigator";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -389,7 +390,7 @@ apiClient.interceptors.response.use(
         typeof window !== "undefined" &&
         window.location.pathname !== "/force-change-password"
       ) {
-        window.location.replace("/force-change-password");
+        softNavigate("/force-change-password", { replace: true });
       }
       return Promise.reject(error);
     }

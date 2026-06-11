@@ -177,6 +177,7 @@ interface AuthState {
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
   ) => Promise<RegisterFlowResult>;
   logout: () => Promise<void>;
+  logoutSoft: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
   updateUser: (data: Partial<User>) => void;
@@ -766,6 +767,15 @@ export const useAuthStore = create<AuthState>()(
             notifyServer: true,
             broadcast: true,
             redirect: true,
+          });
+        },
+
+        logoutSoft: async () => {
+          await runLogoutFlow({
+            reason: "manual_logout",
+            notifyServer: true,
+            broadcast: true,
+            redirect: false,
           });
         },
 

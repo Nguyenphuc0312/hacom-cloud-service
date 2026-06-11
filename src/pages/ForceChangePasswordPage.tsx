@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { AuthLayoutSplit, AuthLogo, PasswordField } from "../components/auth";
+import { AuthLogo, PasswordField } from "../components/auth";
 import { Button } from "../components/ui";
 import { PasswordStrength } from "../components/ui";
 import { toast } from "../components/ui";
@@ -16,7 +16,7 @@ import { translateI18nMessage } from "../utils/userMessages";
 
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { logout } = useAuthStore();
+  const { logoutSoft } = useAuthStore();
   const { t } = useTranslation();
 
   const {
@@ -45,7 +45,7 @@ export const ForceChangePasswordPage: React.FC = () => {
       });
 
       toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
-      await logout();
+      await logoutSoft();
     } catch (error: unknown) {
       const apiError = extractApiError(error);
       toast.error(
@@ -53,7 +53,7 @@ export const ForceChangePasswordPage: React.FC = () => {
       );
 
       if (apiError.statusCode === 401) {
-        await logout();
+        await logoutSoft();
       }
     } finally {
       setIsSubmitting(false);
@@ -61,8 +61,7 @@ export const ForceChangePasswordPage: React.FC = () => {
   };
 
   return (
-    <AuthLayoutSplit>
-      <div className="flex flex-col">
+    <div className="flex flex-col">
         <AuthLogo subtitle="Đổi mật khẩu bắt buộc" />
 
         <p className="mb-[clamp(12px,2dvh,20px)] text-center text-sm leading-6 text-text-muted">
@@ -123,7 +122,7 @@ export const ForceChangePasswordPage: React.FC = () => {
               size="md"
               className="h-11 flex-1 rounded-xl text-sm font-semibold"
               disabled={isSubmitting}
-              onClick={() => logout()}
+              onClick={() => void logoutSoft()}
             >
               Quay lại đăng nhập
             </Button>
@@ -140,8 +139,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             </Button>
           </div>
         </form>
-      </div>
-    </AuthLayoutSplit>
+    </div>
   );
 };
 

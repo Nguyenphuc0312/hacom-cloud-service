@@ -86,7 +86,7 @@ export const SettingsPage: React.FC = () => {
   } = useSettings();
   const currentUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const logout = useAuthStore((state) => state.logout);
+  const logoutSoft = useAuthStore((state) => state.logoutSoft);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
 
   const [isMobile, setIsMobile] = React.useState(() => {
@@ -215,8 +215,7 @@ export const SettingsPage: React.FC = () => {
 
   const handleSelectNav = (navId: SettingsNavId) => {
     if (navId === "logout") {
-      logout();
-      navigate(ROUTE_PATHS.LOGIN, { replace: true });
+      void logoutSoft().then(() => navigate(ROUTE_PATHS.LOGIN, { replace: true }));
       return;
     }
 

@@ -16,7 +16,6 @@ export const JoinByLinkPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token = "" } = useParams<{ token: string }>();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isInitialized = useAuthStore((state) => state.isInitialized);
 
   const [status, setStatus] = useState<JoinStatus>("idle");
@@ -62,23 +61,15 @@ export const JoinByLinkPage: React.FC = () => {
     [t],
   );
 
-  // Auto-join on mount: wait for auth init, redirect to login if unauthenticated, otherwise join immediately.
+  // Auto-join on mount once auth is confirmed (ProtectedRoute guarantees isAuthenticated).
   useEffect(() => {
     if (!isInitialized) return;
     if (!token) return;
     if (status !== "idle") return;
 
-    if (!isAuthenticated) {
-      navigate(ROUTE_PATHS.LOGIN, {
-        state: { from: `/join/${token}` },
-        replace: true,
-      });
-      return;
-    }
-
     void joinAndNavigate(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, isAuthenticated, isInitialized, status]);
+  }, [token, isInitialized, status]);
 
   const openChat = useCallback(() => {
     if (conversationId) {

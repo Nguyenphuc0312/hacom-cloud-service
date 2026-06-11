@@ -1,16 +1,24 @@
 import React, { Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { ToastProvider, PageSpinner } from "../components/ui";
 import { AppErrorBoundary } from "../components/error";
 import { SettingsApplier } from "../components/settings";
 import { scheduleChunkReloadFlagReset } from "../utils/chunkReload";
+import { registerSoftNavigator } from "../lib/softNavigator";
 
 /**
  * Global layout for app-level providers and lazy-route fallback.
  */
 export const RootLayout: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    registerSoftNavigator((path, options) => {
+      navigate(path, { replace: options?.replace ?? true });
+    });
+  }, [navigate]);
 
   useEffect(() => {
     // The app shell mounted on the current build → allow a future (unrelated)

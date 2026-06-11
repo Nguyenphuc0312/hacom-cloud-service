@@ -2,9 +2,10 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import { RootLayout } from "../layouts/RootLayout";
 import { AuthLayout } from "../layouts/AuthLayout";
+import { AuthSplitLayout } from "../layouts/AuthSplitLayout";
 import { AppLayout } from "../layouts/AppLayout";
 import { ProtectedRoute } from "./guards/RouteGuards";
-import { buildPrivateRouteObjects, buildPublicRouteObjects } from "./builders";
+import { buildPrivateRouteObjects, buildSplitPublicRouteObjects, buildNonSplitPublicRouteObjects } from "./builders";
 import { ROUTE_PATHS } from "./paths";
 import { RouterErrorBoundary } from "../components/common/RouterErrorBoundary";
 import { NotFoundPage } from "../pages/errors";
@@ -17,7 +18,13 @@ const routeTree: RouteObject[] = [
     children: [
       {
         element: <AuthLayout />,
-        children: buildPublicRouteObjects(),
+        children: [
+          {
+            element: <AuthSplitLayout />,
+            children: buildSplitPublicRouteObjects(),
+          },
+          ...buildNonSplitPublicRouteObjects(),
+        ],
       },
       {
         element: (
