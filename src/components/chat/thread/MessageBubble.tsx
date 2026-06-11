@@ -7,6 +7,7 @@ interface MessageBubbleProps {
   isOwn: boolean;
   position: MessageBubblePosition;
   isRich?: boolean;
+  hasError?: boolean;
   isHighlighted?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -30,13 +31,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isOwn,
   position,
   isRich = false,
+  hasError = false,
   isHighlighted = false,
   className,
   children,
 }) => (
   <div
     className={clsx(
-      "relative inline-block max-w-full overflow-hidden transition-colors",
+      "relative inline-block box-border min-w-0 max-w-full overflow-hidden transition-colors",
+      hasError && "min-w-[8.5rem]",
       isOwn
         ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"
         : "border border-black/[0.09] dark:border-white/[0.09] bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",

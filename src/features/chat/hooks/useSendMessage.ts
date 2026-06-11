@@ -125,6 +125,73 @@ const toSendMessageAttachments = (
   }));
 };
 
+const retryRequestsInFlight = new Set<string>();
+
+const getRetryMessageKey = (message: Message): string | null =>
+  message.clientMessageId ||
+  message.stableId ||
+  message.localId ||
+  message.id ||
+  null;
+
+const getRetryReplyToId = (message: Message): string | undefined => {
+  if (typeof message.replyTo === "string") return message.replyTo;
+  if (typeof message.replyToMessage?.id === "string") {
+    return message.replyToMessage.id;
+  }
+  return undefined;
+};
+
+const getRetryContentFormat = (
+  message: Message,
+): "plain_text" | "rich_text" | undefined =>
+  message.contentFormat === "plain_text" || message.contentFormat === "rich_text"
+    ? message.contentFormat
+    : undefined;
+
+export const useRetrySendMessage = () => {
+  const [sendMessageMutation] = useSendMessageMutation();
+
+  return React.useCallback(
+    async (message: Message) => {
+      const conversationId = message.conversationId;
+      const clientMessageId = getRetryMessageKey(message);
+      if (!conversationId || !clientMessageId) {
+        return;
+      }
+
+      const requestKey = `${conversationId}:${clientMessageId}`;
+      if (retryRequestsInFlight.has(requestKey)) {
+        return;
+      }
+
+      retryRequestsInFlight.add(requestKey);
+      try {
+        await sendMessageMutation({
+          conversationId,
+          clientMessageId,
+          localId: message.localId || `temp-${clientMessageId}`,
+          content: message.content || "",
+          contentFormat: getRetryContentFormat(message),
+          contentJson: message.contentJson,
+          plainText: message.plainText,
+          type: message.type,
+          replyToId: getRetryReplyToId(message),
+          replyToMessage: message.replyToMessage as Message | undefined,
+          senderId: message.senderId,
+          senderName: message.senderName,
+          senderAvatar: message.senderAvatar,
+          mentions: message.mentions,
+          attachments: toSendMessageAttachments(message.attachments),
+        }).unwrap();
+      } finally {
+        retryRequestsInFlight.delete(requestKey);
+      }
+    },
+    [sendMessageMutation],
+  );
+};
+
 export const useSendMessage = ({
   selectedConversationId = null,
   conversationId,

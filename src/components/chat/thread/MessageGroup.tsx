@@ -31,6 +31,7 @@ import {
   getMessageStableKey,
 } from "../../../utils/messageTimeline";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
+import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { UserProfile } from "../../info/UserProfile";
 import type { ChatDensity } from "../../../stores/uiStore";
@@ -255,7 +256,7 @@ const MessageGroupItem: React.FC<{
       isSelected,
       isGroupTail,
     });
-    const resendMessage = useChatStore((state) => state.resendMessage);
+    const retrySendMessage = useRetrySendMessage();
     // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
     // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
     // tự dựng quote preview từ message gốc đang có trong store.
@@ -463,7 +464,7 @@ const MessageGroupItem: React.FC<{
             break;
           case "retry":
             if (message.conversationId) {
-              void resendMessage(message.conversationId, message);
+              void retrySendMessage(message).catch(() => undefined);
             }
             break;
           case "more":
@@ -474,7 +475,7 @@ const MessageGroupItem: React.FC<{
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [message, onDelete, onEdit, onForward, onReact, onReply, resendMessage, isOwn],
+      [message, onDelete, onEdit, onForward, onReact, onReply, retrySendMessage, isOwn],
     );
 
     const actionRail =
@@ -580,6 +581,7 @@ const MessageGroupItem: React.FC<{
               isOwn={isOwn}
               position={bubblePosition}
               isRich={isRichBubble}
+              hasError={isFailedMessage(message)}
               isHighlighted={isHighlighted}
             >
               {showSenderName && senderDisplayName && (
@@ -724,6 +726,9 @@ const MessageGroupItem: React.FC<{
                   showStatus={item.showStatus}
                   density="comfortable"
                   layout="inline"
+                  onRetry={() => {
+                    void retrySendMessage(message).catch(() => undefined);
+                  }}
                   className={clsx(
                     "mt-1 justify-end text-[11px]",
                     isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",

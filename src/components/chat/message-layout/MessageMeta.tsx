@@ -26,6 +26,7 @@ interface MessageMetaProps {
   density?: ChatDensity;
   layout?: "block" | "inline";
   className?: string;
+  onRetry?: (message: Message) => void;
   onViewEditHistory?: (messageId: string) => void;
 }
 
@@ -115,6 +116,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     density,
     layout = "block",
     className,
+    onRetry,
     onViewEditHistory,
   }) => {
     const { t } = useTranslation();
@@ -130,15 +132,34 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
       : t("chat:message.editedNoHistory", {
           defaultValue: "Message was edited. Previous versions are not available.",
         });
+    const isFailed = isFailedMessage(message);
+    const isRetrying =
+      message.sendState === "retrying" ||
+      message.sendState === "sending" ||
+      message.status === MessageStatus.SENDING;
+    const canRetry =
+      isOwn &&
+      isFailed &&
+      Boolean(onRetry) &&
+      ![
+        "DIRECT_CHAT_FRIENDSHIP_REQUIRED",
+        "AUTH_FORBIDDEN",
+        "FORBIDDEN",
+        "PERMISSION_DENIED",
+        "ROOM_INSUFFICIENT_PERMISSIONS",
+        "USER_BLOCKED",
+        "VALIDATION_ERROR",
+        "VALIDATION_FAILED",
+      ].includes(String(message.errorCode || "").toUpperCase()) &&
+      message.failureReason !== "permission";
 
     return (
       <div
         className={clsx(
-          "flex min-h-4 items-center text-[11px] leading-4",
+          "flex min-h-4 max-w-full min-w-0 items-center text-[11px] leading-4",
           contract.cluster.meta,
           layout === "inline" ? "gap-1.5" : "flex-wrap gap-2",
           isOwn ? "justify-end text-text-muted/92" : "text-text-muted/84",
-          layout === "inline" && "whitespace-nowrap",
           className,
         )}
         title={fullTimestamp}
@@ -170,8 +191,39 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
             </span>
           )
         )}
-        <span>{timeStr}</span>
-        {isOwn && showStatus && (
+        <span className="shrink-0">{timeStr}</span>
+        {isFailed && (
+          <span
+            className={clsx(
+              "inline-flex min-w-0 items-center gap-1 text-danger",
+              layout === "inline" ? "whitespace-nowrap" : "flex-wrap",
+            )}
+          >
+            <ExclamationCircleIcon className="h-3 w-3 shrink-0" />
+            <span className="min-w-0">
+              {t("chat:message.status.failedInline", {
+                defaultValue: "Không gửi được",
+              })}
+            </span>
+          </span>
+        )}
+        {canRetry && (
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center rounded-full border border-danger/30 px-2 py-0.5 text-[11px] font-medium leading-4 text-danger transition-colors hover:bg-danger/10 focus:outline-none focus:ring-2 focus:ring-danger/25 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isRetrying}
+            onClick={() => onRetry?.(message)}
+          >
+            {isRetrying
+              ? t("chat:message.status.retrying", {
+                  defaultValue: "Đang gửi lại",
+                })
+              : t("chat:message.status.retry", {
+                  defaultValue: "Nhắn lại",
+                })}
+          </button>
+        )}
+        {isOwn && showStatus && !isFailed && (
           <span className="inline-flex items-center text-text-muted/82">
             <MessageStatusGlyph message={message} />
           </span>
@@ -186,6 +238,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     prev.density === next.density &&
     prev.layout === next.layout &&
     prev.className === next.className &&
+    prev.onRetry === next.onRetry &&
     prev.onViewEditHistory === next.onViewEditHistory,
 );
 
