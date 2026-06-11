@@ -2241,16 +2241,49 @@ export const useWebSocket = (
         if (targetConversation) {
           if (allowed) {
             clearSendRestriction(targetConversation.id);
+            updateConversation(targetConversation.id, {
+              canCurrentUserSend: true,
+              sendRestriction: null,
+            });
           } else {
+            const reasonCode = asString(payload?.reason);
             const reason =
-              asString(payload?.reason) === "BLOCKED"
-                ? "Direct messaging is no longer allowed."
-                : "Direct messaging permission changed.";
+              reasonCode === "BLOCKED"
+                ? t("chat:composer.directMessagingBlocked", {
+                    defaultValue: "Direct messaging is no longer allowed.",
+                  })
+                : reasonCode === "UNFRIENDED"
+                  ? t("chat:composer.unfriendedRestriction", {
+                      defaultValue:
+                        "You are no longer friends. Add this person as a friend again to continue messaging.",
+                    })
+                  : reasonCode === "FRIENDSHIP_REQUIRED"
+                    ? t("chat:composer.friendshipRequiredRestriction", {
+                        defaultValue:
+                          "You can only message friends. Send a friend request to start the conversation.",
+                      })
+                    : t("chat:composer.directPermissionChanged", {
+                        defaultValue: "Direct messaging permission changed.",
+                      });
             setSendRestriction(targetConversation.id, {
               kind: "permission",
               reason,
-              code: asString(payload?.reason) ?? "PERMISSION_CHANGED",
+              code: reasonCode ?? "PERMISSION_CHANGED",
             });
+            if (
+              reasonCode === "UNFRIENDED" ||
+              reasonCode === "FRIENDSHIP_REQUIRED"
+            ) {
+              updateConversation(targetConversation.id, {
+                canCurrentUserSend: false,
+                sendRestriction: {
+                  code: "FRIENDSHIP_REQUIRED",
+                  ...(reasonCode === "UNFRIENDED"
+                    ? { reason: "UNFRIENDED" }
+                    : {}),
+                },
+              });
+            }
           }
         }
       }

@@ -4558,6 +4558,29 @@ export const useChatStore = create<ChatState>()(
           throw new Error(reason);
         }
         if (conversation?.canCurrentUserSend === false) {
+          if (conversation.sendRestriction?.code === "FRIENDSHIP_REQUIRED") {
+            const reason =
+              conversation.sendRestriction.reason === "UNFRIENDED"
+                ? i18n.t("chat:composer.unfriendedRestriction", {
+                    defaultValue:
+                      "You are no longer friends. Add this person as a friend again to continue messaging.",
+                  })
+                : i18n.t("chat:composer.friendshipRequiredRestriction", {
+                    defaultValue:
+                      "You can only message friends. Send a friend request to start the conversation.",
+                  });
+            outboxController.setSendRestriction(conversationId, {
+              kind: "permission",
+              reason,
+              code: "DIRECT_CHAT_FRIENDSHIP_REQUIRED",
+            });
+            logMessageDebug("chatStore", "send_blocked_friendship_required", {
+              conversationId,
+              reason,
+              restrictionReason: conversation.sendRestriction.reason ?? null,
+            });
+            throw new Error(reason);
+          }
           const reason = i18n.t("chat:composer.readonlyGroup", {
             defaultValue: "Only group admins can send messages right now.",
           });

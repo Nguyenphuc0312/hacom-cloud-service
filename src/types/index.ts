@@ -25,6 +25,8 @@ export type {
   EditMessageDto,
   GetMessagesDto,
   MessagesListResponseDto,
+  ConversationSendRestrictionCode,
+  ConversationSendRestrictionDto,
 } from "@hacom/chat-shared-types/chat";
 
 export type {
@@ -74,6 +76,7 @@ export type {
 import type {
   Conversation as SharedConversation,
   ConversationDetail as SharedConversationDetail,
+  ConversationSendRestrictionDto,
   Message as SharedMessage,
   MessageSummary as SharedMessageSummary,
   TypingUser as SharedTypingUser,
@@ -137,6 +140,8 @@ export type Conversation = Omit<
   currentUserRole?: "owner" | "admin" | "member" | null;
   allowMemberMessaging?: boolean;
   canCurrentUserSend?: boolean;
+  /** Backend-derived send restriction (e.g. DM friendship required). Null when sending is allowed. */
+  sendRestriction?: ConversationSendRestrictionDto | null;
   createdBy?: string;
   createdAt?: Date | string;
   lastMessageAt?: Date | string | null;

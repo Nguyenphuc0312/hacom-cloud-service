@@ -86,6 +86,26 @@ export const useComposerAvailability = ({
     }
 
     if (conversation.canCurrentUserSend === false) {
+      const backendRestriction = conversation.sendRestriction;
+      if (backendRestriction?.code === "FRIENDSHIP_REQUIRED") {
+        return {
+          mode: "restricted" as const,
+          canType: false,
+          canAttach: false,
+          canSubmit: false,
+          statusTone: "error" as const,
+          statusMessage:
+            backendRestriction.reason === "UNFRIENDED"
+              ? t("chat:composer.unfriendedRestriction", {
+                  defaultValue:
+                    "You are no longer friends. Add this person as a friend again to continue messaging.",
+                })
+              : t("chat:composer.friendshipRequiredRestriction", {
+                  defaultValue:
+                    "You can only message friends. Send a friend request to start the conversation.",
+                }),
+        };
+      }
       return {
         mode: "restricted",
         canType: false,
@@ -205,6 +225,7 @@ export const useComposerAvailability = ({
     connectionState,
     conversation.isBlocked,
     conversation.canCurrentUserSend,
+    conversation.sendRestriction,
     isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,
