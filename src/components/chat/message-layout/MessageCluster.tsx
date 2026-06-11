@@ -8,7 +8,8 @@ import ReactDOM from "react-dom";
 import type { Attachment, Conversation, ImageClickPayload, Message } from "../../../types";
 import { RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
-import { useAuthStore, useChatStore } from "../../../stores";
+import { useAuthStore } from "../../../stores";
+import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
 import { UserProfile } from "../../info/UserProfile";
 import {
   resolveMessageActions,
@@ -108,7 +109,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   className,
 }) => {
   const contract = getTimelineDensityContract(density);
-  const resendMessage = useChatStore((s) => s.resendMessage);
+  const retrySendMessage = useRetrySendMessage();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
@@ -213,8 +214,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
 
   const handleRetry = React.useCallback(() => {
     if (!message.conversationId) return;
-    void resendMessage(message.conversationId, message);
-  }, [message, resendMessage]);
+    void retrySendMessage(message).catch(() => undefined);
+  }, [message, retrySendMessage]);
 
   const openActions = React.useCallback(() => {
     setIsActionsOpen(true);
@@ -496,6 +497,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 isOwn={isOwn}
                 showStatus={showStatus}
                 density={density}
+                onRetry={handleRetry}
                 onViewEditHistory={
                   message.isEdited
                     ? (id) => setEditHistoryMessageId(id)
