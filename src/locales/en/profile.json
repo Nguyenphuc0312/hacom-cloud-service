@@ -169,6 +169,15 @@
     "hrLegalName": "HR legal name",
     "corporateEmail": "Corporate email",
     "jobTitle": "Title",
+    "employmentStatus": "Employment status",
+    "employmentStatusValues": {
+      "PROBATION": "Probation",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "TERMINATED": "Terminated",
+      "RESIGNED": "Resigned"
+    },
+    "joinDate": "Join date",
     "enterpriseInfoHint": "These details come from your HR directory and stay read-only here.",
     "unsaved": "Unsaved changes",
     "synced": "Synced",
