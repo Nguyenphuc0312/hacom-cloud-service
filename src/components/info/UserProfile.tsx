@@ -18,6 +18,7 @@ import { Avatar } from "../common/Avatar";
 import { Button, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore } from "../../stores";
+import { useMyHrProfile } from "../../hooks/useMyHrProfile";
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
 import { extractApiError } from "../../lib/apiContract";
@@ -178,6 +179,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     [initialUser, userId],
   );
   const isSelf = userId === currentUserId;
+  // HRM is the source of truth for employment fields on the self profile.
+  const { employee: hrSelf } = useMyHrProfile({ enabled: isSelf });
 
   // Profile fetched from GET /users/{id} for the *other* user. Updated only via
   // the async fetch below — never synchronously in an effect — so it never
@@ -227,11 +230,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       displayName: authUser.displayName,
       avatar: authUser.avatar,
       bio: authUser.bio,
-      phone: authUser.phone,
+      // HR fields override the chat copy when an HR profile is linked.
+      phone: hrSelf?.phone || authUser.phone,
+      jobTitle: hrSelf?.position?.name || undefined,
+      departmentName: hrSelf?.department?.name || undefined,
+      orgUnit: hrSelf?.unit?.name || undefined,
+      corporateEmail: hrSelf?.companyEmail || undefined,
+      employeeCode: hrSelf?.employeeCode || authUser.employeeCode || undefined,
       createdAt: authUser.createdAt,
       status: authUser.status as UserStatus,
     };
-  }, [authUser, isSelf]);
+  }, [authUser, isSelf, hrSelf]);
 
   // Single resolved user for rendering. For the other user we prefer the
   // fetched detail (only when it matches the current target), else fall back to

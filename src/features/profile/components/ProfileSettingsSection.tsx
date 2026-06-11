@@ -5,8 +5,19 @@ import { Avatar } from "../../../components/common/Avatar";
 import { SettingsCard, SettingsSection } from "../../../components/settings";
 import { Button } from "../../../components/ui";
 import { useAuthStore } from "../../../stores";
+import { useMyHrProfile } from "../../../hooks/useMyHrProfile";
 import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
 import { ProfileEditDialog } from "./ProfileEditDialog";
+
+/** Format an ISO date (e.g. "2026-04-15") as dd/MM/yyyy; null on bad input. */
+const formatJoinDate = (iso: string | null | undefined): string | null => {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${date.getFullYear()}`;
+};
 
 interface ProfileSettingsSectionProps {
   id?: string;
@@ -54,6 +65,10 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
 }) => {
   const { t } = useTranslation(["profile", "common"]);
   const user = useAuthStore((state) => state.user);
+  // HRM is the source of truth for employment fields (chức vụ / phòng ban /
+  // trạng thái / ngày vào làm). Fetched directly from hr-api-service and kept
+  // fresh on tab focus/reconnect, so HRM edits show up without a full reload.
+  const { employee: hr } = useMyHrProfile();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const actionButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -63,27 +78,45 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
     t("common:labels.user");
   const username = displayName;
   const phone =
+    hr?.phone ||
     user?.phone ||
     t("profile:settings.phoneEmpty", {
       defaultValue: "No phone number saved",
     });
   const corporateEmail =
+    hr?.companyEmail ||
     readValue(userRecord, "corporateEmail", "emailFromHr", "email_from_hr") ||
     user?.email ||
     t("common:status.unknown");
   const employeeCode =
+    hr?.employeeCode ||
     readValue(userRecord, "employeeCode", "employee_code") ||
     t("common:status.unknown");
   const departmentName =
+    hr?.department?.name ||
     readValue(userRecord, "departmentName", "department_name") ||
     t("common:status.unknown");
   const orgUnit =
-    readValue(userRecord, "orgUnit", "org_unit") || t("common:status.unknown");
+    hr?.unit?.name ||
+    readValue(userRecord, "orgUnit", "org_unit") ||
+    t("common:status.unknown");
   const jobTitle =
+    hr?.position?.name ||
     readValue(userRecord, "jobTitle", "job_title", "title", "position") ||
     t("profile:settings.jobTitleEmpty", {
       defaultValue: "Chưa cập nhật chức danh",
     });
+  const employmentStatusLabels: Record<string, string> = {
+    PROBATION: t("profile:settings.employmentStatusValues.PROBATION"),
+    ACTIVE: t("profile:settings.employmentStatusValues.ACTIVE"),
+    SUSPENDED: t("profile:settings.employmentStatusValues.SUSPENDED"),
+    TERMINATED: t("profile:settings.employmentStatusValues.TERMINATED"),
+    RESIGNED: t("profile:settings.employmentStatusValues.RESIGNED"),
+  };
+  const employmentStatus = hr?.employmentStatus
+    ? employmentStatusLabels[hr.employmentStatus] ?? hr.employmentStatus
+    : null;
+  const joinDate = formatJoinDate(hr?.dateOfJoining);
   const userStatus = user?.status || "online";
 
   return (
@@ -166,6 +199,22 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
               label={t("profile:settings.employeeCode")}
               value={employeeCode}
             />
+            {employmentStatus && (
+              <SummaryItem
+                label={t("profile:settings.employmentStatus", {
+                  defaultValue: "Trạng thái nhân sự",
+                })}
+                value={employmentStatus}
+              />
+            )}
+            {joinDate && (
+              <SummaryItem
+                label={t("profile:settings.joinDate", {
+                  defaultValue: "Ngày vào làm",
+                })}
+                value={joinDate}
+              />
+            )}
           </dl>
         </SettingsCard>
       </SettingsSection>
