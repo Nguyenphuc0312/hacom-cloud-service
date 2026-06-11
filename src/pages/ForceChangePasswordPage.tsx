@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { AuthShell, AuthLogo, PasswordField } from "../components/auth";
+import { AuthLayoutSplit, AuthLogo, PasswordField } from "../components/auth";
 import { Button } from "../components/ui";
 import { PasswordStrength } from "../components/ui";
 import { toast } from "../components/ui";
@@ -61,14 +61,11 @@ export const ForceChangePasswordPage: React.FC = () => {
   };
 
   return (
-    <AuthShell
-      maxWidth="sm"
-      className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-text-primary"
-    >
-        <div className="w-full max-w-[420px] rounded-2xl bg-surface p-7 shadow-lg sm:p-9">
+    <AuthLayoutSplit>
+      <div className="flex flex-col">
         <AuthLogo subtitle="Đổi mật khẩu bắt buộc" />
 
-        <p className="mb-6 px-2 text-center text-sm leading-6 text-text-muted">
+        <p className="mb-[clamp(12px,2dvh,20px)] text-center text-sm leading-6 text-text-muted">
           Tài khoản của bạn đang sử dụng mật khẩu tạm. Vui lòng đổi mật khẩu
           trước khi tiếp tục sử dụng hệ thống.
         </p>
@@ -119,12 +116,12 @@ export const ForceChangePasswordPage: React.FC = () => {
             autoComplete="new-password"
           />
 
-          <div className="flex gap-3 mt-2">
+          <div className="flex gap-3 pt-2">
             <Button
               type="button"
               variant="brand-outline"
               size="md"
-              className="h-11 flex-1 rounded-lg text-sm font-semibold"
+              className="h-11 flex-1 rounded-xl text-sm font-semibold"
               disabled={isSubmitting}
               onClick={() => logout()}
             >
@@ -133,7 +130,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             <Button
               type="submit"
               size="md"
-              className="h-11 flex-1 rounded-lg bg-primary text-sm font-semibold text-text-inverse hover:bg-primary-hover"
+              className="h-11 flex-1 rounded-xl bg-primary text-sm font-semibold text-text-inverse hover:bg-primary-hover"
               isLoading={isSubmitting}
               disabled={
                 isSubmitting || !hasMinimumPasswordLength(newPasswordValue ?? "")
@@ -144,7 +141,7 @@ export const ForceChangePasswordPage: React.FC = () => {
           </div>
         </form>
       </div>
-    </AuthShell>
+    </AuthLayoutSplit>
   );
 };
 

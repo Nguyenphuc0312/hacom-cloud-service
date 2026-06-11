@@ -3,15 +3,12 @@ import type { Message } from "../types";
 import {
   MESSAGE_COLLAPSE_CHAR_THRESHOLD,
   MESSAGE_COLLAPSE_LINE_THRESHOLD,
-  MESSAGE_PREVIEW_CHAR_LIMIT,
 } from "./messageLengthPolicy";
 
 export const LONG_MESSAGE_COLLAPSE_CHAR_THRESHOLD =
   MESSAGE_COLLAPSE_CHAR_THRESHOLD;
 export const LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD =
   MESSAGE_COLLAPSE_LINE_THRESHOLD;
-export const LONG_MESSAGE_COLLAPSE_PREVIEW_CHAR_LIMIT =
-  MESSAGE_PREVIEW_CHAR_LIMIT;
 export const DEFAULT_TEXT_CHARS_PER_LINE = 42;
 
 const INLINE_URL_REGEX = /https?:\/\/[^\s]+/i;
@@ -86,14 +83,34 @@ export const isPlainStaticTextMessage = (message: Message): boolean =>
 export const isCollapsiblePlainTextMessage = (message: Message): boolean =>
   isPlainStaticTextMessage(message) && isLongMessageContent(message.content);
 
-export const getCollapsedTextPreview = (
-  content: string,
-  maxChars = LONG_MESSAGE_COLLAPSE_PREVIEW_CHAR_LIMIT,
-): string => {
-  if (content.length <= maxChars) {
-    return content;
-  }
+// These limits are intentionally shorter than the collapse trigger thresholds
+// so that the collapsed preview is visibly different from the full message.
+// (Collapse triggers at >1200 chars OR >20 lines; preview shows at most 600
+// chars AND at most 8 lines, taking whichever truncation is shorter.)
+const COLLAPSED_PREVIEW_CHAR_LIMIT = 600;
+const COLLAPSED_PREVIEW_LINE_LIMIT = 8;
 
-  const preview = content.slice(0, maxChars).trimEnd();
+export const getCollapsedTextPreview = (content: string): string => {
+  const lines = content.split(/\r?\n/);
+
+  const byLine =
+    lines.length > COLLAPSED_PREVIEW_LINE_LIMIT
+      ? lines.slice(0, COLLAPSED_PREVIEW_LINE_LIMIT).join("\n").trimEnd()
+      : null;
+
+  const byChar =
+    content.length > COLLAPSED_PREVIEW_CHAR_LIMIT
+      ? content.slice(0, COLLAPSED_PREVIEW_CHAR_LIMIT).trimEnd()
+      : null;
+
+  if (byLine === null && byChar === null) return content;
+
+  const preview =
+    byLine !== null && byChar !== null
+      ? byLine.length <= byChar.length
+        ? byLine
+        : byChar
+      : (byLine ?? byChar)!;
+
   return `${preview}\u2026`;
 };
