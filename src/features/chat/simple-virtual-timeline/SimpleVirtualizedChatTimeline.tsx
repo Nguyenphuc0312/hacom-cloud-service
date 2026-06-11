@@ -73,7 +73,6 @@ export interface SimpleVirtualizedChatTimelineProps {
 
 const EMPTY_SELECTED = new Set<string>();
 const EMPTY_INSERTED = new Set<string>();
-const EMPTY_EXPANDED = new Set<string>();
 
 const LONG_TEXT_HEIGHT_MULTIPLIER = 1.15;
 const LONG_TEXT_THRESHOLD_CHARS = 200;
@@ -152,8 +151,6 @@ const estimateRowHeight = (
   }
   return baseHeight;
 };
-
-const noopToggleExpand: (id: string) => void = () => undefined;
 
 const SimpleVirtualizedChatTimelineComponent: React.FC<
   SimpleVirtualizedChatTimelineProps
@@ -304,6 +301,23 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
       handleMediaLoad();
     }
   }, [composerHeight, isInitialSettled, handleMediaLoad]);
+
+  // ── Expanded long messages ────────────────────────────────────────────────
+  const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState(
+    () => new Set<string>(),
+  );
+  // Reset when conversation changes so expansions don't bleed across chats.
+  React.useEffect(() => {
+    setExpandedLongMessageIds(new Set());
+  }, [conversationId]);
+  const toggleLongMessageExpand = React.useCallback((id: string) => {
+    setExpandedLongMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // ── Jump-to-message: scroll the target row into view + flash a highlight ──
   const [highlightedId, setHighlightedId] = React.useState<string | null>(null);
@@ -503,8 +517,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
                         viewerCanRecallOthers={viewerCanRecallOthers}
-                        expandedLongMessageIds={EMPTY_EXPANDED}
-                        onToggleLongMessageExpand={noopToggleExpand}
+                        expandedLongMessageIds={expandedLongMessageIds}
+                        onToggleLongMessageExpand={toggleLongMessageExpand}
                         insertedMessageKeys={EMPTY_INSERTED}
                         highlightedMessageId={highlightedId}
                       />
