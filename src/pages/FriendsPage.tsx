@@ -619,7 +619,7 @@ export const FriendsPage: React.FC = () => {
           <Button
             type="button"
             size="sm"
-            variant="brand-yellow"
+            variant="brand"
             isLoading={actingKey === `message:${actionKeyPrefix}`}
             onClick={(event) => {
               stopPropagation(event);

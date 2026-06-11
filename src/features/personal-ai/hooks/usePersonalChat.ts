@@ -65,14 +65,26 @@ export function usePersonalChat() {
     fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode, userId })
       .then((fetched) => {
         if (ac.signal.aborted || !fetched.length) return;
-        const normalized = fetched.map((m) => ({
-          id: m.id || crypto.randomUUID(),
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          timestamp: new Date(m.timestamp),
-          isStreaming: false as const,
-          thinkingPhase: null as null,
-        }));
+        // Backend trả thêm các role nội bộ của tool-calling:
+        // "assistant_tool_call" (content rỗng) và "tool" (kết quả tool). Đây
+        // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
+        // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
+        // user/assistant có nội dung thực.
+        const normalized = fetched
+          .filter(
+            (m) =>
+              (m.role === "user" || m.role === "assistant") &&
+              (m.content ?? "").trim().length > 0,
+          )
+          .map((m) => ({
+            id: m.id || crypto.randomUUID(),
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            timestamp: new Date(m.timestamp),
+            isStreaming: false as const,
+            thinkingPhase: null as null,
+          }));
+        if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
       })
       .catch(() => { /* Silent — hiển thị empty state làm fallback */ })

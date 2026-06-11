@@ -1062,7 +1062,9 @@ export async function deletePersonalSession(
 
 export interface PersonalSessionMessage {
   id: string;
-  role: "user" | "assistant";
+  // Backend trả cả role nội bộ của tool-calling ("assistant_tool_call",
+  // "tool") bên cạnh "user"/"assistant". Khai báo rộng để consumer lọc đúng.
+  role: "user" | "assistant" | "assistant_tool_call" | "tool" | (string & {});
   content: string;
   timestamp: string;
 }
