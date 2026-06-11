@@ -21,6 +21,38 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
 ]);
 const PHONE_PATTERN = /^\+?[0-9]{10,15}$/;
+const AVATAR_TARGET_SIZE = 512;
+
+/** Center-crop + resize image to a AVATAR_TARGET_SIZE×AVATAR_TARGET_SIZE JPEG. */
+const resizeAvatarToSquare = (file: File): Promise<File> =>
+  new Promise((resolve, reject) => {
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const crop = Math.min(w, h);
+      const sx = (w - crop) / 2;
+      const sy = (h - crop) / 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_TARGET_SIZE;
+      canvas.height = AVATAR_TARGET_SIZE;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas unavailable")); return; }
+      ctx.drawImage(img, sx, sy, crop, crop, 0, 0, AVATAR_TARGET_SIZE, AVATAR_TARGET_SIZE);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error("toBlob failed")); return; }
+          const name = file.name.replace(/\.[^.]+$/, ".jpg");
+          resolve(new File([blob], name, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error("image load failed")); };
+    img.src = blobUrl;
+  });
 
 type ProfileEditDialogMode = "full" | "quick";
 type UsernameState = "idle" | "checking" | "available" | "taken" | "error";
@@ -348,9 +380,10 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
     onClose();
   }, [hasChanges, isSaving, onClose, resetDraft]);
 
-  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setAvatarUploadStage("validating");
     const file = event.target.files?.[0];
+    event.currentTarget.value = "";
     if (!file) {
       setAvatarUploadStage("idle");
       return;
@@ -359,18 +392,22 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       toast.error(t("profile:settings.upload.unsupportedType"));
       setAvatarUploadStage("error");
-      event.currentTarget.value = "";
       return;
     }
 
-    setAvatarFile(file);
-    setAvatarUploadStage("idle");
-    setAvatarUploadProgress(0);
-    setAvatarPreview((current) => {
-      revokeBlobUrl(current);
-      return URL.createObjectURL(file);
-    });
-    event.currentTarget.value = "";
+    try {
+      const resized = await resizeAvatarToSquare(file);
+      setAvatarFile(resized);
+      setAvatarUploadStage("idle");
+      setAvatarUploadProgress(0);
+      setAvatarPreview((current) => {
+        revokeBlobUrl(current);
+        return URL.createObjectURL(resized);
+      });
+    } catch {
+      toast.error(t("profile:settings.upload.unsupportedType"));
+      setAvatarUploadStage("error");
+    }
   };
 
   const handleSave = async () => {
