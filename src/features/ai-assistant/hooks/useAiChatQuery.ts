@@ -137,16 +137,33 @@ function normalizeMessagesResponse(raw: unknown): AiMessage[] {
     .filter((m) => m && typeof m === "object")
     .map((m) => {
       const obj = m as Record<string, unknown>;
+      // Backend dùng nhiều role cho tool-calling: "user", "assistant",
+      // "assistant_tool_call" (rỗng), "tool" (kết quả tool nội bộ). Chỉ
+      // user/assistant mới là tin nhắn hiển thị cho người dùng; các role
+      // khác là chi tiết nội bộ — KHÔNG ép thành "user" (sẽ làm kết quả tool
+      // hiện nhầm thành câu hỏi của user và sinh bong bóng rỗng sau khi F5).
       const role = String(obj.role ?? "user");
+      const content = String(obj.content ?? obj.message ?? obj.text ?? "");
       const rawTs = obj.timestamp ?? obj.created_at ?? obj.createdAt;
+      // sources lịch sử nằm trong metadata.sources (assistant) — giữ lại để
+      // hiển thị nguồn trích dẫn sau khi tải lại.
+      const meta = (obj.metadata ?? null) as Record<string, unknown> | null;
+      const sources = Array.isArray(meta?.sources)
+        ? (meta!.sources as AiMessage["sources"])
+        : undefined;
       return {
         id: String(obj.id ?? obj.message_id ?? crypto.randomUUID()),
-        role: (role === "assistant" ? "assistant" : "user") as "user" | "assistant",
-        content: String(obj.content ?? obj.message ?? obj.text ?? ""),
+        role,
+        content,
         timestamp: rawTs ? new Date(String(rawTs)) : new Date(),
         isStreaming: false,
-      } satisfies Pick<AiMessage, "id" | "role" | "content" | "timestamp" | "isStreaming">;
-    }) as AiMessage[];
+        sources,
+      };
+    })
+    // Bỏ message không phải hội thoại hiển thị (tool/assistant_tool_call/role
+    // lạ) và assistant rỗng (placeholder tool-call). User rỗng cũng loại.
+    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim().length > 0)
+    .map((m) => ({ ...m, role: m.role as "user" | "assistant" })) as AiMessage[];
 }
 
 // ---------------------------------------------------------------------------

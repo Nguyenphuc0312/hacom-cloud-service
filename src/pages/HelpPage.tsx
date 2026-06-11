@@ -67,7 +67,7 @@ const HelpPage: React.FC = () => {
               />
               <div>
                 <h2 className="text-xl font-bold text-text-primary">Vũ Minh Quốc</h2>
-                <p className="text-sm text-text-muted">Technical Lead</p>
+                <p className="text-sm text-text-muted">Support Manager</p>
                 <div className="mt-1 flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-xs font-medium text-emerald-500/90">Trực tuyến</span>
