@@ -380,8 +380,8 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
               <div className="h-1.5 w-3/4 max-w-[200px] overflow-hidden rounded-full bg-white/30">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
+                  className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-300"
+                  style={{ transform: `scaleX(${uploadProgress / 100})` }}
                 />
               </div>
               <span className="mt-2 text-xs text-white">
