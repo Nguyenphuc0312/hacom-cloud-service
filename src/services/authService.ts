@@ -4,6 +4,7 @@ import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { ROUTE_PATHS } from "../router/paths";
 import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
+import { softNavigate } from "../lib/softNavigator";
 import {
   clearTokens,
   getAccessToken,
@@ -77,7 +78,7 @@ export const runClientLogoutCleanup = (reason: string): void => {
 export const redirectToLogin = (): void => {
   if (!isBrowser()) return;
   if (window.location.pathname === ROUTE_PATHS.LOGIN) return;
-  window.location.replace(ROUTE_PATHS.LOGIN);
+  softNavigate(ROUTE_PATHS.LOGIN, { replace: true });
 };
 
 export const notifyLogoutAcrossTabs = (reason: string): void => {

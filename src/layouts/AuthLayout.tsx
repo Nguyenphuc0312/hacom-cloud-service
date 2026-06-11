@@ -1,12 +1,12 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 
-/**
- * Layout boundary for auth pages.
- * Add shared auth shell (logo, side panel, etc.) here when needed.
- */
 export const AuthLayout: React.FC = () => {
-  return <Outlet />;
+  return (
+    <Suspense fallback={<div className="flex h-dvh w-full bg-white" />}>
+      <Outlet />
+    </Suspense>
+  );
 };
 
 export default AuthLayout;

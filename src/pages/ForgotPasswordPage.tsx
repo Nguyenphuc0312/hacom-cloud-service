@@ -4,7 +4,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useTranslation } from "react-i18next";
-import { AuthLayoutSplit } from "../components/auth";
 import { Button } from "../components/ui";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
@@ -24,13 +23,7 @@ type RequestResetFormData = z.infer<typeof requestResetSchema>;
 export const ForgotPasswordPage: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { isLoading, isAuthenticated, error, clearError } = useAuthStore();
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(ROUTE_PATHS.CHAT, { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
+  const { isLoading, error, clearError } = useAuthStore();
 
   useEffect(() => {
     clearError();
@@ -73,8 +66,7 @@ export const ForgotPasswordPage: React.FC = () => {
   const isBusy = isLoading || isSubmitting;
 
   return (
-    <AuthLayoutSplit>
-      <div className="flex flex-col">
+    <div className="flex flex-col">
         <header className="mb-[clamp(12px,2dvh,24px)]">
           <h1
             className="mb-1 font-bold tracking-tight text-text-primary"
@@ -128,8 +120,7 @@ export const ForgotPasswordPage: React.FC = () => {
             </button>
           </footer>
         </form>
-      </div>
-    </AuthLayoutSplit>
+    </div>
   );
 };
 

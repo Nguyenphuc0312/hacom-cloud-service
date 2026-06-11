@@ -18,7 +18,7 @@ const ForceChangePasswordPage = lazy(
  * for both authenticated and unauthenticated users.
  */
 export const publicRoutes: AppRouteConfig[] = [
-  { path: ROUTE_PATHS.LOGIN, component: LoginPage, guestOnly: true },
+  { path: ROUTE_PATHS.LOGIN, component: LoginPage, guestOnly: true, splitLayout: true },
   {
     path: ROUTE_PATHS.ACTIVATION,
     component: ActivationFlowPage,
@@ -34,6 +34,7 @@ export const publicRoutes: AppRouteConfig[] = [
     path: ROUTE_PATHS.FORGOT_PASSWORD,
     component: ForgotPasswordPage,
     guestOnly: true,
+    splitLayout: true,
   },
   {
     path: ROUTE_PATHS.RESET_PASSWORD,
@@ -45,5 +46,6 @@ export const publicRoutes: AppRouteConfig[] = [
     component: ForceChangePasswordPage,
     guestOnly: false,
     forceChangePasswordOnly: true,
+    splitLayout: true,
   },
 ];

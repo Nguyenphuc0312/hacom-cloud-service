@@ -9,12 +9,14 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { SettingsDangerZone } from "./SettingsDangerZone";
 import { SettingsSection } from "./SettingsSection";
 import { Button, Input, toast } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import { userApi } from "../../services/api";
 import { useAuthStore } from "../../stores";
+import { ROUTE_PATHS } from "../../router/paths";
 
 interface DangerZoneSectionProps {
   id?: string;
@@ -22,7 +24,8 @@ interface DangerZoneSectionProps {
 
 export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
-  const logout = useAuthStore((state) => state.logout);
+  const logoutSoft = useAuthStore((state) => state.logoutSoft);
+  const navigate = useNavigate();
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState("");
@@ -40,7 +43,8 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({ id }) => {
     try {
       await userApi.deleteAccount(password, "DELETE");
       toast.success(t("dangerZone.deleteSuccess"));
-      logout();
+      await logoutSoft();
+      navigate(ROUTE_PATHS.LOGIN, { replace: true });
     } catch (reason) {
       const apiError = extractApiError(reason);
       if (apiError.statusCode === 401 || apiError.statusCode === 422) {
@@ -51,7 +55,7 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({ id }) => {
     } finally {
       setIsDeleting(false);
     }
-  }, [logout, password, t]);
+  }, [logoutSoft, navigate, password, t]);
 
   const handleCancel = useCallback(() => {
     setShowConfirm(false);

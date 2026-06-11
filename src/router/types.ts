@@ -10,4 +10,5 @@ export interface AppRouteConfig {
   guestOnly?: boolean;
   activationOnly?: boolean;
   forceChangePasswordOnly?: boolean;
+  splitLayout?: boolean;
 }

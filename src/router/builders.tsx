@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { RouteObject } from "react-router-dom";
 import { publicRoutes } from "./config/publicRoutes";
 import { privateRoutes } from "./config/privateRoutes";
+import type { AppRouteConfig } from "./types";
 import {
   ActivationRoute,
   ForceChangePasswordRoute,
@@ -35,25 +36,28 @@ const renderRouteElement = (
   return page;
 };
 
-export const buildPublicRouteObjects = (): RouteObject[] =>
-  publicRoutes.map(
-    ({
-      path,
-      index,
-      component,
-      guestOnly = true,
-      activationOnly = false,
-      forceChangePasswordOnly = false,
-    }) => ({
-      path,
-      index,
-      element: renderRouteElement(component as React.ComponentType, {
-        guestOnly: forceChangePasswordOnly ? false : guestOnly,
-        activationOnly,
-        forceChangePasswordOnly,
-      }),
-    }),
-  );
+const buildRouteObject = ({
+  path,
+  index,
+  component,
+  guestOnly = true,
+  activationOnly = false,
+  forceChangePasswordOnly = false,
+}: AppRouteConfig): RouteObject => ({
+  path,
+  index,
+  element: renderRouteElement(component as React.ComponentType, {
+    guestOnly: forceChangePasswordOnly ? false : guestOnly,
+    activationOnly,
+    forceChangePasswordOnly,
+  }),
+});
+
+export const buildSplitPublicRouteObjects = (): RouteObject[] =>
+  publicRoutes.filter((r) => r.splitLayout).map(buildRouteObject);
+
+export const buildNonSplitPublicRouteObjects = (): RouteObject[] =>
+  publicRoutes.filter((r) => !r.splitLayout).map(buildRouteObject);
 
 export const buildPrivateRouteObjects = (): RouteObject[] =>
   privateRoutes.map(({ path, index, component, element, roles }) => ({
