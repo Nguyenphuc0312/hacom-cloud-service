@@ -179,7 +179,6 @@ interface AuthState {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
-  syncHRMProfile: () => Promise<User | null>;
   updateUser: (data: Partial<User>) => void;
   updateStatus: (status: User["status"]) => Promise<void>;
   clearError: () => void;
@@ -873,30 +872,6 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const user = await fetchCurrentUser(token);
-          set((state) => ({
-            user,
-            authStatus:
-              state.authStatus === "authenticated"
-                ? state.authStatus
-                : "authenticated",
-            isBootstrappingAuth: false,
-            isAuthenticated: true,
-          }));
-          return user;
-        },
-
-        syncHRMProfile: async () => {
-          const token = getAccessToken();
-          if (!token) {
-            return null;
-          }
-
-          const response = await apiClient.post<ApiResponse<User>>(
-            "/users/profile/sync",
-            {},
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          const user = unwrapApiSuccess(response.data) as unknown as User;
           set((state) => ({
             user,
             authStatus:

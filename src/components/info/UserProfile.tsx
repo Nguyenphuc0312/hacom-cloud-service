@@ -169,7 +169,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 }) => {
   const { t } = useTranslation(["profile", "common", "friends"]);
   const authUser = useAuthStore((state) => state.user);
-  const syncHRMProfile = useAuthStore((state) => state.syncHRMProfile);
+  const refreshProfile = useAuthStore((state) => state.refreshProfile);
   const resolvedInitialUser = React.useMemo(
     () =>
       initialUser && initialUser.id === userId
@@ -243,12 +243,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       ? { ...fetchedUser, avatar: resolvedInitialUser?.avatar || fetchedUser.avatar }
       : (resolvedInitialUser ?? null);
 
-  // Force-pull latest HRM data (departmentName, title, etc.) from auth-service
-  // when viewing own profile, so it reflects HRM changes without re-login.
   React.useEffect(() => {
     if (!isSelf) return;
-    void syncHRMProfile().catch(() => null);
-  }, [isSelf, syncHRMProfile]);
+    void refreshProfile().catch(() => null);
+  }, [isSelf, refreshProfile]);
 
   // Fetch the target user's detail ONCE per userId (cached + in-flight deduped
   // in userProfileCache). Depends only on `userId`/`isSelf` — NOT on the
