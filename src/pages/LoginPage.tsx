@@ -4,12 +4,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { KeyIcon, QrCodeIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
-import { QrLoginPanel, AuthLayoutSplit } from "../components/auth";
+import { QrLoginPanel } from "../components/auth";
 import { PasswordLoginForm } from "../components/auth/PasswordLoginForm";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
-import { ROUTE_PATHS } from "../router/paths";
 import { LockedOrDisabledState } from "../features/activation/components/LockedOrDisabledState";
 import { toast } from "../components/ui";
 import { toVietnameseMessage } from "../utils/userMessages";
@@ -22,9 +21,7 @@ export const LoginPage: React.FC = () => {
   const {
     login,
     isLoading,
-    isAuthenticated,
     authStatus,
-    activationContext,
     lockedAccount,
     error,
     clearError,
@@ -32,22 +29,6 @@ export const LoginPage: React.FC = () => {
     setAuthStatus,
   } = useAuthStore();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      const from = (location.state as { from?: string })?.from ?? "/chat";
-      navigate(from, { replace: true });
-      return;
-    }
-
-    if (authStatus === "activation_required" && activationContext) {
-      navigate(ROUTE_PATHS.ACTIVATION, {
-        replace: true,
-        state: {
-          from: (location.state as { from?: string } | null)?.from,
-        },
-      });
-    }
-  }, [activationContext, authStatus, isAuthenticated, location, navigate]);
 
   useEffect(() => {
     clearError();
@@ -83,16 +64,12 @@ export const LoginPage: React.FC = () => {
         toast.success(
           toVietnameseMessage(result.message, "Đăng nhập thành công."),
         );
-        const from = (location.state as { from?: string })?.from ?? "/chat";
-        navigate(from, { replace: true });
+        // GuestRoute handles redirect (preserves location.state.from)
         return;
       }
       if (result === "activation_required") {
         toast.info(t("auth:activation.required.redirecting"));
-        navigate(ROUTE_PATHS.ACTIVATION, {
-          replace: true,
-          state: { from: (location.state as { from?: string } | null)?.from },
-        });
+        // GuestRoute handles redirect with from state
         return;
       }
       if (result === "locked" || result === "disabled") {
@@ -114,8 +91,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <AuthLayoutSplit>
-      <div className="flex flex-col">
+    <div className="flex flex-col">
         <div className="mb-[clamp(12px,2dvh,20px)] flex justify-center">
           <Link to="/" className="inline-block transition-transform hover:scale-105 active:scale-95">
             <img
@@ -243,8 +219,7 @@ export const LoginPage: React.FC = () => {
           </div>
         )}
 
-      </div>
-    </AuthLayoutSplit>
+    </div>
   );
 };
 

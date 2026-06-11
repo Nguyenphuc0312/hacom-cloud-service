@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import { AuthCard, AuthShell } from "../../../components/auth";
@@ -44,7 +44,6 @@ const hasLoginToken = (
 export const ActivationFlowPage: React.FC = () => {
   const { t } = useTranslation("auth");
   const navigate = useNavigate();
-  const location = useLocation();
   const {
     activationContext,
     applyLoginResponse,
@@ -63,9 +62,6 @@ export const ActivationFlowPage: React.FC = () => {
   const activeActionRef = React.useRef<
     "request_otp" | "resend_otp" | "verify_otp" | "set_password" | null
   >(null);
-
-  const from =
-    (location.state as { from?: string } | null)?.from || ROUTE_PATHS.CHAT;
 
   const [prevActivationContext, setPrevActivationContext] =
     React.useState(activationContext);
@@ -113,12 +109,6 @@ export const ActivationFlowPage: React.FC = () => {
     };
   }, [resendSeconds]);
 
-  React.useEffect(() => {
-    if (authStatus === "authenticated") {
-      navigate(from, { replace: true });
-    }
-  }, [authStatus, from, navigate]);
-
   const finalizeAuthenticated = React.useCallback(
     (payload: unknown) => {
       if (!hasLoginToken(payload)) {
@@ -131,13 +121,13 @@ export const ActivationFlowPage: React.FC = () => {
         activeActionRef.current = null;
         setIsBusy(false);
         toast.success(t("activation.success"));
-        navigate(from, { replace: true });
+        // ActivationRoute guard handles redirect (preserves location.state.from)
         return true;
       } catch {
         return false;
       }
     },
-    [applyLoginResponse, from, navigate, setActivationContext, t],
+    [applyLoginResponse, setActivationContext, t],
   );
 
   const startOtpVerification = React.useCallback(() => {

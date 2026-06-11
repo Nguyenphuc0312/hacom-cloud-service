@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { CommandPalette } from "../components/layout/CommandPalette";
 import { COMMAND_PALETTE_OPEN_EVENT } from "../lib/commandPalette";
@@ -79,7 +79,9 @@ export const AuthenticatedLayout: React.FC = () => {
             onCurrentUserClick={() => navigate(ROUTE_PATHS.SETTINGS)}
           />
           <div className="private-app-route">
-            <Outlet />
+            <Suspense fallback={<div className="flex-1" />}>
+              <Outlet />
+            </Suspense>
           </div>
         </div>
         <CommandPalette

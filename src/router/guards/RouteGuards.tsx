@@ -129,7 +129,8 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     if (user?.mustChangePassword === true) {
       return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
     }
-    return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+    const from = (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
+    return <Navigate to={from} replace />;
   }
 
   if (
@@ -137,7 +138,14 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     activationContext &&
     location.pathname !== ROUTE_PATHS.ACTIVATION
   ) {
-    return <Navigate to={ROUTE_PATHS.ACTIVATION} replace />;
+    const activationFrom = (location.state as { from?: string } | null)?.from;
+    return (
+      <Navigate
+        to={ROUTE_PATHS.ACTIVATION}
+        replace
+        state={activationFrom ? { from: activationFrom } : undefined}
+      />
+    );
   }
 
   return <>{children}</>;
@@ -145,6 +153,7 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
 
 export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   const { t } = useTranslation();
+  const location = useLocation();
   const {
     isInitialized,
     isBootstrappingAuth,
@@ -165,7 +174,8 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   }
 
   if (isAuthenticated || authStatus === "authenticated") {
-    return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+    const from = (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
+    return <Navigate to={from} replace />;
   }
 
   if (isBlockedAuthStatus(authStatus)) {
