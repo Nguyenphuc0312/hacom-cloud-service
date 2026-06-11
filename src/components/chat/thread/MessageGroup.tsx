@@ -164,7 +164,7 @@ const MobileEmojiOverlay: React.FC<{
               type="button"
               aria-label={`Thả reaction ${emoji}`}
               onClick={() => { onSelect(emoji); onClose(); }}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-surface-hover active:scale-95"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-100 hover:scale-110 hover:bg-surface-hover active:scale-95"
             >
               {emoji}
             </button>
@@ -173,7 +173,7 @@ const MobileEmojiOverlay: React.FC<{
             type="button"
             aria-label={showMore ? "Thu gọn" : "Thêm"}
             onClick={() => setShowMore((v) => !v)}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-all duration-100 hover:scale-110 hover:bg-surface-hover"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-[transform,background-color] duration-100 hover:scale-110 hover:bg-surface-hover"
           >
             <Plus
               size={16}
@@ -483,7 +483,7 @@ const MessageGroupItem: React.FC<{
           onMouseEnter={handleItemMouseEnter}
           onMouseLeave={handleItemMouseLeave}
           className={clsx(
-            "absolute top-1 z-20 hidden transition-all duration-150 md:block",
+            "absolute top-1 z-20 hidden transition-[opacity,transform] duration-150 md:block",
             isOwn ? "right-full mr-2" : "left-full ml-2",
             (isHovered || showReactionPicker)
               ? "pointer-events-auto translate-y-0 opacity-100"
@@ -781,7 +781,7 @@ const MessageGroupItem: React.FC<{
     );
   };
 
-export const MessageGroup: React.FC<MessageGroupProps> = ({
+const MessageGroupBase: React.FC<MessageGroupProps> = ({
   row,
   onReply,
   onReact,
@@ -903,4 +903,5 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   );
 };
 
+export const MessageGroup = React.memo(MessageGroupBase);
 export default MessageGroup;
