@@ -168,6 +168,15 @@
     "hrLegalName": "Họ tên HR",
     "corporateEmail": "Email công ty",
     "jobTitle": "Chức danh",
+    "employmentStatus": "Trạng thái nhân sự",
+    "employmentStatusValues": {
+      "PROBATION": "Thử việc",
+      "ACTIVE": "Đang làm việc",
+      "SUSPENDED": "Tạm ngưng",
+      "TERMINATED": "Đã nghỉ việc",
+      "RESIGNED": "Đã thôi việc"
+    },
+    "joinDate": "Ngày vào làm",
     "enterpriseInfoHint": "Các thông tin này đồng bộ từ hệ thống HR và chỉ có thể xem tại đây.",
     "unsaved": "Có thay đổi chưa lưu",
     "synced": "Đã đồng bộ",
