@@ -375,6 +375,7 @@ export const AiAssistantPage: React.FC = () => {
           }
 
           const response = await sendAiChatMessage(request, selectedEndpoint, {
+            signal: controller.signal,
             onToken: (token) => {
               updateLastMessage(currentId!, token, true);
             },
@@ -412,18 +413,20 @@ export const AiAssistantPage: React.FC = () => {
           }
         }
       } catch (err) {
-        const content = describeApiError(err, t("chat.errorNetwork"));
-
-        // Không ghi đè widget đặc biệt đã render nếu lỗi xảy ra sau onSelectionRequest/onFormRequest
-        if (!hasSpecialEvent) {
-          finalizeAssistantMessage({ content, isError: true, isStreaming: false });
-        } else {
-          // Chỉ tắt spinner, giữ nguyên widget
+        // User clicked stop — keep whatever was streamed, don't show error
+        if (controller.signal.aborted) {
           finalizeAssistantMessage({ isStreaming: false });
-        }
-
-        if (usingUpload && fileToSend) {
-          toast.error(`Tải lên "${fileToSend.name}" thất bại: ${content}`);
+        } else {
+          const content = describeApiError(err, t("chat.errorNetwork"));
+          // Không ghi đè widget đặc biệt đã render nếu lỗi xảy ra sau onSelectionRequest/onFormRequest
+          if (!hasSpecialEvent) {
+            finalizeAssistantMessage({ content, isError: true, isStreaming: false });
+          } else {
+            finalizeAssistantMessage({ isStreaming: false });
+          }
+          if (usingUpload && fileToSend) {
+            toast.error(`Tải lên "${fileToSend.name}" thất bại: ${content}`);
+          }
         }
       } finally {
         if (usingUpload) {
@@ -496,6 +499,10 @@ export const AiAssistantPage: React.FC = () => {
   }, [isPersonal, pendingFile]);
 
   const hasMessages = messages.length > 0;
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort("user_stop");
+  }, []);
+
   const attachHandler = isPersonal ? handleAttachFiles : undefined;
 
   const handleRegisterFilePicker = useCallback((open: () => void) => {
@@ -558,6 +565,7 @@ export const AiAssistantPage: React.FC = () => {
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleSubmit}
+                  onStop={handleStop}
                   isLoading={isLoading}
                   isUploading={isUploading}
                   onAttachFiles={attachHandler}
@@ -614,6 +622,7 @@ export const AiAssistantPage: React.FC = () => {
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleSubmit}
+                  onStop={handleStop}
                   isLoading={isLoading}
                   isUploading={isUploading}
                   onAttachFiles={attachHandler}

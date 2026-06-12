@@ -1043,6 +1043,25 @@ export interface PersonalSessionsResponse {
 }
 
 /**
+ * DELETE /api/sessions/{session_id} — xóa session AI công ty.
+ * Backend kiểm tra ownership qua chat-{user_key}- hoặc chat-{emp_key}- prefix.
+ * 404 được coi là thành công (session đã bị xóa từ trước).
+ */
+export async function deleteCompanySession(
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/sessions/${sessionId}`,
+    { method: "DELETE" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new AiApiError(response.status, "http");
+  }
+}
+
+/**
  * DELETE /api/personal/sessions/{session_id} — xóa session AI cá nhân.
  * 404 được coi là thành công (session đã bị xóa từ trước).
  */
@@ -1096,6 +1115,11 @@ export async function fetchPersonalSessionMessages(
     if (Array.isArray(obj.messages)) messages = obj.messages;
     else if (Array.isArray(obj.data)) messages = obj.data;
     else if (Array.isArray(obj.items)) messages = obj.items;
+    else if (obj.session && typeof obj.session === "object") {
+      const sess = obj.session as Record<string, unknown>;
+      if (Array.isArray(sess.messages)) messages = sess.messages;
+      else if (Array.isArray(sess.data)) messages = sess.data;
+    } else if (Array.isArray(obj.history)) messages = obj.history;
   }
   return messages as PersonalSessionMessage[];
 }
