@@ -15,10 +15,14 @@ import { resolvePublicResourceUrl } from "../../config";
 export interface MeetingParticipant {
   name: string;
   hasConflict?: boolean;
+  /** HR employee cuid — present when participant was loaded from an existing
+   *  HR event (edit mode); strongest ref for the backend to resolve. */
+  employeeId?: string;
   /** HR employee code — present when picked from the friends list; lets the
    *  backend resolve this person to a real HR participant. */
   employeeCode?: string;
-  /** Chat user id of the picked friend (diagnostic / future use). */
+  /** Chat user id (auth UUID) of the picked friend — backend resolves this to
+   *  an employee via authUserId when employeeCode is missing. */
   userId?: string;
 }
 
@@ -36,6 +40,10 @@ export interface MeetingFormData {
   startTime: string; // HH:mm
   endTime: string;
   chairman: string;
+  /** HR employee code của chủ trì — khi được chọn từ danh sách bạn bè */
+  chairmanEmployeeCode?: string;
+  /** Chat user id (auth UUID) của chủ trì — khi được chọn từ danh sách bạn bè */
+  chairmanUserId?: string;
   participants: MeetingParticipant[];
   format: "offline" | "online";
   location: string;
@@ -136,6 +144,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const [endTime, setEndTime] = React.useState("09:00");
   const [chairman, setChairman] = React.useState("");
   const [chairmanInput, setChairmanInput] = React.useState("");
+  const [chairmanMeta, setChairmanMeta] = React.useState<{
+    employeeCode?: string;
+    userId?: string;
+  } | null>(null);
   const [showChairmanPicker, setShowChairmanPicker] = React.useState(false);
   const [participantInput, setParticipantInput] = React.useState("");
   const [participants, setParticipants] = React.useState<MeetingParticipant[]>([]);
@@ -285,6 +297,14 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setEndTime(initialData.endTime);
       setChairman(initialData.chairman);
       setChairmanInput(initialData.chairman);
+      setChairmanMeta(
+        initialData.chairmanEmployeeCode || initialData.chairmanUserId
+          ? {
+              employeeCode: initialData.chairmanEmployeeCode,
+              userId: initialData.chairmanUserId,
+            }
+          : null,
+      );
       setShowChairmanPicker(false);
       setParticipantInput("");
       setParticipants(initialData.participants);
@@ -302,6 +322,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setEndTime("09:00");
       setChairman("");
       setChairmanInput("");
+      setChairmanMeta(null);
       setShowChairmanPicker(false);
       setParticipantInput("");
       setParticipants([]);
@@ -313,24 +334,30 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     }
   }, [isOpen, defaultDate, initialData]);
 
-  // Kiểm tra xung đột khi thêm người tham gia
-  const checkConflict = (name: string): boolean => {
-    return existingMeetings.some(
-      (m) =>
-        m.date === date &&
-        timeRangesOverlap(startTime, endTime, m.startTime, m.endTime) &&
-        m.participants.some((p) => p.name.toLowerCase() === name.toLowerCase()),
-    );
-  };
+  // Kiểm tra xung đột lịch theo tên người tham gia
+  const checkConflict = React.useCallback(
+    (name: string): boolean => {
+      return existingMeetings.some(
+        (m) =>
+          m.date === date &&
+          timeRangesOverlap(startTime, endTime, m.startTime, m.endTime) &&
+          m.participants.some((p) => p.name.toLowerCase() === name.toLowerCase()),
+      );
+    },
+    [existingMeetings, date, startTime, endTime],
+  );
+
+  // Cờ trùng lịch derive lúc render — tự cập nhật khi đổi ngày/giờ họp
+  const participantsWithConflicts = React.useMemo(
+    () => participants.map((p) => ({ ...p, hasConflict: checkConflict(p.name) })),
+    [participants, checkConflict],
+  );
 
   const addParticipant = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (participants.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) return;
-    setParticipants((prev) => [
-      ...prev,
-      { name: trimmed, hasConflict: checkConflict(trimmed) },
-    ]);
+    setParticipants((prev) => [...prev, { name: trimmed }]);
     setParticipantInput("");
   };
 
@@ -353,7 +380,6 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         ...prev,
         {
           name: trimmed,
-          hasConflict: checkConflict(trimmed),
           employeeCode: meta?.employeeCode || undefined,
           userId: meta?.userId || undefined,
         },
@@ -396,7 +422,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       startTime,
       endTime,
       chairman: chairman.trim(),
-      participants,
+      chairmanEmployeeCode: chairmanMeta?.employeeCode,
+      chairmanUserId: chairmanMeta?.userId,
+      participants: participantsWithConflicts,
       format,
       location: locToSave,
       notes: notes.trim(),
@@ -420,7 +448,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     (l) => l.toLowerCase().includes(locationInput.toLowerCase()) && locationInput,
   );
 
-  const hasConflicts = participants.some((p) => p.hasConflict);
+  const hasConflicts = participantsWithConflicts.some((p) => p.hasConflict);
 
   return (
     <Modal
@@ -500,7 +528,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 onChange={(e) => {
                   const raw = e.target.value;
                   // Cho phép gõ số + dấu /, tự thêm dấu / sau 2 và 4 số
-                  let digits = raw.replace(/\D/g, "").slice(0, 8);
+                  const digits = raw.replace(/\D/g, "").slice(0, 8);
                   let formatted = digits;
                   if (digits.length > 4) {
                     formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
@@ -618,7 +646,11 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             value={chairmanInput}
             onChange={(e) => {
               setChairmanInput(e.target.value);
-              if (!e.target.value.startsWith("@")) setChairman(e.target.value);
+              if (!e.target.value.startsWith("@")) {
+                setChairman(e.target.value);
+                // Gõ tay → tên không còn ứng với người đã chọn từ bạn bè
+                setChairmanMeta(null);
+              }
             }}
             onBlur={() => {
               // Nếu user gõ @query mà không chọn ai, bỏ ký tự @ khi blur
@@ -657,6 +689,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                           onClick={() => {
                             setChairman(f.name);
                             setChairmanInput(f.name);
+                            setChairmanMeta({
+                              employeeCode: f.employeeCode || undefined,
+                              userId: f.id,
+                            });
                             setShowChairmanPicker(false);
                           }}
                           className={clsx(
@@ -728,7 +764,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               "focus-within:ring-2 focus-within:ring-[#1976D2]/15",
             )}
           >
-            {participants.map((p) => (
+            {participantsWithConflicts.map((p) => (
               <span
                 key={p.name}
                 className={clsx(
