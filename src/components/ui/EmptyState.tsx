@@ -42,6 +42,12 @@ import { useAuthStore } from "../../stores";
 import { useCalendarStore } from "../../stores/calendarStore";
 import { toast } from "../../utils/toast";
 
+// Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
+// có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
+const MarkdownContent = React.lazy(
+  () => import("../message/MarkdownContent"),
+);
+
 interface EmptyStateProps {
   title: string;
   description?: string;
@@ -264,6 +270,8 @@ interface EventDetailPopupProps {
   onDelete?: (meetingId: string) => void;
   onDeleteApiEvent?: (eventId: string) => Promise<void>;
   onToggleRead?: (meetingId: string) => void;
+  /** Mở trang lịch đầy đủ để xem chi tiết. */
+  onViewFull?: () => void;
 }
 
 const formatReadAt = (iso: string): string => {
@@ -299,6 +307,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
   onDelete,
   onDeleteApiEvent,
   onToggleRead,
+  onViewFull,
 }) => {
   const isLocalMeeting = !!detail.meeting;
   const isApiEvent = !!detail.apiEvent;
@@ -320,7 +329,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
     ? m.participants.length + (m.chairman ? 1 : 0)
     : 0;
   const accent = detail.kind === "meeting"
-    ? { dot: "bg-teal-500", chip: "bg-teal-500/10 text-teal-700 dark:text-teal-300", label: "Lịch họp" }
+    ? { dot: "bg-[#1976D2]", chip: "bg-[#1976D2]/10 text-[#1565C0] dark:text-[#6BA8F0]", label: "Lịch họp" }
     : { dot: "bg-amber-500", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300", label: "Cá nhân" };
 
   const formatDate = (d: string) => {
@@ -359,7 +368,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           </div>
 
           <h3 className="text-xl font-semibold text-text-primary">{detail.title}</h3>
-          <p className="mt-1 text-sm font-semibold text-teal-600 dark:text-teal-400">
+          <p className="mt-1 text-sm font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
             {formatDate(detail.date)}
           </p>
 
@@ -387,9 +396,9 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
 
             {isLocalMeeting && m!.chairman && (
               <div className="flex items-center gap-3">
-                <UserIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                 <span className="text-text-primary">
-                  <span className="font-semibold text-teal-600 dark:text-teal-400">Chủ trì: </span>
+                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
                   {m!.chairman}
                 </span>
               </div>
@@ -397,9 +406,9 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
 
             {isLocalMeeting && m!.participants.length > 0 && (
               <div className="flex items-start gap-3">
-                <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
+                <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                 <div className="flex-1">
-                  <div className="font-semibold text-teal-600 dark:text-teal-400">
+                  <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
                     Thành viên ({m!.participants.length}):
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
@@ -425,12 +434,12 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             {isLocalMeeting && (
               <div className="flex items-center gap-3">
                 {m!.format === "online" ? (
-                  <VideoCameraIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                 ) : (
-                  <MapPinIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                 )}
                 <span className="text-text-primary">
-                  <span className="font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
                     {m!.format === "online" ? "Hình thức: " : "Địa điểm: "}
                   </span>
                   {m!.format === "online" ? "Trực tuyến" : (m!.location || "Chưa cập nhật")}
@@ -440,8 +449,14 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
 
             {isLocalMeeting && m!.notes && (
               <div className="flex items-start gap-3">
-                <DocumentTextIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                <p className="whitespace-pre-wrap text-text-primary">{m!.notes}</p>
+                <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
+                  <React.Suspense
+                    fallback={<p className="whitespace-pre-wrap">{m!.notes}</p>}
+                  >
+                    <MarkdownContent content={m!.notes} isOwn={false} />
+                  </React.Suspense>
+                </div>
               </div>
             )}
 
@@ -453,7 +468,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                   <div className="flex items-center gap-3">
                     <ClockIcon className="h-5 w-5 text-text-muted" />
                     <span className="text-text-primary">
-                      {apiEvent.startAt.slice(11, 16)} — {apiEvent.endAt.slice(11, 16)}
+                      {new Date(apiEvent.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} — {new Date(apiEvent.endAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}
                     </span>
                   </div>
                 )}
@@ -461,9 +476,9 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 {/* Chairman */}
                 {apiEvent.meetingChairman && (
                   <div className="flex items-center gap-3">
-                    <UserIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                     <span className="text-text-primary">
-                      <span className="font-semibold text-teal-600 dark:text-teal-400">Chủ trì: </span>
+                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
                       {apiEvent.meetingChairman}
                     </span>
                   </div>
@@ -472,9 +487,9 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 {/* Attendees */}
                 {apiEvent.attendees && apiEvent.attendees.length > 0 && (
                   <div className="flex items-start gap-3">
-                    <UsersIcon className="mt-0.5 h-5 w-5 text-teal-600 dark:text-teal-400" />
+                    <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                     <div className="flex-1">
-                      <div className="font-semibold text-teal-600 dark:text-teal-400">
+                      <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
                         Thành viên ({apiEvent.attendees.length})
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -500,9 +515,9 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 {apiEvent.meetingLocation && (
                   <div className="flex items-center gap-3">
                     {apiEvent.meetingFormat === "online" ? (
-                      <VideoCameraIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                     ) : (
-                      <MapPinIcon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                      <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
                     )}
                     <span className="text-text-primary break-all">
                       {apiEvent.meetingFormat === "online" ? "Trực tuyến: " : "Địa điểm: "}
@@ -511,11 +526,17 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                   </div>
                 )}
 
-                {/* Description */}
+                {/* Description (ghi chú) — render markdown để bảng/danh sách đẹp */}
                 {apiEvent.description && (
                   <div className="flex items-start gap-3">
-                    <DocumentTextIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                    <p className="whitespace-pre-wrap text-text-primary">{apiEvent.description}</p>
+                    <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                    <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
+                      <React.Suspense
+                        fallback={<p className="whitespace-pre-wrap">{apiEvent.description}</p>}
+                      >
+                        <MarkdownContent content={apiEvent.description} isOwn={false} />
+                      </React.Suspense>
+                    </div>
                   </div>
                 )}
               </>
@@ -672,6 +693,19 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
               )}
             </div>
           )}
+
+          {/* Mở trang lịch đầy đủ để xem chi tiết lịch họp */}
+          {onViewFull && (
+            <div className="mt-5 border-t border-border pt-3 text-center">
+              <button
+                type="button"
+                onClick={onViewFull}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-[#1565C0] transition-micro hover:underline dark:text-[#6BA8F0]"
+              >
+                Xem chi tiết lịch họp →
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -787,14 +821,20 @@ const WeeklyCalendarWidget: React.FC = () => {
 
   // Map store events to CalendarEvent format for display
   const events: CalendarEvent[] = React.useMemo(() => {
-    return safeStoreEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      date: event.startAt.slice(0, 10),
-      type: event.eventType === "MEETING" ? "meeting" : "work",
-      description: event.description ?? undefined,
-      time: event.startAt.slice(11, 16),
-    }));
+    return safeStoreEvents.map((event) => {
+      // startAt là UTC ISO → format theo giờ LOCAL (slice chuỗi sẽ ra giờ/ngày
+      // UTC, lệch 7h ở VN và có thể nhảy sai cột ngày với lịch sáng sớm).
+      const d = new Date(event.startAt);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return {
+        id: event.id,
+        title: event.title,
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        type: event.eventType === "MEETING" ? "meeting" : "work",
+        description: event.description ?? undefined,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+      };
+    });
   }, [safeStoreEvents]);
 
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
@@ -808,24 +848,41 @@ const WeeklyCalendarWidget: React.FC = () => {
 
   const handleSaveMeeting = async (data: MeetingFormData) => {
     try {
-      const startAt = `${data.date}T${data.startTime}:00.000Z`;
-      const endAt = `${data.date}T${data.endTime}:00.000Z`;
+      // Diễn giải ngày+giờ đã chọn là giờ LOCAL rồi quy về mốc tuyệt đối (UTC
+      // ISO). Nối "Z" trực tiếp sẽ coi giờ local là UTC (lệch 7h ở VN).
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      // Người được tag phải nhận được lịch → gửi mọi ref backend resolve được
+      // (employee cuid / employeeCode / authUserId). Tên free-text (không có
+      // identity) lưu vào metadata.attendees để hiển thị. Chủ trì tag từ bạn bè
+      // cũng được mời để lịch hiện trên lịch của họ.
+      const refs = new Set<string>();
+      const freeTextNames: string[] = [];
+      for (const p of data.participants ?? []) {
+        const ref = p.employeeId || p.employeeCode || p.userId;
+        if (ref) refs.add(ref);
+        else if (p.name.trim()) freeTextNames.push(p.name.trim());
+      }
+      const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
+      if (chairmanRef) refs.add(chairmanRef);
 
       const input = {
         title: data.title,
         description: data.notes || undefined,
-        type: "MEETING" as const,
-        source: "MEETING" as const,
         startAt,
         endAt,
-        timezone: "Asia/Ho_Chi_Minh",
+        eventType: "MEETING",
+        visibility: "PRIVATE",
         isAllDay: false,
-        visibility: "PRIVATE" as const,
-        status: "CONFIRMED" as const,
-        attendees: data.participants.map(p => p.name),
+        location: data.location || undefined,
+        timezone,
+        participantIds: Array.from(refs),
+        attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
         meetingChairman: data.chairman || undefined,
         meetingFormat: data.format,
-        meetingLocation: data.location || undefined,
       };
 
       const result = await createEvent(input);
@@ -979,6 +1036,7 @@ const WeeklyCalendarWidget: React.FC = () => {
           onDelete={handleDeleteMeeting}
           onDeleteApiEvent={handleDeleteApiEvent}
           onToggleRead={handleToggleRead}
+          onViewFull={() => navigate("/calendar")}
         />
       )}
 
