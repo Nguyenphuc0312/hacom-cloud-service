@@ -1830,3 +1830,25 @@ input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
 }
+
+/* ── Responsive density tuning ──────────────────────────────────────────────
+   Màn thấp (laptop nhỏ, cửa sổ desktop tối thiểu 1024×640, browser zoom lớn):
+   nén chiều cao header để dành chỗ cho timeline + composer. */
+@media (max-height: 700px) {
+  :root {
+    --app-header-height: 50px;
+    --app-header-height-mobile: 48px;
+    --hc-header-height: 52px;
+  }
+}
+
+/* Màn lớn (27–32 inch, ≥1920px): nới sidebar, info panel và gutter để bố cục
+   cân đối thay vì dồn hết không gian thừa vào khung chat. Lane nội dung chat
+   đã được giới hạn riêng qua data-chat-layout-profile="desktop-wide". */
+@media (min-width: 1920px) {
+  :root {
+    --app-inspector-width: 400px;
+    --hc-sidebar-width: clamp(340px, 19vw, 440px);
+    --app-shell-gutter: 32px;
+  }
+}

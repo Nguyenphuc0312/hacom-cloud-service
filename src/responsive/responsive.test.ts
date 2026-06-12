@@ -35,8 +35,11 @@ describe("resolveScreenCategory", () => {
 
 describe("resolveChatLayoutBreakpointBand", () => {
   it("matches chat shell thresholds", () => {
-    expect(resolveChatLayoutBreakpointBand(1023)).toBe("compact");
-    expect(resolveChatLayoutBreakpointBand(1024)).toBe("standard");
+    expect(resolveChatLayoutBreakpointBand(767)).toBe("compact");
+    expect(resolveChatLayoutBreakpointBand(768)).toBe("standard");
+    // Cửa sổ desktop tối thiểu 1024px có viewport thực ~1008px (viền cửa sổ):
+    // vẫn phải là layout hai cột, không rơi về compact.
+    expect(resolveChatLayoutBreakpointBand(1008)).toBe("standard");
     expect(resolveChatLayoutBreakpointBand(1279)).toBe("standard");
     expect(resolveChatLayoutBreakpointBand(1280)).toBe("wide");
   });

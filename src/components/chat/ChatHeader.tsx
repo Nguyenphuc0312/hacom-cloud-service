@@ -149,7 +149,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <button
               type="button"
               onClick={onBack}
-              className={clsx(iconButtonClass, "lg:hidden")}
+              className={clsx(iconButtonClass, "md:hidden")}
               aria-label={t("chat:header.back")}
             >
               <ArrowLeftIcon className="h-5 w-5" />
