@@ -3,7 +3,11 @@ import clsx from "clsx";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
-import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types/chat";
+import type {
+  FriendSuggestionDto,
+  FriendSuggestionMetadataDto,
+  FriendshipCapabilitiesDto,
+} from "@hacom/chat-shared-types/chat";
 import {
   MagnifyingGlassIcon,
   UserGroupIcon,
@@ -35,7 +39,6 @@ import {
   extractApiError,
   unwrapApiSuccess,
 } from "../lib/apiContract";
-import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { ROUTE_PATHS } from "../router/paths";
 import { UserStatus } from "../types";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
@@ -47,6 +50,7 @@ import {
   filterFriendSuggestions,
   getFriendshipAction,
 } from "../features/friends/friendshipAction";
+import { useFriendSuggestions } from "../features/friends/useFriendSuggestions";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -82,6 +86,10 @@ interface ContactUser {
     | "blocked"
     | null;
   capabilities?: Partial<FriendshipCapabilitiesDto> | null;
+}
+
+interface SuggestionContact extends ContactUser {
+  suggestion?: FriendSuggestionMetadataDto;
 }
 
 interface PreviewTarget {
@@ -199,6 +207,36 @@ const buildSuggestionSubtitle = (user: ContactUser): string | undefined => {
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" · ") : undefined;
+};
+
+const toSuggestionContact = (dto: FriendSuggestionDto): SuggestionContact => ({
+  id: dto.id,
+  username: dto.username ?? undefined,
+  displayName: dto.displayName,
+  avatar: dto.avatarUrl ?? undefined,
+  status: normalizeStatus(dto.status),
+  employeeCode: dto.employeeCode ?? undefined,
+  departmentName: dto.departmentName ?? undefined,
+  orgUnit: dto.unitName ?? undefined,
+  unitCode: dto.unitCode ?? undefined,
+  title: dto.title ?? undefined,
+  isFriend: dto.isFriend,
+  canAddFriend: dto.canAddFriend,
+  friendshipStatus: dto.friendshipStatus,
+  capabilities: dto.capabilities,
+  suggestion: dto.suggestion,
+});
+
+const buildSuggestionReasonSubtitle = (
+  user: SuggestionContact,
+): string | undefined => {
+  const labels = (user.suggestion?.reasons ?? [])
+    .map((reason) => reason.label)
+    .filter(Boolean);
+  if (labels.length > 0) {
+    return labels.slice(0, 2).join(" · ");
+  }
+  return buildSuggestionSubtitle(user);
 };
 
 const normalizeSearchResults = (payload: unknown): ContactUser[] => {
@@ -426,13 +464,28 @@ export const FriendsPage: React.FC = () => {
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [suggestions, setSuggestions] = useState<ContactUser[]>([]);
-  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(
     null,
   );
   const debouncedQuery = useDebounce(query, 250);
+
+  const {
+    suggestions: suggestionDtos,
+    hasLoaded: suggestionsHasLoaded,
+    isLoading: isSuggestionsLoading,
+    isLoadingMore: isSuggestionsLoadingMore,
+    hasNext: suggestionsHasNext,
+    error: suggestionsError,
+    loadMoreError: suggestionsLoadMoreError,
+    loadMore: loadMoreSuggestions,
+    reload: reloadSuggestions,
+  } = useFriendSuggestions({ enabled: activeTab === "discover" });
+
+  const suggestions = useMemo(
+    () => suggestionDtos.map(toSuggestionContact),
+    [suggestionDtos],
+  );
 
   const visiblePresenceIds = useMemo(() => {
     const ids = new Set<string>();
@@ -519,75 +572,6 @@ export const FriendsPage: React.FC = () => {
     () => new Set(friends.map((f) => f.id)),
     [friends],
   );
-
-  useEffect(() => {
-    if (activeTab !== "discover") return;
-    const controller = new AbortController();
-
-    const tryFetch = async (
-      fn: () => Promise<unknown>,
-    ): Promise<ContactUser[]> => {
-      try {
-        const res = await fn();
-        return normalizeSearchResults(unwrapApiSuccess(res as ApiResponse<unknown>));
-      } catch {
-        return [];
-      }
-    };
-
-    const loadSuggestions = async () => {
-      const collected = new Map<string, ContactUser>();
-      const addAll = (items: ContactUser[]) => {
-        for (const u of items) {
-          if (!u.id) continue;
-          if (u.id === currentUser?.id) continue;
-          if (!collected.has(u.id)) collected.set(u.id, u);
-        }
-      };
-
-      // Gợi ý theo phòng ban / tên. Hiện chưa có endpoint /suggestions riêng,
-      // nên chỉ dùng /users/search vì response có relationship state.
-      const searchQuery =
-        currentUser?.departmentName?.trim() ||
-        currentUser?.orgUnit?.trim() ||
-        currentUser?.firstName?.trim() ||
-        "";
-      if (searchQuery.length >= 2) {
-        addAll(
-          await tryFetch(() =>
-            userApi.searchUsers(searchQuery, 1, USERS_SEARCH_PAGE_SIZE, {
-              signal: controller.signal,
-            }),
-          ),
-        );
-      }
-
-      if (!controller.signal.aborted) {
-        const sorted = Array.from(collected.values()).sort((a, b) =>
-          toDisplayName(a).localeCompare(toDisplayName(b), "vi"),
-        );
-        setSuggestions(sorted);
-      }
-    };
-
-    const timer = window.setTimeout(() => {
-      setIsSuggestionsLoading(true);
-      void loadSuggestions().finally(() => {
-        if (!controller.signal.aborted) setIsSuggestionsLoading(false);
-      });
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [
-    activeTab,
-    currentUser?.departmentName,
-    currentUser?.firstName,
-    currentUser?.id,
-    currentUser?.orgUnit,
-  ]);
 
   const handleMessage = useCallback(
     async (userId: string) => {
@@ -802,30 +786,45 @@ export const FriendsPage: React.FC = () => {
     [friends],
   );
 
-  const handleFriendsScroll = useCallback(
+  const handleListScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
-      if (
-        activeTab !== "friends" ||
-        isFriendsLoading ||
-        isFriendsLoadingMore ||
-        !friendsHasNext
-      ) {
-        return;
-      }
-
       const element = event.currentTarget;
       const remaining =
         element.scrollHeight - element.scrollTop - element.clientHeight;
-      if (remaining <= 96) {
+      if (remaining > 96) {
+        return;
+      }
+
+      if (activeTab === "friends") {
+        if (isFriendsLoading || isFriendsLoadingMore || !friendsHasNext) {
+          return;
+        }
         void loadMoreFriends();
+        return;
+      }
+
+      if (activeTab === "discover" && debouncedQuery.trim().length < 2) {
+        if (
+          isSuggestionsLoading ||
+          isSuggestionsLoadingMore ||
+          !suggestionsHasNext
+        ) {
+          return;
+        }
+        void loadMoreSuggestions();
       }
     },
     [
       activeTab,
+      debouncedQuery,
       friendsHasNext,
       isFriendsLoading,
       isFriendsLoadingMore,
+      isSuggestionsLoading,
+      isSuggestionsLoadingMore,
       loadMoreFriends,
+      loadMoreSuggestions,
+      suggestionsHasNext,
     ],
   );
 
@@ -1024,17 +1023,27 @@ export const FriendsPage: React.FC = () => {
               ))}
             </div>
           )
-        ) : isSuggestionsLoading ? (
+        ) : isSuggestionsLoading || !suggestionsHasLoaded ? (
           <DirectorySkeleton count={4} />
+        ) : suggestionsError && filteredSuggestions.length === 0 ? (
+          <StateBlock
+            variant="error"
+            icon={<UserPlusIcon className="h-6 w-6" />}
+            title={t("friends:suggestionsError")}
+            description={t("friends:discoverHintBody")}
+            primaryAction={{
+              label: t("common:actions.retry"),
+              onClick: () => void reloadSuggestions(),
+            }}
+            className="border-dashed shadow-none"
+          />
         ) : (
           <div className="space-y-2">
             {filteredSuggestions.length === 0 ? (
               <StateBlock
                 variant="empty"
                 icon={<UserPlusIcon className="h-6 w-6" />}
-                title={t("friends:suggestionsEmpty", {
-                  defaultValue: "Chưa có gợi ý kết bạn phù hợp",
-                })}
+                title={t("friends:suggestionsEmpty")}
                 description={t("friends:discoverHintBody")}
                 className="border-dashed shadow-none"
               />
@@ -1048,13 +1057,28 @@ export const FriendsPage: React.FC = () => {
                     <ContactRow
                       key={user.id}
                       user={user}
-                      subtitle={buildSuggestionSubtitle(user)}
+                      subtitle={buildSuggestionReasonSubtitle(user)}
                       selected={previewTarget?.userId === user.id}
                       onClick={() => setPreviewTarget(profileFromSummary(user))}
                       action={renderRelationshipAction(user)}
                     />
                   ))}
                 </div>
+                {isSuggestionsLoadingMore ? (
+                  <DirectorySkeleton count={2} />
+                ) : null}
+                {suggestionsLoadMoreError ? (
+                  <div className="px-2 py-2 text-center">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="brand-outline"
+                      onClick={() => void loadMoreSuggestions()}
+                    >
+                      {t("common:actions.retry")}
+                    </Button>
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -1121,7 +1145,7 @@ export const FriendsPage: React.FC = () => {
 
             <div
               className="min-h-0 flex-1 overflow-y-auto p-3"
-              onScroll={handleFriendsScroll}
+              onScroll={handleListScroll}
             >
               {activeTab === "friends" && renderFriendsTab()}
               {activeTab === "requests" && renderRequestsTab()}

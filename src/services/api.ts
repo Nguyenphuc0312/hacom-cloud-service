@@ -19,6 +19,8 @@ import type {
   CompleteUploadResponse,
   CreateDirectConversationDto,
   CreateMessageResponse,
+  FriendSuggestionDto,
+  FriendSuggestionSource,
   FriendshipCapabilitiesDto,
   FriendshipPendingCountDto,
   FriendshipRelationDto,
@@ -56,6 +58,7 @@ const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
 export const FRIENDS_PAGE_SIZE = 20;
 export const USERS_SEARCH_PAGE_SIZE = 20;
+export const FRIEND_SUGGESTIONS_PAGE_SIZE = 20;
 
 const buildDirectDmTraceRequestId = (): string => {
   if (
@@ -1731,6 +1734,37 @@ export const friendshipApi = {
     const response = await apiClient.get<
       ApiResponse<FriendshipPendingCountDto>
     >("/friends/requests/count");
+    return response.data;
+  },
+
+  /**
+   * GET /friends/suggestions — gợi ý kết bạn đã ranked + filtered ở backend
+   * (loại self/friends/pending/blocked/inactive; nguồn: cùng nhóm > cùng
+   * phòng ban > cùng đơn vị > tương tác gần đây). Pagination nằm ở `meta`.
+   */
+  getSuggestions: async (
+    page = 1,
+    limit = FRIEND_SUGGESTIONS_PAGE_SIZE,
+    options?: {
+      source?: FriendSuggestionSource | "all";
+      q?: string;
+      signal?: AbortSignal;
+    },
+  ) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options?.source && options.source !== "all") {
+      query.set("source", options.source);
+    }
+    if (options?.q?.trim()) {
+      query.set("q", options.q.trim());
+    }
+    const response = await apiClient.get<ApiResponse<FriendSuggestionDto[]>>(
+      `/friends/suggestions?${query.toString()}`,
+      { signal: options?.signal },
+    );
     return response.data;
   },
 
