@@ -165,8 +165,13 @@ export function sendAiChatMessage(
     });
 
     // Wire caller's signal to SSE cleanup so aborting the signal also stops
-    // the underlying stream reader.
-    options?.signal?.addEventListener("abort", cleanup, { once: true });
+    // the underlying stream reader AND settles the pending Promise.
+    // Without the reject() call the Promise would hang forever because
+    // openSSEStream silently skips onComplete/onError when aborted=true.
+    options?.signal?.addEventListener("abort", () => {
+      cleanup();
+      reject(new DOMException("Stream aborted by user", "AbortError"));
+    }, { once: true });
   });
 }
 
