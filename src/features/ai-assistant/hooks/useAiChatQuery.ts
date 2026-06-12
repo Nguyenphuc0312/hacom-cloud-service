@@ -131,6 +131,12 @@ function normalizeMessagesResponse(raw: unknown): AiMessage[] {
     if (Array.isArray(obj.data)) arr = obj.data;
     else if (Array.isArray(obj.messages)) arr = obj.messages;
     else if (Array.isArray(obj.items)) arr = obj.items;
+    // Xử lý format {session: {messages: [...]}} hoặc {history: [...]}
+    else if (obj.session && typeof obj.session === "object") {
+      const sess = obj.session as Record<string, unknown>;
+      if (Array.isArray(sess.messages)) arr = sess.messages;
+      else if (Array.isArray(sess.data)) arr = sess.data;
+    } else if (Array.isArray(obj.history)) arr = obj.history;
   }
 
   return arr
@@ -294,7 +300,7 @@ export function useDeleteSession(): MutationState<void, string> {
     setLoading(true);
     setError(null);
     try {
-      await aiChatClient.delete(`/api/chat/sessions/${sessionId}`);
+      await aiChatClient.delete(`/api/sessions/${sessionId}`);
     } catch (err) {
       const normalized = normalizeAiChatError(err);
       setError(normalized);
