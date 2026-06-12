@@ -497,8 +497,10 @@ const MessageGroupItem: React.FC<{
           onMouseEnter={handleItemMouseEnter}
           onMouseLeave={handleItemMouseLeave}
           className={clsx(
-            "absolute top-1 z-20 hidden transition-[opacity,transform] duration-150 md:block",
-            isOwn ? "right-full mr-2" : "left-full ml-2",
+            "absolute z-20 hidden transition-[opacity,transform] duration-150 md:block",
+            // Tin của mình: thanh công cụ ở trên-trái bubble (giữ nguyên).
+            // Tin người khác: hạ xuống phải-dưới bubble, gần giờ (17:23).
+            isOwn ? "top-1 right-full mr-2" : "bottom-0 left-full ml-2",
             (isHovered || showReactionPicker)
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
@@ -754,8 +756,9 @@ const MessageGroupItem: React.FC<{
             {(message.reactions?.length ?? 0) > 0 && (
               <div
                 className={clsx(
-                  "absolute bottom-0 translate-y-1/2 z-10",
-                  isOwn ? "right-0" : "left-0",
+                  // Reaction neo góc dưới-phải bubble cho cả hai phía — với tin
+                  // người khác để pill nằm cạnh/dưới giờ (17:23) thay vì góc trái.
+                  "absolute bottom-0 right-0 translate-y-1/2 z-10",
                 )}
               >
                 <ReactionBar
