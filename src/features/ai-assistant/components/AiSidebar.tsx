@@ -14,7 +14,7 @@ import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useReminderStore } from "../../../stores/reminderStore";
 import { useAuthStore } from "../../../stores/authStore";
-import aiChatClient from "../../../services/ai-chat/aiChatClient";
+import { deleteCompanySession } from "../services/aiChatApi";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -256,7 +256,7 @@ export const AiSidebar: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (conv.serverSessionId) {
-                            aiChatClient.delete(`/api/chat/sessions/${conv.serverSessionId}`).catch(() => {});
+                            deleteCompanySession(conv.serverSessionId).catch(() => {});
                           }
                           deleteConversation(conv.id);
                         }}

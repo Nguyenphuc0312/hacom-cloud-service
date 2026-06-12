@@ -341,8 +341,22 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       name: "hacom-ai-assistant-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Conversations không persist — API là source of truth, tránh stale cache cross-user.
-        // Chỉ lưu lastSessionId để restore active conversation sau F5.
+        // Persist conversations (kèm messages) để hiển thị ngay khi F5 / navigate
+        // lại mà không cần chờ API — cùng pattern với personalAiStore.
+        // loadServerSessions vẫn chạy sau đó để merge dữ liệu mới nhất từ server.
+        conversations: state.conversations.map((c) => ({
+          ...c,
+          messages: c.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+            sources: m.sources,
+            isError: m.isError,
+            isStreaming: false,
+            // formRequest / selectionRequest / thinking là UI-only, không persist
+          })),
+        })),
         lastSessionId: state.lastSessionId,
         isSidebarOpen: state.isSidebarOpen,
         ownerId: state.ownerId,
