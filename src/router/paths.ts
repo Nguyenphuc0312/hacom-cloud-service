@@ -24,4 +24,5 @@ export const ROUTE_PATHS = {
   HELP: "/help",
   FAQ: "/faq",
   REPORT_ISSUE: "/report-issue",
+  PRIVACY_POLICY: "/privacy-policy",
 } as const;
