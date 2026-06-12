@@ -46,6 +46,12 @@ const IDENTIFIER_PATTERN = /^[A-Za-z0-9_.@-]+$/;
 const looksLikeIdentifier = (value: string): boolean =>
   IDENTIFIER_PATTERN.test(value) && !value.includes(" ");
 
+// Matches a canonical UUID (e.g. senderId "d530b738-ca1d-42d0-b8e5-a07112a529c3").
+// A UUID is never a meaningful display name, so it must never be shown to users.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const looksLikeUuid = (value: string): boolean => UUID_PATTERN.test(value);
+
 export const resolveUserDisplayName = (
   user: UserIdentityCandidate | null | undefined,
   options: ResolveUserDisplayNameOptions = {},
@@ -76,6 +82,7 @@ export const resolveUserDisplayName = (
   const displayNameIsUsable =
     displayName &&
     !looksLikeEmail(displayName) &&
+    !looksLikeUuid(displayName) &&
     !looksLikeIdentifier(displayName);
 
   if (displayNameIsUsable) {
@@ -90,21 +97,25 @@ export const resolveUserDisplayName = (
     return fullName;
   }
 
-  // displayName that looks like an identifier is better than raw username
-  if (displayName && !looksLikeEmail(displayName)) {
+  // displayName that looks like an identifier is better than raw username,
+  // but a UUID is never a usable name.
+  if (displayName && !looksLikeEmail(displayName) && !looksLikeUuid(displayName)) {
     return displayName;
   }
 
-  if (username) {
+  if (username && !looksLikeUuid(username)) {
     return username;
   }
 
-  if (employeeCode) {
+  if (employeeCode && !looksLikeUuid(employeeCode)) {
     return employeeCode;
   }
 
   if (options.allowLegacyFallback) {
-    return asString(user.id) || "Unknown user";
+    const id = asString(user.id);
+    if (id && !looksLikeUuid(id)) {
+      return id;
+    }
   }
 
   return "Unknown user";
