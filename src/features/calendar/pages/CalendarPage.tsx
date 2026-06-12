@@ -16,8 +16,8 @@ import {
   UsersIcon,
   PencilSquareIcon,
   TrashIcon,
-  ExclamationCircleIcon,
   EyeIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -44,6 +44,12 @@ import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
+
+// Lazy: kéo react-markdown (~100kB) vào chunk riêng, chỉ tải khi mở chi tiết
+// lịch có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
+const MarkdownContent = React.lazy(
+  () => import("../../../components/message/MarkdownContent"),
+);
 
 /**
  * Calendar view types.
@@ -387,16 +393,11 @@ const EventDetailModal: React.FC<{
           <div className="mt-4 space-y-2">
             {/* Date */}
             <div className="flex items-start gap-3">
-              <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+              <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
               <div>
                 <p className="text-sm font-medium text-text-primary">
-                  {event.date}
+                  {isExtended && event.startAt ? formatDateVN(event.startAt) : event.date}
                 </p>
-                {isExtended && event.startAt && (
-                  <p className="text-xs text-text-muted">
-                    {formatDateVN(event.startAt)}
-                  </p>
-                )}
               </div>
             </div>
 
@@ -422,7 +423,7 @@ const EventDetailModal: React.FC<{
             {location && (
               <div className="flex items-start gap-3">
                 {format === "online" ? (
-                  <VideoCameraIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                  <VideoCameraIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
                 ) : (
                   <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
                 )}
@@ -436,7 +437,7 @@ const EventDetailModal: React.FC<{
             {format && (
               <div className="flex items-center gap-3">
                 {format === "online" ? (
-                  <VideoCameraIcon className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                  <VideoCameraIcon className="h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
                 ) : (
                   <BuildingOfficeIcon className="h-5 w-5 shrink-0 text-text-muted" />
                 )}
@@ -449,9 +450,9 @@ const EventDetailModal: React.FC<{
             {/* Chairman */}
             {chairman && (
               <div className="flex items-start gap-3">
-                <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
                 <div>
-                  <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                  <p className="text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
                     Chủ trì
                   </p>
                   <p className="text-sm text-text-primary">
@@ -469,9 +470,9 @@ const EventDetailModal: React.FC<{
                 : (attendees ?? []);
               return nameOnlyAttendees.length > 0 ? (
               <div className="flex items-start gap-3">
-                <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                  <p className="text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
                     {hrEvent ? `Khách mời khác (${nameOnlyAttendees.length})` : `Thành viên (${nameOnlyAttendees.length})`}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
@@ -494,26 +495,48 @@ const EventDetailModal: React.FC<{
               ) : null;
             })()}
 
-            {/* Visibility */}
+            {/* Quyền xem (visibility) */}
             {visibility && (
-              <div className="flex items-center gap-3">
-                <ExclamationCircleIcon className="h-5 w-5 shrink-0 text-text-muted" />
-                <p className="text-xs text-text-muted">
-                  {visibility === "PRIVATE" ? "Ghi chú" :
-                    visibility === "TEAM" ? "Nhóm" :
-                    visibility === "UNIT" ? "Đơn vị" :
-                    visibility === "PUBLIC" ? "Công khai" :
-                    "Chỉ hiển thị trạng thái bận"}
-                </p>
+              <div className="flex items-start gap-3">
+                <EyeIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                <div>
+                  <p className="text-xs font-medium text-text-muted">Quyền xem</p>
+                  <p className="text-sm text-text-primary">
+                    {visibility === "PRIVATE" ? "Riêng tư" :
+                      visibility === "TEAM" ? "Nhóm" :
+                      visibility === "UNIT" ? "Đơn vị" :
+                      visibility === "PUBLIC" ? "Công khai" :
+                      "Chỉ hiển thị trạng thái bận"}
+                  </p>
+                </div>
               </div>
             )}
           </div>
+
+          {/* Ghi chú (description) — render markdown để bảng/danh sách hiển thị đẹp */}
+          {event.description && (
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
+                <DocumentTextIcon className="h-4 w-4" />
+                Ghi chú
+              </p>
+              <div className="rounded-lg bg-surface-overlay/60 p-3 text-sm leading-relaxed text-text-secondary">
+                <React.Suspense
+                  fallback={
+                    <p className="whitespace-pre-wrap">{event.description}</p>
+                  }
+                >
+                  <MarkdownContent content={event.description} isOwn={false} />
+                </React.Suspense>
+              </div>
+            </div>
+          )}
 
           {/* HR participant roster (with response status) */}
           {hrEvent && hrParticipants.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-teal-600 dark:text-teal-400">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
                   <UsersIcon className="h-4 w-4" />
                   Người tham gia ({respSummary.total})
                 </p>
@@ -581,15 +604,6 @@ const EventDetailModal: React.FC<{
                   {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Description */}
-          {event.description && (
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="text-sm text-text-secondary whitespace-pre-wrap">
-                {event.description}
-              </p>
             </div>
           )}
 
