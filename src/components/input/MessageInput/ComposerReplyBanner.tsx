@@ -14,6 +14,8 @@ import { MessageType } from "../../../types";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { resolvePublicResourceUrl } from "../../../config";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../../services/enrichUserProfile";
 
 function getFileExtInfo(
   mimeType?: string,
@@ -101,10 +103,25 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
   const mimeType = firstAttachment?.mimeType;
   const fileExtInfo = isFile ? getFileExtInfo(mimeType, fileName) : null;
 
-  const senderDisplayName = resolveUserDisplayName({
-    displayName: replyToMessage.senderName,
-    username: replyToMessage.senderId,
-  });
+  // Tên thật (HR) fetch theo senderId; senderName trong message có thể rỗng →
+  // ưu tiên tên đã enrich để không hiện UUID/"Unknown user".
+  const replySenderId = replyToMessage.senderId;
+  const enrichedSenderName = useEnrichedProfileStore(
+    React.useMemo(
+      () => (s) => (replySenderId ? s.nameByUserId[replySenderId] : undefined),
+      [replySenderId],
+    ),
+  );
+  React.useEffect(() => {
+    if (replySenderId) enrichUserProfile(replySenderId);
+  }, [replySenderId]);
+
+  const senderDisplayName =
+    enrichedSenderName ??
+    resolveUserDisplayName({
+      displayName: replyToMessage.senderName,
+      username: replyToMessage.senderId,
+    });
 
   const previewText = isImageOrVideo
     ? (replyToMessage.content?.trim() || mediaMeta?.label || "")
