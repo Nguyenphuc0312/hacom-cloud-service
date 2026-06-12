@@ -115,7 +115,7 @@ src/
 │   │   ├── realtimeMiddleware.ts        # Redux middleware patch cache từ realtime actions
 │   │   └── realtimeSlice.ts             # connectionStatus + typingByConversationId
 │   ├── activation/          # luồng kích hoạt tài khoản (OTP + set password)
-│   ├── ai-assistant/        # AI chat (có aiMockResponses, zustand store riêng)
+│   ├── ai-assistant/        # AI chat (zustand store riêng)
 │   ├── tasks/               # quản lý task (axios riêng + realtime hook)
 │   ├── calendar/            # lịch (CalendarPage + data tĩnh calendarEvents)
 │   ├── friends/ friend-qr/  # bạn bè + QR add friend (shareCode)
@@ -224,12 +224,12 @@ Endpoints (build tại dòng ~354):
 ## 7. Feature `chat` (lớn nhất) — `src/features/chat/`
 
 - `domain/` — logic thuần: `messageMerge.ts` (patch RTK cache), `messageIdentity.ts`, `messageOrdering.ts`, `serializableMessage.ts` (chuẩn hóa Message trước khi vào Redux).
-- `hooks/` — `useConversationMessagesRTK` (timeline từ RTK cache), `useChatConversations`, `useSendMessage`, `useConversationTimelineRows`, `useConversationThreadRows`, `useMessageTimelineViewModel`, `useMessageJumpTargetRTK`, `useSidebarConversationList/Summaries`, `useConversationSession/Validation`, `useChatUserSearch`.
-- `usecases/` — 34 use case (1 file/việc): tạo nhóm/DM, add/remove member, role, reaction, edit/delete message, invite link, join request, transfer ownership, share contact, send friend request… (xem `usecases/index.ts`).
+- `hooks/` — `useConversationMessagesRTK` (timeline từ RTK cache), `useSendMessage`, `useConversationTimelineRows`, `useConversationThreadRows`, `useMessageJumpTargetRTK`, `useSidebarConversationList/Summaries`, `useConversationSession/Validation`, `useChatUserSearch`.
+- `usecases/` — 13 use case (1 file/việc, import trực tiếp không qua barrel): tạo nhóm/DM, role, invite link, join request, transfer ownership, ban/unban, share contact, send friend request, search users… (message/reaction đi thẳng qua RTK Query mutations, không qua usecase).
 - `realtime/` — đăng ký handler WS theo nhóm sự kiện: `registerChatEvents`, `registerConversationEvents`, `registerGroupEvents`, `registerPresenceEvents`, `registerFriendshipEvents`, `registerConnectionEvents`, `registerSyncEvents`. `chatRealtimeAdapter` chuẩn hóa event, `realtimeEventKeys` dedupe, `resyncPolicy` phát hiện gap seq để resync.
 - `state/` — zustand phụ trợ: `chatSidebarStore` (filter), `chatUiStore`, `chatEntityStore`, `chatSelectors`.
 - `simple-virtual-timeline/` — virtual list tự viết (`SimpleVirtualizedChatTimeline`) + `useSimpleChatScroll`.
-- `components/` — group-members/* (modal quản lý thành viên), PollCard/PollCreateDialog, VideoCallView, AudioCallDialog.
+- `components/` — group-members/* (modal quản lý thành viên), PollCreateDialog (tạo poll — phần render poll chưa triển khai).
 - `permissions/groupPermissions.ts` — quyền theo role (owner/admin/member).
 
 ---
@@ -238,19 +238,19 @@ Endpoints (build tại dòng ~354):
 
 - `components/ui/` — primitives + barrel `index.ts` (Button, Input, Modal, Toast/ToastProvider, Spinner/PageSpinner, Skeleton, EmptyState, SegmentedControl, Checkbox…).
 - `components/chat/` — `ChatHeader`, `MessageItem/*`, `message-layout/*` (MessageRow, MessageCluster, MessageBodyRenderer, ReplyPreview), `ReactionBar/*`, `ReactionPicker/*`, `QuickReactBar`, `SearchPanel`, `PinnedMessagesPanel`, `ForwardModal`, `thread/*`.
-- `components/message/` — render theo loại: `TextMessage`, `ImageMessage`, `VideoMessage`, `VoiceMessage`, `FileMessage`/`FileMessageCard`, `StickerMessage`, `SystemMessage`, `MarkdownContent`, `LinkPreviewCard`, `context-menu/*`, `sticker-picker/*`.
-- `components/input/` — `MessageInput.tsx` + `MessageInput/*` (composer banners: reply, edit, mention, status, length), `TipTapEditor`, attachments (`AttachmentTray/Item/Preview/Menu`), `EmojiPicker`, `FormatToolbar`, `VoiceRecorder` (ở `components/voice/`).
+- `components/message/` — render theo loại: `TextMessage`, `ImageMessage`, `VoiceMessage`, `FileMessageCard`, `StickerMessage`, `SystemMessage`, `MarkdownContent`, `LinkPreviewCard` (video/file render qua `MessageBodyRenderer` + `FileMessageCard`).
+- `components/input/` — `MessageInput.tsx` + `MessageInput/*` (composer banners: reply, edit, mention, status, length), `TipTapEditor`, attachments (`AttachmentTray/Item/Menu`), `EmojiPicker`, `EmojiButton`.
 - `components/layout/` — `Sidebar`, `ChatWindow`, `CommandPalette`, `sidebar/*` (RoomList, RoomItem, SidebarHeader/Search…).
-- `components/info/` — panel thông tin bên phải: `GroupInfo` (chi tiết hội thoại/nhóm, members, invite link), `UserProfile` (info DM), `InfoMenuRow`, `shared-resources/SharedResourcesPreview` (preview media/file/link dùng chung, gọi 4 endpoint resources ở mục 5). Dùng trong `ChatPage`.
+- `components/info/` — panel thông tin bên phải: `GroupInfo` (chi tiết hội thoại/nhóm, members, invite link), `UserProfile` (info DM), `shared-resources/SharedResourcesPreview` (preview media/file/link dùng chung, gọi 4 endpoint resources ở mục 5). Dùng trong `ChatPage`.
 - `components/settings/` — các section settings (Appearance, Notification, Privacy, Chat, Security, Language, DangerZone…) + `SettingsApplier` (áp dụng settings lúc mount).
 
 ---
 
 ## 9. Hooks toàn cục (`src/hooks/`)
 
-WebSocket: `useWebSocket` (core), `useWebSocketConnectionLifecycle`, `useWebSocketAuthCoordinator`, `useWebSocketConversationCoordinator`, `useWebSocketResyncCoordinator`, `useMultiTabCoordination`.
+WebSocket: `useWebSocket` (core), `useWebSocketConnectionLifecycle`, `useWebSocketAuthCoordinator`, `useWebSocketConversationCoordinator`, `useWebSocketResyncCoordinator`.
 Chat: `useSendMessage`, `useMessageGrouping`, `useMessageSearch`, `usePinnedMessages`, `useTypingIndicator`, `usePresence`, `useComposerAvailability`.
-Upload/file: `useUploadQueue`, `useFilePreview`, `useAttachmentDownloadUrl`, `useDropZone`, `useVoiceRecorder`.
+Upload/file: `useUploadQueue`, `useFilePreview`, `useAttachmentDownloadUrl`, `useDropZone`.
 Auth: `useAuth`, `useLogout`, `useFriendship`, `useNotifications`, `useEmailVerificationChallenge`, `useOtpInput`, `useResendCooldown`.
 Tiện ích: `useDebounce/useDebouncedCallback/useThrottledCallback`, `useAutoResizeTextarea`, `useInViewport`, `useDelayedLoading`, `useMobileViewportMetrics`.
 

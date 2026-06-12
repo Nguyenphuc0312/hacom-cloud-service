@@ -1,1 +1,0 @@
-export { VoiceRecorder } from "./VoiceRecorder";
