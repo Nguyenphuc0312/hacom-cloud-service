@@ -6,6 +6,7 @@ import {
   getConversationAvatar,
   getConversationDisplayName,
   getRepresentativeGroupParticipants,
+  getUserDisplayName,
 } from "../../utils/messageHelpers";
 
 interface GroupAvatarProps {
@@ -49,8 +50,7 @@ const tilePalette = [
 
 const getInitials = (participant: UserSummary): string => {
   const source =
-    participant.displayName?.trim() ||
-    participant.username?.trim() ||
+    getUserDisplayName(participant, { allowTechnicalFallback: true }) ||
     participant.id;
 
   return (

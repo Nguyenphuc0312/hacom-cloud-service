@@ -389,8 +389,7 @@ export const toFriendshipUser = (
   return {
     id: user.id,
     username: user.username,
-    firstName: user.displayName ?? undefined,
-    lastName: undefined,
+    displayName: user.displayName ?? undefined,
     avatar: user.avatarUrl ?? undefined,
     status: "offline",
   };

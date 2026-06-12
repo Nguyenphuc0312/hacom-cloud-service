@@ -274,12 +274,13 @@ export function getUserDisplayName(
     },
   );
   const conversationTitle = asTrimmedString(options.conversationTitle);
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (primaryName) {
     return primaryName;
   }
 
-  if (conversationTitle) {
+  if (conversationTitle && !EMAIL_RE.test(conversationTitle)) {
     return conversationTitle;
   }
 

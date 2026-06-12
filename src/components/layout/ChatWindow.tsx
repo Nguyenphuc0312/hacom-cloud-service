@@ -48,7 +48,9 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { getConversationDisplayName } from "../../utils/messageHelpers";
+import { getConversationDisplayName, getOtherParticipant } from "../../utils/messageHelpers";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state";
@@ -944,6 +946,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     [],
   );
 
+  const enrichedNameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
@@ -971,8 +975,12 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             participantRecord.fullName.trim()) ||
           "";
 
-        // Resolve primary display name: fullNameFromHR > displayName > username
+        // Prefer enriched name fetched from /users/{id} over API participant data
+        const enrichedName = enrichedNameByUserId[participant.id];
+
+        // Resolve primary display name: enriched > fullNameFromHR > displayName > username
         const resolvedName =
+          enrichedName ||
           fullNameFromHR ||
           resolveUserDisplayName(participant, {
             allowLegacyFallback: false,
@@ -985,11 +993,11 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           id: participant.id,
           username:
             participant.username?.trim() || employeeCode || participant.id,
-          displayName:
+          displayName: enrichedName ||
             resolveUserDisplayName(participant, {
               allowLegacyFallback: false,
             }) || undefined,
-          fullName: fullNameFromHR || undefined,
+          fullName: enrichedName || fullNameFromHR || undefined,
           employeeCode: employeeCode || undefined,
           resolvedName,
         };
@@ -1008,12 +1016,23 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     }
 
     return individualCandidates;
-  }, [conversation, currentUser.id]);
+  }, [conversation, currentUser.id, enrichedNameByUserId]);
 
   // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
   React.useLayoutEffect(() => {
     mentionCandidatesRef.current = mentionCandidates;
   });
+
+  // Pre-fetch profiles for all participants so the @mention dropdown and
+  // message sender names show real names instead of codes/emails.
+  React.useEffect(() => {
+    const participants = Array.isArray(conversation.participants)
+      ? conversation.participants
+      : [];
+    for (const p of participants) {
+      if (p.id && p.id !== currentUser.id) enrichUserProfile(p.id);
+    }
+  }, [conversation.id, conversation.participants, currentUser.id]);
 
   const handleShareContact = React.useCallback(
     async (contactUserId: string) => {
@@ -1081,7 +1100,11 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
   const currentUsername = currentUser.username;
+  const dmPartnerUserId = isDirectConversation(conversation)
+    ? getOtherParticipant(conversation, currentUser.id)?.id
+    : undefined;
   const callDisplayName =
+    (dmPartnerUserId && enrichedNameByUserId[dmPartnerUserId]) ||
     getConversationDisplayName(conversation, currentUser.id) ||
     conversation.displayName ||
     conversation.name ||

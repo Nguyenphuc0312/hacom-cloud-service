@@ -1,10 +1,12 @@
-﻿import React, { useMemo } from "react";
+﻿import React, { useEffect, useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
 import { useChatStore, usePresenceStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import type { Conversation, UserStatus, UserSummary } from "../../../types";
 import {
   getConversationAvatar,
@@ -435,12 +437,26 @@ export const RoomItemContainer = React.memo(
       ),
     );
 
+    // Fetch full profile once for DM partners so the sidebar shows the real
+    // name instead of an email address or employee code. enrichUserProfile is
+    // TTL-cached so repeated mounts are cheap.
+    const enrichedName = useEnrichedProfileStore(
+      useMemo(
+        () => (s) => (directPartnerId ? s.nameByUserId[directPartnerId] : undefined),
+        [directPartnerId],
+      ),
+    );
+    useEffect(() => {
+      if (directPartnerId) enrichUserProfile(directPartnerId);
+    }, [directPartnerId]);
+
     const viewModel = useMemo(() => {
       if (!conversation) {
         return null;
       }
 
       const displayName =
+        enrichedName ||
         getConversationDisplayName(conversation, currentUser.id) ||
         i18n.t("common:labels.conversation");
       const previewState = getMessagePreviewState(
@@ -472,7 +488,7 @@ export const RoomItemContainer = React.memo(
         ),
         isDirect,
       };
-    }, [conversation, currentUser, presenceState]);
+    }, [conversation, currentUser, presenceState, enrichedName]);
 
     if (!viewModel) {
       return null;

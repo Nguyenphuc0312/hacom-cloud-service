@@ -118,16 +118,26 @@ const normalizeUserSummary = (value: unknown): UserSummary | null => {
     asString(source.userName) ??
     asString(source.nickname) ??
     id;
+  // Keep displayName as the raw value from the API. Do NOT fold fullName /
+  // fullNameFromHR into it here — those are stored as separate fields so that
+  // resolveUserDisplayName can apply the correct priority at display time (e.g.
+  // skipping an email-shaped displayName and falling back to fullName).
   const displayName =
     asString(source.displayName) ??
     asString(source.display_name) ??
+    username;
+  const fullNameFromHr =
     asString(source.fullNameFromHR) ??
     asString(source.full_name_from_hr) ??
-    asString(source.employeeCode) ??
-    asString(source.employee_code) ??
+    asString(source.fullNameFromHr) ??
+    asString(source.fullNameHR) ??
+    asString(source.hrLegalName) ??
+    null;
+  const fullName =
     asString(source.fullName) ??
+    asString(source.full_name) ??
     asString(source.name) ??
-    username;
+    null;
   const avatar = asString(source.avatar);
   const status = asString(source.status);
 
@@ -135,6 +145,8 @@ const normalizeUserSummary = (value: unknown): UserSummary | null => {
     id,
     username,
     displayName,
+    fullName,
+    fullNameFromHr,
     avatar,
     status: (status ?? UserStatus.OFFLINE) as UserSummary["status"],
     isBot: typeof source.isBot === "boolean" ? source.isBot : undefined,
