@@ -22,7 +22,7 @@ import {
   toast,
 } from "../components/ui";
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
-import { useAuthStore, useChatStore, usePresenceStore } from "../stores";
+import { useAuthStore, usePresenceStore } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
@@ -43,7 +43,10 @@ import {
   getFriendRequestDisplayLabel,
   getFriendRequestDisplayUser,
 } from "../features/friends/requestDisplay";
-import { getFriendshipAction } from "../features/friends/friendshipAction";
+import {
+  filterFriendSuggestions,
+  getFriendshipAction,
+} from "../features/friends/friendshipAction";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -138,6 +141,13 @@ const normalizeStatus = (value: unknown): UserStatus | undefined => {
     ? (value as UserStatus)
     : undefined;
 };
+
+const normalizeFriendshipStatus = (
+  value: unknown,
+): ContactUser["friendshipStatus"] | undefined =>
+  typeof value === "string"
+    ? (value as ContactUser["friendshipStatus"])
+    : undefined;
 
 const toContactUser = (value: {
   id: string;
@@ -248,11 +258,10 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
         canAddFriend:
           typeof row.canAddFriend === "boolean" ? row.canAddFriend : undefined,
         friendshipStatus:
-          typeof row.friendshipStatus === "string"
-            ? (row.friendshipStatus as ContactUser["friendshipStatus"])
-            : typeof row.friendship_status === "string"
-              ? (row.friendship_status as ContactUser["friendshipStatus"])
-              : undefined,
+          normalizeFriendshipStatus(row.friendshipStatus) ??
+          normalizeFriendshipStatus(row.relationshipStatus) ??
+          normalizeFriendshipStatus(row.friendship_status) ??
+          normalizeFriendshipStatus(row.relationship_status),
         capabilities:
           row.capabilities && typeof row.capabilities === "object"
             ? (row.capabilities as Partial<FriendshipCapabilitiesDto>)
@@ -379,7 +388,6 @@ export const FriendsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id ?? null;
-  const conversationsFromStore = useChatStore((state) => state.conversations);
 
   const {
     friends,
@@ -512,45 +520,6 @@ export const FriendsPage: React.FC = () => {
     [friends],
   );
 
-  // Trích participants từ các conversation đã có làm fallback nguồn gợi ý
-  // — bảo đảm có người hiện ra ngay cả khi API search/suggestions không trả gì.
-  const participantsFromConversations = useMemo<ContactUser[]>(() => {
-    const map = new Map<string, ContactUser>();
-    for (const conv of conversationsFromStore) {
-      const list = (conv as { participants?: Array<Record<string, unknown>> })
-        .participants;
-      if (!Array.isArray(list)) continue;
-      for (const p of list) {
-        const id = typeof p.id === "string" ? p.id : "";
-        if (!id || map.has(id)) continue;
-        map.set(
-          id,
-          toContactUser({
-            id,
-            username: typeof p.username === "string" ? p.username : undefined,
-            displayName:
-              typeof p.displayName === "string" ? p.displayName : undefined,
-            firstName:
-              typeof p.firstName === "string" ? p.firstName : undefined,
-            lastName: typeof p.lastName === "string" ? p.lastName : undefined,
-            avatar:
-              (typeof p.avatar === "string" && p.avatar) ||
-              (typeof p.avatarUrl === "string" ? p.avatarUrl : undefined),
-            status: normalizeStatus(p.status),
-            departmentName:
-              typeof p.departmentName === "string"
-                ? p.departmentName
-                : undefined,
-            orgUnit: typeof p.orgUnit === "string" ? p.orgUnit : undefined,
-            unitCode: typeof p.unitCode === "string" ? p.unitCode : undefined,
-            title: typeof p.title === "string" ? p.title : undefined,
-          }),
-        );
-      }
-    }
-    return Array.from(map.values());
-  }, [conversationsFromStore]);
-
   useEffect(() => {
     if (activeTab !== "discover") return;
     const controller = new AbortController();
@@ -576,10 +545,8 @@ export const FriendsPage: React.FC = () => {
         }
       };
 
-      // Seed ngay từ participants của các conversation hiện có
-      addAll(participantsFromConversations);
-
-      // Gợi ý theo phòng ban / tên — dùng searchUsers vì server không có /suggestions
+      // Gợi ý theo phòng ban / tên. Hiện chưa có endpoint /suggestions riêng,
+      // nên chỉ dùng /users/search vì response có relationship state.
       const searchQuery =
         currentUser?.departmentName?.trim() ||
         currentUser?.orgUnit?.trim() ||
@@ -614,10 +581,13 @@ export const FriendsPage: React.FC = () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-    // participantsFromConversations dùng làm seed nhanh — không đưa vào deps
-    // để tránh re-fetch alphabet mỗi khi conversations đổi (presence/typing).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentUser?.id]);
+  }, [
+    activeTab,
+    currentUser?.departmentName,
+    currentUser?.firstName,
+    currentUser?.id,
+    currentUser?.orgUnit,
+  ]);
 
   const handleMessage = useCallback(
     async (userId: string) => {
@@ -1009,8 +979,14 @@ export const FriendsPage: React.FC = () => {
   );
 
   const filteredSuggestions = useMemo(
-    () => suggestions.filter((u) => u.id !== currentUser?.id && !friendIdSet.has(u.id)),
-    [suggestions, currentUser?.id, friendIdSet],
+    () =>
+      filterFriendSuggestions(suggestions, {
+        currentUserId: currentUserId,
+        friendIds: friendIdSet,
+        getRelationshipState: (userId) =>
+          getRelationshipState(userId, currentUserId),
+      }),
+    [currentUserId, friendIdSet, getRelationshipState, suggestions],
   );
 
   const renderDiscoverTab = () => {
@@ -1052,23 +1028,35 @@ export const FriendsPage: React.FC = () => {
           <DirectorySkeleton count={4} />
         ) : (
           <div className="space-y-2">
-            {filteredSuggestions.length > 0 && (
-              <p className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                {t("friends:suggestions")}
-              </p>
+            {filteredSuggestions.length === 0 ? (
+              <StateBlock
+                variant="empty"
+                icon={<UserPlusIcon className="h-6 w-6" />}
+                title={t("friends:suggestionsEmpty", {
+                  defaultValue: "Chưa có gợi ý kết bạn phù hợp",
+                })}
+                description={t("friends:discoverHintBody")}
+                className="border-dashed shadow-none"
+              />
+            ) : (
+              <>
+                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  {t("friends:suggestions")}
+                </p>
+                <div className="space-y-1">
+                  {filteredSuggestions.map((user) => (
+                    <ContactRow
+                      key={user.id}
+                      user={user}
+                      subtitle={buildSuggestionSubtitle(user)}
+                      selected={previewTarget?.userId === user.id}
+                      onClick={() => setPreviewTarget(profileFromSummary(user))}
+                      action={renderRelationshipAction(user)}
+                    />
+                  ))}
+                </div>
+              </>
             )}
-            <div className="space-y-1">
-              {filteredSuggestions.map((user) => (
-                <ContactRow
-                  key={user.id}
-                  user={user}
-                  subtitle={buildSuggestionSubtitle(user)}
-                  selected={previewTarget?.userId === user.id}
-                  onClick={() => setPreviewTarget(profileFromSummary(user))}
-                  action={renderRelationshipAction(user)}
-                />
-              ))}
-            </div>
           </div>
         )}
       </div>
