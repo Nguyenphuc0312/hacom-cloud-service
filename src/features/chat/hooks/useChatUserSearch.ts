@@ -7,6 +7,7 @@ import { searchUsersUseCase } from "../usecases/searchUsers";
 import { ExpiringLruCache } from "../../../utils/expiringLruCache";
 import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshipStore";
 import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
+import { USERS_SEARCH_PAGE_SIZE } from "../../../services/api";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -82,10 +83,18 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
     return null;
   }
 
-  const friendshipStatus =
+  const rawFriendshipStatus =
     asString(value.friendshipStatus) ??
     asString(value.friendship_status) ??
     (asBoolean(value.isFriend) ? "accepted" : "none");
+  const friendshipStatus =
+    asBoolean(value.isFriend) === true ? "accepted" : rawFriendshipStatus;
+  const acceptedOrPending =
+    friendshipStatus === "accepted" || friendshipStatus === "pending";
+  const rawCanAddFriend =
+    asBoolean(value.canAddFriend) ??
+    asBoolean(value.can_add_friend) ??
+    friendshipStatus === "none";
 
   return {
     id,
@@ -124,10 +133,7 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
       asBoolean(value.isFriend) ??
       asBoolean(value.is_friend) ??
       friendshipStatus === "accepted",
-    canAddFriend:
-      asBoolean(value.canAddFriend) ??
-      asBoolean(value.can_add_friend) ??
-      friendshipStatus === "none",
+    canAddFriend: acceptedOrPending ? false : rawCanAddFriend,
     friendshipStatus: (friendshipStatus as ChatSearchUser["friendshipStatus"]) ?? "none",
   };
 };
@@ -224,7 +230,7 @@ export const useChatUserSearch = (
   options?: UseChatUserSearchOptions,
 ) => {
   const minQueryLength = options?.minQueryLength ?? 2;
-  const limit = options?.limit ?? 20;
+  const limit = Math.min(options?.limit ?? USERS_SEARCH_PAGE_SIZE, USERS_SEARCH_PAGE_SIZE);
   const enabled = options?.enabled ?? true;
   const includeSelf = options?.includeSelf ?? false;
   const excludedUserIdsList = options?.excludeUserIds ?? EMPTY_EXCLUDED_USER_IDS;
@@ -300,7 +306,6 @@ export const useChatUserSearch = (
           return;
         }
         if (!cancelled) {
-          setResults([]);
           setErrorMessage(extractApiError(error).message);
         }
       } finally {

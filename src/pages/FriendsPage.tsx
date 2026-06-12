@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
+import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types/chat";
 import {
   MagnifyingGlassIcon,
   UserGroupIcon,
@@ -25,7 +26,11 @@ import { useAuthStore, useChatStore, usePresenceStore } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
-import { conversationApi, userApi } from "../services/api";
+import {
+  USERS_SEARCH_PAGE_SIZE,
+  conversationApi,
+  userApi,
+} from "../services/api";
 import {
   extractApiError,
   unwrapApiSuccess,
@@ -38,6 +43,7 @@ import {
   getFriendRequestDisplayLabel,
   getFriendRequestDisplayUser,
 } from "../features/friends/requestDisplay";
+import { getFriendshipAction } from "../features/friends/friendshipAction";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -58,6 +64,21 @@ interface ContactUser {
   unitCode?: string;
   title?: string;
   createdAt?: string;
+  isFriend?: boolean;
+  canAddFriend?: boolean;
+  friendshipStatus?:
+    | "none"
+    | "pending"
+    | "requested"
+    | "accepted"
+    | "friends"
+    | "friend"
+    | "declined"
+    | "canceled"
+    | "cancelled"
+    | "blocked"
+    | null;
+  capabilities?: Partial<FriendshipCapabilitiesDto> | null;
 }
 
 interface PreviewTarget {
@@ -134,6 +155,10 @@ const toContactUser = (value: {
   unitCode?: string;
   title?: string;
   createdAt?: string;
+  isFriend?: boolean;
+  canAddFriend?: boolean;
+  friendshipStatus?: ContactUser["friendshipStatus"];
+  capabilities?: Partial<FriendshipCapabilitiesDto> | null;
 }): ContactUser => ({
   id: value.id,
   username: value.username,
@@ -150,6 +175,10 @@ const toContactUser = (value: {
   unitCode: value.unitCode,
   title: value.title,
   createdAt: value.createdAt,
+  isFriend: value.isFriend,
+  canAddFriend: value.canAddFriend,
+  friendshipStatus: value.friendshipStatus,
+  capabilities: value.capabilities,
 });
 
 
@@ -215,6 +244,19 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
               ? row.unit_code
               : undefined,
         title: typeof row.title === "string" ? row.title : undefined,
+        isFriend: typeof row.isFriend === "boolean" ? row.isFriend : undefined,
+        canAddFriend:
+          typeof row.canAddFriend === "boolean" ? row.canAddFriend : undefined,
+        friendshipStatus:
+          typeof row.friendshipStatus === "string"
+            ? (row.friendshipStatus as ContactUser["friendshipStatus"])
+            : typeof row.friendship_status === "string"
+              ? (row.friendship_status as ContactUser["friendshipStatus"])
+              : undefined,
+        capabilities:
+          row.capabilities && typeof row.capabilities === "object"
+            ? (row.capabilities as Partial<FriendshipCapabilitiesDto>)
+            : null,
       });
     })
     .filter((item): item is ContactUser => Boolean(item));
@@ -341,7 +383,13 @@ export const FriendsPage: React.FC = () => {
 
   const {
     friends,
+    friendsTotal,
+    friendsHasNext,
+    friendsError,
+    friendsLoadMoreError,
     isFriendsLoading,
+    isFriendsLoadingMore,
+    loadMoreFriends,
     incomingRequests,
     isIncomingLoading,
     sentRequests,
@@ -368,6 +416,7 @@ export const FriendsPage: React.FC = () => {
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
   const [query, setQuery] = useState(initialQuery);
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<ContactUser[]>([]);
   const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
@@ -425,18 +474,24 @@ export const FriendsPage: React.FC = () => {
     async (rawQuery: string) => {
       if (!rawQuery.trim() || rawQuery.trim().length < 2) {
         setSearchResults([]);
+        setSearchError(null);
         return;
       }
 
       setIsSearching(true);
+      setSearchError(null);
       try {
-        const response = await userApi.searchUsers(rawQuery.trim(), 1, 20);
+        const response = await userApi.searchUsers(
+          rawQuery.trim(),
+          1,
+          USERS_SEARCH_PAGE_SIZE,
+        );
         const payload = unwrapApiSuccess(response);
         setSearchResults(normalizeSearchResults(payload));
       } catch (error) {
         const apiError = extractApiError(error);
-        toast.error(apiError.message || t("profile:toast.searchUsersFailed"));
-        setSearchResults([]);
+        setSearchError(apiError.requestId ?? apiError.message);
+        toast.error(t("profile:toast.searchUsersFailed"));
       } finally {
         setIsSearching(false);
       }
@@ -446,7 +501,10 @@ export const FriendsPage: React.FC = () => {
 
   useEffect(() => {
     if (activeTab !== "discover") return;
-    void searchUsers(debouncedQuery);
+    const timer = window.setTimeout(() => {
+      void searchUsers(debouncedQuery);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [activeTab, debouncedQuery, searchUsers]);
 
   const friendIdSet = useMemo(
@@ -496,7 +554,6 @@ export const FriendsPage: React.FC = () => {
   useEffect(() => {
     if (activeTab !== "discover") return;
     const controller = new AbortController();
-    setIsSuggestionsLoading(true);
 
     const tryFetch = async (
       fn: () => Promise<unknown>,
@@ -531,7 +588,9 @@ export const FriendsPage: React.FC = () => {
       if (searchQuery.length >= 2) {
         addAll(
           await tryFetch(() =>
-            userApi.searchUsers(searchQuery, 1, 30, { signal: controller.signal }),
+            userApi.searchUsers(searchQuery, 1, USERS_SEARCH_PAGE_SIZE, {
+              signal: controller.signal,
+            }),
           ),
         );
       }
@@ -544,10 +603,17 @@ export const FriendsPage: React.FC = () => {
       }
     };
 
-    loadSuggestions().finally(() => {
-      if (!controller.signal.aborted) setIsSuggestionsLoading(false);
-    });
-    return () => controller.abort();
+    const timer = window.setTimeout(() => {
+      setIsSuggestionsLoading(true);
+      void loadSuggestions().finally(() => {
+        if (!controller.signal.aborted) setIsSuggestionsLoading(false);
+      });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
     // participantsFromConversations dùng làm seed nhanh — không đưa vào deps
     // để tránh re-fetch alphabet mỗi khi conversations đổi (presence/typing).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -584,6 +650,10 @@ export const FriendsPage: React.FC = () => {
       action: () => Promise<boolean>,
       successMessage: string,
     ) => {
+      if (actingKey) {
+        return;
+      }
+
       setActingKey(key);
       try {
         const success = await action();
@@ -596,25 +666,22 @@ export const FriendsPage: React.FC = () => {
         setActingKey(null);
       }
     },
-    [t],
+    [actingKey, t],
   );
 
   const renderRelationshipAction = (user: ContactUser) => {
     const relationship = getRelationshipState(user.id, currentUserId);
-    const capabilities = relationship.capabilities;
     const actionKeyPrefix = user.id;
+    const action = getFriendshipAction(user, relationship);
 
-    switch (relationship.kind) {
+    switch (action.kind) {
       case "self":
         return (
           <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-xs font-medium text-text-secondary">
             {t("friends:relationship.self")}
           </span>
         );
-      case "friend":
-        if (!capabilities.canMessage) {
-          return null;
-        }
+      case "message":
         return (
           <Button
             type="button"
@@ -629,10 +696,13 @@ export const FriendsPage: React.FC = () => {
             {t("friends:message")}
           </Button>
         );
-      case "incoming_request":
+      case "accept_decline":
+        if (relationship.kind !== "incoming_request") {
+          return null;
+        }
         return (
           <div className="flex items-center gap-2">
-            {capabilities.canAccept ? (
+            {relationship.capabilities.canAccept ? (
               <Button
                 type="button"
                 size="sm"
@@ -650,7 +720,7 @@ export const FriendsPage: React.FC = () => {
                 {t("friends:accept")}
               </Button>
             ) : null}
-            {capabilities.canDecline ? (
+            {relationship.capabilities.canDecline ? (
               <Button
                 type="button"
                 size="sm"
@@ -670,9 +740,13 @@ export const FriendsPage: React.FC = () => {
             ) : null}
           </div>
         );
-      case "outgoing_request":
-        if (!capabilities.canCancel) {
-          return null;
+      case "cancel":
+        if (relationship.kind !== "outgoing_request") {
+          return (
+            <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-xs font-medium text-text-secondary">
+              {t("friends:relationship.outgoing")}
+            </span>
+          );
         }
         return (
           <Button
@@ -688,14 +762,23 @@ export const FriendsPage: React.FC = () => {
                 t("friends:requestCancelled"),
               );
             }}
-          >
-            {t("friends:sentRequests.cancel")}
-          </Button>
+        >
+          {t("friends:sentRequests.cancel")}
+        </Button>
+      );
+      case "pending":
+        return (
+          <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-xs font-medium text-text-secondary">
+            {t("friends:relationship.outgoing")}
+          </span>
         );
-      default:
-        if (!capabilities.canSendRequest) {
-          return null;
-        }
+      case "blocked":
+        return (
+          <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-xs font-medium text-text-secondary">
+            {t("friends:relationship.notFriend")}
+          </span>
+        );
+      case "add":
         return (
           <Button
             type="button"
@@ -711,10 +794,12 @@ export const FriendsPage: React.FC = () => {
                 t("friends:requestSent"),
               );
             }}
-          >
-            {t("friends:addFriend")}
-          </Button>
-        );
+        >
+          {t("friends:addFriend")}
+        </Button>
+      );
+      default:
+        return null;
     }
   };
 
@@ -722,7 +807,7 @@ export const FriendsPage: React.FC = () => {
     {
       id: "friends" as const,
       label: t("friends:tabs.friends"),
-      count: friends.length,
+      count: friendsTotal,
     },
     {
       id: "requests" as const,
@@ -747,6 +832,33 @@ export const FriendsPage: React.FC = () => {
     [friends],
   );
 
+  const handleFriendsScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (
+        activeTab !== "friends" ||
+        isFriendsLoading ||
+        isFriendsLoadingMore ||
+        !friendsHasNext
+      ) {
+        return;
+      }
+
+      const element = event.currentTarget;
+      const remaining =
+        element.scrollHeight - element.scrollTop - element.clientHeight;
+      if (remaining <= 96) {
+        void loadMoreFriends();
+      }
+    },
+    [
+      activeTab,
+      friendsHasNext,
+      isFriendsLoading,
+      isFriendsLoadingMore,
+      loadMoreFriends,
+    ],
+  );
+
 
   const renderFriendsTab = () => {
     if (isFriendsLoading && friendItems.length === 0) {
@@ -755,7 +867,18 @@ export const FriendsPage: React.FC = () => {
       );
     }
 
-    if (friendItems.length === 0) {
+    if (friendsError && friendItems.length === 0) {
+      return (
+        <StateBlock
+          icon={<UserGroupIcon className="h-6 w-6" />}
+          title={t("friends:actionFailed")}
+          description={t("friends:empty.friendsBody")}
+          className="border-dashed shadow-none"
+        />
+      );
+    }
+
+    if (!isFriendsLoading && friendsTotal === 0) {
       return (
         <StateBlock
           icon={<UserGroupIcon className="h-6 w-6" />}
@@ -777,6 +900,19 @@ export const FriendsPage: React.FC = () => {
             action={renderRelationshipAction(friend)}
           />
         ))}
+        {isFriendsLoadingMore ? <DirectorySkeleton count={2} /> : null}
+        {friendsLoadMoreError ? (
+          <div className="px-2 py-2 text-center">
+            <Button
+              type="button"
+              size="sm"
+              variant="brand-outline"
+              onClick={() => void loadMoreFriends()}
+            >
+              {t("common:actions.retry")}
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -882,6 +1018,11 @@ export const FriendsPage: React.FC = () => {
 
     return (
       <div className="space-y-4">
+        {searchError && sortedSearchResults.length > 0 ? (
+          <p className="px-1 text-xs text-danger">
+            {t("profile:toast.searchUsersFailed")}
+          </p>
+        ) : null}
         {isSearching ? (
           <DirectorySkeleton count={4} />
         ) : hasQuery ? (
@@ -990,7 +1131,10 @@ export const FriendsPage: React.FC = () => {
               ) : null}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto p-3"
+              onScroll={handleFriendsScroll}
+            >
               {activeTab === "friends" && renderFriendsTab()}
               {activeTab === "requests" && renderRequestsTab()}
               {activeTab === "discover" && renderDiscoverTab()}

@@ -11,7 +11,7 @@ import type {
 } from "@hacom/chat-shared-types/chat";
 import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { friendshipApi } from "../services/api";
-import { unwrapApiSuccess } from "../lib/apiContract";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, type User } from "../stores";
 import {
   EMPTY_CAPABILITIES,
@@ -52,8 +52,14 @@ export {
 
 interface UseFriendshipReturn {
   friends: FriendRecord[];
+  friendsTotal: number;
+  friendsHasNext: boolean;
+  friendsError: string | null;
+  friendsLoadMoreError: string | null;
   isFriendsLoading: boolean;
+  isFriendsLoadingMore: boolean;
   fetchFriends: () => Promise<void>;
+  loadMoreFriends: () => Promise<void>;
 
   incomingRequests: FriendRequest[];
   isIncomingLoading: boolean;
@@ -237,12 +243,80 @@ const optimisticRemoveFriendSnapshot = (
   friends: removeByRelationId(snapshot.friends, friendshipId),
 });
 
+const isAlreadyFriendsError = (error: unknown): boolean => {
+  const apiError = extractApiError(error);
+  const details = apiError.details;
+  const businessCode =
+    details && typeof details === "object" && "code" in details
+      ? (details as { code?: unknown }).code
+      : undefined;
+
+  return (
+    businessCode === "ALREADY_FRIENDS" ||
+    businessCode === "FRIEND_REQUEST_ALREADY_ACCEPTED" ||
+    apiError.message.toLowerCase().includes("already friends") ||
+    apiError.message.includes("đã là bạn")
+  );
+};
+
+const applyAlreadyFriendsSnapshot = (
+  userId: string,
+  currentUser: User,
+): void => {
+  const timestamp = nowIso();
+  const relationId = computeFriendshipPairKey(currentUser.id, userId);
+
+  useFriendshipStore.getState().applyRelation({
+    relationId,
+    pairKey: relationId,
+    status: "accepted" as FriendshipStatusType,
+    actorRole: "friend",
+    requester: {
+      id: currentUser.id,
+      username: currentUser.username,
+      displayName: currentUser.firstName ?? currentUser.username,
+      avatarUrl: currentUser.avatar ?? null,
+    },
+    addressee: {
+      id: userId,
+      username: "",
+      displayName: null,
+      avatarUrl: null,
+    },
+    friend: {
+      id: userId,
+      username: "",
+      displayName: null,
+      avatarUrl: null,
+    },
+    capabilities: {
+      ...EMPTY_CAPABILITIES,
+      canUnfriend: true,
+      canBlock: true,
+      canMessage: true,
+    },
+    actionResult: "idempotent_hit",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+};
+
 export const useFriendship = (): UseFriendshipReturn => {
   const friends = useFriendshipStore((state) => state.friends);
+  const friendsTotal = useFriendshipStore((state) => state.friendsTotal);
+  const friendsHasNext = useFriendshipStore((state) => state.friendsHasNext);
+  const friendsError = useFriendshipStore((state) => state.friendsError);
+  const friendsLoadMoreError = useFriendshipStore(
+    (state) => state.friendsLoadMoreError,
+  );
   const isFriendsLoading = useFriendshipStore(
     (state) => state.isFriendsLoading,
   );
+  const isFriendsLoadingMore = useFriendshipStore(
+    (state) => state.isFriendsLoadingMore,
+  );
   const fetchFriends = useFriendshipStore((state) => state.fetchFriends);
+  const loadMoreFriends = useFriendshipStore((state) => state.loadMoreFriends);
   const incomingRequests = useFriendshipStore(
     (state) => state.incomingRequests,
   );
@@ -322,7 +396,18 @@ export const useFriendship = (): UseFriendshipReturn => {
 
         store.recordActionResult(actionKey, "success", nowMs() - startedAt);
         return true;
-      } catch {
+      } catch (error) {
+        if (actionKey.startsWith("send:") && isAlreadyFriendsError(error)) {
+          const userId = actionKey.slice("send:".length);
+          const currentUser = toAuthUser(useAuthStore.getState().user);
+          const store = useFriendshipStore.getState();
+
+          applyAlreadyFriendsSnapshot(userId, currentUser);
+          store.triggerResync(fallbackResyncReason);
+          store.recordActionResult(actionKey, "success", nowMs() - startedAt);
+          return true;
+        }
+
         const store = useFriendshipStore.getState();
         store.restoreSnapshot(snapshot);
         store.recordActionResult(actionKey, "rollback", nowMs() - startedAt);
@@ -443,8 +528,14 @@ export const useFriendship = (): UseFriendshipReturn => {
 
   return {
     friends,
+    friendsTotal,
+    friendsHasNext,
+    friendsError,
+    friendsLoadMoreError,
     isFriendsLoading,
+    isFriendsLoadingMore,
     fetchFriends,
+    loadMoreFriends,
     incomingRequests,
     isIncomingLoading,
     fetchIncomingRequests,
