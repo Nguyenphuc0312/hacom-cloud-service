@@ -46,7 +46,7 @@ const HelpPage: React.FC = () => {
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 rounded-2xl border border-border/40 bg-background/40 p-4 transition-colors hover:bg-background/60">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1976D2]/10 text-[#1565C0]">
                   <EnvelopeIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
@@ -77,7 +77,7 @@ const HelpPage: React.FC = () => {
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 rounded-2xl border border-border/40 bg-background/40 p-4 transition-colors hover:bg-background/60">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1976D2]/10 text-[#1565C0]">
                   <EnvelopeIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
@@ -97,7 +97,7 @@ const HelpPage: React.FC = () => {
             className="flex w-full items-center justify-between rounded-2xl border border-border/60 bg-surface p-5 transition-all hover:bg-surface-hover hover:shadow-sm"
           >
             <div className="flex items-center gap-4 text-left">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1976D2]/10 text-[#1565C0]">
                 <DocumentTextIcon className="h-5 w-5" />
               </div>
               <div>

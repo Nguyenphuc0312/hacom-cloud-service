@@ -47,7 +47,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
   const currentImage = HACoM_IMAGES[currentIndex];
 
   return (
-    <div className="flex h-dvh w-full bg-white selection:bg-blue-600/20 overflow-hidden">
+    <div className="flex h-dvh w-full bg-white selection:bg-[#1976D2]/20 overflow-hidden">
       {/* Left side: Premium Image Slider */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden lg:flex">
         {/* Background Layers */}

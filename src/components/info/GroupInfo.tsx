@@ -977,7 +977,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   size="xl"
                 />
               ) : (
-                <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-br from-[#1976D2] to-[#3B82F6] text-2xl font-bold text-white">
+                <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-br from-[#1976D2] to-[#1565C0] text-2xl font-bold text-white">
                   {(conversation.name || "G").slice(0, 2).toUpperCase()}
                 </div>
               )}
