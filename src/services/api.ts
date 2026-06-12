@@ -54,6 +54,8 @@ import { createNormalizedURLSearchParams } from "../utils/unicodeNormalize";
 
 const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
+export const FRIENDS_PAGE_SIZE = 20;
+export const USERS_SEARCH_PAGE_SIZE = 20;
 
 const buildDirectDmTraceRequestId = (): string => {
   if (
@@ -533,7 +535,7 @@ export const userApi = {
   searchUsers: async (
     query: string,
     page = 1,
-    limit = 20,
+    limit = USERS_SEARCH_PAGE_SIZE,
     options?: { signal?: AbortSignal; includeSelf?: boolean },
   ) => {
     const searchParams = createNormalizedURLSearchParams({
@@ -1635,7 +1637,11 @@ export const friendQrApi = {
 // ============================================
 
 export const friendshipApi = {
-  getFriends: async () => {
+  getFriends: async (page = 1, limit = FRIENDS_PAGE_SIZE) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
     const response = await apiClient.get<
       ApiResponse<{
         data: FriendshipRelationDto[];
@@ -1648,7 +1654,7 @@ export const friendshipApi = {
           hasPrev: boolean;
         };
       }>
-    >("/friends");
+    >(`/friends?${query.toString()}`);
     return response.data;
   },
 

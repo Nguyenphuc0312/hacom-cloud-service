@@ -179,6 +179,28 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         toast.success(t("profile:newChatModal.friendRequestSent", { defaultValue: "Friend request sent" }));
       } catch (error) {
         const apiError = extractApiError(error);
+        const details = apiError.details;
+        const businessCode =
+          details && typeof details === "object" && "code" in details
+            ? (details as { code?: unknown }).code
+            : undefined;
+        if (
+          businessCode === "ALREADY_FRIENDS" ||
+          businessCode === "FRIEND_REQUEST_ALREADY_ACCEPTED" ||
+          apiError.message.toLowerCase().includes("already friends") ||
+          apiError.message.includes("đã là bạn")
+        ) {
+          setSearchUserOverridesById((prev) => ({
+            ...prev,
+            [userId]: {
+              friendshipStatus: "accepted",
+              canAddFriend: false,
+              isFriend: true,
+            },
+          }));
+          toast.success(t("friends:relationship.friend", { defaultValue: "Hai người đã là bạn bè" }));
+          return;
+        }
         toast.error(apiError.message || t("profile:newChatModal.friendRequestFailed", { defaultValue: "Cannot send friend request" }));
       } finally {
         setPendingFriendRequestIds((prev) => {

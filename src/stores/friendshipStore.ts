@@ -6,7 +6,7 @@ import type {
   FriendshipRelationDto,
   FriendshipStatus,
 } from "@hacom/chat-shared-types/chat";
-import { friendshipApi } from "../services/api";
+import { FRIENDS_PAGE_SIZE, friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "./authStore";
 import type {
@@ -104,6 +104,12 @@ interface ActionMetric {
 
 interface FriendshipStoreState {
   friends: FriendRecord[];
+  friendsTotal: number;
+  friendsPage: number;
+  friendsLimit: number;
+  friendsHasNext: boolean;
+  friendsError: string | null;
+  friendsLoadMoreError: string | null;
   incomingRequests: FriendRequest[];
   sentRequests: FriendRequest[];
   pendingCount: number;
@@ -114,6 +120,7 @@ interface FriendshipStoreState {
   sentByRelationId: Record<string, FriendRequest>;
 
   isFriendsLoading: boolean;
+  isFriendsLoadingMore: boolean;
   isIncomingLoading: boolean;
   isSentLoading: boolean;
   isDirectoryRefreshing: boolean;
@@ -142,7 +149,12 @@ interface FriendshipStoreState {
   applyRelation: (relation: FriendshipRelationDto) => void;
   applyRealtimeDetail: (detail: FriendshipRealtimeDetail) => void;
 
-  fetchFriends: () => Promise<void>;
+  fetchFriends: (options?: {
+    page?: number;
+    limit?: number;
+    append?: boolean;
+  }) => Promise<void>;
+  loadMoreFriends: () => Promise<void>;
   fetchIncomingRequests: () => Promise<void>;
   fetchSentRequests: () => Promise<void>;
   fetchPendingCount: () => Promise<void>;
@@ -202,72 +214,103 @@ export const extractWriteRelation = (
   return asRelationDto(payload);
 };
 
-const isRelationArrayPayload = (
-  payload: unknown,
-): payload is FriendshipRelationDto[] => {
-  return Array.isArray(payload);
-};
+interface RelationPage {
+  relations: FriendshipRelationDto[];
+  total: number | null;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
 
-const asRelations = (payload: unknown): FriendshipRelationDto[] => {
-  if (isRelationArrayPayload(payload)) {
-    return payload;
-  }
+const asNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const record = payload as Record<string, unknown>;
-  if (Array.isArray(record.data)) {
-    return record.data as FriendshipRelationDto[];
-  }
-
-  if (
-    record.data &&
-    typeof record.data === "object" &&
-    Array.isArray((record.data as Record<string, unknown>).data)
-  ) {
-    return (record.data as Record<string, unknown>)
-      .data as FriendshipRelationDto[];
-  }
-
-  return [];
-};
-
-const asPaginationTotal = (value: unknown): number | null => {
+const asPagination = (
+  value: unknown,
+  fallback: { page: number; limit: number; total: number },
+): Omit<RelationPage, "relations"> => {
   const record = asRecord(value);
   if (!record) {
-    return null;
+    const totalPages = Math.ceil(fallback.total / fallback.limit);
+    return {
+      total: fallback.total,
+      page: fallback.page,
+      limit: fallback.limit,
+      totalPages,
+      hasNext: fallback.page < totalPages,
+      hasPrev: fallback.page > 1,
+    };
   }
 
   const pagination = asRecord(record.pagination);
-  const directTotal =
-    typeof record.total === "number" && Number.isFinite(record.total)
-      ? record.total
-      : null;
-  const paginationTotal =
-    pagination &&
-    typeof pagination.total === "number" &&
-    Number.isFinite(pagination.total)
-      ? pagination.total
-      : null;
+  const total =
+    asNumber(record.total) ??
+    (pagination ? asNumber(pagination.total) : null) ??
+    fallback.total;
+  const page =
+    (pagination ? asNumber(pagination.page) : null) ??
+    asNumber(record.page) ??
+    fallback.page;
+  const limit =
+    (pagination ? asNumber(pagination.limit) : null) ??
+    asNumber(record.limit) ??
+    fallback.limit;
+  const totalPages =
+    (pagination ? asNumber(pagination.totalPages) : null) ??
+    asNumber(record.totalPages) ??
+    Math.ceil(total / limit);
+  const hasNext =
+    (pagination && typeof pagination.hasNext === "boolean"
+      ? pagination.hasNext
+      : typeof record.hasNext === "boolean"
+        ? record.hasNext
+        : page < totalPages);
+  const hasPrev =
+    (pagination && typeof pagination.hasPrev === "boolean"
+      ? pagination.hasPrev
+      : typeof record.hasPrev === "boolean"
+        ? record.hasPrev
+        : page > 1);
 
-  return directTotal ?? paginationTotal;
+  return {
+    total,
+    page,
+    limit,
+    totalPages,
+    hasNext,
+    hasPrev,
+  };
 };
 
 const asRelationPage = (
   payload: unknown,
-): { relations: FriendshipRelationDto[]; total: number | null } => {
+  fallback: { page?: number; limit?: number } = {},
+): RelationPage => {
+  const fallbackPage = fallback.page ?? 1;
+  const fallbackLimit = fallback.limit ?? FRIENDS_PAGE_SIZE;
   if (Array.isArray(payload)) {
     return {
       relations: payload as FriendshipRelationDto[],
-      total: null,
+      ...asPagination(null, {
+        page: fallbackPage,
+        limit: fallbackLimit,
+        total: payload.length,
+      }),
     };
   }
 
   const record = asRecord(payload);
   if (!record) {
-    return { relations: [], total: null };
+    return {
+      relations: [],
+      ...asPagination(null, {
+        page: fallbackPage,
+        limit: fallbackLimit,
+        total: 0,
+      }),
+    };
   }
 
   const directData = Array.isArray(record.data)
@@ -276,21 +319,39 @@ const asRelationPage = (
   if (directData) {
     return {
       relations: directData,
-      total: asPaginationTotal(record),
+      ...asPagination(record, {
+        page: fallbackPage,
+        limit: fallbackLimit,
+        total: directData.length,
+      }),
     };
   }
 
   const nested = asRecord(record.data);
   if (nested && Array.isArray(nested.data)) {
+    const nestedRelations = nested.data as FriendshipRelationDto[];
     return {
-      relations: nested.data as FriendshipRelationDto[],
-      total: asPaginationTotal(nested) ?? asPaginationTotal(record),
+      relations: nestedRelations,
+      ...asPagination(nested, {
+        page: fallbackPage,
+        limit: fallbackLimit,
+        total:
+          asNumber(record.total) ??
+          (asRecord(record.pagination)
+            ? asNumber(asRecord(record.pagination)?.total)
+            : null) ??
+          nestedRelations.length,
+      }),
     };
   }
 
   return {
     relations: [],
-    total: asPaginationTotal(record),
+    ...asPagination(record, {
+      page: fallbackPage,
+      limit: fallbackLimit,
+      total: 0,
+    }),
   };
 };
 
@@ -392,6 +453,16 @@ export const upsertFront = <T extends { relationId: string }>(
   rows: T[],
   nextRow: T,
 ): T[] => [nextRow, ...removeByRelationId(rows, nextRow.relationId)];
+
+const mergeFriendsByUserId = (
+  current: FriendRecord[],
+  incoming: FriendRecord[],
+): FriendRecord[] => {
+  const nextById = new Map<string, FriendRecord>();
+  current.forEach((friend) => nextById.set(friend.id, friend));
+  incoming.forEach((friend) => nextById.set(friend.id, friend));
+  return Array.from(nextById.values());
+};
 
 export const removeByRelationIdentity = (
   rows: FriendRequest[],
@@ -631,8 +702,15 @@ const logFriendshipMetric = (
 export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
   ...initialSnapshot,
   ...toIndexedFields(initialSnapshot),
+  friendsTotal: 0,
+  friendsPage: 0,
+  friendsLimit: FRIENDS_PAGE_SIZE,
+  friendsHasNext: false,
+  friendsError: null,
+  friendsLoadMoreError: null,
 
   isFriendsLoading: false,
+  isFriendsLoadingMore: false,
   isIncomingLoading: false,
   isSentLoading: false,
   isDirectoryRefreshing: false,
@@ -728,14 +806,28 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
   },
 
   applyRelation: (relation) => {
+    const current = get();
+    const hadFriend = current.friends.some(
+      (friend) => friend.relationId === relation.relationId,
+    );
     const nextSnapshot = applyRelationToSnapshot(
-      currentSnapshot(get()),
+      currentSnapshot(current),
       relation,
     );
     const normalized = normalizeSnapshot(nextSnapshot);
+    const hasFriend = normalized.friends.some(
+      (friend) => friend.relationId === relation.relationId,
+    );
+    const friendsTotal =
+      hasFriend && !hadFriend
+        ? current.friendsTotal + 1
+        : hadFriend && !hasFriend
+          ? Math.max(0, current.friendsTotal - 1)
+          : Math.max(current.friendsTotal, normalized.friends.length);
     set(() => ({
       ...normalized,
       ...toIndexedFields(normalized),
+      friendsTotal,
       hasHydrated: true,
       lastSyncedAt: nowIso(),
     }));
@@ -756,41 +848,90 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     });
   },
 
-  fetchFriends: async () => {
-    set({ isFriendsLoading: true });
+  fetchFriends: async (options) => {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? FRIENDS_PAGE_SIZE;
+    const append = options?.append === true;
+    const state = get();
+
+    if (append && (state.isFriendsLoadingMore || state.isFriendsLoading)) {
+      return;
+    }
+
+    set(
+      append
+        ? { isFriendsLoadingMore: true, friendsLoadMoreError: null }
+        : { isFriendsLoading: true, friendsError: null, friendsLoadMoreError: null },
+    );
     try {
-      const response = await friendshipApi.getFriends();
+      const response = await friendshipApi.getFriends(page, limit);
       const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
+      const relationPage = asRelationPage(payload, { page, limit });
+      const list = relationPage.relations
         .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
 
       set((state) => {
+        const mergedFriends = append
+          ? mergeFriendsByUserId(state.friends, list)
+          : list;
         const next = normalizeSnapshot({
           ...currentSnapshot(state),
-          friends: list,
+          friends: mergedFriends,
         });
 
         return {
           ...next,
           ...toIndexedFields(next),
+          friendsTotal: relationPage.total ?? next.friends.length,
+          friendsPage: relationPage.page,
+          friendsLimit: relationPage.limit,
+          friendsHasNext: relationPage.hasNext,
+          friendsError: null,
+          friendsLoadMoreError: null,
         };
       });
-    } catch {
-      set((state) => {
-        const next = normalizeSnapshot({
-          ...currentSnapshot(state),
-          friends: [],
-        });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Load friends failed";
+      if (append) {
+        set({ friendsLoadMoreError: message });
+      } else {
+        set((state) => {
+          const next = normalizeSnapshot({
+            ...currentSnapshot(state),
+            friends: [],
+          });
 
-        return {
-          ...next,
-          ...toIndexedFields(next),
-        };
-      });
+          return {
+            ...next,
+            ...toIndexedFields(next),
+            friendsTotal: 0,
+            friendsPage: 0,
+            friendsHasNext: false,
+            friendsError: message,
+          };
+        });
+      }
     } finally {
-      set({ isFriendsLoading: false });
+      set(
+        append
+          ? { isFriendsLoadingMore: false }
+          : { isFriendsLoading: false },
+      );
     }
+  },
+
+  loadMoreFriends: async () => {
+    const state = get();
+    if (!state.friendsHasNext || state.isFriendsLoadingMore || state.isFriendsLoading) {
+      return;
+    }
+
+    await state.fetchFriends({
+      page: state.friendsPage + 1,
+      limit: state.friendsLimit || FRIENDS_PAGE_SIZE,
+      append: true,
+    });
   },
 
   fetchIncomingRequests: async () => {
@@ -952,11 +1093,17 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
 
 export const selectFriendshipState = (state: FriendshipStoreState) => ({
   friends: state.friends,
+  friendsTotal: state.friendsTotal,
+  friendsPage: state.friendsPage,
+  friendsHasNext: state.friendsHasNext,
+  friendsError: state.friendsError,
+  friendsLoadMoreError: state.friendsLoadMoreError,
   incomingRequests: state.incomingRequests,
   sentRequests: state.sentRequests,
   pendingCount: state.pendingCount,
   sentCount: state.sentCount,
   isFriendsLoading: state.isFriendsLoading,
+  isFriendsLoadingMore: state.isFriendsLoadingMore,
   isIncomingLoading: state.isIncomingLoading,
   isSentLoading: state.isSentLoading,
   hasHydrated: state.hasHydrated,
