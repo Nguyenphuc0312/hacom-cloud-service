@@ -22,6 +22,7 @@
   "discoverHintBody": "Hãy thử từ khóa khác hoặc kiểm tra lại username.",
   "suggestions": "Gợi ý kết bạn",
   "suggestionsEmpty": "Chưa có gợi ý kết bạn phù hợp",
+  "suggestionsError": "Không thể tải gợi ý kết bạn. Thử lại",
   "addFriend": "Kết bạn",
   "message": "Nhắn tin",
   "accept": "Chấp nhận",

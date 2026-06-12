@@ -22,6 +22,7 @@
   "discoverHintBody": "Try a different keyword or check the username spelling.",
   "suggestions": "People you may know",
   "suggestionsEmpty": "No suitable friend suggestions yet",
+  "suggestionsError": "Couldn't load friend suggestions. Try again",
   "addFriend": "Add friend",
   "message": "Message",
   "accept": "Accept",
