@@ -63,6 +63,8 @@ export interface HRCalendarEvent {
   visibility: HRCalendarVisibility;
   eventType: HRCalendarEventType;
   location: string | null;
+  /** Meeting extras (meetingChairman, meetingFormat, attendees free-text…) — null khi BUSY_ONLY masked */
+  metadata?: Record<string, unknown> | null;
   participants: HRCalendarParticipant[];
   canEdit: boolean;
   canDelete: boolean;
@@ -239,7 +241,12 @@ export const hrCalendarApi = {
     isAllDay?: boolean;
     location?: string;
     timezone?: string;
+    /** Participant refs — backend resolve theo employee cuid / employeeCode / authUserId */
     participantIds?: string[];
+    /** Tên người tham gia dạng free-text (không resolve được) — lưu vào metadata */
+    attendees?: string[];
+    meetingChairman?: string;
+    meetingFormat?: string;
   }): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.post<{ data: HRCalendarEvent }>(
       "/calendar/events",
@@ -263,8 +270,12 @@ export const hrCalendarApi = {
       isAllDay?: boolean;
       location?: string;
       timezone?: string;
-      /** Full desired participant set (employee cuids); server reconciles. */
+      /** Full desired participant set (employee cuid / employeeCode / authUserId); server reconciles. */
       participantIds?: string[];
+      /** Tên người tham gia dạng free-text — merge vào metadata */
+      attendees?: string[];
+      meetingChairman?: string;
+      meetingFormat?: string;
     }
   ): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.patch<{ data: HRCalendarEvent }>(
