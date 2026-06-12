@@ -106,7 +106,11 @@ export const resolveScreenCategory = (
 export const resolveChatLayoutBreakpointBand = (
   width: number,
 ): ChatLayoutBreakpointBand => {
-  if (width < RSP_BREAKPOINT_MIN.lg) return "compact";
+  // compact dưới `md` (768px): chỉ các viewport thực sự hẹp (mobile) mới dùng
+  // layout một cột. Cửa sổ desktop tối thiểu 1024px (viewport thực ~1008px do
+  // viền cửa sổ) và browser zoom lớn phải giữ layout hai cột — xem ChatPage
+  // (`hidden md:flex` cho pane chính khi chưa chọn hội thoại).
+  if (width < RSP_BREAKPOINT_MIN.md) return "compact";
   if (width < RSP_BREAKPOINT_MIN.xl) return "standard";
   return "wide";
 };
