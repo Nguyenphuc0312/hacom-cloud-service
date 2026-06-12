@@ -49,6 +49,14 @@ const noneStatuses = new Set<FriendshipSearchStatus>([
   "cancelled",
 ]);
 
+export const isAcceptedFriendshipStatus = (
+  status: FriendshipSearchStatus,
+): boolean => acceptedStatuses.has(status);
+
+export const isPendingFriendshipStatus = (
+  status: FriendshipSearchStatus,
+): boolean => pendingStatuses.has(status);
+
 export const getFriendshipAction = (
   user: FriendshipActionUser,
   relationship: RelationshipState,
@@ -103,4 +111,47 @@ export const getFriendshipAction = (
     default:
       return { kind: "none" };
   }
+};
+
+export interface FilterFriendSuggestionsOptions {
+  currentUserId?: string | null;
+  friendIds?: ReadonlySet<string>;
+  getRelationshipState: (userId: string) => RelationshipState;
+}
+
+export const filterFriendSuggestions = <T extends FriendshipActionUser>(
+  users: T[],
+  options: FilterFriendSuggestionsOptions,
+): T[] => {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const user of users) {
+    if (!user.id || seen.has(user.id)) continue;
+    seen.add(user.id);
+
+    if (options.currentUserId && user.id === options.currentUserId) continue;
+    if (options.friendIds?.has(user.id)) continue;
+    if (user.isFriend === true) continue;
+    if (isAcceptedFriendshipStatus(user.friendshipStatus)) continue;
+    if (user.friendshipStatus === "blocked") continue;
+    if (isPendingFriendshipStatus(user.friendshipStatus)) continue;
+
+    const relationship = options.getRelationshipState(user.id);
+    if (relationship.kind === "self" || relationship.kind === "friend") continue;
+    if (relationship.kind === "incoming_request" || relationship.kind === "outgoing_request") {
+      continue;
+    }
+
+    const action = getFriendshipAction(user, relationship);
+    if (action.kind !== "add") continue;
+
+    const hasExplicitAddPermission =
+      user.canAddFriend === true || user.capabilities?.canSendRequest === true;
+    if (!hasExplicitAddPermission) continue;
+
+    result.push(user);
+  }
+
+  return result;
 };
