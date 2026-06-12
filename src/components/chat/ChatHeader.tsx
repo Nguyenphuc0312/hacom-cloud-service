@@ -25,6 +25,8 @@ import {
   getConversationDisplayName,
   getOtherParticipant,
 } from "../../utils/messageHelpers";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../services/enrichUserProfile";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -117,9 +119,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     return "";
   })();
 
-  const displayName =
+  const rawDisplayName =
     getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
+
+  // For DM conversations, fetch the full profile once into enrichedProfileStore so
+  // the name persists across API/WS refreshes. The store is separate from conversation
+  // data so it cannot be overwritten by incoming conversation updates.
+  const enrichedName = useEnrichedProfileStore(
+    React.useMemo(() => (s) => (otherUserId ? s.nameByUserId[otherUserId] : undefined), [otherUserId]),
+  );
+  React.useEffect(() => {
+    if (isDirect && otherUserId) enrichUserProfile(otherUserId);
+  }, [isDirect, otherUserId]);
+
+  const displayName = enrichedName ?? rawDisplayName;
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   return (

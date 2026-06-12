@@ -36,6 +36,16 @@ const joinName = (parts: Array<string | null | undefined>): string =>
     .filter(Boolean)
     .join(" ");
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const looksLikeEmail = (value: string): boolean => EMAIL_PATTERN.test(value);
+
+// Matches employee codes / system usernames: no whitespace, purely alphanumeric
+// (e.g. "HC888892", "manual000001"). Real human names contain spaces or
+// characters outside [A-Za-z0-9_.-].
+const IDENTIFIER_PATTERN = /^[A-Za-z0-9_.@-]+$/;
+const looksLikeIdentifier = (value: string): boolean =>
+  IDENTIFIER_PATTERN.test(value) && !value.includes(" ");
+
 export const resolveUserDisplayName = (
   user: UserIdentityCandidate | null | undefined,
   options: ResolveUserDisplayNameOptions = {},
@@ -61,7 +71,14 @@ export const resolveUserDisplayName = (
     asString(user.employee_code) ||
     asString(user.code);
 
-  if (displayName) {
+  // Skip displayName if it looks like an email or a system identifier
+  // (employee code / username used as display name). Prefer real name data instead.
+  const displayNameIsUsable =
+    displayName &&
+    !looksLikeEmail(displayName) &&
+    !looksLikeIdentifier(displayName);
+
+  if (displayNameIsUsable) {
     return displayName;
   }
 
@@ -71,6 +88,11 @@ export const resolveUserDisplayName = (
 
   if (fullName) {
     return fullName;
+  }
+
+  // displayName that looks like an identifier is better than raw username
+  if (displayName && !looksLikeEmail(displayName)) {
+    return displayName;
   }
 
   if (username) {

@@ -51,6 +51,7 @@ import {
   getFriendshipAction,
 } from "../features/friends/friendshipAction";
 import { useFriendSuggestions } from "../features/friends/useFriendSuggestions";
+import { fetchUserProfileOnce } from "../services/userProfileCache";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -142,6 +143,8 @@ const toDisplayName = (user: ContactUser): string => {
 
   return "Người dùng";
 };
+
+const DISPLAY_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const normalizeStatus = (value: unknown): UserStatus | undefined => {
   const statuses = new Set<string>(Object.values(UserStatus));
@@ -781,9 +784,34 @@ export const FriendsPage: React.FC = () => {
   const isDirectoryLoading =
     isFriendsLoading || isIncomingLoading || isSentLoading;
 
+  // Enrich display names for friends whose displayName is an email (FriendshipUserDto
+  // doesn't carry firstName/lastName; fetch /users/{id} to get the actual name).
+  const [enrichedNameMap, setEnrichedNameMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    friends.forEach((friend) => {
+      const dn = friend.displayName;
+      if (typeof dn !== "string" || !DISPLAY_EMAIL_PATTERN.test(dn)) return;
+      fetchUserProfileOnce(friend.id)
+        .then((profile) => {
+          const name = resolveUserDisplayName(profile, { allowLegacyFallback: false });
+          if (name && name !== "Unknown user") {
+            setEnrichedNameMap((prev) =>
+              prev[friend.id] === name ? prev : { ...prev, [friend.id]: name },
+            );
+          }
+        })
+        .catch(() => null);
+    });
+  }, [friends]);
+
   const friendItems = useMemo(
-    () => friends.map((friend) => toContactUser(friend)),
-    [friends],
+    () =>
+      friends.map((friend) => {
+        const contact = toContactUser(friend);
+        const enriched = enrichedNameMap[friend.id];
+        return enriched ? { ...contact, displayName: enriched } : contact;
+      }),
+    [friends, enrichedNameMap],
   );
 
   const handleListScroll = useCallback(

@@ -32,6 +32,8 @@ import {
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 import { resolvePublicResourceUrl } from "../../config";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -269,7 +271,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     fetchUserProfileOnce(userId)
       .then((payload) => {
-        if (isMounted) setFetchedUser(toProfileUser(payload));
+        if (!isMounted) return;
+        setFetchedUser(toProfileUser(payload));
+
+        // Store the resolved name so sidebar, header, and message clusters
+        // all reflect it without being overwritten by API/WS refreshes.
+        const resolvedName = resolveUserDisplayName(payload, { allowLegacyFallback: false });
+        if (resolvedName && resolvedName !== "Unknown user") {
+          useEnrichedProfileStore.getState().setEnrichedName(userId, resolvedName);
+        }
       })
       .catch(() => {
         // Keep whatever placeholder/cached value is already displayed.

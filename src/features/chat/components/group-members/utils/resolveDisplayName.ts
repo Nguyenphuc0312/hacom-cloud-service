@@ -5,6 +5,8 @@ interface MemberData {
   email?: string;
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 interface ResolvedDisplayName {
   displayName: string;
   usedFallback: boolean;
@@ -27,8 +29,8 @@ export function resolveDisplayName(
     return { displayName: fullNameFromHR.trim(), usedFallback: false };
   }
 
-  // Priority 2: displayName
-  if (displayName?.trim()) {
+  // Priority 2: displayName (skip if it looks like an email address)
+  if (displayName?.trim() && !EMAIL_PATTERN.test(displayName.trim())) {
     return { displayName: displayName.trim(), usedFallback: false };
   }
 

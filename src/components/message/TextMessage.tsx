@@ -10,6 +10,8 @@ import {
   type LongMessageRenderMode,
 } from "../../utils/longMessagePolicy";
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../services/enrichUserProfile";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
@@ -106,9 +108,14 @@ const FALLBACK_MENTION_REGEX = /@[\p{L}\p{N}_.-]+/gu;
 const renderWithMentions = (
   text: string,
   isOwn: boolean,
-  options: { currentUserId?: string; mentions?: Mention[]; currentUsername?: string },
+  options: {
+    currentUserId?: string;
+    mentions?: Mention[];
+    currentUsername?: string;
+    enrichedNames?: Record<string, string>;
+  },
 ): React.ReactNode[] => {
-  const { currentUserId, mentions, currentUsername } = options;
+  const { currentUserId, mentions, currentUsername, enrichedNames } = options;
 
   const fromMetadata = mentions && mentions.length > 0;
   const regex = fromMetadata
@@ -131,7 +138,6 @@ const renderWithMentions = (
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;
-  // Reset regex state in case the same instance was reused.
   regex.lastIndex = 0;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
@@ -151,6 +157,14 @@ const renderWithMentions = (
             candidate.toLowerCase() === currentUsername.toLowerCase(),
         );
     const isMentionAll = resolved?.userId === "all" || candidate.toLowerCase() === "all";
+    // Prefer enriched name from profile store over raw API displayName
+    const enrichedLabel =
+      resolved?.userId && enrichedNames
+        ? enrichedNames[resolved.userId]
+        : undefined;
+    const displayLabel = enrichedLabel
+      ? `@${enrichedLabel}`
+      : token;
     out.push(
       <span
         key={`m-${key++}`}
@@ -169,7 +183,7 @@ const renderWithMentions = (
         data-mention-user-id={resolved?.userId}
         title={resolved?.employeeCode || undefined}
       >
-        {token}
+        {displayLabel}
       </span>,
     );
     lastIndex = match.index + token.length;
@@ -194,6 +208,33 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   onToggleExpand,
   className,
 }) => {
+  // Trigger profile enrichment for all mentioned users so that bad displayNames
+  // (emails, employee codes) get replaced with real names from /users/{id}.
+  React.useEffect(() => {
+    if (!mentions) return;
+    for (const m of mentions) {
+      if (m.userId && m.userId !== "all") enrichUserProfile(m.userId);
+    }
+  }, [mentions]);
+
+  const mentionUserIds = React.useMemo(
+    () => (mentions ?? []).map((m) => m.userId).filter(Boolean),
+    [mentions],
+  );
+  // Select the whole nameByUserId map (stable reference — only replaced when a new
+  // profile is added) then derive enrichedNames in useMemo. Avoid a selector that
+  // returns a new object on every call, which would cause an infinite Zustand loop.
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  const enrichedNames = React.useMemo(() => {
+    if (mentionUserIds.length === 0) return undefined;
+    const result: Record<string, string> = {};
+    for (const uid of mentionUserIds) {
+      const name = nameByUserId[uid];
+      if (name) result[uid] = name;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }, [nameByUserId, mentionUserIds]);
+
   const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
   const displayContent =
@@ -331,6 +372,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
                   currentUserId,
                   currentUsername,
                   mentions,
+                  enrichedNames,
                 })}
               </React.Fragment>
             );
