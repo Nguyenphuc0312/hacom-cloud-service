@@ -17,6 +17,7 @@ import { PhotoIcon, ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24
 import type { Attachment, ImageClickPayload } from "../../types";
 import { useBatchThumbnailUrl, usePreviewUrl } from "../../hooks";
 import { useInViewport } from "../../hooks/useInViewport";
+import { resolvePublicResourceUrl } from "../../config";
 import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 
@@ -100,20 +101,34 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
       ? `${attachment.width} / ${attachment.height}`
       : "4 / 3";
 
-  // Use thumbnail URL for display
-  const activeSource = thumbnailUrl?.url || null;
+  // True when batch thumbnail API has permanently failed for this file.
+  // This happens for forwarded messages where the new conversationId is not yet
+  // authorized on the backend, even though the file itself exists.
+  const terminalBatchStatus =
+    thumbnailUrl?.status === 'not_previewable' ||
+    thumbnailUrl?.status === 'failed' ||
+    thumbnailUrl?.status === 'not_found' ||
+    thumbnailUrl?.status === 'forbidden';
+
+  // When batch API fails terminally, fall back to the URL the attachment payload
+  // already carries (thumbnailUrl > url). This covers forwarded messages where
+  // the backend hasn't yet associated the file with the new conversation.
+  const attachmentDirectUrl = terminalBatchStatus
+    ? resolvePublicResourceUrl(attachment.thumbnailUrl ?? attachment.url, {
+        context: 'image',
+        allowBlob: false,
+      }) ?? null
+    : null;
+
+  // Use thumbnail URL for display; fall back to attachment's own URL when batch API fails.
+  const activeSource = thumbnailUrl?.url ?? attachmentDirectUrl ?? null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
   const isError = Boolean(activeSource && failedSource === activeSource);
   // Terminal states where no URL will ever be available — show a static fallback icon,
   // never a spinning skeleton.
-  const isTerminalNoUrl =
-    !activeSource &&
-    (thumbnailUrl?.status === 'not_previewable' ||
-      thumbnailUrl?.status === 'failed' ||
-      thumbnailUrl?.status === 'not_found' ||
-      thumbnailUrl?.status === 'forbidden');
+  const isTerminalNoUrl = !activeSource && terminalBatchStatus;
 
   // Reset retry counter and exhaustion flag whenever the thumbnail pipeline
   // leaves the retryable state (reaches ready, failed, not_found, etc.).
