@@ -131,27 +131,70 @@ const formatDateVN = (dateStr: string): string => {
 };
 
 /**
- * Format time string (HH:mm:ss or HH:mm) for modal display
+ * Convert an ISO timestamp (UTC from API) to LOCAL wall-clock HH:mm.
+ * Never slice the raw string — that yields UTC time (7h off in Vietnam).
  */
-const formatTimeStr = (timeStr: string): string => {
-  if (!timeStr) return "";
-  const parts = timeStr.split(":");
-  if (parts.length >= 2) {
-    return `${parts[0]}:${parts[1]}`;
-  }
-  return timeStr;
+const toLocalTimeString = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
 /**
- * Format time from ISO string to HH:mm
+ * Convert an ISO timestamp (UTC from API) to LOCAL date YYYY-MM-DD.
  */
-const formatTimeFromISO = (iso: string): string => {
-  if (!iso) return "08:00";
-  const parts = iso.split(":");
-  if (parts.length >= 2) {
-    return `${parts[0]}:${parts[1]}`;
+const toLocalDateString = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return formatDateString(d);
+};
+
+/** Meeting extras stored in HR event metadata JSON. */
+interface MeetingMetadata {
+  meetingChairman?: string;
+  meetingFormat?: string;
+  attendees?: string[];
+}
+
+const getMeetingMetadata = (event: HRCalendarEvent | undefined): MeetingMetadata => {
+  const meta = event?.metadata;
+  if (!meta || typeof meta !== "object") return {};
+  const m = meta as Record<string, unknown>;
+  return {
+    meetingChairman: typeof m.meetingChairman === "string" ? m.meetingChairman : undefined,
+    meetingFormat: typeof m.meetingFormat === "string" ? m.meetingFormat : undefined,
+    attendees: Array.isArray(m.attendees)
+      ? m.attendees.filter((a): a is string => typeof a === "string")
+      : undefined,
+  };
+};
+
+/**
+ * Build the participant payload for hr-api-service from the meeting form.
+ * - refs: identifiers the backend can resolve to an employee
+ *   (employee cuid / employeeCode / chat authUserId)
+ * - freeTextNames: typed names without identity → stored in metadata.attendees
+ * The chairman tagged from friends is invited as a participant too, so the
+ * meeting shows up on their calendar; the backend never adds the owner.
+ */
+const buildParticipantPayload = (
+  data: MeetingFormData,
+): { refs: string[]; freeTextNames: string[] } => {
+  const refs = new Set<string>();
+  const freeTextNames: string[] = [];
+  for (const p of data.participants ?? []) {
+    const ref = p.employeeId || p.employeeCode || p.userId;
+    if (ref) {
+      refs.add(ref);
+    } else if (p.name.trim()) {
+      freeTextNames.push(p.name.trim());
+    }
   }
-  return "08:00";
+  const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
+  if (chairmanRef) refs.add(chairmanRef);
+  return { refs: Array.from(refs), freeTextNames };
 };
 
 /**
@@ -266,17 +309,18 @@ const EventDetailModal: React.FC<{
   // Get status badge info
   const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
 
-  // Time display
-  const startTime = isExtended && "startAt" in event ? formatTimeStr(event.startAt!) : event.time;
-  const endTime = isExtended && "endAt" in event ? formatTimeStr(event.endAt!) : null;
+  // Time display — convert ISO (UTC) to local wall-clock
+  const startTime = isExtended && "startAt" in event ? toLocalTimeString(event.startAt) : event.time;
+  const endTime = isExtended && "endAt" in event ? toLocalTimeString(event.endAt) : null;
   const duration = isExtended && "startAt" in event && "endAt" in event && event.startAt && event.endAt
     ? calculateDuration(event.startAt, event.endAt)
     : null;
 
-  // Location
+  // Location + meeting extras (chairman/format lưu trong metadata của HR event)
+  const meetingMeta = getMeetingMetadata(hrEvent);
   const location = "meetingLocation" in event ? event.meetingLocation : null;
-  const format = null;
-  const chairman = null;
+  const format = meetingMeta.meetingFormat ?? ("meetingFormat" in event ? event.meetingFormat : null);
+  const chairman = meetingMeta.meetingChairman ?? ("meetingChairman" in event ? event.meetingChairman : null) ?? null;
   const attendees = "attendees" in event ? event.attendees : null;
   const visibility = "visibility" in event ? event.visibility : null;
 
@@ -388,6 +432,20 @@ const EventDetailModal: React.FC<{
               </div>
             )}
 
+            {/* Meeting format */}
+            {format && (
+              <div className="flex items-center gap-3">
+                {format === "online" ? (
+                  <VideoCameraIcon className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                ) : (
+                  <BuildingOfficeIcon className="h-5 w-5 shrink-0 text-text-muted" />
+                )}
+                <p className="text-sm text-text-primary">
+                  {format === "online" ? "Trực tuyến (Online)" : "Trực tiếp (Offline)"}
+                </p>
+              </div>
+            )}
+
             {/* Chairman */}
             {chairman && (
               <div className="flex items-start gap-3">
@@ -403,16 +461,21 @@ const EventDetailModal: React.FC<{
               </div>
             )}
 
-            {/* Attendees (name-only fallback — hidden when rich HR roster is available) */}
-            {!hrEvent && attendees && attendees.length > 0 && (
+            {/* Attendees (name-only): full fallback khi không có HR roster;
+                khi có roster thì chỉ hiện thêm khách mời free-text từ metadata */}
+            {(() => {
+              const nameOnlyAttendees = hrEvent
+                ? (meetingMeta.attendees ?? [])
+                : (attendees ?? []);
+              return nameOnlyAttendees.length > 0 ? (
               <div className="flex items-start gap-3">
                 <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <div className="flex-1">
                   <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
-                    Thành viên ({attendees.length})
+                    {hrEvent ? `Khách mời khác (${nameOnlyAttendees.length})` : `Thành viên (${nameOnlyAttendees.length})`}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    {attendees.slice(0, 10).map((name, idx) => (
+                    {nameOnlyAttendees.slice(0, 10).map((name, idx) => (
                       <span
                         key={`${name}-${idx}`}
                         className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-primary"
@@ -420,15 +483,16 @@ const EventDetailModal: React.FC<{
                         {name}
                       </span>
                     ))}
-                    {attendees.length > 10 && (
+                    {nameOnlyAttendees.length > 10 && (
                       <span className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
-                        +{attendees.length - 10} người khác
+                        +{nameOnlyAttendees.length - 10} người khác
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-            )}
+              ) : null;
+            })()}
 
             {/* Visibility */}
             {visibility && (
@@ -782,7 +846,6 @@ export const CalendarPage: React.FC = () => {
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
-  const [localMeetings] = useState<MeetingFormData[]>([]);
 
   // Edit event modal state
   const [editingEvent, setEditingEvent] = useState<MeetingFormData | null>(null);
@@ -801,6 +864,14 @@ export const CalendarPage: React.FC = () => {
     setViewingUser(userId, userName);
   };
 
+  // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
+  const refetchCurrentMonth = useCallback(() => {
+    const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    void fetchEvents(fromDate, toDate);
+  }, [currentYear, currentMonth, fetchEvents]);
+
   // Handle create event from MeetingFormModal
   const handleCreateEvent = useCallback(async (data: MeetingFormData) => {
     try {
@@ -815,14 +886,11 @@ export const CalendarPage: React.FC = () => {
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
-      // Participants picked from the friends list carry an HR employeeCode; the
-      // backend resolves those to real HR participants. Free-text names (no code)
-      // are display-only and are skipped here.
-      const participantIds = (data.participants ?? [])
-        .map((p) => p.employeeCode)
-        .filter((c): c is string => !!c);
+      // Người được tag phải nhận được lịch → gửi mọi ref backend resolve được
+      // (employee cuid / employeeCode / authUserId). Tên free-text (không có
+      // identity) lưu vào metadata.attendees để hiển thị.
+      const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
 
-      // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
       const input = {
         title: data.title,
         description: data.notes || undefined,
@@ -834,13 +902,18 @@ export const CalendarPage: React.FC = () => {
         location: data.location || undefined,
         timezone,
         participantIds,
+        attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
       };
 
-      // Use store's createEvent which handles API call + state update
+      // Use store's createEvent which handles API call + state update (+ toast)
       const result = await useCalendarStore.getState().createEvent(input);
 
       if (result) {
-        toast.success("Đã thêm lịch họp");
+        // Store chỉ chèn event nếu khớp range nội bộ của store (có thể lệch
+        // với tháng đang xem của trang) → refetch theo range của trang.
+        refetchCurrentMonth();
       }
     } catch (error) {
       console.error("Failed to create event:", error);
@@ -848,7 +921,7 @@ export const CalendarPage: React.FC = () => {
     } finally {
       setIsCreatingEvent(false);
     }
-  }, []);
+  }, [refetchCurrentMonth]);
 
   // Fetch calendar events from API when month changes or mode changes.
   // Always pass explicit date range from component state so the store doesn't
@@ -871,16 +944,19 @@ export const CalendarPage: React.FC = () => {
             .map((p) => p.employee!.fullName)
         : ("attendees" in event && Array.isArray(event.attendees) ? event.attendees : []);
 
+      const meta = getMeetingMetadata(event);
       map[event.id] = {
         id: event.id,
         title: event.title,
-        date: event.startAt.slice(0, 10),
+        date: toLocalDateString(event.startAt),
         type: mapApiEventTypeToLocal(event.eventType),
         description: event.description ?? undefined,
-        time: event.startAt.slice(11, 16),
+        time: toLocalTimeString(event.startAt),
         startAt: event.startAt,
         endAt: event.endAt,
         meetingLocation: event.location ?? undefined,
+        meetingChairman: meta.meetingChairman,
+        meetingFormat: meta.meetingFormat === "online" ? "online" : meta.meetingFormat === "offline" ? "offline" : undefined,
         attendees: attendeeNames,
         visibility: event.visibility,
         ownerId: event.ownerId,
@@ -891,15 +967,41 @@ export const CalendarPage: React.FC = () => {
     setApiEventsMap(map);
   }, [apiEvents]);
 
+  // Lịch họp đã tải trong tháng → dùng cho check trùng giờ khi tag người tham gia.
+  // Chỉ phát hiện trùng trong phạm vi event mình thấy được (sở hữu / được mời).
+  const meetingsForConflictCheck = useMemo((): MeetingFormData[] => {
+    return apiEvents.map((event: HRCalendarEvent): MeetingFormData => {
+      const meta = getMeetingMetadata(event);
+      const participantNames = event.participants
+        .map((p) => p.fullName ?? p.employee?.fullName ?? "")
+        .filter(Boolean)
+        .map((name) => ({ name }));
+      const ownerName = event.ownerName ?? event.owner?.fullName;
+      if (ownerName) participantNames.push({ name: ownerName });
+      return {
+        id: event.id,
+        title: event.title,
+        date: toLocalDateString(event.startAt),
+        startTime: toLocalTimeString(event.startAt),
+        endTime: toLocalTimeString(event.endAt),
+        chairman: meta.meetingChairman ?? "",
+        participants: participantNames,
+        format: meta.meetingFormat === "online" ? "online" : "offline",
+        location: event.location ?? "",
+        notes: "",
+      };
+    });
+  }, [apiEvents]);
+
   // Convert API CalendarEvent to LocalCalendarEvent
   const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
     return apiEvents.map((event: HRCalendarEvent): LocalCalendarEvent => ({
       id: event.id,
       title: event.title,
-      date: event.startAt.slice(0, 10),
+      date: toLocalDateString(event.startAt),
       type: mapApiEventTypeToLocal(event.eventType),
       description: event.description ?? undefined,
-      time: event.startAt.slice(11, 16),
+      time: toLocalTimeString(event.startAt),
     }));
   }, [apiEvents]);
 
@@ -1121,6 +1223,12 @@ export const CalendarPage: React.FC = () => {
     [navigate, apiEventsMap]
   );
 
+  // Raw HR event for the selected item — carries participant roster + response.
+  const selectedHrEvent = useMemo(
+    () => (selectedEvent ? apiEvents.find((e) => e.id === selectedEvent.id) : undefined),
+    [selectedEvent, apiEvents],
+  );
+
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
     if (!selectedEvent) return;
@@ -1148,33 +1256,39 @@ export const CalendarPage: React.FC = () => {
     }
 
     const extEvent = selectedEvent as ExtendedCalendarEvent;
+    const meta = getMeetingMetadata(selectedHrEvent);
 
-    // Build MeetingFormData from ExtendedCalendarEvent
+    // Người tham gia: ưu tiên roster HR (giữ employeeId để update giữ nguyên
+    // liên kết); kèm khách mời free-text từ metadata. Fallback tên hiển thị.
+    const participants: MeetingFormData["participants"] = selectedHrEvent
+      ? [
+          ...selectedHrEvent.participants.map((p) => ({
+            name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "N/A",
+            employeeId: p.employeeId,
+            employeeCode: p.employeeCode ?? p.employee?.employeeCode ?? undefined,
+            userId: p.authUserId ?? undefined,
+          })),
+          ...(meta.attendees ?? []).map((name) => ({ name })),
+        ]
+      : (extEvent.attendees || []).map((name) => ({ name }));
+
+    // Build MeetingFormData from HR event (+ metadata) / ExtendedCalendarEvent
     const data: MeetingFormData = {
       id: extEvent.id,
       title: extEvent.title,
-      date: extEvent.startAt ? extEvent.startAt.split("T")[0] : formatDateString(new Date()),
-      startTime: extEvent.startAt ? formatTimeFromISO(extEvent.startAt) : "08:00",
-      endTime: extEvent.endAt ? formatTimeFromISO(extEvent.endAt) : "09:00",
-      chairman: "",
-      participants: (extEvent.attendees || []).map((name) => ({
-        id: name,
-        name: name,
-      })),
-      format: "offline",
+      date: extEvent.startAt ? toLocalDateString(extEvent.startAt) : formatDateString(new Date()),
+      startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
+      endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
+      chairman: meta.meetingChairman ?? "",
+      participants,
+      format: meta.meetingFormat === "online" ? "online" : "offline",
       location: extEvent.meetingLocation || "",
       notes: extEvent.description || "",
       createdById: extEvent.ownerId,
     };
 
     setEditingEvent(data);
-  }, [selectedEvent]);
-
-  // Raw HR event for the selected item — carries participant roster + response.
-  const selectedHrEvent = useMemo(
-    () => (selectedEvent ? apiEvents.find((e) => e.id === selectedEvent.id) : undefined),
-    [selectedEvent, apiEvents],
-  );
+  }, [selectedEvent, selectedHrEvent, mode, apiEventsMap]);
 
   // Invitee accepts/declines a meeting → persist via HR API, then refetch.
   const handleRespond = useCallback(
@@ -1185,13 +1299,13 @@ export const CalendarPage: React.FC = () => {
         toast.success(
           response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
         );
-        await fetchEvents();
+        refetchCurrentMonth();
       } catch (error) {
         console.error("Failed to update participant response:", error);
         toast.error("Không thể cập nhật phản hồi");
       }
     },
-    [selectedEvent, fetchEvents],
+    [selectedEvent, refetchCurrentMonth],
   );
 
   // Handle delete event
@@ -1214,8 +1328,8 @@ export const CalendarPage: React.FC = () => {
   const handleEditSuccess = useCallback(() => {
     setEditingEvent(null);
     setSelectedEvent(null);
-    void fetchEvents();
-  }, [fetchEvents]);
+    refetchCurrentMonth();
+  }, [refetchCurrentMonth]);
 
   // Handle update event from edit form
   const handleUpdateEvent = useCallback(async (data: MeetingFormData) => {
@@ -1228,19 +1342,27 @@ export const CalendarPage: React.FC = () => {
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
-      // hr-api-service expects: title, description, startAt, endAt, eventType, visibility, isAllDay, location
+      // Gửi đủ participant refs + meeting fields để server reconcile danh sách
+      // người tham gia (thêm người mới được tag, gỡ người bị bỏ tag).
+      const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
+
+      // Gửi cả chuỗi rỗng (khác create): backend chỉ bỏ qua khi undefined,
+      // nên "" mới xóa được ghi chú/địa điểm cũ.
       const input = {
         title: data.title,
-        description: data.notes || undefined,
+        description: data.notes,
         startAt,
         endAt,
-        location: data.location || undefined,
+        location: data.location,
         timezone,
+        participantIds,
+        attendees: freeTextNames,
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
       if (success) {
-        toast.success("Đã cập nhật sự kiện");
         void handleEditSuccess();
       }
     } catch (error) {
@@ -1622,16 +1744,17 @@ export const CalendarPage: React.FC = () => {
         onClose={() => setMeetingModalOpen(false)}
         onSave={handleCreateEvent}
         defaultDate={meetingModalDate}
-        existingMeetings={localMeetings}
+        existingMeetings={meetingsForConflictCheck}
         isLoading={isCreatingEvent}
       />
 
-      {/* Edit event modal */}
+      {/* Edit event modal — loại chính event đang sửa khỏi danh sách check trùng */}
       <MeetingFormModal
         isOpen={!!editingEvent}
         onClose={() => setEditingEvent(null)}
         onSave={handleUpdateEvent}
         initialData={editingEvent}
+        existingMeetings={meetingsForConflictCheck.filter((m) => m.id !== editingEvent?.id)}
       />
 
       {/* Delete confirmation dialog */}
