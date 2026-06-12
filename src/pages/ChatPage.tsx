@@ -1134,7 +1134,7 @@ export const ChatPage: React.FC = () => {
         tabIndex={-1}
         className={clsx(
           "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
-          !selectedConversation && "hidden lg:flex",
+          !selectedConversation && "hidden md:flex",
         )}
       >
         {selectedConversation ? (
