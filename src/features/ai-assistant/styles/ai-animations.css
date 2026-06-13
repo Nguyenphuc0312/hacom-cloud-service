@@ -45,10 +45,14 @@
 }
 
 /* ── ChatGPT-style Prose Overrides ── */
+.prose-chatgpt,
+.prose-chatgpt * {
+  line-height: 1.4;
+  text-align: justify;
+}
 .prose-chatgpt {
   font-family: 'Söhne', 'Inter', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 16px;
-  line-height: 1.3;
   color: hsl(var(--color-text-primary));
 }
 
@@ -67,7 +71,6 @@
   font-weight: 700;
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
-  line-height: 1.3;
 }
 .prose-chatgpt h1 { font-size: 1.5rem; }
 .prose-chatgpt h2 { font-size: 1.25rem; }

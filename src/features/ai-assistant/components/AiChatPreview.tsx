@@ -172,7 +172,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 <div
                   className={clsx(
                     message.role === "user"
-                      ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words"
+                      ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words text-justify"
                       : "w-full max-w-full",
                   )}
                 >
@@ -222,7 +222,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                       isStreaming={message.isStreaming}
                     />
                   ) : (
-                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                    <div className="text-[15px] leading-[1.4] whitespace-pre-wrap break-words text-justify">
                       {message.content}
                     </div>
                   )}
