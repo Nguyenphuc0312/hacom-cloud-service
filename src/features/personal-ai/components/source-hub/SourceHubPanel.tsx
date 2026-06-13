@@ -9,6 +9,8 @@ import {
   Square,
   ZapIcon,
   BrainIcon,
+  SearchIcon,
+  XIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import { SourceCard } from "./SourceCard";
@@ -28,10 +30,17 @@ export const SourceHubPanel: React.FC = () => {
   } = usePersonalDocuments();
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const activeCount = selectedDocumentIds.length;
   const totalCount = documents.length;
   const allSelected = totalCount > 0 && activeCount === totalCount;
+
+  const filteredDocuments = searchQuery.trim()
+    ? documents.filter((d) =>
+        d.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : documents;
 
   return (
     <>
@@ -84,6 +93,34 @@ export const SourceHubPanel: React.FC = () => {
             <PlusIcon size={16} strokeWidth={2.5} />
             Thêm tài liệu
           </button>
+
+          {/* Search input */}
+          {totalCount > 0 && (
+            <div className="mt-2 relative">
+              <SearchIcon
+                size={14}
+                strokeWidth={2}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm tài liệu…"
+                className="w-full rounded-xl border border-border bg-surface py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-[#C41E3A]/40 focus:outline-none focus:ring-1 focus:ring-[#C41E3A]/20 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
+                  aria-label="Xóa tìm kiếm"
+                >
+                  <XIcon size={13} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Divider + status bar */}
@@ -145,10 +182,17 @@ export const SourceHubPanel: React.FC = () => {
                 </p>
               </div>
             </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <SearchIcon size={20} strokeWidth={1.5} className="text-text-muted" />
+              <p className="text-xs text-text-muted">
+                Không tìm thấy tài liệu nào khớp với <span className="font-medium text-text-secondary">"{searchQuery}"</span>
+              </p>
+            </div>
           ) : (
             <div className="space-y-2 pt-1">
               <AnimatePresence initial={false}>
-                {documents.map((doc) => (
+                {filteredDocuments.map((doc) => (
                   <SourceCard
                     key={doc.id}
                     document={doc}

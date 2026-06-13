@@ -273,7 +273,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
             <div
               className={clsx(
                 isUser
-                  ? "w-fit max-w-[76%] rounded-2xl rounded-tr-sm bg-surface-hover px-4 py-3 text-[15px] leading-relaxed text-text-primary break-words"
+                  ? "w-fit max-w-[76%] rounded-2xl rounded-tr-sm bg-surface-hover px-4 py-3 text-[15px] leading-[1.4] text-text-primary break-words text-justify"
                   : "w-full",
               )}
             >
@@ -328,7 +328,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   }
                 />
               ) : isAssistant ? (
-                <div className="prose-chatgpt" style={{ lineHeight: 1 }}>
+                <div className="prose-chatgpt">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeSanitize]}
@@ -339,7 +339,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   {message.isStreaming && message.content && <StreamingCursor />}
                 </div>
               ) : (
-                <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.4] text-justify">
                   {message.content}
                 </div>
               )}
