@@ -6,6 +6,7 @@ import {
   BookOpenIcon,
   RefreshCwIcon,
   AlertCircleIcon,
+  SearchIcon,
 } from "lucide-react";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
@@ -22,6 +23,7 @@ export const AiSourcePanel: React.FC = () => {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Lấy sources từ tin nhắn assistant cuối cùng của cuộc hội thoại hiện tại
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
@@ -42,6 +44,12 @@ export const AiSourcePanel: React.FC = () => {
       : null;
 
   const sources: AiSource[] = lastAssistantWithSources?.sources ?? [];
+
+  const filteredSources = searchQuery.trim()
+    ? sources.filter((s) =>
+        getSourceLabel(s).toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : sources;
 
   const handleRefresh = useCallback(async () => {
     if (!lastQuestion || !activeConversationId || isRefreshing) return;
@@ -108,35 +116,63 @@ export const AiSourcePanel: React.FC = () => {
       className="flex h-full w-[380px] flex-col bg-surface border-l border-border z-40 overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <BookOpenIcon size={18} className="text-text-secondary" strokeWidth={2} />
-          <h2 className="text-sm font-semibold text-text-primary">Nguồn tham khảo</h2>
-          <span className="bg-surface-hover text-text-secondary text-[11px] px-2 py-0.5 rounded-full font-medium">
-            {sources.length}
-          </span>
+      <div className="flex flex-col gap-0 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-4">
+          <div className="flex items-center gap-2">
+            <BookOpenIcon size={18} className="text-text-secondary" strokeWidth={2} />
+            <h2 className="text-sm font-semibold text-text-primary">Nguồn tham khảo</h2>
+            <span className="bg-surface-hover text-text-secondary text-[11px] px-2 py-0.5 rounded-full font-medium">
+              {searchQuery ? filteredSources.length : sources.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing || !lastQuestion}
+              className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Làm mới nguồn tham khảo"
+              title={lastQuestion ? "Làm mới nguồn tham khảo" : "Không có câu hỏi để làm mới"}
+            >
+              <RefreshCwIcon
+                size={16}
+                strokeWidth={2}
+                className={isRefreshing ? "animate-spin text-primary" : ""}
+              />
+            </button>
+            <button
+              onClick={() => toggleSourcePanel(false)}
+              className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-secondary transition-colors"
+              aria-label="Đóng panel"
+            >
+              <XIcon size={18} strokeWidth={2} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing || !lastQuestion}
-            className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Làm mới nguồn tham khảo"
-            title={lastQuestion ? "Làm mới nguồn tham khảo" : "Không có câu hỏi để làm mới"}
-          >
-            <RefreshCwIcon
-              size={16}
-              strokeWidth={2}
-              className={isRefreshing ? "animate-spin text-primary" : ""}
-            />
-          </button>
-          <button
-            onClick={() => toggleSourcePanel(false)}
-            className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-secondary transition-colors"
-            aria-label="Đóng panel"
-          >
-            <XIcon size={18} strokeWidth={2} />
-          </button>
+
+        {/* Search input */}
+        <div className="px-4 pb-3 relative">
+          <SearchIcon
+            size={14}
+            strokeWidth={2}
+            className="absolute left-7 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Tìm nguồn tham khảo…"
+            className="w-full rounded-xl border border-border bg-surface-hover py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-primary/40 focus:bg-surface focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-7 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
+              aria-label="Xóa tìm kiếm"
+            >
+              <XIcon size={13} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -158,7 +194,16 @@ export const AiSourcePanel: React.FC = () => {
 
       {/* Source list */}
       <div className="flex-1 overflow-y-auto ai-scrollbar p-4 space-y-3">
-        {sources.map((source, index) => {
+        {filteredSources.length === 0 && searchQuery ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <SearchIcon size={20} strokeWidth={1.5} className="text-text-muted" />
+            <p className="text-xs text-text-muted">
+              Không tìm thấy nguồn nào khớp với{" "}
+              <span className="font-medium text-text-secondary">"{searchQuery}"</span>
+            </p>
+          </div>
+        ) : null}
+        {filteredSources.map((source, index) => {
           const label = getSourceLabel(source);
           const meta = getSourceMeta(source);
           const safe = isSafeSourceUrl(source.open_url);
