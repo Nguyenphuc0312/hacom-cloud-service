@@ -195,15 +195,29 @@ const buildPreviewText = (
     (participant) => participant.id === lastMessage.senderId,
   );
 
+  const resolvedName =
+    getUserDisplayName(senderParticipant) ||
+    getUserDisplayName(directPartner) ||
+    lastMessage.senderName?.trim() ||
+    "";
+
+  // Suppress identifier-like values (employee codes, system usernames) as prefix.
+  const IDENTIFIER_RE = /^[A-Za-z0-9_.@-]+$/;
+  const nameIsUsable =
+    resolvedName.length > 0 &&
+    !(IDENTIFIER_RE.test(resolvedName) && !resolvedName.includes(" "));
+
   const senderLabel =
     lastMessage.senderId === currentUser.id
       ? i18n.t("chat:message.you")
-      : getUserDisplayName(senderParticipant) ||
-        getUserDisplayName(directPartner) ||
-        lastMessage.senderName?.trim() ||
-        i18n.t("common:labels.conversation");
+      : nameIsUsable
+        ? resolvedName
+        : null;
 
-  return truncateTextWithEllipsis(`${senderLabel}: ${messagePreview}`, 52);
+  return truncateTextWithEllipsis(
+    senderLabel ? `${senderLabel}: ${messagePreview}` : messagePreview,
+    52,
+  );
 };
 
 const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({

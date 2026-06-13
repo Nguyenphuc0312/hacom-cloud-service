@@ -97,14 +97,14 @@ export const resolveUserDisplayName = (
     return fullName;
   }
 
-  // displayName that looks like an identifier is better than raw username,
-  // but a UUID is never a usable name.
-  if (displayName && !looksLikeEmail(displayName) && !looksLikeUuid(displayName)) {
-    return displayName;
-  }
-
   if (username && !looksLikeUuid(username)) {
     return username;
+  }
+
+  // Last resort: return displayName even if it looks like an identifier,
+  // but never show a UUID or email as a display name.
+  if (displayName && !looksLikeEmail(displayName) && !looksLikeUuid(displayName)) {
+    return displayName;
   }
 
   if (employeeCode && !looksLikeUuid(employeeCode)) {
