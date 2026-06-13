@@ -6,8 +6,6 @@ import {
   AlertCircleIcon,
   CopyIcon,
   CheckIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
   FileTextIcon,
   SearchIcon,
   BrainCircuitIcon,
@@ -330,7 +328,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   }
                 />
               ) : isAssistant ? (
-                <div className="prose-chatgpt">
+                <div className="prose-chatgpt" style={{ lineHeight: 1 }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeSanitize]}
@@ -371,20 +369,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   ) : (
                     <CopyIcon size={13} />
                   )}
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center p-1 rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-                  title="Hữu ích"
-                >
-                  <ThumbsUpIcon size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center p-1 rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-                  title="Không hữu ích"
-                >
-                  <ThumbsDownIcon size={13} />
                 </button>
               </div>
             )}

@@ -3,10 +3,7 @@ import {
   SparklesIcon,
   AlertCircleIcon,
   CopyIcon,
-  RotateCcwIcon,
   CheckIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
   UserIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -245,26 +242,6 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                         <CopyIcon size={14} />
                       )}
                     </button>
-                    <button
-                      className="flex items-center p-1 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
-                      title="Thích"
-                    >
-                      <ThumbsUpIcon size={14} />
-                    </button>
-                    <button
-                      className="flex items-center p-1 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
-                      title="Không thích"
-                    >
-                      <ThumbsDownIcon size={14} />
-                    </button>
-                    {index === messages.length - 1 && (
-                      <button
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
-                        title="Tạo lại"
-                      >
-                        <RotateCcwIcon size={14} />
-                      </button>
-                    )}
                   </div>
                 )}
 
