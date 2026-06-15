@@ -31,27 +31,46 @@ với payload kiểu lịch cá nhân:
 }
 ```
 
-## 2. Vấn đề — thiếu enum `PERSONAL`
+## 2. Vấn đề — thiếu enum `PERSONAL` (đã kiểm chứng tại source backend)
 
-Enum `eventType` hiện tại của `hr-api-service` (xem `APIcalendar.md` §2.3):
+Đã đối chiếu trực tiếp source `hr-api-service` (không chỉ dựa vào type FE):
 
-```
-MEETING | TASK | LEAVE | DEADLINE | REMINDER | OTHER
-```
+- **DB enum** — `prisma/schema.prisma:763`:
+  ```prisma
+  enum CalendarEventType {
+    MEETING
+    TASK
+    LEAVE
+    DEADLINE
+    REMINDER
+    OTHER
+  }
+  ```
+- **Validation DTO** — `src/modules/calendar/dto/calendar.dto.ts:106`:
+  `CreateCalendarEventDto.eventType` dùng `@IsEnum(CalendarEventType)` (và alias
+  `type` cũng vậy). Gửi `"PERSONAL"` → **422 validation error**.
+- **Default backend** — `src/modules/calendar/calendar.service.ts:259`:
+  ```ts
+  const resolvedEventType = dto.eventType ?? dto.type ?? CalendarEventType.OTHER;
+  ```
+  Khi không truyền `eventType`, backend tự đặt `OTHER`. Comment
+  `calendar.service.ts:968`: *"user can still have personal calendar events"* →
+  lịch cá nhân hiện được lưu dưới `OTHER`.
 
-➡️ **Không có giá trị `PERSONAL`.** Gửi `eventType: "PERSONAL"` → backend trả
-lỗi validation (422) → FE báo "Không thể tạo sự kiện". Đây là lý do lịch cá
-nhân **chưa tạo được**.
+➡️ **Kết luận: enum `PERSONAL` thật sự KHÔNG tồn tại ở backend.** Đây là lý do
+lịch cá nhân không tạo được khi FE gửi `eventType: "PERSONAL"`.
 
-Ghi chú: response `listEvents` đã có capability `canCreatePersonalEvent`
-(`APIcalendar.md` §2.1) — tức backend đã có khái niệm "lịch cá nhân", nhưng
-**chưa có eventType riêng** để phân loại.
+> Lưu ý: capability `canCreatePersonalEvent` ghi trong `APIcalendar.md` §2.1
+> **không tìm thấy trong source `hr-api-service`** — có thể là tài liệu FE cũ/
+> chưa khớp backend. Cần backend xác nhận lại.
 
 ## 3. Giải pháp tạm thời đang áp dụng ở FE (stopgap)
 
 Để không chặn người dùng, FE tạm thời:
 
-- Gửi `eventType: "OTHER"` + `visibility: "PRIVATE"` cho lịch cá nhân.
+- Gửi `eventType: "OTHER"` + `visibility: "PRIVATE"` cho lịch cá nhân — **đúng
+  bằng giá trị backend tự default cho event không có eventType**
+  (`calendar.service.ts:259`), nên tương thích hoàn toàn.
 - Map ngược `OTHER → "personal"` khi hiển thị/lọc trên lịch
   (`mapApiEventTypeToLocal` trong `CalendarPage.tsx`).
 
@@ -102,3 +121,87 @@ Sau khi backend thêm `PERSONAL`, FE cần:
 | eventType `PERSONAL` | ❌ **Thiếu — cần backend bổ sung** |
 | Stopgap FE (dùng `OTHER`) | ✅ Đã áp dụng, lịch cá nhân tạo/hiển thị được |
 | Phân loại chính xác lịch cá nhân | ⏳ Chờ backend thêm `PERSONAL` |
+
+---
+
+## 6. Chi tiết công việc FE đã làm
+
+### 6.1 Form lịch cá nhân (component mới)
+
+**File mới: `src/components/ui/PersonalEventFormModal.tsx`**
+
+- Form gọn hơn lịch họp, chỉ gồm: **Nội dung** (bắt buộc), **Ngày** (gõ
+  `dd/mm/yyyy` hoặc chọn từ icon lịch — cùng kiểu form lịch họp), **Giờ bắt
+  đầu / kết thúc** (24h, hiển thị thời lượng), **Ghi chú**, nút **Hủy / Lưu**.
+- Màu theo `WEBFE.md`: focus ring xanh `#1976D2`, nút `variant="brand"`.
+- Props: `isOpen`, `onClose`, `onBack?`, `onSave`, `defaultDate`,
+  `defaultStartTime`, `defaultEndTime`, `initialData`, `isLoading`.
+- Nút trái đổi nhãn theo ngữ cảnh: có `onBack` → **"Quay lại"**, không có →
+  **"Hủy"**.
+
+### 6.2 Bộ chọn loại lịch + nối vào các điểm "Thêm lịch"
+
+**File sửa: `src/features/calendar/pages/CalendarPage.tsx`**
+
+- Thêm **modal chọn loại lịch** với 2 thẻ:
+  - **Lịch họp** (xanh, `UsersIcon`) → mở `MeetingFormModal`.
+  - **Lịch cá nhân** (vàng amber, `UserIcon` — khớp màu filter "Cá nhân") → mở
+    `PersonalEventFormModal`.
+- Gắn bộ chọn (`openEventTypeChooser`) vào **cả hai** entry point:
+  - Nút "Thêm lịch" ở sidebar.
+  - Click ô khung giờ trên Day/Week View (`handleCreateAtSlot`) — vẫn giữ
+    ngày/giờ điền sẵn rồi truyền vào form được chọn.
+- Thêm `handleCreatePersonalEvent` lưu sự kiện qua `createEvent` (convert giờ
+  local → UTC ISO như lịch họp).
+
+### 6.3 Nút "Quay lại" về bộ chọn
+
+- Thêm prop `onBack?` vào **cả** `MeetingFormModal` và `PersonalEventFormModal`.
+- Khi mở từ luồng **tạo mới**: nút hiển thị **"Quay lại"** → đóng form và mở lại
+  bộ chọn loại lịch (không thoát hẳn).
+- Lưu thành công vẫn đóng bình thường; form **chỉnh sửa** lịch họp giữ nút
+  **"Hủy"** (không truyền `onBack`).
+
+### 6.4 Đồng bộ widget "Lịch tuần" ngoài màn chat
+
+**File sửa: `src/components/ui/EmptyState.tsx`** (`WeeklyCalendarWidget` hiển thị
+trên màn chat welcome — `NoChatSelected`).
+
+Trước đó widget bấm "Thêm lịch" mở **thẳng** form họp; nay đồng bộ với
+`CalendarPage`:
+
+- Bấm "Thêm lịch" từng ngày → mở **bộ chọn loại lịch** (họp / cá nhân) thay vì
+  mở thẳng form họp (`openEventTypeChooser`).
+- Dùng chung `PersonalEventFormModal`; lưu qua `createEvent` với
+  `eventType: "OTHER"` + `visibility: "PRIVATE"` (stopgap giống CalendarPage).
+- Thêm `onBack` cho cả form họp (khi tạo mới) và form cá nhân → "Quay lại" mở
+  lại bộ chọn; form **sửa** lịch họp vẫn giữ "Hủy".
+- Sửa map hiển thị: event `OTHER` từ API → nhóm `"personal"` (legend "Cá nhân",
+  màu amber) thay vì rơi vào `"work"` (không hiển thị).
+
+### 6.5 Mapping eventType (stopgap)
+
+Trong `CalendarPage.tsx`:
+
+- `handleCreatePersonalEvent` gửi `eventType: "OTHER"` + `visibility: "PRIVATE"`.
+- `mapApiEventTypeToLocal`: `OTHER → "personal"`.
+- `mapLocalTypeToApi`: `personal → "OTHER"`.
+
+### 6.6 Bảng file thay đổi
+
+| File | Loại |
+|------|------|
+| `src/components/ui/PersonalEventFormModal.tsx` | Mới |
+| `yeucauapicalenda.md` | Mới |
+| `src/features/calendar/pages/CalendarPage.tsx` | Sửa |
+| `src/components/ui/MeetingFormModal.tsx` | Sửa (thêm `onBack`) |
+| `src/components/ui/EmptyState.tsx` | Sửa (đồng bộ widget "Lịch tuần") |
+
+### 6.7 Lưu ý còn lại
+
+- **Đánh đổi stopgap:** mọi event `OTHER` từ backend sẽ hiện dưới nhóm "Cá nhân"
+  cho tới khi backend thêm enum `PERSONAL` (xem §3, §4).
+- **Sửa lịch cá nhân** hiện vẫn mở form lịch họp (cả ở CalendarPage lẫn widget) —
+  có thể tách nhánh để sửa bằng `PersonalEventFormModal` sau.
+- Chưa chạy `npm run build` (theo quy ước `CLAUDE.md`); đã kiểm tra qua IDE
+  diagnostics — không có lỗi type.
