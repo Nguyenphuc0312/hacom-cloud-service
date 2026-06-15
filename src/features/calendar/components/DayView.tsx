@@ -1,10 +1,23 @@
 /**
- * DayView - Shows a single day with hourly timeline
+ * DayView - Lịch theo ngày, timeline 24h.
+ *
+ * Phase 1 (xem docs/CALENDAR_SPEC.md):
+ *  - Event cao theo thời lượng (startAt/endAt), không còn block cố định.
+ *  - Event trùng giờ chia cột overlap (tối đa 3).
+ *  - Hàng "ALL DAY" cho event không có giờ (lễ, task theo ngày, all-day).
+ *  - Current-time line tick mỗi phút + auto-scroll tới giờ hiện tại khi mở.
  */
 
-import React from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
 import { getEventColor, type CalendarEvent } from "../data/calendarEvents";
+import {
+  HOURS,
+  MINUTES_PER_DAY,
+  layoutDayEvents,
+  type PositionedEvent,
+} from "../utils/timeline";
+import { useNowMinute } from "../hooks/useNowMinute";
 
 interface DayViewProps {
   date: Date;
@@ -15,17 +28,66 @@ interface DayViewProps {
     totalTime?: string | null;
   };
   onEventClick: (event: CalendarEvent) => void;
+  /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
+  onSlotClick?: (date: Date, minutes: number) => void;
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+/** px mỗi giờ trên lưới ngày (1px = 1 phút). */
+const HOUR_HEIGHT = 60;
+const PX_PER_MIN = HOUR_HEIGHT / 60;
+const MIN_BLOCK_HEIGHT = 22;
 
-const formatHour = (hour: number): string => {
-  return `${hour.toString().padStart(2, "0")}:00`;
+const formatHour = (hour: number): string => `${hour.toString().padStart(2, "0")}:00`;
+const formatTime = (time: string | null | undefined): string => (time ? time : "--:--");
+const fmtMin = (min: number): string => {
+  const clamped = Math.max(0, Math.min(min, MINUTES_PER_DAY));
+  const h = Math.floor(clamped / 60) % 24;
+  const m = clamped % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
 
-const formatTime = (time: string | null | undefined): string => {
-  if (!time) return "--:--";
-  return time;
+const sameDay = (a: Date, b: Date): boolean => a.toDateString() === b.toDateString();
+
+const TimedEventBlock: React.FC<{
+  positioned: PositionedEvent;
+  onEventClick: (event: CalendarEvent) => void;
+}> = ({ positioned, onEventClick }) => {
+  const { event, startMin, endMin, col, colCount } = positioned;
+  const colors = getEventColor(event.type);
+  const top = startMin * PX_PER_MIN;
+  const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
+  const widthPct = 100 / colCount;
+  const showTime = height >= 34;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onEventClick(event);
+      }}
+      title={`${event.title} · ${fmtMin(startMin)}–${fmtMin(endMin)}`}
+      className={clsx(
+        "absolute overflow-hidden rounded-md border px-2 py-0.5 text-left text-xs transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+        colors.bg,
+        colors.border,
+        colors.text,
+      )}
+      style={{
+        top: `${top}px`,
+        height: `${height}px`,
+        left: `calc(${col * widthPct}% + 2px)`,
+        width: `calc(${widthPct}% - 4px)`,
+      }}
+    >
+      <span className="block truncate font-medium leading-tight">{event.title}</span>
+      {showTime && (
+        <span className="block truncate text-[10px] opacity-70">
+          {fmtMin(startMin)}–{fmtMin(endMin)}
+        </span>
+      )}
+    </button>
+  );
 };
 
 export const DayView: React.FC<DayViewProps> = ({
@@ -33,16 +95,33 @@ export const DayView: React.FC<DayViewProps> = ({
   events,
   attendance,
   onEventClick,
+  onSlotClick,
 }) => {
-  const dayEvents = events.filter((event) => {
-    const eventDate = new Date(event.date);
-    return eventDate.toDateString() === date.toDateString();
-  });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const nowMin = useNowMinute();
+  const isToday = sameDay(date, new Date());
+
+  const dayEvents = useMemo(
+    () => events.filter((event) => sameDay(new Date(event.date), date)),
+    [events, date],
+  );
+
+  const { timed, allDay } = useMemo(() => layoutDayEvents(dayEvents, 3), [dayEvents]);
 
   const formatDateDisplay = (d: Date): string => {
     const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
     return `${weekdays[d.getDay()]}, ngày ${d.getDate()} tháng ${d.getMonth() + 1} năm ${d.getFullYear()}`;
   };
+
+  // Auto-scroll tới giờ hiện tại (today) hoặc 07:00 (ngày khác) khi mở/đổi ngày.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = isToday ? nowMin : 7 * 60;
+    el.scrollTop = Math.max(0, target * PX_PER_MIN - 200);
+    // Chỉ chạy khi đổi ngày — không phụ thuộc nowMin để tránh giật khi tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -60,13 +139,13 @@ export const DayView: React.FC<DayViewProps> = ({
             <span className="flex items-center gap-1">
               <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ đến:</span>
               <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.firstPunch) || "--:--"}
+                {formatTime(attendance.firstPunch)}
               </span>
             </span>
             <span className="flex items-center gap-1">
               <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ về:</span>
               <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.lastPunch) || "--:--"}
+                {formatTime(attendance.lastPunch)}
               </span>
             </span>
             {attendance.totalTime && (
@@ -81,63 +160,102 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
       )}
 
-      {/* Hourly timeline */}
-      <div className="flex-1 overflow-auto">
-        <div className="relative min-h-[1440px]">
-          {/* Hour lines */}
-          {HOURS.map((hour) => (
-            <div
-              key={hour}
-              className="absolute left-0 right-0 flex border-t border-border"
-              style={{ top: `${hour * 60}px` }}
-            >
-              <div className="w-16 shrink-0 py-1 pr-2 text-right text-xs text-text-muted">
-                {formatHour(hour)}
-              </div>
-              <div className="flex-1 h-[60px]" />
-            </div>
-          ))}
-
-          {/* Current time indicator */}
-          <div
-            className="absolute left-16 right-0 z-10 flex items-center"
-            style={{
-              top: `${new Date().getHours() * 60 + new Date().getMinutes()}px`,
-            }}
-          >
-            <div className="h-0.5 w-3 rounded-l-full bg-danger" />
-            <div className="h-0.5 flex-1 bg-danger/30" />
+      {/* All-day row */}
+      {allDay.length > 0 && (
+        <div className="flex border-b border-border bg-surface-overlay/40">
+          <div className="w-16 shrink-0 py-1.5 pr-2 text-right text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            All day
           </div>
-
-          {/* Events */}
-          <div className="absolute left-16 right-0">
-            {dayEvents.map((event) => {
-              const eventHour = event.time ? parseInt(event.time.split(":")[0], 10) : 8;
-              const eventMinute = event.time ? parseInt(event.time.split(":")[1], 10) : 0;
-              const top = eventHour * 60 + eventMinute;
+          <div className="flex flex-1 flex-wrap gap-1 px-1 py-1.5">
+            {allDay.map((event) => {
               const colors = getEventColor(event.type);
-
               return (
                 <button
                   key={event.id}
                   type="button"
                   onClick={() => onEventClick(event)}
+                  title={event.title}
                   className={clsx(
-                    "absolute left-1 right-1 rounded-md border px-2 py-1 text-left text-xs transition-micro",
+                    "max-w-full truncate rounded-md border px-2 py-0.5 text-xs font-medium transition-micro hover:opacity-90",
                     colors.bg,
                     colors.border,
                     colors.text,
-                    "hover:opacity-80 cursor-pointer"
                   )}
-                  style={{ top: `${top}px` }}
                 >
-                  <span className="block truncate font-medium">{event.title}</span>
-                  {event.time && (
-                    <span className="block truncate text-[10px] opacity-70">{event.time}</span>
-                  )}
+                  {event.title}
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Hourly timeline */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
+        <div className="relative flex" style={{ height: `${MINUTES_PER_DAY * PX_PER_MIN}px` }}>
+          {/* Hour labels */}
+          <div className="w-16 shrink-0 border-r border-border">
+            {HOURS.map((hour) => (
+              <div
+                key={hour}
+                className="border-b border-border px-2 py-0.5 text-right text-xs text-text-muted"
+                style={{ height: `${HOUR_HEIGHT}px` }}
+              >
+                {formatHour(hour)}
+              </div>
+            ))}
+          </div>
+
+          {/* Day body — mỗi giờ = 2 slot 30 phút, hover & click tạo lịch (kiểu Teams) */}
+          <div className="relative flex-1">
+            {HOURS.map((hour) => (
+              <div
+                key={hour}
+                className="border-b border-border"
+                style={{ height: `${HOUR_HEIGHT}px` }}
+              >
+                <button
+                  type="button"
+                  disabled={!onSlotClick}
+                  onClick={onSlotClick ? () => onSlotClick(date, hour * 60) : undefined}
+                  title={onSlotClick ? "Tạo lịch" : undefined}
+                  className={clsx(
+                    "block h-1/2 w-full border-b border-border/40",
+                    onSlotClick && "cursor-pointer hover:bg-[#1976D2]/10",
+                  )}
+                />
+                <button
+                  type="button"
+                  disabled={!onSlotClick}
+                  onClick={onSlotClick ? () => onSlotClick(date, hour * 60 + 30) : undefined}
+                  title={onSlotClick ? "Tạo lịch" : undefined}
+                  className={clsx(
+                    "block h-1/2 w-full",
+                    onSlotClick && "cursor-pointer hover:bg-[#1976D2]/10",
+                  )}
+                />
+              </div>
+            ))}
+
+            {/* Timed events */}
+            {timed.map((positioned) => (
+              <TimedEventBlock
+                key={positioned.event.id}
+                positioned={positioned}
+                onEventClick={onEventClick}
+              />
+            ))}
+
+            {/* Current time indicator */}
+            {isToday && (
+              <div
+                className="pointer-events-none absolute left-0 right-0 z-30 flex items-center"
+                style={{ top: `${nowMin * PX_PER_MIN}px` }}
+              >
+                <div className="h-2 w-2 -translate-x-1 rounded-full bg-danger" />
+                <div className="h-0.5 flex-1 bg-danger" />
+              </div>
+            )}
           </div>
         </div>
       </div>

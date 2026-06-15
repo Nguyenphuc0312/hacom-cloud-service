@@ -59,8 +59,13 @@ export interface MeetingFormData {
 interface MeetingFormModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Nếu có → nút "Hủy" quay lại bước chọn loại lịch thay vì đóng hẳn. */
+  onBack?: () => void;
   onSave: (data: MeetingFormData) => Promise<void> | void;
   defaultDate?: string;
+  /** Giờ bắt đầu/kết thúc điền sẵn (HH:mm) khi tạo từ click ô khung giờ trên lưới */
+  defaultStartTime?: string;
+  defaultEndTime?: string;
   /** Existing meetings on the same date to detect conflicts */
   existingMeetings?: MeetingFormData[];
   /** Nếu có → modal hoạt động ở chế độ chỉnh sửa (giữ id, createdBy, readBy) */
@@ -130,8 +135,11 @@ const timeRangesOverlap = (
 export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   isOpen,
   onClose,
+  onBack,
   onSave,
   defaultDate,
+  defaultStartTime,
+  defaultEndTime,
   existingMeetings = [],
   initialData = null,
   isLoading = false,
@@ -318,8 +326,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setTitle("");
       setDate(d0);
       setDateText(formatDateVN(d0));
-      setStartTime("08:00");
-      setEndTime("09:00");
+      setStartTime(defaultStartTime ?? "08:00");
+      setEndTime(defaultEndTime ?? "09:00");
       setChairman("");
       setChairmanInput("");
       setChairmanMeta(null);
@@ -332,7 +340,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setNotes("");
       setErrors({});
     }
-  }, [isOpen, defaultDate, initialData]);
+  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData]);
 
   // Kiểm tra xung đột lịch theo tên người tham gia
   const checkConflict = React.useCallback(
@@ -465,8 +473,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             </p>
           )}
           <div className="ml-auto flex gap-2">
-            <Button variant="brand-outline" onClick={onClose} type="button">
-              Hủy
+            <Button variant="brand-outline" onClick={onBack ?? onClose} type="button">
+              {onBack ? "Quay lại" : "Hủy"}
             </Button>
             <Button variant="brand" onClick={handleSave} type="button" disabled={isLoading}>
               {isLoading ? "Đang lưu..." : isEditMode ? "Cập nhật" : "Lưu & Gửi"}
