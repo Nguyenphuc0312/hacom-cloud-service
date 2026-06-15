@@ -3,7 +3,11 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
-import { useChatStore, usePresenceStore } from "../../../stores";
+import {
+  useChatStore,
+  usePresenceStore,
+  resolveLivePresenceStatus,
+} from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
@@ -154,26 +158,6 @@ const resolveRoomItemVisualState = ({
   }
 
   return "default";
-};
-
-const resolvePresenceStatus = (
-  presenceState: string | undefined,
-  fallbackStatus: string | undefined,
-): UserStatus | undefined => {
-  const nextStatus = presenceState || fallbackStatus;
-  if (
-    nextStatus === "online" ||
-    nextStatus === "offline" ||
-    nextStatus === "away" ||
-    nextStatus === "idle" ||
-    nextStatus === "dnd" ||
-    nextStatus === "busy" ||
-    nextStatus === "invisible"
-  ) {
-    return nextStatus as UserStatus;
-  }
-
-  return undefined;
 };
 
 const buildPreviewText = (
@@ -443,10 +427,10 @@ export const RoomItemContainer = React.memo(
       () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
       [conversation, currentUser.id],
     );
-    const presenceState = usePresenceStore(
+    const livePresence = usePresenceStore(
       useMemo(
         () => (state) =>
-          directPartnerId ? state.presenceMap[directPartnerId]?.state : undefined,
+          directPartnerId ? state.presenceMap[directPartnerId] : undefined,
         [directPartnerId],
       ),
     );
@@ -496,13 +480,13 @@ export const RoomItemContainer = React.memo(
         unreadLabel: unreadCount > 99 ? "99+" : String(unreadCount),
         hasUnreadMention: hasConversationMention(conversation, currentUser),
         avatarSrc: getConversationAvatar(conversation, currentUser.id),
-        avatarStatus: resolvePresenceStatus(
-          presenceState,
-          conversation.otherUser?.status,
-        ),
+        // Live presence (WS) only — never the backend `otherUser.status` field.
+        avatarStatus: isDirect
+          ? resolveLivePresenceStatus(livePresence)
+          : undefined,
         isDirect,
       };
-    }, [conversation, currentUser, presenceState, enrichedName]);
+    }, [conversation, currentUser, livePresence, enrichedName]);
 
     if (!viewModel) {
       return null;

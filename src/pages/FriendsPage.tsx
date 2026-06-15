@@ -26,7 +26,7 @@ import {
   toast,
 } from "../components/ui";
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
-import { useAuthStore, usePresenceStore } from "../stores";
+import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
@@ -370,10 +370,9 @@ const ContactRow: React.FC<ContactRowProps> = ({
     user.id ? state.presenceMap[user.id] : undefined,
   );
 
-  const status =
-    livePresence?.state === "online"
-      ? UserStatus.ONLINE
-      : (user.status ?? UserStatus.OFFLINE);
+  // Live presence (WS) is the only source of truth — never the backend
+  // `user.status` field. See resolveLivePresenceStatus for the rationale.
+  const status = resolveLivePresenceStatus(livePresence);
 
   const defaultSubtitle =
     status === UserStatus.ONLINE

@@ -17,7 +17,7 @@ import {
 import { Avatar } from "../common/Avatar";
 import { Button, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
-import { useAuthStore, usePresenceStore } from "../../stores";
+import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../../stores";
 import { useMyHrProfile } from "../../hooks/useMyHrProfile";
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
@@ -299,12 +299,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   const displayName = formatDisplayName(user);
   const username = user?.username ? `@${user.username}` : null;
-  const effectiveStatus = livePresence
-    ? livePresence.state === "online"
-      ? UserStatus.ONLINE
-      : UserStatus.OFFLINE
-    : user?.status;
-  const lastSeenAt = livePresence?.lastSeenAt;
+  // Live presence (WS) is the only source of truth — never `user.status`.
+  // Self is always shown ONLINE (you are actively using the app and we don't
+  // subscribe to our own presence channel).
+  const effectiveStatus = isSelf
+    ? UserStatus.ONLINE
+    : resolveLivePresenceStatus(livePresence);
+  const lastSeenAt = isSelf ? undefined : livePresence?.lastSeenAt;
   const relationship = getRelationshipState(userId, currentUserId);
   const capabilities = relationship.capabilities;
 
