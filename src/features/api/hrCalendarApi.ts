@@ -8,7 +8,7 @@ import { hrApiClient } from "./hrApi";
 /**
  * HR Calendar event types (aligned with hr-api-service Prisma enums)
  */
-export type HRCalendarEventType = "MEETING" | "TASK" | "LEAVE" | "DEADLINE" | "REMINDER" | "OTHER";
+export type HRCalendarEventType = "MEETING" | "TASK" | "LEAVE" | "DEADLINE" | "REMINDER" | "OTHER" | "PERSONAL";
 export type HRCalendarVisibility = "PRIVATE" | "BUSY_ONLY" | "TEAM" | "UNIT" | "PUBLIC";
 export type HRParticipantResponse = "PENDING" | "ACCEPTED" | "DECLINED" | "MAYBE";
 
