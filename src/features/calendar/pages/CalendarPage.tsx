@@ -36,12 +36,14 @@ import {
 } from "../../api/hrApi";
 import { hrCalendarApi, type HRCalendarEvent } from "../../api/hrCalendarApi";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
-import { ConfirmDialog } from "../../../components/ui/Modal";
+import { PersonalEventFormModal, type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
+import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
+import { getWeekDays, getIsoWeekNumber } from "../utils/timeline";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 
@@ -671,8 +673,9 @@ const MiniCalendar: React.FC<{
   year: number;
   month: number;
   onNavigate: (year: number, month: number) => void;
+  onSelectDate: (date: Date) => void;
   selectedDate: Date;
-}> = ({ year, month, onNavigate, selectedDate }) => {
+}> = ({ year, month, onNavigate, onSelectDate, selectedDate }) => {
   const days = generateCalendarDays(year, month);
   const today = new Date();
   const isToday = (date: Date) =>
@@ -741,7 +744,7 @@ const MiniCalendar: React.FC<{
           <button
             key={index}
             type="button"
-            onClick={() => onNavigate(dayInfo.date.getFullYear(), dayInfo.date.getMonth())}
+            onClick={() => onSelectDate(dayInfo.date)}
             className={clsx(
               "flex h-7 w-full items-center justify-center rounded text-xs transition-micro",
               !dayInfo.isCurrentMonth && "text-text-disabled",
@@ -860,6 +863,18 @@ export const CalendarPage: React.FC = () => {
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
+  const [meetingModalStart, setMeetingModalStart] = useState<string | undefined>();
+  const [meetingModalEnd, setMeetingModalEnd] = useState<string | undefined>();
+
+  // "Thêm lịch" type chooser — họp vs cá nhân. Giữ lại ngày/giờ điền sẵn để
+  // chuyển sang đúng form sau khi user chọn loại.
+  const [eventTypeChooserOpen, setEventTypeChooserOpen] = useState(false);
+
+  // Personal event form modal state
+  const [personalModalOpen, setPersonalModalOpen] = useState(false);
+  const [personalModalDate, setPersonalModalDate] = useState<string | undefined>();
+  const [personalModalStart, setPersonalModalStart] = useState<string | undefined>();
+  const [personalModalEnd, setPersonalModalEnd] = useState<string | undefined>();
 
   // Edit event modal state
   const [editingEvent, setEditingEvent] = useState<MeetingFormData | null>(null);
@@ -937,6 +952,58 @@ export const CalendarPage: React.FC = () => {
     }
   }, [refetchCurrentMonth]);
 
+  // Handle create personal event from PersonalEventFormModal.
+  // Lịch cá nhân: eventType PERSONAL, không có người tham gia/chủ trì.
+  const handleCreatePersonalEvent = useCallback(async (data: PersonalEventFormData) => {
+    try {
+      setIsCreatingEvent(true);
+      // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        startAt,
+        endAt,
+        // hr-api-service eventType enum CHƯA có "PERSONAL" (MEETING|TASK|LEAVE|
+        // DEADLINE|REMINDER|OTHER). Tạm dùng "OTHER" + visibility PRIVATE cho
+        // lịch cá nhân; FE map OTHER → "personal" để hiển thị/lọc.
+        // TODO(backend): thêm eventType "PERSONAL" — xem yeucauapicalenda.md.
+        eventType: "OTHER",
+        visibility: "PRIVATE",
+        isAllDay: false,
+        timezone,
+      };
+
+      const result = await useCalendarStore.getState().createEvent(input);
+      if (result) {
+        refetchCurrentMonth();
+      }
+    } catch (error) {
+      console.error("Failed to create personal event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  }, [refetchCurrentMonth]);
+
+  // Mở bộ chọn loại lịch (họp / cá nhân) với ngày + giờ điền sẵn.
+  const openEventTypeChooser = useCallback(
+    (date?: string, start?: string, end?: string) => {
+      setMeetingModalDate(date);
+      setMeetingModalStart(start);
+      setMeetingModalEnd(end);
+      setPersonalModalDate(date);
+      setPersonalModalStart(start);
+      setPersonalModalEnd(end);
+      setEventTypeChooserOpen(true);
+    },
+    [],
+  );
+
   // Fetch calendar events from API when month changes or mode changes.
   // Always pass explicit date range from component state so the store doesn't
   // use its own (potentially stale) currentYear/currentMonth.
@@ -1007,15 +1074,19 @@ export const CalendarPage: React.FC = () => {
     });
   }, [apiEvents]);
 
-  // Convert API CalendarEvent to LocalCalendarEvent
-  const calendarEventsFromApi = useMemo((): LocalCalendarEvent[] => {
-    return apiEvents.map((event: HRCalendarEvent): LocalCalendarEvent => ({
+  // Convert API CalendarEvent to ExtendedCalendarEvent (giữ startAt/endAt để
+  // Day/Week View dựng block theo thời lượng + overlap — xem utils/timeline.ts).
+  const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
+    return apiEvents.map((event: HRCalendarEvent): ExtendedCalendarEvent => ({
       id: event.id,
       title: event.title,
       date: toLocalDateString(event.startAt),
       type: mapApiEventTypeToLocal(event.eventType),
       description: event.description ?? undefined,
       time: toLocalTimeString(event.startAt),
+      startAt: event.startAt,
+      endAt: event.endAt,
+      isAllDay: event.isAllDay,
     }));
   }, [apiEvents]);
 
@@ -1211,6 +1282,33 @@ export const CalendarPage: React.FC = () => {
     setSelectedDate(now);
   }, []);
 
+  // Dịch ngày đang chọn (day/week view) ±deltaDays, đồng bộ tháng/năm để refetch
+  // đúng range (event của tháng kề tại biên tuần là giới hạn Phase 1).
+  const shiftSelected = useCallback(
+    (deltaDays: number) => {
+      const next = new Date(selectedDate);
+      next.setDate(next.getDate() + deltaDays);
+      setSelectedDate(next);
+      setCurrentYear(next.getFullYear());
+      setCurrentMonth(next.getMonth());
+    },
+    [selectedDate],
+  );
+
+  // Nhãn tiêu đề theo chế độ xem.
+  const dayTitle = useMemo(() => {
+    const wd = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+    return `${wd[selectedDate.getDay()]}, ${selectedDate.getDate()}/${selectedDate.getMonth() + 1}/${selectedDate.getFullYear()}`;
+  }, [selectedDate]);
+
+  const weekTitle = useMemo(() => {
+    const days = getWeekDays(selectedDate);
+    const start = days[0];
+    const end = days[6];
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return `Tuần ${getIsoWeekNumber(selectedDate)} · ${fmt(start)}–${fmt(end)}/${end.getFullYear()}`;
+  }, [selectedDate]);
+
   // Handle mini calendar navigation
   const handleMiniCalendarNavigate = useCallback((year: number, month: number) => {
     setCurrentYear(year);
@@ -1218,10 +1316,40 @@ export const CalendarPage: React.FC = () => {
     setSelectedDate(new Date(year, month, 1));
   }, []);
 
-  // Handle date selection
+  // Handle date selection — đồng bộ tháng/năm để ngày của tháng kề (ô mờ trong
+  // lưới tháng) chuyển đúng tháng khi chọn, không chỉ set selectedDate.
   const handleDateClick = useCallback((date: Date) => {
     setSelectedDate(date);
+    setCurrentYear(date.getFullYear());
+    setCurrentMonth(date.getMonth());
   }, []);
+
+  // Mở Day view của một ngày (click ô ngày trong lưới Tháng / tiêu đề ngày Tuần).
+  const handleOpenDay = useCallback(
+    (date: Date) => {
+      handleDateClick(date);
+      setView("day");
+    },
+    [handleDateClick, setView],
+  );
+
+  // Click ô khung giờ trên lưới Day/Week → mở form tạo lịch với giờ điền sẵn,
+  // snap về mốc 30 phút (kiểu Teams), thời lượng mặc định 30 phút.
+  const handleCreateAtSlot = useCallback(
+    (date: Date, minutes: number) => {
+      if (mode === "other") return; // xem lịch người khác → không tạo
+      const fmt = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const snapped = Math.max(0, Math.min(Math.floor(minutes / 30) * 30, 23 * 60 + 30));
+      const endM = snapped + 30;
+      openEventTypeChooser(
+        formatDateString(date),
+        fmt(snapped),
+        endM >= 24 * 60 ? "23:59" : fmt(endM),
+      );
+    },
+    [mode, openEventTypeChooser],
+  );
 
   // Handle event click — navigate to /tasks for task events, open modal otherwise
   const handleEventClick = useCallback(
@@ -1436,6 +1564,7 @@ export const CalendarPage: React.FC = () => {
                 year={currentYear}
                 month={currentMonth}
                 onNavigate={handleMiniCalendarNavigate}
+                onSelectDate={handleDateClick}
                 selectedDate={selectedDate}
               />
             </div>
@@ -1518,10 +1647,7 @@ export const CalendarPage: React.FC = () => {
             {mode !== "other" && (
               <button
                 type="button"
-                onClick={() => {
-                  setMeetingModalDate(formatDateString(selectedDate));
-                  setMeetingModalOpen(true);
-                }}
+                onClick={() => openEventTypeChooser(formatDateString(selectedDate))}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5 hover:text-[#1565C0] transition-micro"
               >
                 <PlusIcon className="h-4 w-4" />
@@ -1563,23 +1689,39 @@ export const CalendarPage: React.FC = () => {
                 )}
                 {mode === "my" && (
                   <h2 className="text-lg font-semibold text-text-primary">
-                    {VIETNAMESE_MONTHS[currentMonth]} {currentYear}
+                    {currentView === "day"
+                      ? dayTitle
+                      : currentView === "week"
+                        ? weekTitle
+                        : `${VIETNAMESE_MONTHS[currentMonth]} ${currentYear}`}
                   </h2>
                 )}
                 {mode !== "other" && (
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={goToPrevMonth}
-                      title="Tháng trước"
+                      onClick={
+                        currentView === "day"
+                          ? () => shiftSelected(-1)
+                          : currentView === "week"
+                            ? () => shiftSelected(-7)
+                            : goToPrevMonth
+                      }
+                      title={currentView === "day" ? "Ngày trước" : currentView === "week" ? "Tuần trước" : "Tháng trước"}
                       className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
                     >
                       <ChevronLeftIcon className="h-5 w-5" />
                     </button>
                     <button
                       type="button"
-                      onClick={goToNextMonth}
-                      title="Tháng sau"
+                      onClick={
+                        currentView === "day"
+                          ? () => shiftSelected(1)
+                          : currentView === "week"
+                            ? () => shiftSelected(7)
+                            : goToNextMonth
+                      }
+                      title={currentView === "day" ? "Ngày sau" : currentView === "week" ? "Tuần sau" : "Tháng sau"}
                       className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
                     >
                       <ChevronRightIcon className="h-5 w-5" />
@@ -1651,7 +1793,8 @@ export const CalendarPage: React.FC = () => {
                   return (
                     <div
                       key={index}
-                      onClick={() => handleDateClick(dayInfo.date)}
+                      onClick={() => handleOpenDay(dayInfo.date)}
+                      title="Mở lịch ngày"
                       className={clsx(
                         "min-h-[120px] cursor-pointer border-border bg-surface p-1.5 transition-micro",
                         !dayInfo.isCurrentMonth && "bg-surface-overlay",
@@ -1699,6 +1842,7 @@ export const CalendarPage: React.FC = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              handleOpenDay(dayInfo.date);
                             }}
                             className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-[#1565C0] transition-micro"
                           >
@@ -1720,18 +1864,19 @@ export const CalendarPage: React.FC = () => {
               events={searchedEvents}
               attendance={mode !== "other" ? getAttendanceForDate(selectedDate) : undefined}
               onEventClick={handleEventClick}
+              onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
             />
           )}
 
           {/* Week view */}
           {currentView === "week" && (
             <WeekView
-              year={currentYear}
-              month={currentMonth}
+              weekDate={selectedDate}
               events={searchedEvents}
               attendanceData={mode !== "other" ? attendanceData : []}
-              onDateClick={handleDateClick}
+              onDateClick={handleOpenDay}
               onEventClick={handleEventClick}
+              onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
               isToday={isToday}
               isSelected={isSelected}
             />
@@ -1752,13 +1897,76 @@ export const CalendarPage: React.FC = () => {
         />
       )}
 
+      {/* Bộ chọn loại lịch: họp vs cá nhân */}
+      <Modal
+        isOpen={eventTypeChooserOpen}
+        onClose={() => setEventTypeChooserOpen(false)}
+        title="Thêm lịch"
+        size="sm"
+      >
+        <p className="mb-4 text-sm text-text-secondary">
+          Chọn loại lịch bạn muốn thêm.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setMeetingModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
+              <UsersIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch họp</span>
+            <span className="text-[11px] text-text-muted">Mời người tham gia, chủ trì, địa điểm</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setPersonalModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-amber-500/60 hover:bg-amber-500/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <UserIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch cá nhân</span>
+            <span className="text-[11px] text-text-muted">Chỉ mình bạn — ngày, giờ, nội dung</span>
+          </button>
+        </div>
+      </Modal>
+
       {/* Meeting form modal */}
       <MeetingFormModal
         isOpen={meetingModalOpen}
         onClose={() => setMeetingModalOpen(false)}
+        onBack={() => {
+          setMeetingModalOpen(false);
+          setEventTypeChooserOpen(true);
+        }}
         onSave={handleCreateEvent}
         defaultDate={meetingModalDate}
+        defaultStartTime={meetingModalStart}
+        defaultEndTime={meetingModalEnd}
         existingMeetings={meetingsForConflictCheck}
+        isLoading={isCreatingEvent}
+      />
+
+      {/* Personal event form modal */}
+      <PersonalEventFormModal
+        isOpen={personalModalOpen}
+        onClose={() => setPersonalModalOpen(false)}
+        onBack={() => {
+          setPersonalModalOpen(false);
+          setEventTypeChooserOpen(true);
+        }}
+        onSave={handleCreatePersonalEvent}
+        defaultDate={personalModalDate}
+        defaultStartTime={personalModalStart}
+        defaultEndTime={personalModalEnd}
         isLoading={isCreatingEvent}
       />
 
@@ -1807,10 +2015,13 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
       return "attendance";
     case "TASK":
       return "task";
+    // "OTHER" hiện là kho chứa lịch cá nhân (backend chưa có eventType PERSONAL)
+    // → map sang "personal" để hiển thị/lọc đúng. Xem yeucauapicalenda.md.
+    case "OTHER":
+      return "personal";
     case "LEAVE":
     case "DEADLINE":
     case "REMINDER":
-    case "OTHER":
     case "UNIT":
     case "LEADER":
     case "WORK":
@@ -1826,7 +2037,8 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
 const mapLocalTypeToApi = (localType: string): string => {
   switch (localType) {
     case "personal":
-      return "PERSONAL";
+      // Backend chưa có "PERSONAL" → lịch cá nhân lưu dưới "OTHER".
+      return "OTHER";
     case "meeting":
       return "MEETING";
     case "attendance":

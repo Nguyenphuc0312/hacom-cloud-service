@@ -11,6 +11,8 @@ Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File 
 - **`WEBFE.md`** — bảng màu / UI tokens (đã `@import` ở trên). Đọc trước khi chỉnh UI/UX.
 - **`WEBBE.md`** — backend `chat-api-service` (kiến trúc, endpoint, DB, auth, env). Đọc khi sửa/đụng backend.
 - **`WEBAPI.md`** — hợp đồng API FE↔BE (map `services/api.ts` ↔ endpoint BE, RTK Query, WS realtime, envelope). Đọc khi thêm/sửa API hoặc nối FE↔BE.
+- **`APIcalendar.md`** — toàn bộ API liên quan đến Lịch (events/chấm công/hồ sơ HR/thông báo qua hr-api-service + task/lễ). Đọc khi đụng tính năng lịch.
+- **`docs/CALENDAR_SPEC.md`** — đặc tả sản phẩm Day/Week View kiểu Teams (hiện trạng vs mục tiêu, gap, lộ trình). Đọc khi làm/đổi Day-Week View.
 
 ---
 
@@ -106,7 +108,10 @@ src/
 ├── features/                # domain features (feature-sliced)
 │   ├── api/
 │   │   ├── chatApi.ts       # RTK Query API CHÍNH (xem mục 5)
-│   │   ├── hrApi.ts         # RTK Query cho HR/chấm công
+│   │   ├── hrApi.ts         # axios client HR (chấm công + health) → HR_API_BASE_URL — KHÔNG phải RTK Query
+│   │   ├── hrCalendarApi.ts # axios client lịch HR (events CRUD + participants) — xem APIcalendar.md
+│   │   ├── hrProfileApi.ts  # axios client hồ sơ HR (GET /auth/me) — identity cho lịch
+│   │   ├── hrNotificationApi.ts # axios client thông báo HR (mời/ phản hồi họp, polling)
 │   │   └── rtkQueryMetricsMiddleware.ts
 │   ├── auth/                # authApi, authState (AuthStatus state machine), authErrorMapper
 │   ├── chat/                # feature lớn nhất — xem mục 7
@@ -117,7 +122,7 @@ src/
 │   ├── activation/          # luồng kích hoạt tài khoản (OTP + set password)
 │   ├── ai-assistant/        # AI chat (zustand store riêng)
 │   ├── tasks/               # quản lý task (axios riêng + realtime hook)
-│   ├── calendar/            # lịch (CalendarPage + data tĩnh calendarEvents)
+│   ├── calendar/            # lịch: CalendarPage gộp events HR + chấm công + task + ngày lễ tĩnh (calendarEvents). Lịch/HR đi qua hr-api-service — xem APIcalendar.md
 │   ├── friends/ friend-qr/  # bạn bè + QR add friend (shareCode)
 │   ├── notification/        # notification store
 │   └── profile/             # chỉnh sửa hồ sơ
