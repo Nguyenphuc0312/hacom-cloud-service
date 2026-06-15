@@ -10,6 +10,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import ReactDOM from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -51,6 +52,7 @@ import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDis
 import {
   listenForContactProfileView,
   listenForNotificationClick,
+  listenForStartDirectMessage,
 } from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
 import { logger } from "../utils/logger";
@@ -78,6 +80,7 @@ import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
 import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
+import { getCachedUserProfile } from "../services/userProfileCache";
 import { fileApi } from "../services/api";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
@@ -354,6 +357,7 @@ export const ChatPage: React.FC = () => {
     null,
   );
   const [contactProfileUserId, setContactProfileUserId] = useState<string | null>(null);
+  const [mentionProfileUserId, setMentionProfileUserId] = useState<string | null>(null);
   const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
@@ -1053,6 +1057,13 @@ export const ChatPage: React.FC = () => {
   }, [openContactProfile]);
 
   useEffect(() => {
+    return listenForStartDirectMessage(({ userId }) => {
+      if (!userId) return;
+      void handleStartChat(userId);
+    });
+  }, [handleStartChat]);
+
+  useEffect(() => {
     return listenForNotificationClick(
       ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
         if (!nextConversationId) return;
@@ -1136,6 +1147,16 @@ export const ChatPage: React.FC = () => {
           "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
           !selectedConversation && "hidden md:flex",
         )}
+        onClick={(e) => {
+          const el = (e.target as HTMLElement).closest("[data-mention-user-id]");
+          if (el) {
+            const uid = (el as HTMLElement).dataset.mentionUserId;
+            if (uid && uid !== "all") {
+              e.stopPropagation();
+              setMentionProfileUserId(uid);
+            }
+          }
+        }}
       >
         {selectedConversation ? (
           <ChatWindow
@@ -1267,6 +1288,7 @@ export const ChatPage: React.FC = () => {
                       conversation={selectedConversation}
                       currentUserId={currentUserSummary.id}
                       onClose={closeInfoPanel}
+                      onStartConversation={handleStartChat}
                     />
                   ) : null}
                 </React.Suspense>
@@ -1299,6 +1321,44 @@ export const ChatPage: React.FC = () => {
             isSubmitting={isCreatingRoom}
           />
         </React.Suspense>
+      )}
+
+      {/* Mention profile modal */}
+      {mentionProfileUserId && currentUserSummary && ReactDOM.createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setMentionProfileUserId(null)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <React.Suspense fallback={null}>
+              <UserProfile
+                userId={mentionProfileUserId}
+                currentUserId={currentUserSummary.id}
+                conversationContext="group"
+                initialUser={(() => {
+                  const cached = getCachedUserProfile(mentionProfileUserId);
+                  if (!cached) return null;
+                  return {
+                    id: cached.id,
+                    username: cached.username,
+                    displayName: cached.displayName,
+                    avatar: resolvePublicResourceUrl(cached.avatar ?? undefined),
+                  };
+                })()}
+                onClose={() => setMentionProfileUserId(null)}
+                onStartConversation={async (uid) => {
+                  setMentionProfileUserId(null);
+                  await handleStartChat(uid);
+                }}
+              />
+            </React.Suspense>
+          </div>
+        </div>,
+        document.body,
       )}
 
       {/* Image Preview Modal */}

@@ -47,6 +47,7 @@ import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
 import { MessageActionBar } from "../MessageActionBar";
 import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
+import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
   [MessageType.IMAGE]: "Hình ảnh",
@@ -890,6 +891,10 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               conversationContext="group"
               initialUser={{ id: leadMessage.senderId, username: leadMessage.senderId, displayName: leadMessage.senderName ?? undefined, avatar: leadMessage.senderAvatar ?? undefined }}
               onClose={() => setViewingUserId(null)}
+              onStartConversation={(uid) => {
+                setViewingUserId(null);
+                dispatchStartDirectMessage({ userId: uid });
+              }}
             />
           </div>
         </div>,
