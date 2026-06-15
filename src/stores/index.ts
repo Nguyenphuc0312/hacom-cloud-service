@@ -31,7 +31,7 @@ export type {
   Toast,
 } from "./uiStore";
 
-export { usePresenceStore } from "./presenceStore";
+export { usePresenceStore, resolveLivePresenceStatus } from "./presenceStore";
 export type { PresenceState, UserPresenceInfo } from "./presenceStore";
 
 export { useGroupStore } from "./groupStore";

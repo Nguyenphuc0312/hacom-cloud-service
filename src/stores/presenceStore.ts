@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { registerStoreResetter } from "./storeResetRegistry";
+import { UserStatus } from "../types";
 
 // ============================================
 // Types
@@ -99,3 +100,24 @@ export const usePresenceStore = create<PresenceStoreState>((set, get) => ({
 registerStoreResetter("presence", () => {
   usePresenceStore.getState().clearAll();
 });
+
+// ============================================
+// Presence → UserStatus mapping (shared)
+// ============================================
+
+/**
+ * Resolve the avatar/label status for a user from LIVE presence ONLY.
+ *
+ * Real-time presence (WebSocket → presenceStore) is the single source of truth
+ * for online/offline. The `status` field returned on user / participant /
+ * suggestion DTOs is derived on the backend from last-login & password-change
+ * timestamps and is NOT a live presence signal — it must never be rendered as
+ * "online". When there is no live presence record (or presence is anything
+ * other than `online`) we report OFFLINE, so every surface — chat header,
+ * sidebar room item, profile panel, friend discovery — stays consistent
+ * instead of trusting that stale field.
+ */
+export const resolveLivePresenceStatus = (
+  presence: UserPresenceInfo | undefined,
+): UserStatus =>
+  presence?.state === "online" ? UserStatus.ONLINE : UserStatus.OFFLINE;

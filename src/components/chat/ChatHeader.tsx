@@ -13,7 +13,7 @@ import { Avatar } from "../common/Avatar";
 import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import { ConversationLane } from "../layout/ConversationLane";
-import { usePresenceStore } from "../../stores";
+import { usePresenceStore, resolveLivePresenceStatus } from "../../stores";
 import { UserStatus } from "../../types";
 import type { Conversation, TypingStatus } from "../../types";
 import {
@@ -75,11 +75,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const livePresence = usePresenceStore((s) =>
     otherUserId ? s.presenceMap[otherUserId] : undefined,
   );
-  const liveStatus = livePresence
-    ? livePresence.state === "online"
-      ? UserStatus.ONLINE
-      : UserStatus.OFFLINE
-    : otherUser?.status;
+  // Live presence (WS) is the only source of truth — never `otherUser.status`.
+  const liveStatus = resolveLivePresenceStatus(livePresence);
   const isOnline = liveStatus === UserStatus.ONLINE;
   const activeTypingStatuses = React.useMemo(() => {
     const statuses =
