@@ -31,6 +31,8 @@ export interface ExtendedCalendarEvent extends CalendarEvent {
   startAt?: string;
   /** Full end timestamp from API */
   endAt?: string;
+  /** All-day event → render ở hàng "ALL DAY" thay vì trên lưới giờ */
+  isAllDay?: boolean;
   /** Meeting format: "offline" | "online" | null */
   meetingFormat?: "offline" | "online";
   /** Meeting location (for offline) or URL (for online) */
