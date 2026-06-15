@@ -6,6 +6,12 @@ export interface StartDirectMessageDetail {
   userId: string;
 }
 
+export interface MentionProfileViewDetail {
+  userId: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
 export interface NotificationClickDetail {
   conversationId?: string;
   messageId?: string;
@@ -20,6 +26,7 @@ const CONTACT_PROFILE_VIEW_EVENT = "chat:contact:view-profile";
 const NOTIFICATION_CLICK_EVENT = "chat:notification:clicked";
 const OPEN_CONVERSATION_EVENT = "chat:open-conversation";
 const START_DIRECT_MESSAGE_EVENT = "chat:start-direct-message";
+const MENTION_PROFILE_VIEW_EVENT = "chat:mention:view-profile";
 
 const dispatchWindowEvent = <TDetail>(name: string, detail: TDetail): void => {
   if (typeof window === "undefined") {
@@ -87,3 +94,13 @@ export const dispatchStartDirectMessage = (
 export const listenForStartDirectMessage = (
   handler: (detail: StartDirectMessageDetail) => void,
 ): (() => void) => listenWindowEvent(START_DIRECT_MESSAGE_EVENT, handler);
+
+export const dispatchMentionProfileView = (
+  detail: MentionProfileViewDetail,
+): void => {
+  dispatchWindowEvent(MENTION_PROFILE_VIEW_EVENT, detail);
+};
+
+export const listenForMentionProfileView = (
+  handler: (detail: MentionProfileViewDetail) => void,
+): (() => void) => listenWindowEvent(MENTION_PROFILE_VIEW_EVENT, handler);

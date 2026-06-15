@@ -12,6 +12,7 @@ import {
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
+import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
@@ -181,8 +182,19 @@ const renderWithMentions = (
                 : "text-[#1565C0]/80",
           !isMentionAll && resolved?.userId && "cursor-pointer hover:underline",
         )}
-        data-mention-user-id={resolved?.userId}
         title={resolved?.employeeCode || undefined}
+        onClick={
+          !isMentionAll && resolved?.userId
+            ? (e) => {
+                e.stopPropagation();
+                dispatchMentionProfileView({
+                  userId: resolved.userId,
+                  displayName: resolved.displayName,
+                  avatarUrl: resolved.avatarUrl,
+                });
+              }
+            : undefined
+        }
       >
         {displayLabel}
       </span>,

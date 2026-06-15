@@ -53,6 +53,7 @@ import {
   listenForContactProfileView,
   listenForNotificationClick,
   listenForStartDirectMessage,
+  listenForMentionProfileView,
 } from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
 import { logger } from "../utils/logger";
@@ -357,7 +358,7 @@ export const ChatPage: React.FC = () => {
     null,
   );
   const [contactProfileUserId, setContactProfileUserId] = useState<string | null>(null);
-  const [mentionProfileUserId, setMentionProfileUserId] = useState<string | null>(null);
+  const [mentionProfile, setMentionProfile] = useState<{ userId: string; avatarUrl?: string; displayName?: string } | null>(null);
   const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
@@ -1064,6 +1065,13 @@ export const ChatPage: React.FC = () => {
   }, [handleStartChat]);
 
   useEffect(() => {
+    return listenForMentionProfileView(({ userId, displayName, avatarUrl }) => {
+      if (!userId) return;
+      setMentionProfile({ userId, displayName, avatarUrl });
+    });
+  }, []);
+
+  useEffect(() => {
     return listenForNotificationClick(
       ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
         if (!nextConversationId) return;
@@ -1147,16 +1155,6 @@ export const ChatPage: React.FC = () => {
           "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
           !selectedConversation && "hidden md:flex",
         )}
-        onClick={(e) => {
-          const el = (e.target as HTMLElement).closest("[data-mention-user-id]");
-          if (el) {
-            const uid = (el as HTMLElement).dataset.mentionUserId;
-            if (uid && uid !== "all") {
-              e.stopPropagation();
-              setMentionProfileUserId(uid);
-            }
-          }
-        }}
       >
         {selectedConversation ? (
           <ChatWindow
@@ -1324,10 +1322,10 @@ export const ChatPage: React.FC = () => {
       )}
 
       {/* Mention profile modal */}
-      {mentionProfileUserId && currentUserSummary && ReactDOM.createPortal(
+      {mentionProfile && currentUserSummary && ReactDOM.createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setMentionProfileUserId(null)}
+          onClick={() => setMentionProfile(null)}
         >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
@@ -1336,22 +1334,23 @@ export const ChatPage: React.FC = () => {
           >
             <React.Suspense fallback={null}>
               <UserProfile
-                userId={mentionProfileUserId}
+                userId={mentionProfile.userId}
                 currentUserId={currentUserSummary.id}
                 conversationContext="group"
                 initialUser={(() => {
-                  const cached = getCachedUserProfile(mentionProfileUserId);
-                  if (!cached) return null;
+                  const cached = getCachedUserProfile(mentionProfile.userId);
+                  const avatarUrl = resolvePublicResourceUrl(
+                    cached?.avatar ?? mentionProfile.avatarUrl ?? undefined,
+                  );
                   return {
-                    id: cached.id,
-                    username: cached.username,
-                    displayName: cached.displayName,
-                    avatar: resolvePublicResourceUrl(cached.avatar ?? undefined),
+                    id: mentionProfile.userId,
+                    displayName: cached?.displayName || mentionProfile.displayName,
+                    avatar: avatarUrl,
                   };
                 })()}
-                onClose={() => setMentionProfileUserId(null)}
+                onClose={() => setMentionProfile(null)}
                 onStartConversation={async (uid) => {
-                  setMentionProfileUserId(null);
+                  setMentionProfile(null);
                   await handleStartChat(uid);
                 }}
               />
