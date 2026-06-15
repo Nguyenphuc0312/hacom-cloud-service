@@ -179,6 +179,7 @@ const renderWithMentions = (
               : isOwn
                 ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
                 : "text-[#1565C0]/80",
+          !isMentionAll && resolved?.userId && "cursor-pointer hover:underline",
         )}
         data-mention-user-id={resolved?.userId}
         title={resolved?.employeeCode || undefined}
