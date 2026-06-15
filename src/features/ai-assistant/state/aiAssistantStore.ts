@@ -266,9 +266,13 @@ export const useAiAssistantStore = create<AiAssistantState>()(
               c.endpoint === endpoint &&
               c.serverSessionId &&
               isCurrentOwner(c) &&
-              // Loại session ẩn danh (anon-*) còn sót từ lúc chưa đăng nhập —
-              // chúng không thuộc tài khoản này (backend trả 403 khi fetch).
-              !c.serverSessionId.startsWith("anon-") &&
+              // Chỉ loại session ẩn danh (anon-*) RỖNG — artefact còn sót từ lúc
+              // chưa đăng nhập (không thuộc tài khoản, backend trả 403 khi fetch).
+              // GIỮ LẠI session anon ĐÃ CÓ tin nhắn thật: đó là hội thoại đã trả
+              // lời xong mà backend trả session_id ẩn danh — nếu lọc luôn thì sau
+              // F5 hội thoại biến mất (chỉ khi bấm Dừng mới còn vì không có
+              // serverSessionId). Tin nhắn đã persist sẵn nên không cần fetch lại.
+              !(c.serverSessionId.startsWith("anon-") && c.messages.length === 0) &&
               !serverIds.has(c.serverSessionId) &&
               !deletedIds.has(c.serverSessionId),
           );

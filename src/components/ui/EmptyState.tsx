@@ -37,7 +37,8 @@ import {
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
 import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
-import { ConfirmDialog } from "./Modal";
+import { PersonalEventFormModal, type PersonalEventFormData } from "./PersonalEventFormModal";
+import { ConfirmDialog, Modal } from "./Modal";
 import { useAuthStore } from "../../stores";
 import { useCalendarStore } from "../../stores/calendarStore";
 import { toast } from "../../utils/toast";
@@ -744,6 +745,9 @@ const WeeklyCalendarWidget: React.FC = () => {
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalDefaultDate, setModalDefaultDate] = React.useState<string | undefined>();
+  // "Thêm lịch" type chooser — họp vs cá nhân (đồng bộ với CalendarPage).
+  const [eventTypeChooserOpen, setEventTypeChooserOpen] = React.useState(false);
+  const [personalModalOpen, setPersonalModalOpen] = React.useState(false);
   const [selectedDetail, setSelectedDetail] = React.useState<SelectedEventDetail | null>(null);
   const [editingMeeting, setEditingMeeting] = React.useState<MeetingFormData | null>(null);
 
@@ -830,7 +834,15 @@ const WeeklyCalendarWidget: React.FC = () => {
         id: event.id,
         title: event.title,
         date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-        type: event.eventType === "MEETING" ? "meeting" : "work",
+        // "OTHER" hiện là kho chứa lịch cá nhân (backend chưa có eventType
+        // PERSONAL) → map sang "personal" để hiển thị/lọc đúng nhóm. Xem
+        // yeucauapicalenda.md.
+        type:
+          event.eventType === "MEETING"
+            ? "meeting"
+            : event.eventType === "OTHER"
+              ? "personal"
+              : "work",
         description: event.description ?? undefined,
         time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       };
@@ -840,10 +852,11 @@ const WeeklyCalendarWidget: React.FC = () => {
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
 
-  const openAddMeeting = (day: Date) => {
+  // Mở bộ chọn loại lịch (họp / cá nhân) với ngày điền sẵn.
+  const openEventTypeChooser = (day: Date) => {
     setEditingMeeting(null);
     setModalDefaultDate(formatDateStr(day));
-    setModalOpen(true);
+    setEventTypeChooserOpen(true);
   };
 
   const handleSaveMeeting = async (data: MeetingFormData) => {
@@ -896,6 +909,42 @@ const WeeklyCalendarWidget: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to create event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    }
+  };
+
+  // Lịch cá nhân: chỉ mình bạn, không người tham gia/chủ trì.
+  const handleSavePersonalEvent = async (data: PersonalEventFormData) => {
+    try {
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      // hr-api-service eventType enum CHƯA có "PERSONAL" (MEETING|TASK|LEAVE|
+      // DEADLINE|REMINDER|OTHER). Tạm dùng "OTHER" + visibility PRIVATE cho lịch
+      // cá nhân; FE map OTHER → "personal" để hiển thị/lọc.
+      // TODO(backend): thêm eventType "PERSONAL" — xem yeucauapicalenda.md.
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        startAt,
+        endAt,
+        eventType: "OTHER",
+        visibility: "PRIVATE",
+        isAllDay: false,
+        timezone,
+      };
+
+      const result = await createEvent(input);
+      if (result) {
+        toast.success("Đã thêm lịch cá nhân");
+        if (weekRange.start && weekRange.end) {
+          await fetchEvents(weekRange.start, weekRange.end);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to create personal event:", error);
       toast.error("Không thể thêm lịch. Vui lòng thử lại.");
     }
   };
@@ -1015,15 +1064,77 @@ const WeeklyCalendarWidget: React.FC = () => {
         </div>
       </div>
 
+      {/* Bộ chọn loại lịch: họp vs cá nhân (đồng bộ với CalendarPage) */}
+      <Modal
+        isOpen={eventTypeChooserOpen}
+        onClose={() => setEventTypeChooserOpen(false)}
+        title="Thêm lịch"
+        size="sm"
+      >
+        <p className="mb-4 text-sm text-text-secondary">
+          Chọn loại lịch bạn muốn thêm.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
+              <UsersIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch họp</span>
+            <span className="text-[11px] text-text-muted">Mời người tham gia, chủ trì, địa điểm</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setPersonalModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-amber-500/60 hover:bg-amber-500/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <UserIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch cá nhân</span>
+            <span className="text-[11px] text-text-muted">Chỉ mình bạn — ngày, giờ, nội dung</span>
+          </button>
+        </div>
+      </Modal>
+
       <MeetingFormModal
         isOpen={modalOpen}
         onClose={() => {
           setModalOpen(false);
           setEditingMeeting(null);
         }}
+        onBack={
+          // Khi tạo mới (không phải sửa) → "Quay lại" mở lại bộ chọn loại lịch.
+          editingMeeting
+            ? undefined
+            : () => {
+                setModalOpen(false);
+                setEventTypeChooserOpen(true);
+              }
+        }
         onSave={handleSaveMeeting}
         defaultDate={modalDefaultDate}
         initialData={editingMeeting}
+      />
+
+      <PersonalEventFormModal
+        isOpen={personalModalOpen}
+        onClose={() => setPersonalModalOpen(false)}
+        onBack={() => {
+          setPersonalModalOpen(false);
+          setEventTypeChooserOpen(true);
+        }}
+        onSave={handleSavePersonalEvent}
+        defaultDate={modalDefaultDate}
       />
 
       {selectedDetail && (
@@ -1196,7 +1307,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                   <button
                     type="button"
                     title={`Thêm lịch ngày ${day.getDate()}`}
-                    onClick={() => openAddMeeting(day)}
+                    onClick={() => openEventTypeChooser(day)}
                     className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
                   >
                     <PlusIcon className="h-3 w-3" />
