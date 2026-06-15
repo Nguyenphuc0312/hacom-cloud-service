@@ -313,7 +313,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const shouldShowMessageAction =
     !isSelf &&
     Boolean(onStartConversation) &&
-    capabilities.canMessage &&
+    (capabilities.canMessage || relationship.kind === "friend") &&
     conversationContext !== "direct";
 
   const handleAsyncAction = React.useCallback(

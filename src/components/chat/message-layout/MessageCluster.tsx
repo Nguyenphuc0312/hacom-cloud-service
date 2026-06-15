@@ -35,6 +35,7 @@ import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { MessageActionBar } from "../MessageActionBar";
 import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
+import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 
 interface MessageClusterProps {
   message: Message;
@@ -569,6 +570,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                   : null
               }
               onClose={() => setViewingUserId(null)}
+              onStartConversation={(uid) => {
+                setViewingUserId(null);
+                dispatchStartDirectMessage({ userId: uid });
+              }}
             />
           </div>
         </div>,

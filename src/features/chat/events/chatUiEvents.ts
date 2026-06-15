@@ -2,6 +2,10 @@ export interface ContactProfileViewDetail {
   userId?: string;
 }
 
+export interface StartDirectMessageDetail {
+  userId: string;
+}
+
 export interface NotificationClickDetail {
   conversationId?: string;
   messageId?: string;
@@ -15,6 +19,7 @@ export interface OpenConversationDetail {
 const CONTACT_PROFILE_VIEW_EVENT = "chat:contact:view-profile";
 const NOTIFICATION_CLICK_EVENT = "chat:notification:clicked";
 const OPEN_CONVERSATION_EVENT = "chat:open-conversation";
+const START_DIRECT_MESSAGE_EVENT = "chat:start-direct-message";
 
 const dispatchWindowEvent = <TDetail>(name: string, detail: TDetail): void => {
   if (typeof window === "undefined") {
@@ -72,3 +77,13 @@ export const dispatchOpenConversation = (
 export const listenForOpenConversation = (
   handler: (detail: OpenConversationDetail) => void,
 ): (() => void) => listenWindowEvent(OPEN_CONVERSATION_EVENT, handler);
+
+export const dispatchStartDirectMessage = (
+  detail: StartDirectMessageDetail,
+): void => {
+  dispatchWindowEvent(START_DIRECT_MESSAGE_EVENT, detail);
+};
+
+export const listenForStartDirectMessage = (
+  handler: (detail: StartDirectMessageDetail) => void,
+): (() => void) => listenWindowEvent(START_DIRECT_MESSAGE_EVENT, handler);

@@ -75,6 +75,7 @@ interface GroupInfoProps {
   conversation: Conversation;
   currentUserId: string;
   onClose: () => void;
+  onStartConversation?: (userId: string) => void | Promise<void>;
   className?: string;
 }
 
@@ -331,6 +332,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
   currentUserId,
   onClose,
+  onStartConversation,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
@@ -1624,6 +1626,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 return m ? { id: m.id, username: m.username, displayName: m.displayName, avatar: m.avatar, status: m.status } : null;
               })()}
               onClose={() => setViewingMemberId(null)}
+              onStartConversation={onStartConversation}
             />
           </div>
         </div>,
