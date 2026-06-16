@@ -39,6 +39,8 @@ const FLUSH_WINDOW_MS = 60;
 const SUMMARY_STALE_MS = 5 * 60 * 1000; // 5 minutes
 /** Short negative cache for ids the server explicitly could not resolve. */
 const NEGATIVE_TTL_MS = 60 * 1000; // 1 minute
+/** Cooldown after a 429 when the server sends no Retry-After. */
+const RATE_LIMIT_COOLDOWN_MS = 10 * 1000;
 /** Max ids flushed in one tick (the API layer also chunks defensively). */
 const MAX_FLUSH_BATCH = 50;
 
@@ -104,6 +106,27 @@ const fail = (userId: string, reason: unknown): void => {
   deferred.reject(reason);
 };
 
+/** Best-effort HTTP status extraction from an axios error or ApiContractError. */
+const extractStatus = (error: unknown): number | undefined => {
+  if (error && typeof error === "object") {
+    const e = error as { response?: { status?: number }; statusCode?: number };
+    return e.response?.status ?? e.statusCode;
+  }
+  return undefined;
+};
+
+/** Parse Retry-After (seconds) from a 429 response, in ms. */
+const extractRetryAfterMs = (error: unknown): number | undefined => {
+  if (error && typeof error === "object") {
+    const headers = (error as { response?: { headers?: Record<string, unknown> } })
+      .response?.headers;
+    const raw = headers?.["retry-after"] ?? headers?.["Retry-After"];
+    const seconds = Number.parseInt(String(raw ?? ""), 10);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  }
+  return undefined;
+};
+
 const runBatch = async (userIds: string[]): Promise<void> => {
   try {
     const map = await userApi.getUsersByIds(userIds);
@@ -111,7 +134,7 @@ const runBatch = async (userIds: string[]): Promise<void> => {
       const summary = map[userId] ?? null;
       // Cache positives for the full window; cache explicit nulls briefly so we
       // don't hammer the endpoint for genuinely missing users, but never let a
-      // transient failure poison the cache (that path rejects instead).
+      // transient failure poison the cache (that path resolves null instead).
       summaryCache.set(
         userId,
         summary,
@@ -120,31 +143,50 @@ const runBatch = async (userIds: string[]): Promise<void> => {
       settle(userId, summary);
     }
   } catch (error) {
+    const status = extractStatus(error);
     if (import.meta.env.DEV) {
       logger.warn("user-batch", "batch_request_failed", {
         count: userIds.length,
+        status,
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    await fallbackPerId(userIds, error);
+
+    // Endpoint genuinely missing (older backend) — DEV-only single-fetch
+    // fallback so local dev still works. NEVER in production, and NEVER for
+    // 429/5xx/network (those must not turn one batch into an N-request storm).
+    if (import.meta.env.DEV && (status === 404 || status === 501)) {
+      await fallbackPerId(userIds);
+      return;
+    }
+
+    // Rate limited: respect Retry-After by negative-caching for the cooldown so
+    // re-renders during the window don't re-queue a storm.
+    if (status === 429) {
+      const cooldownUntil =
+        Date.now() + (extractRetryAfterMs(error) ?? RATE_LIMIT_COOLDOWN_MS);
+      for (const userId of userIds) {
+        summaryCache.set(userId, null, cooldownUntil);
+        settle(userId, null);
+      }
+      return;
+    }
+
+    // Transient (network / 5xx): resolve null WITHOUT caching so the next render
+    // retries — but no per-id fan-out.
+    for (const userId of userIds) {
+      settle(userId, null);
+    }
   }
 };
 
 /**
- * DEV-only fallback used when the batch request fails (e.g. the endpoint is not
- * deployed yet). Resolves each id via the legacy single-user endpoint so local
- * development still works against an older backend. In production we reject so
- * the caller falls back to its existing display data without an N+1 storm.
+ * DEV-only fallback used ONLY when the batch endpoint is missing (404/501),
+ * e.g. running the FE against an older backend. Resolves each id via the legacy
+ * single-user endpoint so local development still works. Never reached in
+ * production.
  */
-const fallbackPerId = async (
-  userIds: string[],
-  originalError: unknown,
-): Promise<void> => {
-  if (!import.meta.env.DEV) {
-    for (const userId of userIds) fail(userId, originalError);
-    return;
-  }
-
+const fallbackPerId = async (userIds: string[]): Promise<void> => {
   logger.warn("user-batch", "falling_back_to_single_fetch", {
     count: userIds.length,
   });
