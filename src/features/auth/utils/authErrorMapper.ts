@@ -1,5 +1,5 @@
 import axios from "axios";
-import { ErrorCode, type ApiFailure } from "@hacom/chat-shared-types/core";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type {
   ActivationContext,
   ActivationNextAction,
@@ -11,6 +11,8 @@ interface ApiErrorEnvelope {
   code: string;
   message: string;
   details?: unknown;
+  /** Số giây phải chờ trước khi thử lại (rate-limit), nếu backend cung cấp. */
+  retryAfterSeconds?: number;
 }
 
 export type AuthFailureKind =
@@ -27,6 +29,8 @@ export interface AuthFailureResolution {
   code: string;
   message: string;
   activationContext?: ActivationContext;
+  /** Số giây phải chờ trước khi thử lại (rate-limit), nếu xác định được. */
+  retryAfterSeconds?: number;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -46,21 +50,100 @@ const asString = (value: unknown): string | null => {
 const resolveActivationNextAction = (value: unknown): ActivationNextAction =>
   value === "SET_PASSWORD" ? "SET_PASSWORD" : "VERIFY_OTP";
 
+const asPositiveInt = (value: unknown): number | null => {
+  const n = typeof value === "number" ? value : Number(asString(value));
+  return Number.isFinite(n) && n > 0 ? Math.ceil(n) : null;
+};
+
+/**
+ * Số giây phải chờ trước khi thử lại. Ưu tiên header `Retry-After`
+ * (giây hoặc HTTP-date), sau đó tới các field trong details của envelope.
+ */
+const readRetryAfterSeconds = (
+  headers: unknown,
+  details: unknown,
+): number | undefined => {
+  const headerValue = asRecord(headers)?.["retry-after"];
+  if (headerValue !== undefined && headerValue !== null) {
+    const asSeconds = asPositiveInt(headerValue);
+    if (asSeconds) {
+      return asSeconds;
+    }
+    const asDate = Date.parse(String(headerValue));
+    if (!Number.isNaN(asDate)) {
+      const diff = Math.ceil((asDate - Date.now()) / 1000);
+      if (diff > 0) {
+        return diff;
+      }
+    }
+  }
+
+  const detailRecord = asRecord(details);
+  if (detailRecord) {
+    const fromSeconds =
+      asPositiveInt(detailRecord.retryAfter) ??
+      asPositiveInt(detailRecord.retryAfterSeconds) ??
+      asPositiveInt(detailRecord.retry_after);
+    if (fromSeconds) {
+      return fromSeconds;
+    }
+    const fromMs =
+      asPositiveInt(detailRecord.retryAfterMs) ??
+      asPositiveInt(detailRecord.retry_after_ms);
+    if (fromMs) {
+      return Math.ceil(fromMs / 1000);
+    }
+  }
+
+  return undefined;
+};
+
 const readApiFailureEnvelope = (error: unknown): ApiErrorEnvelope | null => {
   if (!axios.isAxiosError(error)) {
     return null;
   }
 
-  const payload = error.response?.data as ApiFailure | undefined;
-  if (!payload || payload.success !== false) {
+  const response = error.response;
+  if (!response) {
     return null;
   }
 
+  const payload = asRecord(response.data);
+  if (payload && payload.success === false) {
+    // Hỗ trợ CẢ HAI shape envelope:
+    //  - Chuẩn:  { success:false, statusCode, message, error:{ code, details } }
+    //  - Phẳng:  { success:false, code, error:"<message>", details } (vd 429 RATE_LIMITED)
+    const errorField = payload.error;
+    const errorRecord = asRecord(errorField);
+
+    const code =
+      asString(payload.code) ?? asString(errorRecord?.code) ?? `HTTP_${response.status}`;
+    const message =
+      asString(payload.message) ??
+      asString(typeof errorField === "string" ? errorField : errorRecord?.message) ??
+      "";
+    const details = payload.details ?? errorRecord?.details;
+    const statusCode =
+      asPositiveInt(payload.statusCode) ?? response.status;
+
+    return {
+      statusCode,
+      code,
+      message,
+      details,
+      retryAfterSeconds: readRetryAfterSeconds(response.headers, details),
+    };
+  }
+
+  // Lỗi không có cờ success:false (vd: rate-limit từ throttler trả body
+  // { statusCode, message }). Tổng hợp từ HTTP status để vẫn map đúng thông
+  // báo theo trạng thái thay vì rơi về fallback "sai mật khẩu".
   return {
-    statusCode: payload.statusCode,
-    code: payload.error.code,
-    message: payload.message,
-    details: payload.error.details,
+    statusCode: response.status,
+    code: `HTTP_${response.status}`,
+    message: asString(payload?.message) ?? "",
+    details: payload,
+    retryAfterSeconds: readRetryAfterSeconds(response.headers, payload),
   };
 };
 
@@ -101,6 +184,7 @@ export const mapAuthErrorMessage = (
   code: string,
   fallbackMessage: string,
   t?: (key: string, options?: Record<string, unknown>) => string,
+  statusCode?: number,
 ): string => {
   if (!t) {
     return fallbackMessage;
@@ -122,12 +206,30 @@ export const mapAuthErrorMessage = (
     return t("auth:activation.verifyOtp.expiredCode");
   }
 
+  // Rate-limit theo NGỮ CẢNH OTP/gửi lại mã — giữ thông báo dành riêng cho OTP.
   if (
-    code === ErrorCode.RATE_LIMITED ||
     code === ErrorCode.OTP_RESEND_BLOCKED ||
     code === ErrorCode.OTP_TOO_MANY_ATTEMPTS
   ) {
     return t("auth:activation.verifyOtp.rateLimited");
+  }
+
+  // Sai tài khoản/mật khẩu khi đăng nhập.
+  if (
+    code === ErrorCode.INVALID_CREDENTIALS ||
+    code === ErrorCode.AUTH_INVALID_CREDENTIALS
+  ) {
+    return t("auth:login.invalidCredentials");
+  }
+
+  // Quá nhiều yêu cầu (đăng nhập): RATE_LIMITED / RATE_LIMIT_EXCEEDED hoặc bất
+  // kỳ phản hồi HTTP 429 nào — KHÔNG được hiển thị thành "sai mật khẩu".
+  if (
+    statusCode === 429 ||
+    code === ErrorCode.RATE_LIMITED ||
+    code === ErrorCode.RATE_LIMIT_EXCEEDED
+  ) {
+    return t("auth:login.rateLimited");
   }
 
   if (code === ErrorCode.USER_PROFILE_FORBIDDEN_FIELD) {
@@ -154,7 +256,12 @@ export const resolveAuthFailure = (
     };
   }
 
-  const message = mapAuthErrorMessage(envelope.code, envelope.message, t);
+  const message = mapAuthErrorMessage(
+    envelope.code,
+    envelope.message,
+    t,
+    envelope.statusCode,
+  );
   const activationContext = resolveActivationContext(envelope);
 
   if (activationContext) {
@@ -195,7 +302,9 @@ export const resolveAuthFailure = (
   }
 
   if (
+    envelope.statusCode === 429 ||
     envelope.code === ErrorCode.RATE_LIMITED ||
+    envelope.code === ErrorCode.RATE_LIMIT_EXCEEDED ||
     envelope.code === ErrorCode.OTP_RESEND_BLOCKED ||
     envelope.code === ErrorCode.OTP_TOO_MANY_ATTEMPTS
   ) {
@@ -203,6 +312,7 @@ export const resolveAuthFailure = (
       kind: "otp_rate_limited",
       code: envelope.code,
       message,
+      retryAfterSeconds: envelope.retryAfterSeconds,
     };
   }
 

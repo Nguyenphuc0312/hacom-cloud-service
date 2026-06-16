@@ -24,11 +24,40 @@ export const LoginPage: React.FC = () => {
     authStatus,
     lockedAccount,
     error,
+    rateLimitedUntil,
     clearError,
     setLockedAccount,
     setAuthStatus,
   } = useAuthStore();
 
+  // Đồng hồ đếm ngược khi bị rate-limit: tick mỗi giây để cập nhật thời gian
+  // còn lại hiển thị trong form.
+  const [nowTs, setNowTs] = React.useState(() => Date.now());
+  useEffect(() => {
+    if (!rateLimitedUntil || rateLimitedUntil <= Date.now()) {
+      return;
+    }
+    setNowTs(Date.now());
+    const intervalId = window.setInterval(() => setNowTs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [rateLimitedUntil]);
+
+  const rateLimitRemainingMs =
+    rateLimitedUntil && rateLimitedUntil > nowTs ? rateLimitedUntil - nowTs : 0;
+
+  const rateLimitError = React.useMemo(() => {
+    if (rateLimitRemainingMs <= 0) {
+      return null;
+    }
+    const totalSeconds = Math.ceil(rateLimitRemainingMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const time =
+      minutes > 0
+        ? t("auth:login.durationMinutesSeconds", { minutes, seconds })
+        : t("auth:login.durationSeconds", { seconds });
+    return t("auth:login.rateLimitedCountdown", { time });
+  }, [rateLimitRemainingMs, t]);
 
   useEffect(() => {
     clearError();
@@ -56,6 +85,8 @@ export const LoginPage: React.FC = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     if (submitLockRef.current || isLoading) return;
+    // Đang trong thời gian chờ rate-limit: không gửi tiếp, giữ nguyên đếm ngược.
+    if (rateLimitedUntil && rateLimitedUntil > Date.now()) return;
     submitLockRef.current = true;
 
     try {
@@ -173,7 +204,9 @@ export const LoginPage: React.FC = () => {
               isLoading={isLoading}
               isSubmitting={isSubmitting}
               authError={
-                authStatus === "locked" || authStatus === "disabled" ? null : error
+                authStatus === "locked" || authStatus === "disabled"
+                  ? null
+                  : rateLimitError ?? error
               }
               onSubmit={handleSubmit(onSubmit)}
             />
