@@ -311,6 +311,9 @@ export const fetchThumbnailUrlsShared = async (
   return { ...cached, ...resolved };
 };
 
+/** Canonical name for the shared batch fetch (alias of fetchThumbnailUrlsShared). */
+export const getBatchThumbnailUrls = fetchThumbnailUrlsShared;
+
 /** Synchronous fresh-only read from the shared thumbnail cache. */
 export const readThumbnailCache = (
   fileId: string,
@@ -323,6 +326,11 @@ export const primeThumbnailCache = (items: ThumbnailUrlItem[]): void => {
     if (!item?.fileId) continue;
     THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
   }
+};
+
+/** Drop a single fileId from the shared cache (e.g. broken signed URL). */
+export const evictThumbnailCache = (fileId: string): void => {
+  if (fileId) THUMBNAIL_CACHE.delete(fileId);
 };
 
 export const useBatchThumbnailUrl = (

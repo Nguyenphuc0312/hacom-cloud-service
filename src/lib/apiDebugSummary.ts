@@ -23,6 +23,8 @@ const ENABLED =
 /** Window after the first request in which calls are aggregated, then flushed. */
 const WINDOW_MS = 10_000;
 const MAX_SAMPLE_IDS = 5;
+/** GET /users/:id count in one window above which we flag a likely N+1. */
+const USERS_BY_ID_WARN_THRESHOLD = 3;
 
 interface PendingCall {
   endpoint: string;
@@ -110,6 +112,17 @@ const flush = (): void => {
     console.groupEnd?.();
   } else {
     logger.info("api-debug", "request_summary", { rows });
+  }
+
+  // Hygiene guard: a burst of GET /users/:id means a list-render N+1 slipped
+  // back in (the canonical path is userBatchLoader -> POST /users/batch).
+  const perIdRow = rows.find((r) => r.endpoint === "GET /users/:id");
+  if (perIdRow && perIdRow.count >= USERS_BY_ID_WARN_THRESHOLD) {
+    console.warn(
+      `API Hygiene Warning: GET /users/:id called ${perIdRow.count}x during a ` +
+        `${WINDOW_MS / 1000}s window. Use userBatchLoader (loadUserProfile/` +
+        `loadUserProfiles) or summary fields, not per-item profile fetches.`,
+    );
   }
 };
 

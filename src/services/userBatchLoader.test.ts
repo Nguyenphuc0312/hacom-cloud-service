@@ -125,4 +125,39 @@ describe("userBatchLoader", () => {
     expect(result).toEqual(summary("seeded"));
     expect(getUsersByIds).not.toHaveBeenCalled();
   });
+
+  it("chunks > MAX_FLUSH_BATCH (50) ids into multiple batches", async () => {
+    getUsersByIds.mockImplementation(async (ids: string[]) =>
+      Object.fromEntries(ids.map((id) => [id, summary(id)])),
+    );
+
+    const ids = Array.from({ length: 120 }, (_, i) => `u${i}`);
+    const promise = loadUserProfiles(ids);
+    await vi.advanceTimersByTimeAsync(70);
+    const map = await promise;
+
+    // 120 ids -> slices of 50/50/20 -> 3 batch requests.
+    expect(getUsersByIds).toHaveBeenCalledTimes(3);
+    expect(Object.keys(map)).toHaveLength(120);
+  });
+
+  it("on 429 honors Retry-After (cooldown cache) and never falls back per-id", async () => {
+    getUsersByIds.mockRejectedValueOnce({
+      response: { status: 429, headers: { "retry-after": "1" } },
+    });
+
+    const p = loadUserProfile("r");
+    await vi.advanceTimersByTimeAsync(70);
+    expect(await p).toBeNull();
+
+    // No per-id storm.
+    expect(getUserById).not.toHaveBeenCalled();
+    // Cooldown is cached (null is a cache HIT, not undefined) so re-renders during
+    // the window do not re-queue a request.
+    expect(getCachedUserProfileSummary("r")).toBeNull();
+
+    const p2 = await loadUserProfile("r");
+    expect(p2).toBeNull();
+    expect(getUsersByIds).toHaveBeenCalledTimes(1);
+  });
 });
