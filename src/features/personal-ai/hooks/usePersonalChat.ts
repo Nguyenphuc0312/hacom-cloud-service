@@ -3,16 +3,12 @@ import { streamPersonalChat, PersonalAiError } from "../api/personalAiApi";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
-  fetchDepartments,
   fetchPersonalSessionMessages,
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import type { PersonalChatMessage } from "../types";
-import type {
-  DepartmentSelectionRequest,
-  WorkReportFormRequest,
-} from "../../ai-assistant/types";
+import type { WorkReportFormRequest } from "../../ai-assistant/types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
@@ -112,51 +108,12 @@ export function usePersonalChat() {
       };
       addMessage(conversationId, userMessage);
 
-      // Detect #baocaocv — FE tự xử lý, không cần SSE từ backend
-      if (BAOCAOCV_TRIGGER.test(trimmed)) {
-        const assistantId = crypto.randomUUID();
-        const loadingMsg: PersonalChatMessage = {
-          id: assistantId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-          isStreaming: true,
-          thinkingPhase: "searching",
-        };
-        addMessage(conversationId, loadingMsg);
-        const convIdSnapshot = conversationId;
-        try {
-          const res = await fetchDepartments();
-          const options = (res.departments ?? []).map((d) => ({
-            label: d.department,
-            value: d.department,
-            type: "department",
-            company: d.company,
-            count: d.count,
-          }));
-          const selectionData: DepartmentSelectionRequest = {
-            selection_type: "department_report",
-            title: "Chọn phòng ban/đơn vị để xem báo cáo công việc ngày:",
-            options,
-            multi_select: true,
-            date_range: true,
-            fetch_endpoint: "GET /api/work-reports",
-          };
-          patchMessage(convIdSnapshot, assistantId, {
-            content: "",
-            selectionRequest: selectionData,
-            isStreaming: false,
-            thinkingPhase: null,
-          });
-        } catch {
-          patchMessage(convIdSnapshot, assistantId, {
-            content: "Không thể tải danh sách phòng ban. Vui lòng thử lại.",
-            isStreaming: false,
-            thinkingPhase: null,
-          });
-        }
-        return;
-      }
+      // #baocaocv — KHÔNG chặn ở FE nữa. Để request chạy qua SSE để BE quyết
+      // định theo quyền của user:
+      //   • Admin/Giám đốc → event `selection_request` → DepartmentSelector
+      //   • User thường     → event `token` → nội dung báo cáo của bản thân
+      // (xem fe-baocaocv-regular-user-fix.md). Streaming path bên dưới đã xử lý
+      // cả `onToken` lẫn `onSelectionRequest`, nên chỉ cần để nó chạy tiếp.
 
       // Detect #baocaocongviec — FE trực tiếp hiển thị form báo cáo công việc ngày
       if (BAOCAOCONGVIEC_TRIGGER.test(trimmed)) {
@@ -219,13 +176,23 @@ export function usePersonalChat() {
         return;
       }
 
+      // #baocaocv — đánh dấu là yêu cầu xem báo cáo. BE quyết định theo quyền:
+      //  • Admin/Giám đốc → event `selection_request` → DepartmentSelector
+      //  • User thường     → event `token` → nội dung báo cáo của bản thân,
+      //    hiển thị trong bordered box "Xem báo cáo công việc".
+      const isReportRequest = BAOCAOCV_TRIGGER.test(trimmed);
+
       const assistantMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
         content: "",
         timestamp: new Date(),
         isStreaming: true,
-        thinkingPhase: selectedDocumentIds.length > 0 ? "searching" : null,
+        thinkingPhase:
+          isReportRequest || selectedDocumentIds.length > 0
+            ? "searching"
+            : null,
+        ...(isReportRequest && { reportRequest: true }),
       };
       addMessage(conversationId, assistantMessage);
 
