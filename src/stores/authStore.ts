@@ -167,6 +167,8 @@ interface AuthState {
   isInitialized: boolean;
   registrationStatus: RegistrationStatus;
   error: string | null;
+  /** Mốc thời gian (epoch ms) được phép thử đăng nhập lại sau khi bị rate-limit. */
+  rateLimitedUntil: number | null;
 
   login: (data: LoginFormData) => Promise<LoginResult>;
   applyLoginResponse: (payload: unknown, rememberMe?: boolean) => void;
@@ -480,6 +482,7 @@ export const useAuthStore = create<AuthState>()(
         isInitialized: false,
         registrationStatus: "idle",
         error: null,
+        rateLimitedUntil: null,
 
         applyLoginResponse: (payload, rememberMe = false) => {
           const normalizedPayload = normalizeLoginPayload(payload);
@@ -570,6 +573,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: true,
             error: null,
             lockedAccount: null,
+            rateLimitedUntil: null,
           });
 
           try {
@@ -644,9 +648,17 @@ export const useAuthStore = create<AuthState>()(
               i18n.t("error:auth.loginFailed"),
             );
 
+            // Khi bị rate-limit, lưu mốc cho phép thử lại để form hiển thị đếm
+            // ngược. Nếu backend không trả Retry-After, mặc định chờ 60 giây.
+            const rateLimitedUntil =
+              failure.kind === "otp_rate_limited"
+                ? Date.now() + (failure.retryAfterSeconds ?? 60) * 1000
+                : null;
+
             set({
               isLoading: false,
               error: errorMessage,
+              rateLimitedUntil,
               authStatus: "anonymous",
               isBootstrappingAuth: false,
               activationContext: null,
@@ -916,7 +928,7 @@ export const useAuthStore = create<AuthState>()(
           }
         },
 
-        clearError: () => set({ error: null }),
+        clearError: () => set({ error: null, rateLimitedUntil: null }),
 
         setPendingVerificationEmail: (email, source) =>
           set((state) => {
