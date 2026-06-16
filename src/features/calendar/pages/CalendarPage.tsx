@@ -991,11 +991,10 @@ export const CalendarPage: React.FC = () => {
         description: data.notes || undefined,
         startAt,
         endAt,
-        // hr-api-service eventType enum CHƯA có "PERSONAL" (MEETING|TASK|LEAVE|
-        // DEADLINE|REMINDER|OTHER). Tạm dùng "OTHER" + visibility PRIVATE cho
-        // lịch cá nhân; FE map OTHER → "personal" để hiển thị/lọc.
-        // TODO(backend): thêm eventType "PERSONAL" — xem yeucauapicalenda.md.
-        eventType: "OTHER",
+        // Lịch cá nhân: eventType PERSONAL + visibility PRIVATE (chỉ owner thấy).
+        // Backend (hr-api-service) đã hỗ trợ enum PERSONAL chính thức và tự chặn
+        // participants cho event PERSONAL.
+        eventType: "PERSONAL",
         visibility: "PRIVATE",
         isAllDay: false,
         timezone,
@@ -1053,7 +1052,7 @@ export const CalendarPage: React.FC = () => {
         id: event.id,
         title: localizeEventTitle(event.title),
         date: toLocalDateString(event.startAt),
-        type: mapApiEventTypeToLocal(event.eventType),
+        type: mapEventTypeForDisplay(event),
         description: event.description ?? undefined,
         time: toLocalTimeString(event.startAt),
         startAt: event.startAt,
@@ -1104,7 +1103,7 @@ export const CalendarPage: React.FC = () => {
       id: event.id,
       title: localizeEventTitle(event.title),
       date: toLocalDateString(event.startAt),
-      type: mapApiEventTypeToLocal(event.eventType),
+      type: mapEventTypeForDisplay(event),
       description: event.description ?? undefined,
       time: toLocalTimeString(event.startAt),
       startAt: event.startAt,
@@ -2112,10 +2111,10 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
       return "attendance";
     case "TASK":
       return "task";
-    // "OTHER" hiện là kho chứa lịch cá nhân (backend chưa có eventType PERSONAL)
-    // → map sang "personal" để hiển thị/lọc đúng. Xem yeucauapicalenda.md.
+    // "OTHER" là loại chung (không còn là kho chứa lịch cá nhân — backend đã có
+    // eventType PERSONAL). Map sang "work". Sự kiện cá nhân legacy lưu dưới
+    // OTHER+PRIVATE được xử lý ở call site (xem mapEventTypeForDisplay).
     case "OTHER":
-      return "personal";
     case "LEAVE":
     case "DEADLINE":
     case "REMINDER":
@@ -2124,8 +2123,31 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
     case "WORK":
       return "work";
     default:
-      return "personal";
+      return "work";
   }
+};
+
+/**
+ * Resolve the local EventType for display from a full API event.
+ *
+ * Ưu tiên eventType mới (PERSONAL). Đồng thời giữ tương thích ngược TẠM THỜI:
+ * sự kiện legacy được lưu dưới OTHER + PRIVATE + không có participants vốn là
+ * lịch cá nhân (giai đoạn stopgap trước khi backend có enum PERSONAL) → vẫn
+ * hiển thị là "personal" để không hiển thị sai loại.
+ *
+ * TODO(remove-after-backfill): bỏ nhánh legacy bên dưới sau khi đã chạy
+ *   hr-api-service: `npm run calendar:backfill-personal-events -- --since=<deploy-date> --apply`
+ * (lúc đó mọi OTHER+PRIVATE+no-participants đã được chuyển sang PERSONAL).
+ */
+const mapEventTypeForDisplay = (event: HRCalendarEvent): EventType => {
+  if (
+    event.eventType === "OTHER" &&
+    event.visibility === "PRIVATE" &&
+    (event.participants?.length ?? 0) === 0
+  ) {
+    return "personal";
+  }
+  return mapApiEventTypeToLocal(event.eventType);
 };
 
 /**
@@ -2134,8 +2156,7 @@ const mapApiEventTypeToLocal = (apiType: string): EventType => {
 const mapLocalTypeToApi = (localType: string): string => {
   switch (localType) {
     case "personal":
-      // Backend chưa có "PERSONAL" → lịch cá nhân lưu dưới "OTHER".
-      return "OTHER";
+      return "PERSONAL";
     case "meeting":
       return "MEETING";
     case "attendance":

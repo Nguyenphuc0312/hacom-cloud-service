@@ -43,6 +43,7 @@ import {
   showSingletonMessageToast,
 } from "../utils/messageToast";
 import { RoomType } from "../types";
+import { markPreviewReady, markPreviewFailed } from "./useBatchThumbnailUrl";
 import {
   broadcastUnreadSnapshot,
   emitBrowserNotification,
@@ -1791,6 +1792,24 @@ export const useWebSocket = (
         }
 
         applyConversationParticipantSummary(conversationId, participant);
+      },
+      onAttachmentPreviewReady: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+        const fileId =
+          asString(payload.fileId) ?? asString(payload.attachmentId);
+        if (!fileId) return;
+        // Evict the cached PENDING entry + nudge mounted ImageMessages to refetch
+        // a fresh signed URL. Idempotent: safe if polling already resolved it.
+        markPreviewReady(fileId);
+      },
+      onAttachmentPreviewFailed: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+        const fileId =
+          asString(payload.fileId) ?? asString(payload.attachmentId);
+        if (!fileId) return;
+        markPreviewFailed(fileId);
       },
     });
     unsubscribersRef.current.push(unsubscribeChatEvents);

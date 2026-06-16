@@ -30,6 +30,7 @@ import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 import { isDefiniteAuthRefreshFailure } from "../services/authRefreshErrorClassifier";
 import { logger } from "../utils/logger";
 import { apiPerfLogger } from "../utils/apiPerfLogger";
+import { recordRequestStart, recordRequestEnd } from "./apiDebugSummary";
 import { softNavigate } from "./softNavigator";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
@@ -316,6 +317,8 @@ apiClient.interceptors.request.use(
     // Phase 2: Track API call start
     const endpoint = `${config.method?.toUpperCase() ?? "GET"} ${config.url ?? ""}`;
     apiPerfLogger.startApiCall(endpoint, config.method?.toUpperCase() ?? "GET");
+    // Dev-only axios request summary (VITE_API_DEBUG_REQUESTS=true).
+    recordRequestStart(requestId, config.method, config.url);
 
     if (!requestConfig.signal || requestConfig._managedSignal) {
       const controller = new AbortController();
@@ -364,11 +367,9 @@ apiClient.interceptors.response.use(
   (response) => {
     releasePendingRequest(response.config);
     // Phase 2: Track API call metrics
-    apiPerfLogger.endApiCall(
-      (response.config as AuthRequestConfig)._requestId ?? "",
-      response.status,
-      false,
-    );
+    const okRequestId = (response.config as AuthRequestConfig)._requestId ?? "";
+    apiPerfLogger.endApiCall(okRequestId, response.status, false);
+    recordRequestEnd(okRequestId, response.status);
     return response;
   },
   async (error: AxiosError) => {
@@ -378,6 +379,7 @@ apiClient.interceptors.response.use(
     const requestId = originalRequest?._requestId ?? "";
     if (requestId) {
       apiPerfLogger.endApiCall(requestId, error.response?.status ?? 0, false);
+      recordRequestEnd(requestId, error.response?.status);
     }
 
     if (error.response?.status === 403) {

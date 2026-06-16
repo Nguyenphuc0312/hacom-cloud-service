@@ -102,10 +102,22 @@ Tất cả gọi qua `hrApiClient` → `HR_API_BASE_URL`.
 - **update**: gửi cả chuỗi rỗng `""` để **xóa** ghi chú/địa điểm cũ (backend chỉ bỏ qua khi `undefined`); `participantIds` là full set mong muốn — server reconcile (thêm người mới tag, gỡ người bỏ tag).
 
 ### 2.3 Kiểu dữ liệu chính `HRCalendarEvent`
-- enums: `eventType` ∈ MEETING|TASK|LEAVE|DEADLINE|REMINDER|OTHER; `visibility` ∈ PRIVATE|BUSY_ONLY|TEAM|UNIT|PUBLIC.
+- enums: `eventType` ∈ MEETING|TASK|LEAVE|DEADLINE|REMINDER|OTHER|PERSONAL; `visibility` ∈ PRIVATE|BUSY_ONLY|TEAM|UNIT|PUBLIC.
 - `participants: HRCalendarParticipant[]` mỗi người có `response` ∈ PENDING|ACCEPTED|DECLINED|MAYBE, kèm `employeeId/authUserId/employeeCode/fullName/departmentName`.
 - `metadata?: { meetingChairman?, meetingFormat?, attendees?: string[] }` — null khi `BUSY_ONLY` bị mask.
 - cờ quyền: `canEdit`, `canDelete`, `canViewFullDetails`, `isParticipant`.
+
+#### `PERSONAL` — lịch cá nhân
+- Dùng cho lịch cá nhân của một user (vd: khám sức khỏe, việc riêng).
+- Mặc định `visibility = PRIVATE` nếu FE không truyền `visibility`.
+- **Không có participants** — gửi `participantIds`/`participants` cho event `PERSONAL` sẽ bị backend từ chối **422** với message `PERSONAL events cannot have participants`.
+- Chỉ owner nhìn thấy (PRIVATE) — không xuất hiện trong lịch người khác / phòng ban / công ty.
+- Owner luôn có `canEdit = true`, `canDelete = true`.
+- Không gửi notification/invitation (vì không có participants).
+- Lọc theo loại: `GET /calendar/events?type=PERSONAL` chỉ trả event `PERSONAL` (filter `type`/`visibility` được áp ở backend).
+- **Alias `type`**: `createEvent` chấp nhận cả `eventType` và alias `type`. Nếu truyền cả hai mà **khác nhau** → **400** (`Conflicting event type`). Giống nhau hoặc chỉ một field → OK.
+
+> **Lưu ý `capabilities` / `mode`**: các field `mode` và `capabilities` (gồm `canCreatePersonalEvent`) ở response §2.1 là **optional** và hiện do FE xử lý graceful-fallback; endpoint `GET /calendar/events` của hr-api-service hiện **chưa phát ra** chúng (trả `{ data, pagination }`). FE coi vắng mặt = `HR_LINKED` và luôn cho phép tạo lịch cá nhân. Không dựa vào `canCreatePersonalEvent` như một cờ bắt buộc từ backend cho tới khi endpoint capability được triển khai.
 
 ---
 
