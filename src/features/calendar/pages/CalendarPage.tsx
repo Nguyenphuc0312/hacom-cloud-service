@@ -168,6 +168,21 @@ const localizeEventTitle = (title: string | null | undefined): string => {
   return t.toLowerCase() === "busy" ? "Bận" : t;
 };
 
+/**
+ * Map lựa chọn quyền xem trên form (riêng tư / công khai) sang enum visibility
+ * của hr-api-service:
+ *  - "private" → BUSY_ONLY: người khác xem lịch chỉ thấy ô "Bận" (backend che
+ *    tiêu đề thành "Busy"), không lộ nội dung.
+ *  - "public"  → PUBLIC: ai xem lịch cũng thấy đầy đủ chi tiết.
+ * (PRIVATE thật sự = ẩn hoàn toàn nên KHÔNG dùng cho lựa chọn "riêng tư" này.)
+ */
+const formVisibilityToApi = (v: "private" | "public" | undefined): string =>
+  v === "public" ? "PUBLIC" : "BUSY_ONLY";
+
+/** Map enum visibility từ API về lựa chọn form khi mở chỉnh sửa. */
+const apiVisibilityToForm = (v: string | null | undefined): "private" | "public" =>
+  v === "PUBLIC" ? "public" : "private";
+
 /** Meeting extras stored in HR event metadata JSON. */
 interface MeetingMetadata {
   meetingChairman?: string;
@@ -513,11 +528,11 @@ const EventDetailModal: React.FC<{
                 <div>
                   <p className="text-xs font-medium text-text-muted">Quyền xem</p>
                   <p className="text-sm text-text-primary">
-                    {visibility === "PRIVATE" ? "Riêng tư" :
+                    {visibility === "PUBLIC" ? "Công khai" :
                       visibility === "TEAM" ? "Nhóm" :
                       visibility === "UNIT" ? "Đơn vị" :
-                      visibility === "PUBLIC" ? "Công khai" :
-                      "Chỉ hiển thị trạng thái bận"}
+                      visibility === "PRIVATE" ? "Riêng tư (ẩn hoàn toàn)" :
+                      "Riêng tư (người khác chỉ thấy “Bận”)"}
                   </p>
                 </div>
               </div>
@@ -949,7 +964,8 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         eventType: "MEETING",
-        visibility: "PRIVATE",
+        // Quyền xem theo lựa chọn trên form (mặc định riêng tư → BUSY_ONLY).
+        visibility: formVisibilityToApi(data.visibility),
         isAllDay: false,
         location: data.location || undefined,
         timezone,
@@ -991,11 +1007,11 @@ export const CalendarPage: React.FC = () => {
         description: data.notes || undefined,
         startAt,
         endAt,
-        // Lịch cá nhân: eventType PERSONAL + visibility PRIVATE (chỉ owner thấy).
-        // Backend (hr-api-service) đã hỗ trợ enum PERSONAL chính thức và tự chặn
-        // participants cho event PERSONAL.
+        // Lịch cá nhân: eventType PERSONAL, không có participants (backend tự chặn).
+        // Quyền xem theo lựa chọn trên form: riêng tư → BUSY_ONLY (người khác chỉ
+        // thấy "Bận"), công khai → PUBLIC (ai cũng xem được chi tiết).
         eventType: "PERSONAL",
-        visibility: "PRIVATE",
+        visibility: formVisibilityToApi(data.visibility),
         isAllDay: false,
         timezone,
       };
@@ -1090,6 +1106,7 @@ export const CalendarPage: React.FC = () => {
         chairman: meta.meetingChairman ?? "",
         participants: participantNames,
         format: meta.meetingFormat === "online" ? "online" : "offline",
+        visibility: apiVisibilityToForm(event.visibility),
         location: event.location ?? "",
         notes: "",
       };
@@ -1430,6 +1447,7 @@ export const CalendarPage: React.FC = () => {
         startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
         endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
         notes: extEvent.description || "",
+        visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       };
       setEditingPersonalEvent(personalData);
       return;
@@ -1461,6 +1479,7 @@ export const CalendarPage: React.FC = () => {
       chairman: meta.meetingChairman ?? "",
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",
+      visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       location: extEvent.meetingLocation || "",
       notes: extEvent.description || "",
       createdById: extEvent.ownerId,
@@ -1534,6 +1553,7 @@ export const CalendarPage: React.FC = () => {
         endAt,
         location: data.location,
         timezone,
+        visibility: formVisibilityToApi(data.visibility),
         participantIds,
         attendees: freeTextNames,
         meetingChairman: data.chairman || undefined,
@@ -1568,6 +1588,7 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         timezone,
+        visibility: formVisibilityToApi(data.visibility),
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
