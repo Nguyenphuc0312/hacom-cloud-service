@@ -168,6 +168,21 @@ const localizeEventTitle = (title: string | null | undefined): string => {
   return t.toLowerCase() === "busy" ? "Bận" : t;
 };
 
+/**
+ * Map lựa chọn quyền xem trên form (riêng tư / công khai) sang enum visibility
+ * của hr-api-service:
+ *  - "private" → BUSY_ONLY: người khác xem lịch chỉ thấy ô "Bận" (backend che
+ *    tiêu đề thành "Busy"), không lộ nội dung.
+ *  - "public"  → PUBLIC: ai xem lịch cũng thấy đầy đủ chi tiết.
+ * (PRIVATE thật sự = ẩn hoàn toàn nên KHÔNG dùng cho lựa chọn "riêng tư" này.)
+ */
+const formVisibilityToApi = (v: "private" | "public" | undefined): string =>
+  v === "public" ? "PUBLIC" : "BUSY_ONLY";
+
+/** Map enum visibility từ API về lựa chọn form khi mở chỉnh sửa. */
+const apiVisibilityToForm = (v: string | null | undefined): "private" | "public" =>
+  v === "PUBLIC" ? "public" : "private";
+
 /** Meeting extras stored in HR event metadata JSON. */
 interface MeetingMetadata {
   meetingChairman?: string;
@@ -513,11 +528,11 @@ const EventDetailModal: React.FC<{
                 <div>
                   <p className="text-xs font-medium text-text-muted">Quyền xem</p>
                   <p className="text-sm text-text-primary">
-                    {visibility === "PRIVATE" ? "Riêng tư" :
+                    {visibility === "PUBLIC" ? "Công khai" :
                       visibility === "TEAM" ? "Nhóm" :
                       visibility === "UNIT" ? "Đơn vị" :
-                      visibility === "PUBLIC" ? "Công khai" :
-                      "Chỉ hiển thị trạng thái bận"}
+                      visibility === "PRIVATE" ? "Riêng tư (ẩn hoàn toàn)" :
+                      "Riêng tư (người khác chỉ thấy “Bận”)"}
                   </p>
                 </div>
               </div>
@@ -906,6 +921,16 @@ export const CalendarPage: React.FC = () => {
     setViewingUser(userId, userName);
   };
 
+  // Quay về "Lịch của tôi" ngay tại chỗ (không cần reload trang).
+  // setMode tự gọi fetchEvents() theo currentMonth của STORE — vốn không đồng bộ
+  // với tháng đang xem của TRANG, gây load nhầm range. Đồng bộ range vào store
+  // trước (setDate không fetch) rồi mới setMode để fetch đúng tháng đang xem.
+  const handleBackToMyCalendar = useCallback(() => {
+    const store = useCalendarStore.getState();
+    store.setDate(currentYear, currentMonth);
+    store.setMode("my");
+  }, [currentYear, currentMonth]);
+
   // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
   const refetchCurrentMonth = useCallback(() => {
     const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
@@ -939,7 +964,8 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         eventType: "MEETING",
-        visibility: "PRIVATE",
+        // Quyền xem theo lựa chọn trên form (mặc định riêng tư → BUSY_ONLY).
+        visibility: formVisibilityToApi(data.visibility),
         isAllDay: false,
         location: data.location || undefined,
         timezone,
@@ -981,11 +1007,11 @@ export const CalendarPage: React.FC = () => {
         description: data.notes || undefined,
         startAt,
         endAt,
-        // Lịch cá nhân: eventType PERSONAL + visibility PRIVATE (chỉ owner thấy).
-        // Backend (hr-api-service) đã hỗ trợ enum PERSONAL chính thức và tự chặn
-        // participants cho event PERSONAL.
+        // Lịch cá nhân: eventType PERSONAL, không có participants (backend tự chặn).
+        // Quyền xem theo lựa chọn trên form: riêng tư → BUSY_ONLY (người khác chỉ
+        // thấy "Bận"), công khai → PUBLIC (ai cũng xem được chi tiết).
         eventType: "PERSONAL",
-        visibility: "PRIVATE",
+        visibility: formVisibilityToApi(data.visibility),
         isAllDay: false,
         timezone,
       };
@@ -1080,6 +1106,7 @@ export const CalendarPage: React.FC = () => {
         chairman: meta.meetingChairman ?? "",
         participants: participantNames,
         format: meta.meetingFormat === "online" ? "online" : "offline",
+        visibility: apiVisibilityToForm(event.visibility),
         location: event.location ?? "",
         notes: "",
       };
@@ -1420,6 +1447,7 @@ export const CalendarPage: React.FC = () => {
         startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
         endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
         notes: extEvent.description || "",
+        visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       };
       setEditingPersonalEvent(personalData);
       return;
@@ -1451,6 +1479,7 @@ export const CalendarPage: React.FC = () => {
       chairman: meta.meetingChairman ?? "",
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",
+      visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       location: extEvent.meetingLocation || "",
       notes: extEvent.description || "",
       createdById: extEvent.ownerId,
@@ -1524,6 +1553,7 @@ export const CalendarPage: React.FC = () => {
         endAt,
         location: data.location,
         timezone,
+        visibility: formVisibilityToApi(data.visibility),
         participantIds,
         attendees: freeTextNames,
         meetingChairman: data.chairman || undefined,
@@ -1558,6 +1588,7 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         timezone,
+        visibility: formVisibilityToApi(data.visibility),
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
@@ -1636,7 +1667,7 @@ export const CalendarPage: React.FC = () => {
               <div className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => useCalendarStore.getState().setMode("my")}
+                  onClick={handleBackToMyCalendar}
                   className={clsx(
                     "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
                     mode === "my"
@@ -1647,19 +1678,38 @@ export const CalendarPage: React.FC = () => {
                   <CalendarIcon className="h-4 w-4" />
                   Lịch của tôi
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setUserSearchModalOpen(true)}
-                  className={clsx(
-                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
-                    mode === "other"
-                      ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                      : "text-text-secondary hover:bg-surface-hover"
-                  )}
-                >
-                  <UserIcon className="h-4 w-4" />
-                  {mode === "other" && viewingUserName ? viewingUserName : "Xem lịch người khác"}
-                </button>
+                {mode === "other" && viewingUserName ? (
+                  // Đang xem lịch người khác: bấm tên để đổi người, bấm X để quay
+                  // về lịch của mình (không reload trang).
+                  <div className="flex items-center gap-1 rounded-lg bg-blue-50 px-1 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                    <button
+                      type="button"
+                      onClick={() => setUserSearchModalOpen(true)}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-2 text-sm transition-micro hover:bg-blue-100/60 dark:hover:bg-blue-900/40"
+                      title="Đổi người xem lịch"
+                    >
+                      <UserIcon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{viewingUserName}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBackToMyCalendar}
+                      title="Quay về lịch của tôi"
+                      className="shrink-0 rounded-lg p-1.5 transition-micro hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setUserSearchModalOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-text-secondary transition-micro hover:bg-surface-hover"
+                  >
+                    <UserIcon className="h-4 w-4" />
+                    Xem lịch người khác
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => toast.info("Tính năng đang phát triển")}

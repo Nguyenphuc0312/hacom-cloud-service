@@ -48,6 +48,9 @@ export interface MeetingFormData {
   format: "offline" | "online";
   location: string;
   notes: string;
+  /** Quyền xem: "private" = chỉ hiện "Bận" cho người khác (BUSY_ONLY);
+   *  "public" = ai cũng xem được đầy đủ (PUBLIC). Mặc định "private". */
+  visibility: "private" | "public";
   /** ID của người tạo lịch — dùng để phân quyền sửa/xóa */
   createdById?: string;
   /** Tên hiển thị người tạo lịch */
@@ -160,6 +163,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const [participantInput, setParticipantInput] = React.useState("");
   const [participants, setParticipants] = React.useState<MeetingParticipant[]>([]);
   const [format, setFormat] = React.useState<"offline" | "online">("offline");
+  const [visibility, setVisibility] = React.useState<"private" | "public">("private");
   const [location, setLocation] = React.useState("");
   const [locationInput, setLocationInput] = React.useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = React.useState(false);
@@ -317,6 +321,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setParticipantInput("");
       setParticipants(initialData.participants);
       setFormat(initialData.format);
+      setVisibility(initialData.visibility ?? "private");
       setLocation(initialData.location);
       setLocationInput(initialData.location);
       setNotes(initialData.notes);
@@ -335,6 +340,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setParticipantInput("");
       setParticipants([]);
       setFormat("offline");
+      setVisibility("private");
       setLocation("");
       setLocationInput("");
       setNotes("");
@@ -434,6 +440,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       chairmanUserId: chairmanMeta?.userId,
       participants: participantsWithConflicts,
       format,
+      visibility,
       location: locToSave,
       notes: notes.trim(),
       createdById: initialData?.createdById,
@@ -926,6 +933,33 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 5b. Quyền xem (riêng tư / công khai) */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">Quyền xem</label>
+          <div className="flex gap-2">
+            {(["private", "public"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setVisibility(v)}
+                className={clsx(
+                  "flex-1 rounded-lg border px-4 py-1.5 text-sm font-medium transition-micro",
+                  visibility === v
+                    ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
+                    : "border-border bg-surface-overlay text-text-secondary hover:bg-surface-hover",
+                )}
+              >
+                {v === "private" ? "Riêng tư" : "Công khai"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-text-muted">
+            {visibility === "private"
+              ? "Riêng tư: người khác xem lịch của bạn chỉ thấy ô “Bận”, không thấy nội dung."
+              : "Công khai: ai xem lịch của bạn cũng thấy đầy đủ chi tiết sự kiện."}
+          </p>
         </div>
 
         {/* 6. Địa điểm */}

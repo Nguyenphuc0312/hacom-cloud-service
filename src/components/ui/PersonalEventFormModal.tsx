@@ -15,6 +15,9 @@ export interface PersonalEventFormData {
   startTime: string; // HH:mm
   endTime: string;
   notes: string;
+  /** Quyền xem: "private" = chỉ hiện "Bận" cho người khác (BUSY_ONLY);
+   *  "public" = ai cũng xem được đầy đủ (PUBLIC). Mặc định "private". */
+  visibility: "private" | "public";
 }
 
 interface PersonalEventFormModalProps {
@@ -82,6 +85,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
   const [startTime, setStartTime] = React.useState("08:00");
   const [endTime, setEndTime] = React.useState("09:00");
   const [notes, setNotes] = React.useState("");
+  const [visibility, setVisibility] = React.useState<"private" | "public">("private");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   // Reset / pre-fill khi mở modal
@@ -94,6 +98,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       setStartTime(initialData.startTime);
       setEndTime(initialData.endTime);
       setNotes(initialData.notes);
+      setVisibility(initialData.visibility ?? "private");
       setErrors({});
     } else {
       const d0 = defaultDate ?? today();
@@ -103,6 +108,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       setStartTime(defaultStartTime ?? "08:00");
       setEndTime(defaultEndTime ?? "09:00");
       setNotes("");
+      setVisibility("private");
       setErrors({});
     }
   }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData]);
@@ -127,6 +133,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       startTime,
       endTime,
       notes: notes.trim(),
+      visibility,
     };
     onClose();
     try {
@@ -306,6 +313,33 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
             rows={3}
             className="w-full resize-none rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
           />
+        </div>
+
+        {/* Quyền xem (riêng tư / công khai) */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-primary">Quyền xem</label>
+          <div className="flex gap-2">
+            {(["private", "public"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setVisibility(v)}
+                className={clsx(
+                  "flex-1 rounded-lg border px-4 py-1.5 text-sm font-medium transition-micro",
+                  visibility === v
+                    ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
+                    : "border-border bg-surface-overlay text-text-secondary hover:bg-surface-hover",
+                )}
+              >
+                {v === "private" ? "Riêng tư" : "Công khai"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-text-muted">
+            {visibility === "private"
+              ? "Riêng tư: người khác xem lịch của bạn chỉ thấy ô “Bận”, không thấy nội dung."
+              : "Công khai: ai xem lịch của bạn cũng thấy đầy đủ chi tiết sự kiện."}
+          </p>
         </div>
       </div>
     </Modal>
