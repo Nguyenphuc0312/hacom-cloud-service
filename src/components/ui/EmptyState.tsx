@@ -234,6 +234,15 @@ const getWeekDays = (base: Date): Date[] => {
 
 const MAX_VISIBLE_EVENTS = 3;
 
+/**
+ * Event BUSY_ONLY khi xem lịch người khác bị backend che tiêu đề thành "Busy".
+ * Chuẩn hóa sang tiếng Việt "Bận".
+ */
+const localizeEventTitle = (title: string | null | undefined): string => {
+  const t = (title ?? "").trim();
+  return t.toLowerCase() === "busy" ? "Bận" : t;
+};
+
 interface SelectedEventDetail {
   kind: "meeting" | "personal";
   id: string;
@@ -773,7 +782,7 @@ const WeeklyCalendarWidget: React.FC = () => {
         : [];
       map[event.id] = {
         id: event.id,
-        title: event.title,
+        title: localizeEventTitle(event.title),
         startAt: event.startAt,
         endAt: event.endAt,
         description: event.description,
@@ -832,17 +841,14 @@ const WeeklyCalendarWidget: React.FC = () => {
       const pad = (n: number) => String(n).padStart(2, "0");
       return {
         id: event.id,
-        title: event.title,
+        title: localizeEventTitle(event.title),
         date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-        // "OTHER" hiện là kho chứa lịch cá nhân (backend chưa có eventType
-        // PERSONAL) → map sang "personal" để hiển thị/lọc đúng nhóm. Xem
-        // yeucauapicalenda.md.
-        type:
-          event.eventType === "MEETING"
-            ? "meeting"
-            : event.eventType === "OTHER"
-              ? "personal"
-              : "work",
+        // Phân loại đồng bộ với CalendarPage (mapApiEventTypeToLocal): MEETING →
+        // họp; còn lại (PERSONAL/OTHER/LEAVE/REMINDER/DEADLINE…) gom vào "Cá
+        // nhân" để KHÔNG bị rớt khỏi widget (widget chỉ render kind họp + cá
+        // nhân). "OTHER" hiện là kho chứa lịch cá nhân; backend có thể trả về cả
+        // "PERSONAL" — cả hai đều phải hiện. Xem yeucauapicalenda.md.
+        type: event.eventType === "MEETING" ? "meeting" : "personal",
         description: event.description ?? undefined,
         time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       };

@@ -159,6 +159,15 @@ const toLocalDateString = (iso: string | null | undefined): string => {
   return formatDateString(d);
 };
 
+/**
+ * Khi xem lịch người khác, event có visibility BUSY_ONLY bị backend che tiêu đề
+ * thành "Busy". Chuẩn hóa sang tiếng Việt "Bận" để hiển thị.
+ */
+const localizeEventTitle = (title: string | null | undefined): string => {
+  const t = (title ?? "").trim();
+  return t.toLowerCase() === "busy" ? "Bận" : t;
+};
+
 /** Meeting extras stored in HR event metadata JSON. */
 interface MeetingMetadata {
   meetingChairman?: string;
@@ -879,6 +888,10 @@ export const CalendarPage: React.FC = () => {
   // Edit event modal state
   const [editingEvent, setEditingEvent] = useState<MeetingFormData | null>(null);
 
+  // Edit personal event modal state — lịch cá nhân sửa bằng form cá nhân, không
+  // phải form họp (xem handleEditEvent: nhánh theo type).
+  const [editingPersonalEvent, setEditingPersonalEvent] = useState<PersonalEventFormData | null>(null);
+
   // Delete confirmation dialog state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -1028,7 +1041,7 @@ export const CalendarPage: React.FC = () => {
       const meta = getMeetingMetadata(event);
       map[event.id] = {
         id: event.id,
-        title: event.title,
+        title: localizeEventTitle(event.title),
         date: toLocalDateString(event.startAt),
         type: mapApiEventTypeToLocal(event.eventType),
         description: event.description ?? undefined,
@@ -1079,7 +1092,7 @@ export const CalendarPage: React.FC = () => {
   const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
     return apiEvents.map((event: HRCalendarEvent): ExtendedCalendarEvent => ({
       id: event.id,
-      title: event.title,
+      title: localizeEventTitle(event.title),
       date: toLocalDateString(event.startAt),
       type: mapApiEventTypeToLocal(event.eventType),
       description: event.description ?? undefined,
@@ -1393,11 +1406,26 @@ export const CalendarPage: React.FC = () => {
 
     // Only allow editing API events (with startAt/endAt)
     if (!isExtended) {
-      toast.warning("Chỉ có thể chỉnh sửa lịch họp từ API");
+      toast.warning("Chỉ có thể chỉnh sửa lịch tạo từ hệ thống");
       return;
     }
 
     const extEvent = selectedEvent as ExtendedCalendarEvent;
+
+    // Lịch cá nhân (type "personal") → mở form cá nhân, không phải form họp.
+    if (extEvent.type === "personal") {
+      const personalData: PersonalEventFormData = {
+        id: extEvent.id,
+        title: extEvent.title,
+        date: extEvent.startAt ? toLocalDateString(extEvent.startAt) : formatDateString(new Date()),
+        startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
+        endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
+        notes: extEvent.description || "",
+      };
+      setEditingPersonalEvent(personalData);
+      return;
+    }
+
     const meta = getMeetingMetadata(selectedHrEvent);
 
     // Người tham gia: ưu tiên roster HR (giữ employeeId để update giữ nguyên
@@ -1513,6 +1541,38 @@ export const CalendarPage: React.FC = () => {
       throw error;
     }
   }, [handleEditSuccess]);
+
+  // Handle update personal event from edit form (lịch cá nhân — không có người
+  // tham gia/chủ trì/địa điểm). Giữ nguyên eventType OTHER ở backend.
+  const handleUpdatePersonalEvent = useCallback(async (data: PersonalEventFormData) => {
+    try {
+      // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      // Gửi cả chuỗi rỗng để xóa được ghi chú cũ (backend bỏ qua undefined).
+      const input = {
+        title: data.title,
+        description: data.notes,
+        startAt,
+        endAt,
+        timezone,
+      };
+
+      const success = await useCalendarStore.getState().updateEvent(data.id, input);
+      if (success) {
+        setEditingPersonalEvent(null);
+        setSelectedEvent(null);
+        refetchCurrentMonth();
+      }
+    } catch (error) {
+      console.error("Failed to update personal event:", error);
+      toast.error("Không thể cập nhật sự kiện");
+      throw error;
+    }
+  }, [refetchCurrentMonth]);
 
   // Toggle filter
   const toggleFilter = useCallback((type: EventType) => {
@@ -1977,6 +2037,14 @@ export const CalendarPage: React.FC = () => {
         onSave={handleUpdateEvent}
         initialData={editingEvent}
         existingMeetings={meetingsForConflictCheck.filter((m) => m.id !== editingEvent?.id)}
+      />
+
+      {/* Edit personal event modal — lịch cá nhân sửa bằng form cá nhân */}
+      <PersonalEventFormModal
+        isOpen={!!editingPersonalEvent}
+        onClose={() => setEditingPersonalEvent(null)}
+        onSave={handleUpdatePersonalEvent}
+        initialData={editingPersonalEvent}
       />
 
       {/* Delete confirmation dialog */}
