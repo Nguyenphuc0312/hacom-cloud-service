@@ -366,6 +366,26 @@ export const useAiAssistantStore = create<AiAssistantState>()(
         ownerId: state.ownerId,
         deletedServerSessionIds: state.deletedServerSessionIds,
       }),
+      // v1: dọn dữ liệu di sản. Trước khi BE sinh session_id riêng (UUID), mọi
+      // hội thoại company bị gộp chung serverSessionId `chat-{user}-default`.
+      // Những bản ghi đó không tách lại được (BE đã gộp lịch sử) và gây
+      // merge/mất khi loadServerSessions chạy → xóa 1 lần khỏi localStorage.
+      version: 1,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const state = persisted as { conversations?: AiConversation[] } | undefined;
+        if (!state || !Array.isArray(state.conversations)) return state as never;
+        if (fromVersion < 1) {
+          state.conversations = state.conversations.filter(
+            (c) =>
+              !(
+                c.endpoint === "company" &&
+                typeof c.serverSessionId === "string" &&
+                c.serverSessionId.endsWith("-default")
+              ),
+          );
+        }
+        return state as never;
+      },
     }
   )
 );

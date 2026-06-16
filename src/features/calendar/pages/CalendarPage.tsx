@@ -906,6 +906,16 @@ export const CalendarPage: React.FC = () => {
     setViewingUser(userId, userName);
   };
 
+  // Quay về "Lịch của tôi" ngay tại chỗ (không cần reload trang).
+  // setMode tự gọi fetchEvents() theo currentMonth của STORE — vốn không đồng bộ
+  // với tháng đang xem của TRANG, gây load nhầm range. Đồng bộ range vào store
+  // trước (setDate không fetch) rồi mới setMode để fetch đúng tháng đang xem.
+  const handleBackToMyCalendar = useCallback(() => {
+    const store = useCalendarStore.getState();
+    store.setDate(currentYear, currentMonth);
+    store.setMode("my");
+  }, [currentYear, currentMonth]);
+
   // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
   const refetchCurrentMonth = useCallback(() => {
     const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
@@ -1636,7 +1646,7 @@ export const CalendarPage: React.FC = () => {
               <div className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => useCalendarStore.getState().setMode("my")}
+                  onClick={handleBackToMyCalendar}
                   className={clsx(
                     "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
                     mode === "my"
@@ -1647,19 +1657,38 @@ export const CalendarPage: React.FC = () => {
                   <CalendarIcon className="h-4 w-4" />
                   Lịch của tôi
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setUserSearchModalOpen(true)}
-                  className={clsx(
-                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm transition-micro",
-                    mode === "other"
-                      ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                      : "text-text-secondary hover:bg-surface-hover"
-                  )}
-                >
-                  <UserIcon className="h-4 w-4" />
-                  {mode === "other" && viewingUserName ? viewingUserName : "Xem lịch người khác"}
-                </button>
+                {mode === "other" && viewingUserName ? (
+                  // Đang xem lịch người khác: bấm tên để đổi người, bấm X để quay
+                  // về lịch của mình (không reload trang).
+                  <div className="flex items-center gap-1 rounded-lg bg-blue-50 px-1 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                    <button
+                      type="button"
+                      onClick={() => setUserSearchModalOpen(true)}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-2 text-sm transition-micro hover:bg-blue-100/60 dark:hover:bg-blue-900/40"
+                      title="Đổi người xem lịch"
+                    >
+                      <UserIcon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{viewingUserName}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBackToMyCalendar}
+                      title="Quay về lịch của tôi"
+                      className="shrink-0 rounded-lg p-1.5 transition-micro hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setUserSearchModalOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-text-secondary transition-micro hover:bg-surface-hover"
+                  >
+                    <UserIcon className="h-4 w-4" />
+                    Xem lịch người khác
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => toast.info("Tính năng đang phát triển")}

@@ -58,6 +58,13 @@ export function sendAiChatMessage(
   options?: {
     /** External cancellation signal — wired to SSE cleanup on abort. */
     signal?: AbortSignal;
+    /**
+     * `event: session` đến TRƯỚC token đầu tiên và mang session_id thật mà BE
+     * cấp cho cuộc hội thoại (mới: UUID riêng `chat-{user}-{uuid}`). Lưu ngay
+     * để không phụ thuộc `event: done` — nếu stream lỗi giữa chừng, done không
+     * phát ra, nhưng session_id đã được giữ.
+     */
+    onSession?: (sessionId: string) => void;
     onToken?: (token: string) => void;
     onThinking?: (thinking: string) => void;
     onFormRequest?: (data: WorkReportFormRequest) => void;
@@ -79,7 +86,16 @@ export function sendAiChatMessage(
         // Track raw for fallback regex
         accumulatedRawData += `event: ${type}\ndata: ${data}\n\n`;
 
-        if (type === "token") {
+        if (type === "session") {
+          // { "session_id": "chat-{user}-{uuid}" }
+          try {
+            const parsed = JSON.parse(data) as { session_id?: unknown };
+            const sid = typeof parsed?.session_id === "string" ? parsed.session_id : "";
+            if (sid) options?.onSession?.(sid);
+          } catch {
+            // payload không phải JSON — bỏ qua
+          }
+        } else if (type === "token") {
           try {
             const parsed = JSON.parse(data) as { token?: unknown } | string;
             const token = String(
