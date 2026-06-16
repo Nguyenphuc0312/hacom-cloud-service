@@ -1,4 +1,4 @@
-import { fetchUserProfileOnce } from "./userProfileCache";
+import { loadUserProfile } from "./userBatchLoader";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { useEnrichedProfileStore } from "../stores/enrichedProfileStore";
 
@@ -17,9 +17,10 @@ const isRealName = (name: string): boolean => {
 };
 
 /**
- * Fetches /users/{id} once (TTL-cached), resolves the display name,
- * and stores it in enrichedProfileStore only when the resolved name
- * looks like a real human name (has a space or non-ASCII characters).
+ * Resolves a user's display name via the coalescing batch loader (many enrich
+ * calls in the same tick share one `POST /users/batch` request instead of one
+ * `GET /users/{id}` each), then stores it in enrichedProfileStore only when the
+ * resolved name looks like a real human name (has a space or non-ASCII chars).
  */
 export const enrichUserProfile = (userId: string): void => {
   if (!userId) return;
@@ -27,8 +28,9 @@ export const enrichUserProfile = (userId: string): void => {
   // Already enriched — skip
   if (useEnrichedProfileStore.getState().nameByUserId[userId]) return;
 
-  void fetchUserProfileOnce(userId)
+  void loadUserProfile(userId)
     .then((profile) => {
+      if (!profile) return;
       const name = resolveUserDisplayName(profile, { allowLegacyFallback: false });
       if (name && name !== "Unknown user" && isRealName(name)) {
         useEnrichedProfileStore.getState().setEnrichedName(userId, name);

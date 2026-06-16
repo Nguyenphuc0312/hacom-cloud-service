@@ -280,6 +280,51 @@ const dedupedBatchFetch = (
   return request;
 };
 
+/**
+ * Shared, deduped, TTL-cached batch fetch for thumbnail URLs.
+ *
+ * This is the SAME cache (`THUMBNAIL_CACHE`) and in-flight dedupe used by the
+ * timeline hook below. Other surfaces that render the same files — the Shared
+ * Resources drawer and the "Kho lưu trữ" modal — call this instead of issuing
+ * their own `fileApi.batchThumbnailUrls` requests, so a `fileId` shown in the
+ * timeline and again in the library is fetched at most once per TTL (no
+ * duplicate presigned-URL minting). WS `attachment:preview_ready` evicts this
+ * cache via `markPreviewReady`, benefiting every surface at once.
+ *
+ * Returns the resolved items for every requested id (cached + freshly fetched).
+ * Never throws for individual ids; a failed batch rejects so the caller can
+ * decide whether to surface the error.
+ */
+export const fetchThumbnailUrlsShared = async (
+  conversationId: string,
+  fileIds: string[],
+  options: { force?: boolean } = {},
+): Promise<Record<string, ThumbnailUrlItem>> => {
+  const ids = Array.from(new Set(fileIds.filter(Boolean)));
+  if (!conversationId || ids.length === 0) return {};
+
+  const { cached, missing } = readCachedUrls(ids);
+  const idsToFetch = options.force ? ids : missing;
+  if (idsToFetch.length === 0) return cached;
+
+  const resolved = await dedupedBatchFetch(conversationId, idsToFetch);
+  return { ...cached, ...resolved };
+};
+
+/** Synchronous fresh-only read from the shared thumbnail cache. */
+export const readThumbnailCache = (
+  fileId: string,
+): ThumbnailUrlItem | undefined =>
+  fileId ? THUMBNAIL_CACHE.get(fileId) : undefined;
+
+/** Seed the shared cache from items already resolved elsewhere. */
+export const primeThumbnailCache = (items: ThumbnailUrlItem[]): void => {
+  for (const item of items) {
+    if (!item?.fileId) continue;
+    THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
+  }
+};
+
 export const useBatchThumbnailUrl = (
   conversationId: string | undefined,
   fileIds: string[],

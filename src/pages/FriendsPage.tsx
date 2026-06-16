@@ -51,7 +51,7 @@ import {
   getFriendshipAction,
 } from "../features/friends/friendshipAction";
 import { useFriendSuggestions } from "../features/friends/useFriendSuggestions";
-import { fetchUserProfileOnce } from "../services/userProfileCache";
+import { loadUserProfiles } from "../services/userBatchLoader";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -787,20 +787,51 @@ export const FriendsPage: React.FC = () => {
   // doesn't carry firstName/lastName; fetch /users/{id} to get the actual name).
   const [enrichedNameMap, setEnrichedNameMap] = useState<Record<string, string>>({});
   useEffect(() => {
-    friends.forEach((friend) => {
-      const dn = friend.displayName;
-      if (typeof dn !== "string" || !DISPLAY_EMAIL_PATTERN.test(dn)) return;
-      fetchUserProfileOnce(friend.id)
-        .then((profile) => {
+    // Collect every friend whose displayName is just an email and enrich them in
+    // ONE batch request (previously this was a forEach → N `GET /users/{id}`).
+    const idsToEnrich = friends
+      .filter(
+        (friend) =>
+          typeof friend.displayName === "string" &&
+          DISPLAY_EMAIL_PATTERN.test(friend.displayName),
+      )
+      .map((friend) => friend.id);
+
+    if (idsToEnrich.length === 0) return;
+
+    let cancelled = false;
+    void loadUserProfiles(idsToEnrich)
+      .then((profileMap) => {
+        if (cancelled) return;
+
+        const resolved: Record<string, string> = {};
+        for (const [id, profile] of Object.entries(profileMap)) {
+          if (!profile) continue;
           const name = resolveUserDisplayName(profile, { allowLegacyFallback: false });
           if (name && name !== "Unknown user") {
-            setEnrichedNameMap((prev) =>
-              prev[friend.id] === name ? prev : { ...prev, [friend.id]: name },
-            );
+            resolved[id] = name;
           }
-        })
-        .catch(() => null);
-    });
+        }
+        if (Object.keys(resolved).length === 0) return;
+
+        // Single state update; only changes keys that actually moved.
+        setEnrichedNameMap((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const [id, name] of Object.entries(resolved)) {
+            if (next[id] !== name) {
+              next[id] = name;
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      })
+      .catch(() => null);
+
+    return () => {
+      cancelled = true;
+    };
   }, [friends]);
 
   const friendItems = useMemo(

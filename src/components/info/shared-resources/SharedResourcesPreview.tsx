@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import clsx from "clsx";
 import {
   PhotoIcon,
@@ -20,6 +20,7 @@ import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { resolvePublicResourceUrl } from "../../../config";
+import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
@@ -31,17 +32,6 @@ interface SharedResourcesPreviewProps {
 const DRAWER_MEDIA_PREVIEW = 6;
 const DRAWER_FILES_PREVIEW = 4;
 const DRAWER_LINKS_PREVIEW = 3;
-
-// Module-level in-flight request tracking to prevent duplicate calls
-const inFlightRequests = new Map<string, Promise<unknown>>();
-
-// Module-level cache for thumbnail URLs with status tracking
-const thumbnailStatusCache = new Map<string, {
-  status: 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original';
-  url?: string | null;
-  retryAfterMs?: number | null;
-  fetchedAt: number;
-}>();
 
 function truncateFilename(name: string, maxLength = 24): string {
   if (name.length <= maxLength) return name;
@@ -68,7 +58,6 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     forConversationId: string;
     urls: Record<string, string>;
   }>({ forConversationId: conversationId, urls: {} });
-  const batchAbortRef = useRef<AbortController | null>(null);
 
   const { data, isLoading, isError } = useGetConversationSidebarSummaryQuery(
     conversationId,
@@ -133,143 +122,49 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("media");
     setUrlCache({ forConversationId: conversationId, urls: {} });
-    return () => {
-      batchAbortRef.current?.abort();
-    };
   }, [conversationId]);
 
-  // Batch thumbnail loading for drawer media preview (only when media tab is active)
-  // Uses stable request key and deduplication to prevent infinite calls
+  // Batch thumbnail loading for drawer media preview (only when media tab is
+  // active). Delegates to the SHARED thumbnail cache/dedupe so files already
+  // resolved in the timeline are not re-fetched here.
   useEffect(() => {
     if (activeTab !== "media" || !thumbnailFileIdsKey) return;
 
-    // Create a stable request key
-    const requestKey = `${conversationId}:${thumbnailFileIdsKey}`;
-
-    // Skip if this exact request is already in-flight
-    if (inFlightRequests.has(requestKey)) {
-      return;
-    }
-
-    // Build the list of items needing thumbnails
     const needingFallback = mediaPreview.filter(
       (item) => !item.thumbnailUrl && !thumbnailUrls[item.fileId],
     );
-
     if (needingFallback.length === 0) return;
 
-    // Create abort controller
-    const controller = new AbortController();
-    batchAbortRef.current = controller;
-
-    // Create the request promise
-    const requestPromise = (async () => {
-      // Debug logging for QA (dev only)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[ThumbnailQA] Fetching batch-thumbnail-urls`, {
-          conversationId,
-          fileIds: needingFallback.map((i) => i.fileId),
-          needingCount: needingFallback.length,
-          timestamp: Date.now(),
-        });
-      }
-
-      try {
-        const response = await fileApi.batchThumbnailUrls({
-          conversationId,
-          fileIds: needingFallback.map((i) => i.fileId),
-          signal: controller.signal,
-        });
-        const payload = unwrapApiSuccess(response);
-
-        if (controller.signal.aborted) return null;
-
-        // Debug logging for QA (dev only)
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[ThumbnailQA] Received batch-thumbnail-urls response`, {
-            conversationId,
-            totalItems: payload.items.length,
-            readyCount: payload.items.filter((i) => i.status === 'ready').length,
-            fallbackOriginalCount: payload.items.filter(
-              (i) => i.status === 'fallback_original',
-            ).length,
-            failedCount: payload.items.filter((i) => i.status === 'failed').length,
-            withUrlCount: payload.items.filter((i) => i.url).length,
-          });
-        }
-
+    let cancelled = false;
+    void fetchThumbnailUrlsShared(
+      conversationId,
+      needingFallback.map((i) => i.fileId),
+    )
+      .then((resolved) => {
+        if (cancelled) return;
         const newUrls: Record<string, string> = {};
-        const now = Date.now();
-
-        for (const item of payload.items) {
-          // Map response status to our cache format
-          // Backend returns: ready, processing, queued, not_previewable, failed, not_found, forbidden, error
-          const status = item.status as 'ready' | 'processing' | 'queued' | 'failed' | 'fallback_original';
-          const url = item.url ?? null;
-          const retryAfterMs = item.retryAfterMs ?? null;
-
-          // Update module-level cache with full status for retry logic
-          thumbnailStatusCache.set(item.fileId, {
-            status,
-            url,
-            retryAfterMs,
-            fetchedAt: now,
-          });
-
-          // Use URL when: ready (thumbnail) OR failed/fallback_original (original file URL fallback)
-          // Apply resolvePublicResourceUrl so relative paths are resolved against FILE_BASE_URL
-          const hasRenderableUrl =
-            (item.status === 'ready' && url) ||
-            (url && ['failed', 'fallback_original'].includes(item.status));
-
-          if (hasRenderableUrl && url) {
-            const resolved = resolvePublicResourceUrl(url, { context: 'image' });
-            if (resolved) newUrls[item.fileId] = resolved;
-          }
+        for (const [fileId, item] of Object.entries(resolved)) {
+          // item.url is already resolved against FILE_BASE_URL by the shared layer.
+          if (item.url) newUrls[fileId] = item.url;
         }
+        if (Object.keys(newUrls).length === 0) return;
 
-        // Cache the overall request status
-        thumbnailStatusCache.set(requestKey, {
-          status: 'ready',
-          url: null,
-          fetchedAt: now,
-        });
-
-        return newUrls;
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          return null;
-        }
-        throw error;
-      }
-    })();
-
-    // Store in-flight request
-    inFlightRequests.set(requestKey, requestPromise);
-
-    requestPromise
-      .then((newUrls) => {
-        if (!newUrls || controller.signal.aborted) return;
-
-        // Update URL cache with new URLs
-        if (Object.keys(newUrls).length > 0) {
-          setUrlCache((prev) => ({
-            forConversationId: conversationId,
-            urls:
-              prev.forConversationId === conversationId
-                ? { ...prev.urls, ...newUrls }
-                : newUrls,
-          }));
-        }
+        setUrlCache((prev) => ({
+          forConversationId: conversationId,
+          urls:
+            prev.forConversationId === conversationId
+              ? { ...prev.urls, ...newUrls }
+              : newUrls,
+        }));
       })
       .catch(() => {
         // Error handling - don't spam retries
-      })
-      .finally(() => {
-        inFlightRequests.delete(requestKey);
       });
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, thumbnailFileIdsKey, conversationId]);
 
   if (isLoading) {

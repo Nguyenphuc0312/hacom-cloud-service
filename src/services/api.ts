@@ -13,6 +13,8 @@ import type {
   LoginResponse,
   RefreshTokenResponse,
   RegisterResponseDto,
+  UserProfileSummaryDto,
+  BatchUsersResponseDto,
 } from "@hacom/chat-shared-types/auth";
 import type {
   CompleteUploadRequest,
@@ -58,6 +60,8 @@ const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
 export const FRIENDS_PAGE_SIZE = 20;
 export const USERS_SEARCH_PAGE_SIZE = 20;
+/** Must mirror BATCH_USERS_MAX_IDS on the backend (POST /users/batch cap). */
+export const USERS_BATCH_MAX_IDS = 50;
 export const FRIEND_SUGGESTIONS_PAGE_SIZE = 20;
 
 const buildDirectDmTraceRequestId = (): string => {
@@ -557,6 +561,47 @@ export const userApi = {
   getUserById: async (userId: string) => {
     const response = await apiClient.get<ApiResponse<User>>(`/users/${userId}`);
     return response.data;
+  },
+
+  /**
+   * Batch resolve user profile summaries via `POST /users/batch`.
+   *
+   * Deduplicates ids and chunks them into requests of at most
+   * {@link USERS_BATCH_MAX_IDS} so callers never have to worry about the size
+   * cap. Returns a merged `{ userId -> summary | null }` map (null = the server
+   * could not resolve that id). Network/contract errors propagate so the batch
+   * loader can mark the affected ids as retryable.
+   */
+  getUsersByIds: async (
+    userIds: string[],
+  ): Promise<Record<string, UserProfileSummaryDto | null>> => {
+    const uniqueIds = Array.from(
+      new Set(userIds.filter((id): id is string => Boolean(id))),
+    );
+    if (uniqueIds.length === 0) {
+      return {};
+    }
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < uniqueIds.length; i += USERS_BATCH_MAX_IDS) {
+      chunks.push(uniqueIds.slice(i, i + USERS_BATCH_MAX_IDS));
+    }
+
+    const parts = await Promise.all(
+      chunks.map(async (chunk) => {
+        const response = await apiClient.post<ApiResponse<BatchUsersResponseDto>>(
+          "/users/batch",
+          { userIds: chunk },
+        );
+        return unwrapApiSuccess(response.data);
+      }),
+    );
+
+    const merged: Record<string, UserProfileSummaryDto | null> = {};
+    for (const part of parts) {
+      Object.assign(merged, part.users);
+    }
+    return merged;
   },
 
   checkUsername: async (username: string) => {
