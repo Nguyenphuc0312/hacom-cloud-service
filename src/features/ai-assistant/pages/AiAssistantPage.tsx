@@ -348,12 +348,12 @@ export const AiAssistantPage: React.FC = () => {
           const request: any = {
             question: trimmed,
             session_id: serverSessionId,
+            // new_conversation là bắt buộc theo hợp đồng BE:
+            //  - chưa có session_id → true  → BE sinh UUID riêng cho cuộc mới
+            //  - đã có session_id   → false → BE ghi tiếp đúng cuộc đó
+            new_conversation: !serverSessionId,
             department: user?.departmentName || "",
           };
-
-          if (!serverSessionId) {
-            request.new_conversation = true;
-          }
 
           if (isCompany) {
             request.user_id = user?.id || "";
@@ -376,6 +376,14 @@ export const AiAssistantPage: React.FC = () => {
 
           const response = await sendAiChatMessage(request, selectedEndpoint, {
             signal: controller.signal,
+            onSession: (sessionId) => {
+              // event: session đến trước token đầu → lưu session_id NGAY để
+              // không phụ thuộc event: done (nếu stream lỗi giữa chừng vẫn giữ
+              // được id, lần gửi sau ghi tiếp đúng cuộc thay vì tạo cuộc mới).
+              if (currentId && sessionId && sessionId !== serverSessionId) {
+                updateServerSessionId(currentId, sessionId);
+              }
+            },
             onToken: (token) => {
               updateLastMessage(currentId!, token, true);
             },
