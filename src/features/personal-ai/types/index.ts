@@ -25,6 +25,12 @@ export interface PersonalChatMessage {
   selectionRequest?: DepartmentSelectionRequest;
   /** #tongcvtuan — render danh sách file báo cáo tuần inline trong chat. */
   weeklyReportList?: boolean;
+  /**
+   * #baocaocv — đánh dấu message là kết quả xem báo cáo. Khi BE gửi `token`
+   * (user thường) thay vì `selection_request` (admin/giám đốc), nội dung
+   * `content` được hiển thị trong bordered box "Xem báo cáo công việc".
+   */
+  reportRequest?: boolean;
 }
 
 export interface PersonalCitation {

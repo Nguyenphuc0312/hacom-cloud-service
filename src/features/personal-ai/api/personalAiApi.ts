@@ -588,7 +588,10 @@ export async function streamPersonalChat(
         } else if (eventType === "selection_request" && options?.onSelectionRequest) {
           try {
             const parsed = JSON.parse(data) as DepartmentSelectionRequest;
-            if (parsed.selection_type === "department_report") {
+            if (
+              parsed.selection_type === "department_report" ||
+              parsed.selection_type === "company_department_report"
+            ) {
               options.onSelectionRequest(parsed);
             }
           } catch { /* malformed payload — ignore */ }

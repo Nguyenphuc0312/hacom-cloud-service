@@ -17,6 +17,7 @@ import { openWeeklyReportFile } from "../../api/personalAiApi";
 import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
+import { ReportTextBox } from "./ReportTextBox";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -323,6 +324,19 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     patchMessage(activeConversationId, message.id, {
                       content: "Đã hủy.",
                       selectionRequest: undefined,
+                      isStreaming: false,
+                    })
+                  }
+                />
+              ) : message.reportRequest && (message.content || !message.isStreaming) ? (
+                <ReportTextBox
+                  content={message.content}
+                  isStreaming={message.isStreaming}
+                  onCancel={() =>
+                    activeConversationId &&
+                    patchMessage(activeConversationId, message.id, {
+                      content: "Đã đóng báo cáo công việc.",
+                      reportRequest: undefined,
                       isStreaming: false,
                     })
                   }
