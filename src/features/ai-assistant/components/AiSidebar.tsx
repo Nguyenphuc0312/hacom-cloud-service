@@ -33,11 +33,8 @@ export const AiSidebar: React.FC = () => {
   } = useAiAssistantStore();
 
   const user = useAuthStore((s) => s.user);
-  // Lọc hội thoại theo employeeCode (giống AI cá nhân) — KHÔNG fallback user.id,
-  // nếu không hội thoại tạo trước khi employeeCode kịp tải (bị đóng dấu user.id)
-  // sẽ bị ẩn sạch sau F5/đổi tab khi bộ lọc chuyển sang so theo employeeCode.
   const currentOwnerId = user
-    ? (user.employeeCode ?? user.employee_code ?? null)
+    ? (user.employeeCode ?? user.employee_code ?? user.id ?? null)
     : null;
 
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();

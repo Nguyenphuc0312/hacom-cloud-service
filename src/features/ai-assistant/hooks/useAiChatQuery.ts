@@ -55,6 +55,13 @@ export interface QueryState<T> {
   refetch: () => void;
 }
 
+export interface MutationState<TResult, TVars> {
+  loading: boolean;
+  error: NormalizedError | null;
+  mutate: (vars: TVars) => Promise<TResult>;
+  reset: () => void;
+}
+
 // ---------------------------------------------------------------------------
 // Auth-aware retry helper
 // ---------------------------------------------------------------------------
@@ -64,7 +71,7 @@ export interface QueryState<T> {
  * Auth failures (401/403) and rate-limits → never retry.
  * Network / timeout / 5xx → retry up to `maxAttempts` times.
  */
-function aiChatRetry(
+export function aiChatRetry(
   error: unknown,
   attemptsDone: number,
   maxAttempts = 2,
@@ -73,6 +80,15 @@ function aiChatRetry(
   if (!isRetryableError(normalized)) return false;
   return attemptsDone < maxAttempts;
 }
+
+// ---------------------------------------------------------------------------
+// Query key factory — prevents typo-driven cache misses across hooks
+// ---------------------------------------------------------------------------
+
+export const aiChatKeys = {
+  sessions: () => "ai-chat:sessions",
+  sessionMessages: (id: string) => `ai-chat:session:${id}:messages`,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Response normalizers — handle multiple API response shapes
@@ -270,4 +286,124 @@ export function useAiChatHistory(
   const data = entry && sessionId && entry.sid === sessionId ? entry.messages : undefined;
 
   return { data, loading, error, refetch };
+}
+
+// ---------------------------------------------------------------------------
+// useDeleteSession
+// ---------------------------------------------------------------------------
+
+export function useDeleteSession(): MutationState<void, string> {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+
+  const mutate = useCallback(async (sessionId: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await aiChatClient.delete(`/api/sessions/${sessionId}`);
+    } catch (err) {
+      const normalized = normalizeAiChatError(err);
+      setError(normalized);
+      throw normalized;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reset = useCallback(() => setError(null), []);
+
+  return { loading, error, mutate, reset };
+}
+
+// ---------------------------------------------------------------------------
+// useRenameSession
+// ---------------------------------------------------------------------------
+
+interface RenameSessionVars {
+  sessionId: string;
+  title: string;
+}
+
+export function useRenameSession(): MutationState<void, RenameSessionVars> {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+
+  const mutate = useCallback(
+    async ({ sessionId, title }: RenameSessionVars): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        await aiChatClient.patch(`/api/chat/sessions/${sessionId}`, { title });
+      } catch (err) {
+        const normalized = normalizeAiChatError(err);
+        setError(normalized);
+        throw normalized;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  const reset = useCallback(() => setError(null), []);
+
+  return { loading, error, mutate, reset };
+}
+
+// ---------------------------------------------------------------------------
+// usePrefetchSession
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a stable `prefetch` function.  Call it on `onMouseEnter` of a
+ * session list item to warm a local ref cache before the user navigates.
+ *
+ * Note: without a shared query cache (like React Query or RTK Query),
+ * prefetched data is held in a module-level WeakMap and consumed by the
+ * first `useAiChatHistory` call for the same session ID within 60 seconds.
+ */
+const prefetchCache = new Map<string, { data: AiMessage[]; expiresAt: number }>();
+const PREFETCH_TTL_MS = 60_000;
+
+export function usePrefetchSession(
+  userId?: string | null,
+  employeeCode?: string | null,
+) {
+  const prefetch = useCallback((sessionId: string): void => {
+    const existing = prefetchCache.get(sessionId);
+    if (existing && existing.expiresAt > Date.now()) return;
+
+    const ac = new AbortController();
+    void aiChatClient
+      .get<unknown>(
+        `/api/sessions/${sessionId}`,
+        { signal: ac.signal },
+      )
+      .then(({ data }) => {
+        const messages = normalizeMessagesResponse(data);
+        if (messages.length > 0) {
+          prefetchCache.set(sessionId, {
+            data: messages,
+            expiresAt: Date.now() + PREFETCH_TTL_MS,
+          });
+        }
+      })
+      .catch(() => {
+        // Prefetch errors are silently ignored — they're best-effort.
+      });
+  }, [userId, employeeCode]);
+
+  return { prefetch };
+}
+
+/**
+ * Retrieve a prefetched session message list (if still fresh).
+ * Returns `undefined` when the cache is cold or stale.
+ */
+export function getPrefetchedSessionMessages(
+  sessionId: string,
+): AiMessage[] | undefined {
+  const entry = prefetchCache.get(sessionId);
+  if (!entry || entry.expiresAt <= Date.now()) return undefined;
+  return entry.data;
 }
