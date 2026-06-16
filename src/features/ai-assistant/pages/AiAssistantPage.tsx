@@ -66,7 +66,12 @@ export const AiAssistantPage: React.FC = () => {
 
   // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
   // kể cả trước khi sessions load xong
-  const ownerIdKey = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
+  // CHỈ dùng employeeCode làm ownerId (giống AI cá nhân) — KHÔNG fallback user.id.
+  // employeeCode tải bất đồng bộ từ HR profile; nếu fallback sang user.id trong lúc
+  // chờ, hội thoại bị đóng dấu ownerId=user.id rồi sau đó các bộ lọc so theo
+  // employeeCode → mismatch → ẩn sạch hội thoại sau F5/đổi tab. Để trống → ownerId
+  // null (hiển thị với mọi tài khoản) cho tới khi biết employeeCode thật.
+  const ownerIdKey = user?.employeeCode ?? user?.employee_code ?? "";
   useEffect(() => {
     if (ownerIdKey) setOwnerId(ownerIdKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +110,7 @@ export const AiAssistantPage: React.FC = () => {
 
   useEffect(() => {
     if (!companySessions || companySessions.length === 0) return;
-    const ownerId = user?.employeeCode ?? user?.employee_code ?? user?.id ?? "";
+    const ownerId = user?.employeeCode ?? user?.employee_code ?? "";
     if (!ownerId) return;
     loadServerSessions(
       companySessions.map((s) => ({
