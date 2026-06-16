@@ -80,6 +80,71 @@ const inFlightBatchRequests = new Map<
   Promise<Record<string, ThumbnailUrlItem>>
 >();
 
+// --- Realtime preview signals (WebSocket-driven) ---------------------------
+// When the worker finishes a thumbnail it publishes `attachment:preview_ready`
+// (or `:_failed`). The WS handler calls markPreview*() below, which evicts the
+// per-file TTL cache entry and notifies any mounted hook watching that fileId so
+// it re-fetches a fresh signed URL immediately — turning polling into a fallback
+// rather than the primary delivery path.
+const previewSignalListeners = new Map<string, Set<() => void>>();
+
+const subscribePreviewSignal = (
+  fileIds: string[],
+  cb: () => void,
+): (() => void) => {
+  for (const id of fileIds) {
+    if (!id) continue;
+    let set = previewSignalListeners.get(id);
+    if (!set) {
+      set = new Set();
+      previewSignalListeners.set(id, set);
+    }
+    set.add(cb);
+  }
+  return () => {
+    for (const id of fileIds) {
+      const set = previewSignalListeners.get(id);
+      if (!set) continue;
+      set.delete(cb);
+      if (set.size === 0) previewSignalListeners.delete(id);
+    }
+  };
+};
+
+const emitPreviewSignal = (fileId: string): void => {
+  const set = previewSignalListeners.get(fileId);
+  if (!set) return;
+  for (const cb of set) {
+    try {
+      cb();
+    } catch {
+      // listener errors must not break the emitter loop
+    }
+  }
+};
+
+/**
+ * Called when a WS `attachment:preview_ready` event arrives. Evicts the cached
+ * (likely PENDING) entry so the next fetch returns the READY signed URL, then
+ * nudges any mounted hook to refetch now. Idempotent — safe to call repeatedly.
+ */
+export const markPreviewReady = (fileId: string): void => {
+  if (!fileId) return;
+  THUMBNAIL_CACHE.delete(fileId);
+  emitPreviewSignal(fileId);
+};
+
+/**
+ * Called when a WS `attachment:preview_failed` event arrives. Evicts the cached
+ * entry so the next fetch reflects the terminal failed/fallback state from the
+ * server (which decides retryability).
+ */
+export const markPreviewFailed = (fileId: string): void => {
+  if (!fileId) return;
+  THUMBNAIL_CACHE.delete(fileId);
+  emitPreviewSignal(fileId);
+};
+
 const parseExpiry = (expiresAt?: string | null): number => {
   if (!expiresAt) return Number.NaN;
   // Numeric epoch (seconds or milliseconds).
@@ -297,6 +362,17 @@ export const useBatchThumbnailUrl = (
     },
     [runFetch],
   );
+
+  // Realtime: when a preview_ready/failed signal fires for any managed fileId,
+  // refetch immediately (the cache entry was already evicted by markPreview*).
+  useEffect(() => {
+    if (!stableKey) return;
+    const ids = stableKey.split("|");
+    const unsubscribe = subscribePreviewSignal(ids, () => {
+      void runFetch(false);
+    });
+    return unsubscribe;
+  }, [stableKey, runFetch]);
 
   return { urls, isLoading, error, refresh };
 };
