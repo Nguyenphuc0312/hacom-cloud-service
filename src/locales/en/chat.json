@@ -315,7 +315,8 @@
     "previewAlt": "Image preview",
     "close": "Close",
     "processing": "Generating preview…",
-    "processingFallback": "Image is being processed",
+    "processingFallback": "Image is still being processed — you can still open/download the original.",
+    "openOriginal": "Open original",
     "retry": "Retry",
     "notPreviewable": "Preview not supported",
     "previewFailed": "Preview could not be generated"

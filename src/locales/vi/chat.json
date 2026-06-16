@@ -315,7 +315,8 @@
     "previewAlt": "Xem trước ảnh",
     "close": "Đóng",
     "processing": "Đang tạo xem trước…",
-    "processingFallback": "Ảnh đang được xử lý",
+    "processingFallback": "Ảnh đang được xử lý, bạn vẫn có thể mở/tải ảnh gốc.",
+    "openOriginal": "Mở ảnh gốc",
     "retry": "Thử lại",
     "notPreviewable": "Không hỗ trợ xem trước",
     "previewFailed": "Không tạo được xem trước"

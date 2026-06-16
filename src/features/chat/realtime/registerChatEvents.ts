@@ -17,6 +17,8 @@ interface ChatEventHandlers {
   onReactionRemoved?: RealtimeEventHandler;
   onReactionUpdated?: RealtimeEventHandler;
   onConversationParticipantUpdated?: RealtimeEventHandler;
+  onAttachmentPreviewReady?: RealtimeEventHandler;
+  onAttachmentPreviewFailed?: RealtimeEventHandler;
 }
 
 export const registerChatEvents = (
@@ -67,6 +69,14 @@ export const registerChatEvents = (
   register(
     WebSocketEvents.CONVERSATION_PARTICIPANT_UPDATED,
     handlers.onConversationParticipantUpdated,
+  );
+  register(
+    WebSocketEvents.ATTACHMENT_PREVIEW_READY,
+    handlers.onAttachmentPreviewReady,
+  );
+  register(
+    WebSocketEvents.ATTACHMENT_PREVIEW_FAILED,
+    handlers.onAttachmentPreviewFailed,
   );
 
   return () => {

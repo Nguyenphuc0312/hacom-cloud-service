@@ -40,6 +40,18 @@ interface ImageMessageProps {
 
 const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
 
+// --- Thumbnail polling cadence (fallback when WS preview event is missed) ----
+// Exponential backoff during an "active" window, then a slow heartbeat so a job
+// that finishes late (large image / queue backlog) still self-heals without the
+// user refreshing. WebSocket `attachment:preview_ready` short-circuits all of
+// this when it arrives.
+const PENDING_BACKOFF_MS = [2000, 4000, 8000, 15000, 30000];
+const ACTIVE_WINDOW_MS = 120_000; // ~2 min of escalating polls
+const SLOW_INTERVAL_MS = 45_000; // then 30–60s heartbeat
+const MIN_POLL_DELAY_MS = 2000;
+const MAX_ACTIVE_DELAY_MS = 30_000;
+const MAX_SLOW_DELAY_MS = 60_000;
+
 export const ImageMessage: React.FC<ImageMessageProps> = ({
   conversationId,
   attachment,
@@ -61,12 +73,17 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
 
-  // Retry counter — bounded so we never poll forever.
-  // Resets when the file reaches a terminal/ready state.
-  const retryCountRef = useRef(0);
-  const MAX_THUMBNAIL_RETRIES = 3;
-  // True once the client has exhausted all auto-retries. Triggers fallback UI.
+  // Backoff bookkeeping. `pendingSinceRef` anchors the active window; `pollAttemptRef`
+  // indexes the backoff schedule. We never hard-stop while the server says
+  // retryable — once the active window elapses we keep a slow heartbeat going.
+  const pendingSinceRef = useRef<number | null>(null);
+  const pollAttemptRef = useRef(0);
+  // True once the active window has elapsed: show the "still processing, open the
+  // original" fallback while continuing to poll slowly in the background.
   const [retryExhausted, setRetryExhausted] = useState(false);
+  // Bumped on tab visibility changes so the polling effect re-evaluates (pauses
+  // while hidden, resumes on focus).
+  const [tabVisibilityTick, setTabVisibilityTick] = useState(0);
 
   const isLargeImage = (attachment.fileSize || 0) > HD_THRESHOLD;
   const [showHd, setShowHd] = useState(!isLargeImage);
@@ -130,44 +147,92 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   // never a spinning skeleton.
   const isTerminalNoUrl = !activeSource && terminalBatchStatus;
 
-  // Reset retry counter and exhaustion flag whenever the thumbnail pipeline
-  // leaves the retryable state (reaches ready, failed, not_found, etc.).
+  // Reset backoff bookkeeping whenever the thumbnail pipeline leaves the
+  // retryable state (reaches ready, failed, not_found, etc.).
   useEffect(() => {
     if (!isThumbnailPending) {
-      retryCountRef.current = 0;
+      pendingSinceRef.current = null;
+      pollAttemptRef.current = 0;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRetryExhausted(false);
     }
   }, [isThumbnailPending]);
 
-  // Auto-refresh thumbnail while in-flight, visible, and under the retry budget.
-  // Uses non-force path so the hook's TTL gate prevents hammering the endpoint;
-  // the actual network call fires at most once per retryAfterMs / PENDING_TTL_MS.
-  // When retryCountRef hits MAX_THUMBNAIL_RETRIES: stop the timer and set
-  // retryExhausted so the component renders a fallback UI instead of a spinner.
+  // Pause/resume polling with tab visibility (avoid background spam).
   useEffect(() => {
-    if (!isThumbnailPending || !isVisible || retryExhausted) return;
+    if (typeof document === "undefined") return;
+    const onVisibility = () => setTabVisibilityTick((tick) => tick + 1);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
-    // Use retryAfterMs from the server response; fall back to 8 s.
-    const intervalMs = thumbnailUrl?.retryAfterMs ?? 8000;
+  // Smart auto-poll: exponential backoff inside the active window, then a slow
+  // heartbeat — never a hard stop while the server says retryable. The hook's
+  // TTL gate + in-flight dedupe still prevent hammering the endpoint. The
+  // WebSocket preview_ready handler evicts the cache and refetches out-of-band,
+  // so in the happy path this loop fires only once or twice.
+  useEffect(() => {
+    if (!isThumbnailPending || !isVisible) return;
+    if (typeof document !== "undefined" && document.hidden) return;
 
-    const timer = setInterval(() => {
-      retryCountRef.current += 1;
-      if (retryCountRef.current >= MAX_THUMBNAIL_RETRIES) {
-        clearInterval(timer);
+    if (pendingSinceRef.current === null) {
+      pendingSinceRef.current = Date.now();
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleNext = () => {
+      const elapsed = Date.now() - (pendingSinceRef.current ?? Date.now());
+      const inActiveWindow = elapsed < ACTIVE_WINDOW_MS;
+
+      if (!inActiveWindow && !retryExhausted) {
         setRetryExhausted(true);
-        return;
       }
-      void refreshThumbnail(false);
-    }, intervalMs);
 
-    return () => clearInterval(timer);
-  }, [isThumbnailPending, isVisible, retryExhausted, refreshThumbnail, thumbnailUrl?.retryAfterMs]);
+      // Base delay: backoff schedule while active, slow heartbeat after.
+      let delay = inActiveWindow
+        ? PENDING_BACKOFF_MS[
+            Math.min(pollAttemptRef.current, PENDING_BACKOFF_MS.length - 1)
+          ]
+        : SLOW_INTERVAL_MS;
 
-  // Manual retry: resets exhaustion state and forces a fresh network call,
-  // bypassing the TTL cache. Gives the user 3 more auto-retries after this.
+      // Honour the server's retryAfterMs when present, clamped to the phase.
+      const serverRetry = thumbnailUrl?.retryAfterMs;
+      if (typeof serverRetry === "number" && serverRetry > 0) {
+        delay = serverRetry;
+      }
+      const maxDelay = inActiveWindow ? MAX_ACTIVE_DELAY_MS : MAX_SLOW_DELAY_MS;
+      delay = Math.min(Math.max(delay, MIN_POLL_DELAY_MS), maxDelay);
+
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        pollAttemptRef.current += 1;
+        void refreshThumbnail(false);
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [
+    isThumbnailPending,
+    isVisible,
+    retryExhausted,
+    refreshThumbnail,
+    thumbnailUrl?.retryAfterMs,
+    tabVisibilityTick,
+  ]);
+
+  // Manual retry: restarts the active window and forces a fresh network call,
+  // bypassing the TTL cache.
   const handleManualRetry = useCallback(() => {
-    retryCountRef.current = 0;
+    pendingSinceRef.current = Date.now();
+    pollAttemptRef.current = 0;
     setRetryExhausted(false);
     void refreshThumbnail(true);
   }, [refreshThumbnail]);
@@ -344,21 +409,34 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
             </div>
           )}
 
-          {/* Retry exhausted — client gave up auto-polling; offer manual retry */}
+          {/* Active window elapsed — still polling slowly in the background, but
+              surface a fallback so the user can open/download the original now. */}
           {isThumbnailPending && !hasDisplayUrl && retryExhausted && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay p-4">
               <PhotoIcon className="h-10 w-10 text-text-muted" />
               <span className="text-center text-xs text-text-muted">
-                {t("chat:image.processingFallback", { defaultValue: "Ảnh đang được xử lý" })}
+                {t("chat:image.processingFallback", {
+                  defaultValue: "Ảnh đang được xử lý, bạn vẫn có thể mở/tải ảnh gốc.",
+                })}
               </span>
-              <button
-                type="button"
-                onClick={handleManualRetry}
-                className="flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <ArrowPathIcon className="h-3 w-3" />
-                {t("chat:image.retry", { defaultValue: "Thử lại" })}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleImageClick}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <PhotoIcon className="h-3 w-3" />
+                  {t("chat:image.openOriginal", { defaultValue: "Mở ảnh gốc" })}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleManualRetry}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <ArrowPathIcon className="h-3 w-3" />
+                  {t("chat:image.retry", { defaultValue: "Thử lại" })}
+                </button>
+              </div>
             </div>
           )}
 
