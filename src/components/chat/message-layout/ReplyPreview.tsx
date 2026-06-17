@@ -13,6 +13,7 @@ import type { Message } from "../../../types";
 import { MessageType } from "../../../types";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { resolvePublicResourceUrl } from "../../../config";
+import { useBatchThumbnailUrl } from "../../../hooks";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ interface ReplyPreviewProps {
   isSelectionMode: boolean;
   isOwn: boolean;
   replyPreviewClass?: string;
+  conversationId?: string;
   onClick: () => void;
 }
 
@@ -76,6 +78,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
   replyTargetMessageId,
   isSelectionMode,
   isOwn,
+  conversationId,
   onClick,
 }) => {
   const { t } = useTranslation();
@@ -97,9 +100,25 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
   const isImageOrVideo = msgType === MessageType.IMAGE || msgType === MessageType.VIDEO;
 
   const firstAttachment = replyToMessage.attachments?.[0];
-  const thumbnailUrl = resolvePublicResourceUrl(
-    firstAttachment?.thumbnailUrl ?? (isImageOrVideo ? firstAttachment?.url : undefined),
+
+  // Private files don't carry a usable URL in the reply payload — fetch the
+  // signed thumbnail the same way the timeline does (keyed by attachment id).
+  const wantsThumb = isImageOrVideo && !isDeleted && !!firstAttachment?.id;
+  const { urls: signedThumbs } = useBatchThumbnailUrl(
+    conversationId,
+    wantsThumb ? [firstAttachment!.id] : [],
+    { autoFetch: wantsThumb && !!conversationId },
   );
+  const signedThumbUrl = firstAttachment?.id
+    ? signedThumbs?.[firstAttachment.id]?.url
+    : undefined;
+
+  // Prefer signed thumbnail; fall back to any URL the payload already carries.
+  const thumbnailUrl =
+    signedThumbUrl ??
+    resolvePublicResourceUrl(
+      firstAttachment?.thumbnailUrl ?? (isImageOrVideo ? firstAttachment?.url : undefined),
+    );
   const hasThumb = !!thumbnailUrl && isImageOrVideo;
 
   const fileName = firstAttachment?.fileName;
