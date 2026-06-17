@@ -135,7 +135,8 @@
     "discardDescription": "Your unsaved edits will be lost.",
     "cancel": "Cancel",
     "save": "Save changes",
-    "phonePlaceholder": "+84 912 345 678"
+    "phonePlaceholder": "+84 912 345 678",
+    "lockedHrHint": "This field is managed in the HRM system and cannot be edited here."
   },
   "settings": {
     "title": "Profile settings",
