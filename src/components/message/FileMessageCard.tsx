@@ -74,12 +74,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const iconType = getFileIconType(attachment.mimeType, attachment.fileName) as FileIconType;
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
+  // Office documents (Word/Excel/PowerPoint) + PDF/text/csv/media are all
+  // previewable in-browser. Only truly opaque types (archives, unknown) and
+  // oversized files fall back to download-only.
   const isPreviewable =
     previewType !== "unknown" &&
     previewType !== "archive" &&
-    previewType !== "document" &&
-    previewType !== "spreadsheet" &&
-    previewType !== "presentation" &&
     !isFileTooLargeForPreview(attachment.fileSize) &&
     fileStatus === "ready";
 
@@ -478,7 +478,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             onClick={handlePreview}
             className={clsx(
               "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-              "opacity-0 group-hover/file:opacity-100 focus:opacity-100",
               isOwn
                 ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.25]"
                 : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
