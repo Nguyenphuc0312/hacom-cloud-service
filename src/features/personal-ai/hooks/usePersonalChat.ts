@@ -8,7 +8,6 @@ import {
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import type { PersonalChatMessage } from "../types";
-import type { WorkReportFormRequest } from "../../ai-assistant/types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
@@ -79,6 +78,8 @@ export function usePersonalChat() {
             timestamp: new Date(m.timestamp),
             isStreaming: false as const,
             thinkingPhase: null as null,
+            // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
+            ...(m.metadata?.exportable_table === true && { exportableTable: true }),
           }));
         if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
@@ -115,50 +116,21 @@ export function usePersonalChat() {
       // (xem fe-baocaocv-regular-user-fix.md). Streaming path bên dưới đã xử lý
       // cả `onToken` lẫn `onSelectionRequest`, nên chỉ cần để nó chạy tiếp.
 
-      // Detect #baocaocongviec — FE trực tiếp hiển thị form báo cáo công việc ngày
+      // #baocaocongviec — KHÔNG dựng form ở FE nữa. Để request stream qua SSE; BE
+      // sẽ bắn `form_request` kèm `existing` (prefill chống mất dữ liệu) + cấu hình
+      // đính kèm. `onFormRequest` bên dưới patch form vào message. Ở đây chỉ tự động
+      // hủy các form còn mở trước đó để tránh nhiều form cùng lúc (lưu trùng).
       if (BAOCAOCONGVIEC_TRIGGER.test(trimmed)) {
-        const assistantId = crypto.randomUUID();
-        addMessage(conversationId, {
-          id: assistantId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-          isStreaming: false,
-          thinkingPhase: null,
+        const prevConv = conversations.find((c) => c.id === conversationId);
+        prevConv?.messages.forEach((m) => {
+          if (m.formRequest) {
+            patchMessage(conversationId, m.id, {
+              content: "Đã hủy báo cáo.",
+              formRequest: undefined,
+              isStreaming: false,
+            });
+          }
         });
-        const today = new Date().toISOString().split("T")[0];
-        const formData: WorkReportFormRequest = {
-          form_type: "daily_work_report",
-          date: today,
-          employee_code: user?.employeeCode ?? user?.employee_code ?? "",
-          employee_name:
-            user?.fullNameFromHr ??
-            user?.fullNameFromHR ??
-            user?.displayName ??
-            user?.username ??
-            "",
-          department_name: user?.departmentName ?? "",
-          org_unit: user?.orgUnit ?? "",
-          allow_multiple_tasks: true,
-          fields: ["task_name", "requirements", "completed", "difficulties"],
-          field_labels: {
-            task_name: "Tên công việc",
-            requirements: "Yêu cầu",
-            completed: "Đã làm được",
-            difficulties: "Khó khăn",
-          },
-          extra_fields: ["notes"],
-          extra_field_labels: { notes: "Ghi chú" },
-          existing: null,
-          submit_endpoint: "/api/work-reports",
-        };
-        patchMessage(conversationId, assistantId, {
-          content: "",
-          formRequest: formData,
-          isStreaming: false,
-          thinkingPhase: null,
-        });
-        return;
       }
 
       // Detect #tongcvtuan — hiển thị danh sách file báo cáo tuần inline
@@ -257,6 +229,11 @@ export function usePersonalChat() {
         );
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
+
+        // Bật nút "In" nếu câu trả lời là bảng có thể xuất (SSE done.exportable_table).
+        if (response.exportable_table) {
+          patchMessage(convIdSnapshot, assistantMessage.id, { exportableTable: true });
+        }
 
         // Cập nhật serverSessionId nếu backend trả về session_id mới.
         // Guard: bỏ qua nếu ID mới chỉ là wrapper của ID cũ (backend double-prefix bug:

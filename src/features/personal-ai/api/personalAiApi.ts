@@ -606,6 +606,7 @@ export async function streamPersonalChat(
                     .map(normalizeCitation)
                     .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
                 : undefined,
+              exportable_table: parsed.exportable_table === true,
             };
           } catch {
             /* malformed done payload — recover below */
@@ -628,6 +629,7 @@ export async function streamPersonalChat(
                   .map(normalizeCitation)
                   .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
               : undefined,
+            exportable_table: parsed.exportable_table === true,
           };
         } catch {
           /* unrecoverable */
