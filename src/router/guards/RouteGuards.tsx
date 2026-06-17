@@ -9,7 +9,10 @@ import { useAuthStore } from "../../stores";
 import { PageSpinner } from "../../components/ui";
 import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
-import { isBlockedAuthStatus } from "../../features/auth/model/authState";
+import {
+  isBlockedAuthStatus,
+  isPendingHrLinkStatus,
+} from "../../features/auth/model/authState";
 
 interface GuardProps {
   children: React.ReactNode;
@@ -57,6 +60,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (isBlockedAuthStatus(authStatus)) {
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
+  }
+
+  if (
+    isPendingHrLinkStatus(authStatus) &&
+    location.pathname !== ROUTE_PATHS.PENDING_HR_LINK
+  ) {
+    return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
   }
 
   if (authStatus === "bootstrap_error") {
@@ -125,6 +135,10 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     return <>{children}</>;
   }
 
+  if (isPendingHrLinkStatus(authStatus)) {
+    return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
+  }
+
   if (isAuthenticated || authStatus === "authenticated") {
     if (user?.mustChangePassword === true) {
       return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
@@ -182,6 +196,10 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
+  if (isPendingHrLinkStatus(authStatus)) {
+    return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
+  }
+
   if (authStatus === "bootstrap_error") {
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
@@ -201,6 +219,7 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
     isBootstrappingAuth,
     initialize,
     user,
+    authStatus,
   } = useAuthStore();
 
   useEffect(() => {
@@ -214,6 +233,9 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
   }
 
   if (!isAuthenticated) {
+    if (isPendingHrLinkStatus(authStatus)) {
+      return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
+    }
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
@@ -222,4 +244,39 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
   }
 
   return <>{children}</>;
+};
+
+export const PendingHrLinkRoute: React.FC<GuardProps> = ({ children }) => {
+  const { t } = useTranslation();
+  const {
+    isInitialized,
+    isBootstrappingAuth,
+    initialize,
+    authStatus,
+    user,
+  } = useAuthStore();
+
+  useEffect(() => {
+    if (!isInitialized) {
+      void initialize();
+    }
+  }, [isInitialized, initialize]);
+
+  if (!isInitialized || isBootstrappingAuth) {
+    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+  }
+
+  if (isPendingHrLinkStatus(authStatus) && user) {
+    return <>{children}</>;
+  }
+
+  if (isBlockedAuthStatus(authStatus)) {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
+  }
+
+  if (authStatus === "authenticated") {
+    return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+  }
+
+  return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
 };

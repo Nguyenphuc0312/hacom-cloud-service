@@ -8,12 +8,19 @@ import {
   ActivationRoute,
   ForceChangePasswordRoute,
   GuestRoute,
+  PendingHrLinkRoute,
   ProtectedRoute,
 } from "./guards/RouteGuards";
 
 const renderRouteElement = (
   Component: React.ComponentType,
-  options?: { guestOnly?: boolean; activationOnly?: boolean; forceChangePasswordOnly?: boolean; roles?: string[] },
+  options?: {
+    guestOnly?: boolean;
+    activationOnly?: boolean;
+    forceChangePasswordOnly?: boolean;
+    pendingHrLinkOnly?: boolean;
+    roles?: string[];
+  },
 ): ReactElement => {
   const page = <Component />;
 
@@ -23,6 +30,10 @@ const renderRouteElement = (
 
   if (options?.forceChangePasswordOnly) {
     return <ForceChangePasswordRoute>{page}</ForceChangePasswordRoute>;
+  }
+
+  if (options?.pendingHrLinkOnly) {
+    return <PendingHrLinkRoute>{page}</PendingHrLinkRoute>;
   }
 
   if (options?.guestOnly) {
@@ -43,13 +54,15 @@ const buildRouteObject = ({
   guestOnly = true,
   activationOnly = false,
   forceChangePasswordOnly = false,
+  pendingHrLinkOnly = false,
 }: AppRouteConfig): RouteObject => ({
   path,
   index,
   element: renderRouteElement(component as React.ComponentType, {
-    guestOnly: forceChangePasswordOnly ? false : guestOnly,
+    guestOnly: forceChangePasswordOnly || pendingHrLinkOnly ? false : guestOnly,
     activationOnly,
     forceChangePasswordOnly,
+    pendingHrLinkOnly,
   }),
 });
 

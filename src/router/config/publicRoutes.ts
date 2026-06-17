@@ -12,6 +12,7 @@ const ResetPasswordPage = lazy(() => import("../../pages/ResetPasswordPage"));
 const ForceChangePasswordPage = lazy(
   () => import("../../pages/ForceChangePasswordPage"),
 );
+const PendingHrLinkPage = lazy(() => import("../../pages/PendingHrLinkPage"));
 
 /**
  * Public routes. Most are guest-only, but verification links must stay accessible
@@ -46,6 +47,13 @@ export const publicRoutes: AppRouteConfig[] = [
     component: ForceChangePasswordPage,
     guestOnly: false,
     forceChangePasswordOnly: true,
+    splitLayout: true,
+  },
+  {
+    path: ROUTE_PATHS.PENDING_HR_LINK,
+    component: PendingHrLinkPage,
+    guestOnly: false,
+    pendingHrLinkOnly: true,
     splitLayout: true,
   },
 ];

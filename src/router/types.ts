@@ -10,5 +10,6 @@ export interface AppRouteConfig {
   guestOnly?: boolean;
   activationOnly?: boolean;
   forceChangePasswordOnly?: boolean;
+  pendingHrLinkOnly?: boolean;
   splitLayout?: boolean;
 }
