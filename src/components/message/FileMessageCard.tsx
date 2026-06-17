@@ -432,18 +432,20 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 w-[17rem] max-w-full items-center gap-2.5 rounded-lg border p-2.5 transition-colors",
+        "group/file flex min-w-0 w-[17rem] max-w-full items-center gap-3 rounded-2xl border p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         isOwn
           ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
-          : "border-border/70 bg-surface hover:bg-surface-hover",
+          : "border-[#1976D2]/15 bg-[#1976D2]/[0.035] hover:border-[#1976D2]/25 hover:bg-[#1976D2]/[0.07]",
         className,
       )}
     >
       {/* Icon */}
       <div
         className={clsx(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-          isOwn ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15]" : "bg-surface",
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover/file:scale-105",
+          isOwn
+            ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15]"
+            : "bg-[#DBEAFE]/70 ring-1 ring-inset ring-[#1976D2]/10",
         )}
       >
         <FileTypeIcon type={iconType} />
@@ -455,19 +457,32 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           name={attachment.fileName || t("chat:file.unknown")}
           title={attachment.fileName}
           className={clsx(
-            "text-sm font-medium",
+            "text-sm font-semibold",
             isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
           )}
         />
-        <p
-          className={clsx(
-            "text-xs",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
-          )}
-        >
-          {size}
-          {extension ? ` · ${extension}` : ""}
-        </p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          {extension ? (
+            <span
+              className={clsx(
+                "rounded-md px-1.5 py-px text-[10px] font-bold uppercase tracking-wide",
+                isOwn
+                  ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))/0.85]"
+                  : "bg-[#1976D2]/10 text-[#1565C0]",
+              )}
+            >
+              {extension}
+            </span>
+          ) : null}
+          <span
+            className={clsx(
+              "text-xs",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
+            )}
+          >
+            {size}
+          </span>
+        </div>
       </div>
 
       {/* Action buttons */}
@@ -477,10 +492,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             type="button"
             onClick={handlePreview}
             className={clsx(
-              "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+              "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90",
               isOwn
-                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.25]"
-                : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
+                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:scale-110 hover:bg-[hsl(var(--chat-bubble-sent-text))/0.32]"
+                : "bg-white text-[#1565C0] shadow-sm hover:scale-110 hover:bg-[#1565C0] hover:text-white hover:shadow-md hover:shadow-[#1565C0]/30",
             )}
             aria-label={t("chat:filePreview.preview", {
               defaultValue: "Preview",
@@ -495,10 +510,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           onClick={() => void handleDownload()}
           disabled={isDownloading}
           className={clsx(
-            "flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 disabled:cursor-not-allowed disabled:opacity-50",
             isOwn
-              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.25]"
-              : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
+              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:scale-110 hover:bg-[hsl(var(--chat-bubble-sent-text))/0.32]"
+              : "bg-white text-[#1565C0] shadow-sm hover:scale-110 hover:bg-[#1565C0] hover:text-white hover:shadow-md hover:shadow-[#1565C0]/30",
           )}
           aria-label={t("chat:file.download")}
         >
