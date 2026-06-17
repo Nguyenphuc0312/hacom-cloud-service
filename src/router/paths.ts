@@ -9,6 +9,7 @@ export const ROUTE_PATHS = {
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
   FORCE_CHANGE_PASSWORD: "/force-change-password",
+  PENDING_HR_LINK: "/pending-hr-link",
   CHAT: "/chat",
   CHAT_DETAIL: "/chat/:conversationId?",
   FRIENDS: "/friends",

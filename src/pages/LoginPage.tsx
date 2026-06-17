@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { KeyIcon, QrCodeIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
@@ -12,6 +12,7 @@ import { useAuthStore } from "../stores";
 import { LockedOrDisabledState } from "../features/activation/components/LockedOrDisabledState";
 import { toast } from "../components/ui";
 import { toVietnameseMessage } from "../utils/userMessages";
+import { ROUTE_PATHS } from "../router/paths";
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation("auth");
@@ -68,7 +69,7 @@ export const LoginPage: React.FC = () => {
     handleSubmit,
     formState: { errors, isSubmitting },
     setFocus,
-    watch,
+    control,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { loginIdentifier: "", password: "", rememberMe: false },
@@ -80,7 +81,7 @@ export const LoginPage: React.FC = () => {
     }
   }, [authMethod, setFocus]);
 
-  const rememberMe = watch("rememberMe");
+  const rememberMe = useWatch({ control, name: "rememberMe" });
   const submitLockRef = React.useRef(false);
 
   const onSubmit = async (data: LoginFormData) => {
@@ -96,6 +97,11 @@ export const LoginPage: React.FC = () => {
           toVietnameseMessage(result.message, "Đăng nhập thành công."),
         );
         // GuestRoute handles redirect (preserves location.state.from)
+        return;
+      }
+      if (typeof result === "object" && result.status === "pending_hr_link") {
+        toast.info("Tài khoản đang chờ xác minh nhân sự.");
+        navigate(ROUTE_PATHS.PENDING_HR_LINK, { replace: true });
         return;
       }
       if (result === "activation_required") {

@@ -5,6 +5,7 @@ export type AuthStatus =
   | "loading"
   | "anonymous"
   | "authenticated"
+  | "pending_hr_link"
   | "activation_required"
   | "verifying_activation"
   | "locked"
@@ -39,6 +40,9 @@ export const isAuthenticatedStatus = (status: AuthStatus): boolean =>
 
 export const isBlockedAuthStatus = (status: AuthStatus): boolean =>
   status === "locked" || status === "disabled";
+
+export const isPendingHrLinkStatus = (status: AuthStatus): boolean =>
+  status === "pending_hr_link";
 
 export const resolveLockedAccountStatus = (
   code: string | null | undefined,

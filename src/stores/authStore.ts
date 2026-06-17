@@ -71,6 +71,12 @@ export interface User {
   full_name_from_hr?: string;
   employeeCode?: string;
   employee_code?: string;
+  claimedEmployeeCode?: string | null;
+  claimed_employee_code?: string | null;
+  claimedEmail?: string | null;
+  claimed_email?: string | null;
+  hrEmployeeId?: string | null;
+  hr_employee_id?: string | null;
   hrLinked?: boolean;
   accountType?: "employee" | "exception" | "bot" | string;
   hrLegalName?: string;
@@ -149,6 +155,7 @@ export interface RegisterFlowResult {
 
 export type LoginResult =
   | { status: "authenticated"; message?: string }
+  | { status: "pending_hr_link"; message?: string }
   | "activation_required"
   | "locked"
   | "disabled";
@@ -318,6 +325,26 @@ const resolveBlockedStatusFromUser = (
   }
 
   return null;
+};
+
+const isPendingHrLinkUser = (user: User | null | undefined): boolean => {
+  if (!user) {
+    return false;
+  }
+
+  const userRecord = user as unknown as Record<string, unknown>;
+  const candidates = [
+    userRecord.accountState,
+    userRecord.account_state,
+    userRecord.accountStatus,
+    userRecord.account_status,
+    userRecord.activationStatus,
+    userRecord.activation_status,
+  ];
+
+  return candidates.some(
+    (value) => normalizeStatusMarker(value) === "PENDING_HR_LINK",
+  );
 };
 
 const resolveBlockedAuthMessage = (
@@ -520,6 +547,29 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
+          if (isPendingHrLinkUser(user)) {
+            storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+            resetAuthFailureState();
+            resetAuthIdentityGuard();
+
+            set({
+              user,
+              authStatus: "pending_hr_link",
+              isBootstrappingAuth: false,
+              activationContext: null,
+              lockedAccount: null,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
+              isAuthenticated: false,
+              isLoading: false,
+              isInitialized: true,
+              registrationStatus: "idle",
+              error: null,
+            });
+            return;
+          }
+
           storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
           resetAuthFailureState();
           // A fresh, validated token+user pair is now in sync — re-arm the
@@ -586,6 +636,12 @@ export const useAuthStore = create<AuthState>()(
               rememberMe: data.rememberMe,
             });
             get().applyLoginResponse(payload, data.rememberMe);
+            if (get().authStatus === "pending_hr_link") {
+              return {
+                status: "pending_hr_link",
+                message: payload.message,
+              };
+            }
             return {
               status: "authenticated",
               message: payload.message,
@@ -687,6 +743,20 @@ export const useAuthStore = create<AuthState>()(
           try {
             const response = await authApi.register(data);
             const registerPayload = unwrapApiSuccess(response);
+            const authPayload = normalizeLoginPayload(registerPayload);
+            if (authPayload.accessToken) {
+              get().applyLoginResponse(registerPayload, false);
+              return {
+                verificationRequired: false,
+                email:
+                  normalizeStringValue(authPayload.user.email) ??
+                  data.email.trim().toLowerCase(),
+                challengeId: null,
+                expiresAt: null,
+                message: response.message,
+              };
+            }
+
             const payloadRecord = registerPayload as unknown as Record<
               string,
               unknown
@@ -846,6 +916,26 @@ export const useAuthStore = create<AuthState>()(
               return;
             }
 
+            if (isPendingHrLinkUser(user)) {
+              set({
+                user,
+                authStatus: "pending_hr_link",
+                isBootstrappingAuth: false,
+                activationContext: null,
+                lockedAccount: null,
+                pendingVerificationEmail: null,
+                pendingVerificationSource: null,
+                emailVerificationChallenge: null,
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+                error: null,
+              });
+              resetAuthFailureState();
+              return;
+            }
+
             set({
               user,
               authStatus: "authenticated",
@@ -894,6 +984,15 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const user = await fetchCurrentUser(token);
+          if (isPendingHrLinkUser(user)) {
+            set({
+              user,
+              authStatus: "pending_hr_link",
+              isBootstrappingAuth: false,
+              isAuthenticated: false,
+            });
+            return user;
+          }
           set((state) => ({
             user,
             authStatus:
@@ -1019,6 +1118,26 @@ export const useAuthStore = create<AuthState>()(
                   return;
                 }
 
+                if (isPendingHrLinkUser(user)) {
+                  set({
+                    user,
+                    authStatus: "pending_hr_link",
+                    isBootstrappingAuth: false,
+                    activationContext: null,
+                    lockedAccount: null,
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: null,
+                  });
+                  resetAuthFailureState();
+                  return;
+                }
+
                 set({
                   user,
                   authStatus: "authenticated",
@@ -1106,6 +1225,26 @@ export const useAuthStore = create<AuthState>()(
                     return;
                   }
 
+                  if (isPendingHrLinkUser(user)) {
+                    set({
+                      user,
+                      authStatus: "pending_hr_link",
+                      isBootstrappingAuth: false,
+                      activationContext: null,
+                      lockedAccount: null,
+                      pendingVerificationEmail: null,
+                      pendingVerificationSource: null,
+                      emailVerificationChallenge: null,
+                      isAuthenticated: false,
+                      isLoading: false,
+                      isInitialized: true,
+                      registrationStatus: "idle",
+                      error: null,
+                    });
+                    resetAuthFailureState();
+                    return;
+                  }
+
                   set({
                     user,
                     authStatus: "authenticated",
@@ -1132,16 +1271,17 @@ export const useAuthStore = create<AuthState>()(
                     // Network/server error on profile fetch, but we have a fresh
                     // token — restore from persisted user rather than logging out.
                     const cachedUser = get().user;
+                    const cachedPending = isPendingHrLinkUser(cachedUser);
                     set({
                       user: cachedUser,
-                      authStatus: "authenticated",
+                      authStatus: cachedPending ? "pending_hr_link" : "authenticated",
                       isBootstrappingAuth: false,
                       activationContext: null,
                       lockedAccount: null,
                       pendingVerificationEmail: null,
                       pendingVerificationSource: null,
                       emailVerificationChallenge: null,
-                      isAuthenticated: true,
+                      isAuthenticated: !cachedPending,
                       isLoading: false,
                       isInitialized: true,
                       registrationStatus: "idle",
