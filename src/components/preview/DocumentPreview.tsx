@@ -1,10 +1,16 @@
 /**
- * @fileoverview DocumentPreview - Fallback preview for office documents.
- * Shows document info with icon, metadata, and download option.
- * Designed to be extensible for future backend document-to-PDF conversion.
+ * @fileoverview DocumentPreview - In-browser preview for office documents.
+ *
+ * Word / Excel / PowerPoint are rendered with the Microsoft Office Online
+ * viewer (iframe) when the file is served from a publicly reachable URL —
+ * Microsoft's servers fetch the file directly, so the signed/public storage
+ * URL must be absolute http(s) and not a localhost address.
+ *
+ * When the file is not publicly reachable (e.g. local dev) we fall back to a
+ * download / open-in-new-tab card.
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
@@ -65,6 +71,34 @@ const getDocumentDescription = (mimeType?: string): string => {
   return "";
 };
 
+/**
+ * Whether a URL can be fetched by Microsoft's Office Online viewer:
+ * must be an absolute http(s) URL that isn't a localhost / private address.
+ */
+const isPubliclyViewableUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host.endsWith(".local")
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const buildOfficeViewerUrl = (fileUrl: string): string =>
+  `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
+
 export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   url,
   fileName,
@@ -75,6 +109,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const [iframeFailed, setIframeFailed] = useState(false);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -102,6 +137,75 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const iconType = getDocumentIconType(previewType);
   const colorClass = getDocumentColorClass(previewType);
 
+  const canEmbed = useMemo(
+    () => Boolean(url) && isPubliclyViewableUrl(url),
+    [url],
+  );
+  const viewerUrl = useMemo(
+    () => (canEmbed ? buildOfficeViewerUrl(url) : null),
+    [canEmbed, url],
+  );
+
+  // ── In-browser viewer (Microsoft Office Online) ──────────────────────
+  if (viewerUrl && !iframeFailed) {
+    return (
+      <div
+        className={clsx(
+          "flex h-[85vh] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-text-inverse/12 bg-surface",
+          className,
+        )}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* Toolbar */}
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-surface-overlay px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colorClass)}>
+              <FileTypeIcon type={iconType} className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
+                {fileName}
+              </p>
+              <p className="truncate text-xs text-text-muted">
+                {[extension?.toUpperCase(), formatFileSize(fileSize), docDescription]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              {t("chat:file.download")}
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenInNewTab}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+            >
+              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+              {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
+            </button>
+          </div>
+        </div>
+
+        {/* Viewer */}
+        <iframe
+          src={viewerUrl}
+          title={fileName || "document preview"}
+          className="min-h-0 w-full flex-1 border-0 bg-white"
+          onError={() => setIframeFailed(true)}
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+        />
+      </div>
+    );
+  }
+
+  // ── Fallback card (not publicly reachable / viewer unavailable) ───────
   return (
     <div
       className={clsx(
@@ -109,6 +213,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         isOwn && "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08]",
         className,
       )}
+      onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-start gap-4">
         <div className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", colorClass)}>
@@ -167,13 +272,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
         </button>
       </div>
-
-      {/* Future: Integration point for document preview service */}
-      {/* <div className="mt-4 border-t border-border pt-4"> */}
-      {/*   <p className="text-xs text-text-muted"> */}
-      {/*     {t("chat:filePreview.comingSoon", { defaultValue: "Document preview coming soon" })} */}
-      {/*   </p> */}
-      {/* </div> */}
     </div>
   );
 };
