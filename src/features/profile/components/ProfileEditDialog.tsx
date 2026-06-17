@@ -1,8 +1,7 @@
 import React from "react";
 import {
-  AtSymbolIcon,
   CameraIcon,
-  PhoneIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { VALIDATION_CONFIG } from "../../../config"; 
@@ -299,42 +298,6 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
 
     return () => window.clearTimeout(timeoutId);
   }, [isOpen, isUsernameDirty, mode, normalizedUsername, usernameError]);
-
-  const usernameHint = React.useMemo(() => {
-    if (mode !== "full") {
-      return undefined;
-    }
-
-    if (!isUsernameDirty || usernameError) {
-      return undefined;
-    }
-
-    if (usernameState === "checking") {
-      return t("auth:username.checking");
-    }
-
-    if (usernameState === "available" && checkedUsername === normalizedUsername) {
-      return t("auth:username.available");
-    }
-
-    if (usernameState === "taken" && checkedUsername === normalizedUsername) {
-      return t("auth:username.taken");
-    }
-
-    if (usernameState === "error" && checkedUsername === normalizedUsername) {
-      return t("error:generic.requestFailed");
-    }
-
-    return undefined;
-  }, [
-    checkedUsername,
-    isUsernameDirty,
-    mode,
-    normalizedUsername,
-    t,
-    usernameError,
-    usernameState,
-  ]);
 
   const hasValidationErrors = Boolean(
     displayNameError ||
@@ -671,18 +634,10 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
               <Input
                 label={t("profile:settings.username")}
                 value={draft.username}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    username: event.target.value.replace(/\s+/g, ""),
-                  }))
-                }
-                placeholder={t("profile:settings.usernamePlaceholder")}
-                maxLength={VALIDATION_CONFIG.USERNAME_MAX_LENGTH}
-                disabled={isSaving}
-                error={usernameError}
-                hint={usernameHint}
-                leftIcon={<AtSymbolIcon className="h-4 w-4" />}
+                readOnly
+                disabled
+                hint={t("profile:editProfileModal.lockedHrHint")}
+                leftIcon={<LockClosedIcon className="h-4 w-4" />}
               />
             ) : null}
 
@@ -690,16 +645,10 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
               <Input
                 label={t("profile:editProfileModal.phone")}
                 value={draft.phone}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    phone: event.target.value,
-                  }))
-                }
-                placeholder={t("profile:editProfileModal.phonePlaceholder")}
-                disabled={isSaving}
-                error={phoneError}
-                leftIcon={<PhoneIcon className="h-4 w-4" />}
+                readOnly
+                disabled
+                hint={t("profile:editProfileModal.lockedHrHint")}
+                leftIcon={<LockClosedIcon className="h-4 w-4" />}
               />
             ) : null}
 

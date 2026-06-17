@@ -134,7 +134,8 @@
     "discardDescription": "Các chỉnh sửa chưa lưu sẽ bị mất.",
     "cancel": "Hủy",
     "save": "Lưu thay đổi",
-    "phonePlaceholder": "+84 912 345 678"
+    "phonePlaceholder": "+84 912 345 678",
+    "lockedHrHint": "Thông tin này được quản lý trên hệ thống HRM, không thể chỉnh sửa tại đây."
   },
   "settings": {
     "title": "Hồ sơ cá nhân",
