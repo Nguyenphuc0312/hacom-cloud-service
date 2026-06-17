@@ -39,6 +39,7 @@ import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
 import { truncateFilename } from "../../utils/truncateFilename";
+import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileName } from "../common/FileName";
 
 // ── Status types for edge cases ──────────────────────────────────────
@@ -157,15 +158,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const handleDownload = useCallback(async () => {
     const downloadUrl = await resolveUrl(true);
     if (!downloadUrl) return;
-    // Open in new tab for download
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = attachment.fileName || "download";
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Tải bằng blob để giữ đúng tên gốc (URL ký khác origin sẽ bỏ qua a.download).
+    await downloadResourceWithName(downloadUrl, attachment.fileName);
   }, [resolveUrl, attachment.fileName]);
 
   const handlePreview = useCallback(() => {
