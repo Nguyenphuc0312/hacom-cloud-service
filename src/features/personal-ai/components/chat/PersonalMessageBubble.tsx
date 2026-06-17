@@ -11,9 +11,11 @@ import {
   BrainCircuitIcon,
   DownloadIcon,
   Loader2Icon,
+  PrinterIcon,
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
 import { openWeeklyReportFile } from "../../api/personalAiApi";
+import { printWorkReportTable } from "../../../ai-assistant/services/aiChatApi";
 import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
@@ -105,6 +107,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
   const patchMessage = usePersonalAiStore((s) => s.patchMessage);
@@ -200,6 +203,25 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     void navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    // Mở cửa sổ ngay (đồng bộ) để tránh bị chặn popup, rồi đổ HTML sau khi có.
+    const win = window.open("", "_blank");
+    setIsPrinting(true);
+    try {
+      const html = await printWorkReportTable("Tổng hợp báo cáo công việc", message.content);
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+      }
+    } catch {
+      win?.close();
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   return (
@@ -384,6 +406,22 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     <CopyIcon size={13} />
                   )}
                 </button>
+                {message.exportableTable && (
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    disabled={isPrinting}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
+                    title="In báo cáo"
+                  >
+                    {isPrinting ? (
+                      <Loader2Icon size={13} className="animate-spin" />
+                    ) : (
+                      <PrinterIcon size={13} />
+                    )}
+                    In
+                  </button>
+                )}
               </div>
             )}
           </div>
