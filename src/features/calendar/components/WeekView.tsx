@@ -103,8 +103,11 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Header + all-day + lưới giờ nằm CHUNG một vùng cuộn để cột thẳng hàng
+          (tránh lệch do thanh cuộn chỉ ảnh hưởng phần lưới). Header dùng sticky. */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
       {/* Day headers */}
-      <div className="flex border-b border-border bg-surface">
+      <div className="sticky top-0 z-40 flex border-b border-border bg-surface">
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
@@ -129,12 +132,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
               >
                 {date.getDate()}
               </div>
-              {(attendance?.firstPunch || attendance?.lastPunch) && (
-                <div className="mt-0.5 space-y-px text-[9px] leading-tight text-emerald-600 dark:text-emerald-400">
-                  <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
-                  <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
-                </div>
-              )}
+              {/* Luôn giữ chỗ cho vùng chấm công để các cột cao bằng nhau (cân đối header) */}
+              <div className="mt-0.5 h-[22px] space-y-px text-[9px] leading-tight text-emerald-600 dark:text-emerald-400">
+                {attendance?.firstPunch || attendance?.lastPunch ? (
+                  <>
+                    <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
+                    <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
+                  </>
+                ) : null}
+              </div>
             </button>
           );
         })}
@@ -176,7 +182,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
       )}
 
       {/* Hourly grid */}
-      <div ref={scrollRef} className="flex-1 overflow-auto">
         <div className="relative flex" style={{ height: `${MINUTES_PER_DAY * PX_PER_MIN}px` }}>
           {/* Hour labels */}
           <div className="w-16 shrink-0 border-r border-border">
@@ -285,5 +290,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
     </div>
   );
 };
+
 
 export default WeekView;
