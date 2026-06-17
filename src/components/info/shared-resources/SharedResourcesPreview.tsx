@@ -24,6 +24,7 @@ import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
+import { FileName } from "../../common/FileName";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -32,17 +33,6 @@ interface SharedResourcesPreviewProps {
 const DRAWER_MEDIA_PREVIEW = 6;
 const DRAWER_FILES_PREVIEW = 4;
 const DRAWER_LINKS_PREVIEW = 3;
-
-function truncateFilename(name: string, maxLength = 24): string {
-  if (name.length <= maxLength) return name;
-  const dotIdx = name.lastIndexOf(".");
-  if (dotIdx <= 0) return name.slice(0, maxLength - 3) + "...";
-  const ext = name.slice(dotIdx + 1);
-  const base = name.slice(0, dotIdx);
-  const keepBase = maxLength - ext.length - 4;
-  if (keepBase <= 2) return name.slice(0, maxLength - 3) + "...";
-  return `${base.slice(0, keepBase)}...${ext}`;
-}
 
 export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   conversationId,
@@ -521,9 +511,10 @@ const DrawerFileRow: React.FC<{
         <FileTypeIcon type={iconType} className="h-8 w-8" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text-primary">
-          {truncateFilename(item.fileName)}
-        </p>
+        <FileName
+          name={item.fileName}
+          className="text-sm font-medium text-text-primary"
+        />
         <p className="truncate text-xs text-text-muted">
           {formatFileSize(item.sizeBytes)} · {item.senderName} · {date}
         </p>

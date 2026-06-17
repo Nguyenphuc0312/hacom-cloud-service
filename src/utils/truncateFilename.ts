@@ -72,6 +72,25 @@ export function truncateFilenameEnd(name: string, maxLen = 30): string {
 }
 
 /**
+ * Split a filename into base name + extension (extension includes the leading dot).
+ * Only treats a trailing segment as an extension when it is short (<= 8 chars incl. dot),
+ * so dots inside a long descriptive name are not mistaken for an extension.
+ *
+ * Example: "Tea Leaf Disease Classification.pdf" -> { base: "Tea Leaf Disease Classification", ext: ".pdf" }
+ */
+export function splitFileName(name: string): { base: string; ext: string } {
+  const lastDotIndex = name.lastIndexOf(".");
+  if (
+    lastDotIndex > 0 &&
+    lastDotIndex < name.length - 1 &&
+    name.length - lastDotIndex <= 8
+  ) {
+    return { base: name.slice(0, lastDotIndex), ext: name.slice(lastDotIndex) };
+  }
+  return { base: name, ext: "" };
+}
+
+/**
  * Get filename without extension.
  */
 export function getFilenameWithoutExtension(filename: string): string {
