@@ -13,6 +13,10 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import {
+  downloadResourceWithName,
+  openResourceInNewTab,
+} from "../../utils/downloadFile";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
 interface ArchivePreviewProps {
@@ -52,25 +56,12 @@ export const ArchivePreview: React.FC<ArchivePreviewProps> = ({
   const { t } = useTranslation();
 
   const handleDownload = useCallback(async () => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = fileName || "archive";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    await downloadResourceWithName(url, fileName || "archive");
   }, [fileName, url]);
 
   const handleOpenInNewTab = useCallback(() => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [url]);
+    openResourceInNewTab(url, fileName, false);
+  }, [fileName, url]);
 
   const extension = getFileExtension(fileName);
   const archiveDescription = getArchiveDescription(mimeType);

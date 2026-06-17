@@ -16,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { IconButton } from "../ui";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
 interface PdfJsViewerProps {
@@ -196,20 +197,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
 
   // Handlers
   const handleDownload = useCallback(async () => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = fileName || "document.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    await downloadResourceWithName(url, fileName || "document.pdf");
   }, [fileName, url]);
 
   const handleOpenInNewTab = useCallback(() => {

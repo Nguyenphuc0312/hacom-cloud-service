@@ -32,6 +32,10 @@ import {
   getIconTypeFromPreviewType,
 } from "../../utils/filePreviewUtils";
 import type { PreviewTarget } from "../../hooks/useFilePreview";
+import {
+  downloadResourceWithName,
+  openResourceInNewTab,
+} from "../../utils/downloadFile";
 
 interface FilePreviewModalProps {
   isOpen: boolean;
@@ -128,28 +132,19 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
 
   const handleDownload = useCallback(async () => {
     if (!secureUrl) return;
-
-    try {
-      const response = await fetch(secureUrl);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = blobUrl;
-      anchor.download =
-        fileName || `file-${Date.now()}.${extension.toLowerCase() || "bin"}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    } catch {
-      window.open(secureUrl, "_blank", "noopener,noreferrer");
-    }
+    await downloadResourceWithName(
+      secureUrl,
+      fileName || `file-${Date.now()}.${extension.toLowerCase() || "bin"}`,
+    );
   }, [extension, fileName, secureUrl]);
 
   const handleOpenInNewTab = useCallback(() => {
     if (!secureUrl) return;
-    window.open(secureUrl, "_blank", "noopener,noreferrer");
-  }, [secureUrl]);
+    const inlineViewable = ["image", "pdf", "video", "audio", "text"].includes(
+      previewType,
+    );
+    openResourceInNewTab(secureUrl, fileName, inlineViewable);
+  }, [fileName, previewType, secureUrl]);
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
