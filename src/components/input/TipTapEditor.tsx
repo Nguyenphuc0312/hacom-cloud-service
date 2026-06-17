@@ -155,7 +155,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             // Alt+Enter inserts a line break (same as Shift+Enter).
             if (event.altKey) {
               event.preventDefault();
-              editor.commands.setHardBreak();
+              editor?.commands.setHardBreak();
               return true;
             }
             if (!event.shiftKey) {
