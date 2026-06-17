@@ -39,6 +39,7 @@ import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
 import { truncateFilename } from "../../utils/truncateFilename";
+import { FileName } from "../common/FileName";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -431,7 +432,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 w-[min(17rem,100%)] items-center gap-2.5 rounded-lg border p-2.5 transition-colors",
+        "group/file flex min-w-0 w-[17rem] max-w-full items-center gap-2.5 rounded-lg border p-2.5 transition-colors",
         isOwn
           ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
           : "border-border/70 bg-surface hover:bg-surface-hover",
@@ -450,15 +451,14 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
       {/* File info */}
       <div className="min-w-0 flex-1">
-        <p
+        <FileName
+          name={attachment.fileName || t("chat:file.unknown")}
+          title={attachment.fileName}
           className={clsx(
-            "truncate text-sm font-medium",
+            "text-sm font-medium",
             isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
           )}
-          title={attachment.fileName}
-        >
-          {truncateFilename(attachment.fileName || t("chat:file.unknown"), 28)}
-        </p>
+        />
         <p
           className={clsx(
             "text-xs",
