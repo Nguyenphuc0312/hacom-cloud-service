@@ -471,6 +471,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                         isSelectionMode={isSelectionMode}
                         isOwn={isOwn}
                         replyPreviewClass={contract.cluster.replyPreview}
+                        conversationId={message.conversationId}
                         onClick={handleReplyPreviewClick}
                       />
                     )}
