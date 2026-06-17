@@ -151,10 +151,18 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             event.preventDefault();
             return true;
           }
-          if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-            event.preventDefault();
-            onEnterPressRef.current?.();
-            return true;
+          if (event.key === "Enter" && !event.isComposing) {
+            // Alt+Enter inserts a line break (same as Shift+Enter).
+            if (event.altKey) {
+              event.preventDefault();
+              editor?.commands.setHardBreak();
+              return true;
+            }
+            if (!event.shiftKey) {
+              event.preventDefault();
+              onEnterPressRef.current?.();
+              return true;
+            }
           }
           return false;
         },
