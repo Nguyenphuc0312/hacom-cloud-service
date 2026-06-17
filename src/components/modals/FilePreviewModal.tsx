@@ -492,7 +492,14 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   }
 
   // Check if this preview type uses full-width layout
-  const isFullWidth = ["pdf", "text", "csv"].includes(previewType);
+  const isFullWidth = [
+    "pdf",
+    "text",
+    "csv",
+    "document",
+    "spreadsheet",
+    "presentation",
+  ].includes(previewType);
 
   return (
     <div
