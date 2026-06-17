@@ -133,8 +133,8 @@ export interface ListHREventsParams {
   ownerAuthUserId?: string;
   from?: string;
   to?: string;
-  type?: string;
-  visibility?: string;
+  type?: HRCalendarEventType;
+  visibility?: HRCalendarVisibility;
   includeParticipantEvents?: boolean;
   page?: number;
   pageSize?: number;
@@ -236,8 +236,8 @@ export const hrCalendarApi = {
     description?: string;
     startAt: string;
     endAt: string;
-    eventType?: string;
-    visibility?: string;
+    eventType?: HRCalendarEventType;
+    visibility?: HRCalendarVisibility;
     isAllDay?: boolean;
     location?: string;
     timezone?: string;
@@ -265,8 +265,8 @@ export const hrCalendarApi = {
       description?: string;
       startAt?: string;
       endAt?: string;
-      eventType?: string;
-      visibility?: string;
+      eventType?: HRCalendarEventType;
+      visibility?: HRCalendarVisibility;
       isAllDay?: boolean;
       location?: string;
       timezone?: string;

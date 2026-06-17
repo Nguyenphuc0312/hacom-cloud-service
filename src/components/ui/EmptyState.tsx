@@ -42,6 +42,10 @@ import { ConfirmDialog, Modal } from "./Modal";
 import { useAuthStore } from "../../stores";
 import { useCalendarStore } from "../../stores/calendarStore";
 import { toast } from "../../utils/toast";
+import {
+  meetingVisibilityToApi,
+  personalVisibilityToApi,
+} from "../../features/calendar/utils/calendarVisibility";
 
 // Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
 // có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
@@ -893,8 +897,8 @@ const WeeklyCalendarWidget: React.FC = () => {
         description: data.notes || undefined,
         startAt,
         endAt,
-        eventType: "MEETING",
-        visibility: "PRIVATE",
+        eventType: "MEETING" as const,
+        visibility: meetingVisibilityToApi(data.visibility),
         isAllDay: false,
         location: data.location || undefined,
         timezone,
@@ -927,17 +931,13 @@ const WeeklyCalendarWidget: React.FC = () => {
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
-      // hr-api-service eventType enum CHƯA có "PERSONAL" (MEETING|TASK|LEAVE|
-      // DEADLINE|REMINDER|OTHER). Tạm dùng "OTHER" + visibility PRIVATE cho lịch
-      // cá nhân; FE map OTHER → "personal" để hiển thị/lọc.
-      // TODO(backend): thêm eventType "PERSONAL" — xem yeucauapicalenda.md.
       const input = {
         title: data.title,
         description: data.notes || undefined,
         startAt,
         endAt,
-        eventType: "OTHER",
-        visibility: "PRIVATE",
+        eventType: "PERSONAL" as const,
+        visibility: personalVisibilityToApi(data.visibility),
         isAllDay: false,
         timezone,
       };

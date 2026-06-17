@@ -34,7 +34,15 @@ import {
   hrApi,
   type AttendanceCalendarDay,
 } from "../../api/hrApi";
-import { hrCalendarApi, type HRCalendarEvent } from "../../api/hrCalendarApi";
+import {
+  hrCalendarApi,
+  type HRCalendarEvent,
+} from "../../api/hrCalendarApi";
+import {
+  apiVisibilityToForm,
+  meetingVisibilityToApi,
+  personalVisibilityToApi,
+} from "../utils/calendarVisibility";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
@@ -167,21 +175,6 @@ const localizeEventTitle = (title: string | null | undefined): string => {
   const t = (title ?? "").trim();
   return t.toLowerCase() === "busy" ? "Bận" : t;
 };
-
-/**
- * Map lựa chọn quyền xem trên form (riêng tư / công khai) sang enum visibility
- * của hr-api-service:
- *  - "private" → BUSY_ONLY: người khác xem lịch chỉ thấy ô "Bận" (backend che
- *    tiêu đề thành "Busy"), không lộ nội dung.
- *  - "public"  → PUBLIC: ai xem lịch cũng thấy đầy đủ chi tiết.
- * (PRIVATE thật sự = ẩn hoàn toàn nên KHÔNG dùng cho lựa chọn "riêng tư" này.)
- */
-const formVisibilityToApi = (v: "private" | "public" | undefined): string =>
-  v === "public" ? "PUBLIC" : "BUSY_ONLY";
-
-/** Map enum visibility từ API về lựa chọn form khi mở chỉnh sửa. */
-const apiVisibilityToForm = (v: string | null | undefined): "private" | "public" =>
-  v === "PUBLIC" ? "public" : "private";
 
 /** Meeting extras stored in HR event metadata JSON. */
 interface MeetingMetadata {
@@ -963,9 +956,9 @@ export const CalendarPage: React.FC = () => {
         description: data.notes || undefined,
         startAt,
         endAt,
-        eventType: "MEETING",
+        eventType: "MEETING" as const,
         // Quyền xem theo lựa chọn trên form (mặc định riêng tư → BUSY_ONLY).
-        visibility: formVisibilityToApi(data.visibility),
+        visibility: meetingVisibilityToApi(data.visibility),
         isAllDay: false,
         location: data.location || undefined,
         timezone,
@@ -1008,10 +1001,10 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         // Lịch cá nhân: eventType PERSONAL, không có participants (backend tự chặn).
-        // Quyền xem theo lựa chọn trên form: riêng tư → BUSY_ONLY (người khác chỉ
-        // thấy "Bận"), công khai → PUBLIC (ai cũng xem được chi tiết).
-        eventType: "PERSONAL",
-        visibility: formVisibilityToApi(data.visibility),
+        // Quyền xem theo lựa chọn trên form: riêng tư → PRIVATE (chỉ owner),
+        // công khai → PUBLIC.
+        eventType: "PERSONAL" as const,
+        visibility: personalVisibilityToApi(data.visibility),
         isAllDay: false,
         timezone,
       };
@@ -1553,7 +1546,7 @@ export const CalendarPage: React.FC = () => {
         endAt,
         location: data.location,
         timezone,
-        visibility: formVisibilityToApi(data.visibility),
+        visibility: meetingVisibilityToApi(data.visibility),
         participantIds,
         attendees: freeTextNames,
         meetingChairman: data.chairman || undefined,
@@ -1588,7 +1581,7 @@ export const CalendarPage: React.FC = () => {
         startAt,
         endAt,
         timezone,
-        visibility: formVisibilityToApi(data.visibility),
+        visibility: personalVisibilityToApi(data.visibility),
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
