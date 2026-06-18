@@ -44,33 +44,33 @@ function getTaskList(r: WorkReportRecord): WorkReportTaskItem[] {
 }
 
 const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[]; reportNotes?: string }> = ({ tasks, reportNotes }) => (
-  <div className="flex flex-col gap-2">
+  <div className="flex flex-col gap-1.5">
     {tasks.map((t, i) => (
-      <div key={i} className={i > 0 ? "pt-2 border-t border-border/40" : ""}>
-        <div className="text-sm text-text-primary whitespace-pre-wrap break-words">
+      <div key={i} className={i > 0 ? "pt-1.5 border-t border-border/40" : ""}>
+        <div className="text-[13px] text-text-primary whitespace-pre-wrap break-words">
           {tasks.length > 1 && (
             <span className="font-semibold text-[#1565C0] mr-1">{i + 1}.</span>
           )}
           {t.task_name || <span className="text-text-muted italic">—</span>}
         </div>
         {t.requirements && (
-          <div className="mt-0.5 text-xs text-text-muted whitespace-pre-wrap break-words">
+          <div className="mt-0.5 text-[11px] text-text-muted whitespace-pre-wrap break-words">
             <span className="font-medium">Yêu cầu:</span> {t.requirements}
           </div>
         )}
         {t.completed && (
-          <div className="mt-0.5 text-xs text-text-secondary whitespace-pre-wrap break-words">
+          <div className="mt-0.5 text-[11px] text-text-secondary whitespace-pre-wrap break-words">
             <span className="font-medium">Đã làm:</span> {t.completed}
           </div>
         )}
         {t.difficulties && (
-          <div className="mt-0.5 text-xs text-text-muted whitespace-pre-wrap break-words">
+          <div className="mt-0.5 text-[11px] text-text-muted whitespace-pre-wrap break-words">
             <span className="font-medium">Khó khăn:</span> {t.difficulties}
           </div>
         )}
         {/* Ghi chú riêng của task này */}
         {t.notes && (
-          <div className="mt-0.5 text-xs text-text-secondary whitespace-pre-wrap break-words">
+          <div className="mt-0.5 text-[11px] text-text-secondary whitespace-pre-wrap break-words">
             <span className="font-medium">Ghi chú:</span> {t.notes}
           </div>
         )}
@@ -78,7 +78,7 @@ const ExpandedDetail: React.FC<{ tasks: WorkReportTaskItem[]; reportNotes?: stri
     ))}
     {/* Fallback: nếu backend trả notes ở cấp report (dữ liệu cũ) và không có per-task notes */}
     {reportNotes && !tasks.some((t) => t.notes) && (
-      <div className="mt-1 pt-2 border-t border-border/40 text-xs text-text-secondary whitespace-pre-wrap break-words">
+      <div className="mt-1 pt-1.5 border-t border-border/40 text-[11px] text-text-secondary whitespace-pre-wrap break-words">
         <span className="font-medium">Ghi chú:</span> {reportNotes}
       </div>
     )}
@@ -163,37 +163,37 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
 
   if (reports.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-surface shadow-sm px-4 py-6 text-center text-sm text-text-muted">
+      <div className="w-full max-w-[660px] rounded-xl border border-border bg-surface shadow-sm px-4 py-5 text-center text-xs text-text-muted">
         Không có báo cáo trong khoảng thời gian này
       </div>
     );
   }
 
   return (
-    <div className="w-full rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+    <div className="w-full max-w-[660px] rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 bg-[#1976D2]/8 border-b border-border">
-        <h3 className="text-sm font-semibold text-[#1565C0]">
+      <div className="px-3 py-2 bg-[#1976D2]/8 border-b border-border">
+        <h3 className="text-[13px] font-semibold text-[#1565C0]">
           Báo cáo công việc — {title}
         </h3>
-        <p className="text-xs text-text-muted mt-0.5">
+        <p className="text-[11px] text-text-muted mt-0.5">
           {formatDateVN(startDate)} – {formatDateVN(endDate)} · {reports.length} báo cáo
         </p>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-[13px]">
           <thead>
             <tr className="bg-surface-overlay/30 border-b border-border">
-              <th className="w-6 px-2 py-2" />
-              <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary whitespace-nowrap">
+              <th className="w-5 px-1.5 py-1.5" />
+              <th className="px-2.5 py-1.5 text-left text-[11px] font-medium text-text-secondary whitespace-nowrap">
                 Nhân viên
               </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary whitespace-nowrap">
+              <th className="px-2.5 py-1.5 text-left text-[11px] font-medium text-text-secondary whitespace-nowrap">
                 Ngày
               </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">
+              <th className="px-2.5 py-1.5 text-left text-[11px] font-medium text-text-secondary">
                 Tóm tắt công việc
               </th>
             </tr>
@@ -214,29 +214,29 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
                     className="border-b border-border last:border-b-0 hover:bg-surface-overlay/20 transition-colors cursor-pointer"
                     onClick={() => toggleRow(i)}
                   >
-                    <td className="px-2 py-2.5 align-top text-text-muted">
+                    <td className="px-1.5 py-2 align-top text-text-muted">
                       {isExpanded
-                        ? <ChevronDownIcon size={14} />
-                        : <ChevronRightIcon size={14} />}
+                        ? <ChevronDownIcon size={13} />
+                        : <ChevronRightIcon size={13} />}
                     </td>
-                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
-                      <div className="text-sm font-medium text-text-primary">{r.user_name}</div>
-                      <div className="text-xs text-text-muted">{r.department}</div>
+                    <td className="px-2.5 py-2 align-top whitespace-nowrap">
+                      <div className="text-[13px] font-medium text-text-primary">{r.user_name}</div>
+                      <div className="text-[11px] text-text-muted">{r.department}</div>
                     </td>
-                    <td className="px-3 py-2.5 align-top whitespace-nowrap text-sm text-text-secondary">
+                    <td className="px-2.5 py-2 align-top whitespace-nowrap text-xs text-text-secondary">
                       {formatDateVN(r.date)}
                     </td>
-                    <td className="px-3 py-2.5 align-top">
-                      <div className="text-sm text-text-primary truncate max-w-xs">
+                    <td className="px-2.5 py-2 align-top">
+                      <div className="text-[13px] text-text-primary truncate max-w-xs">
                         {firstTask.task_name || <span className="text-text-muted italic">—</span>}
                       </div>
                       {taskCount > 1 && (
-                        <div className="mt-0.5 text-xs text-[#1565C0]">
+                        <div className="mt-0.5 text-[11px] text-[#1565C0]">
                           +{taskCount - 1} công việc khác
                         </div>
                       )}
                       {previewNotes && !isExpanded && (
-                        <div className="mt-0.5 text-xs text-text-secondary truncate max-w-xs">
+                        <div className="mt-0.5 text-[11px] text-text-secondary truncate max-w-xs">
                           <span className="font-medium">Ghi chú:</span> {previewNotes}
                         </div>
                       )}
@@ -246,8 +246,8 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
                   {/* Expanded detail row */}
                   {isExpanded && (
                     <tr className="border-b border-border last:border-b-0 bg-[#1976D2]/3">
-                      <td className="px-2 py-1" />
-                      <td colSpan={3} className="px-4 py-3">
+                      <td className="px-1.5 py-1" />
+                      <td colSpan={3} className="px-3 py-2.5">
                         <ExpandedDetail tasks={tasks} reportNotes={r.notes} />
                         {r.attachments && r.attachments.length > 0 && (
                           <AttachmentList

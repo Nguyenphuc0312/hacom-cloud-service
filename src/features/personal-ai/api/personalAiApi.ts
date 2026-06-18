@@ -538,82 +538,96 @@ export async function streamPersonalChat(
     let accumulated = "";
     let finalResponse: PersonalChatResponse | null = null;
 
+    // Buffer SSE để ghép event bị cắt ngang giữa 2 chunk mạng. Nếu parse từng
+    // chunk độc lập (chunk.split("\n\n")), JSON của selection_request/done có thể
+    // bị tách đôi qua 2 lần reader.read() → JSON.parse fail → MẤT event. Đây là
+    // nguyên nhân #baocaocv "lúc hiện lúc không" (mất selection_request → rơi vào
+    // ReportTextBox rỗng). Chỉ xử lý event đã đủ (kết bằng "\n\n"), giữ phần dư.
+    let buffer = "";
+
+    const processEvent = (event: string) => {
+      if (!event.trim()) return;
+      const lines = event.split("\n");
+      let eventType = "";
+      let data = "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+        else if (line.startsWith("data: ")) data = line.slice(6).trim();
+      }
+
+      if (eventType === "token" && options?.onToken) {
+        try {
+          const parsed = JSON.parse(data);
+          options.onToken(
+            typeof parsed === "object" && "token" in parsed
+              ? String(parsed.token)
+              : data,
+          );
+        } catch {
+          options.onToken(data);
+        }
+      } else if (eventType === "thinking" && options?.onThinking) {
+        options.onThinking("reasoning", data);
+      } else if (
+        (eventType === "searching" || eventType === "retrieving") &&
+        options?.onThinking
+      ) {
+        options.onThinking("searching");
+      } else if (eventType === "form_request" && options?.onFormRequest) {
+        try {
+          const parsed = JSON.parse(data) as WorkReportFormRequest;
+          if (parsed.form_type === "daily_work_report") {
+            options.onFormRequest(parsed);
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "selection_request" && options?.onSelectionRequest) {
+        try {
+          const parsed = JSON.parse(data) as DepartmentSelectionRequest;
+          if (
+            parsed.selection_type === "department_report" ||
+            parsed.selection_type === "company_department_report"
+          ) {
+            options.onSelectionRequest(parsed);
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "done") {
+        try {
+          const parsed = JSON.parse(data);
+          finalResponse = {
+            session_id: String(parsed.session_id ?? ""),
+            answer: String(parsed.answer ?? ""),
+            sources: Array.isArray(parsed.sources)
+              ? parsed.sources
+                  .map(normalizeCitation)
+                  .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
+              : undefined,
+            exportable_table: parsed.exportable_table === true,
+          };
+        } catch {
+          /* malformed done payload — recover below */
+        }
+      }
+    };
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
       accumulated += chunk;
+      buffer += chunk.replace(/\r\n/g, "\n");
 
-      // Parse SSE events from chunk
-      const events = chunk.split("\n\n");
-      for (const event of events) {
-        if (!event.trim()) continue;
-        const lines = event.split("\n");
-        let eventType = "";
-        let data = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: "))
-            eventType = line.slice(7).trim();
-          else if (line.startsWith("data: "))
-            data = line.slice(6).trim();
-        }
-
-        if (eventType === "token" && options?.onToken) {
-          try {
-            const parsed = JSON.parse(data);
-            options.onToken(
-              typeof parsed === "object" && "token" in parsed
-                ? String(parsed.token)
-                : data,
-            );
-          } catch {
-            options.onToken(data);
-          }
-        } else if (eventType === "thinking" && options?.onThinking) {
-          options.onThinking("reasoning", data);
-        } else if (
-          (eventType === "searching" || eventType === "retrieving") &&
-          options?.onThinking
-        ) {
-          options.onThinking("searching");
-        } else if (eventType === "form_request" && options?.onFormRequest) {
-          try {
-            const parsed = JSON.parse(data) as WorkReportFormRequest;
-            if (parsed.form_type === "daily_work_report") {
-              options.onFormRequest(parsed);
-            }
-          } catch { /* malformed payload — ignore */ }
-        } else if (eventType === "selection_request" && options?.onSelectionRequest) {
-          try {
-            const parsed = JSON.parse(data) as DepartmentSelectionRequest;
-            if (
-              parsed.selection_type === "department_report" ||
-              parsed.selection_type === "company_department_report"
-            ) {
-              options.onSelectionRequest(parsed);
-            }
-          } catch { /* malformed payload — ignore */ }
-        } else if (eventType === "done") {
-          try {
-            const parsed = JSON.parse(data);
-            finalResponse = {
-              session_id: String(parsed.session_id ?? ""),
-              answer: String(parsed.answer ?? ""),
-              sources: Array.isArray(parsed.sources)
-                ? parsed.sources
-                    .map(normalizeCitation)
-                    .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
-                : undefined,
-              exportable_table: parsed.exportable_table === true,
-            };
-          } catch {
-            /* malformed done payload — recover below */
-          }
-        }
+      // Tách các event hoàn chỉnh; phần dư (event chưa kết thúc) giữ lại buffer.
+      let sepIndex: number;
+      while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+        processEvent(buffer.slice(0, sepIndex));
+        buffer = buffer.slice(sepIndex + 2);
       }
     }
+
+    // Flush event cuối nếu server không gửi "\n\n" kết thúc.
+    if (buffer.trim()) processEvent(buffer);
 
     // Fallback: parse from accumulated text
     if (!finalResponse) {
