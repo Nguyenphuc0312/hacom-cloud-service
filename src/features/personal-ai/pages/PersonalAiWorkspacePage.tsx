@@ -77,13 +77,19 @@ export const PersonalAiWorkspacePage: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      setInputValue("");
       if (pendingFile) {
+        // Upload báo cáo tuần là GHI ĐÈ (mỗi tuần chỉ giữ 1 file) — xác nhận trước.
+        const confirmed = window.confirm(
+          `Tải lên báo cáo tuần sẽ THAY THẾ file của tuần này (mỗi tuần chỉ giữ 1 file).\n\nTiếp tục với "${pendingFile.name}"?`,
+        );
+        if (!confirmed) return;
+        setInputValue("");
         setPendingFile(null);
         setIsUploading(true);
         await sendWithFile(text, pendingFile);
         setIsUploading(false);
       } else {
+        setInputValue("");
         await sendMessage(text);
       }
       setTimeout(() => textareaRef.current?.focus(), 0);

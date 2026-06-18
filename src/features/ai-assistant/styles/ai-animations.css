@@ -52,7 +52,7 @@
 }
 .prose-chatgpt {
   font-family: 'Söhne', 'Inter', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 16px;
+  font-size: 12px;
   color: hsl(var(--color-text-primary));
 }
 

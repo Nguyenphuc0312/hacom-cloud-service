@@ -9,7 +9,7 @@ import { SafeImage } from "./SafeImage";
 interface AvatarProps {
   src?: string | null;
   alt?: string | null;
-  size?: "xs" | "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
   status?: UserStatus;
   showStatus?: boolean;
   className?: string;
@@ -22,6 +22,7 @@ const sizeClasses = {
   md: "h-10 w-10",
   lg: "h-12 w-12",
   xl: "h-16 w-16",
+  "2xl": "h-32 w-32",
 };
 
 const statusSizeClasses = {
@@ -30,6 +31,7 @@ const statusSizeClasses = {
   md: "h-3 w-3",
   lg: "h-4 w-4",
   xl: "h-4 w-4",
+  "2xl": "h-6 w-6",
 };
 
 const statusColors: Record<UserStatus, string> = {
@@ -89,7 +91,9 @@ export const Avatar: React.FC<AvatarProps> = ({
       )}
       aria-hidden="true"
     >
-      {initials || <UserIcon className={iconClasses[size]} aria-hidden="true" />}
+      {initials || (
+        <UserIcon className={iconClasses[size]} aria-hidden="true" />
+      )}
     </div>
   );
 
@@ -101,13 +105,13 @@ export const Avatar: React.FC<AvatarProps> = ({
       tabIndex={onClick ? 0 : undefined}
     >
       <SafeImage
-          src={safeSrc}
-          alt={safeAlt}
-          className={clsx(
-            sizeClasses[size],
-            "rounded-full object-cover ring-2 ring-surface",
-            onClick && "cursor-pointer transition-opacity hover:opacity-90",
-          )}
+        src={safeSrc}
+        alt={safeAlt}
+        className={clsx(
+          sizeClasses[size],
+          "rounded-full object-cover ring-2 ring-surface",
+          onClick && "cursor-pointer transition-opacity hover:opacity-90",
+        )}
         fallback={fallback}
       />
 
@@ -127,4 +131,3 @@ export const Avatar: React.FC<AvatarProps> = ({
 };
 
 export default Avatar;
-

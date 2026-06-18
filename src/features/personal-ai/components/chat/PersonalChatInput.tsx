@@ -393,7 +393,7 @@ export const PersonalChatInput = forwardRef<
               placeholder={placeholder}
               rows={1}
               disabled={isStreaming || isUploading}
-              className="flex-1 resize-none bg-transparent px-2 py-3.5 text-[15px] leading-6 text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70"
+              className="flex-1 resize-none bg-transparent px-2 py-3.5 text-xs leading-6 text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70"
               style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
               aria-label="Nhập câu hỏi"
             />

@@ -30,80 +30,157 @@ interface ParsedReport {
 type TaskField = "requirements" | "completed" | "difficulties" | "notes";
 
 /**
- * Parse text báo cáo do BE trả qua `token`. Định dạng:
- *   Báo cáo công việc của <Tên> :
- *   [dd/mm/yyyy]
- *   Công việc: ...
- *   Yêu cầu: ...
- *   Đã làm được: ...
- *   Khó khăn: ...
- *   Ghi chú: ...
- *   Date: yyyy-mm-dd   ← bỏ qua (trùng với [dd/mm/yyyy])
+ * Parse một dòng công việc do BE trả. Định dạng (các trường nối nhau bằng " - "):
+ *   <Tên công việc> - Yêu cầu: ... - Đã làm được: ... - Khó khăn: ... - Ghi chú: ... - Date: yyyy-mm-dd
+ * Phần đầu (trước marker " - Yêu cầu:" đầu tiên) là tên công việc. "Date" bị bỏ qua.
+ * Nhãn "Công việc:" ở đầu (nếu có) cũng được bỏ.
+ */
+function parseTaskLine(line: string): ReportTask {
+  const labelToKey: Record<string, TaskField | "skip"> = {
+    "yêu cầu": "requirements",
+    "đã làm được": "completed",
+    "đã làm": "completed",
+    "khó khăn": "difficulties",
+    "ghi chú": "notes",
+    date: "skip",
+  };
+
+  // Delimiter: " - <Nhãn>:" — yêu cầu dấu gạch + nhãn đã biết, nên dấu "-" nằm
+  // trong tên công việc sẽ không bị nhầm là delimiter.
+  const re =
+    /\s*-\s*(Yêu cầu|Đã làm được|Đã làm|Khó khăn|Ghi chú|Date)\s*:\s*/gi;
+
+  const marks: Array<{ start: number; end: number; key: TaskField | "skip" }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    marks.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      key: labelToKey[m[1].toLowerCase()] ?? "skip",
+    });
+  }
+
+  const head = (marks.length ? line.slice(0, marks[0].start) : line).trim();
+  const taskName = head.replace(/^công việc\s*:\s*/i, "").trim();
+
+  const task: ReportTask = { taskName };
+  for (let i = 0; i < marks.length; i++) {
+    const valEnd = i + 1 < marks.length ? marks[i + 1].start : line.length;
+    const value = line.slice(marks[i].end, valEnd).trim();
+    if (marks[i].key !== "skip" && value) task[marks[i].key as TaskField] = value;
+  }
+  return task;
+}
+
+// Thứ tự trường khi BE trả mỗi giá trị trên một dòng (không nhãn).
+const POSITIONAL_FIELDS: TaskField[] = ["requirements", "completed", "difficulties"];
+
+/**
+ * Parse text báo cáo do BE trả qua `token`. Hỗ trợ 2 định dạng:
  *
- * Nếu không nhận diện được ngày nào (vd: "Bạn chưa có báo cáo...") → days rỗng,
- * caller render text thô.
+ * (A) Mỗi công việc một dòng, có nhãn:
+ *     <Tên> - Yêu cầu: ... - Đã làm được: ... - Khó khăn: ... [- Ghi chú: ...] [- Date: ...]
+ *
+ * (B) Mỗi trường một dòng, KHÔNG nhãn (định dạng thực tế hiện tại) — 4 dòng liên
+ *     tiếp = Tên công việc / Yêu cầu / Đã làm được / Khó khăn; dòng "Ghi chú:" (có
+ *     nhãn) đứng riêng, dòng kế tiếp là nội dung ghi chú của công việc gần nhất.
+ *
+ * Khung chung:
+ *   Báo cáo công việc của <Tên>
+ *   N ngày · M công việc       ← bỏ qua (component tự tính lại)
+ *   dd/mm/yyyy                  ← dòng ngày (chấp nhận cả [dd/mm/yyyy])
+ *   ...
+ *
+ * Không nhận diện được ngày nào → days rỗng, caller render text thô.
  */
 function parseReport(content: string): ParsedReport {
   const lines = content.split(/\r?\n/);
   const days: ReportDay[] = [];
   let employeeLine: string | undefined;
   let curDay: ReportDay | null = null;
-  let curTask: ReportTask | null = null;
-  let lastField: TaskField | "taskName" | null = null;
 
-  const fieldMap: Array<[RegExp, TaskField | "taskName"]> = [
-    [/^công việc\s*:/i, "taskName"],
-    [/^yêu cầu\s*:/i, "requirements"],
-    [/^(đã làm được|đã làm)\s*:/i, "completed"],
-    [/^khó khăn\s*:/i, "difficulties"],
-    [/^ghi chú\s*:/i, "notes"],
-  ];
+  // Buffer các giá trị trường không-nhãn (định dạng B), gom 4 dòng thành 1 task.
+  let buf: string[] = [];
+  // Task đang chờ nội dung ghi chú ở dòng kế tiếp (sau dòng "Ghi chú:").
+  let pendingNotes: ReportTask | null = null;
+
+  const flushBuf = () => {
+    if (!curDay) {
+      buf = [];
+      return;
+    }
+    for (let i = 0; i < buf.length; i += 4) {
+      const grp = buf.slice(i, i + 4);
+      const task: ReportTask = { taskName: grp[0] ?? "" };
+      POSITIONAL_FIELDS.forEach((key, j) => {
+        const v = grp[j + 1];
+        if (v) task[key] = v;
+      });
+      curDay.tasks.push(task);
+    }
+    buf = [];
+  };
+
+  const labeledRe =
+    /\s-\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:/i;
 
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
 
-    const dateMatch = line.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4})\]$/);
+    const dateMatch = line.match(/^\[?(\d{1,2}\/\d{1,2}\/\d{4})\]?$/);
     if (dateMatch) {
+      flushBuf();
+      pendingNotes = null;
       curDay = { date: dateMatch[1], tasks: [] };
       days.push(curDay);
-      curTask = null;
-      lastField = null;
       continue;
     }
-
-    if (/^date\s*:/i.test(line)) continue;
-
-    let matched = false;
-    for (const [re, key] of fieldMap) {
-      const m = line.match(re);
-      if (!m) continue;
-      matched = true;
-      const value = line.slice(m[0].length).trim();
-      if (key === "taskName") {
-        curTask = { taskName: value };
-        if (curDay) curDay.tasks.push(curTask);
-        lastField = "taskName";
-      } else if (curTask) {
-        curTask[key] = value;
-        lastField = key;
-      }
-      break;
-    }
-    if (matched) continue;
 
     if (!curDay && /^báo cáo công việc/i.test(line)) {
       employeeLine = line.replace(/\s*:\s*$/, "");
       continue;
     }
 
-    // Dòng nối tiếp giá trị field nhiều dòng → ghép vào field gần nhất.
-    if (curTask && lastField) {
-      const prev = curTask[lastField] ?? "";
-      curTask[lastField] = prev ? `${prev}\n${line}` : line;
+    // Dòng tóm tắt "N ngày · M công việc" — bỏ qua.
+    if (/\d+\s*ngày\s*·/i.test(line)) continue;
+    if (!curDay) continue;
+
+    // Bỏ dòng Date đứng riêng (yyyy-mm-dd hoặc "Date: ...").
+    if (/^date\s*:/i.test(line) || /^\d{4}-\d{2}-\d{2}$/.test(line)) continue;
+
+    // Dòng kế sau "Ghi chú:" → nội dung ghi chú của task gần nhất.
+    if (pendingNotes) {
+      pendingNotes.notes = line;
+      pendingNotes = null;
+      continue;
     }
+
+    // Dòng "Ghi chú:" (có thể kèm giá trị ngay sau dấu hai chấm).
+    const noteInline = line.match(/^ghi chú\s*:\s*(.*)$/i);
+    if (noteInline) {
+      flushBuf();
+      const lastTask = curDay.tasks[curDay.tasks.length - 1];
+      const value = noteInline[1].trim();
+      if (lastTask) {
+        if (value) lastTask.notes = value;
+        else pendingNotes = lastTask;
+      }
+      continue;
+    }
+
+    // Định dạng A: cả công việc trên một dòng có nhãn.
+    if (labeledRe.test(line)) {
+      flushBuf();
+      curDay.tasks.push(parseTaskLine(line));
+      continue;
+    }
+
+    // Định dạng B: giá trị trường không nhãn → gom vào buffer.
+    buf.push(line);
   }
 
+  flushBuf();
   return { employeeLine, days };
 }
 
@@ -117,13 +194,83 @@ const Field: React.FC<{ label: string; value?: string }> = ({ label, value }) =>
   );
 };
 
+/** Cột bảng — khớp với header của form #baocaocongviec (WorkReportForm). */
+const TASK_COLUMNS: Array<{ label: string; key: keyof ReportTask }> = [
+  { label: "Tên công việc", key: "taskName" },
+  { label: "Yêu cầu", key: "requirements" },
+  { label: "Đã làm được", key: "completed" },
+  { label: "Khó khăn", key: "difficulties" },
+];
+
+const COL_TEMPLATE = "1fr 1fr 1fr 1fr";
+
+const Cell: React.FC<{ value?: string }> = ({ value }) => (
+  <div className="whitespace-pre-wrap break-words px-3 py-2 text-sm text-text-primary">
+    {value?.trim() || <span className="text-text-muted">—</span>}
+  </div>
+);
+
+/**
+ * Render báo cáo theo bảng cột giống form #baocaocongviec (read-only):
+ * header ngày → cột Tên công việc / Yêu cầu / Đã làm được / Khó khăn → dòng Ghi chú.
+ */
 const DayCard: React.FC<{ day: ReportDay }> = ({ day }) => (
   <div className="overflow-hidden rounded-xl border border-border bg-surface">
-    <div className="flex items-center gap-1.5 border-b border-border bg-[#1976D2]/8 px-3 py-2">
-      <CalendarDaysIcon size={13} className="text-[#1565C0]" />
-      <span className="text-xs font-semibold text-[#1565C0]">{day.date}</span>
+    {/* Header ngày */}
+    <div className="flex items-center gap-1.5 border-b border-border bg-[#1976D2]/8 px-4 py-2.5">
+      <CalendarDaysIcon size={14} className="text-[#1565C0]" />
+      <span className="text-sm font-semibold text-[#1565C0]">
+        Báo cáo công việc ngày {day.date}
+      </span>
     </div>
-    <div className="flex flex-col gap-3 px-3 py-2.5">
+
+    {/* Desktop: bảng cột */}
+    <div className="hidden sm:block">
+      <div
+        className="grid border-b border-border"
+        style={{ gridTemplateColumns: COL_TEMPLATE }}
+      >
+        {TASK_COLUMNS.map((c) => (
+          <div
+            key={c.key}
+            className="border-r border-border px-3 py-2 text-xs font-medium text-text-secondary last:border-r-0 bg-surface-overlay/30"
+          >
+            {c.label}
+          </div>
+        ))}
+      </div>
+
+      {day.tasks.length === 0 && (
+        <div className="px-3 py-3 text-xs italic text-text-muted">
+          Không có nội dung
+        </div>
+      )}
+
+      {day.tasks.map((task, i) => (
+        <div key={i} className="border-b border-border last:border-b-0">
+          <div className="grid" style={{ gridTemplateColumns: COL_TEMPLATE }}>
+            {TASK_COLUMNS.map((c) => (
+              <div key={c.key} className="border-r border-border last:border-r-0">
+                <Cell value={task[c.key]} />
+              </div>
+            ))}
+          </div>
+          {task.notes?.trim() && (
+            <div className="flex items-start gap-2 border-t border-border/50 px-3 py-1.5">
+              <span className="min-w-[3.5rem] whitespace-nowrap pt-0.5 text-xs font-medium text-text-secondary">
+                Ghi chú:
+              </span>
+              <span className="flex-1 whitespace-pre-wrap break-words text-sm text-text-primary">
+                {task.notes}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+
+    {/* Mobile: xếp dọc theo nhãn */}
+    <div className="flex flex-col gap-3 px-3 py-2.5 sm:hidden">
       {day.tasks.length === 0 && (
         <span className="text-xs italic text-text-muted">Không có nội dung</span>
       )}

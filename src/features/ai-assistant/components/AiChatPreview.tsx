@@ -222,7 +222,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                       isStreaming={message.isStreaming}
                     />
                   ) : (
-                    <div className="text-[15px] leading-[1.4] whitespace-pre-wrap break-words text-justify">
+                    <div className="text-[12px] leading-[1.4] whitespace-pre-wrap break-words text-justify">
                       {message.content}
                     </div>
                   )}

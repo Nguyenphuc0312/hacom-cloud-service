@@ -31,6 +31,8 @@ export interface PersonalChatMessage {
    * `content` được hiển thị trong bordered box "Xem báo cáo công việc".
    */
   reportRequest?: boolean;
+  /** SSE `done.exportable_table` — bật nút "In" cho câu trả lời dạng bảng. */
+  exportableTable?: boolean;
 }
 
 export interface PersonalCitation {
@@ -56,6 +58,8 @@ export interface PersonalChatResponse {
   session_id: string;
   answer: string;
   sources?: PersonalCitation[];
+  /** BE bật ở SSE `done` khi câu trả lời là bảng có thể "In". */
+  exportable_table?: boolean;
 }
 
 export interface UploadDocumentResponse {

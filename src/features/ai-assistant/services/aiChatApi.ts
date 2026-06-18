@@ -28,6 +28,7 @@ import type {
   WorkReportFormRequest,
   DepartmentSelectionRequest,
   WorkReportRecord,
+  WorkReportAttachment,
 } from "../types";
 import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
 
@@ -994,6 +995,161 @@ export async function submitWorkReport(
   return response.json() as Promise<WorkReportSubmitResponse>;
 }
 
+// ---------------------------------------------------------------------------
+// Work Report file attachments (cấp ngày) + In bảng
+// ---------------------------------------------------------------------------
+
+const WORK_REPORT_FILES_URL = `${WORK_REPORTS_URL}/files`;
+const WORK_REPORT_PRINT_TABLE_URL = `${WORK_REPORTS_URL}/print-table`;
+
+async function readErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const err = (await response.json()) as { detail?: string };
+    if (err?.detail) return err.detail;
+  } catch {
+    /* không phải JSON */
+  }
+  return fallback;
+}
+
+export interface WorkReportFileUploadResponse {
+  ok: boolean;
+  file: {
+    id: number;
+    report_date: string;
+    filename: string;
+    file_size?: number;
+    content_type?: string;
+    download_url: string;
+  };
+}
+
+/** POST /api/work-reports/files — đính kèm file cho báo cáo ngày (mặc định hôm nay). */
+export async function uploadWorkReportFile(
+  file: File,
+  reportDate?: string,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportFileUploadResponse> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  if (reportDate) form.append("report_date", reportDate);
+
+  // KHÔNG set Content-Type — trình duyệt tự thêm boundary cho multipart.
+  const response = await fetchWithAuth(
+    WORK_REPORT_FILES_URL,
+    { method: "POST", body: form },
+    { signal: options?.signal, timeoutMs: UPLOAD_TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error("Tệp vượt quá dung lượng cho phép (tối đa 25MB).");
+    }
+    if (response.status === 403) {
+      throw new Error("Bạn không có quyền đính kèm tệp này.");
+    }
+    throw new Error(await readErrorDetail(response, "Không thể tải tệp lên"));
+  }
+  return response.json() as Promise<WorkReportFileUploadResponse>;
+}
+
+export interface WorkReportFilesListResponse {
+  count: number;
+  report_date: string;
+  items: WorkReportAttachment[];
+}
+
+/** GET /api/work-reports/files — file của mình (mặc định hôm nay) hoặc của NV nếu là quản lý. */
+export async function listWorkReportFiles(
+  params: { reportDate?: string; employeeCode?: string },
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportFilesListResponse> {
+  const qs = new URLSearchParams();
+  if (params.reportDate) qs.set("report_date", params.reportDate);
+  if (params.employeeCode) qs.set("employee_code", params.employeeCode);
+  const query = qs.toString();
+  const url = query ? `${WORK_REPORT_FILES_URL}?${query}` : WORK_REPORT_FILES_URL;
+
+  const response = await fetchWithAuth(
+    url,
+    { method: "GET" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error("Bạn không có quyền xem tệp của nhân viên này.");
+    }
+    throw new Error(await readErrorDetail(response, "Không thể tải danh sách tệp"));
+  }
+  return response.json() as Promise<WorkReportFilesListResponse>;
+}
+
+/** GET /api/work-reports/files/{id} — tải file (kích hoạt download trên trình duyệt). */
+export async function downloadWorkReportFile(
+  id: number,
+  fallbackName?: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${WORK_REPORT_FILES_URL}/${id}`,
+    { method: "GET" },
+    { signal: options?.signal, timeoutMs: UPLOAD_TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 403) throw new Error("Bạn không có quyền tải tệp này.");
+    if (response.status === 404) throw new Error("Tệp không tồn tại.");
+    throw new Error(await readErrorDetail(response, "Không thể tải tệp"));
+  }
+  // Ưu tiên tên gốc từ JSON (luôn có, không phụ thuộc CORS expose header);
+  // header X-File-Name chỉ dùng khi caller không truyền sẵn tên.
+  const downloadName =
+    fallbackName ||
+    response.headers.get("X-File-Name") ||
+    response.headers.get("X-Original-Filename") ||
+    `work-report-file-${id}`;
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  triggerBrowserDownload(objectUrl, downloadName, true);
+}
+
+/** DELETE /api/work-reports/files/{id} — chỉ chủ file. */
+export async function deleteWorkReportFile(
+  id: number,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${WORK_REPORT_FILES_URL}/${id}`,
+    { method: "DELETE" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 403) throw new Error("Chỉ chủ tệp mới được xoá.");
+    if (response.status === 404) throw new Error("Tệp không tồn tại.");
+    throw new Error(await readErrorDetail(response, "Không thể xoá tệp"));
+  }
+}
+
+/** POST /api/work-reports/print-table — trả HTML hoàn chỉnh để mở & tự in. */
+export async function printWorkReportTable(
+  title: string,
+  content: string,
+  options?: { signal?: AbortSignal },
+): Promise<string> {
+  const response = await fetchWithAuth(
+    WORK_REPORT_PRINT_TABLE_URL,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content }),
+    },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 400) throw new Error("Nội dung in trống.");
+    throw new Error(await readErrorDetail(response, "Không thể tạo bản in"));
+  }
+  return response.text();
+}
+
 export interface FetchWorkReportsParams {
   department?: string;
   employee_code?: string;
@@ -1107,6 +1263,8 @@ export interface PersonalSessionMessage {
   role: "user" | "assistant" | "assistant_tool_call" | "tool" | (string & {});
   content: string;
   timestamp: string;
+  /** BE đính kèm cờ exportable_table ở metadata để render lại nút "In" sau khi tải lịch sử. */
+  metadata?: { exportable_table?: boolean } | null;
 }
 
 /**

@@ -18,6 +18,7 @@ import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm"
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
+import { TableExportMenu } from "./TableExportMenu";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -115,8 +116,16 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
       table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
-        <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
-          <table className="w-full border-collapse text-[13px]">{children}</table>
+        <div className="relative my-4">
+          {message.exportableTable && (
+            <TableExportMenu
+              content={message.content}
+              title="Tổng hợp báo cáo công việc"
+            />
+          )}
+          <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
+            <table className="w-full border-collapse text-[13px]">{children}</table>
+          </div>
         </div>
       ),
       thead: ({ children }: React.ComponentPropsWithoutRef<"thead">) => (
@@ -134,8 +143,8 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         </th>
       ),
       td: ({ children }: React.ComponentPropsWithoutRef<"td">) => (
-        <td className="px-4 py-2.5 align-middle text-text-primary" style={{ maxWidth: "220px" }}>
-          <div className="overflow-hidden text-ellipsis whitespace-nowrap">{children}</div>
+        <td className="px-4 py-2.5 align-top text-text-primary">
+          <div className="whitespace-pre-wrap break-words">{children}</div>
         </td>
       ),
 
@@ -193,7 +202,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId],
+    [loadingFileId, message.exportableTable, message.content],
   );
 
   const handleCopy = () => {
@@ -274,7 +283,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
             <div
               className={clsx(
                 isUser
-                  ? "w-fit max-w-[76%] rounded-2xl rounded-tr-sm bg-surface-hover px-4 py-3 text-[15px] leading-[1.4] text-text-primary break-words text-justify"
+                  ? "w-fit max-w-[76%] rounded-2xl rounded-tr-sm bg-surface-hover px-4 py-3 text-[12px] leading-[1.4] text-text-primary break-words text-justify"
                   : "w-full",
               )}
             >
@@ -353,7 +362,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   {message.isStreaming && message.content && <StreamingCursor />}
                 </div>
               ) : (
-                <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.4] text-justify">
+                <div className="whitespace-pre-wrap break-words text-[12px] leading-[1.4] text-justify">
                   {message.content}
                 </div>
               )}

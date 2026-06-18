@@ -19,6 +19,7 @@ import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { formatRelativeDate } from "../../../utils/formatTime";
 import { fileApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
 import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
@@ -492,14 +493,7 @@ const DrawerFileRow: React.FC<{
       });
       const payload = unwrapApiSuccess(res);
       if (payload.url) {
-        const a = document.createElement("a");
-        a.href = payload.url;
-        a.download = item.fileName;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        await downloadResourceWithName(payload.url, item.fileName);
       }
     } catch {
       // silent — user can retry

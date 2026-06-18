@@ -20,6 +20,10 @@ import {
 import type { PreviewType } from "../../utils/mimeRegistry";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
 import { FileTypeIcon } from "../message/FileTypeIcon";
+import {
+  downloadResourceWithName,
+  openResourceInNewTab,
+} from "../../utils/downloadFile";
 
 interface DocumentPreviewProps {
   url: string;
@@ -112,25 +116,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const [iframeFailed, setIframeFailed] = useState(false);
 
   const handleDownload = useCallback(async () => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = fileName || "document";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    await downloadResourceWithName(url, fileName || "document");
   }, [fileName, url]);
 
+  // Office docs không render trực tiếp trong tab trình duyệt → mở tab mới chỉ tải
+  // về với tên sai; thay bằng tải về giữ đúng tên gốc.
   const handleOpenInNewTab = useCallback(() => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [url]);
+    openResourceInNewTab(url, fileName, false);
+  }, [fileName, url]);
 
   const extension = getFileExtension(fileName);
   const docDescription = getDocumentDescription(mimeType);
