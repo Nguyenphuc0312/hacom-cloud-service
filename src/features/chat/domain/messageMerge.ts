@@ -1,5 +1,5 @@
 import { MessageStatus } from "../../../types";
-import type { Message, Reaction } from "../../../types";
+import type { Attachment, Message, Reaction } from "../../../types";
 import {
   findMessageIdentityIndex,
   getStableMessageId,
@@ -68,11 +68,53 @@ const indexMessagesById = (messages: readonly Message[]) =>
     return accumulator;
   }, {});
 
+/**
+ * Reply preview của tin ảnh/video/file thường thiếu `attachments` (BE chưa
+ * populate vào `replyToMessage`, hoặc ack ghi đè mất snapshot optimistic). Tin
+ * gốc lại đang nằm sẵn trong cache timeline với đầy đủ `attachments[].id` →
+ * lấy lại từ đó để reply preview có thể mint signed thumbnail như timeline.
+ * Trả về `true` nếu có thay đổi (caller cần build lại index).
+ */
+const hydrateReplyAttachments = (
+  messages: Message[],
+  lookup: Record<string, Message>,
+): boolean => {
+  let changed = false;
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    const reply = message.replyToMessage;
+    if (!reply?.id) continue;
+
+    const replyAttachments = (
+      reply as Message["replyToMessage"] & { attachments?: Attachment[] }
+    ).attachments;
+    if (replyAttachments && replyAttachments.length > 0) continue;
+
+    const targetAttachments = lookup[reply.id]?.attachments;
+    if (targetAttachments && targetAttachments.length > 0) {
+      messages[index] = {
+        ...message,
+        replyToMessage: {
+          ...reply,
+          attachments: targetAttachments as unknown as Attachment[],
+        } as Message["replyToMessage"],
+      };
+      changed = true;
+    }
+  }
+  return changed;
+};
+
 export const refreshCacheIndex = (cache: ConversationMessagesCache): void => {
+  let byId = indexMessagesById(cache.messages);
+  if (hydrateReplyAttachments(cache.messages, byId)) {
+    byId = indexMessagesById(cache.messages);
+  }
+
   const oldest = cache.messages[0] ?? null;
   const newest = cache.messages[cache.messages.length - 1] ?? null;
 
-  cache.messageById = indexMessagesById(cache.messages);
+  cache.messageById = byId;
   cache.messageIds = cache.messages.map(getStableMessageId);
   cache.oldestLoadedMessageId = oldest?.id ?? null;
   cache.newestLoadedMessageId = newest?.id ?? null;
@@ -91,13 +133,17 @@ export const buildConversationMessagesCache = (
   const orderedMessages = sortMessagesByCanonicalOrder(
     normalizeMessagesForReduxCache(messages),
   );
+  let byId = indexMessagesById(orderedMessages);
+  if (hydrateReplyAttachments(orderedMessages, byId)) {
+    byId = indexMessagesById(orderedMessages);
+  }
   const oldest = orderedMessages[0] ?? null;
   const newest = orderedMessages[orderedMessages.length - 1] ?? null;
 
   return {
     conversationId,
     messages: orderedMessages,
-    messageById: indexMessagesById(orderedMessages),
+    messageById: byId,
     messageIds: orderedMessages.map(getStableMessageId),
     oldestLoadedMessageId: oldest?.id ?? null,
     newestLoadedMessageId: newest?.id ?? null,
