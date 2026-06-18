@@ -2,6 +2,7 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { MessageActions } from "../../message/MessageActions";
@@ -314,6 +315,8 @@ const MessageGroupItem: React.FC<{
           const resolvedThumb = resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url);
           return {
             label,
+            attachment: att,
+            renderThumbnail: true,
             thumbnailUrl: resolvedThumb,
             showPlaceholder: !resolvedThumb,
             badge: null as { ext: string; className: string } | null,
@@ -328,6 +331,8 @@ const MessageGroupItem: React.FC<{
           const badge = ext ? { ext, className: replyExtBadgeClass(ext) } : null;
           return {
             label,
+            attachment: att,
+            renderThumbnail: false,
             thumbnailUrl: undefined,
             showPlaceholder: !badge,
             badge,
@@ -339,6 +344,8 @@ const MessageGroupItem: React.FC<{
         case MessageType.VOICE:
           return {
             label,
+            attachment: att,
+            renderThumbnail: false,
             thumbnailUrl: undefined,
             showPlaceholder: true,
             badge: null,
@@ -349,6 +356,8 @@ const MessageGroupItem: React.FC<{
         case MessageType.AUDIO:
           return {
             label,
+            attachment: att,
+            renderThumbnail: false,
             thumbnailUrl: undefined,
             showPlaceholder: true,
             badge: null,
@@ -359,6 +368,8 @@ const MessageGroupItem: React.FC<{
         case MessageType.STICKER:
           return {
             label,
+            attachment: att,
+            renderThumbnail: false,
             thumbnailUrl: undefined,
             showPlaceholder: true,
             badge: null,
@@ -637,12 +648,14 @@ const MessageGroupItem: React.FC<{
                   />
 
                   {/* Thumbnail (ảnh/video) hoặc badge loại file */}
-                  {replyPreviewMeta?.thumbnailUrl ? (
-                    <img
-                      src={replyPreviewMeta.thumbnailUrl}
-                      alt=""
-                      className="h-10 w-10 flex-shrink-0 self-center rounded-md object-cover"
-                    />
+                  {replyPreviewMeta?.renderThumbnail ? (
+                    <div className="h-10 w-10 flex-shrink-0 self-center">
+                      <MediaThumbnail
+                        attachment={replyPreviewMeta.attachment}
+                        src={replyPreviewMeta.thumbnailUrl}
+                        variant="reply"
+                      />
+                    </div>
                   ) : replyPreviewMeta?.showPlaceholder ? (
                     <span className={clsx(
                       "flex h-10 w-10 flex-shrink-0 select-none items-center justify-center self-center rounded-md",

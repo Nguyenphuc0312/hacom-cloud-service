@@ -3,6 +3,8 @@ import clsx from "clsx";
 import { MagnifyingGlassIcon, XMarkIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { searchUsersUseCase } from "../../chat/usecases/searchUsers";
 import { resolvePublicResourceUrl } from "../../../config";
+import { SafeImage } from "../../../components/common/SafeImage";
+import { getInitials } from "../../../utils/mediaFallback";
 
 export interface AssigneeUser {
   id: string;
@@ -160,14 +162,20 @@ export const AssigneeAvatar: React.FC<{ user: { displayName: string; avatar: str
   size = 6,
 }) => {
   const avatarUrl = user.avatar ? resolvePublicResourceUrl(user.avatar, { context: 'image' }) : undefined;
-  const initials = user.displayName.slice(0, 2).toUpperCase();
+  const initials = getInitials(user.displayName);
   const sizeClass = `h-${size} w-${size}`;
-
-  return avatarUrl ? (
-    <img src={avatarUrl} alt={user.displayName} className={clsx(sizeClass, 'rounded-full object-cover')} />
-  ) : (
+  const fallback = (
     <div className={clsx(sizeClass, 'rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-medium text-indigo-700 dark:text-indigo-300')}>
-      {initials}
+      {initials || <UserCircleIcon className="h-4 w-4" />}
     </div>
+  );
+
+  return (
+    <SafeImage
+      src={avatarUrl}
+      alt={user.displayName}
+      className={clsx(sizeClass, 'rounded-full object-cover')}
+      fallback={fallback}
+    />
   );
 };

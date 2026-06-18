@@ -1,7 +1,10 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { UserIcon } from "@heroicons/react/24/outline";
 import { UserStatus } from "../../types";
+import { getInitials } from "../../utils/mediaFallback";
+import { SafeImage } from "./SafeImage";
 
 interface AvatarProps {
   src?: string | null;
@@ -51,6 +54,14 @@ const statusLabelKeys: Record<UserStatus, string> = {
   [UserStatus.BUSY]: "common:status.busy",
 };
 
+const iconClasses = {
+  xs: "h-3 w-3",
+  sm: "h-4 w-4",
+  md: "h-5 w-5",
+  lg: "h-6 w-6",
+  xl: "h-8 w-8",
+};
+
 export const Avatar: React.FC<AvatarProps> = ({
   src,
   alt,
@@ -65,23 +76,26 @@ export const Avatar: React.FC<AvatarProps> = ({
   const safeAlt = normalizedAlt || t("common:labels.user");
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
-  const [imageFailed, setImageFailed] = React.useState(false);
-  const [prevSrc, setPrevSrc] = React.useState(safeSrc);
-
-  if (safeSrc !== prevSrc) {
-    setPrevSrc(safeSrc);
-    setImageFailed(false);
-  }
-
-  const initials =
-    safeAlt
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "?";
-  const shouldRenderImage = Boolean(safeSrc) && !imageFailed;
+  const initials = getInitials(normalizedAlt);
+  const fallback = (
+    <div
+      className={clsx(
+        sizeClasses[size],
+        "flex items-center justify-center rounded-full bg-primary font-medium text-text-inverse ring-2 ring-surface",
+        onClick && "cursor-pointer transition-opacity hover:opacity-90",
+        size === "xs" && "text-xs",
+        size === "sm" && "text-xs",
+        size === "md" && "text-sm",
+        size === "lg" && "text-base",
+        size === "xl" && "text-lg",
+      )}
+      aria-hidden="true"
+    >
+      {initials || (
+        <UserIcon className={iconClasses[size]} aria-hidden="true" />
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -90,35 +104,16 @@ export const Avatar: React.FC<AvatarProps> = ({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {shouldRenderImage ? (
-        <img
-          src={safeSrc}
-          alt={safeAlt}
-          onError={() => setImageFailed(true)}
-          className={clsx(
-            sizeClasses[size],
-            "rounded-full object-cover ring-2 ring-surface",
-            onClick && "cursor-pointer transition-opacity hover:opacity-90",
-          )}
-          loading="lazy"
-        />
-      ) : (
-        <div
-          className={clsx(
-            sizeClasses[size],
-            "flex items-center justify-center rounded-full bg-primary font-medium text-text-inverse",
-            onClick && "cursor-pointer transition-opacity hover:opacity-90",
-            size === "xs" && "text-xs",
-            size === "sm" && "text-xs",
-            size === "md" && "text-sm",
-            size === "lg" && "text-base",
-            size === "xl" && "text-lg",
-            size === "2xl" && "text-2xl",
-          )}
-        >
-          {initials}
-        </div>
-      )}
+      <SafeImage
+        src={safeSrc}
+        alt={safeAlt}
+        className={clsx(
+          sizeClasses[size],
+          "rounded-full object-cover ring-2 ring-surface",
+          onClick && "cursor-pointer transition-opacity hover:opacity-90",
+        )}
+        fallback={fallback}
+      />
 
       {showStatus && status && (
         <span
@@ -136,4 +131,3 @@ export const Avatar: React.FC<AvatarProps> = ({
 };
 
 export default Avatar;
-

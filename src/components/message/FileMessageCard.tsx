@@ -19,10 +19,8 @@ import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
   EyeIcon,
-  PlayIcon,
   ExclamationTriangleIcon,
   ShieldExclamationIcon,
-  VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
@@ -41,6 +39,8 @@ import { Skeleton, SkeletonCircle } from "../ui";
 import { truncateFilename } from "../../utils/truncateFilename";
 import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileName } from "../common/FileName";
+import { MediaThumbnail } from "../common/MediaThumbnail";
+import { SafeImage } from "../common/SafeImage";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -278,11 +278,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           )}
 
           {thumbnailUrl && !thumbError && (
-            <img
+            <SafeImage
               src={thumbnailUrl}
               alt={attachment.fileName || t("chat:image.previewAlt")}
-              loading="lazy"
-              decoding="async"
               className={clsx(
                 "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity",
                 thumbLoaded ? "opacity-100" : "opacity-0",
@@ -291,6 +289,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               onLoad={() => setThumbLoaded(true)}
               onError={() => setThumbError(true)}
               onClick={handlePreview}
+              fallback={null}
             />
           )}
 
@@ -371,25 +370,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             defaultValue: "Play video",
           })}
         >
-          {/* If thumbnail available, show it */}
-          {attachment.thumbnailUrl ? (
-            <img
-              src={attachment.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              className="absolute inset-0 h-full w-full rounded-lg object-cover"
-            />
-          ) : (
-            <VideoCameraIcon className="h-12 w-12 text-text-muted" />
-          )}
-
-          {/* Play button overlay */}
-          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-text-primary/30 transition-colors group-hover/file:bg-text-primary/40">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface/90 shadow-md backdrop-blur">
-              <PlayIcon className="h-6 w-6 text-text-primary" />
-            </div>
-          </div>
+          <MediaThumbnail
+            attachment={attachment}
+            src={attachment.thumbnailUrl}
+            variant="message"
+            className="absolute inset-0 h-full w-full rounded-lg"
+          />
         </div>
 
         {/* Info bar */}

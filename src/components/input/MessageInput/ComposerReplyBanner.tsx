@@ -12,10 +12,10 @@ import {
 import type { Message } from "../../../types";
 import { MessageType } from "../../../types";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
-import { resolvePublicResourceUrl } from "../../../config";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
 
 function getFileExtInfo(
   mimeType?: string,
@@ -94,10 +94,10 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
     msgType === MessageType.IMAGE || msgType === MessageType.VIDEO;
 
   const firstAttachment = replyToMessage.attachments?.[0];
-  const thumbnailUrl = resolvePublicResourceUrl(
-    firstAttachment?.thumbnailUrl ?? (isImageOrVideo ? firstAttachment?.url : undefined),
-  );
-  const hasThumb = !!thumbnailUrl && isImageOrVideo;
+  const thumbnailUrl =
+    firstAttachment?.thumbnailUrl ??
+    (isImageOrVideo ? firstAttachment?.url : undefined);
+  const showMediaThumb = isImageOrVideo && !!firstAttachment;
 
   const fileName = firstAttachment?.fileName;
   const mimeType = firstAttachment?.mimeType;
@@ -141,12 +141,12 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
       <div className="w-[3px] flex-shrink-0 self-stretch rounded-l-xl" style={{ background: "linear-gradient(180deg, #1565C0 0%, #DBEAFE 100%)" }} />
 
       {/* Thumbnail (image/video only) */}
-      {hasThumb && (
+      {showMediaThumb && (
         <div className="flex-shrink-0 my-1.5 ml-2">
-          <img
+          <MediaThumbnail
+            attachment={firstAttachment}
             src={thumbnailUrl}
-            alt=""
-            className="h-11 w-11 rounded-lg object-cover"
+            variant="reply"
           />
         </div>
       )}

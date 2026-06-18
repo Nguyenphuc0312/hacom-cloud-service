@@ -28,6 +28,7 @@ import { resolvePublicResourceUrl } from "../../../config";
 import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { FileName } from "../../common/FileName";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
 
 export type SharedContentTab = "media" | "files" | "links";
 
@@ -246,6 +247,7 @@ const ModalMediaTab: React.FC<{
         {items.map((item) => (
           <ModalMediaThumb
             key={`${item.messageId}-${item.fileId}`}
+            conversationId={conversationId}
             item={item}
             fallbackUrl={thumbnailUrls[item.fileId] ?? null}
             onImageClick={(url) => handleThumbClick(item.fileId, url)}
@@ -285,45 +287,52 @@ const ModalMediaTab: React.FC<{
 };
 
 const ModalMediaThumb: React.FC<{
+  conversationId: string;
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string) => void;
-}> = React.memo(({ item, fallbackUrl, onImageClick }) => {
+}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
+  const canOpen = Boolean(src) || isVideo;
+
+  const handleClick = async () => {
+    if (src) {
+      onImageClick(src);
+      return;
+    }
+    if (!isVideo) return;
+    try {
+      const res = await fileApi.getDownloadUrl({
+        conversationId,
+        attachmentId: item.fileId,
+      });
+      const payload = unwrapApiSuccess(res);
+      if (payload.url) window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Stable fallback stays visible; user can retry by clicking the tile.
+    }
+  };
 
   return (
     <button
       type="button"
-      disabled={!src}
-      onClick={() => { if (src) onImageClick(src); }}
+      disabled={!canOpen}
+      onClick={() => void handleClick()}
       className={clsx(
         "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",
-        src && "cursor-pointer hover:ring-2 hover:ring-primary/50",
+        canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
       )}
       aria-label={item.fileName}
     >
-      {src ? (
-        <img
-          src={src}
-          alt={item.fileName}
-          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-          loading="lazy"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <PhotoIcon className="h-6 w-6 text-text-muted" />
-        </div>
-      )}
-      {isVideo && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80">
-            <span className="ml-0.5 border-y-[5px] border-l-[9px] border-y-transparent border-l-text-primary" />
-          </div>
-        </div>
-      )}
+      <MediaThumbnail
+        attachment={item}
+        src={src}
+        variant="grid"
+        imageClassName="transition-transform duration-200 group-hover:scale-105"
+      />
     </button>
   );
 });

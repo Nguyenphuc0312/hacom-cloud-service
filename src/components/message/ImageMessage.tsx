@@ -20,6 +20,7 @@ import { useInViewport } from "../../hooks/useInViewport";
 import { resolvePublicResourceUrl } from "../../config";
 import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
+import { SafeImage } from "../common/SafeImage";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -487,9 +488,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 
           {/* Image */}
           {hasDisplayUrl && (
-            <img
-              loading="lazy"
-              decoding="async"
+            <SafeImage
               className={clsx(
                 "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
                 isLoaded ? "opacity-100" : "opacity-0",
@@ -506,6 +505,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
                 );
               }}
               onError={handleImageError}
+              fallback={null}
+              retryOnSignedUrlExpired
+              onRetrySource={() => void refreshThumbnail(true)}
             />
           )}
 

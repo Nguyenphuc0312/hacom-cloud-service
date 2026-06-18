@@ -21,6 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
+import { SafeImage } from "../common/SafeImage";
 import { TextPreview, CsvPreview, DocumentPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
 import type { PreviewType } from "../../utils/mimeRegistry";
 import {
@@ -406,13 +407,18 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
           onClick={(event) => event.stopPropagation()}
           onWheel={handleWheel}
         >
-          <img
+          <SafeImage
             src={secureUrl}
             alt={fileName || t("chat:image.previewAlt")}
-            decoding="async"
             className="max-h-[88vh] max-w-[92vw] select-none object-contain transition-transform duration-150"
             style={{ transform: `scale(${scale})` }}
             draggable={false}
+            fallback={
+              <div className="flex min-h-[240px] min-w-[280px] flex-col items-center justify-center gap-2 rounded-xl bg-surface-overlay text-text-muted">
+                <ExclamationTriangleIcon className="h-8 w-8" />
+                <span className="text-sm">Khong tai duoc anh</span>
+              </div>
+            }
           />
         </div>
       );
