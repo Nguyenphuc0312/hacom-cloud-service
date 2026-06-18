@@ -37,6 +37,7 @@ import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
+import { splitFileName } from "../../../utils/truncateFilename";
 import { UserProfile } from "../../info/UserProfile";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type {
@@ -670,7 +671,7 @@ const MessageGroupItem: React.FC<{
                     }
                   }}
                   className={clsx(
-                    "mb-2 flex w-full max-w-[20rem] items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
+                    "mb-2 flex w-full max-w-full items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
                     "bg-black/[0.05] dark:bg-white/[0.08]",
                     onNavigateToMessage ? "cursor-pointer hover:opacity-75 active:opacity-50" : "cursor-default",
                   )}
@@ -735,7 +736,7 @@ const MessageGroupItem: React.FC<{
                     </div>
                     <p
                       className={clsx(
-                        "mt-0.5 flex items-center gap-1 text-[12px] leading-4",
+                        "mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-4",
                         isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.50]" : "text-text-muted/75",
                       )}
                     >
@@ -763,9 +764,26 @@ const MessageGroupItem: React.FC<{
                           <span className="flex-shrink-0 font-medium opacity-90">
                             [{replyPreviewMeta.label}]
                           </span>
-                          {replyPreviewMeta.text && (
-                            <span className="truncate">{replyPreviewMeta.text}</span>
-                          )}
+                          {replyPreviewMeta.text &&
+                            (replyPreviewMeta.badge
+                              ? (() => {
+                                  // File: cắt CUỐI phần tên nhưng ghim đuôi
+                                  // (.docx/.xlsx…) luôn hiện — đuôi không bao giờ mất.
+                                  const { base, ext } = splitFileName(
+                                    replyPreviewMeta.text,
+                                  );
+                                  return (
+                                    <span className="flex min-w-0 items-center">
+                                      <span className="truncate">{base}</span>
+                                      <span className="flex-shrink-0">{ext}</span>
+                                    </span>
+                                  );
+                                })()
+                              : (
+                                <span className="truncate">
+                                  {replyPreviewMeta.text}
+                                </span>
+                              ))}
                         </>
                       ) : (
                         <span className="truncate">
