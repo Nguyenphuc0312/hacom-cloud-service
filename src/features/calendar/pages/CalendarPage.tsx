@@ -52,6 +52,15 @@ import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, isMultiDayEvent } from "../utils/timeline";
+import {
+  filterCalendarEventsByType,
+  localizeEventTitle,
+  mapEventTypeForDisplay,
+  mapHrmEventToCalendarEvent,
+  mergeCalendarEventSources,
+  toLocalDateString,
+  toLocalTimeString,
+} from "../utils/calendarEventMapping";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 
@@ -144,36 +153,6 @@ const formatDateVN = (dateStr: string): string => {
   } catch {
     return dateStr;
   }
-};
-
-/**
- * Convert an ISO timestamp (UTC from API) to LOCAL wall-clock HH:mm.
- * Never slice the raw string — that yields UTC time (7h off in Vietnam).
- */
-const toLocalTimeString = (iso: string | null | undefined): string => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
-/**
- * Convert an ISO timestamp (UTC from API) to LOCAL date YYYY-MM-DD.
- */
-const toLocalDateString = (iso: string | null | undefined): string => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return formatDateString(d);
-};
-
-/**
- * Khi xem lịch người khác, event có visibility BUSY_ONLY bị backend che tiêu đề
- * thành "Busy". Chuẩn hóa sang tiếng Việt "Bận" để hiển thị.
- */
-const localizeEventTitle = (title: string | null | undefined): string => {
-  const t = (title ?? "").trim();
-  return t.toLowerCase() === "busy" ? "Bận" : t;
 };
 
 /** Meeting extras stored in HR event metadata JSON. */
@@ -1143,17 +1122,7 @@ export const CalendarPage: React.FC = () => {
   // Convert API CalendarEvent to ExtendedCalendarEvent (giữ startAt/endAt để
   // Day/Week View dựng block theo thời lượng + overlap — xem utils/timeline.ts).
   const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
-    return apiEvents.map((event: HRCalendarEvent): ExtendedCalendarEvent => ({
-      id: event.id,
-      title: localizeEventTitle(event.title),
-      date: toLocalDateString(event.startAt),
-      type: mapEventTypeForDisplay(event),
-      description: event.description ?? undefined,
-      time: toLocalTimeString(event.startAt),
-      startAt: event.startAt,
-      endAt: event.endAt,
-      isAllDay: event.isAllDay,
-    }));
+    return apiEvents.map(mapHrmEventToCalendarEvent);
   }, [apiEvents]);
 
   // Fetch attendance data when month changes.
@@ -1265,14 +1234,14 @@ export const CalendarPage: React.FC = () => {
 
   // Generate events for current year, merged with task events and API events
   const allEvents = useMemo(
-    () => [...getCalendarEvents(currentYear), ...taskEvents, ...calendarEventsFromApi],
+    () => mergeCalendarEventSources(getCalendarEvents(currentYear), taskEvents, calendarEventsFromApi),
     [currentYear, taskEvents, calendarEventsFromApi],
   );
 
   // Filter events based on selected filters
   const filteredEvents = useMemo(() => {
     const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
-    return allEvents.filter((event) => activeTypes.includes(event.type));
+    return filterCalendarEventsByType(allEvents, activeTypes);
   }, [allEvents, localFilters]);
 
   // Search filtered events
@@ -2152,58 +2121,6 @@ export const CalendarPage: React.FC = () => {
 
     </div>
   );
-};
-
-/**
- * Map API CalendarEventType (UPPERCASE) to local EventType (lowercase_underscore).
- */
-const mapApiEventTypeToLocal = (apiType: string): EventType => {
-  switch (apiType) {
-    case "PERSONAL":
-      return "personal";
-    case "MEETING":
-      return "meeting";
-    case "ATTENDANCE":
-      return "attendance";
-    case "TASK":
-      return "task";
-    // "OTHER" là loại chung (không còn là kho chứa lịch cá nhân — backend đã có
-    // eventType PERSONAL). Map sang "work". Sự kiện cá nhân legacy lưu dưới
-    // OTHER+PRIVATE được xử lý ở call site (xem mapEventTypeForDisplay).
-    case "OTHER":
-    case "LEAVE":
-    case "DEADLINE":
-    case "REMINDER":
-    case "UNIT":
-    case "LEADER":
-    case "WORK":
-      return "work";
-    default:
-      return "work";
-  }
-};
-
-/**
- * Resolve the local EventType for display from a full API event.
- *
- * Ưu tiên eventType mới (PERSONAL). Đồng thời giữ tương thích ngược TẠM THỜI:
- * sự kiện legacy được lưu dưới OTHER + PRIVATE + không có participants vốn là
- * lịch cá nhân (giai đoạn stopgap trước khi backend có enum PERSONAL) → vẫn
- * hiển thị là "personal" để không hiển thị sai loại.
- *
- * TODO(remove-after-backfill): bỏ nhánh legacy bên dưới sau khi đã chạy
- *   hr-api-service: `npm run calendar:backfill-personal-events -- --since=<deploy-date> --apply`
- * (lúc đó mọi OTHER+PRIVATE+no-participants đã được chuyển sang PERSONAL).
- */
-const mapEventTypeForDisplay = (event: HRCalendarEvent): EventType => {
-  if (
-    event.eventType === "OTHER" &&
-    event.visibility === "PRIVATE" &&
-    (event.participants?.length ?? 0) === 0
-  ) {
-    return "personal";
-  }
-  return mapApiEventTypeToLocal(event.eventType);
 };
 
 /**
