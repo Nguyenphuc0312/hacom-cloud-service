@@ -33,4 +33,11 @@ describe("Avatar", () => {
     expect(screen.queryByText("?")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  it("renders the 2xl fallback icon with matching sizing", () => {
+    const { container } = render(<Avatar size="2xl" />);
+
+    expect(container.querySelector(".h-32.w-32")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toHaveClass("h-16", "w-16");
+  });
 });
