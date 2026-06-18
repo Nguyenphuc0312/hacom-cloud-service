@@ -185,8 +185,17 @@ async function loadPdfMake(): Promise<{
   const pdfMake: any = (pdfMakeModule as any).default ?? (pdfMakeModule as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawVfs: any = vfsModule as any;
+  // Dev (esbuild CJS interop): fonts live on the module export shape.
+  // Prod (Rollup, vite.config moduleContext="globalThis"): vfs_fonts assigns
+  // its fonts onto globalThis.pdfMake.vfs — read them back from there.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const globalVfs = (globalThis as any).pdfMake?.vfs;
   pdfMake.vfs =
-    rawVfs.pdfMake?.vfs ?? rawVfs.default?.pdfMake?.vfs ?? rawVfs.default ?? rawVfs;
+    rawVfs.pdfMake?.vfs ??
+    rawVfs.default?.pdfMake?.vfs ??
+    globalVfs ??
+    rawVfs.default ??
+    rawVfs;
   return pdfMake;
 }
 
@@ -271,57 +280,4 @@ export async function exportTableToPdf(
   pdfMake
     .createPdf(buildReportDocDefinition(title, table))
     .download(ensureExt(filename, ".pdf"));
-}
-
-/** Cầu nối desktop Electron (preload.js inject). */
-interface ChatDesktopPrintBridge {
-  printPdf?: (data: Uint8Array, filename: string) => void;
-}
-
-/**
- * In báo cáo bằng CHÍNH file PDF pdfmake (không dùng window.print() trên HTML).
- * - Desktop Electron: đẩy bytes qua window.chatDesktop.printPdf → webContents.print (đồng bộ layout).
- * - Web: nhúng PDF vào iframe ẩn rồi in (tránh popup blocker & bug tab trắng của .print()).
- */
-export async function printTablePdf(
-  title: string,
-  table: ParsedTable,
-): Promise<void> {
-  const pdfMake = await loadPdfMake();
-  const pdf = pdfMake.createPdf(buildReportDocDefinition(title, table));
-
-  const bridge = (window as unknown as { chatDesktop?: ChatDesktopPrintBridge })
-    .chatDesktop;
-  if (bridge?.printPdf) {
-    pdf.getBuffer((buf: Uint8Array) => {
-      bridge.printPdf?.(buf, ensureExt(title, ".pdf"));
-    });
-    return;
-  }
-
-  pdf.getBlob((blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.src = url;
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        /* noop */
-      }
-      // Dọn dẹp sau khi hộp thoại in có thời gian mở.
-      setTimeout(() => {
-        iframe.remove();
-        URL.revokeObjectURL(url);
-      }, 60_000);
-    };
-    document.body.appendChild(iframe);
-  });
 }
