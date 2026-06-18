@@ -71,34 +71,34 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[860px] overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+    <div className="w-full max-w-[460px] overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-[#1976D2]/8 px-4 py-3">
-        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[#1565C0]">
-          <FileTextIcon size={15} />
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-[#1976D2]/8 px-3 py-2">
+        <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-[#1565C0]">
+          <FileTextIcon size={14} />
           Báo cáo công việc tuần
         </h3>
         <button
           type="button"
           onClick={() => void loadFiles()}
           disabled={isLoading}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-50"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-50"
           title="Tải lại"
         >
-          <RefreshCwIcon size={13} className={clsx(isLoading && "animate-spin")} />
+          <RefreshCwIcon size={12} className={clsx(isLoading && "animate-spin")} />
           Tải lại
         </button>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-sm text-text-muted">
-          <Loader2Icon size={16} className="animate-spin" />
+        <div className="flex items-center justify-center gap-2 py-5 text-xs text-text-muted">
+          <Loader2Icon size={14} className="animate-spin" />
           Đang tải danh sách báo cáo...
         </div>
       ) : error ? (
-        <p className="px-3 py-6 text-center text-sm text-danger">{error}</p>
+        <p className="px-3 py-4 text-center text-xs text-danger">{error}</p>
       ) : files.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-text-muted">
+        <p className="px-3 py-4 text-center text-xs text-text-muted">
           Chưa có báo cáo tuần nào trong hệ thống
         </p>
       ) : (
@@ -110,15 +110,16 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
               cellValue(item.user_name),
               cellValue(item.department),
               cellValue(item.company),
+              weekRange(item),
             ].filter((v) => v !== "—");
             return (
               <div
                 key={item.file_id}
-                className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#1976D2]/6"
+                className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-[#1976D2]/6"
               >
                 {/* Icon tệp */}
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/8 text-[#1565C0]">
-                  <FileTextIcon size={16} />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/8 text-[#1565C0]">
+                  <FileTextIcon size={14} />
                 </span>
 
                 {/* Thông tin tệp */}
@@ -127,22 +128,21 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
                     type="button"
                     onClick={() => handleAction(item.file_id, "view")}
                     disabled={isBusy}
-                    className="flex max-w-full items-center gap-1.5 text-left text-sm font-medium text-[#1565C0] hover:underline disabled:cursor-wait disabled:opacity-60"
+                    className="flex max-w-full items-center gap-1.5 text-left text-[13px] font-medium text-[#1565C0] hover:underline disabled:cursor-wait disabled:opacity-60"
                     title={`Xem ${label}`}
                   >
                     {isBusy ? (
-                      <Loader2Icon size={13} className="shrink-0 animate-spin" />
+                      <Loader2Icon size={12} className="shrink-0 animate-spin" />
                     ) : (
-                      <EyeIcon size={13} className="shrink-0" />
+                      <EyeIcon size={12} className="shrink-0" />
                     )}
                     <span className="truncate">{label}</span>
                   </button>
                   {meta.length > 0 && (
-                    <p className="mt-0.5 break-words text-xs text-text-secondary">
+                    <p className="truncate text-[11px] text-text-muted" title={meta.join(" · ")}>
                       {meta.join(" · ")}
                     </p>
                   )}
-                  <p className="mt-0.5 text-xs text-text-muted">{weekRange(item)}</p>
                 </div>
 
                 {/* Tải về */}
@@ -150,10 +150,10 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
                   type="button"
                   onClick={() => handleAction(item.file_id, "download")}
                   disabled={isBusy}
-                  className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-60"
                   title="Tải về máy"
                 >
-                  <DownloadIcon size={13} />
+                  <DownloadIcon size={12} />
                   <span className="hidden sm:inline">Tải về</span>
                 </button>
               </div>

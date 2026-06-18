@@ -65,13 +65,23 @@ export function usePersonalChat() {
         // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
         // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
         // user/assistant có nội dung thực.
-        const normalized = fetched
-          .filter(
-            (m) =>
-              (m.role === "user" || m.role === "assistant") &&
-              (m.content ?? "").trim().length > 0,
-          )
-          .map((m) => ({
+        const visible = fetched.filter(
+          (m) =>
+            (m.role === "user" || m.role === "assistant") &&
+            (m.content ?? "").trim().length > 0,
+        );
+        const normalized = visible.map((m, idx) => {
+          // Khôi phục hộp "Xem báo cáo công việc" (ReportTextBox) sau khi tải
+          // lịch sử: câu trả lời của #baocaocv (user thường) là text báo cáo,
+          // không có cờ trong metadata. Nhận diện bằng tin user liền trước là
+          // "#baocaocv". Loại trừ báo cáo dạng bảng của admin (có exportable_table).
+          const prev = visible[idx - 1];
+          const isReportRequest =
+            m.role === "assistant" &&
+            m.metadata?.exportable_table !== true &&
+            prev?.role === "user" &&
+            BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
+          return {
             id: m.id || crypto.randomUUID(),
             role: m.role as "user" | "assistant",
             content: m.content,
@@ -80,7 +90,10 @@ export function usePersonalChat() {
             thinkingPhase: null as null,
             // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
             ...(m.metadata?.exportable_table === true && { exportableTable: true }),
-          }));
+            // Render lại hộp báo cáo công việc của #baocaocv.
+            ...(isReportRequest && { reportRequest: true as const }),
+          };
+        });
         if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
       })
