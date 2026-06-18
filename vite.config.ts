@@ -166,6 +166,20 @@ export default defineConfig(({ mode }) => {
 
     build: {
       rollupOptions: {
+        // pdfmake's `build/vfs_fonts.js` registers its embedded fonts via a
+        // top-level `this.pdfMake.vfs = {…}` assignment. Rollup defaults a
+        // module's top-level `this` to `undefined` (ESM strict semantics), so
+        // in a production build that assignment throws a TypeError and the
+        // dynamic import rejects — which is why PDF export works in `vite dev`
+        // (esbuild pre-bundles it as CommonJS, `this` === exports) but silently
+        // fails once deployed to web/desktop. Pin this one module's `this` to
+        // globalThis so the fonts land on `globalThis.pdfMake.vfs` instead of
+        // crashing; tableExport.ts reads them back from there.
+        moduleContext: (id: string) =>
+          id.replace(/\\/g, "/").includes("/pdfmake/build/vfs_fonts")
+            ? "globalThis"
+            : undefined,
+
         // Surface CIRCULAR_CHUNK warnings. We previously suppressed them on
         // the assumption that cross-chunk imports are only used inside
         // function bodies; that was incorrect. React 19's `Activity`

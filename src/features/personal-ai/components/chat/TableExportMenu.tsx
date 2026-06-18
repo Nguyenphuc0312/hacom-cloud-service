@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  PrinterIcon,
   FileTextIcon,
   FileSpreadsheetIcon,
   FileIcon,
@@ -14,7 +13,6 @@ import {
   exportTableToXlsx,
   exportTableToDocx,
   exportTableToPdf,
-  printTablePdf,
 } from "../../services/tableExport";
 import { logger } from "../../../../utils/logger";
 
@@ -25,7 +23,7 @@ interface TableExportMenuProps {
   title: string;
 }
 
-type ItemKey = "print" | "pdf" | "excel" | "word";
+type ItemKey = "pdf" | "excel" | "word";
 
 export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   content,
@@ -62,9 +60,7 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
     }
     try {
       setBusy(key);
-      if (key === "print") {
-        await printTablePdf(title, table);
-      } else if (key === "excel") {
+      if (key === "excel") {
         exportTableToXlsx(fileBase, table);
       } else if (key === "word") {
         await exportTableToDocx(fileBase, title, table);
@@ -79,7 +75,6 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   };
 
   const items: { key: ItemKey; label: string; icon: React.ReactNode }[] = [
-    { key: "print", label: "In", icon: <PrinterIcon size={14} /> },
     { key: "pdf", label: "Xuất PDF (.pdf)", icon: <FileTextIcon size={14} /> },
     {
       key: "excel",
@@ -105,7 +100,7 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
         ) : (
           <DownloadIcon size={13} />
         )}
-        Xuất & In
+        Xuất File
         <ChevronDownIcon
           size={12}
           className={clsx("transition-transform", open && "rotate-180")}
