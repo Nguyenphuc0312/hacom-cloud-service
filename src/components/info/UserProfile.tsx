@@ -78,19 +78,25 @@ const formatDisplayName = (user: ProfileUser | null | undefined): string => {
 };
 
 /** Map a fetched user-detail payload to the panel's ProfileUser shape. */
-const toProfileUser = (payload: CachedUserProfile): ProfileUser => ({
+const toProfileUser = (payload: CachedUserProfile): ProfileUser => {
+  return {
   ...(payload as Partial<ProfileUser>),
   id: payload.id,
   username: payload.username,
   firstName: payload.firstName,
   lastName: payload.lastName,
   displayName: payload.displayName,
-  avatar: resolvePublicResourceUrl(payload.avatar ?? undefined),
+  // Backend trả avatar dưới field `avatarUrl`; `avatar` là fallback cho payload
+  // cũ. Dùng `||` để chuỗi rỗng không bị coi là giá trị hợp lệ.
+  avatar: resolvePublicResourceUrl(
+    payload.avatar || (payload as { avatarUrl?: string | null }).avatarUrl || undefined,
+  ),
   bio: payload.bio,
   phone: payload.phone,
   createdAt: payload.createdAt,
   status: (payload.status as UserStatus) || UserStatus.OFFLINE,
-});
+  };
+};
 
 const formatPresenceLabel = (
   status: UserStatus | undefined,
