@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import clsx from "clsx";
 import {
   PhotoIcon,
@@ -97,9 +97,20 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     return mediaPreview.map((item) => item.fileId).sort().join("|");
   }, [mediaPreview]);
 
-  // Auto-select first non-empty tab once data arrives
+  // Tracks the conversation for which we've already run the initial tab
+  // auto-select, so it runs exactly once per conversation (when data arrives)
+  // and never overrides a tab the user manually clicked afterwards.
+  const autoSelectedForRef = useRef<string | null>(null);
+
+  // Auto-select first non-empty tab once data arrives — only on the first load
+  // per conversation. Without the ref guard this re-fires whenever activeTab
+  // changes and bounces the user off an empty tab (e.g. clicking "Link" when
+  // there are no links snapped back to "Ảnh/Video").
   useEffect(() => {
     if (!data) return;
+    if (autoSelectedForRef.current === conversationId) return;
+    autoSelectedForRef.current = conversationId;
+
     const order: SharedContentTab[] = ["media", "files", "links"];
     const totals: Record<SharedContentTab, number> = {
       media: data.media.total,
@@ -111,10 +122,11 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (fallback) setActiveTab(fallback);
     }
-  }, [data, activeTab]);
+  }, [data, activeTab, conversationId]);
 
   // Reset when conversation changes
   useEffect(() => {
+    autoSelectedForRef.current = null;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("media");
     setUrlCache({ forConversationId: conversationId, urls: {} });
