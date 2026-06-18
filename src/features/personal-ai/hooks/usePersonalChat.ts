@@ -220,6 +220,10 @@ export function usePersonalChat() {
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",
                 selectionRequest: selectionData,
+                // BE chọn luồng admin → đây là selector, KHÔNG phải report-text.
+                // Xóa cờ reportRequest để khi hủy selector không rơi vào
+                // ReportTextBox (gây "x2 lần hủy").
+                reportRequest: undefined,
                 isStreaming: false,
                 thinkingPhase: null,
               });

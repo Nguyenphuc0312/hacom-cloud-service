@@ -119,13 +119,21 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
     return result;
   }, [deptList]);
 
-  // Đếm số báo cáo theo công ty
+  // Đếm số báo cáo + số phòng ban theo công ty
   const countByCompany = useMemo(() => {
     const map = new Map<string, number>();
     for (const d of deptList) {
       if (d.company) {
         map.set(d.company, (map.get(d.company) ?? 0) + d.count);
       }
+    }
+    return map;
+  }, [deptList]);
+
+  const deptCountByCompany = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const d of deptList) {
+      if (d.company) map.set(d.company, (map.get(d.company) ?? 0) + 1);
     }
     return map;
   }, [deptList]);
@@ -191,12 +199,15 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
   // Loading skeleton
   if (loadingDepts) {
     return (
-      <div className="w-full rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-[#1976D2]/8 border-b border-border">
-          <h3 className="text-sm font-semibold text-[#1565C0]">Xem báo cáo công việc</h3>
+      <div className="w-full max-w-[420px] rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+        <div className="px-3 py-2 bg-[#1976D2]/8 border-b border-border">
+          <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-[#1565C0]">
+            <BarChart2Icon size={14} />
+            Xem báo cáo công việc
+          </h3>
         </div>
-        <div className="flex items-center justify-center gap-2 py-8 text-text-muted text-sm">
-          <Loader2Icon size={16} className="animate-spin" />
+        <div className="flex items-center justify-center gap-2 py-6 text-text-muted text-xs">
+          <Loader2Icon size={15} className="animate-spin" />
           Đang tải danh sách phòng ban...
         </div>
       </div>
@@ -205,7 +216,7 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
 
   if (deptList.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-surface shadow-sm px-4 py-6 text-sm text-text-muted text-center">
+      <div className="w-full max-w-[420px] rounded-xl border border-border bg-surface shadow-sm px-4 py-5 text-xs text-text-muted text-center">
         Chưa có báo cáo nào trong hệ thống
       </div>
     );
@@ -236,59 +247,60 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
   const step: "company" | "department" = selectedCompany ? "department" : "company";
 
   return (
-      <div className="w-full rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+      <div className="w-full max-w-[420px] rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="px-4 py-3 bg-[#1976D2]/8 border-b border-border">
-          <div className="flex items-center gap-2">
+        <div className="px-3 py-2 bg-[#1976D2]/8 border-b border-border">
+          <div className="flex items-center gap-1.5">
             {step === "department" && (
               <button type="button" onClick={handleBack}
-                className="flex items-center justify-center h-6 w-6 rounded-md text-[#1565C0] hover:bg-[#1976D2]/15 transition-colors"
+                className="flex items-center justify-center h-5 w-5 rounded-md text-[#1565C0] hover:bg-[#1976D2]/15 transition-colors"
                 title="Quay lại">
-                <ChevronLeftIcon size={15} />
+                <ChevronLeftIcon size={14} />
               </button>
             )}
-            <h3 className="text-sm font-semibold text-[#1565C0] flex items-center gap-1.5">
+            <h3 className="text-[13px] font-semibold text-[#1565C0] flex items-center gap-1.5">
               {step === "department" ? (
                 <>
-                  <span className="text-text-muted font-normal text-xs">{selectedCompany}</span>
-                  <ChevronRightIcon size={12} className="text-text-muted" />
-                  Chọn phòng ban
+                  <span className="text-text-muted font-normal text-xs truncate max-w-[160px]">{selectedCompany}</span>
+                  <ChevronRightIcon size={12} className="text-text-muted shrink-0" />
+                  <span className="shrink-0">Chọn phòng ban</span>
                 </>
               ) : (
-                "Xem báo cáo công việc"
+                <>
+                  <BarChart2Icon size={14} />
+                  Xem báo cáo công việc
+                </>
               )}
             </h3>
           </div>
         </div>
 
-        <div className="px-4 py-3 flex flex-col gap-3">
+        <div className="px-3 py-2.5 flex flex-col gap-2.5">
 
           {/* BƯỚC 1 — chọn công ty */}
           {step === "company" && (
             <div>
-              <p className="text-xs font-medium text-text-secondary mb-2">
+              <p className="text-xs font-medium text-text-secondary mb-1.5">
                 Chọn công ty/đơn vị để xem báo cáo:
               </p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1">
                 {companies.map((company) => (
                   <button
                     key={company}
                     type="button"
                     onClick={() => handleSelectCompany(company)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:bg-[#1976D2]/8 hover:border-[#1976D2]/25 transition-colors text-left group"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-transparent hover:bg-[#1976D2]/8 hover:border-[#1976D2]/25 transition-colors text-left group"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0] group-hover:bg-[#1976D2]/18 transition-colors">
-                      <BuildingIcon size={15} />
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0] group-hover:bg-[#1976D2]/18 transition-colors">
+                      <BuildingIcon size={14} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-medium text-text-primary truncate">{company}</span>
-                      <span className="block text-xs text-text-muted">
-                        {deptsForCompany.length > 0
-                          ? `${deptList.filter((d) => d.company === company).length} phòng ban · ${countByCompany.get(company) ?? 0} báo cáo`
-                          : `${countByCompany.get(company) ?? 0} báo cáo`}
+                      <span className="block text-[13px] font-medium text-text-primary truncate">{company}</span>
+                      <span className="block text-[11px] text-text-muted">
+                        {`${deptCountByCompany.get(company) ?? 0} phòng ban · ${countByCompany.get(company) ?? 0} báo cáo`}
                       </span>
                     </span>
-                    <ChevronRightIcon size={15} className="text-text-muted group-hover:text-[#1565C0] shrink-0 transition-colors" />
+                    <ChevronRightIcon size={14} className="text-text-muted group-hover:text-[#1565C0] shrink-0 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -299,10 +311,10 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
           {step === "department" && (
             <>
               <div>
-                <p className="text-xs font-medium text-text-secondary mb-2">
+                <p className="text-xs font-medium text-text-secondary mb-1.5">
                   Chọn phòng ban (có thể chọn nhiều):
                 </p>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
                   {deptsForCompany.map((d) => {
                     const checked = selectedDepts.includes(d.department);
                     return (
@@ -313,7 +325,7 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
                         aria-checked={checked}
                         onClick={() => toggleDept(d.department)}
                         className={clsx(
-                          "flex w-full items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors",
+                          "flex w-full items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors",
                           checked
                             ? "bg-[#1976D2]/8 border border-[#1976D2]/30"
                             : "border border-transparent hover:bg-surface-hover",
@@ -321,14 +333,14 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
                       >
                         <Checkbox checked={checked} />
                         <span className="flex-1 min-w-0">
-                          <span className="block text-sm text-text-primary truncate">{d.department}</span>
+                          <span className="block text-[13px] text-text-primary truncate">{d.department}</span>
                         </span>
-                        <span className="text-xs text-text-muted shrink-0">({d.count} báo cáo)</span>
+                        <span className="text-[11px] text-text-muted shrink-0">({d.count} báo cáo)</span>
                       </button>
                     );
                   })}
                   {deptsForCompany.length === 0 && (
-                    <p className="text-xs text-text-muted py-2 px-1">
+                    <p className="text-xs text-text-muted py-1.5 px-1">
                       Không có phòng ban nào trong đơn vị này
                     </p>
                   )}
@@ -336,18 +348,18 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
               </div>
 
               {/* Date range */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-text-secondary whitespace-nowrap">Từ ngày:</label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] text-text-secondary whitespace-nowrap">Từ ngày:</label>
                   <input type="date" value={startDate} max={endDate} title="Từ ngày"
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
+                    className="rounded-lg border border-border bg-transparent px-1.5 py-0.5 text-xs text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-text-secondary whitespace-nowrap">Đến ngày:</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] text-text-secondary whitespace-nowrap">Đến ngày:</label>
                   <input type="date" value={endDate} min={startDate} max={todayStr()} title="Đến ngày"
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
+                    className="rounded-lg border border-border bg-transparent px-1.5 py-0.5 text-xs text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
                 </div>
               </div>
 
@@ -358,17 +370,17 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-surface-overlay/20">
+        <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border bg-surface-overlay/20">
           <button type="button" onClick={onCancel} disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:bg-surface-hover transition-colors disabled:opacity-50">
-            <XIcon size={14} />
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-text-secondary hover:bg-surface-hover transition-colors disabled:opacity-50">
+            <XIcon size={13} />
             Hủy
           </button>
           {step === "department" && (
             <button type="button" onClick={handleFetch}
               disabled={isLoading || selectedDepts.length === 0}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-[#1976D2] to-[#1565C0] hover:brightness-105 transition-all disabled:opacity-50 shadow-sm">
-              <BarChart2Icon size={14} />
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-[#1976D2] to-[#1565C0] hover:brightness-105 transition-all disabled:opacity-50 shadow-sm">
+              <BarChart2Icon size={13} />
               {isLoading ? "Đang tải..." : "Xem báo cáo"}
             </button>
           )}
