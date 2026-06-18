@@ -15,6 +15,7 @@ import {
   exportTableToPdf,
 } from "../../services/tableExport";
 import { logger } from "../../../../utils/logger";
+import { toast } from "../../../../utils/toast";
 
 interface TableExportMenuProps {
   /** Nội dung markdown của tin nhắn (chứa bảng để parse). */
@@ -51,24 +52,38 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
 
   const fileBase = title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "bao-cao";
 
+  const FORMAT_LABEL: Record<ItemKey, string> = {
+    pdf: "PDF",
+    excel: "Excel",
+    word: "Word",
+  };
+
   const handleExport = async (key: ItemKey) => {
     setOpen(false);
     const table = parseMarkdownTable(content);
     if (!table || table.headers.length === 0) {
       logger.warn("TableExportMenu", "no-table-found");
+      toast.error("Không tìm thấy bảng để xuất file.");
       return;
     }
     try {
       setBusy(key);
+      let saved = false;
       if (key === "excel") {
-        exportTableToXlsx(fileBase, table);
+        saved = await exportTableToXlsx(fileBase, table);
       } else if (key === "word") {
-        await exportTableToDocx(fileBase, title, table);
+        saved = await exportTableToDocx(fileBase, title, table);
       } else {
-        await exportTableToPdf(fileBase, title, table);
+        saved = await exportTableToPdf(fileBase, title, table);
+      }
+      // Chỉ báo thành công khi file đã thật sự được lưu (không báo nếu người
+      // dùng bấm Hủy ở hộp thoại "Save as").
+      if (saved) {
+        toast.success(`Xuất file ${FORMAT_LABEL[key]} thành công.`);
       }
     } catch (err) {
       logger.error("TableExportMenu", "export-failed", { key, err });
+      toast.error(`Xuất file ${FORMAT_LABEL[key]} thất bại. Vui lòng thử lại.`);
     } finally {
       setBusy(null);
     }
