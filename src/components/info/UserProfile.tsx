@@ -749,9 +749,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           if (actingKey !== "unfriend") setIsUnfriendConfirmOpen(false);
         }}
         onConfirm={() => {
+          if (relationship.kind !== "friend") {
+            setIsUnfriendConfirmOpen(false);
+            return;
+          }
+          const friendshipId = relationship.friendshipId;
           void handleAsyncAction(
             "unfriend",
-            () => removeFriend(relationship.friendshipId),
+            () => removeFriend(friendshipId),
             t("friends:unfriendSuccess"),
             t("friends:actionFailed"),
           ).finally(() => setIsUnfriendConfirmOpen(false));
