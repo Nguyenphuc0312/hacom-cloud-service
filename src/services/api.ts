@@ -1932,6 +1932,32 @@ export const conversationResourcesApi = {
   },
 };
 
+/**
+ * Link preview (OpenGraph unfurl) — xem docs/LINK_PREVIEW_SPEC.md.
+ * Backend fetch trang đích → trả metadata đã chuẩn hóa. Khớp shape với
+ * `LinkPreviewMeta` ở components/message/linkPreviewUtils.ts.
+ */
+export interface LinkPreviewData {
+  url: string;
+  hostname: string;
+  siteName?: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  faviconUrl?: string;
+  mediaType?: string;
+  fetchedAt?: string;
+}
+
+export const linkPreviewApi = {
+  get: async (url: string) => {
+    const response = await apiClient.get<ApiResponse<LinkPreviewData>>(
+      `/link-preview?url=${encodeURIComponent(url)}`,
+    );
+    return response.data;
+  },
+};
+
 export default {
   auth: authApi,
   user: userApi,

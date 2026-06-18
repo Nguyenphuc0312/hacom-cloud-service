@@ -10,7 +10,8 @@ import { ImageGallery } from "../../message/ImageGallery";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
-import { LinkPreviewCard } from "../../message/LinkPreviewCard";
+import { MessageLinkPreview } from "../../message/MessageLinkPreview";
+import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
 import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
 import type { Attachment, ImageClickPayload, Message } from "../../../types";
@@ -47,12 +48,6 @@ interface ContactPayloadView {
   orgUnit?: string;
   title?: string;
 }
-
-const extractFirstUrl = (content: string | undefined): string | null => {
-  if (!content) return null;
-  const match = content.match(/https?:\/\/[^\s]+/i);
-  return match ? match[0] : null;
-};
 
 const extractContactPayload = (message: Message): ContactPayloadView | null => {
   const metadata =
@@ -569,12 +564,11 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       );
     case MessageType.TEXT:
     default: {
-      const firstUrl = shouldTreatMessageContentAsRichText({
+      const isRichText = shouldTreatMessageContentAsRichText({
         contentFormat: message.contentFormat,
         content: message.content,
-      })
-        ? null
-        : extractFirstUrl(message.content);
+      });
+      const firstUrl = extractFirstUrlFromContent(message.content, isRichText);
       return (
         <div className="space-y-2">
           {renderTextContent(
@@ -586,7 +580,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             isCollapsibleText,
             onToggleTextExpand,
           )}
-          {firstUrl ? <LinkPreviewCard url={firstUrl} isOwn={isOwn} /> : null}
+          {firstUrl ? <MessageLinkPreview url={firstUrl} isOwn={isOwn} /> : null}
         </div>
       );
     }
