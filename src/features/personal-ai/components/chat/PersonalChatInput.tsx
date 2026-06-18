@@ -252,10 +252,10 @@ export const PersonalChatInput = forwardRef<
             ref={hashMenuRef}
             role="listbox"
             aria-label="Lệnh nhanh"
-            className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-2xl border border-border bg-surface shadow-xl"
+            className="absolute bottom-full left-0 z-50 mb-2 w-max max-w-[min(360px,90%)] overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
           >
-            <div className="px-3 py-2 border-b border-border/50">
-              <span className="text-xs font-medium text-text-muted">Lệnh nhanh</span>
+            <div className="px-2.5 py-1.5 border-b border-border/50">
+              <span className="text-[11px] font-medium text-text-muted">Lệnh nhanh</span>
             </div>
             {filteredHashCommands.map((cmd, idx) => (
               <button
@@ -269,37 +269,31 @@ export const PersonalChatInput = forwardRef<
                 }}
                 onMouseEnter={() => setHashSelectedIdx(idx)}
                 className={clsx(
-                  "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                  "flex w-full items-center gap-2 px-2.5 py-1 text-left transition-colors",
                   idx === hashSelectedIdx
                     ? "bg-[#1976D2]/10"
                     : "hover:bg-surface-hover",
                 )}
               >
-                <div
+                <HashIcon
+                  size={12}
+                  strokeWidth={2}
                   className={clsx(
-                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
-                    idx === hashSelectedIdx
-                      ? "bg-[#1976D2]/15 text-[#1565C0]"
-                      : "bg-surface-hover text-text-muted",
+                    "shrink-0",
+                    idx === hashSelectedIdx ? "text-[#1565C0]" : "text-text-muted",
+                  )}
+                />
+                <span
+                  className={clsx(
+                    "text-[12px] font-medium shrink-0",
+                    idx === hashSelectedIdx ? "text-[#1565C0]" : "text-text-primary",
                   )}
                 >
-                  <HashIcon size={14} strokeWidth={2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={clsx(
-                      "text-sm font-medium",
-                      idx === hashSelectedIdx
-                        ? "text-[#1565C0]"
-                        : "text-text-primary",
-                    )}
-                  >
-                    {cmd.label}
-                  </div>
-                  <div className="text-xs text-text-muted truncate">
-                    {cmd.description}
-                  </div>
-                </div>
+                  {cmd.label}
+                </span>
+                <span className="text-[11px] text-text-muted truncate">
+                  {cmd.description}
+                </span>
               </button>
             ))}
           </div>

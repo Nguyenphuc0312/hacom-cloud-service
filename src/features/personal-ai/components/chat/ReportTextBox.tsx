@@ -386,10 +386,16 @@ export const ReportTextBox: React.FC<ReportTextBoxProps> = ({
             <DayCard key={`${day.date}-${i}`} day={day} />
           ))}
         </div>
-      ) : (
+      ) : content.trim() ? (
         <div className="whitespace-pre-wrap break-words px-4 py-4 text-sm leading-[1.5] text-text-primary">
           {content}
         </div>
+      ) : (
+        !isStreaming && (
+          <p className="px-4 py-6 text-center text-sm text-text-muted">
+            Không có báo cáo công việc nào trong khoảng thời gian này.
+          </p>
+        )
       )}
 
       {/* Đang tải */}
