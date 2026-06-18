@@ -1,0 +1,327 @@
+import * as XLSX from "xlsx";
+import {
+  Document,
+  Packer,
+  Table as DocxTable,
+  TableRow,
+  TableCell,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  WidthType,
+} from "docx";
+
+export interface ParsedTable {
+  headers: string[];
+  rows: string[][];
+}
+
+/** Tách 1 dòng markdown `| a | b |` thành mảng ô (giữ escape `\|`). */
+function splitRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+
+/** Dòng phân cách header kiểu `| --- | :--: |`. */
+function isSeparator(line: string): boolean {
+  const cells = splitRow(line);
+  return (
+    cells.length > 0 &&
+    cells.every((c) => /^:?-{1,}:?$/.test(c.replace(/\s/g, "")))
+  );
+}
+
+/** Bỏ cú pháp markdown trong 1 ô → text thuần (link giữ nhãn). */
+function stripCellMarkdown(cell: string): string {
+  return cell
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .trim();
+}
+
+/** Lấy bảng markdown ĐẦU TIÊN trong nội dung; null nếu không có. */
+export function parseMarkdownTable(content: string): ParsedTable | null {
+  const lines = content.split(/\r?\n/);
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i];
+    if (!line.includes("|") || isSeparator(line)) continue;
+    const next = lines[i + 1];
+    if (!next || !isSeparator(next)) continue;
+
+    const headers = splitRow(line).map(stripCellMarkdown);
+    const rows: string[][] = [];
+    for (let j = i + 2; j < lines.length; j++) {
+      const r = lines[j];
+      if (!r.includes("|") || r.trim() === "") break;
+      if (isSeparator(r)) continue;
+      const cells = splitRow(r).map(stripCellMarkdown);
+      // Chuẩn hóa số cột bằng header.
+      while (cells.length < headers.length) cells.push("");
+      rows.push(cells.slice(0, headers.length));
+    }
+    return { headers, rows };
+  }
+  return null;
+}
+
+function ensureExt(name: string, ext: string): string {
+  return name.toLowerCase().endsWith(ext) ? name : `${name}${ext}`;
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Xuất Excel .xlsx thật (SheetJS). */
+export function exportTableToXlsx(filename: string, table: ParsedTable): void {
+  const aoa = [table.headers, ...table.rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Độ rộng cột theo nội dung dài nhất (10–60 ký tự).
+  ws["!cols"] = table.headers.map((_, c) => {
+    const maxLen = Math.max(
+      table.headers[c]?.length ?? 0,
+      ...table.rows.map((r) => (r[c] ?? "").length),
+    );
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Báo cáo");
+  XLSX.writeFile(wb, ensureExt(filename, ".xlsx"));
+}
+
+/** Xuất Word .docx thật (docx). */
+export async function exportTableToDocx(
+  filename: string,
+  title: string,
+  table: ParsedTable,
+): Promise<void> {
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: table.headers.map(
+      (h) =>
+        new TableCell({
+          shading: { fill: "1565C0" },
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: h, bold: true, color: "FFFFFF" })],
+            }),
+          ],
+        }),
+    ),
+  });
+
+  const bodyRows = table.rows.map(
+    (r) =>
+      new TableRow({
+        children: table.headers.map(
+          (_, c) =>
+            new TableCell({
+              children: (r[c] ?? "")
+                .split("\n")
+                .map((ln) => new Paragraph({ children: [new TextRun(ln)] })),
+            }),
+        ),
+      }),
+  );
+
+  const docTable = new DocxTable({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [headerRow, ...bodyRows],
+  });
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            children: [new TextRun({ text: title, bold: true })],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Xuất ngày ${new Date().toLocaleDateString("vi-VN")}`,
+                italics: true,
+                color: "888888",
+              }),
+            ],
+          }),
+          new Paragraph({}),
+          docTable,
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  downloadBlob(blob, ensureExt(filename, ".docx"));
+}
+
+/** Nạp pdfmake + gắn vfs font (Roboto, hỗ trợ tiếng Việt). Dùng dynamic import. */
+async function loadPdfMake(): Promise<{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createPdf: (dd: any) => any;
+}> {
+  const [pdfMakeModule, vfsModule] = await Promise.all([
+    import("pdfmake/build/pdfmake"),
+    import("pdfmake/build/vfs_fonts"),
+  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfMake: any = (pdfMakeModule as any).default ?? (pdfMakeModule as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawVfs: any = vfsModule as any;
+  pdfMake.vfs =
+    rawVfs.pdfMake?.vfs ?? rawVfs.default?.pdfMake?.vfs ?? rawVfs.default ?? rawVfs;
+  return pdfMake;
+}
+
+/**
+ * Dựng docDefinition báo cáo. Cấu hình multi-page chuẩn:
+ * - headerRows: 1 → tiêu đề cột tự lặp ở mọi trang.
+ * - keepWithHeaderRows: 1 → header không đứng một mình cuối trang.
+ * - dontBreakRows: false → cho phép cắt dòng giữa trang (tránh mất dòng quá dài).
+ * - header/footer toàn cục + pageMargins → không mất tiêu đề/số trang khi tràn trang.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildReportDocDefinition(title: string, table: ParsedTable): any {
+  const headerRow = table.headers.map((h) => ({
+    text: h,
+    bold: true,
+    color: "white",
+    fillColor: "#1565C0",
+  }));
+  const bodyRows = table.rows.map((r) =>
+    table.headers.map((_, c) => ({ text: r[c] ?? "" })),
+  );
+  const exportedAt = new Date().toLocaleDateString("vi-VN");
+
+  return {
+    pageOrientation: "landscape" as const,
+    pageMargins: [24, 56, 24, 40] as [number, number, number, number],
+    header: (currentPage: number) =>
+      currentPage === 1
+        ? undefined
+        : {
+            text: title,
+            margin: [24, 20, 24, 0],
+            fontSize: 9,
+            color: "#888888",
+          },
+    footer: (currentPage: number, pageCount: number) => ({
+      columns: [
+        { text: `Xuất ngày ${exportedAt}`, fontSize: 8, color: "#888888", margin: [24, 0, 0, 0] },
+        {
+          text: `Trang ${currentPage} / ${pageCount}`,
+          alignment: "right",
+          fontSize: 8,
+          color: "#888888",
+          margin: [0, 0, 24, 0],
+        },
+      ],
+    }),
+    content: [
+      { text: title, style: "title" },
+      { text: `Xuất ngày ${exportedAt}`, style: "sub" },
+      {
+        table: {
+          headerRows: 1,
+          keepWithHeaderRows: 1,
+          dontBreakRows: false,
+          widths: table.headers.map(() => "*"),
+          body: [headerRow, ...bodyRows],
+        },
+        layout: {
+          fillColor: (rowIndex: number) =>
+            rowIndex > 0 && rowIndex % 2 === 0 ? "#F4F8FF" : null,
+          hLineColor: () => "#D7DCE3",
+          vLineColor: () => "#D7DCE3",
+        },
+      },
+    ],
+    styles: {
+      title: { fontSize: 16, bold: true, margin: [0, 0, 0, 4] },
+      sub: { fontSize: 9, italics: true, color: "#888888", margin: [0, 0, 0, 12] },
+    },
+    defaultStyle: { fontSize: 10 },
+  };
+}
+
+/** Xuất PDF thật (pdfmake, font Roboto hỗ trợ tiếng Việt). Tải file trực tiếp. */
+export async function exportTableToPdf(
+  filename: string,
+  title: string,
+  table: ParsedTable,
+): Promise<void> {
+  const pdfMake = await loadPdfMake();
+  pdfMake
+    .createPdf(buildReportDocDefinition(title, table))
+    .download(ensureExt(filename, ".pdf"));
+}
+
+/** Cầu nối desktop Electron (preload.js inject). */
+interface ChatDesktopPrintBridge {
+  printPdf?: (data: Uint8Array, filename: string) => void;
+}
+
+/**
+ * In báo cáo bằng CHÍNH file PDF pdfmake (không dùng window.print() trên HTML).
+ * - Desktop Electron: đẩy bytes qua window.chatDesktop.printPdf → webContents.print (đồng bộ layout).
+ * - Web: nhúng PDF vào iframe ẩn rồi in (tránh popup blocker & bug tab trắng của .print()).
+ */
+export async function printTablePdf(
+  title: string,
+  table: ParsedTable,
+): Promise<void> {
+  const pdfMake = await loadPdfMake();
+  const pdf = pdfMake.createPdf(buildReportDocDefinition(title, table));
+
+  const bridge = (window as unknown as { chatDesktop?: ChatDesktopPrintBridge })
+    .chatDesktop;
+  if (bridge?.printPdf) {
+    pdf.getBuffer((buf: Uint8Array) => {
+      bridge.printPdf?.(buf, ensureExt(title, ".pdf"));
+    });
+    return;
+  }
+
+  pdf.getBlob((blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.src = url;
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        /* noop */
+      }
+      // Dọn dẹp sau khi hộp thoại in có thời gian mở.
+      setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(url);
+      }, 60_000);
+    };
+    document.body.appendChild(iframe);
+  });
+}
