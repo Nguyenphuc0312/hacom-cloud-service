@@ -450,14 +450,21 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   />
                 )}
           {attachments.length > 0 && hasContent
-            ? renderTextContent(
-                message,
-                isOwn,
-                currentUsername,
-                currentUserId,
-                textRenderMode,
-                isCollapsibleText,
-                onToggleTextExpand,
+            ? (
+                // Caption không được tính vào chiều rộng tối đa của bong bóng:
+                // width:0 + min-w-full khiến bong bóng co đúng bề ngang ảnh, còn
+                // chữ (dù dài hơn ảnh) tự xuống dòng trong bề ngang đó.
+                <div className="w-0 min-w-full">
+                  {renderTextContent(
+                    message,
+                    isOwn,
+                    currentUsername,
+                    currentUserId,
+                    textRenderMode,
+                    isCollapsibleText,
+                    onToggleTextExpand,
+                  )}
+                </div>
               )
             : null}
         </div>
@@ -485,14 +492,20 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 onToggleTextExpand,
               )}
           {attachments.length > 0 && hasContent
-            ? renderTextContent(
-                message,
-                isOwn,
-                currentUsername,
-                currentUserId,
-                textRenderMode,
-                isCollapsibleText,
-                onToggleTextExpand,
+            ? (
+                // Như case IMAGE: caption không kéo giãn bong bóng theo chiều dài
+                // chữ; bong bóng bó theo card file, chữ tự xuống dòng.
+                <div className="w-0 min-w-full">
+                  {renderTextContent(
+                    message,
+                    isOwn,
+                    currentUsername,
+                    currentUserId,
+                    textRenderMode,
+                    isCollapsibleText,
+                    onToggleTextExpand,
+                  )}
+                </div>
               )
             : null}
         </div>

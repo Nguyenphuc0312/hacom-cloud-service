@@ -628,7 +628,7 @@ const MessageGroupItem: React.FC<{
                     }
                   }}
                   className={clsx(
-                    "mb-2 flex w-full items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
+                    "mb-2 flex w-full max-w-[20rem] items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
                     "bg-black/[0.05] dark:bg-white/[0.08]",
                     onNavigateToMessage ? "cursor-pointer hover:opacity-75 active:opacity-50" : "cursor-default",
                   )}

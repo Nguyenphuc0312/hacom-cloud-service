@@ -143,7 +143,9 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
   const isClickable = !!replyTargetMessageId && !isSelectionMode;
 
   return (
-    <div className="mb-2.5">
+    // Khung trích dẫn cố định 1 bề ngang chuẩn (≤20rem) và truncate nội dung —
+    // không kéo giãn bong bóng theo độ dài tin được trả lời.
+    <div className="mb-2.5 max-w-[20rem]">
       {/* Reply card */}
       <button
         type="button"
