@@ -11,15 +11,14 @@ import {
   BrainCircuitIcon,
   DownloadIcon,
   Loader2Icon,
-  PrinterIcon,
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
 import { openWeeklyReportFile } from "../../api/personalAiApi";
-import { printWorkReportTable } from "../../../ai-assistant/services/aiChatApi";
 import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
+import { TableExportMenu } from "./TableExportMenu";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -107,7 +106,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
-  const [isPrinting, setIsPrinting] = useState(false);
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
   const patchMessage = usePersonalAiStore((s) => s.patchMessage);
@@ -118,8 +116,16 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
       table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
-        <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
-          <table className="w-full border-collapse text-[13px]">{children}</table>
+        <div className="relative my-4">
+          {message.exportableTable && (
+            <TableExportMenu
+              content={message.content}
+              title="Tổng hợp báo cáo công việc"
+            />
+          )}
+          <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
+            <table className="w-full border-collapse text-[13px]">{children}</table>
+          </div>
         </div>
       ),
       thead: ({ children }: React.ComponentPropsWithoutRef<"thead">) => (
@@ -137,8 +143,8 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         </th>
       ),
       td: ({ children }: React.ComponentPropsWithoutRef<"td">) => (
-        <td className="px-4 py-2.5 align-middle text-text-primary" style={{ maxWidth: "220px" }}>
-          <div className="overflow-hidden text-ellipsis whitespace-nowrap">{children}</div>
+        <td className="px-4 py-2.5 align-top text-text-primary">
+          <div className="whitespace-pre-wrap break-words">{children}</div>
         </td>
       ),
 
@@ -196,32 +202,13 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId],
+    [loadingFileId, message.exportableTable, message.content],
   );
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handlePrint = async () => {
-    if (isPrinting) return;
-    // Mở cửa sổ ngay (đồng bộ) để tránh bị chặn popup, rồi đổ HTML sau khi có.
-    const win = window.open("", "_blank");
-    setIsPrinting(true);
-    try {
-      const html = await printWorkReportTable("Tổng hợp báo cáo công việc", message.content);
-      if (win) {
-        win.document.open();
-        win.document.write(html);
-        win.document.close();
-      }
-    } catch {
-      win?.close();
-    } finally {
-      setIsPrinting(false);
-    }
   };
 
   return (
@@ -406,22 +393,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     <CopyIcon size={13} />
                   )}
                 </button>
-                {message.exportableTable && (
-                  <button
-                    type="button"
-                    onClick={handlePrint}
-                    disabled={isPrinting}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
-                    title="In báo cáo"
-                  >
-                    {isPrinting ? (
-                      <Loader2Icon size={13} className="animate-spin" />
-                    ) : (
-                      <PrinterIcon size={13} />
-                    )}
-                    In
-                  </button>
-                )}
               </div>
             )}
           </div>
