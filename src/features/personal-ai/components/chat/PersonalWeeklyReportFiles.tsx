@@ -102,69 +102,63 @@ export const PersonalWeeklyReportFiles: React.FC = () => {
           Chưa có báo cáo tuần nào trong hệ thống
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-border bg-surface-hover text-xs font-semibold uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-3 py-2.5">Người tạo</th>
-                <th className="px-3 py-2.5">Phòng ban</th>
-                <th className="px-3 py-2.5">Công ty</th>
-                <th className="px-3 py-2.5">Thời gian</th>
-                <th className="px-3 py-2.5">Tệp</th>
-                <th className="px-3 py-2.5 text-center">Tải về</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {files.map((item) => {
-                const label = item.filename?.trim() || `Báo cáo #${item.file_id}`;
-                const isBusy = busyFileId === item.file_id;
-                return (
-                  <tr key={item.file_id} className="hover:bg-[#1976D2]/6">
-                    <td className="px-3 py-2.5 text-text-primary">
-                      {cellValue(item.user_name)}
-                    </td>
-                    <td className="px-3 py-2.5 text-text-secondary">
-                      {cellValue(item.department)}
-                    </td>
-                    <td className="px-3 py-2.5 text-text-secondary">
-                      {cellValue(item.company)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs text-text-secondary">
-                      {weekRange(item)}
-                    </td>
-                    <td className="max-w-[220px] px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => handleAction(item.file_id, "view")}
-                        disabled={isBusy}
-                        className="flex max-w-full items-center gap-1 truncate text-left font-medium text-[#1565C0] hover:underline disabled:cursor-wait disabled:opacity-60"
-                        title={`Xem ${label}`}
-                      >
-                        {isBusy ? (
-                          <Loader2Icon size={13} className="shrink-0 animate-spin" />
-                        ) : (
-                          <EyeIcon size={13} className="shrink-0" />
-                        )}
-                        <span className="truncate">{label}</span>
-                      </button>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleAction(item.file_id, "download")}
-                        disabled={isBusy}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-60"
-                        title="Tải về máy"
-                      >
-                        <DownloadIcon size={13} />
-                        Tải về
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="flex flex-col divide-y divide-border">
+          {files.map((item) => {
+            const label = item.filename?.trim() || `Báo cáo #${item.file_id}`;
+            const isBusy = busyFileId === item.file_id;
+            const meta = [
+              cellValue(item.user_name),
+              cellValue(item.department),
+              cellValue(item.company),
+            ].filter((v) => v !== "—");
+            return (
+              <div
+                key={item.file_id}
+                className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#1976D2]/6"
+              >
+                {/* Icon tệp */}
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/8 text-[#1565C0]">
+                  <FileTextIcon size={16} />
+                </span>
+
+                {/* Thông tin tệp */}
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => handleAction(item.file_id, "view")}
+                    disabled={isBusy}
+                    className="flex max-w-full items-center gap-1.5 text-left text-sm font-medium text-[#1565C0] hover:underline disabled:cursor-wait disabled:opacity-60"
+                    title={`Xem ${label}`}
+                  >
+                    {isBusy ? (
+                      <Loader2Icon size={13} className="shrink-0 animate-spin" />
+                    ) : (
+                      <EyeIcon size={13} className="shrink-0" />
+                    )}
+                    <span className="truncate">{label}</span>
+                  </button>
+                  {meta.length > 0 && (
+                    <p className="mt-0.5 break-words text-xs text-text-secondary">
+                      {meta.join(" · ")}
+                    </p>
+                  )}
+                  <p className="mt-0.5 text-xs text-text-muted">{weekRange(item)}</p>
+                </div>
+
+                {/* Tải về */}
+                <button
+                  type="button"
+                  onClick={() => handleAction(item.file_id, "download")}
+                  disabled={isBusy}
+                  className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/12 disabled:opacity-60"
+                  title="Tải về máy"
+                >
+                  <DownloadIcon size={13} />
+                  <span className="hidden sm:inline">Tải về</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

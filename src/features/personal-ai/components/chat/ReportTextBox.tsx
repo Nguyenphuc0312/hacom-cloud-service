@@ -75,21 +75,119 @@ function parseTaskLine(line: string): ReportTask {
 // Thứ tự trường khi BE trả mỗi giá trị trên một dòng (không nhãn).
 const POSITIONAL_FIELDS: TaskField[] = ["requirements", "completed", "difficulties"];
 
+// Định dạng A: cả công việc trên một dòng, các trường nối bằng " - <Nhãn>:".
+const INLINE_LABELED_RE =
+  /\s-\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:/i;
+
+// Định dạng C: mỗi trường một dòng, có nhãn, thường có tiền tố "- " (vd "- Yêu cầu: ...").
+const FIELD_LINE_RE =
+  /^[-*•]?\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:\s*(.*)$/i;
+
+const FIELD_LABEL_TO_KEY: Record<string, TaskField | "skip"> = {
+  "yêu cầu": "requirements",
+  "đã làm được": "completed",
+  "đã làm": "completed",
+  "khó khăn": "difficulties",
+  "ghi chú": "notes",
+  date: "skip",
+};
+
 /**
- * Parse text báo cáo do BE trả qua `token`. Hỗ trợ 2 định dạng:
+ * Parse danh sách công việc trong MỘT ngày. Tự nhận diện:
  *
- * (A) Mỗi công việc một dòng, có nhãn:
- *     <Tên> - Yêu cầu: ... - Đã làm được: ... - Khó khăn: ... [- Ghi chú: ...] [- Date: ...]
+ * (A) Mỗi công việc một dòng, có nhãn nối bằng " - <Nhãn>:".
+ * (C) Mỗi trường một dòng, có nhãn (vd "- Yêu cầu: ..."); dòng không nhãn = tên
+ *     công việc mới (bỏ tiền tố "Công việc:"). "Date" bị bỏ qua.
+ * (B) Mỗi trường một dòng, KHÔNG nhãn — gom 4 dòng liên tiếp thành 1 công việc.
  *
- * (B) Mỗi trường một dòng, KHÔNG nhãn (định dạng thực tế hiện tại) — 4 dòng liên
- *     tiếp = Tên công việc / Yêu cầu / Đã làm được / Khó khăn; dòng "Ghi chú:" (có
- *     nhãn) đứng riêng, dòng kế tiếp là nội dung ghi chú của công việc gần nhất.
+ * Chỉ dùng (B) khi cả ngày không có dòng nào mang nhãn — tránh để nhãn lọt vào ô.
+ */
+function parseDayTasks(lines: string[]): ReportTask[] {
+  const hasLabels = lines.some(
+    (l) => FIELD_LINE_RE.test(l.trim()) || INLINE_LABELED_RE.test(l.trim()),
+  );
+
+  // (B) Không có nhãn → gom theo vị trí.
+  if (!hasLabels) {
+    const tasks: ReportTask[] = [];
+    for (let i = 0; i < lines.length; i += 4) {
+      const grp = lines.slice(i, i + 4);
+      const task: ReportTask = { taskName: grp[0] ?? "" };
+      POSITIONAL_FIELDS.forEach((key, j) => {
+        const v = grp[j + 1];
+        if (v) task[key] = v;
+      });
+      tasks.push(task);
+    }
+    return tasks;
+  }
+
+  // (A) + (C) — chế độ có nhãn.
+  const tasks: ReportTask[] = [];
+  let cur: ReportTask | null = null;
+  let pendingNotes: ReportTask | null = null;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // Dòng Date đứng riêng (yyyy-mm-dd).
+    if (/^\d{4}-\d{2}-\d{2}$/.test(line)) continue;
+
+    // Trường có nhãn trên một dòng (định dạng C).
+    const fieldMatch = line.match(FIELD_LINE_RE);
+    if (fieldMatch) {
+      const key = FIELD_LABEL_TO_KEY[fieldMatch[1].toLowerCase()] ?? "skip";
+      const value = fieldMatch[2].trim();
+      if (key === "skip") {
+        pendingNotes = null;
+        continue;
+      }
+      if (!cur) {
+        cur = { taskName: "" };
+        tasks.push(cur);
+      }
+      if (key === "notes" && !value) {
+        pendingNotes = cur; // nội dung ghi chú nằm ở dòng kế tiếp
+        continue;
+      }
+      if (value) cur[key] = value;
+      pendingNotes = null;
+      continue;
+    }
+
+    // Cả công việc trên một dòng có nhãn (định dạng A).
+    if (INLINE_LABELED_RE.test(line)) {
+      cur = parseTaskLine(line);
+      tasks.push(cur);
+      pendingNotes = null;
+      continue;
+    }
+
+    // Dòng kế sau "Ghi chú:" trống → nội dung ghi chú.
+    if (pendingNotes) {
+      pendingNotes.notes = line;
+      pendingNotes = null;
+      continue;
+    }
+
+    // Còn lại = dòng tên công việc mới (bỏ tiền tố "Công việc:").
+    cur = { taskName: line.replace(/^công việc\s*:\s*/i, "").trim() };
+    tasks.push(cur);
+    pendingNotes = null;
+  }
+
+  return tasks;
+}
+
+/**
+ * Parse text báo cáo do BE trả qua `token`.
  *
  * Khung chung:
  *   Báo cáo công việc của <Tên>
  *   N ngày · M công việc       ← bỏ qua (component tự tính lại)
  *   dd/mm/yyyy                  ← dòng ngày (chấp nhận cả [dd/mm/yyyy])
- *   ...
+ *   ...công việc... (định dạng A/B/C — xem parseDayTasks)
  *
  * Không nhận diện được ngày nào → days rỗng, caller render text thô.
  */
@@ -97,32 +195,15 @@ function parseReport(content: string): ParsedReport {
   const lines = content.split(/\r?\n/);
   const days: ReportDay[] = [];
   let employeeLine: string | undefined;
+
+  // Gom dòng thô của ngày hiện tại; parse khi gặp ngày mới / kết thúc.
   let curDay: ReportDay | null = null;
+  let dayLines: string[] = [];
 
-  // Buffer các giá trị trường không-nhãn (định dạng B), gom 4 dòng thành 1 task.
-  let buf: string[] = [];
-  // Task đang chờ nội dung ghi chú ở dòng kế tiếp (sau dòng "Ghi chú:").
-  let pendingNotes: ReportTask | null = null;
-
-  const flushBuf = () => {
-    if (!curDay) {
-      buf = [];
-      return;
-    }
-    for (let i = 0; i < buf.length; i += 4) {
-      const grp = buf.slice(i, i + 4);
-      const task: ReportTask = { taskName: grp[0] ?? "" };
-      POSITIONAL_FIELDS.forEach((key, j) => {
-        const v = grp[j + 1];
-        if (v) task[key] = v;
-      });
-      curDay.tasks.push(task);
-    }
-    buf = [];
+  const flushDay = () => {
+    if (curDay) curDay.tasks = parseDayTasks(dayLines);
+    dayLines = [];
   };
-
-  const labeledRe =
-    /\s-\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:/i;
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -130,8 +211,7 @@ function parseReport(content: string): ParsedReport {
 
     const dateMatch = line.match(/^\[?(\d{1,2}\/\d{1,2}\/\d{4})\]?$/);
     if (dateMatch) {
-      flushBuf();
-      pendingNotes = null;
+      flushDay();
       curDay = { date: dateMatch[1], tasks: [] };
       days.push(curDay);
       continue;
@@ -146,41 +226,10 @@ function parseReport(content: string): ParsedReport {
     if (/\d+\s*ngày\s*·/i.test(line)) continue;
     if (!curDay) continue;
 
-    // Bỏ dòng Date đứng riêng (yyyy-mm-dd hoặc "Date: ...").
-    if (/^date\s*:/i.test(line) || /^\d{4}-\d{2}-\d{2}$/.test(line)) continue;
-
-    // Dòng kế sau "Ghi chú:" → nội dung ghi chú của task gần nhất.
-    if (pendingNotes) {
-      pendingNotes.notes = line;
-      pendingNotes = null;
-      continue;
-    }
-
-    // Dòng "Ghi chú:" (có thể kèm giá trị ngay sau dấu hai chấm).
-    const noteInline = line.match(/^ghi chú\s*:\s*(.*)$/i);
-    if (noteInline) {
-      flushBuf();
-      const lastTask = curDay.tasks[curDay.tasks.length - 1];
-      const value = noteInline[1].trim();
-      if (lastTask) {
-        if (value) lastTask.notes = value;
-        else pendingNotes = lastTask;
-      }
-      continue;
-    }
-
-    // Định dạng A: cả công việc trên một dòng có nhãn.
-    if (labeledRe.test(line)) {
-      flushBuf();
-      curDay.tasks.push(parseTaskLine(line));
-      continue;
-    }
-
-    // Định dạng B: giá trị trường không nhãn → gom vào buffer.
-    buf.push(line);
+    dayLines.push(line);
   }
 
-  flushBuf();
+  flushDay();
   return { employeeLine, days };
 }
 
