@@ -6,17 +6,19 @@ import { UserStatus } from "../../types";
 import { getInitials } from "../../utils/mediaFallback";
 import { SafeImage } from "./SafeImage";
 
+type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+
 interface AvatarProps {
   src?: string | null;
   alt?: string | null;
-  size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: AvatarSize;
   status?: UserStatus;
   showStatus?: boolean;
   className?: string;
   onClick?: () => void;
 }
 
-const sizeClasses = {
+const sizeClasses: Record<AvatarSize, string> = {
   xs: "h-6 w-6",
   sm: "h-8 w-8",
   md: "h-10 w-10",
@@ -25,7 +27,7 @@ const sizeClasses = {
   "2xl": "h-32 w-32",
 };
 
-const statusSizeClasses = {
+const statusSizeClasses: Record<AvatarSize, string> = {
   xs: "h-2 w-2",
   sm: "h-3 w-3",
   md: "h-3 w-3",
@@ -54,12 +56,22 @@ const statusLabelKeys: Record<UserStatus, string> = {
   [UserStatus.BUSY]: "common:status.busy",
 };
 
-const iconClasses = {
+const iconClasses: Record<AvatarSize, string> = {
   xs: "h-3 w-3",
   sm: "h-4 w-4",
   md: "h-5 w-5",
   lg: "h-6 w-6",
   xl: "h-8 w-8",
+  "2xl": "h-16 w-16",
+};
+
+const textSizeClasses: Record<AvatarSize, string> = {
+  xs: "text-xs",
+  sm: "text-xs",
+  md: "text-sm",
+  lg: "text-base",
+  xl: "text-lg",
+  "2xl": "text-4xl",
 };
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -83,11 +95,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         sizeClasses[size],
         "flex items-center justify-center rounded-full bg-primary font-medium text-text-inverse ring-2 ring-surface",
         onClick && "cursor-pointer transition-opacity hover:opacity-90",
-        size === "xs" && "text-xs",
-        size === "sm" && "text-xs",
-        size === "md" && "text-sm",
-        size === "lg" && "text-base",
-        size === "xl" && "text-lg",
+        textSizeClasses[size],
       )}
       aria-hidden="true"
     >
