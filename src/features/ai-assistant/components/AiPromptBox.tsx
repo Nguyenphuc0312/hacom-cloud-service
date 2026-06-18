@@ -509,7 +509,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
               placeholder={placeholder}
               rows={1}
               disabled={textareaDisabled}
-              className="flex-1 resize-none bg-transparent py-4 px-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70"
+              className="flex-1 resize-none bg-transparent py-4 px-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70"
               style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
             />
 
