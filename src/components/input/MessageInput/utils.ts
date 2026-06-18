@@ -35,7 +35,11 @@ export const buildMentionMatch = (
     return null;
   }
 
-  if (!/^[a-zA-Z0-9._-]*$/.test(mentionQuery)) {
+  // Allow any Unicode letter/number so Vietnamese (and other accented) names can
+  // be typed/searched after "@". The previous ASCII-only pattern dropped the
+  // match the moment a diacritic (e.g. "ậ" in "nhật") was typed, closing the
+  // mention panel and making it impossible to mention Vietnamese names.
+  if (!/^[\p{L}\p{N}._-]*$/u.test(mentionQuery)) {
     return null;
   }
 
