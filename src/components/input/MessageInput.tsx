@@ -624,6 +624,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
   const handleTipTapInterceptKeydown = React.useCallback(
     (event: KeyboardEvent): boolean => {
+      // While an IME composition is active (e.g. typing Vietnamese with Unikey /
+      // Windows VN keyboard), Arrow/Enter/Tab keys are used by the IME to pick
+      // diacritic candidates. Never intercept them here or the user can't type
+      // Vietnamese while the mention panel is open. keyCode 229 is the legacy
+      // "composing" signal some IMEs send when event.isComposing isn't set.
+      if (event.isComposing || event.keyCode === 229) {
+        return false;
+      }
+
       if (showMentionPanelRef.current) {
         if (event.key === "ArrowDown") {
           setActiveMentionIndex((current) =>
