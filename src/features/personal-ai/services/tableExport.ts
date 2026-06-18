@@ -85,8 +85,69 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Xuất Excel .xlsx thật (SheetJS). */
-export function exportTableToXlsx(filename: string, table: ParsedTable): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SaveFilePicker = (opts: any) => Promise<any>;
+
+/**
+ * Lưu file, CHỈ báo thành công khi file đã thật sự được ghi.
+ *
+ * QUAN TRỌNG: `showSaveFilePicker` bắt buộc gọi NGAY trong user gesture (cú
+ * click). Nếu gọi sau khi đã `await` (tạo blob / tải pdfmake) thì "user
+ * activation" đã hết → ném NotAllowedError. Vì vậy ta mở hộp thoại Save TRƯỚC,
+ * rồi mới dựng blob qua `buildBlob()` và ghi vào handle.
+ *
+ * - Hỗ trợ File System Access API (Chromium/desktop): resolve(true) sau khi
+ *   người dùng chọn vị trí và ghi xong; bấm Hủy → resolve(false) (không báo).
+ * - Không hỗ trợ / bị chặn: fallback tải qua thẻ <a> sau khi dựng blob xong.
+ */
+async function saveFile(
+  filename: string,
+  mime: string,
+  buildBlob: () => Promise<Blob> | Blob,
+): Promise<boolean> {
+  const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker })
+    .showSaveFilePicker;
+
+  if (typeof picker === "function") {
+    let handle: { createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> } | null = null;
+    try {
+      const ext = filename.slice(filename.lastIndexOf("."));
+      // Phải là lời gọi async ĐẦU TIÊN kể từ cú click (chưa await gì trước đó).
+      handle = await picker({
+        suggestedName: filename,
+        types: [{ description: filename, accept: { [mime]: [ext] } }],
+      });
+    } catch (err) {
+      // Hủy hộp thoại → không lưu, không báo lỗi.
+      if ((err as DOMException)?.name === "AbortError") return false;
+      // Bị chặn/không khả dụng → dùng fallback bên dưới.
+      handle = null;
+    }
+    if (handle) {
+      const blob = await buildBlob();
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    }
+  }
+
+  const blob = await buildBlob();
+  downloadBlob(blob, filename);
+  return true;
+}
+
+const MIME = {
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pdf: "application/pdf",
+} as const;
+
+/** Xuất Excel .xlsx thật (SheetJS). Resolve true nếu đã lưu. */
+export async function exportTableToXlsx(
+  filename: string,
+  table: ParsedTable,
+): Promise<boolean> {
   const aoa = [table.headers, ...table.rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
@@ -101,7 +162,10 @@ export function exportTableToXlsx(filename: string, table: ParsedTable): void {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Báo cáo");
-  XLSX.writeFile(wb, ensureExt(filename, ".xlsx"));
+  return saveFile(ensureExt(filename, ".xlsx"), MIME.xlsx, () => {
+    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    return new Blob([out], { type: MIME.xlsx });
+  });
 }
 
 /** Xuất Word .docx thật (docx). */
@@ -109,7 +173,7 @@ export async function exportTableToDocx(
   filename: string,
   title: string,
   table: ParsedTable,
-): Promise<void> {
+): Promise<boolean> {
   const headerRow = new TableRow({
     tableHeader: true,
     children: table.headers.map(
@@ -168,8 +232,9 @@ export async function exportTableToDocx(
     ],
   });
 
-  const blob = await Packer.toBlob(doc);
-  downloadBlob(blob, ensureExt(filename, ".docx"));
+  return saveFile(ensureExt(filename, ".docx"), MIME.docx, () =>
+    Packer.toBlob(doc),
+  );
 }
 
 /** Nạp pdfmake + gắn vfs font (Roboto, hỗ trợ tiếng Việt). Dùng dynamic import. */
@@ -270,14 +335,17 @@ function buildReportDocDefinition(title: string, table: ParsedTable): any {
   };
 }
 
-/** Xuất PDF thật (pdfmake, font Roboto hỗ trợ tiếng Việt). Tải file trực tiếp. */
+/** Xuất PDF thật (pdfmake, font Roboto hỗ trợ tiếng Việt). Resolve true nếu đã lưu. */
 export async function exportTableToPdf(
   filename: string,
   title: string,
   table: ParsedTable,
-): Promise<void> {
-  const pdfMake = await loadPdfMake();
-  pdfMake
-    .createPdf(buildReportDocDefinition(title, table))
-    .download(ensureExt(filename, ".pdf"));
+): Promise<boolean> {
+  // saveFile mở hộp thoại Save trước; pdfmake chỉ được tải & dựng blob bên
+  // trong callback (sau khi đã có handle) nên không phá vỡ user gesture.
+  return saveFile(ensureExt(filename, ".pdf"), MIME.pdf, async () => {
+    const pdfMake = await loadPdfMake();
+    const pdf = pdfMake.createPdf(buildReportDocDefinition(title, table));
+    return new Promise<Blob>((resolve) => pdf.getBlob(resolve));
+  });
 }
