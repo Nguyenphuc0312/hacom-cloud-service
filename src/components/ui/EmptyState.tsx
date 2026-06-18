@@ -926,8 +926,9 @@ const WeeklyCalendarWidget: React.FC = () => {
   // Lịch cá nhân: chỉ mình bạn, không người tham gia/chủ trì.
   const handleSavePersonalEvent = async (data: PersonalEventFormData) => {
     try {
+      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
       const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 

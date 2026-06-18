@@ -21,8 +21,8 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
-  getEventsByDate,
   getEventColor,
+  MULTI_DAY_EVENT_COLOR,
   getEventTypeLabel,
   VIETNAMESE_MONTHS,
   VIETNAMESE_WEEKDAYS,
@@ -51,7 +51,7 @@ import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
-import { getWeekDays, getIsoWeekNumber } from "../utils/timeline";
+import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, isMultiDayEvent } from "../utils/timeline";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 
@@ -340,6 +340,12 @@ const EventDetailModal: React.FC<{
   const duration = isExtended && "startAt" in event && "endAt" in event && event.startAt && event.endAt
     ? calculateDuration(event.startAt, event.endAt)
     : null;
+  // Sự kiện kéo dài nhiều ngày (qua đêm / công tác) → bắt đầu & kết thúc khác ngày local.
+  const startAtIso = isExtended && "startAt" in event ? event.startAt : null;
+  const endAtIso = isExtended && "endAt" in event ? event.endAt : null;
+  const startDateLocal = startAtIso ? toLocalDateString(startAtIso) : null;
+  const endDateLocal = endAtIso ? toLocalDateString(endAtIso) : null;
+  const isMultiDay = !!(startDateLocal && endDateLocal && startDateLocal !== endDateLocal);
 
   // Location + meeting extras (chairman/format lưu trong metadata của HR event)
   const meetingMeta = getMeetingMetadata(hrEvent);
@@ -410,32 +416,56 @@ const EventDetailModal: React.FC<{
 
           {/* Date and Time Section */}
           <div className="mt-4 space-y-2">
-            {/* Date */}
-            <div className="flex items-start gap-3">
-              <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
-              <div>
-                <p className="text-sm font-medium text-text-primary">
-                  {isExtended && event.startAt ? formatDateVN(event.startAt) : event.date}
-                </p>
-              </div>
-            </div>
-
-            {/* Time (for API events with startAt) */}
-            {isExtended && startTime && (
+            {isMultiDay ? (
+              /* Sự kiện nhiều ngày: hiện rõ mốc bắt đầu & kết thúc kèm ngày. */
               <div className="flex items-start gap-3">
-                <ClockIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
-                <div>
+                <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
+                <div className="space-y-1">
                   <p className="text-sm text-text-primary">
-                    {startTime}
-                    {endTime && ` — ${endTime}`}
+                    <span className="font-medium text-text-secondary">Bắt đầu: </span>
+                    {formatDateVN(startAtIso!)}
+                    {startTime && ` · ${startTime}`}
+                  </p>
+                  <p className="text-sm text-text-primary">
+                    <span className="font-medium text-text-secondary">Kết thúc: </span>
+                    {formatDateVN(endAtIso!)}
+                    {endTime && ` · ${endTime}`}
                   </p>
                   {duration && (
-                    <p className="text-xs text-text-muted">
-                      Thời lượng: {duration}
-                    </p>
+                    <p className="text-xs text-text-muted">Thời lượng: {duration}</p>
                   )}
                 </div>
               </div>
+            ) : (
+              <>
+                {/* Date */}
+                <div className="flex items-start gap-3">
+                  <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">
+                      {isExtended && event.startAt ? formatDateVN(event.startAt) : event.date}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Time (for API events with startAt) */}
+                {isExtended && startTime && (
+                  <div className="flex items-start gap-3">
+                    <ClockIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                    <div>
+                      <p className="text-sm text-text-primary">
+                        {startTime}
+                        {endTime && ` — ${endTime}`}
+                      </p>
+                      {duration && (
+                        <p className="text-xs text-text-muted">
+                          Thời lượng: {duration}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Location / Meeting Link */}
@@ -786,7 +816,9 @@ const EventBadge: React.FC<{
   onClick: (event: LocalCalendarEvent) => void;
   compact?: boolean;
 }> = ({ event, onClick, compact = false }) => {
-  const colors = getEventColor(event.type);
+  // Lịch dài hạn (nhiều ngày) → màu vàng + chữ to & đậm hơn cho nổi bật.
+  const isLong = isMultiDayEvent(event);
+  const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
 
   return (
     <button
@@ -799,11 +831,12 @@ const EventBadge: React.FC<{
         "event-badge block w-full cursor-pointer rounded border text-left transition-micro",
         colors.bg,
         colors.border,
-        compact ? "px-1.5 py-0.5 text-xs" : "px-2 py-1 text-xs"
+        compact ? "px-1.5 py-0.5" : "px-2 py-1",
+        isLong ? "text-sm" : "text-xs",
       )}
       title={event.title}
     >
-      <span className={clsx("block truncate font-medium", colors.text)}>
+      <span className={clsx("block truncate", colors.text, isLong ? "font-semibold" : "font-medium")}>
         {event.title}
       </span>
     </button>
@@ -990,8 +1023,9 @@ export const CalendarPage: React.FC = () => {
     try {
       setIsCreatingEvent(true);
       // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
+      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
       const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
@@ -1433,10 +1467,15 @@ export const CalendarPage: React.FC = () => {
 
     // Lịch cá nhân (type "personal") → mở form cá nhân, không phải form họp.
     if (extEvent.type === "personal") {
+      const personalStartDate = extEvent.startAt
+        ? toLocalDateString(extEvent.startAt)
+        : formatDateString(new Date());
       const personalData: PersonalEventFormData = {
         id: extEvent.id,
         title: extEvent.title,
-        date: extEvent.startAt ? toLocalDateString(extEvent.startAt) : formatDateString(new Date()),
+        date: personalStartDate,
+        // endAt có thể rơi vào ngày khác (qua đêm / nhiều ngày) → lấy ngày local của endAt.
+        endDate: extEvent.endAt ? toLocalDateString(extEvent.endAt) : personalStartDate,
         startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
         endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
         notes: extEvent.description || "",
@@ -1569,8 +1608,9 @@ export const CalendarPage: React.FC = () => {
   const handleUpdatePersonalEvent = useCallback(async (data: PersonalEventFormData) => {
     try {
       // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
+      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
       const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
@@ -1886,7 +1926,9 @@ export const CalendarPage: React.FC = () => {
               {/* Calendar days grid */}
               <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
                 {calendarDays.map((dayInfo, index) => {
-                  const dayEvents = getEventsByDate(searchedEvents, dayInfo.date);
+                  const dayEvents = searchedEvents.filter((event) =>
+                    eventOccursOnDay(event, dayInfo.date),
+                  );
                   const maxVisibleEvents = 2;
                   const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
                   const remainingCount = dayEvents.length - maxVisibleEvents;

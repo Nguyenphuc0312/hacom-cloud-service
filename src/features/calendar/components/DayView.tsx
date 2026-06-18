@@ -10,10 +10,12 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
-import { getEventColor, type CalendarEvent } from "../data/calendarEvents";
+import { getEventColor, MULTI_DAY_EVENT_COLOR, type CalendarEvent } from "../data/calendarEvents";
 import {
   HOURS,
   MINUTES_PER_DAY,
+  eventOccursOnDay,
+  isMultiDayEvent,
   layoutDayEvents,
   type PositionedEvent,
 } from "../utils/timeline";
@@ -53,11 +55,14 @@ const TimedEventBlock: React.FC<{
   onEventClick: (event: CalendarEvent) => void;
 }> = ({ positioned, onEventClick }) => {
   const { event, startMin, endMin, col, colCount } = positioned;
-  const colors = getEventColor(event.type);
+  // Lịch dài hạn (nhiều ngày) → màu vàng nổi bật + chữ to & đậm hơn cho dễ thấy.
+  const isLong = isMultiDayEvent(event);
+  const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
   const top = startMin * PX_PER_MIN;
   const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
   const widthPct = 100 / colCount;
-  const showTime = height >= 34;
+  // Không hiện giờ clamp theo ngày cho event nhiều ngày (tránh "00:00–24:00" gây rối).
+  const showTime = height >= 34 && !isLong;
 
   return (
     <button
@@ -68,7 +73,8 @@ const TimedEventBlock: React.FC<{
       }}
       title={`${event.title} · ${fmtMin(startMin)}–${fmtMin(endMin)}`}
       className={clsx(
-        "absolute overflow-hidden rounded-md border px-2 py-0.5 text-left text-xs transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+        "absolute overflow-hidden rounded-md border px-2 py-0.5 text-left transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+        isLong ? "text-sm" : "text-xs",
         colors.bg,
         colors.border,
         colors.text,
@@ -80,7 +86,14 @@ const TimedEventBlock: React.FC<{
         width: `calc(${widthPct}% - 4px)`,
       }}
     >
-      <span className="block truncate font-medium leading-tight">{event.title}</span>
+      <span
+        className={clsx(
+          "block truncate leading-tight",
+          isLong ? "font-semibold" : "font-medium",
+        )}
+      >
+        {event.title}
+      </span>
       {showTime && (
         <span className="block truncate text-[10px] opacity-70">
           {fmtMin(startMin)}–{fmtMin(endMin)}
@@ -102,11 +115,11 @@ export const DayView: React.FC<DayViewProps> = ({
   const isToday = sameDay(date, new Date());
 
   const dayEvents = useMemo(
-    () => events.filter((event) => sameDay(new Date(event.date), date)),
+    () => events.filter((event) => eventOccursOnDay(event, date)),
     [events, date],
   );
 
-  const { timed, allDay } = useMemo(() => layoutDayEvents(dayEvents, 3), [dayEvents]);
+  const { timed, allDay } = useMemo(() => layoutDayEvents(dayEvents, 3, date), [dayEvents, date]);
 
   const formatDateDisplay = (d: Date): string => {
     const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
