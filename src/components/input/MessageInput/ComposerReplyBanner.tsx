@@ -136,7 +136,7 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
           });
 
   return (
-    <div className="mb-1.5 flex items-stretch overflow-hidden rounded-xl bg-[#1976D2]/8 border border-[#1976D2]/20 animate-slide-up-fade">
+    <div className="mb-1.5 flex w-fit max-w-full items-stretch overflow-hidden rounded-xl bg-[#1976D2]/8 border border-[#1976D2]/20 animate-slide-up-fade">
       {/* Accent bar */}
       <div className="w-[3px] flex-shrink-0 self-stretch rounded-l-xl" style={{ background: "linear-gradient(180deg, #1565C0 0%, #DBEAFE 100%)" }} />
 
