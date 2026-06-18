@@ -14,6 +14,7 @@ import { MessageType } from "../../../types";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { resolvePublicResourceUrl } from "../../../config";
 import { useBatchThumbnailUrl } from "../../../hooks";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
     resolvePublicResourceUrl(
       firstAttachment?.thumbnailUrl ?? (isImageOrVideo ? firstAttachment?.url : undefined),
     );
-  const hasThumb = !!thumbnailUrl && isImageOrVideo;
+  const showMediaThumb = isImageOrVideo && !!firstAttachment && !isDeleted;
 
   const fileName = firstAttachment?.fileName;
   const mimeType = firstAttachment?.mimeType;
@@ -161,12 +162,12 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
           />
 
           {/* Thumbnail for image/video */}
-          {hasThumb && (
+          {showMediaThumb && (
             <div className="flex-shrink-0 py-1.5 pl-2">
-              <img
+              <MediaThumbnail
+                attachment={firstAttachment}
                 src={thumbnailUrl}
-                alt=""
-                className="h-10 w-10 rounded-lg object-cover"
+                variant="reply"
               />
             </div>
           )}

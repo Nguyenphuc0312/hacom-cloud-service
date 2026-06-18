@@ -24,6 +24,7 @@ import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useReminderStore } from "../../stores/reminderStore";
 import { useChatUiStore } from "../../features/chat/state/chatUiStore";
+import { SafeImage } from "../../components/common/SafeImage";
 
 type SideRailItem = {
   id: string;
@@ -90,18 +91,11 @@ const SideRailAvatar: React.FC<{
   onCurrentUserClick?: () => void;
 }> = ({ currentUser, onCurrentUserClick }) => {
   const { t } = useTranslation();
-  const [imageFailed, setImageFailed] = React.useState(false);
   const avatarSrc =
     typeof currentUser?.avatar === "string" && currentUser.avatar.trim()
       ? currentUser.avatar.trim()
       : "";
-
-  const [prevAvatarSrc, setPrevAvatarSrc] = React.useState(avatarSrc);
-
-  if (avatarSrc !== prevAvatarSrc) {
-    setPrevAvatarSrc(avatarSrc);
-    setImageFailed(false);
-  }
+  const fallback = <span>{getInitial(currentUser)}</span>;
 
   return (
     <button
@@ -111,17 +105,12 @@ const SideRailAvatar: React.FC<{
       aria-label={t("sidebar:rail.profile")}
       title={currentUser?.displayName || currentUser?.username || t("sidebar:rail.profile")}
     >
-      {avatarSrc && !imageFailed ? (
-        <img
-          src={avatarSrc}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <span>{getInitial(currentUser)}</span>
-      )}
+      <SafeImage
+        src={avatarSrc}
+        alt=""
+        className="h-full w-full object-cover"
+        fallback={fallback}
+      />
     </button>
   );
 };

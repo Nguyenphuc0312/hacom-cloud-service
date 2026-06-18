@@ -25,6 +25,7 @@ import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
 import { FileName } from "../../common/FileName";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -257,6 +258,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         <div className={clsx("p-3", tabs.length === 1 && "border-t border-border")}>
           {activeTab === "media" && (
             <DrawerMediaTab
+              conversationId={conversationId}
               items={mediaPreview}
               total={mediaTotal}
               thumbnailUrls={thumbnailUrls}
@@ -312,12 +314,13 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 // ─── Drawer Media Tab ─────────────────────────────────────────────────────────
 
 const DrawerMediaTab: React.FC<{
+  conversationId: string;
   items: ConversationResourcesMediaItem[];
   total: number;
   thumbnailUrls: Record<string, string>;
   onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
   onViewAll: () => void;
-}> = ({ items, total, thumbnailUrls, onImageOpen, onViewAll }) => {
+}> = ({ conversationId, items, total, thumbnailUrls, onImageOpen, onViewAll }) => {
   // When total > preview limit, replace last slot with "+N" overlay
   const showOverlay = total > DRAWER_MEDIA_PREVIEW;
   const visibleItems = showOverlay ? items.slice(0, DRAWER_MEDIA_PREVIEW - 1) : items;
@@ -360,6 +363,7 @@ const DrawerMediaTab: React.FC<{
       {visibleItems.map((item) => (
         <DrawerMediaThumb
           key={`${item.messageId}-${item.fileId}`}
+          conversationId={conversationId}
           item={item}
           fallbackUrl={thumbnailUrls[item.fileId] ?? null}
           onImageClick={(url) => handleThumbClick(item.fileId, url)}
@@ -373,11 +377,11 @@ const DrawerMediaTab: React.FC<{
           className="relative aspect-square overflow-hidden rounded-md bg-surface-overlay"
         >
           {overlayItem && (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
-            <img
-              src={resolvePublicResourceUrl(overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId], { context: 'image' }) ?? undefined}
-              alt={overlayItem.fileName}
-              className="h-full w-full object-cover opacity-40"
-              loading="lazy"
+            <MediaThumbnail
+              attachment={overlayItem}
+              src={overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]}
+              variant="grid"
+              className="opacity-40"
             />
           ) : (
             <div className="h-full w-full bg-surface-overlay" />
@@ -392,47 +396,52 @@ const DrawerMediaTab: React.FC<{
 };
 
 const DrawerMediaThumb: React.FC<{
+  conversationId: string;
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string) => void;
-}> = React.memo(({ item, fallbackUrl, onImageClick }) => {
+}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
+  const canOpen = Boolean(src) || isVideo;
+
+  const handleClick = async () => {
+    if (src) {
+      onImageClick(src);
+      return;
+    }
+    if (!isVideo) return;
+    try {
+      const res = await fileApi.getDownloadUrl({
+        conversationId,
+        attachmentId: item.fileId,
+      });
+      const payload = unwrapApiSuccess(res);
+      if (payload.url) window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Keep the stable fallback tile; user can retry by clicking again.
+    }
+  };
 
   return (
     <button
       type="button"
-      disabled={!src}
-      onClick={() => {
-        if (src) onImageClick(src);
-      }}
+      disabled={!canOpen}
+      onClick={() => void handleClick()}
       className={clsx(
         "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",
-        src && "cursor-pointer hover:ring-2 hover:ring-primary/50",
+        canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
       )}
       aria-label={item.fileName}
     >
-      {src ? (
-        <img
-          src={src}
-          alt={item.fileName}
-          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-          loading="lazy"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <PhotoIcon className="h-5 w-5 text-text-muted" />
-        </div>
-      )}
-      {isVideo && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/80">
-            <span className="ml-0.5 border-y-[5px] border-l-[9px] border-y-transparent border-l-text-primary" />
-          </div>
-        </div>
-      )}
+      <MediaThumbnail
+        attachment={item}
+        src={src}
+        variant="grid"
+        imageClassName="transition-transform duration-200 group-hover:scale-105"
+      />
     </button>
   );
 });

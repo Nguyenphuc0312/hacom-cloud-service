@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
 import { useInViewport } from "../../hooks/useInViewport";
+import { SafeImage } from "../common/SafeImage";
 
 interface StickerMessageProps {
   conversationId: string;
@@ -91,17 +92,16 @@ export const StickerMessage: React.FC<StickerMessageProps> = ({
           className="relative overflow-hidden"
           style={{ width: 120, height: 120 }}
         >
-          <img
+          <SafeImage
             src={stickerUrl}
             alt={stickerName}
-            loading="lazy"
-            decoding="async"
             className={clsx(
               "h-full w-full object-contain transition-opacity",
               loaded ? "opacity-100" : "opacity-0",
             )}
             onLoad={handleLoad}
             onError={handleError}
+            fallback={null}
           />
 
           {/* HD badge if applicable */}

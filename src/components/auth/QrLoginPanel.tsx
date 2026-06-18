@@ -17,6 +17,7 @@ import { extractApiError } from "../../lib/apiContract";
 import { qrLoginService } from "../../services/qrLoginService";
 import { useAuthStore } from "../../stores";
 import type { User } from "../../stores/authStore";
+import { SafeImage } from "../common/SafeImage";
 
 interface QrLoginPanelProps {
   rememberMe?: boolean;
@@ -324,13 +325,17 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           style={{ width: "clamp(148px, 22vmin, 192px)", height: "clamp(148px, 22vmin, 192px)" }}
         >
           {panelState?.qrImageUrl ? (
-            <img
+            <SafeImage
               src={panelState.qrImageUrl}
               alt={t("qrLogin.alt")}
               className={clsx(
                 "h-full w-full rounded-lg object-contain transition-opacity duration-200",
                 (isRefreshing || isBootstrapping) && "opacity-40",
               )}
+              objectFit="contain"
+              fallback={
+                <div className="h-full w-full rounded-lg bg-surface-overlay animate-pulse" />
+              }
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center rounded-lg bg-surface text-xs text-text-muted">

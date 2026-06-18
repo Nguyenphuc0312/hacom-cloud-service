@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { formatFileSize } from "../../utils/formatFileSize";
+import { MediaThumbnail } from "../common/MediaThumbnail";
 
 interface AttachmentItemProps {
   draft: AttachmentDraft;
@@ -150,20 +151,17 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
 
       <div className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded">
         {hasPreview ? (
-          <>
-            {draft.kind === "image" ? (
-              <img
-                src={draft.previewUrl}
-                alt=""
-                className="h-12 w-full rounded object-cover"
-                draggable={false}
-              />
-            ) : (
-              <div className="relative flex h-12 w-full items-center justify-center rounded bg-black/10">
-                <FilmIcon className="h-5 w-5 text-text-muted" />
-              </div>
-            )}
-          </>
+          <MediaThumbnail
+            attachment={{
+              id: draft.fileId ?? draft.localId,
+              fileName: draft.filename,
+              mimeType: draft.mimeType,
+              fileSize: draft.sizeBytes,
+            }}
+            src={draft.kind === "image" ? draft.previewUrl : undefined}
+            variant="preview"
+            showFileName={false}
+          />
         ) : (
           <div className="flex h-12 w-full items-center justify-center rounded bg-surface">
             <KindIcon kind={draft.kind} className="h-6 w-6 text-text-muted" />

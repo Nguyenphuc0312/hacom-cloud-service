@@ -14,6 +14,7 @@
 import React, { useMemo } from "react";
 import clsx from "clsx";
 import { Skeleton } from "../ui";
+import { SafeImage } from "../common/SafeImage";
 import type { LinkPreviewMeta } from "./linkPreviewUtils";
 import { buildLinkMeta } from "./linkPreviewUtils";
 
@@ -111,13 +112,12 @@ export const LinkPreviewCard: React.FC<LinkPreviewCardProps> = ({
       {/* OG Image */}
       {hasOgImage && (
         <div className="relative w-full overflow-hidden" style={{ maxHeight: 200 }}>
-          <img
+          <SafeImage
             src={linkMeta.imageUrl}
             alt=""
-            loading="lazy"
-            decoding="async"
             className="w-full object-cover"
             style={{ maxHeight: 200 }}
+            fallback={null}
           />
         </div>
       )}
@@ -127,14 +127,11 @@ export const LinkPreviewCard: React.FC<LinkPreviewCardProps> = ({
         {/* Domain + favicon */}
         <div className="mb-1 flex items-center gap-1.5">
           <div className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface/30">
-            <img
+            <SafeImage
               src={faviconUrl}
               alt=""
               className="h-3 w-3"
-              loading="lazy"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
+              fallback={null}
             />
           </div>
           <span className={clsx("text-[11px] font-medium uppercase tracking-wide", secondaryTextColor)}>

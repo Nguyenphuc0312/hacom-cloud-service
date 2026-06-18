@@ -1,6 +1,8 @@
 import React from "react";
 import toastLib from "react-hot-toast";
 import { dispatchOpenConversation } from "../../features/chat/events/chatUiEvents";
+import { SafeImage } from "../common/SafeImage";
+import { getInitials } from "../../utils/mediaFallback";
 
 export interface MessageToastCardProps {
   toastId: string;
@@ -18,28 +20,8 @@ const AvatarEl: React.FC<{
   name: string;
   url?: string | null;
 }> = ({ name, url }) => {
-  const [failed, setFailed] = React.useState(false);
-  const initial = (name || "?").trim().charAt(0).toUpperCase();
-  if (url && !failed) {
-    return (
-      <img
-        src={url}
-        alt=""
-        width={40}
-        height={40}
-        onError={() => setFailed(true)}
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          objectFit: "cover",
-          flexShrink: 0,
-          display: "block",
-        }}
-      />
-    );
-  }
-  return (
+  const initials = getInitials(name) || "?";
+  const fallback = (
     <div
       aria-hidden="true"
       style={{
@@ -57,8 +39,26 @@ const AvatarEl: React.FC<{
         userSelect: "none",
       }}
     >
-      {initial}
+      {initials}
     </div>
+  );
+
+  return (
+    <SafeImage
+      src={url}
+      alt=""
+      width={40}
+      height={40}
+      fallback={fallback}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: "50%",
+        objectFit: "cover",
+        flexShrink: 0,
+        display: "block",
+      }}
+    />
   );
 };
 

@@ -14,6 +14,7 @@ import {
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
+import { SafeImage } from "../common/SafeImage";
 import {
   Button,
   ConfirmDialog,
@@ -656,10 +657,20 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
           <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
             {myQrImageUrl ? (
-              <img
+              <SafeImage
                 src={myQrImageUrl}
                 alt={t("friends:tabs.qr")}
                 className="h-full w-full rounded-lg"
+                fallback={
+                  <div
+                    className="h-full w-full space-y-3 p-4"
+                    aria-busy="true"
+                    aria-label={t("auth:qrLogin.creating")}
+                    role="status"
+                  >
+                    <Skeleton className="h-full w-full" rounded="lg" />
+                  </div>
+                }
               />
             ) : (
               <div

@@ -8,6 +8,7 @@ import {
   getRepresentativeGroupParticipants,
   getUserDisplayName,
 } from "../../utils/messageHelpers";
+import { SafeImage } from "./SafeImage";
 
 interface GroupAvatarProps {
   conversation: Conversation;
@@ -48,7 +49,7 @@ const tilePalette = [
   "bg-surface-hover text-text-primary",
 ];
 
-const getInitials = (participant: UserSummary): string => {
+const getParticipantInitials = (participant: UserSummary): string => {
   const source =
     getUserDisplayName(participant, { allowTechnicalFallback: true }) ||
     participant.id;
@@ -88,13 +89,27 @@ const GroupAvatarTile: React.FC<{
   }
 
   if (participant.avatar) {
+    const fallback = (
+      <div
+        className={clsx(
+          "flex h-full w-full items-center justify-center font-semibold uppercase tracking-[0.03em]",
+          tileTextClasses[size],
+          getTilePaletteClass(participant),
+        )}
+        aria-hidden="true"
+        data-group-avatar-tile="initials"
+      >
+        {getParticipantInitials(participant)}
+      </div>
+    );
+
     return (
       <div className="h-full w-full" data-group-avatar-tile="photo">
-        <img
+        <SafeImage
           src={participant.avatar}
           alt=""
           className="h-full w-full object-cover"
-          loading="lazy"
+          fallback={fallback}
         />
       </div>
     );
@@ -110,7 +125,7 @@ const GroupAvatarTile: React.FC<{
       aria-hidden="true"
       data-group-avatar-tile="initials"
     >
-      {getInitials(participant)}
+      {getParticipantInitials(participant)}
     </div>
   );
 };
@@ -122,7 +137,6 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
   className,
   alt,
 }) => {
-  const [imageFailed, setImageFailed] = React.useState(false);
   const label =
     alt ||
     getConversationDisplayName(conversation, currentUserId) ||
@@ -134,11 +148,35 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
     4,
   );
 
-  React.useEffect(() => {
-    setImageFailed(false);
-  }, [explicitAvatar]);
+  const fallbackVisual = representatives.length > 0 ? (
+    <div
+      className={clsx(
+        sizeClasses[size],
+        "grid grid-cols-2 overflow-hidden rounded-full ring-2 ring-surface",
+      )}
+    >
+      {Array.from({ length: 4 }, (_, index) => representatives[index]).map(
+        (participant, index) => (
+          <GroupAvatarTile
+            key={participant?.id || `empty-${index}`}
+            participant={participant}
+            size={size}
+          />
+        ),
+      )}
+    </div>
+  ) : (
+    <div
+      className={clsx(
+        sizeClasses[size],
+        "flex items-center justify-center rounded-full bg-surface-hover text-text-secondary ring-2 ring-surface",
+      )}
+    >
+      <UserGroupIcon className={iconClasses[size]} aria-hidden="true" />
+    </div>
+  );
 
-  if (explicitAvatar && !imageFailed) {
+  if (explicitAvatar) {
     return (
       <div
         className={clsx("relative inline-block shrink-0", className)}
@@ -146,15 +184,14 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
         aria-label={label}
         data-group-avatar-variant="photo"
       >
-        <img
+        <SafeImage
           src={explicitAvatar}
           alt=""
           className={clsx(
             sizeClasses[size],
             "rounded-full object-cover ring-2 ring-surface",
           )}
-          loading="lazy"
-          onError={() => setImageFailed(true)}
+          fallback={fallbackVisual}
         />
       </div>
     );
