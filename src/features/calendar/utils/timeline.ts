@@ -23,16 +23,67 @@ const sameLocalDay = (a: Date, b: Date): boolean =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+/** Mốc 00:00 local (ms) của một ngày — để so sánh khoảng ngày. */
+const localDayStartMs = (d: Date): number =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/** Date bắt đầu của event (ưu tiên ISO startAt; fallback chuỗi `event.date`). */
+const eventStartDate = (event: CalendarEvent): Date | null => {
+  const ext = event as ExtendedCalendarEvent;
+  const d = ext.startAt ? new Date(ext.startAt) : new Date(`${event.date}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/** Date kết thúc của event (ưu tiên ISO endAt; fallback = ngày bắt đầu). */
+const eventEndDate = (event: CalendarEvent): Date | null => {
+  const ext = event as ExtendedCalendarEvent;
+  if (ext.endAt) {
+    const d = new Date(ext.endAt);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return eventStartDate(event);
+};
+
 /**
- * Phút-từ-nửa-đêm của thời điểm bắt đầu. Trả `null` nếu event là all-day hoặc
- * không xác định được giờ (lễ tĩnh, task theo ngày…).
+ * Event có diễn ra (một phần) trong ngày `day` không — hỗ trợ sự kiện nhiều ngày
+ * (qua đêm / công tác). Loại trừ trường hợp kết thúc đúng 00:00 của ngày đang xét
+ * (thực chất đã hết ở ngày trước).
  */
-export const getStartMinutes = (event: CalendarEvent): number | null => {
+export const eventOccursOnDay = (event: CalendarEvent, day: Date): boolean => {
+  const start = eventStartDate(event);
+  if (!start) return false;
+  const end = eventEndDate(event) ?? start;
+  const dayMs = localDayStartMs(day);
+  const startMs = localDayStartMs(start);
+  const endMs = localDayStartMs(end);
+  if (dayMs === endMs && dayMs > startMs && end.getHours() === 0 && end.getMinutes() === 0) {
+    return false;
+  }
+  return dayMs >= startMs && dayMs <= endMs;
+};
+
+/** Event kéo dài qua nhiều ngày local (qua đêm / nhiều ngày liên tiếp). */
+export const isMultiDayEvent = (event: CalendarEvent): boolean => {
+  const start = eventStartDate(event);
+  const end = eventEndDate(event);
+  if (!start || !end) return false;
+  return localDayStartMs(end) > localDayStartMs(start);
+};
+
+/**
+ * Phút-từ-nửa-đêm của thời điểm bắt đầu, tính theo ngày `day` (nếu truyền).
+ * Trả `null` nếu event là all-day hoặc không xác định được giờ (lễ tĩnh, task theo ngày…).
+ * Với event nhiều ngày: các ngày sau ngày bắt đầu ⇒ bắt đầu từ 00:00.
+ */
+export const getStartMinutes = (event: CalendarEvent, day?: Date): number | null => {
   const ext = event as ExtendedCalendarEvent;
   if (ext.isAllDay) return null;
   if (ext.startAt) {
     const d = new Date(ext.startAt);
-    if (!Number.isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+    if (!Number.isNaN(d.getTime())) {
+      if (day && !sameLocalDay(d, day)) return 0;
+      return d.getHours() * 60 + d.getMinutes();
+    }
   }
   if (event.time) {
     const m = TIME_RE.exec(event.time);
@@ -46,15 +97,23 @@ export const getStartMinutes = (event: CalendarEvent): number | null => {
 };
 
 /**
- * Phút-từ-nửa-đêm của thời điểm kết thúc, clamp trong cùng một ngày.
- * Mặc định +60 phút khi không có endAt; nếu endAt sang ngày khác ⇒ cuối ngày.
+ * Phút-từ-nửa-đêm của thời điểm kết thúc, clamp trong ngày `day` (nếu truyền).
+ * Mặc định +60 phút khi không có endAt. Với event nhiều ngày: ngày kết thúc dùng
+ * giờ kết thúc thật; các ngày trước đó ⇒ hết ngày (24:00).
  */
-export const getEndMinutes = (event: CalendarEvent, startMin: number): number => {
+export const getEndMinutes = (event: CalendarEvent, startMin: number, day?: Date): number => {
   const ext = event as ExtendedCalendarEvent;
   if (ext.startAt && ext.endAt) {
     const start = new Date(ext.startAt);
     const end = new Date(ext.endAt);
     if (!Number.isNaN(end.getTime())) {
+      if (day) {
+        if (sameLocalDay(end, day)) {
+          const m = end.getHours() * 60 + end.getMinutes();
+          return Math.min(Math.max(m, startMin), MINUTES_PER_DAY);
+        }
+        return MINUTES_PER_DAY;
+      }
       if (!sameLocalDay(start, end) && end > start) return MINUTES_PER_DAY;
       const m = end.getHours() * 60 + end.getMinutes();
       if (m > startMin) return Math.min(m, MINUTES_PER_DAY);
@@ -94,17 +153,18 @@ interface RawItem {
 export const layoutDayEvents = (
   events: CalendarEvent[],
   maxCols = 3,
+  day?: Date,
 ): DayLayout => {
   const allDay: CalendarEvent[] = [];
   const raw: RawItem[] = [];
 
   for (const event of events) {
-    const startMin = getStartMinutes(event);
+    const startMin = getStartMinutes(event, day);
     if (startMin === null) {
       allDay.push(event);
       continue;
     }
-    raw.push({ event, startMin, endMin: getEndMinutes(event, startMin) });
+    raw.push({ event, startMin, endMin: getEndMinutes(event, startMin, day) });
   }
 
   raw.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
