@@ -256,11 +256,18 @@ const getMessageQueryArgForConversation = (
  */
 const normalizeMentionsFromServer = (mentions: unknown): Mention[] | undefined => {
   if (!Array.isArray(mentions) || mentions.length === 0) return undefined;
-  return mentions.map((m): Mention =>
-    typeof m === "string"
-      ? { userId: m, displayName: "" }
-      : { userId: String((m as Record<string, unknown>).userId ?? ""), displayName: String((m as Record<string, unknown>).displayName ?? "") },
-  );
+  return mentions.map((m): Mention => {
+    if (typeof m === "string") return { userId: m, displayName: "" };
+    const rec = m as Record<string, unknown>;
+    const avatarUrl = rec.avatarUrl ?? rec.avatar;
+    const employeeCode = rec.employeeCode ?? rec.employee_code;
+    return {
+      userId: String(rec.userId ?? ""),
+      displayName: String(rec.displayName ?? ""),
+      ...(typeof avatarUrl === "string" && avatarUrl ? { avatarUrl } : {}),
+      ...(typeof employeeCode === "string" && employeeCode ? { employeeCode } : {}),
+    };
+  });
 };
 
 /**
