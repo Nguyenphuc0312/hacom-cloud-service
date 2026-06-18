@@ -1338,9 +1338,16 @@ export const ChatPage: React.FC = () => {
                 currentUserId={currentUserSummary.id}
                 conversationContext="group"
                 initialUser={(() => {
-                  const cached = getCachedUserProfile(mentionProfile.userId);
+                  const cached = getCachedUserProfile(mentionProfile.userId) as
+                    | { avatar?: string | null; avatarUrl?: string | null; displayName?: string }
+                    | undefined;
+                  // Avatar URLs are short-lived presigned S3 links (~15 min).
+                  // Prefer the mention's URL — it is captured at click time from
+                  // the freshly fetched message, so it is the least likely to be
+                  // expired. The cached profile copy can hold a stale (expired)
+                  // signature that would 403 and fall back to initials.
                   const avatarUrl = resolvePublicResourceUrl(
-                    cached?.avatar ?? mentionProfile.avatarUrl ?? undefined,
+                    mentionProfile.avatarUrl || cached?.avatar || cached?.avatarUrl || undefined,
                   );
                   return {
                     id: mentionProfile.userId,

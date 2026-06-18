@@ -45,19 +45,29 @@ export interface AiChatResponse {
 // ---------------------------------------------------------------------------
 
 export interface WorkReportTaskItem {
+  /**
+   * Id công việc do BE cấp (chỉ có sau khi lưu báo cáo). Khi SỬA báo cáo phải
+   * gửi lại id này để giữ liên kết file ↔ việc — nếu thiếu, BE coi là việc mới.
+   */
+  id?: string;
   task_name: string;
   requirements: string;
   completed: string;
   difficulties: string;
   notes?: string;
+  /** File đính kèm thuộc riêng công việc này (chế độ attach_level="task"). */
+  attachments?: WorkReportAttachment[];
 }
 
 /**
- * File đính kèm ở mức báo cáo NGÀY (không theo từng task).
+ * File đính kèm của báo cáo. `task_id` xác định file thuộc công việc nào:
+ *   - task_id = id công việc → file của việc đó.
+ *   - task_id = null/undefined → file "chung" của cả báo cáo (gồm file cũ).
  * `download_url` là tương đối tới host AI — KHÔNG bao giờ chứa stored_path.
  */
 export interface WorkReportAttachment {
   id: number;
+  task_id?: string | null;
   original_filename: string;
   content_type?: string;
   file_size?: number;
@@ -91,6 +101,10 @@ export interface WorkReportFormRequest {
 
   // Cấu hình đính kèm file (BE gửi kèm form_request).
   allow_attachments?: boolean;
+  /** "task" = đính kèm theo từng công việc; mặc định/khác = mức báo cáo ngày (legacy). */
+  attach_level?: "report" | "task";
+  /** true = BẮT BUỘC chọn việc khi upload (BE bật REQUIRE_TASK_ATTACHMENT). */
+  attach_requires_task?: boolean;
   accepted_file_types?: string[];
   max_file_mb?: number;
   attach_endpoint?: string;

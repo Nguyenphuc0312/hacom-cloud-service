@@ -937,6 +937,11 @@ export async function uploadPersonalDocument(
 const WORK_REPORTS_URL = `${BASE_URL}/api/work-reports`;
 
 export interface WorkReportTaskSubmit {
+  /**
+   * Id công việc đang có (round-trip khi SỬA). Bỏ trống khi tạo việc mới —
+   * BE sẽ cấp id mới. Gửi lại id để giữ liên kết file ↔ việc.
+   */
+  id?: string;
   task_name: string;
   requirements?: string;
   completed?: string;
@@ -954,12 +959,17 @@ export interface WorkReportSubmitBody {
   notes?: string;
 }
 
+/** Một công việc trong response — BE trả kèm `id` để FE round-trip & gắn file. */
+export interface WorkReportTaskResult extends WorkReportTaskSubmit {
+  id?: string;
+}
+
 export interface WorkReportSubmitResponse {
   ok: boolean;
   report: {
     id: number;
     report_date: string;
-    tasks?: WorkReportTaskSubmit[];
+    tasks?: WorkReportTaskResult[];
     notes?: string;
     task_name?: string;
     requirements?: string;
@@ -1016,6 +1026,7 @@ export interface WorkReportFileUploadResponse {
   ok: boolean;
   file: {
     id: number;
+    task_id?: string | null;
     report_date: string;
     filename: string;
     file_size?: number;
@@ -1024,15 +1035,26 @@ export interface WorkReportFileUploadResponse {
   };
 }
 
-/** POST /api/work-reports/files — đính kèm file cho báo cáo ngày (mặc định hôm nay). */
+export interface UploadWorkReportFileParams {
+  /** Ngày báo cáo YYYY-MM-DD; mặc định hôm nay nếu bỏ trống. */
+  reportDate?: string;
+  /**
+   * Id công việc để gắn file (chế độ attach_level="task"). Bỏ trống → file
+   * "chung" (task_id=null). BẮT BUỘC khi BE bật attach_requires_task.
+   */
+  taskId?: string;
+}
+
+/** POST /api/work-reports/files — đính kèm file cho báo cáo ngày (kèm task_id nếu theo việc). */
 export async function uploadWorkReportFile(
   file: File,
-  reportDate?: string,
+  params?: UploadWorkReportFileParams,
   options?: { signal?: AbortSignal },
 ): Promise<WorkReportFileUploadResponse> {
   const form = new FormData();
   form.append("file", file, file.name);
-  if (reportDate) form.append("report_date", reportDate);
+  if (params?.reportDate) form.append("report_date", params.reportDate);
+  if (params?.taskId) form.append("task_id", params.taskId);
 
   // KHÔNG set Content-Type — trình duyệt tự thêm boundary cho multipart.
   const response = await fetchWithAuth(
@@ -1047,6 +1069,8 @@ export async function uploadWorkReportFile(
     if (response.status === 403) {
       throw new Error("Bạn không có quyền đính kèm tệp này.");
     }
+    // 400 mang detail rõ ràng từ BE (thiếu task_id / task không thuộc báo cáo /
+    // định dạng / ngày tương lai / file trống).
     throw new Error(await readErrorDetail(response, "Không thể tải tệp lên"));
   }
   return response.json() as Promise<WorkReportFileUploadResponse>;
