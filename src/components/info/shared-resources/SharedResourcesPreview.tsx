@@ -23,6 +23,7 @@ import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
 import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
+import { VideoPlayerModal } from "./VideoPlayerModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
 import { FileName } from "../../common/FileName";
@@ -45,6 +46,9 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     images: Array<{ url: string; alt?: string }>;
     index: number;
   } | null>(null);
+  const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
+    null,
+  );
 
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
@@ -193,12 +197,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     );
   }
 
-  const allTabs: { key: SharedContentTab; label: string; count: number }[] = [
+  // Always show all three tabs (Ảnh/Video · File · Link) in the same row, even
+  // when a category is empty — users expect the Link tab to be visible here
+  // without first opening the "Xem tất cả" modal.
+  const tabs: { key: SharedContentTab; label: string; count: number }[] = [
     { key: "media", label: "Ảnh/Video", count: mediaTotal },
     { key: "files", label: "File", count: filesTotal },
     { key: "links", label: "Link", count: linksTotal },
   ];
-  const tabs = allTabs.filter((t) => t.count > 0);
 
   const activeTabTotal =
     activeTab === "media"
@@ -264,6 +270,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               total={mediaTotal}
               thumbnailUrls={thumbnailUrls}
               onImageOpen={(index, images) => setLightbox({ images, index })}
+              onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
               onViewAll={() => {
                 setActiveTab("media");
                 setModalOpen(true);
@@ -302,6 +309,13 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         initialIndex={lightbox?.index ?? 0}
       />
 
+      <VideoPlayerModal
+        isOpen={video !== null}
+        onClose={() => setVideo(null)}
+        url={video?.url ?? null}
+        fileName={video?.fileName}
+      />
+
       <SharedContentModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -320,8 +334,17 @@ const DrawerMediaTab: React.FC<{
   total: number;
   thumbnailUrls: Record<string, string>;
   onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
+  onVideoOpen: (url: string, fileName?: string) => void;
   onViewAll: () => void;
-}> = ({ conversationId, items, total, thumbnailUrls, onImageOpen, onViewAll }) => {
+}> = ({
+  conversationId,
+  items,
+  total,
+  thumbnailUrls,
+  onImageOpen,
+  onVideoOpen,
+  onViewAll,
+}) => {
   // When total > preview limit, replace last slot with "+N" overlay
   const showOverlay = total > DRAWER_MEDIA_PREVIEW;
   const visibleItems = showOverlay ? items.slice(0, DRAWER_MEDIA_PREVIEW - 1) : items;
@@ -368,6 +391,7 @@ const DrawerMediaTab: React.FC<{
           item={item}
           fallbackUrl={thumbnailUrls[item.fileId] ?? null}
           onImageClick={(url) => handleThumbClick(item.fileId, url)}
+          onVideoOpen={onVideoOpen}
         />
       ))}
       {showOverlay && (
@@ -401,29 +425,32 @@ const DrawerMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string) => void;
-}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick }) => {
+  onVideoOpen: (url: string, fileName?: string) => void;
+}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick, onVideoOpen }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
-  const canOpen = Boolean(src) || isVideo;
+  const canOpen = true;
 
   const handleClick = async () => {
-    if (src) {
-      onImageClick(src);
+    // Videos must be played from their resolved source — the thumbnail (src) is
+    // only a still image, so routing it to the image lightbox shows a frozen
+    // frame that can't be played.
+    if (isVideo) {
+      try {
+        const res = await fileApi.getDownloadUrl({
+          conversationId,
+          attachmentId: item.fileId,
+        });
+        const payload = unwrapApiSuccess(res);
+        if (payload.url) onVideoOpen(payload.url, item.fileName);
+      } catch {
+        // Keep the stable fallback tile; user can retry by clicking again.
+      }
       return;
     }
-    if (!isVideo) return;
-    try {
-      const res = await fileApi.getDownloadUrl({
-        conversationId,
-        attachmentId: item.fileId,
-      });
-      const payload = unwrapApiSuccess(res);
-      if (payload.url) window.open(payload.url, "_blank", "noopener,noreferrer");
-    } catch {
-      // Keep the stable fallback tile; user can retry by clicking again.
-    }
+    if (src) onImageClick(src);
   };
 
   return (
