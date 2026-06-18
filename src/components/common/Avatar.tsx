@@ -6,7 +6,7 @@ import { UserStatus } from "../../types";
 interface AvatarProps {
   src?: string | null;
   alt?: string | null;
-  size?: "xs" | "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
   status?: UserStatus;
   showStatus?: boolean;
   className?: string;
@@ -19,6 +19,7 @@ const sizeClasses = {
   md: "h-10 w-10",
   lg: "h-12 w-12",
   xl: "h-16 w-16",
+  "2xl": "h-32 w-32",
 };
 
 const statusSizeClasses = {
@@ -27,6 +28,7 @@ const statusSizeClasses = {
   md: "h-3 w-3",
   lg: "h-4 w-4",
   xl: "h-4 w-4",
+  "2xl": "h-6 w-6",
 };
 
 const statusColors: Record<UserStatus, string> = {
@@ -111,6 +113,7 @@ export const Avatar: React.FC<AvatarProps> = ({
             size === "md" && "text-sm",
             size === "lg" && "text-base",
             size === "xl" && "text-lg",
+            size === "2xl" && "text-2xl",
           )}
         >
           {initials}

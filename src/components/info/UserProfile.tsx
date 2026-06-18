@@ -15,7 +15,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
-import { Button, PanelSection, ProfileSkeleton, toast } from "../ui";
+import { Button, ConfirmDialog, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../../stores";
 import { useMyHrProfile } from "../../hooks/useMyHrProfile";
@@ -198,6 +198,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     () => !isSelf && Boolean(userId) && !getCachedUserProfile(userId),
   );
   const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
   const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -375,47 +376,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
 
     if (relationship.kind === "friend") {
-      const secondaryActions = [
-        capabilities.canUnfriend ? (
-          <Button
-            key="unfriend"
-            type="button"
-            variant="secondary"
-            size="sm"
-            isLoading={actingKey === "unfriend"}
-            onClick={() =>
-              void handleAsyncAction(
-                "unfriend",
-                () => removeFriend(relationship.friendshipId),
-                t("friends:unfriendSuccess"),
-                t("friends:actionFailed"),
-              )
-            }
-          >
-            {t("friends:unfriend")}
-          </Button>
-        ) : null,
-      ].filter(Boolean);
+      // The "unfriend" action is rendered separately at the bottom of the
+      // panel (centered, danger color) — here we only surface the message CTA.
+      if (!shouldShowMessageAction) return null;
 
       return (
         <div className="space-y-2">
-          {shouldShowMessageAction ? (
-            <Button
-              type="button"
-              variant="brand-yellow"
-              fullWidth
-              leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
-              isLoading={actingKey === "message"}
-              onClick={() => void handleMessage()}
-            >
-              {t("friends:message")}
-            </Button>
-          ) : null}
-          {secondaryActions.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {secondaryActions}
-            </div>
-          ) : null}
+          <Button
+            type="button"
+            variant="brand-yellow"
+            fullWidth
+            leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
+            isLoading={actingKey === "message"}
+            onClick={() => void handleMessage()}
+          >
+            {t("friends:message")}
+          </Button>
         </div>
       );
     }
@@ -544,18 +520,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           ) : (
             <div className="space-y-4 px-4 py-4">
               <PanelSection className="rounded-2xl border-transparent bg-[hsl(var(--chat-panel-bg))] px-4 py-4 shadow-none">
-                <div className="flex flex-col items-start gap-3 sm:items-center sm:text-center">
+                <div className="flex flex-col items-center gap-3 text-center">
                   <Avatar
                     src={user?.avatar}
                     alt={displayName}
-                    size="xl"
+                    size="2xl"
                     status={effectiveStatus}
                     showStatus
                   />
 
                   <div className="w-full min-w-0 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-center">
-                      <h2 className="truncate text-title text-text-primary">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <h2 className="text-2xl font-semibold text-text-primary">
                         {displayName}
                       </h2>
                       <span
@@ -741,6 +717,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </section>
               )}
 
+              {relationship.kind === "friend" && capabilities.canUnfriend && (
+                <section className="flex justify-center pt-2">
+                  <Button
+                    type="button"
+                    variant="danger"
+                    isLoading={actingKey === "unfriend"}
+                    onClick={() => setIsUnfriendConfirmOpen(true)}
+                  >
+                    {t("friends:unfriend")}
+                  </Button>
+                </section>
+              )}
+
             </div>
           )}
         </div>
@@ -753,6 +742,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           restoreFocusRef={editButtonRef}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={isUnfriendConfirmOpen}
+        onClose={() => {
+          if (actingKey !== "unfriend") setIsUnfriendConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          void handleAsyncAction(
+            "unfriend",
+            () => removeFriend(relationship.friendshipId),
+            t("friends:unfriendSuccess"),
+            t("friends:actionFailed"),
+          ).finally(() => setIsUnfriendConfirmOpen(false));
+        }}
+        title={t("friends:unfriendConfirmTitle")}
+        message={t("friends:unfriendConfirmMessage", { name: displayName })}
+        confirmText={t("friends:unfriend")}
+        variant="danger"
+        isLoading={actingKey === "unfriend"}
+      />
     </>
   );
 };
