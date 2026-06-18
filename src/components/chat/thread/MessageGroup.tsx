@@ -671,7 +671,7 @@ const MessageGroupItem: React.FC<{
                     }
                   }}
                   className={clsx(
-                    "mb-2 flex w-full max-w-full items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
+                    "mb-2 flex max-w-[260px] items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
                     "bg-black/[0.05] dark:bg-white/[0.08]",
                     onNavigateToMessage ? "cursor-pointer hover:opacity-75 active:opacity-50" : "cursor-default",
                   )}
@@ -717,7 +717,7 @@ const MessageGroupItem: React.FC<{
                     </span>
                   ) : null}
 
-                  <div className="flex min-w-0 flex-col justify-center">
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
                     <div
                       className={clsx(
                         "truncate text-[13px] font-semibold leading-4",
@@ -736,7 +736,7 @@ const MessageGroupItem: React.FC<{
                     </div>
                     <p
                       className={clsx(
-                        "mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-4",
+                        "mt-0.5 flex items-center gap-1 text-[12px] leading-4",
                         isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.50]" : "text-text-muted/75",
                       )}
                     >
