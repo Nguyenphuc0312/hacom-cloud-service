@@ -10,13 +10,14 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../../lib/conversationAdapter";
-import { conversationApi, messageApi, conversationResourcesApi, fileApi } from "../../services/api";
+import { conversationApi, messageApi, conversationResourcesApi, fileApi, linkPreviewApi } from "../../services/api";
 import type {
   ConversationSidebarSummary,
   ConversationResourcesMediaItem,
   ConversationResourcesFileItem,
   ConversationResourcesLinkItem,
   ConversationResourcesPaginatedResult,
+  LinkPreviewData,
 } from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
 import type { Attachment, Conversation, Mention, Message } from "../../types";
@@ -871,6 +872,17 @@ export const chatApi = createApi({
       ],
     }),
 
+    getLinkPreview: build.query<LinkPreviewData, string>({
+      async queryFn(url) {
+        try {
+          const response = await linkPreviewApi.get(url);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+    }),
+
     batchThumbnailUrls: build.mutation<
       { items: Array<{ fileId: string; url: string | null; expiresAt: string | null; status: string }> },
       { conversationId: string; fileIds: string[] }
@@ -906,7 +918,8 @@ export const {
   useGetConversationMediaQuery,
   useGetConversationFilesQuery,
   useGetConversationLinksQuery,
+  useGetLinkPreviewQuery,
   useBatchThumbnailUrlsMutation,
 } = chatApi;
 
-export type { ConversationSidebarSummary, ConversationResourcesMediaItem, ConversationResourcesFileItem, ConversationResourcesLinkItem, ConversationResourcesPaginatedResult };
+export type { ConversationSidebarSummary, ConversationResourcesMediaItem, ConversationResourcesFileItem, ConversationResourcesLinkItem, ConversationResourcesPaginatedResult, LinkPreviewData };
