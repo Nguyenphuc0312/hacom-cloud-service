@@ -21,6 +21,7 @@ import {
 import type { Attachment, ImageClickPayload, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import { resolvePublicResourceUrl } from "../../../config";
+import { useBatchThumbnailUrl } from "../../../hooks";
 import { useChatStore, useAuthStore } from "../../../stores";
 import {
   type MessageActionId,
@@ -264,13 +265,32 @@ const MessageGroupItem: React.FC<{
     // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
     // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
     // tự dựng quote preview từ message gốc đang có trong store.
-    const replyTargetFromStore = useChatStore((state) =>
-      !message.replyToMessage && message.replyTo
-        ? state.messageById[message.replyTo]
-        : undefined,
-    );
+    // Tra tin gốc trong store khi: (a) thiếu hẳn `replyToMessage`, hoặc
+    // (b) có `replyToMessage` nhưng thiếu `attachments` (BE chưa populate /
+    // ack ghi đè) — cần `attachments[].id` để mint signed thumbnail.
+    const replyTargetFromStore = useChatStore((state) => {
+      const existingReply = message.replyToMessage;
+      const replyHasAttachments =
+        !!existingReply?.attachments && existingReply.attachments.length > 0;
+      const targetId = message.replyTo ?? existingReply?.id;
+      if (!targetId) return undefined;
+      if (existingReply && replyHasAttachments) return undefined;
+      return state.messageById[targetId];
+    });
     const resolvedReplyPreview = React.useMemo(() => {
-      if (message.replyToMessage) return message.replyToMessage;
+      const existingReply = message.replyToMessage;
+      if (existingReply) {
+        const replyHasAttachments =
+          !!existingReply.attachments && existingReply.attachments.length > 0;
+        const storeAttachments = replyTargetFromStore?.attachments;
+        if (!replyHasAttachments && storeAttachments && storeAttachments.length > 0) {
+          return {
+            ...existingReply,
+            attachments: storeAttachments,
+          } as Message["replyToMessage"];
+        }
+        return existingReply;
+      }
       if (!message.replyTo) return undefined;
       if (replyTargetFromStore) {
         return {
@@ -288,6 +308,26 @@ const MessageGroupItem: React.FC<{
       }
       return undefined;
     }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
+    // Ảnh/video reply là file private — không có URL dùng trực tiếp; mint
+    // signed thumbnail qua batch-thumbnail-urls (cùng cache với timeline).
+    const replyFirstAttachment = resolvedReplyPreview?.attachments?.[0] as
+      | Attachment
+      | undefined;
+    const replyType = resolvedReplyPreview?.type as string | undefined;
+    const wantsReplyThumb =
+      (replyType === MessageType.IMAGE ||
+        replyType === MessageType.VIDEO ||
+        replyType === MessageType.GIF) &&
+      !resolvedReplyPreview?.isDeleted &&
+      !!replyFirstAttachment?.id;
+    const { urls: replySignedThumbs } = useBatchThumbnailUrl(
+      message.conversationId,
+      wantsReplyThumb ? [replyFirstAttachment!.id] : [],
+      { autoFetch: wantsReplyThumb && !!message.conversationId },
+    );
+    const replySignedThumbUrl = replyFirstAttachment?.id
+      ? replySignedThumbs?.[replyFirstAttachment.id]?.url
+      : undefined;
     const replyPreviewSenderId = resolvedReplyPreview?.senderId;
     const enrichedReplySenderName = useEnrichedProfileStore(
       React.useMemo(
@@ -312,7 +352,9 @@ const MessageGroupItem: React.FC<{
         case MessageType.GIF:
         case MessageType.VIDEO: {
           const isVideo = type === MessageType.VIDEO;
-          const resolvedThumb = resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url);
+          const resolvedThumb =
+            replySignedThumbUrl ??
+            resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url);
           return {
             label,
             attachment: att,
@@ -380,7 +422,7 @@ const MessageGroupItem: React.FC<{
         default:
           return null;
       }
-    }, [resolvedReplyPreview]);
+    }, [resolvedReplyPreview, replySignedThumbUrl]);
     const isHighlighted =
       highlightedMessageId === message.id ||
       highlightedMessageId === message.localId ||

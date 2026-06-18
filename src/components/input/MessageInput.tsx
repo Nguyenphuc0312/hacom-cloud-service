@@ -869,6 +869,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         {mode === "reply" && replyToMessage && (
           <ComposerReplyBanner
             replyToMessage={replyToMessage}
+            conversationId={conversationId}
             onCancelReply={onCancelReply}
           />
         )}
