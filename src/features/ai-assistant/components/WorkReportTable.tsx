@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  PrinterIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   DownloadIcon,
@@ -31,14 +30,6 @@ interface WorkReportTableProps {
 function formatDateVN(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
-}
-
-function escHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 // notes nằm ở cấp report (r.notes), không phải trong task
@@ -170,79 +161,6 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
       ? departments[0]
       : `${departments.length} phòng ban`;
 
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const dateRange = `${formatDateVN(startDate)} – ${formatDateVN(endDate)}`;
-
-    const tableRows = reports
-      .map((r) => {
-        const tasks = getTaskList(r);
-        const count = tasks.length;
-        return tasks
-          .map((t, ti) => {
-            const isFirst = ti === 0;
-            const rs = count > 1 ? ` rowspan="${count}"` : "";
-            // notes per-task; fallback về report-level notes cho dữ liệu cũ
-            const taskNotes = t.notes || (isFirst && !tasks.some((x) => x.notes) ? r.notes || "" : "");
-            return `<tr>
-              ${isFirst ? `<td${rs}>${escHtml(r.user_name)}<br/><span class="dept">${escHtml(r.department)}</span></td>` : ""}
-              ${isFirst ? `<td${rs} class="nowrap">${formatDateVN(r.date)}</td>` : ""}
-              <td>${count > 1 ? `<b>${ti + 1}.</b> ` : ""}${escHtml(t.task_name || "—")}</td>
-              <td>${escHtml(t.requirements || "")}</td>
-              <td>${escHtml(t.completed || "")}</td>
-              <td>${escHtml(t.difficulties || "")}</td>
-              <td>${escHtml(taskNotes)}</td>
-            </tr>`;
-          })
-          .join("");
-      })
-      .join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="utf-8"/>
-  <title>Báo cáo công việc – ${escHtml(title)}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
-    h2{text-align:center;font-size:14px;text-transform:uppercase;margin-bottom:4px}
-    .sub{text-align:center;color:#555;font-size:11px;margin-bottom:14px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #bbb;padding:5px 7px;vertical-align:top;word-break:break-word}
-    th{background:#e8eef7;font-size:11px;text-align:left}
-    .dept{color:#666;font-size:10px}
-    .nowrap{white-space:nowrap}
-    @media print{@page{margin:1.5cm}}
-  </style>
-</head>
-<body>
-  <h2>Báo cáo công việc — ${escHtml(title)}</h2>
-  <p class="sub">${escHtml(dateRange)} · ${reports.length} báo cáo</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Nhân viên</th>
-        <th>Ngày</th>
-        <th>Công việc</th>
-        <th>Yêu cầu</th>
-        <th>Đã làm</th>
-        <th>Khó khăn</th>
-        <th>Ghi chú</th>
-      </tr>
-    </thead>
-    <tbody>${tableRows}</tbody>
-  </table>
-</body>
-</html>`;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 250);
-  };
-
   if (reports.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-surface shadow-sm px-4 py-6 text-center text-sm text-text-muted">
@@ -254,23 +172,13 @@ export const WorkReportTable: React.FC<WorkReportTableProps> = ({
   return (
     <div className="w-full rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#1976D2]/8 border-b border-border">
-        <div>
-          <h3 className="text-sm font-semibold text-[#1565C0]">
-            Báo cáo công việc — {title}
-          </h3>
-          <p className="text-xs text-text-muted mt-0.5">
-            {formatDateVN(startDate)} – {formatDateVN(endDate)} · {reports.length} báo cáo
-          </p>
-        </div>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-text-secondary hover:bg-surface-hover border border-border transition-colors"
-          title="In báo cáo (đầy đủ chi tiết)"
-        >
-          <PrinterIcon size={13} />
-          In
-        </button>
+      <div className="px-4 py-3 bg-[#1976D2]/8 border-b border-border">
+        <h3 className="text-sm font-semibold text-[#1565C0]">
+          Báo cáo công việc — {title}
+        </h3>
+        <p className="text-xs text-text-muted mt-0.5">
+          {formatDateVN(startDate)} – {formatDateVN(endDate)} · {reports.length} báo cáo
+        </p>
       </div>
 
       {/* Table */}
