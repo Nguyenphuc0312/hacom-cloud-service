@@ -34,6 +34,8 @@
   "requestCancelled": "Đã hủy lời mời",
   "unfriend": "Hủy kết bạn",
   "unfriendSuccess": "Đã hủy kết bạn",
+  "unfriendConfirmTitle": "Hủy kết bạn",
+  "unfriendConfirmMessage": "Bạn có chắc muốn hủy kết bạn với {{name}}?",
   "requestReceivedAt": "Nhận ngày {{date}}",
   "requestSentAt": "Gửi ngày {{date}}",
   "actionFailed": "Thao tác thất bại",

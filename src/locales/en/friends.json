@@ -34,6 +34,8 @@
   "requestCancelled": "Request cancelled",
   "unfriend": "Unfriend",
   "unfriendSuccess": "Removed friend",
+  "unfriendConfirmTitle": "Unfriend",
+  "unfriendConfirmMessage": "Are you sure you want to unfriend {{name}}?",
   "requestReceivedAt": "Received {{date}}",
   "requestSentAt": "Sent {{date}}",
   "actionFailed": "Action failed",
