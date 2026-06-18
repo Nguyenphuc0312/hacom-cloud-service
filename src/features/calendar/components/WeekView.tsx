@@ -10,11 +10,13 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
-import { getEventColor, type CalendarEvent } from "../data/calendarEvents";
+import { getEventColor, MULTI_DAY_EVENT_COLOR, type CalendarEvent } from "../data/calendarEvents";
 import {
   HOURS,
   MINUTES_PER_DAY,
+  eventOccursOnDay,
   getWeekDays,
+  isMultiDayEvent,
   layoutDayEvents,
   nowMinutes,
 } from "../utils/timeline";
@@ -58,11 +60,6 @@ const fmtMin = (min: number): string => {
 const dateKey = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const sameDay = (iso: string, date: Date): boolean => {
-  const d = new Date(iso);
-  return d.toDateString() === date.toDateString();
-};
-
 export const WeekView: React.FC<WeekViewProps> = ({
   weekDate,
   events,
@@ -81,8 +78,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
     () =>
       weekDays.map((date) =>
         layoutDayEvents(
-          events.filter((event) => sameDay(event.date, date)),
+          events.filter((event) => eventOccursOnDay(event, date)),
           3,
+          date,
         ),
       ),
     [weekDays, events],
@@ -246,7 +244,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
                   {/* Timed events */}
                   {timed.map(({ event, startMin, endMin, col, colCount }) => {
-                    const colors = getEventColor(event.type);
+                    // Lịch dài hạn (nhiều ngày) → màu vàng + chữ to & đậm hơn.
+                    const isLong = isMultiDayEvent(event);
+                    const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
                     const top = startMin * PX_PER_MIN;
                     const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
                     const widthPct = 100 / colCount;
@@ -260,7 +260,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         }}
                         title={`${event.title} · ${fmtMin(startMin)}–${fmtMin(endMin)}`}
                         className={clsx(
-                          "absolute overflow-hidden rounded border px-1 py-0.5 text-left text-[10px] transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+                          "absolute overflow-hidden rounded border px-1 py-0.5 text-left transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+                          isLong ? "text-xs" : "text-[10px]",
                           colors.bg,
                           colors.border,
                           colors.text,
@@ -272,10 +273,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
                           width: `calc(${widthPct}% - 2px)`,
                         }}
                       >
-                        <span className="block truncate font-medium leading-tight">
+                        <span
+                          className={clsx(
+                            "block truncate leading-tight",
+                            isLong ? "font-semibold" : "font-medium",
+                          )}
+                        >
                           {event.title}
                         </span>
-                        {height >= 28 && (
+                        {height >= 28 && !isLong && (
                           <span className="block truncate opacity-70">{fmtMin(startMin)}</span>
                         )}
                       </button>

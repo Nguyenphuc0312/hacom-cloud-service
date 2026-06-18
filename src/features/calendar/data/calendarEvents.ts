@@ -184,6 +184,16 @@ export const formatDateString = (date: Date): string => {
  * Returns a CSS class pair — background/text — that works in both light and dark modes.
  * Uses opacity modifier so the color reads correctly on both light and dark surfaces.
  */
+/**
+ * Màu nổi bật (vàng) cho lịch dài ngày (qua đêm / nhiều ngày) — phân biệt rõ với
+ * event trong ngày để đỡ rối. Dùng chung cho cả month/day/week view.
+ */
+export const MULTI_DAY_EVENT_COLOR = {
+  bg: "bg-amber-500/40",
+  text: "text-amber-900 dark:text-amber-100",
+  border: "border-amber-600/70",
+} as const;
+
 export const getEventColor = (type: EventType): { bg: string; text: string; border: string } => {
   switch (type) {
     case "vietnam_holiday":
