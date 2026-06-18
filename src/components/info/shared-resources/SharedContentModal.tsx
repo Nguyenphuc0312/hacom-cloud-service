@@ -27,6 +27,7 @@ import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
 import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
+import { VideoPlayerModal } from "./VideoPlayerModal";
 import { FileName } from "../../common/FileName";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
 
@@ -54,6 +55,9 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
     images: Array<{ url: string; alt?: string }>;
     index: number;
   } | null>(null);
+  const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -95,6 +99,7 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
             <ModalMediaTab
               conversationId={conversationId}
               onImageOpen={(index, images) => setLightbox({ images, index })}
+              onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
             />
           )}
           {activeTab === "files" && (
@@ -112,6 +117,13 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
         images={lightbox?.images}
         initialIndex={lightbox?.index ?? 0}
       />
+
+      <VideoPlayerModal
+        isOpen={video !== null}
+        onClose={() => setVideo(null)}
+        url={video?.url ?? null}
+        fileName={video?.fileName}
+      />
     </>
   );
 };
@@ -121,7 +133,8 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
 const ModalMediaTab: React.FC<{
   conversationId: string;
   onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
-}> = ({ conversationId, onImageOpen }) => {
+  onVideoOpen: (url: string, fileName?: string) => void;
+}> = ({ conversationId, onImageOpen, onVideoOpen }) => {
   const [page, setPage] = useState(1);
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
@@ -251,6 +264,7 @@ const ModalMediaTab: React.FC<{
             item={item}
             fallbackUrl={thumbnailUrls[item.fileId] ?? null}
             onImageClick={(url) => handleThumbClick(item.fileId, url)}
+            onVideoOpen={onVideoOpen}
           />
         ))}
       </div>
@@ -291,29 +305,32 @@ const ModalMediaThumb: React.FC<{
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
   onImageClick: (url: string) => void;
-}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick }) => {
+  onVideoOpen: (url: string, fileName?: string) => void;
+}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick, onVideoOpen }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
-  const canOpen = Boolean(src) || isVideo;
+  const canOpen = true;
 
   const handleClick = async () => {
-    if (src) {
-      onImageClick(src);
+    // Videos must be played from their resolved source — the thumbnail (src) is
+    // only a still image, so routing it to the image lightbox shows a frozen
+    // frame that can't be played.
+    if (isVideo) {
+      try {
+        const res = await fileApi.getDownloadUrl({
+          conversationId,
+          attachmentId: item.fileId,
+        });
+        const payload = unwrapApiSuccess(res);
+        if (payload.url) onVideoOpen(payload.url, item.fileName);
+      } catch {
+        // Stable fallback stays visible; user can retry by clicking the tile.
+      }
       return;
     }
-    if (!isVideo) return;
-    try {
-      const res = await fileApi.getDownloadUrl({
-        conversationId,
-        attachmentId: item.fileId,
-      });
-      const payload = unwrapApiSuccess(res);
-      if (payload.url) window.open(payload.url, "_blank", "noopener,noreferrer");
-    } catch {
-      // Stable fallback stays visible; user can retry by clicking the tile.
-    }
+    if (src) onImageClick(src);
   };
 
   return (
