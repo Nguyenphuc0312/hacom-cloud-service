@@ -16,6 +16,8 @@ import { resolveUserDisplayName } from "../../../features/chat/identity/resolveU
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
+import { useBatchThumbnailUrl } from "../../../hooks";
+import { resolvePublicResourceUrl } from "../../../config";
 
 function getFileExtInfo(
   mimeType?: string,
@@ -77,11 +79,13 @@ const MEDIA_META: Record<string, { icon: React.ReactNode; label: string }> = {
 
 interface ComposerReplyBannerProps {
   replyToMessage: Message;
+  conversationId?: string;
   onCancelReply?: () => void;
 }
 
 export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
   replyToMessage,
+  conversationId,
   onCancelReply,
 }) => {
   const { t } = useTranslation();
@@ -94,9 +98,25 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
     msgType === MessageType.IMAGE || msgType === MessageType.VIDEO;
 
   const firstAttachment = replyToMessage.attachments?.[0];
+
+  // Ảnh/video là file private — không có URL dùng trực tiếp; mint signed
+  // thumbnail qua batch-thumbnail-urls (cùng cache với timeline & ReplyPreview).
+  const wantsThumb = isImageOrVideo && !!firstAttachment?.id;
+  const { urls: signedThumbs } = useBatchThumbnailUrl(
+    conversationId,
+    wantsThumb ? [firstAttachment!.id] : [],
+    { autoFetch: wantsThumb && !!conversationId },
+  );
+  const signedThumbUrl = firstAttachment?.id
+    ? signedThumbs?.[firstAttachment.id]?.url
+    : undefined;
+
   const thumbnailUrl =
-    firstAttachment?.thumbnailUrl ??
-    (isImageOrVideo ? firstAttachment?.url : undefined);
+    signedThumbUrl ??
+    resolvePublicResourceUrl(
+      firstAttachment?.thumbnailUrl ??
+        (isImageOrVideo ? firstAttachment?.url : undefined),
+    );
   const showMediaThumb = isImageOrVideo && !!firstAttachment;
 
   const fileName = firstAttachment?.fileName;
