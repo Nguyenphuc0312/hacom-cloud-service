@@ -164,7 +164,7 @@ export const LoginPage: React.FC = () => {
             aria-controls="login-panel-password"
             onClick={() => setAuthMethod("password")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "password"
-              ? "bg-surface text-primary shadow-sm"
+              ? "bg-surface text-[#C41E3A] shadow-sm"
               : "text-text-secondary hover:text-text-primary"
               }`}
           >
@@ -178,7 +178,7 @@ export const LoginPage: React.FC = () => {
             aria-selected={authMethod === "qr"}
             onClick={() => setAuthMethod("qr")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "qr"
-              ? "bg-surface text-primary shadow-sm"
+              ? "bg-surface text-[#C41E3A] shadow-sm"
               : "text-text-secondary hover:text-text-primary"
               }`}
           >
@@ -216,20 +216,14 @@ export const LoginPage: React.FC = () => {
               }
               onSubmit={handleSubmit(onSubmit)}
             />
-
-            <div className="relative py-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border"></div>
-              </div>
-            </div>
           </div>
         )}
 
         {authMethod === "qr" && (
           <div className="space-y-3">
-            <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-center">
-              <p className="flex items-center justify-center gap-2 text-sm font-semibold text-emerald-800">
-                <ShieldCheckIcon className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <div className="rounded-lg border border-border bg-surface-overlay px-3 py-2.5 text-center">
+              <p className="flex items-center justify-center gap-2 text-sm font-semibold text-text-secondary">
+                <ShieldCheckIcon className="h-4 w-4 text-[#C41E3A]" aria-hidden="true" />
                 Sử dụng ứng dụng di động để quét
               </p>
             </div>

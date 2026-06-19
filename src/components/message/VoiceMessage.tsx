@@ -131,7 +131,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn
             ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.3]"
-            : "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white hover:brightness-105",
+            : "bg-[#1565C0] text-white hover:bg-[#1976D2]",
         )}
         aria-label={isPlaying ? t("chat:voice.pause") : t("chat:voice.play")}
       >

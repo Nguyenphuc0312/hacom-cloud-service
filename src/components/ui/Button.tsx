@@ -29,9 +29,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   brand:
-    "border border-[#1565C0] bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-md shadow-[#1565C0]/20 hover:brightness-105 focus:ring-[#1565C0]/25",
+    "border border-[#1565C0] bg-[#1565C0] text-white shadow-md shadow-[#1565C0]/20 hover:bg-[#1976D2] focus:ring-[#1565C0]/25",
   "brand-yellow":
-    "border border-[#1565C0]/70 bg-gradient-to-r from-[#1565C0] to-[#1976D2] text-white shadow-md shadow-[#1565C0]/25 hover:brightness-105 focus:ring-[#1565C0]/25",
+    "border border-[#1565C0]/70 bg-[#1565C0] text-white shadow-md shadow-[#1565C0]/25 hover:bg-[#1976D2] focus:ring-[#1565C0]/25",
   "brand-outline":
     "border border-[#1976D2]/60 bg-transparent text-[#1565C0] hover:bg-[#1976D2]/8 active:bg-[#1976D2]/12 focus:ring-[#1565C0]/25",
   primary:

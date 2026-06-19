@@ -749,7 +749,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         <button
           type="submit"
           disabled={busy}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-[#1976D2] to-[#1565C0] hover:brightness-105 transition-all disabled:opacity-50 shadow-sm"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-[#1565C0] hover:bg-[#1976D2] transition-all disabled:opacity-50 shadow-sm"
         >
           <SaveIcon size={14} />
           {isSubmitting ? "Đang lưu..." : "Lưu báo cáo"}

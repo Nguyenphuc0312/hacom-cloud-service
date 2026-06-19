@@ -1820,7 +1820,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={goToToday}
-                    className="rounded-xl bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:brightness-105 active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
+                    className="rounded-xl bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#1976D2] active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
                   >
                     Hôm nay
                   </button>
@@ -1839,7 +1839,7 @@ export const CalendarPage: React.FC = () => {
                     className={clsx(
                       "rounded-md px-3 py-1.5 text-sm font-medium transition-micro",
                       currentView === view.id
-                        ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-sm"
+                        ? "bg-[#1565C0] text-white shadow-sm"
                         : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                     )}
                   >

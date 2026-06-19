@@ -979,7 +979,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   size="xl"
                 />
               ) : (
-                <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-br from-[#1976D2] to-[#1565C0] text-2xl font-bold text-white">
+                <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#1565C0] text-2xl font-bold text-white">
                   {(conversation.name || "G").slice(0, 2).toUpperCase()}
                 </div>
               )}
@@ -1023,7 +1023,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => void handleRenameGroup()}
-                  className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded-lg bg-[#1565C0] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
                 >
                   <CheckIcon className="h-3.5 w-3.5" />
                   {t("common:actions.save")}
@@ -1339,7 +1339,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             type="button"
                             disabled={isCreatingInvite}
                             onClick={() => void handleCreateInviteLink()}
-                            className="rounded-md bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-3 py-1.5 text-sm text-white hover:brightness-105 disabled:opacity-60"
+                            className="rounded-md bg-[#1565C0] px-3 py-1.5 text-sm text-white hover:brightness-105 disabled:opacity-60"
                           >
                             {isCreatingInvite ? t("common:loading.processing") : t("profile:groupInfo.invite.create")}
                           </button>
@@ -1450,7 +1450,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                   type="button"
                                   disabled={resolvingRequestId === request.id}
                                   onClick={() => void handleResolveJoinRequest(request.id, "approved")}
-                                  className="rounded-md bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-3 py-1.5 text-xs text-white hover:brightness-105 disabled:opacity-60"
+                                  className="rounded-md bg-[#1565C0] px-3 py-1.5 text-xs text-white hover:brightness-105 disabled:opacity-60"
                                 >
                                   {t("common:actions.approve")}
                                 </button>

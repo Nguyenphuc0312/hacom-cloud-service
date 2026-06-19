@@ -95,7 +95,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[#DBEAFE]/10",
+    container: "bg-[#1976D2]/8",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
@@ -262,8 +262,10 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
     >
       {(visualState === "active" || visualState === "mention") && (
         <span
-          className="absolute left-0 top-2 bottom-2 w-1 rounded-full"
-          style={{ background: "linear-gradient(180deg, #1565C0 0%, #DBEAFE 100%)" }}
+          className={clsx(
+            "absolute left-0 top-2 bottom-2 w-1 rounded-full",
+            visualState === "mention" ? "bg-danger" : "bg-[#1565C0]",
+          )}
           aria-hidden="true"
         />
       )}
