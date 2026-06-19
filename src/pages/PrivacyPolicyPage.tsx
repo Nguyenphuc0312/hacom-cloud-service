@@ -7,19 +7,19 @@ const UPDATED_DATE_EN = "June 12, 2026";
 
 const ViContent: React.FC = () => (
   <div className="space-y-8">
-    <div className="border-b border-gray-200 pb-6">
+    <div className="border-b border-[#e5e7eb] pb-6">
       <div className="flex items-center gap-3 mb-4">
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Chính Sách Bảo Mật</h1>
-          <p className="text-sm text-gray-500 mt-0.5">CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Chính Sách Bảo Mật</h1>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
         </div>
       </div>
-      <div className="bg-blue-50 rounded-lg p-4 text-sm text-gray-700 space-y-1">
+      <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
         <p><span className="font-medium">Ngày có hiệu lực:</span> {UPDATED_DATE_VI}</p>
         <p><span className="font-medium">Công ty/Tổ chức:</span> CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS (HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY)</p>
-        <p><span className="font-medium">Email liên hệ:</span> <a href="mailto:admin@hacomholdings.vn" className="text-blue-600 hover:underline">admin@hacomholdings.vn</a></p>
-        <p><span className="font-medium">Website:</span> <a href="https://www.hacomholdings.vn/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">https://www.hacomholdings.vn/</a></p>
+        <p><span className="font-medium">Email liên hệ:</span> <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">admin@hacomholdings.vn</a></p>
+        <p><span className="font-medium">Website:</span> <a href="https://www.hacomholdings.vn/" target="_blank" rel="noopener noreferrer" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">https://www.hacomholdings.vn/</a></p>
       </div>
     </div>
 
@@ -30,7 +30,7 @@ const ViContent: React.FC = () => (
     </Section>
 
     <Section title="2. Hacom ID — Mã định danh người dùng">
-      <p>Mỗi tài khoản trong hệ thống HACOM Chat được gắn một <span className="font-semibold text-gray-900">Hacom ID</span> duy nhất — là mã số định danh nội bộ do hệ thống tự cấp phát khi tài khoản được tạo.</p>
+      <p>Mỗi tài khoản trong hệ thống HACOM Chat được gắn một <span className="font-semibold text-[#0f172a]">Hacom ID</span> duy nhất — là mã số định danh nội bộ do hệ thống tự cấp phát khi tài khoản được tạo.</p>
       <div className="mt-3 space-y-2">
         <p><span className="font-medium">Hacom ID dùng để:</span></p>
         <ul className="list-disc pl-5 space-y-1">
@@ -140,7 +140,7 @@ const ViContent: React.FC = () => (
         <li>Tuân thủ các yêu cầu pháp luật, quy định hoặc chính sách nội bộ</li>
         <li>Cải thiện tính ổn định, độ tin cậy và trải nghiệm sử dụng của ứng dụng</li>
       </ul>
-      <p className="mt-3 text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+      <p className="mt-4 rounded-xl border border-amber-200/70 bg-amber-50/70 p-3.5 text-sm text-[#854d0e]">
         <span className="font-medium">Lưu ý:</span> Chúng tôi không sử dụng thông tin người dùng cho mục đích quảng cáo, tiếp thị thương mại hoặc bán cho bên thứ ba.
       </p>
     </Section>
@@ -195,7 +195,7 @@ const ViContent: React.FC = () => (
         </li>
       </ul>
       <p className="mt-3">Các dịch vụ này có thể xử lý định danh thiết bị hoặc thông tin kỹ thuật cần thiết để thực hiện chức năng của mình theo chính sách bảo mật riêng của họ.</p>
-      <p className="mt-3 text-sm bg-gray-50 border border-gray-200 rounded-lg p-3">
+      <p className="mt-4 rounded-xl border border-[#d7dce3] bg-[#eef2f7]/70 p-3.5 text-sm text-[#475569]">
         Ứng dụng <span className="font-medium">không sử dụng dịch vụ quảng cáo</span> của bên thứ ba và không sử dụng dữ liệu người dùng cho mục đích tiếp thị hay quảng cáo thương mại.
       </p>
     </Section>
@@ -266,32 +266,32 @@ const ViContent: React.FC = () => (
 
     <Section title="17. Thông tin liên hệ">
       <p>Nếu bạn có bất kỳ câu hỏi, thắc mắc hoặc yêu cầu nào liên quan đến Chính sách Bảo mật hoặc việc xử lý dữ liệu cá nhân của mình, vui lòng liên hệ:</p>
-      <div className="mt-3 bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
-        <p className="font-semibold text-gray-900">CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
-        <p>Email: <a href="mailto:admin@hacomholdings.vn" className="text-blue-600 hover:underline">admin@hacomholdings.vn</a></p>
+      <div className="mt-4 space-y-1.5 rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4 text-sm">
+        <p className="font-semibold text-[#0f172a]">CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
+        <p>Email: <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">admin@hacomholdings.vn</a></p>
         <p>Địa chỉ: Tầng 5, Tháp B, Tòa nhà CT2 (The Light), Đường Tố Hữu, Phường Đại Mỗ, Thành phố Hà Nội, Việt Nam</p>
-        <p>Điện thoại: <a href="tel:+842466646333" className="text-blue-600 hover:underline">(+84) 24 6664 6333</a></p>
+        <p>Điện thoại: <a href="tel:+842466646333" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">(+84) 24 6664 6333</a></p>
       </div>
-      <p className="mt-3 text-sm text-gray-500">Đối với các yêu cầu liên quan đến tài khoản hoặc dữ liệu nội bộ, bạn cũng có thể liên hệ trực tiếp với quản trị viên hệ thống hoặc bộ phận Công nghệ thông tin của công ty.</p>
+      <p className="mt-3 text-sm text-[#64748b]">Đối với các yêu cầu liên quan đến tài khoản hoặc dữ liệu nội bộ, bạn cũng có thể liên hệ trực tiếp với quản trị viên hệ thống hoặc bộ phận Công nghệ thông tin của công ty.</p>
     </Section>
   </div>
 );
 
 const EnContent: React.FC = () => (
   <div className="space-y-8">
-    <div className="border-b border-gray-200 pb-6">
+    <div className="border-b border-[#e5e7eb] pb-6">
       <div className="flex items-center gap-3 mb-4">
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Privacy Policy</h1>
-          <p className="text-sm text-gray-500 mt-0.5">HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Privacy Policy</h1>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
         </div>
       </div>
-      <div className="bg-blue-50 rounded-lg p-4 text-sm text-gray-700 space-y-1">
+      <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
         <p><span className="font-medium">Effective Date:</span> {UPDATED_DATE_EN}</p>
         <p><span className="font-medium">Company / Organization:</span> HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY (CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS)</p>
-        <p><span className="font-medium">Contact Email:</span> <a href="mailto:admin@hacomholdings.vn" className="text-blue-600 hover:underline">admin@hacomholdings.vn</a></p>
-        <p><span className="font-medium">Website:</span> <a href="https://www.hacomholdings.vn/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">https://www.hacomholdings.vn/</a></p>
+        <p><span className="font-medium">Contact Email:</span> <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">admin@hacomholdings.vn</a></p>
+        <p><span className="font-medium">Website:</span> <a href="https://www.hacomholdings.vn/" target="_blank" rel="noopener noreferrer" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">https://www.hacomholdings.vn/</a></p>
       </div>
     </div>
 
@@ -302,7 +302,7 @@ const EnContent: React.FC = () => (
     </Section>
 
     <Section title="2. Hacom ID — User Identifier">
-      <p>Every account in HACOM Chat is assigned a unique <span className="font-semibold text-gray-900">Hacom ID</span> — an internal identifier automatically generated by the system when an account is created.</p>
+      <p>Every account in HACOM Chat is assigned a unique <span className="font-semibold text-[#0f172a]">Hacom ID</span> — an internal identifier automatically generated by the system when an account is created.</p>
       <div className="mt-3 space-y-2">
         <p><span className="font-medium">Hacom ID is used to:</span></p>
         <ul className="list-disc pl-5 space-y-1">
@@ -412,7 +412,7 @@ const EnContent: React.FC = () => (
         <li>To comply with legal, regulatory, or internal organizational requirements</li>
         <li>To improve the stability, reliability, and usability of the application</li>
       </ul>
-      <p className="mt-3 text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+      <p className="mt-4 rounded-xl border border-amber-200/70 bg-amber-50/70 p-3.5 text-sm text-[#854d0e]">
         <span className="font-medium">Note:</span> We do not use user information for advertising, commercial marketing, or sale to third parties.
       </p>
     </Section>
@@ -467,7 +467,7 @@ const EnContent: React.FC = () => (
         </li>
       </ul>
       <p className="mt-3">These services may process certain technical information according to their own privacy practices.</p>
-      <p className="mt-3 text-sm bg-gray-50 border border-gray-200 rounded-lg p-3">
+      <p className="mt-4 rounded-xl border border-[#d7dce3] bg-[#eef2f7]/70 p-3.5 text-sm text-[#475569]">
         The application does <span className="font-medium">not use third-party advertising services</span> and does not use user data for marketing or commercial advertising purposes.
       </p>
     </Section>
@@ -538,28 +538,33 @@ const EnContent: React.FC = () => (
 
     <Section title="17. Contact Us">
       <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your personal data, please contact:</p>
-      <div className="mt-3 bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
-        <p className="font-semibold text-gray-900">HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
-        <p>Email: <a href="mailto:admin@hacomholdings.vn" className="text-blue-600 hover:underline">admin@hacomholdings.vn</a></p>
+      <div className="mt-4 space-y-1.5 rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4 text-sm">
+        <p className="font-semibold text-[#0f172a]">HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
+        <p>Email: <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">admin@hacomholdings.vn</a></p>
         <p>Address: 5th Floor, Tower B, CT2 Building (The Light), To Huu Street, Dai Mo Ward, Hanoi, Vietnam</p>
-        <p>Phone: <a href="tel:+842466646333" className="text-blue-600 hover:underline">024 666 46333</a></p>
+        <p>Phone: <a href="tel:+842466646333" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">024 666 46333</a></p>
       </div>
-      <p className="mt-3 text-sm text-gray-500">For requests related to internal accounts or data, you may also contact your system administrator or the Company's IT department directly.</p>
+      <p className="mt-3 text-sm text-[#64748b]">For requests related to internal accounts or data, you may also contact your system administrator or the Company's IT department directly.</p>
     </Section>
   </div>
 );
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section>
-    <h2 className="text-lg font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-100">{title}</h2>
-    <div className="text-gray-700 text-sm leading-relaxed">{children}</div>
+    <h2 className="mb-4 flex items-center gap-2.5 border-b border-[#eef2f7] pb-2.5 text-[15px] font-semibold tracking-tight text-[#0f172a]">
+      <span aria-hidden className="h-4 w-1 rounded-full bg-[#1565C0]" />
+      {title}
+    </h2>
+    <div className="text-sm leading-relaxed text-[#334155] [&_a]:font-medium [&_a]:text-[#1565C0] [&_a:hover]:text-[#1976D2] [&_a:hover]:underline [&_ul]:list-none [&_ul]:pl-0 [&_li]:relative [&_li]:pl-5 [&_li]:before:absolute [&_li]:before:left-0.5 [&_li]:before:text-[#1976D2] [&_li]:before:content-['-']">
+      {children}
+    </div>
   </section>
 );
 
 const SubSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="mt-4">
-    <h3 className="text-sm font-semibold text-gray-800 mb-2">{title}</h3>
-    <div className="text-gray-700">{children}</div>
+    <h3 className="mb-2 text-sm font-semibold text-[#1e293b]">{title}</h3>
+    <div className="text-[#334155]">{children}</div>
   </div>
 );
 
@@ -567,30 +572,30 @@ export const PrivacyPolicyPage: React.FC = () => {
   const [lang, setLang] = useState<Lang>("vi");
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+    <div className="h-full overflow-y-auto bg-[#eef2f7]">
+      <div className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-6 rounded-full bg-gradient-to-b from-[#D32F2F] to-[#C41E3A]" />
-            <span className="font-semibold text-gray-900 text-sm">HACOM HOLDINGS</span>
+          <div className="flex items-center gap-2.5">
+            <div className="h-6 w-1.5 rounded-full bg-[#1565C0]" />
+            <span className="text-sm font-semibold text-[#0f172a]">HACOM HOLDINGS</span>
           </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-1 rounded-xl bg-[#eef2f7] p-1 ring-1 ring-inset ring-[#d7dce3]/70">
             <button
               onClick={() => setLang("vi")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 lang === "vi"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-[#1565C0] text-white shadow-sm"
+                  : "text-[#64748b] hover:text-[#1e293b]"
               }`}
             >
               Tiếng Việt
             </button>
             <button
               onClick={() => setLang("en")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 lang === "en"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-[#1565C0] text-white shadow-sm"
+                  : "text-[#64748b] hover:text-[#1e293b]"
               }`}
             >
               English
@@ -600,11 +605,11 @@ export const PrivacyPolicyPage: React.FC = () => {
       </div>
 
       <main className="max-w-3xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-10">
+        <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-12px_rgba(15,23,42,0.10)] md:p-10">
           {lang === "vi" ? <ViContent /> : <EnContent />}
         </div>
 
-        <footer className="mt-6 text-center text-xs text-gray-400 pb-8">
+        <footer className="mt-8 pb-10 text-center text-xs text-[#94a3b8]">
           <p>
             {lang === "vi"
               ? `Cập nhật lần cuối: ${UPDATED_DATE_VI}`
