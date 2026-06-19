@@ -48,13 +48,13 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     dateDivider: {
       outer: "my-3",
       pill:
-        "px-2.5 py-0.5 text-[10px] font-medium tracking-[0.01em]",
+        "px-3 py-1 text-[10px] font-medium tracking-[0.01em]",
     },
     unreadDivider: {
       outer: "my-3 gap-2",
       line: "bg-primary/12",
       pill:
-        "px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.01em]",
+        "px-3 py-1 text-[10px] font-semibold tracking-[0.01em]",
     },
     cluster: {
       rowGap: "gap-1",
@@ -80,13 +80,13 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     dateDivider: {
       outer: "my-3.5",
       pill:
-        "px-2.75 py-0.5 text-[10px] font-medium tracking-[0.01em]",
+        "px-3.5 py-1 text-[10px] font-medium tracking-[0.01em]",
     },
     unreadDivider: {
       outer: "my-3.5 gap-2.5",
       line: "bg-primary/14",
       pill:
-        "px-2.75 py-0.5 text-[10px] font-semibold tracking-[0.01em]",
+        "px-3.5 py-1 text-[10px] font-semibold tracking-[0.01em]",
     },
     cluster: {
       rowGap: "gap-2",
@@ -111,12 +111,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     },
     dateDivider: {
       outer: "my-4",
-      pill: "px-3 py-0.75 text-[11px] font-medium tracking-[0.01em]",
+      pill: "px-4 py-1.5 text-[11px] font-medium tracking-[0.01em]",
     },
     unreadDivider: {
       outer: "my-4 gap-3",
       line: "bg-primary/16",
-      pill: "px-3 py-0.75 text-[11px] font-semibold tracking-[0.01em]",
+      pill: "px-4 py-1.5 text-[11px] font-semibold tracking-[0.01em]",
     },
     cluster: {
       rowGap: "gap-2",
