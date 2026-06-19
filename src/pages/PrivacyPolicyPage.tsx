@@ -239,7 +239,8 @@ const ViContent: React.FC = () => (
     </Section>
 
     <Section title="13. Quản lý tài khoản">
-      <p>Tài khoản người dùng được tạo, cập nhật, tạm khóa hoặc xóa bởi quản trị viên được ủy quyền của tổ chức.</p>
+      <p>Tài khoản Hacom ID được cấp phát và quản lý bởi doanh nghiệp. Khi nhân sự nghỉ việc hoặc theo yêu cầu của doanh nghiệp, quản trị viên hệ thống sẽ vô hiệu hóa hoặc xóa tài khoản theo quy trình nội bộ.</p>
+      <p className="mt-3">Tài khoản người dùng được tạo, cập nhật, tạm khóa hoặc xóa bởi quản trị viên được ủy quyền của tổ chức.</p>
       <p className="mt-3">Khi quan hệ lao động, hợp đồng hoặc quyền được cấp phép sử dụng kết thúc, quyền truy cập ứng dụng của bạn sẽ bị chấm dứt hoặc hạn chế theo chính sách nội bộ.</p>
       <p className="mt-3">Người dùng <span className="font-medium">không thể tự xóa tài khoản</span> — việc này phải được thực hiện thông qua quản trị viên hệ thống.</p>
     </Section>
@@ -510,7 +511,8 @@ const EnContent: React.FC = () => (
     </Section>
 
     <Section title="13. Account Management">
-      <p>User accounts are created, updated, suspended, and deleted by the organization's authorized administrators.</p>
+      <p>Hacom ID accounts are provisioned and managed by the enterprise. When an employee leaves the company or upon the enterprise's request, the system administrator will disable or delete the account in accordance with internal procedures.</p>
+      <p className="mt-3">User accounts are created, updated, suspended, and deleted by the organization's authorized administrators.</p>
       <p className="mt-3">If your employment, contract, or authorization ends, your access to the application will be terminated or limited according to internal policy.</p>
       <p className="mt-3">Users <span className="font-medium">cannot self-delete their account</span> — this must be requested through the system administrator.</p>
     </Section>
