@@ -82,9 +82,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         className,
       )}
     >
-      {icon && <div className="mb-3 h-12 w-12 text-text-muted/55">{icon}</div>}
+      {icon && (
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-overlay text-[#1565C0] ring-1 ring-inset ring-border/60">
+          <div className="h-7 w-7">{icon}</div>
+        </div>
+      )}
 
-      <h3 className="mb-1.5 text-sm font-semibold text-text-primary">
+      <h3 className="mb-1.5 text-base font-semibold text-text-primary">
         {title}
       </h3>
 
@@ -1032,9 +1036,9 @@ const WeeklyCalendarWidget: React.FC = () => {
             <button
               type="button"
               onClick={() => setWeekOffset(0)}
-              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
+              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:bg-[#1976D2] active:scale-[0.98] bg-[#1565C0]"
               style={{
-                boxShadow: "0 1px 4px rgba(196, 30, 58, 0.3)",
+                boxShadow: "0 1px 4px rgba(21, 101, 192, 0.3)",
               }}
             >
               Hôm nay · {todayLabel}
@@ -1381,7 +1385,7 @@ const WeeklyCalendarWidget: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/calendar")}
-          className="bg-gradient-to-r from-[#1976D2] to-[#1565C0] bg-clip-text text-xs font-semibold text-transparent transition-micro hover:brightness-110 active:scale-95"
+          className="text-xs font-semibold text-[#1565C0] transition-micro hover:text-[#1976D2] active:scale-95"
         >
           Xem lịch đầy đủ →
         </button>
@@ -1440,7 +1444,7 @@ const SlideshowFigure: React.FC = React.memo(() => {
   }, []);
 
   return (
-    <figure className="w-full max-w-[380px] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(15,23,42,0.18)]">
+    <figure className="w-full max-w-[380px] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(21,101,192,0.15)] ring-1 ring-border/50">
       <div className="relative aspect-[16/8.7] w-full overflow-hidden bg-slate-100">
         {WELCOME_SLIDES.map((slide, index) => (
           <img
@@ -1476,10 +1480,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
       <div className="mx-auto flex w-full max-w-[1800px] flex-col items-center">
         <SlideshowFigure />
 
-        <div className="mt-4 text-center">
+        <div className="mt-4 animate-fade-in text-center">
           <h2 className="text-[clamp(22px,2.8vw,32px)] font-extrabold leading-tight text-text-primary">
             Chào mừng đến với{" "}
-            <span className="bg-gradient-to-r from-[#1976D2] to-[#1565C0] bg-clip-text text-transparent">
+            <span className="text-[#1565C0]">
               Hacom Chat
             </span>
           </h2>
@@ -1488,9 +1492,9 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
               href="https://drive.google.com/drive/u/2/folders/1sHWGuyh8oU70KfiqK5x_q3fBV4xhPE0u"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:brightness-105 active:scale-[0.98] bg-gradient-to-r from-[#1976D2] to-[#1565C0]"
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:bg-[#1976D2] active:scale-[0.98] bg-[#1565C0]"
               style={{
-                boxShadow: "0 2px 8px rgba(196, 30, 58, 0.35), 0 1px 3px rgba(255, 200, 87, 0.3)",
+                boxShadow: "0 2px 8px rgba(21, 101, 192, 0.35), 0 1px 3px rgba(21, 101, 192, 0.2)",
               }}
             >
               <ComputerDesktopIcon className="h-5 w-5 shrink-0" />

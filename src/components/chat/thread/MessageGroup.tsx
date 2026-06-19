@@ -687,7 +687,7 @@ const MessageGroupItem: React.FC<{
                 >
                   {/* Thanh nhận diện bên trái */}
                   <span
-                    className="w-[3px] flex-shrink-0 self-stretch rounded-full bg-gradient-to-b from-[#1976D2] to-[#1565C0]"
+                    className="w-[3px] flex-shrink-0 self-stretch rounded-full bg-[#1565C0]"
                   />
 
                   {/* Thumbnail (ảnh/video) hoặc badge loại file */}

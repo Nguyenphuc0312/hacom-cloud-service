@@ -54,7 +54,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         )}
 
         <div className="space-y-1.5">
-          <label htmlFor="loginIdentifier" className="text-sm font-bold text-text-primary">
+          <label htmlFor="loginIdentifier" className="text-sm font-semibold text-text-primary">
             {t("auth:login.loginIdentifier")}
           </label>
           <div className="relative">
@@ -68,7 +68,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               autoComplete="username webauthn"
               placeholder="name@hacomholdings.vn"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-medium text-text-primary outline-none transition-all focus:border-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.1)] disabled:opacity-60"
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-medium text-text-primary outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60"
               aria-invalid={Boolean(loginIdentifierError)}
             />
           </div>
@@ -79,7 +79,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-bold text-text-primary">
+            <label htmlFor="password" className="text-sm font-semibold text-text-primary">
               {t("auth:login.password")}
             </label>
           </div>
@@ -91,7 +91,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               placeholder={t("auth:placeholders.password")}
               autoComplete="current-password"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-border bg-surface px-4 pr-12 text-sm font-medium text-text-primary outline-none transition-all focus:border-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.1)] disabled:opacity-60"
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 pr-12 text-sm font-medium text-text-primary outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60"
               aria-invalid={Boolean(passwordError)}
             />
             <button
@@ -124,7 +124,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
           <button
             type="button"
             onClick={() => navigate('/forgot-password')}
-            className="text-sm font-bold text-text-muted transition-colors hover:text-text-secondary"
+            className="text-sm font-semibold text-[#C41E3A] transition-colors hover:text-[#D32F2F]"
           >
             {t("auth:login.forgotPassword")}
           </button>

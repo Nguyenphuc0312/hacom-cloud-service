@@ -51,7 +51,7 @@ const Checkbox: React.FC<{ checked: boolean }> = ({ checked }) => (
     className={clsx(
       "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
       checked
-        ? "border-[#1565C0] bg-gradient-to-br from-[#1565C0] to-[#1976D2]"
+        ? "border-[#1565C0] bg-[#1565C0]"
         : "border-border",
     )}
   >
@@ -379,7 +379,7 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
           {step === "department" && (
             <button type="button" onClick={handleFetch}
               disabled={isLoading || selectedDepts.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-[#1976D2] to-[#1565C0] hover:brightness-105 transition-all disabled:opacity-50 shadow-sm">
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-white bg-[#1565C0] hover:bg-[#1976D2] transition-all disabled:opacity-50 shadow-sm">
               <BarChart2Icon size={13} />
               {isLoading ? "Đang tải..." : "Xem báo cáo"}
             </button>

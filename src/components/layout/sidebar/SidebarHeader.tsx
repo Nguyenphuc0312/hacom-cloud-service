@@ -111,7 +111,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <IconButtonSurface
             onClick={() => emitOpenNewChatModal()}
             className={clsx(
-              "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+              "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-[#1565C0]",
               "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
             aria-label={t("sidebar:header.composeLabel")}

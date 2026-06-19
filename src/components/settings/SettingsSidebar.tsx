@@ -115,24 +115,30 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => onSelect(item.id)}
                     className={clsx(
-                      "group flex w-full items-center gap-3 rounded-lg text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+                      "group relative flex w-full items-center gap-3 rounded-lg text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                       isListMode ? "px-3 py-3" : "px-3 py-2.5",
                       isActive
-                        ? "bg-[#DBEAFE]/10 text-text-primary"
+                        ? "bg-[#1976D2]/8 font-semibold text-text-primary"
                         : item.tone === "danger"
                           ? "text-danger hover:bg-danger/10"
                           : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
                     )}
                   >
+                    {isActive ? (
+                      <span
+                        className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-[#1565C0]"
+                        aria-hidden="true"
+                      />
+                    ) : null}
                     {item.icon ? (
                       <span
                         className={clsx(
-                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
                           isActive
-                            ? "text-[#1565C0]"
+                            ? "bg-[#1976D2]/10 text-[#1565C0]"
                             : item.tone === "danger"
                               ? "text-danger"
-                              : "text-text-secondary",
+                              : "text-text-secondary group-hover:text-text-primary",
                         )}
                       >
                         {item.icon}

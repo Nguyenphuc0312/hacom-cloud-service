@@ -170,7 +170,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
               <Badge count={tab.count} size="sm" />
             )}
             {activeTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#1976D2] to-[#1565C0]" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1565C0]" />
             )}
           </button>
         ))}
