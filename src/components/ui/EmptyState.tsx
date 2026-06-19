@@ -33,9 +33,11 @@ import {
 import { CheckCircleIcon as CheckCircleSolidIcon } from "@heroicons/react/24/solid";
 import { Button } from "./Button";
 import {
-  getEventsByDate,
+  getEventColor,
+  MULTI_DAY_EVENT_COLOR,
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
+import { eventOccursOnDay, isMultiDayEvent } from "../../features/calendar/utils/timeline";
 import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "./PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "./Modal";
@@ -46,6 +48,7 @@ import {
   meetingVisibilityToApi,
   personalVisibilityToApi,
 } from "../../features/calendar/utils/calendarVisibility";
+import { mapHrmEventToCalendarEvent } from "../../features/calendar/utils/calendarEventMapping";
 
 // Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
 // có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
@@ -271,7 +274,7 @@ interface SelectedEventDetail {
     ownerUserId: string;
     ownerEmployeeId: string | null;
   }>;
-  /** Có giá trị khi click vào sự kiện demo (getCalendarEvents) */
+  /** CalendarEvent gốc (đã chuẩn hóa) của item được click. */
   source?: CalendarEvent;
 }
 
@@ -818,46 +821,55 @@ const WeeklyCalendarWidget: React.FC = () => {
     return getWeekDays(base);
   }, [today, weekOffset]);
 
-  // Compute week range for API call
+  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI THÊM 2 THÁNG ở đầu khoảng.
+  // Lý do: lịch dài hạn (công tác/nghỉ phép) bắt đầu từ tuần/tháng trước nhưng
+  // kéo sang tuần đang xem sẽ KHÔNG được backend trả về nếu chỉ hỏi đúng khoảng
+  // tuần (lọc theo startAt). Lùi `from` về đầu tháng cách 2 tháng để chắc chắn
+  // bắt được các event dài hạn bắc qua tháng; phần render vẫn lọc client theo
+  // eventOccursOnDay nên chỉ hiện đúng 7 ngày của tuần.
   const weekRange = React.useMemo(() => {
     if (!weekDays.length) return { start: null, end: null };
-    const start = weekDays[0];
-    const end = new Date(weekDays[6]);
-    end.setHours(23, 59, 59, 999);
+    const first = weekDays[0];
+    const last = weekDays[6];
+    const start = new Date(first.getFullYear(), first.getMonth() - 2, 1, 0, 0, 0, 0);
+    const end = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
     return {
       start: start.toISOString(),
       end: end.toISOString(),
     };
   }, [weekDays]);
 
-  // Fetch events from API when week changes
+  // Fetch events khi đổi tuần; đồng thời tự cập nhật khi quay lại tab và theo
+  // chu kỳ 60s — không có WS cho lịch nên đây là cách giữ đồng bộ với thay đổi
+  // từ /calendar hoặc người khác (mời họp).
   React.useEffect(() => {
     if (!weekRange.start || !weekRange.end) return;
-    void fetchEvents(weekRange.start, weekRange.end);
+    const refetch = () => {
+      void fetchEvents(weekRange.start!, weekRange.end!);
+    };
+    refetch();
+    const onFocus = () => refetch();
+    window.addEventListener("focus", onFocus);
+    const intervalId = window.setInterval(refetch, 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(intervalId);
+    };
   }, [weekRange.start, weekRange.end, fetchEvents]);
 
-  // Map store events to CalendarEvent format for display
-  const events: CalendarEvent[] = React.useMemo(() => {
-    return safeStoreEvents.map((event) => {
-      // startAt là UTC ISO → format theo giờ LOCAL (slice chuỗi sẽ ra giờ/ngày
-      // UTC, lệch 7h ở VN và có thể nhảy sai cột ngày với lịch sáng sớm).
-      const d = new Date(event.startAt);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return {
-        id: event.id,
-        title: localizeEventTitle(event.title),
-        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-        // Phân loại đồng bộ với CalendarPage (mapApiEventTypeToLocal): MEETING →
-        // họp; còn lại (PERSONAL/OTHER/LEAVE/REMINDER/DEADLINE…) gom vào "Cá
-        // nhân" để KHÔNG bị rớt khỏi widget (widget chỉ render kind họp + cá
-        // nhân). "OTHER" hiện là kho chứa lịch cá nhân; backend có thể trả về cả
-        // "PERSONAL" — cả hai đều phải hiện. Xem yeucauapicalenda.md.
-        type: event.eventType === "MEETING" ? "meeting" : "personal",
-        description: event.description ?? undefined,
-        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-      };
-    });
-  }, [safeStoreEvents]);
+  // Widget chỉ hiển thị lịch HỌP và lịch CÁ NHÂN (kể cả cá nhân dài hạn). Map
+  // store events dùng CHUNG mapping với CalendarPage: type qua mapApiEventTypeToLocal
+  // (meeting/personal…), giữ startAt/endAt để event nhiều ngày trải đủ cột ngày,
+  // giờ/ngày convert UTC→local. Nhờ vậy màu phân loại (getEventColor) khớp /calendar.
+  const events: CalendarEvent[] = React.useMemo(
+    () =>
+      safeStoreEvents
+        .map(mapHrmEventToCalendarEvent)
+        // Chỉ HỌP & CÁ NHÂN (OTHER/LEAVE/REMINDER… đã map về personal); loại bỏ
+        // mọi loại khác (vd attendance/task) nếu backend trả về.
+        .filter((e) => e.type === "meeting" || e.type === "personal"),
+    [safeStoreEvents],
+  );
 
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
@@ -1030,7 +1042,7 @@ const WeeklyCalendarWidget: React.FC = () => {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {/* Legend */}
+          {/* Legend — chỉ họp & cá nhân (khớp getEventColor) */}
           <div className="hidden items-center gap-3 sm:flex">
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <span className="h-2 w-2 rounded-full bg-teal-500" />
@@ -1217,51 +1229,46 @@ const WeeklyCalendarWidget: React.FC = () => {
       <div className="grid grid-cols-7 divide-x divide-border">
         {weekDays.map((day, i) => {
           const todayDay = isToday(day);
-          const dayEvents = getEventsByDate(events, day);
+          // eventOccursOnDay (không phải getEventsByDate) để lịch cá nhân DÀI HẠN
+          // trải đủ các ngày từ startAt→endAt, không chỉ ngày bắt đầu.
+          const dayEvents = events.filter((e) => eventOccursOnDay(e, day));
           const isWeekend = i >= 5;
           const dayStr = formatDateStr(day);
 
-          const personal = dayEvents.filter((e) => e.type === "personal").sort(sortByTime);
-          const meeting = dayEvents.filter((e) => e.type === "meeting").sort(sortByTime);
-
+          // Chỉ họp & cá nhân; sắp theo giờ. Lịch dài hạn (nhiều ngày) tô màu
+          // nổi bật (MULTI_DAY_EVENT_COLOR) như /calendar và ẩn giờ (trải cả ngày).
           const allEvents: Array<{
             id: string;
             time?: string;
             title: string;
+            type: CalendarEvent["type"];
+            isMultiDay: boolean;
             kind: "meeting" | "personal";
             detail: SelectedEventDetail;
-          }> = [
-            ...meeting.map((e) => ({
-              id: e.id,
-              time: e.time,
-              title: e.title,
-              kind: "meeting" as const,
-              detail: {
-                kind: "meeting" as const,
+          }> = dayEvents
+            .slice()
+            .sort(sortByTime)
+            .map((e) => {
+              const kind: "meeting" | "personal" =
+                e.type === "meeting" ? "meeting" : "personal";
+              return {
                 id: e.id,
-                title: e.title,
-                date: dayStr,
                 time: e.time,
-                source: e,
-                apiEvent: apiEventsMap[e.id],
-              },
-            })),
-            ...personal.map((e) => ({
-              id: e.id,
-              time: e.time,
-              title: e.title,
-              kind: "personal" as const,
-              detail: {
-                kind: "personal" as const,
-                id: e.id,
                 title: e.title,
-                date: dayStr,
-                time: e.time,
-                source: e,
-                apiEvent: apiEventsMap[e.id],
-              },
-            })),
-          ];
+                type: e.type,
+                isMultiDay: isMultiDayEvent(e),
+                kind,
+                detail: {
+                  kind,
+                  id: e.id,
+                  title: e.title,
+                  date: dayStr,
+                  time: e.time,
+                  source: e,
+                  apiEvent: apiEventsMap[e.id],
+                },
+              };
+            });
 
           const visibleEvents = allEvents.slice(0, MAX_VISIBLE_EVENTS);
           const overflowCount = allEvents.length - visibleEvents.length;
@@ -1325,26 +1332,30 @@ const WeeklyCalendarWidget: React.FC = () => {
 
               {/* Events */}
               <div className="flex flex-1 flex-col gap-1">
-                {visibleEvents.map((ev) => (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    onClick={() => setSelectedDetail(ev.detail)}
-                    className={clsx(
-                      "flex min-w-0 w-full flex-col rounded-[3px] border-l-[3px] px-1.5 py-1 text-left text-[10px] leading-snug sm:text-[11px]",
-                      "hover:brightness-95 dark:hover:brightness-110 transition-micro",
-                      ev.kind === "meeting"
-                        ? "border-teal-500 bg-teal-500/8 text-teal-800 dark:bg-teal-500/12 dark:text-teal-200"
-                        : "border-amber-500 bg-amber-500/8 text-amber-800 dark:bg-amber-500/12 dark:text-amber-200",
-                    )}
-                    title={ev.title}
-                  >
-                    {ev.time && (
-                      <span className="font-bold opacity-80">{ev.time}</span>
-                    )}
-                    <span className="truncate">{ev.title}</span>
-                  </button>
-                ))}
+                {visibleEvents.map((ev) => {
+                  // Lịch dài hạn → màu vàng nổi bật (khớp /calendar); còn lại theo type.
+                  const colors = ev.isMultiDay ? MULTI_DAY_EVENT_COLOR : getEventColor(ev.type);
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setSelectedDetail(ev.detail)}
+                      className={clsx(
+                        "flex min-w-0 w-full flex-col rounded border px-1.5 py-1 text-left text-[10px] leading-snug sm:text-[11px]",
+                        "hover:brightness-95 dark:hover:brightness-110 transition-micro",
+                        colors.bg,
+                        colors.border,
+                        colors.text,
+                      )}
+                      title={ev.title}
+                    >
+                      {ev.time && !ev.isMultiDay && (
+                        <span className="font-bold opacity-80">{ev.time}</span>
+                      )}
+                      <span className="truncate">{ev.title}</span>
+                    </button>
+                  );
+                })}
 
                 {overflowCount > 0 && (
                   <button
