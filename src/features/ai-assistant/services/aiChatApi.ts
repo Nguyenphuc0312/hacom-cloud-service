@@ -1107,12 +1107,12 @@ export async function listWorkReportFiles(
   return response.json() as Promise<WorkReportFilesListResponse>;
 }
 
-/** GET /api/work-reports/files/{id} — tải file (kích hoạt download trên trình duyệt). */
-export async function downloadWorkReportFile(
+/** GET /api/work-reports/files/{id} — tải blob kèm auth (chưa lưu xuống máy). */
+export async function fetchWorkReportFileBlob(
   id: number,
   fallbackName?: string,
   options?: { signal?: AbortSignal },
-): Promise<void> {
+): Promise<{ blob: Blob; filename: string }> {
   const response = await fetchWithAuth(
     `${WORK_REPORT_FILES_URL}/${id}`,
     { method: "GET" },
@@ -1123,16 +1123,25 @@ export async function downloadWorkReportFile(
     if (response.status === 404) throw new Error("Tệp không tồn tại.");
     throw new Error(await readErrorDetail(response, "Không thể tải tệp"));
   }
-  // Ưu tiên tên gốc từ JSON (luôn có, không phụ thuộc CORS expose header);
-  // header X-File-Name chỉ dùng khi caller không truyền sẵn tên.
-  const downloadName =
+  // Ưu tiên tên gốc do caller truyền; header X-File-Name là phương án dự phòng.
+  const filename =
     fallbackName ||
     response.headers.get("X-File-Name") ||
     response.headers.get("X-Original-Filename") ||
     `work-report-file-${id}`;
   const blob = await response.blob();
+  return { blob, filename };
+}
+
+/** GET /api/work-reports/files/{id} — tải file (kích hoạt download trên trình duyệt). */
+export async function downloadWorkReportFile(
+  id: number,
+  fallbackName?: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const { blob, filename } = await fetchWorkReportFileBlob(id, fallbackName, options);
   const objectUrl = URL.createObjectURL(blob);
-  triggerBrowserDownload(objectUrl, downloadName, true);
+  triggerBrowserDownload(objectUrl, filename, true);
 }
 
 /** DELETE /api/work-reports/files/{id} — chỉ chủ file. */
@@ -1150,6 +1159,33 @@ export async function deleteWorkReportFile(
     if (response.status === 404) throw new Error("Tệp không tồn tại.");
     throw new Error(await readErrorDetail(response, "Không thể xoá tệp"));
   }
+}
+
+export interface DeleteWorkReportTaskResponse {
+  ok: boolean;
+  deleted_task_id: string;
+}
+
+/**
+ * DELETE /api/work-reports/tasks/{task_id} — xóa một công việc (kèm file riêng
+ * của nó). Chỉ owner (chủ báo cáo) được xóa. 403 nếu không phải owner, 404 nếu
+ * công việc không tồn tại.
+ */
+export async function deleteWorkReportTask(
+  taskId: string,
+  options?: { signal?: AbortSignal },
+): Promise<DeleteWorkReportTaskResponse> {
+  const response = await fetchWithAuth(
+    `${WORK_REPORTS_URL}/tasks/${encodeURIComponent(taskId)}`,
+    { method: "DELETE" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    if (response.status === 403) throw new Error("Chỉ chủ báo cáo mới được xóa công việc.");
+    if (response.status === 404) throw new Error("Công việc không tồn tại.");
+    throw new Error(await readErrorDetail(response, "Không thể xóa công việc"));
+  }
+  return response.json() as Promise<DeleteWorkReportTaskResponse>;
 }
 
 /** POST /api/work-reports/print-table — trả HTML hoàn chỉnh để mở & tự in. */
