@@ -253,7 +253,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       data-keyboard-active={isKeyboardActive}
       className={clsx(
         "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
-        "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
         hoverStyles?.container,
@@ -263,7 +263,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       {(visualState === "active" || visualState === "mention") && (
         <span
           className={clsx(
-            "absolute left-0 top-2 bottom-2 w-1 rounded-full",
+            "absolute left-0 top-2 bottom-2 w-1 origin-left rounded-full animate-slide-up-fade",
             visualState === "mention" ? "bg-danger" : "bg-[#1565C0]",
           )}
           aria-hidden="true"

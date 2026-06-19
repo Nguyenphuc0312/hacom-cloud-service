@@ -215,7 +215,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={clsx(
           "relative flex w-full max-h-[min(90vh,48rem)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-elev3",
-          "animate-slide-in-up",
+          "animate-modal-in will-change-transform",
           sizeClasses[size],
           contentClassName,
         )}
