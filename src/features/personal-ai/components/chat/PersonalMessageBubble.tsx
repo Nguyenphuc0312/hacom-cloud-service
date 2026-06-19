@@ -14,6 +14,31 @@ import {
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
 import { openWeeklyReportFile } from "../../api/personalAiApi";
+import {
+  downloadWorkReportFile,
+  fetchWorkReportFileBlob,
+} from "../../../ai-assistant/services/aiChatApi";
+import { toast } from "../../../../utils/toast";
+
+/**
+ * File System Access API (chỉ Chromium). Cho phép mở hộp thoại "Lưu" và CHỈ
+ * resolve sau khi người dùng thực sự chọn vị trí + ghi xong — nhờ đó toast
+ * "đã tải thành công" hiện đúng thời điểm, không sớm như anchor download.
+ */
+type SaveFilePicker = (options?: {
+  suggestedName?: string;
+}) => Promise<{
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+}>;
+
+function getSaveFilePicker(): SaveFilePicker | null {
+  const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker })
+    .showSaveFilePicker;
+  return typeof picker === "function" ? picker : null;
+}
 import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
@@ -97,6 +122,22 @@ const CitationChips: React.FC<{ citations: PersonalCitation[] }> = ({
   );
 };
 
+/**
+ * Nhận diện link file đính kèm báo cáo NGÀY trong markdown synthesis của quản lý
+ * (#baocaocv): `[A.pdf](/api/work-reports/files/12)`. Trả về file_id để tải có
+ * kèm auth (anchor thường không gửi Bearer token → 403).
+ */
+const WORK_REPORT_FILE_HREF = /\/api\/work-reports\/files\/(\d+)\/?$/i;
+
+function parseWorkReportFileHref(href: string | undefined): number | null {
+  if (!href) return null;
+  const path = href.split("?")[0];
+  const match = path.match(WORK_REPORT_FILE_HREF);
+  if (!match) return null;
+  const id = Number.parseInt(match[1], 10);
+  return Number.isFinite(id) ? id : null;
+}
+
 const StreamingCursor: React.FC = () => (
   <span className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] animate-[pulse_0.8s_ease-in-out_infinite] rounded-sm bg-text-primary" />
 );
@@ -106,6 +147,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
+  const [loadingWorkFileId, setLoadingWorkFileId] = useState<number | null>(null);
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
   const patchMessage = usePersonalAiStore((s) => s.patchMessage);
@@ -116,12 +158,14 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
       table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
-        <div className="relative my-4">
+        <div className="my-4">
           {message.exportableTable && (
-            <TableExportMenu
-              content={message.content}
-              title="Tổng hợp báo cáo công việc"
-            />
+            <div className="mb-2 flex justify-end">
+              <TableExportMenu
+                content={message.content}
+                title="Tổng hợp báo cáo công việc"
+              />
+            </div>
           )}
           <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
             <table className="w-full border-collapse text-[13px]">{children}</table>
@@ -153,6 +197,72 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         const label = (React.Children.toArray(children) as React.ReactNode[])
           .map((c) => (typeof c === "string" ? c : ""))
           .join("");
+
+        // File đính kèm báo cáo NGÀY (owner + quản lý) — tải kèm auth header.
+        const workFileId = parseWorkReportFileHref(href);
+        if (workFileId != null) {
+          const isWorkLoading = loadingWorkFileId === workFileId;
+          const successMsg = label
+            ? `Đã tải "${label}" thành công.`
+            : "Đã tải tệp thành công.";
+
+          const handleWorkClick = (e: React.MouseEvent) => {
+            e.preventDefault();
+            if (isWorkLoading) return;
+
+            const picker = getSaveFilePicker();
+            if (picker) {
+              // Phải gọi picker NGAY trong user gesture (trước mọi await) để giữ
+              // quyền mở hộp thoại lưu. Toast chỉ hiện sau khi ghi file xong.
+              picker({ suggestedName: label || `work-report-file-${workFileId}` })
+                .then(async (handle) => {
+                  setLoadingWorkFileId(workFileId);
+                  const { blob } = await fetchWorkReportFileBlob(
+                    workFileId,
+                    label || undefined,
+                  );
+                  const writable = await handle.createWritable();
+                  await writable.write(blob);
+                  await writable.close();
+                  toast.success(successMsg);
+                })
+                .catch((err) => {
+                  // Người dùng bấm Hủy ở hộp thoại lưu → không báo gì.
+                  if (err instanceof DOMException && err.name === "AbortError") return;
+                  toast.error(err instanceof Error ? err.message : "Không thể tải tệp.");
+                })
+                .finally(() => setLoadingWorkFileId(null));
+              return;
+            }
+
+            // Trình duyệt không hỗ trợ (Firefox/Safari): tải trực tiếp; không thể
+            // biết thời điểm người dùng lưu nên báo ngay khi tải xong.
+            setLoadingWorkFileId(workFileId);
+            downloadWorkReportFile(workFileId, label || undefined)
+              .then(() => toast.success(successMsg))
+              .catch((err) => {
+                toast.error(err instanceof Error ? err.message : "Không thể tải tệp.");
+              })
+              .finally(() => setLoadingWorkFileId(null));
+          };
+          return (
+            <button
+              type="button"
+              onClick={handleWorkClick}
+              disabled={isWorkLoading}
+              className="inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 disabled:opacity-60"
+              title={label || "Tải về máy"}
+            >
+              {isWorkLoading ? (
+                <Loader2Icon size={12} strokeWidth={2} className="shrink-0 animate-spin" />
+              ) : (
+                <DownloadIcon size={12} strokeWidth={2} className="shrink-0" />
+              )}
+              <span className="truncate">{children}</span>
+            </button>
+          );
+        }
+
         const action = resolveWeeklyReportFileAction(href, label);
 
         if (!action) {
@@ -202,7 +312,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId, message.exportableTable, message.content],
+    [loadingFileId, loadingWorkFileId, message.exportableTable, message.content],
   );
 
   const handleCopy = () => {
