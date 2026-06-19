@@ -113,7 +113,7 @@ export const AppErrorPage: React.FC<AppErrorPageProps> = ({
   return (
     <main
       className={clsx(
-        "flex min-h-[100dvh] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary overflow-hidden",
+        "flex min-h-[var(--app-dvh)] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary overflow-hidden",
         className,
       )}
       aria-labelledby="app-error-title"

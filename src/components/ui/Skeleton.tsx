@@ -417,7 +417,7 @@ export const PageSkeleton: React.FC<{ className?: string }> = ({
   className,
 }) => (
   <div
-    className={clsx("grid h-dvh min-h-dvh grid-cols-[var(--hc-rail-width)_var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background", className)}
+    className={clsx("grid h-[var(--app-dvh)] min-h-[var(--app-dvh)] grid-cols-[var(--hc-rail-width)_var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background", className)}
     aria-busy="true"
   >
     <div className="hc-side-rail">
