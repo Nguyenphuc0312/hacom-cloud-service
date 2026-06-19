@@ -14,6 +14,7 @@ import { MessageStatus } from "../../../types";
 import {
   formatMessageTime,
   formatRelativeDate,
+  formatCalendarDateTime,
 } from "../../../utils/formatTime";
 import { isFailedMessage } from "../../../utils/messageTimeline";
 import type { ChatDensity } from "../../../stores/uiStore";
@@ -122,7 +123,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     const { t } = useTranslation();
     const contract = getTimelineDensityContract(density);
     const timeStr = formatMessageTime(new Date(message.createdAt));
-    const fullTimestamp = new Date(message.createdAt).toLocaleString();
+    const fullTimestamp = formatCalendarDateTime(new Date(message.createdAt));
     const editedLabel = t("chat:message.edited");
     const editedTitle = message.editedAt
       ? t("chat:message.editedAtNoHistory", {

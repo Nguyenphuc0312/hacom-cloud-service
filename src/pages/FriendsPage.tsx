@@ -27,6 +27,7 @@ import {
 } from "../components/ui";
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../stores";
+import { formatCalendarDate, formatCalendarDateTime } from "../utils/formatTime";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
@@ -379,7 +380,7 @@ const ContactRow: React.FC<ContactRowProps> = ({
       ? t("common:status.online")
       : livePresence?.lastSeenAt
         ? t("common:status.lastSeen", {
-            time: new Date(livePresence.lastSeenAt).toLocaleString(),
+            time: formatCalendarDateTime(new Date(livePresence.lastSeenAt)),
           })
         : user.username
           ? `@${user.username}`
@@ -998,10 +999,10 @@ export const FriendsPage: React.FC = () => {
             const subtitle =
               requestTab === "incoming"
                 ? t("friends:requestReceivedAt", {
-                    date: new Date(request.createdAt).toLocaleDateString(),
+                    date: formatCalendarDate(new Date(request.createdAt)),
                   })
                 : t("friends:requestSentAt", {
-                    date: new Date(request.createdAt).toLocaleDateString(),
+                    date: formatCalendarDate(new Date(request.createdAt)),
                   });
 
             return (
