@@ -87,6 +87,20 @@ export interface WorkReportFormRequest {
   field_labels: Record<string, string>;
   extra_fields?: string[];
   extra_field_labels?: Record<string, string>;
+  /**
+   * "append" = form là NHẬP MỚI (mỗi lần submit THÊM công việc mới vào báo cáo
+   * ngày, KHÔNG ghi đè/sửa). Khi ở chế độ này form luôn TRỐNG, không đọc `existing`.
+   */
+  mode?: "append" | string;
+  /**
+   * Danh sách công việc ĐÃ nộp hôm nay (chỉ-đọc) để hiển thị + cho xóa lẻ.
+   * Mỗi phần tử có `id` (dùng gọi xóa) và `attachments` riêng của công việc.
+   */
+  submitted_tasks?: WorkReportTaskItem[];
+  /** "DELETE /api/work-reports/tasks/{task_id}" — gọi để xóa một công việc. */
+  task_delete_endpoint?: string;
+  /** File "chung" (chưa gắn việc) đã nộp hôm nay (chỉ-đọc). */
+  attachments?: WorkReportAttachment[];
   existing: {
     tasks?: WorkReportTaskItem[];
     attachments?: WorkReportAttachment[];

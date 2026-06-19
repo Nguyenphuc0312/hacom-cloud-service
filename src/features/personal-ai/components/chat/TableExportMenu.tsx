@@ -102,7 +102,7 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   const anyBusy = busy !== null;
 
   return (
-    <div ref={rootRef} className="absolute right-2.5 top-2.5 z-10">
+    <div ref={rootRef} className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

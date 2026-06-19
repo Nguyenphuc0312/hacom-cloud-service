@@ -20,6 +20,7 @@ import {
   uploadWorkReportFile,
   downloadWorkReportFile,
   deleteWorkReportFile,
+  deleteWorkReportTask,
   type WorkReportTaskSubmit,
 } from "../services/aiChatApi";
 
@@ -93,6 +94,11 @@ function toTaskRow(t: Partial<WorkReportTaskItem>): TaskRow {
 }
 
 function initTasks(data: WorkReportFormRequest): TaskRow[] {
+  // Chế độ "append" (nộp nhiều lần/ngày): form luôn TRỐNG — KHÔNG đọc `existing`.
+  if (data.mode === "append" || data.submitted_tasks) {
+    return [{ ...EMPTY_TASK }];
+  }
+  // Legacy (BE cũ): prefill để sửa báo cáo.
   if (data.existing?.tasks && data.existing.tasks.length > 0) {
     return data.existing.tasks.map(toTaskRow);
   }
@@ -171,14 +177,23 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
     : DEFAULT_ACCEPT;
   const maxMb = data.max_file_mb ?? DEFAULT_MAX_MB;
 
+  // File "chung" (chưa gắn việc) đã nộp hôm nay — chế độ "append" lấy từ
+  // `data.attachments`; legacy lấy từ `existing.attachments`.
+  const initialCommon = data.attachments ?? data.existing?.attachments ?? [];
   // File "chung" (task_id=null) — chế độ task: CHỈ hiển thị (xem/tải/xoá), không upload mới.
   const [commonAttachments, setCommonAttachments] = useState<WorkReportAttachment[]>(
-    () => (taskAttachMode ? data.existing?.attachments ?? [] : []),
+    () => (taskAttachMode ? initialCommon : []),
   );
   // File cấp ngày (legacy, attach_level != "task") — vẫn cho upload trực tiếp.
   const [attachments, setAttachments] = useState<WorkReportAttachment[]>(
-    () => (taskAttachMode ? [] : data.existing?.attachments ?? []),
+    () => (taskAttachMode ? [] : initialCommon),
   );
+
+  // Công việc ĐÃ nộp hôm nay (chỉ-đọc) — hiển thị bên dưới form + cho xóa lẻ.
+  const [submittedTasks, setSubmittedTasks] = useState<WorkReportTaskItem[]>(
+    () => data.submitted_tasks ?? [],
+  );
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const [uploadingKeys, setUploadingKeys] = useState<string[]>([]); // "idx:filename" (task) | "report:filename" (legacy)
   const [savingForAttach, setSavingForAttach] = useState(false);
@@ -382,6 +397,21 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       setAttachError(err instanceof Error ? err.message : "Không thể xoá tệp");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Xóa một công việc ĐÃ nộp (owner-only). Xóa thành công → bỏ khỏi UI; file
+  // riêng của công việc cũng bị BE xóa kèm.
+  const handleDeleteSubmittedTask = async (taskId: string) => {
+    setAttachError(null);
+    setDeletingTaskId(taskId);
+    try {
+      await deleteWorkReportTask(taskId);
+      setSubmittedTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : "Không thể xóa công việc");
+    } finally {
+      setDeletingTaskId(null);
     }
   };
 
@@ -721,6 +751,101 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Công việc ĐÃ nộp hôm nay (chỉ-đọc) — mỗi việc kèm nút Xóa + file đính kèm */}
+      {submittedTasks.length > 0 && (
+        <div className="border-t border-border px-4 py-3 flex flex-col gap-2">
+          <span className="text-xs font-semibold text-text-secondary">
+            Công việc đã nộp hôm nay ({submittedTasks.length})
+          </span>
+          <div className="flex flex-col gap-2">
+            {submittedTasks.map((task, idx) => {
+              const taskId = task.id;
+              return (
+              <div
+                key={taskId ?? idx}
+                className="rounded-lg border border-border bg-surface-overlay/30 px-3 py-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-text-primary break-words">
+                      {task.task_name || `Công việc ${idx + 1}`}
+                    </div>
+                    {TASK_KEYS.filter((k) => k !== "task_name").map((key) =>
+                      task[key] ? (
+                        <div key={key} className="mt-0.5 text-[11px] text-text-muted break-words">
+                          <span className="font-medium">{fieldLabel(key)}:</span> {task[key]}
+                        </div>
+                      ) : null,
+                    )}
+                    {task.notes ? (
+                      <div className="mt-0.5 text-[11px] text-text-muted break-words">
+                        <span className="font-medium">Ghi chú:</span> {task.notes}
+                      </div>
+                    ) : null}
+                  </div>
+                  {taskId && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubmittedTask(taskId)}
+                      disabled={busy || deletingTaskId === taskId}
+                      title="Xóa công việc này"
+                      className="shrink-0 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                    >
+                      {deletingTaskId === taskId ? (
+                        <Loader2Icon size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2Icon size={13} />
+                      )}
+                      Xóa
+                    </button>
+                  )}
+                </div>
+
+                {/* File đính kèm riêng của công việc (chỉ tải) */}
+                {task.attachments && task.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5 border-t border-border/50 pt-2">
+                    {task.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#1976D2]/8 text-[#1565C0]">
+                          <FileIcon size={14} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {att.original_filename}
+                          </div>
+                          {formatFileSize(att.file_size) && (
+                            <div className="text-[11px] text-text-muted">
+                              {formatFileSize(att.file_size)}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(att)}
+                          disabled={downloadingId === att.id}
+                          title="Tải về"
+                          className="rounded p-1 text-text-muted transition-colors hover:bg-[#1976D2]/10 hover:text-[#1565C0] disabled:opacity-50"
+                        >
+                          {downloadingId === att.id ? (
+                            <Loader2Icon size={14} className="animate-spin" />
+                          ) : (
+                            <DownloadIcon size={14} />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
