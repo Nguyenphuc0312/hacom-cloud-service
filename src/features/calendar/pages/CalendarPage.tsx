@@ -1,5 +1,4 @@
 ﻿import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
   ChevronLeftIcon,
@@ -20,7 +19,6 @@ import {
   DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import {
-  getCalendarEvents,
   getEventColor,
   MULTI_DAY_EVENT_COLOR,
   getEventTypeLabel,
@@ -46,7 +44,6 @@ import {
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
-import { taskApi } from "../../tasks/api/taskApi";
 import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
@@ -57,7 +54,6 @@ import {
   localizeEventTitle,
   mapEventTypeForDisplay,
   mapHrmEventToCalendarEvent,
-  mergeCalendarEventSources,
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
@@ -127,6 +123,19 @@ const formatDateString = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+/**
+ * Khoảng FETCH cho tháng đang xem, LÙI THÊM 2 THÁNG ở đầu khoảng.
+ * Lý do: lịch dài hạn (công tác/nghỉ phép) bắt đầu từ tháng trước nhưng kéo sang
+ * tháng đang xem sẽ KHÔNG được backend trả về nếu chỉ hỏi đúng tháng (lọc theo
+ * startAt). Lưới/Day/Week vẫn lọc client theo eventOccursOnDay nên chỉ hiển thị
+ * đúng phạm vi đang xem. Khớp với khoảng fetch của widget lịch tuần (EmptyState).
+ */
+const getMonthFetchRange = (year: number, month: number): { from: string; to: string } => {
+  const start = new Date(year, month - 2, 1);
+  const end = new Date(year, month + 1, 0);
+  return { from: formatDateString(start), to: formatDateString(end) };
 };
 
 /**
@@ -852,8 +861,7 @@ const AttendanceBadge: React.FC<{
  */
 export const CalendarPage: React.FC = () => {
   const today = new Date();
-  const navigate = useNavigate();
-  
+
   // Calendar store
   const storeState = useCalendarStore();
   const {
@@ -882,9 +890,6 @@ export const CalendarPage: React.FC = () => {
   const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
   const [, setIsLoadingAttendance] = useState(false);
   const [, setAttendanceError] = useState<string | null>(null);
-
-  // Task events state
-  const [taskEvents, setTaskEvents] = useState<LocalCalendarEvent[]>([]);
 
   // Extended API events state (for detail view)
   const [apiEventsMap, setApiEventsMap] = useState<Record<string, ExtendedCalendarEvent>>({});
@@ -938,10 +943,8 @@ export const CalendarPage: React.FC = () => {
 
   // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
   const refetchCurrentMonth = useCallback(() => {
-    const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    void fetchEvents(fromDate, toDate);
+    const { from, to } = getMonthFetchRange(currentYear, currentMonth);
+    void fetchEvents(from, to);
   }, [currentYear, currentMonth, fetchEvents]);
 
   // Handle create event from MeetingFormModal
@@ -1052,10 +1055,8 @@ export const CalendarPage: React.FC = () => {
   // Always pass explicit date range from component state so the store doesn't
   // use its own (potentially stale) currentYear/currentMonth.
   useEffect(() => {
-    const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    void fetchEvents(fromDate, toDate);
+    const { from, to } = getMonthFetchRange(currentYear, currentMonth);
+    void fetchEvents(from, to);
   }, [currentYear, currentMonth, mode]);
 
   // Build extended events map from API events
@@ -1176,34 +1177,6 @@ export const CalendarPage: React.FC = () => {
     void fetchAttendance();
   }, [currentYear, currentMonth, mode]);
 
-  // Fetch tasks with dueDate in current month range
-  useEffect(() => {
-    const fetchTaskEvents = async () => {
-      try {
-        const from = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-        const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const to = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-        const tasks = await taskApi.getCalendarTasks(from, to);
-        const events: LocalCalendarEvent[] = tasks.map((task) => ({
-          id: `task:${task.id}`,
-          title: task.title,
-          date: task.dueDate!.slice(0, 10),
-          type: "task" as const,
-          description: task.description ?? undefined,
-          taskId: task.id,
-          taskPriority: task.priority,
-          taskOverdue:
-            task.status !== "DONE" && new Date(task.dueDate!) < new Date(),
-        }));
-        setTaskEvents(events);
-      } catch {
-        setTaskEvents([]);
-        toast.warning("Không thể tải nhiệm vụ trên lịch");
-      }
-    };
-    void fetchTaskEvents();
-  }, [currentYear, currentMonth]);
-
   // Calendar type filters — local state for display
   const localFilters = useMemo((): CalendarTypeFilter[] => {
     const defaultFilters: CalendarTypeFilter[] = [
@@ -1232,11 +1205,8 @@ export const CalendarPage: React.FC = () => {
     setFilters(newTypes);
   };
 
-  // Generate events for current year, merged with task events and API events
-  const allEvents = useMemo(
-    () => mergeCalendarEventSources(getCalendarEvents(currentYear), taskEvents, calendarEventsFromApi),
-    [currentYear, taskEvents, calendarEventsFromApi],
-  );
+  // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
+  const allEvents = calendarEventsFromApi;
 
   // Filter events based on selected filters
   const filteredEvents = useMemo(() => {
@@ -1386,18 +1356,13 @@ export const CalendarPage: React.FC = () => {
     [mode, openEventTypeChooser],
   );
 
-  // Handle event click — navigate to /tasks for task events, open modal otherwise
+  // Handle event click — open detail modal (extended data if available)
   const handleEventClick = useCallback(
     (event: LocalCalendarEvent) => {
-      if (event.type === "task" && event.taskId) {
-        navigate(`/tasks?taskId=${event.taskId}`);
-      } else {
-        // Get extended event data if available
-        const extended = apiEventsMap[event.id];
-        setSelectedEvent(extended ?? event);
-      }
+      const extended = apiEventsMap[event.id];
+      setSelectedEvent(extended ?? event);
     },
-    [navigate, apiEventsMap]
+    [apiEventsMap]
   );
 
   // Raw HR event for the selected item — carries participant roster + response.
@@ -1782,24 +1747,34 @@ export const CalendarPage: React.FC = () => {
             </div>
           )}
           {/* Header */}
-          <header className="shrink-0 border-b border-border px-4 py-3">
+          <header
+            className={clsx(
+              "shrink-0 border-b border-border px-4",
+              mode === "other" ? "py-2" : "py-3",
+            )}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Month/Year title and navigation */}
               <div className="flex items-center gap-3">
                 {/* Viewing others indicator */}
                 {mode === "other" && viewingUserName && (
-                  <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 dark:bg-blue-900/30">
-                    <EyeIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      Đang xem lịch của <span className="font-semibold">{viewingUserName}</span>
+                  <div className="flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 dark:bg-blue-900/30">
+                    <EyeIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                      Lịch của <span className="font-semibold">{viewingUserName}</span>
                     </span>
-                    <span className="rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                    <span className="rounded bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                       Chỉ xem
                     </span>
                   </div>
                 )}
-                {mode === "my" && (
-                  <h2 className="text-lg font-semibold text-text-primary">
+                {(mode === "my" || mode === "other") && (
+                  <h2
+                    className={clsx(
+                      "font-semibold text-text-primary",
+                      mode === "other" ? "text-sm" : "text-lg",
+                    )}
+                  >
                     {currentView === "day"
                       ? dayTitle
                       : currentView === "week"
@@ -1807,7 +1782,9 @@ export const CalendarPage: React.FC = () => {
                         : `${VIETNAMESE_MONTHS[currentMonth]} ${currentYear}`}
                   </h2>
                 )}
-                {mode !== "other" && (
+                {/* Điều hướng ‹ › cho cả lịch mình và lịch người khác (chỉ đổi
+                    khoảng xem; effect tự refetch lịch người đó theo tháng). */}
+                {(mode === "my" || mode === "other") && (
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -1839,7 +1816,7 @@ export const CalendarPage: React.FC = () => {
                     </button>
                   </div>
                 )}
-                {mode !== "other" && (
+                {(mode === "my" || mode === "other") && (
                   <button
                     type="button"
                     onClick={goToToday}
