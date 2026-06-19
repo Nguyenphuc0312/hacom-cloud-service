@@ -54,7 +54,7 @@ function formatSentAt(sentAt: Date | string | undefined): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const timeStr = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const timeStr = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
   if (diffDays === 0) return `${timeStr} Hôm nay`;
   if (diffDays === 1) return `${timeStr} Hôm qua`;
   return `${timeStr} ${d.toLocaleDateString("vi-VN")}`;
