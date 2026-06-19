@@ -39,12 +39,13 @@ const joinName = (parts: Array<string | null | undefined>): string =>
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const looksLikeEmail = (value: string): boolean => EMAIL_PATTERN.test(value);
 
-// Matches employee codes / system usernames: no whitespace, purely alphanumeric
-// (e.g. "HC888892", "manual000001"). Real human names contain spaces or
-// characters outside [A-Za-z0-9_.-].
+// Matches employee codes / system usernames: no whitespace, purely alphanumeric,
+// AND containing at least one digit (e.g. "HC888892", "manual000001"). The digit
+// requirement is what distinguishes a system identifier from a single-word human
+// name like "David"/"Lisa" — those are plain letters and must NOT be discarded.
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_.@-]+$/;
 const looksLikeIdentifier = (value: string): boolean =>
-  IDENTIFIER_PATTERN.test(value) && !value.includes(" ");
+  IDENTIFIER_PATTERN.test(value) && !value.includes(" ") && /\d/.test(value);
 
 // Matches a canonical UUID (e.g. senderId "d530b738-ca1d-42d0-b8e5-a07112a529c3").
 // A UUID is never a meaningful display name, so it must never be shown to users.

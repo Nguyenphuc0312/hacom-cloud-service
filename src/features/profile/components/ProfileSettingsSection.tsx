@@ -68,15 +68,27 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
   // HRM is the source of truth for employment fields (chức vụ / phòng ban /
   // trạng thái / ngày vào làm). Fetched directly from hr-api-service and kept
   // fresh on tab focus/reconnect, so HRM edits show up without a full reload.
-  const { employee: hr } = useMyHrProfile();
+  const { hrProfile, employee: hr } = useMyHrProfile();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const actionButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const userRecord = (user as Record<string, unknown> | null) ?? null;
+  // HRM is the authoritative source for the legal name. Feed it into name
+  // resolution via `fullNameFromHr` so a real HR name always wins over an empty
+  // or code-like chat-api displayName.
+  const nameCandidate = user
+    ? { ...user, fullNameFromHr: hr?.fullName || hrProfile?.fullName || null }
+    : null;
   const displayName =
-    resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
+    resolveUserDisplayName(nameCandidate, { allowLegacyFallback: true }) ||
     t("common:labels.user");
-  const username = displayName;
+  // "Tên người dùng" is the login username/code (e.g. HC987656), distinct from
+  // the display name above — keep it showing the real account identifier.
+  const username =
+    readValue(userRecord, "username") ||
+    hr?.employeeCode ||
+    readValue(userRecord, "employeeCode", "employee_code") ||
+    displayName;
   const phone =
     hr?.phone ||
     user?.phone ||
