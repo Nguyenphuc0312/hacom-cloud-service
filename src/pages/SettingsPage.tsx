@@ -28,6 +28,7 @@ import {
 import { AppPageHeader } from "../components/layout/AppPage";
 import { InlineNotice, Skeleton } from "../components/ui";
 import { ProfileSettingsSection } from "../features/profile/components/ProfileSettingsSection";
+import { formatCalendarDateTime } from "../utils/formatTime";
 import { ROUTE_PATHS } from "../router/paths";
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
@@ -148,7 +149,7 @@ export const SettingsPage: React.FC = () => {
       return t("common:status.unknown");
     }
 
-    return new Date(value).toLocaleString();
+    return formatCalendarDateTime(new Date(value));
   };
 
   const navItems: Array<SettingsSidebarItem & { navId: SettingsNavId }> = [

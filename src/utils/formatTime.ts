@@ -139,6 +139,26 @@ export function formatLastSeen(date: Date | undefined): string {
 }
 
 /**
+ * Format an absolute calendar date — "dd/MM/yyyy" (locale-aware).
+ * Use for "joined on", request dates, etc. instead of `toLocaleDateString()`
+ * which falls back to the browser locale (US "M/d/yyyy").
+ */
+export function formatCalendarDate(date: Date): string {
+  if (!isValidDate(date)) return "";
+  return format(date, "dd/MM/yyyy", { locale: getDateFnsLocale() });
+}
+
+/**
+ * Format an absolute date + time — "dd/MM/yyyy HH:mm" (locale-aware, 24h).
+ * Use for last-seen / updated-at labels and tooltips instead of
+ * `toLocaleString()` which falls back to the browser locale.
+ */
+export function formatCalendarDateTime(date: Date): string {
+  if (!isValidDate(date)) return "";
+  return format(date, "dd/MM/yyyy HH:mm", { locale: getDateFnsLocale() });
+}
+
+/**
  * Format voice message duration.
  */
 export function formatDuration(seconds: number): string {

@@ -30,6 +30,7 @@ import {
   type CachedUserProfile,
 } from "../../services/userProfileCache";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+import { formatCalendarDate, formatCalendarDateTime } from "../../utils/formatTime";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 import { resolvePublicResourceUrl } from "../../config";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
@@ -109,7 +110,7 @@ const formatPresenceLabel = (
 
   if (lastSeenAt) {
     return t("common:status.lastSeen", {
-      time: new Date(lastSeenAt).toLocaleString(),
+      time: formatCalendarDateTime(new Date(lastSeenAt)),
     });
   }
 
@@ -624,7 +625,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("friends:joined")}
                           </p>
                           <p className="mt-1 text-sm text-text-primary">
-                            {new Date(user.createdAt).toLocaleDateString()}
+                            {formatCalendarDate(new Date(user.createdAt))}
                           </p>
                         </div>
                       </div>

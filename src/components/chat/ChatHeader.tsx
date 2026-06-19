@@ -27,6 +27,7 @@ import {
 } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
+import { formatCalendarDateTime } from "../../utils/formatTime";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -107,7 +108,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       if (isOnline) return t("common:status.online");
       if (livePresence?.lastSeenAt) {
         return t("common:status.lastSeen", {
-          time: new Date(livePresence.lastSeenAt).toLocaleString(),
+          time: formatCalendarDateTime(new Date(livePresence.lastSeenAt)),
         });
       }
       return t("common:status.offline");

@@ -12,6 +12,7 @@ import {
   type UserPresenceInfo,
   type PresenceState,
 } from "../stores/presenceStore";
+import { formatCalendarDate } from "../utils/formatTime";
 
 // Debounce subscribe calls by 300ms
 const SUBSCRIBE_DEBOUNCE_MS = 300;
@@ -65,7 +66,7 @@ function formatLastSeenTime(isoString?: string): string {
   if (diffHour < 24) return `${diffHour}h ago`;
   if (diffDay < 7) return `${diffDay}d ago`;
 
-  return date.toLocaleDateString();
+  return formatCalendarDate(date);
 }
 
 export function usePresence(

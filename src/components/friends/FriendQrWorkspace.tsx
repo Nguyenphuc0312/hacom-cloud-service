@@ -35,6 +35,7 @@ import {
   type FriendQrPayloadDto,
 } from "../../services/api";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { formatCalendarDateTime } from "../../utils/formatTime";
 import { ROUTE_PATHS } from "../../router/paths";
 import { parseShareCodeInput } from "../../features/friend-qr/shareCode";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -691,7 +692,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           {myQr?.updatedAt ? (
             <p className="text-xs text-text-muted">
               {t("friends:qr.updatedAt", {
-                time: new Date(myQr.updatedAt).toLocaleString(),
+                time: formatCalendarDateTime(new Date(myQr.updatedAt)),
               })}
             </p>
           ) : null}
