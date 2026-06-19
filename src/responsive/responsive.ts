@@ -65,6 +65,14 @@ export interface ResponsiveSnapshot {
   dprLayoutFactor: number;
   /** Width / reference width for optional UI scaling hints (0.85–1). */
   scaleRatio: number;
+  /**
+   * App-wide UI zoom for large monitors / TVs. At/below 1920px screen width it
+   * stays 1 (laptops/FHD untouched); on larger external monitors the whole UI is
+   * scaled up so the interface doesn't look tiny on ultrawide/4K screens —
+   * mirroring how a native desktop app scales. Applied via the `--app-zoom` CSS
+   * var on `body`.
+   */
+  appZoom: number;
   breakpoint: ResponsiveBreakpoint;
   screenCategory: ScreenCategory;
   chatLayoutBreakpoint: ChatLayoutBreakpointBand;
@@ -125,6 +133,38 @@ const computeScaleRatio = (width: number): number => {
   return lerp(0.92, 1, t);
 };
 
+/**
+ * Piecewise-linear zoom stops [screenWidthPx, zoomFactor]. At/below 1920 the UI
+ * is left at 1:1 — laptops and standard FHD monitors are never scaled. Only
+ * genuinely large external monitors grow the UI, toward ~1.35 on a 3440px
+ * ultrawide, so it reads like a desktop app instead of a tiny web page lost in
+ * empty space. Capped at the last stop for anything wider (e.g. 4K TVs).
+ */
+const APP_ZOOM_STOPS: ReadonlyArray<readonly [number, number]> = [
+  [1920, 1.0],
+  [2560, 1.2],
+  [3440, 1.35],
+];
+
+export const computeAppZoom = (width: number): number => {
+  if (!Number.isFinite(width)) return 1;
+  const first = APP_ZOOM_STOPS[0];
+  const last = APP_ZOOM_STOPS[APP_ZOOM_STOPS.length - 1];
+  if (width <= first[0]) return first[1];
+  if (width >= last[0]) return last[1];
+
+  for (let i = 1; i < APP_ZOOM_STOPS.length; i += 1) {
+    const [w0, z0] = APP_ZOOM_STOPS[i - 1];
+    const [w1, z1] = APP_ZOOM_STOPS[i];
+    if (width <= w1) {
+      const t = (width - w0) / (w1 - w0);
+      // Round to 3 decimals to keep the CSS var stable across resize jitter.
+      return Math.round(lerp(z0, z1, t) * 1000) / 1000;
+    }
+  }
+  return last[1];
+};
+
 export const computeAdaptiveSpacingPx = (width: number): ResponsiveSpacingPx => {
   const t = clamp01((width - 360) / (1280 - 360));
   return {
@@ -152,6 +192,13 @@ export const buildResponsiveSnapshot = (
   innerWidth: number,
   innerHeight: number,
   devicePixelRatio: number,
+  /**
+   * Physical screen width (CSS px, OS-scaling aware). App zoom is driven by the
+   * monitor size — NOT the layout viewport — so resizing the window or using the
+   * browser's own zoom (Ctrl ±) never fights the UI scale. Falls back to `width`
+   * when unavailable (e.g. SSR / tests).
+   */
+  screenWidth: number = width,
 ): ResponsiveSnapshot => {
   const dpr = Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1;
   return {
@@ -162,6 +209,7 @@ export const buildResponsiveSnapshot = (
     devicePixelRatio: dpr,
     dprLayoutFactor: computeDprLayoutFactor(dpr),
     scaleRatio: computeScaleRatio(width),
+    appZoom: computeAppZoom(screenWidth),
     breakpoint: resolveResponsiveBreakpoint(width),
     screenCategory: resolveScreenCategory(width, height),
     chatLayoutBreakpoint: resolveChatLayoutBreakpointBand(width),
@@ -175,6 +223,7 @@ const readRawViewport = (): {
   height: number;
   innerWidth: number;
   innerHeight: number;
+  screenWidth: number;
 } => {
   if (typeof window === "undefined") {
     return {
@@ -182,11 +231,16 @@ const readRawViewport = (): {
       height: 800,
       innerWidth: 1280,
       innerHeight: 800,
+      screenWidth: 1280,
     };
   }
 
   const innerWidth = window.innerWidth;
   const innerHeight = window.innerHeight;
+  // Physical monitor width in CSS px (already reflects OS display scaling).
+  // Unaffected by window size or browser zoom, so it is the stable signal for
+  // app zoom. Fall back to the layout width if the Screen API is unavailable.
+  const screenWidth = Math.round(window.screen?.width || innerWidth);
   const vv = window.visualViewport;
   if (!vv) {
     return {
@@ -194,6 +248,7 @@ const readRawViewport = (): {
       height: Math.round(innerHeight),
       innerWidth: Math.round(innerWidth),
       innerHeight: Math.round(innerHeight),
+      screenWidth,
     };
   }
 
@@ -202,6 +257,7 @@ const readRawViewport = (): {
     height: Math.round(vv.height),
     innerWidth: Math.round(innerWidth),
     innerHeight: Math.round(innerHeight),
+    screenWidth,
   };
 };
 
@@ -229,6 +285,7 @@ const applyResponsiveRootStyles = (
     "--rsp-scale-ratio",
     String(snapshot.scaleRatio),
   );
+  root.style.setProperty("--app-zoom", String(snapshot.appZoom));
   root.style.setProperty(
     "--rsp-shell-gutter-px",
     `${spacingPx.shellGutter}px`,
@@ -282,6 +339,7 @@ export const ResponsiveProvider = ({
       raw.innerWidth,
       raw.innerHeight,
       typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+      raw.screenWidth,
     );
   });
 
@@ -300,6 +358,14 @@ export const ResponsiveProvider = ({
       reducedMotionRef.current,
     );
   }, []);
+
+  // Flush the initial snapshot before first paint so viewport-derived vars —
+  // notably `--app-zoom` — are correct on the very first frame. Without this
+  // the main (post-paint) effect would briefly render at zoom 1 then jump to
+  // the large-screen zoom, causing a visible flash on ultrawide monitors.
+  useLayoutEffect(() => {
+    flushToDom(snapshotRef.current);
+  }, [flushToDom]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") {
@@ -326,6 +392,7 @@ export const ResponsiveProvider = ({
         raw.innerWidth,
         raw.innerHeight,
         window.devicePixelRatio || 1,
+        raw.screenWidth,
       );
     };
 

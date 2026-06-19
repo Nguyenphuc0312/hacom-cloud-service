@@ -495,6 +495,20 @@ body {
     sans-serif;
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
+  /* App-wide UI scaling for large monitors / TVs. `--app-zoom` is 1 at/below a
+     1920px screen width (no change on laptops/FHD monitors) and grows toward
+     ~1.35 on ultrawide, set at runtime by ResponsiveProvider. Applied on
+     `body` so it also covers modals/toasts portaled to document.body and scales
+     the whole UI uniformly (sidebar, composer, login, fonts, icons).
+
+     The width/height are pre-shrunk by the zoom factor so that AFTER `zoom`
+     paints them ×factor the box fills the viewport EXACTLY — without this the
+     zoomed body would overflow the `overflow:hidden` html box and clip content
+     (lost sidebar/composer rows). At zoom 1 both calc() resolve to 100% — a
+     no-op for normal screens. */
+  width: calc(100% / var(--app-zoom, 1));
+  height: calc(100% / var(--app-zoom, 1));
+  zoom: var(--app-zoom, 1);
 }
 
 #root {
@@ -1856,17 +1870,5 @@ input[type="password"]::-ms-clear {
     --app-inspector-width: 400px;
     --hc-sidebar-width: clamp(340px, 19vw, 440px);
     --app-shell-gutter: 32px;
-  }
-}
-
-/* Ultrawide & TV (≥2560px, gồm 3440×1440): trên các màn rất rộng, nếu giữ
-   tuning của 1920px thì pane chat thừa quá nhiều nền hai bên. Nới sidebar +
-   inspector thêm một nấc và cap chúng để cân đối; lane chat đã cap riêng ở
-   `desktop-wide` (~1300px) nên vẫn dễ đọc, phần nền còn lại được kéo hẹp bớt. */
-@media (min-width: 2560px) {
-  :root {
-    --app-inspector-width: 440px;
-    --hc-sidebar-width: clamp(380px, 16vw, 480px);
-    --app-shell-gutter: 40px;
   }
 }
