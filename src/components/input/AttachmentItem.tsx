@@ -196,7 +196,7 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
       ) && (
         <div className="h-1 w-full overflow-hidden rounded-full bg-border">
           <div
-            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[#1976D2] to-[#1565C0] transition-transform duration-200"
+            className="h-full w-full origin-left rounded-full bg-[#1565C0] transition-transform duration-200"
             style={{ transform: `scaleX(${draft.progress / 100})` }}
             role="progressbar"
             aria-valuenow={draft.progress}

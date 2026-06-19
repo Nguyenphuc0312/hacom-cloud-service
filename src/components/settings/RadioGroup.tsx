@@ -63,7 +63,7 @@ export function RadioGroup<T extends string>({
                 "transition-micro",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                 value === opt.value
-                  ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-xs"
+                  ? "bg-[#1565C0] text-white shadow-xs"
                   : "bg-surface-overlay text-text-secondary hover:bg-surface-hover",
               )}
             >

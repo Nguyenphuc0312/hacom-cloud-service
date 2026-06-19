@@ -244,7 +244,7 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
               type="button"
               disabled={isLoading}
               onClick={handleInlineConfirm}
-              className="flex-1 rounded-md bg-gradient-to-r from-[#1976D2] to-[#1565C0] px-3 py-1.5 text-sm text-white hover:brightness-105 disabled:opacity-60"
+              className="flex-1 rounded-md bg-[#1565C0] px-3 py-1.5 text-sm text-white hover:bg-[#1976D2] disabled:opacity-60"
             >
               {t("common:actions.confirm")}
             </button>

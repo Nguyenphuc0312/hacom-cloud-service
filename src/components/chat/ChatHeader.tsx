@@ -47,7 +47,7 @@ interface ChatHeaderProps {
 const iconButtonClass = clsx(
   "chat-header-action inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-transparent",
   "text-text-muted transition-micro",
-  "hover:bg-surface-hover/80 hover:text-text-primary",
+  "hover:bg-surface-hover/80 hover:text-[#1565C0]",
   "active:scale-[0.98] active:bg-surface-active",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
 );

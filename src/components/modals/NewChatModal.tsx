@@ -279,7 +279,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             className={clsx(
               "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               !isGroupMode
-                ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-sm"
+                ? "bg-[#1565C0] text-white shadow-sm"
                 : "text-text-secondary hover:bg-[#1976D2]/8",
             )}
           >
@@ -293,7 +293,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             className={clsx(
               "flex flex-1 items-center justify-center gap-2 rounded-[calc(var(--chat-control-radius)-2px)] px-3 py-2 text-sm font-medium transition-colors",
               isGroupMode
-                ? "bg-gradient-to-r from-[#1976D2] to-[#1565C0] text-white shadow-sm"
+                ? "bg-[#1565C0] text-white shadow-sm"
                 : "text-text-secondary hover:bg-[#1976D2]/8",
             )}
           >
@@ -414,7 +414,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                             "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30",
                             isSelected
-                              ? "border-[#1976D2] bg-gradient-to-br from-[#1976D2] to-[#1565C0] text-white"
+                              ? "border-[#1976D2] bg-[#1565C0] text-white"
                               : "border-border-strong text-transparent hover:border-[#1976D2]/50",
                             isBusy && "cursor-not-allowed opacity-60",
                           )}
