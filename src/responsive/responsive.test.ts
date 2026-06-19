@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   RSP_BREAKPOINT_MIN,
   buildResponsiveSnapshot,
+  computeAppZoom,
   resolveChatLayoutBreakpointBand,
   resolveResponsiveBreakpoint,
   resolveScreenCategory,
@@ -52,5 +53,46 @@ describe("buildResponsiveSnapshot", () => {
     expect(snap.dprLayoutFactor).toBeLessThanOrEqual(1.25);
     expect(snap.scaleRatio).toBeGreaterThan(0.9);
     expect(snap.scaleRatio).toBeLessThanOrEqual(1);
+  });
+
+  it("carries the app zoom factor in the snapshot", () => {
+    expect(buildResponsiveSnapshot(1280, 800, 1280, 800, 1).appZoom).toBe(1);
+    expect(buildResponsiveSnapshot(3440, 1440, 3440, 1440, 1).appZoom).toBe(1.35);
+  });
+
+  it("drives app zoom from the physical screen width, not the layout width", () => {
+    // Narrow window (1100px) on a 3440px monitor → still zoomed for the monitor.
+    expect(
+      buildResponsiveSnapshot(1100, 900, 1100, 900, 1, 3440).appZoom,
+    ).toBe(1.35);
+    // Wide layout (browser zoomed out) on a 1920px laptop → no UI zoom.
+    expect(
+      buildResponsiveSnapshot(2400, 1000, 2400, 1000, 1, 1920).appZoom,
+    ).toBe(1);
+  });
+});
+
+describe("computeAppZoom", () => {
+  it("stays 1 for laptops / FHD monitors (≤1920)", () => {
+    expect(computeAppZoom(1366)).toBe(1);
+    expect(computeAppZoom(1600)).toBe(1);
+    expect(computeAppZoom(1920)).toBe(1);
+  });
+
+  it("hits the defined zoom stops exactly", () => {
+    expect(computeAppZoom(2560)).toBe(1.2);
+    expect(computeAppZoom(3440)).toBe(1.35);
+  });
+
+  it("interpolates between stops and caps beyond the widest", () => {
+    const mid = computeAppZoom(2240); // halfway 1920→2560
+    expect(mid).toBeGreaterThan(1);
+    expect(mid).toBeLessThan(1.2);
+    expect(computeAppZoom(3840)).toBe(1.35);
+    expect(computeAppZoom(5120)).toBe(1.35);
+  });
+
+  it("is resilient to non-finite input", () => {
+    expect(computeAppZoom(Number.NaN)).toBe(1);
   });
 });
