@@ -144,7 +144,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     return (
       <div
         className={clsx(
-          "flex h-[85vh] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-text-inverse/12 bg-surface",
+          "flex h-[calc(85vh/var(--app-zoom,1))] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-text-inverse/12 bg-surface",
           className,
         )}
         onClick={(event) => event.stopPropagation()}

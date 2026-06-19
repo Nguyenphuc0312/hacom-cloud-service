@@ -37,7 +37,7 @@ const makeCorrelationId = (): string =>
 
 /** Lightweight, non-alarming screen while a stale-deploy reload happens. */
 const ChunkUpdateFallback: React.FC<{ reloading: boolean }> = ({ reloading }) => (
-  <main className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary">
+  <main className="flex min-h-[var(--app-dvh)] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary">
     <div className="flex w-full max-w-sm flex-col items-center text-center">
       <div className="mb-4 rounded-full bg-primary/10 p-3">
         <CloudArrowDownIcon className="h-7 w-7 text-primary" aria-hidden="true" />
@@ -62,7 +62,7 @@ const ChunkUpdateFallback: React.FC<{ reloading: boolean }> = ({ reloading }) =>
 
 /** Soft recovery for transient network/connectivity errors (no scary 500). */
 const NetworkRecoveryFallback: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
-  <main className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary">
+  <main className="flex min-h-[var(--app-dvh)] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary">
     <div className="flex w-full max-w-sm flex-col items-center text-center">
       <div className="mb-4 rounded-full bg-warning/10 p-3">
         <SignalSlashIcon className="h-7 w-7 text-warning-dark" aria-hidden="true" />

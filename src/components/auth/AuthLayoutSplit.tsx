@@ -47,7 +47,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
   const currentImage = HACoM_IMAGES[currentIndex];
 
   return (
-    <div className="flex h-dvh w-full bg-white selection:bg-[#1976D2]/20 overflow-hidden">
+    <div className="flex h-[var(--app-dvh)] w-full bg-white selection:bg-[#1976D2]/20 overflow-hidden">
       {/* Left side: Premium Image Slider */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden lg:flex">
         {/* Background Layers */}
@@ -132,7 +132,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
       {/* Right side: Form — scrollable, fluid padding via clamp */}
       <div className="relative w-full bg-surface-hover lg:w-1/2 overflow-y-auto">
         <div
-          className="flex min-h-dvh items-center justify-center"
+          className="flex min-h-[var(--app-dvh)] items-center justify-center"
           style={{ padding: "clamp(16px, 4dvh, 40px) clamp(12px, 3vw, 40px)" }}
         >
           <div
