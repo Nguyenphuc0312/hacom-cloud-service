@@ -503,10 +503,16 @@ body {
 
 .chat-shell[data-chat-layout-profile="desktop-wide"] {
   --chat-lane-padding: 32px;
-  --chat-content-lane: 64rem;
+  /* Lane là max-width của nội dung (header/timeline/composer) và luôn được
+     bọc trong wrapper `w-full mx-auto`, nên nó chỉ CHẶN trần chứ không ép
+     tràn pane. Trên màn 27-32" lane nới tới ~1300px ("thoáng") rồi dừng để
+     dòng text không quá dài. Pane hẹp hơn vẫn co theo `w-full`. */
+  --chat-content-lane: 81.25rem;
   --chat-rich-lane: 43rem;
-  --chat-bubble-max: min(44rem, 72%);
-  --chat-bubble-max-compact: min(34rem, 64%);
+  /* Bong bóng tin nhắn cap cứng ~600px (37.5rem) để dòng text không quá dài
+     trên màn lớn — dễ đọc kiểu Zalo/Messenger. */
+  --chat-bubble-max: min(37.5rem, 72%);
+  --chat-bubble-max-compact: min(30rem, 64%);
 }
 
 .chat-shell[data-chat-layout-profile="laptop"] {
@@ -1850,5 +1856,17 @@ input[type="password"]::-ms-clear {
     --app-inspector-width: 400px;
     --hc-sidebar-width: clamp(340px, 19vw, 440px);
     --app-shell-gutter: 32px;
+  }
+}
+
+/* Ultrawide & TV (≥2560px, gồm 3440×1440): trên các màn rất rộng, nếu giữ
+   tuning của 1920px thì pane chat thừa quá nhiều nền hai bên. Nới sidebar +
+   inspector thêm một nấc và cap chúng để cân đối; lane chat đã cap riêng ở
+   `desktop-wide` (~1300px) nên vẫn dễ đọc, phần nền còn lại được kéo hẹp bớt. */
+@media (min-width: 2560px) {
+  :root {
+    --app-inspector-width: 440px;
+    --hc-sidebar-width: clamp(380px, 16vw, 480px);
+    --app-shell-gutter: 40px;
   }
 }
