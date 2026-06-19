@@ -82,6 +82,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const { t } = useTranslation();
     const isDisabled = disabled || isLoading;
     const resolvedVariant = variant === "danger" ? "destructive" : (variant ?? "primary");
+    // Filled CTAs get a subtle tactile lift on hover; press flattens it back.
+    const isFilledCta =
+      resolvedVariant === "brand" ||
+      resolvedVariant === "brand-yellow" ||
+      resolvedVariant === "primary" ||
+      resolvedVariant === "destructive";
 
     return (
       <button
@@ -98,7 +104,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           resolvedVariant !== "link" && sizeClasses[size],
           variant === "link" && variantClasses.link,
           fullWidth && "w-full",
-          !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
+          !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98] active:translate-y-0",
+          !isDisabled && isFilledCta && "hover:-translate-y-px hover:shadow-lg",
           className,
         )}
         {...props}

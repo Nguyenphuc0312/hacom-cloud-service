@@ -31,6 +31,7 @@
     "addMember": "Thêm thành viên",
     "addMemberEligibilityHint": "Chỉ những liên hệ đủ điều kiện mới có thể được thêm vào nhóm này.",
     "searchMemberPlaceholder": "Tìm theo tên hoặc username",
+    "searchHint": "Tìm theo tên hoặc username.",
     "noSearchResult": "Không tìm thấy kết quả phù hợp",
     "noMembers": "Không có thành viên",
     "youSuffix": "(Bạn)",
