@@ -134,36 +134,24 @@ const computeScaleRatio = (width: number): number => {
 };
 
 /**
- * Piecewise-linear zoom stops [screenWidthPx, zoomFactor]. At/below 1920 the UI
- * is left at 1:1 — laptops and standard FHD monitors are never scaled. Only
- * genuinely large external monitors grow the UI, toward ~1.35 on a 3440px
- * ultrawide, so it reads like a desktop app instead of a tiny web page lost in
- * empty space. Capped at the last stop for anything wider (e.g. 4K TVs).
+ * App-wide UI zoom is DISABLED — it always returns 1 on every screen.
+ *
+ * We previously scaled the whole UI up on large monitors via CSS `zoom` on
+ * `body`. CSS `zoom` is fundamentally incompatible with `position: fixed`
+ * (info panel, modals, command palette, toasts, overlays) and with raw
+ * viewport units (vh/dvh/vw), which broke layout severely on ultrawide PCs
+ * (e.g. 3440×1440). The correct, robust way to "fill" big screens is the
+ * fluid responsive system this module already provides — clamp()/vw type &
+ * spacing, breakpoint-driven sidebar/inspector widths (`@media min-width:
+ * 1920px`) and the capped chat content lane (`data-chat-layout-profile=
+ * "desktop-wide"`). So the UI now auto-fits every screen with standard CSS,
+ * never the brittle `zoom` hack.
+ *
+ * Kept as a stable no-op (instead of deleting) so existing consumers — the
+ * `--app-zoom` CSS var and the zoom-compensated `--app-dvh`/`--app-vh`/
+ * `--app-vw` vars — keep resolving to a 1:1 identity.
  */
-const APP_ZOOM_STOPS: ReadonlyArray<readonly [number, number]> = [
-  [1920, 1.0],
-  [2560, 1.2],
-  [3440, 1.35],
-];
-
-export const computeAppZoom = (width: number): number => {
-  if (!Number.isFinite(width)) return 1;
-  const first = APP_ZOOM_STOPS[0];
-  const last = APP_ZOOM_STOPS[APP_ZOOM_STOPS.length - 1];
-  if (width <= first[0]) return first[1];
-  if (width >= last[0]) return last[1];
-
-  for (let i = 1; i < APP_ZOOM_STOPS.length; i += 1) {
-    const [w0, z0] = APP_ZOOM_STOPS[i - 1];
-    const [w1, z1] = APP_ZOOM_STOPS[i];
-    if (width <= w1) {
-      const t = (width - w0) / (w1 - w0);
-      // Round to 3 decimals to keep the CSS var stable across resize jitter.
-      return Math.round(lerp(z0, z1, t) * 1000) / 1000;
-    }
-  }
-  return last[1];
-};
+export const computeAppZoom = (_width: number): number => 1;
 
 export const computeAdaptiveSpacingPx = (width: number): ResponsiveSpacingPx => {
   const t = clamp01((width - 360) / (1280 - 360));
