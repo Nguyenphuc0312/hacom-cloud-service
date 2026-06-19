@@ -506,20 +506,16 @@ body {
     sans-serif;
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
-  /* App-wide UI scaling for large monitors / TVs. `--app-zoom` is 1 at/below a
-     1920px screen width (no change on laptops/FHD monitors) and grows toward
-     ~1.35 on ultrawide, set at runtime by ResponsiveProvider. Applied on
-     `body` so it also covers modals/toasts portaled to document.body and scales
-     the whole UI uniformly (sidebar, composer, login, fonts, icons).
-
-     The width/height are pre-shrunk by the zoom factor so that AFTER `zoom`
-     paints them ×factor the box fills the viewport EXACTLY — without this the
-     zoomed body would overflow the `overflow:hidden` html box and clip content
-     (lost sidebar/composer rows). At zoom 1 both calc() resolve to 100% — a
-     no-op for normal screens. */
-  width: calc(100% / var(--app-zoom, 1));
-  height: calc(100% / var(--app-zoom, 1));
-  zoom: var(--app-zoom, 1);
+  /* No CSS `zoom` here. We tried scaling the whole UI up on large monitors with
+     `zoom: var(--app-zoom)`, but CSS `zoom` breaks `position: fixed` (modals,
+     info panel, command palette, toasts) and raw viewport units, which wrecked
+     layout on ultrawide PCs (3440×1440). The UI now auto-fits every screen
+     purely through the fluid responsive system (clamp/vw tokens, breakpoint
+     sidebar widths, capped chat lane) — see computeAppZoom() in responsive.ts.
+     `--app-zoom` stays defined as 1, so the `--app-dvh`/`--app-vh`/`--app-vw`
+     helpers below resolve to plain 100dvh/100vh/100vw. */
+  width: 100%;
+  height: 100%;
 }
 
 #root {
