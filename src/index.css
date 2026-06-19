@@ -67,6 +67,17 @@
   --layout-panel-min: 280px;
   --layout-panel-max: 420px;
 
+  /* Zoom-compensated viewport units. CSS `zoom` (var(--app-zoom) on body, set by
+     ResponsiveProvider on large monitors) does NOT scale raw vh/dvh/vw units, so
+     a child sized `100dvh` paints ×zoom and overflows the body box → clipped
+     login card / chat composer on ultrawide PCs. Pre-divide by zoom so AFTER the
+     body's `zoom` paints them they equal the real viewport. No-op at zoom 1
+     (≤1920px), so laptops/FHD are untouched. Use these instead of 100dvh/100vh/
+     100vw for any element meant to fill (a fraction of) the viewport. */
+  --app-dvh: calc(100dvh / var(--app-zoom, 1));
+  --app-vh: calc(100vh / var(--app-zoom, 1));
+  --app-vw: calc(100vw / var(--app-zoom, 1));
+
   --size-room-item: 72px;
   --size-room-meta: 40px;
   --size-sidebar-width: 320px;
@@ -1092,7 +1103,7 @@ a:focus-visible {
   }
 
   .auth-shell {
-    min-height: 100dvh;
+    min-height: var(--app-dvh);
     display: grid;
     place-items: center;
     overflow-y: auto;
@@ -1337,9 +1348,9 @@ a:focus-visible {
   .private-app-shell {
     position: relative;
     display: flex;
-    height: 100dvh;
-    min-height: 100dvh;
-    max-height: 100dvh;
+    height: var(--app-dvh);
+    min-height: var(--app-dvh);
+    max-height: var(--app-dvh);
     flex-direction: column;
     overflow: hidden;
     background:
@@ -1784,7 +1795,7 @@ a:focus-visible {
       z-index: 65;
       display: flex;
       width: var(--hc-rail-width);
-      height: 100dvh;
+      height: var(--app-dvh);
       min-width: var(--hc-rail-width);
       flex-direction: column;
       border-right: 1px solid hsl(var(--color-border));
