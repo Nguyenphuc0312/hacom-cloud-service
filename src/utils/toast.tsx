@@ -1,13 +1,26 @@
 /**
  * @fileoverview Toast utility functions.
+ *
+ * Standardized toast API on top of react-hot-toast. All four severity levels
+ * share a consistent look: a colored leading icon on the neutral `.toast-library`
+ * surface. Display duration scales with severity (success is quick, error lingers).
  */
 
 import toastLib from "react-hot-toast";
 import type { ToastOptions } from "react-hot-toast";
+import {
+  InformationCircleIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/solid";
 
 const TOAST_DEDUPE_WINDOW_MS = 1800;
-const DEFAULT_TOAST_DURATION_MS = 5500;
+
+// Duration scales with severity: the more the user needs to act on it, the longer it stays.
+const SUCCESS_TOAST_DURATION_MS = 4000;
+const INFO_TOAST_DURATION_MS = 4500;
+const WARNING_TOAST_DURATION_MS = 5000;
 const ERROR_TOAST_DURATION_MS = 6000;
+
 const toastDedupedAt = new Map<string, number>();
 
 const shouldSuppressToast = (key: string): boolean => {
@@ -37,7 +50,7 @@ export const toast = {
     toastLib.success(message, {
       ...baseOptions,
       id,
-      duration: DEFAULT_TOAST_DURATION_MS,
+      duration: SUCCESS_TOAST_DURATION_MS,
       iconTheme: {
         primary: "#16a34a",
         secondary: "#ffffff",
@@ -71,8 +84,8 @@ export const toast = {
     toastLib(message, {
       ...baseOptions,
       id,
-      duration: DEFAULT_TOAST_DURATION_MS,
-      icon: "ℹ",
+      duration: INFO_TOAST_DURATION_MS,
+      icon: <InformationCircleIcon className="h-5 w-5 text-[#1565C0]" />,
     });
   },
 
@@ -85,8 +98,8 @@ export const toast = {
     toastLib(message, {
       ...baseOptions,
       id,
-      duration: DEFAULT_TOAST_DURATION_MS,
-      icon: "!",
+      duration: WARNING_TOAST_DURATION_MS,
+      icon: <ExclamationTriangleIcon className="h-5 w-5 text-warning" />,
     });
   },
 
@@ -104,7 +117,7 @@ export const toast = {
     });
   },
 
-  promise: <T>(
+  promise: <T,>(
     promise: Promise<T>,
     msgs: {
       loading: string;

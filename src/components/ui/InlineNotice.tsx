@@ -44,6 +44,8 @@ export const InlineNotice: React.FC<InlineNoticeProps> = ({
   onDismiss,
   className,
 }) => {
+  // Errors/warnings interrupt (assertive alert); info/success announce politely.
+  const isUrgent = tone === "error" || tone === "warning";
   return (
     <div
       className={clsx(
@@ -51,8 +53,8 @@ export const InlineNotice: React.FC<InlineNoticeProps> = ({
         toneClasses[tone],
         className,
       )}
-      role="status"
-      aria-live="polite"
+      role={isUrgent ? "alert" : "status"}
+      aria-live={isUrgent ? "assertive" : "polite"}
     >
       <span className="shrink-0">{toneIcons[tone]}</span>
       <p className="min-w-0 flex-1 truncate font-medium">{message}</p>

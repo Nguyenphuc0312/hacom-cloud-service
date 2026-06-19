@@ -134,6 +134,9 @@
   --motion-ease-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --motion-ease-press: ease-out;
+  /* Tactile overshoot for press/pop feedback; emphasized for panels/dialogs. */
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
   --core-gray-0: 0 0% 100%;
   --core-gray-50: 210 33% 98%;
@@ -223,8 +226,8 @@
   --surface-border: var(--color-border);
   --surface-text-muted: var(--color-text-muted);
   --surface-text-primary: var(--color-text-primary);
-  --state-info-bg: var(--core-brand-500);
-  --state-info-border: var(--core-brand-400);
+  --state-info-bg: 210 100% 96%;
+  --state-info-border: 210 75% 82%;
   --state-success-bg: 152 80% 97%;
   --state-success-border: 152 48% 80%;
   --state-warning-bg: 46 100% 96%;

@@ -228,17 +228,16 @@ export default {
           "reactionPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
         shake: "shake 0.5s ease-in-out",
         /* New polished animations */
-        "msg-in": "msgSlideIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both",
-        "toolbar-in": "toolbarScaleIn 150ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "typing-dot": "typingDot 1.4s ease-in-out infinite",
         "typing-dot-delay-1": "typingDot 1.4s ease-in-out 0.16s infinite",
         "typing-dot-delay-2": "typingDot 1.4s ease-in-out 0.32s infinite",
-        "skeleton-shimmer": "shimmer 1.8s ease-in-out infinite",
         "content-fade": "contentFade 200ms ease-out both",
         "slide-up-fade": "slideUpFade 200ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "bounce-subtle": "bounceSubtle 1.5s ease-in-out infinite",
         "message-insert":
           "messageInsert var(--motion-duration-message-insert, 140ms) var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1)) both",
+        "modal-in":
+          "modalIn 240ms var(--motion-ease-emphasized, cubic-bezier(0.2, 0, 0, 1)) both",
         shimmer: "shimmer 2s linear infinite",
         scan: "scan 3s ease-in-out infinite",
       },
@@ -285,24 +284,12 @@ export default {
           "75%": { transform: "translateX(5px)" },
         },
         /* New polished keyframes */
-        msgSlideIn: {
-          from: { opacity: "0", transform: "translateY(8px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
-        },
-        toolbarScaleIn: {
-          from: { opacity: "0", transform: "scale(0.92)" },
-          to: { opacity: "1", transform: "scale(1)" },
-        },
         typingDot: {
           "0%, 44%, 100%": {
             opacity: "0.3",
             transform: "scale(0.8) translateY(0)",
           },
           "22%": { opacity: "1", transform: "scale(1) translateY(-3px)" },
-        },
-        shimmer: {
-          "0%": { backgroundPosition: "-200% 0" },
-          "100%": { backgroundPosition: "200% 0" },
         },
         contentFade: {
           from: { opacity: "0" },
@@ -325,6 +312,10 @@ export default {
             opacity: "1",
             transform: "translateY(0) scale(1)",
           },
+        },
+        modalIn: {
+          from: { opacity: "0", transform: "translateY(12px) scale(0.97)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
         },
         shimmer: {
           "0%": { transform: "translateX(-100%)" },
