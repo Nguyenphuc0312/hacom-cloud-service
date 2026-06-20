@@ -4,7 +4,7 @@
  * Phase 1 (xem docs/CALENDAR_SPEC.md):
  *  - Event cao theo thời lượng (startAt/endAt), không còn block cố định.
  *  - Event trùng giờ chia cột overlap (tối đa 3).
- *  - Hàng "ALL DAY" cho event không có giờ (lễ, task theo ngày, all-day).
+ *  - Hàng "Cả ngày" cho event không có giờ (lễ, task theo ngày, all-day).
  *  - Current-time line tick mỗi phút + auto-scroll tới giờ hiện tại khi mở.
  */
 
@@ -195,7 +195,7 @@ export const DayView: React.FC<DayViewProps> = ({
       {allDay.length > 0 && (
         <div className="flex border-b border-border bg-surface-overlay/40">
           <div className="w-16 shrink-0 py-1.5 pr-2 text-right text-[10px] font-medium uppercase tracking-wide text-text-muted">
-            All day
+            Cả ngày
           </div>
           <div className="flex flex-1 flex-wrap gap-1 px-1 py-1.5">
             {allDay.map((event) => {

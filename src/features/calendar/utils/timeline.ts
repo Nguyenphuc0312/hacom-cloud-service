@@ -218,6 +218,13 @@ export const layoutDayEvents = (
   const raw: RawItem[] = [];
 
   for (const event of events) {
+    // Lịch nhiều ngày (công tác dài hạn / qua đêm) → đưa lên dải "cả ngày" để
+    // render thành thanh trải nối liền qua các ngày (kiểu Google/Teams/Outlook),
+    // thay vì các block giờ rời rạc không nối được trên lưới timeline.
+    if (isMultiDayEvent(event)) {
+      allDay.push(event);
+      continue;
+    }
     const startMin = getStartMinutes(event, day);
     if (startMin === null) {
       allDay.push(event);

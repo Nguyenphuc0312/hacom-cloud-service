@@ -29,7 +29,7 @@
 | 5 | Drag-move / resize | ❌ chưa có | Kéo đổi giờ/ngày; resize đổi duration; lưu qua API | **Thiếu** |
 | 6 | Current-time indicator | ⚠️ có line đỏ nhưng tính 1 lần lúc render | Tick mỗi phút + auto-scroll tới giờ hiện tại khi mở | Nâng cấp |
 | 7 | Điều hướng tuần | ⚠️ WeekView khóa "tuần đầu của tháng" (`getWeekDays(year, month)`) | Điều hướng theo tuần: ‹ Tuần trước · Hôm nay · Tuần sau ›; header "Tuần 24 · 09/06–15/06" | **Thiếu** |
-| 8 | All-day event | ❌ chưa có hàng riêng | Hàng "ALL DAY" trên đầu lưới | **Thiếu** |
+| 8 | All-day event | ❌ chưa có hàng riêng | Hàng "Cả ngày" trên đầu lưới | **Thiếu** |
 | 9 | Multi-day event | ❌ chưa có | Event nghỉ phép trải nhiều cột (Mon→Thu) | **Thiếu** |
 | 10 | Presence trong lịch | ❌ lịch không hiện presence | "Busy · In a meeting until 10:30" (dùng presence WS sẵn có) | **Thiếu** |
 | 11 | Hover meeting card | ❌ click mới mở modal | Hover hiện card: organizer, participants, Join/Edit/Delete | **Thiếu** |
@@ -51,7 +51,7 @@
 +------------------------------------------------------+
 | ‹ Hôm qua | Hôm nay | Ngày mai ›        15/06/2026   |
 +------------------------------------------------------+
-| [ALL DAY]  Company Event · Holiday                   |
+| [Cả ngày]  Company Event · Holiday                   |
 +------------------------------------------------------+
 | Giờ   | Sự kiện                                      |
 | 08:00 | ┌ Daily Meeting ───────┐                     |
@@ -71,7 +71,7 @@
 - **FR-D4 Tạo nhanh.** Double-click ô trống → mở `MeetingFormModal` với ngày/giờ điền sẵn theo slot; **kéo chọn khoảng** → điền sẵn start/end.
 - **FR-D5 Chỉnh sửa trực tiếp.** Kéo block lên/xuống đổi giờ; resize cạnh trên/dưới đổi duration; thả → gọi `hrCalendarApi.updateEvent` (optimistic, rollback nếu lỗi). Chỉ bật khi `event.canEdit`.
 - **FR-D6 Mở chi tiết.** Click block → `EventDetailModal` (đã có).
-- **FR-D7 All-day.** Hàng "ALL DAY" trên cùng cho `isAllDay`.
+- **FR-D7 All-day.** Hàng "Cả ngày" trên cùng cho `isAllDay`.
 - **FR-D8 Điều hướng.** ‹ Hôm qua · Hôm nay · Ngày mai › đổi `selectedDate`, refetch đúng range.
 
 ---

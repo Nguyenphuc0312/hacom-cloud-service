@@ -4,7 +4,7 @@
  * Phase 1 (xem docs/CALENDAR_SPEC.md):
  *  - Neo theo TUẦN chứa `weekDate` (không còn khóa "tuần đầu của tháng").
  *  - Event cao theo thời lượng + chia cột overlap (tối đa 3) trong từng ngày.
- *  - Hàng "ALL DAY" cho event không có giờ.
+ *  - Hàng "Cả ngày" cho event không có giờ.
  *  - Current-time line trên cột hôm nay, tick mỗi phút + auto-scroll khi mở.
  */
 
@@ -111,10 +111,13 @@ export const WeekView: React.FC<WeekViewProps> = ({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header + all-day + lưới giờ nằm CHUNG một vùng cuộn để cột thẳng hàng
-          (tránh lệch do thanh cuộn chỉ ảnh hưởng phần lưới). Header dùng sticky. */}
+          (tránh lệch do thanh cuộn chỉ ảnh hưởng phần lưới). */}
       <div ref={scrollRef} className="flex-1 overflow-auto">
+      {/* Header ngày + dải "Cả ngày" GHIM CHUNG ở đỉnh: cuộn lưới giờ thì cả hai
+          vẫn luôn hiển thị (giống Day view — dải "Cả ngày" không bị cuộn mất). */}
+      <div className="sticky top-0 z-40 bg-surface">
       {/* Day headers */}
-      <div className="sticky top-0 z-40 flex border-b border-border bg-surface">
+      <div className="flex border-b border-border bg-surface">
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
@@ -170,7 +173,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
       {hasAllDay && (
         <div className="flex border-b border-border bg-surface-overlay/40">
           <div className="w-16 shrink-0 border-r border-border py-1 pr-2 text-right text-[10px] font-medium uppercase tracking-wide text-text-muted">
-            All day
+            Cả ngày
           </div>
           {weekDays.map((date, index) => {
             // Ghim lịch nhiều ngày lên đầu để dây nối thẳng hàng giữa các ngày.
@@ -257,6 +260,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           })}
         </div>
       )}
+      </div>
 
       {/* Hourly grid */}
         <div className="relative flex" style={{ height: `${MINUTES_PER_DAY * PX_PER_MIN}px` }}>
