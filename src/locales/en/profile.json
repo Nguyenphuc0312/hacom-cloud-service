@@ -176,7 +176,7 @@
       "ACTIVE": "Active",
       "SUSPENDED": "Suspended",
       "TERMINATED": "Terminated",
-      "RESIGNED": "Resigned"
+      "RESIGNED": "Admin"
     },
     "joinDate": "Join date",
     "enterpriseInfoHint": "These details come from your HR directory and stay read-only here.",
