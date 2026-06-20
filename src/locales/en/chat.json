@@ -159,12 +159,17 @@
   "search": {
     "title": "Search messages",
     "placeholder": "Search in this conversation",
+    "idleTitle": "Search in this conversation",
+    "idleDescription": "Enter a keyword to start searching messages and files in this conversation.",
     "error": "Unable to search messages",
     "noResults": "No matching messages",
     "noResultsDescription": "Try a different keyword.",
     "resultCount": "{{count}} results",
     "resultCount_one": "{{count}} result",
-    "resultCount_other": "{{count}} results"
+    "resultCount_other": "{{count}} results",
+    "sectionMessages": "Messages",
+    "sectionFiles": "Files",
+    "showMore": "Show more"
   },
   "conversation": {
     "untitled": "Untitled conversation",
