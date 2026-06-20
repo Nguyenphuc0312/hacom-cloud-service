@@ -125,15 +125,17 @@ const formatDateString = (date: Date): string => {
 };
 
 /**
- * Khoảng FETCH cho tháng đang xem, LÙI THÊM 2 THÁNG ở đầu khoảng.
- * Lý do: lịch dài hạn (công tác/nghỉ phép) bắt đầu từ tháng trước nhưng kéo sang
- * tháng đang xem sẽ KHÔNG được backend trả về nếu chỉ hỏi đúng tháng (lọc theo
- * startAt). Lưới/Day/Week vẫn lọc client theo eventOccursOnDay nên chỉ hiển thị
- * đúng phạm vi đang xem. Khớp với khoảng fetch của widget lịch tuần (EmptyState).
+ * Khoảng FETCH cho tháng đang xem, LÙI 6 THÁNG ở đầu và TIẾN 1 THÁNG ở cuối.
+ * Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
+ * nhiều tháng trước nhưng vẫn kéo sang tuần/tháng đang xem; backend lọc theo
+ * `startAt` nên nếu range quá hẹp sẽ KHÔNG trả các event dài bắt đầu xa → dây bị
+ * đứt ở các tuần xa ngày bắt đầu. Lùi 6 tháng để chắc bắt được event dài.
+ * Lưới/Day/Week vẫn lọc client theo eventOccursOnDay nên chỉ hiển thị đúng phạm
+ * vi đang xem. Khớp với khoảng fetch của widget lịch tuần (EmptyState).
  */
 const getMonthFetchRange = (year: number, month: number): { from: string; to: string } => {
-  const start = new Date(year, month - 2, 1);
-  const end = new Date(year, month + 1, 0);
+  const start = new Date(year, month - 6, 1);
+  const end = new Date(year, month + 2, 0);
   return { from: formatDateString(start), to: formatDateString(end) };
 };
 
