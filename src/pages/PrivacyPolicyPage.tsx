@@ -245,16 +245,49 @@ const ViContent: React.FC = () => (
       <p className="mt-3">Người dùng <span className="font-medium">không thể tự xóa tài khoản</span> — việc này phải được thực hiện thông qua quản trị viên hệ thống.</p>
     </Section>
 
-    <Section title="14. Quyền riêng tư của trẻ em">
+    <Section title="14. Xóa dữ liệu">
+      <p>Mặc dù tài khoản được cấp phát bởi quản trị viên được ủy quyền, người dùng có thể yêu cầu xóa tài khoản và dữ liệu liên quan của mình bất kỳ lúc nào.</p>
+
+      <SubSection title="Cách yêu cầu xóa dữ liệu">
+        <p>Nhân sự được ủy quyền của CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS có thể yêu cầu xóa dữ liệu bằng cách:</p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li>Gửi email đến Bộ phận Công nghệ thông tin tại <a href="mailto:it@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">it@hacomholdings.com.vn</a></li>
+          <li>Truy cập <a href="https://chat.hacomholdings.com.vn/data-deletion" target="_blank" rel="noopener noreferrer" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">https://chat.hacomholdings.com.vn/data-deletion</a></li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Dữ liệu sẽ được xóa">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Hồ sơ người dùng (tên hiển thị, số điện thoại, tiểu sử, ảnh đại diện)</li>
+          <li>Tin nhắn do người dùng gửi</li>
+          <li>Tệp, hình ảnh, video do người dùng tải lên</li>
+          <li>Sự kiện lịch do người dùng tạo</li>
+          <li>Firebase installation ID và mã đăng ký FCM (FCM registration token)</li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Dữ liệu được giữ lại">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Nhật ký kiểm tra (audit logs) — lưu 12 tháng, phục vụ bảo mật và tuân thủ</li>
+          <li>Tin nhắn mà người dùng khác nhận được (sẽ hiển thị là "[Người dùng đã xóa]")</li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Thời gian xử lý">
+        <p>Yêu cầu được xử lý trong vòng 30 ngày làm việc.</p>
+      </SubSection>
+    </Section>
+
+    <Section title="15. Quyền riêng tư của trẻ em">
       <p>Ứng dụng này được thiết kế cho mục đích sử dụng nội bộ của tổ chức, chỉ dành cho người lao động và cộng tác viên đã trưởng thành theo quy định pháp luật.</p>
       <p className="mt-3">Chúng tôi không cố ý thu thập thông tin từ trẻ em dưới 18 tuổi. Nếu phát hiện trường hợp này, chúng tôi sẽ xóa thông tin ngay khi biết được.</p>
     </Section>
 
-    <Section title="15. Chuyển dữ liệu quốc tế">
+    <Section title="16. Chuyển dữ liệu quốc tế">
       <p>Trong trường hợp dữ liệu cần được xử lý hoặc lưu trữ tại máy chủ đặt tại quốc gia hoặc khu vực khác (ví dụ: dịch vụ đám mây quốc tế), chúng tôi sẽ áp dụng các biện pháp bảo vệ dữ liệu phù hợp theo quy định pháp luật Việt Nam và quốc tế có liên quan.</p>
     </Section>
 
-    <Section title="16. Thay đổi Chính sách Bảo mật">
+    <Section title="17. Thay đổi Chính sách Bảo mật">
       <p>Chúng tôi có thể cập nhật Chính sách Bảo mật này theo từng thời điểm nhằm phản ánh thay đổi về dịch vụ, quy định pháp luật hoặc thực tiễn vận hành.</p>
       <p className="mt-3">Khi có thay đổi đáng kể, chúng tôi sẽ:</p>
       <ul className="list-disc pl-5 space-y-1 mt-2">
@@ -264,7 +297,7 @@ const ViContent: React.FC = () => (
       <p className="mt-3">Việc tiếp tục sử dụng ứng dụng sau khi chính sách được cập nhật đồng nghĩa với việc bạn chấp nhận các nội dung sửa đổi.</p>
     </Section>
 
-    <Section title="17. Thông tin liên hệ">
+    <Section title="18. Thông tin liên hệ">
       <p>Nếu bạn có bất kỳ câu hỏi, thắc mắc hoặc yêu cầu nào liên quan đến Chính sách Bảo mật hoặc việc xử lý dữ liệu cá nhân của mình, vui lòng liên hệ:</p>
       <div className="mt-4 space-y-1.5 rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4 text-sm">
         <p className="font-semibold text-[#0f172a]">CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
@@ -520,16 +553,49 @@ const EnContent: React.FC = () => (
       <p className="mt-3">Users <span className="font-medium">cannot self-delete their account</span> — this must be requested through the system administrator.</p>
     </Section>
 
-    <Section title="14. Children's Privacy">
+    <Section title="14. Data Deletion">
+      <p>Although accounts are provisioned by authorized administrators, users may request deletion of their account and associated data at any time.</p>
+
+      <SubSection title="How to request deletion">
+        <p>Authorized personnel of HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY may request data deletion by:</p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li>Emailing the IT Department at <a href="mailto:it@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">it@hacomholdings.com.vn</a></li>
+          <li>Visiting <a href="https://chat.hacomholdings.com.vn/data-deletion" target="_blank" rel="noopener noreferrer" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline">https://chat.hacomholdings.com.vn/data-deletion</a></li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Data that will be deleted">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>User profile (display name, phone, bio, avatar)</li>
+          <li>Messages sent by the user</li>
+          <li>Files, photos, videos uploaded by the user</li>
+          <li>Calendar events created by the user</li>
+          <li>Firebase installation ID and FCM registration token</li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Data retained">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Audit logs (12 months, for security and compliance)</li>
+          <li>Messages received by other users (will display as "[Deleted User]")</li>
+        </ul>
+      </SubSection>
+
+      <SubSection title="Processing time">
+        <p>Requests are processed within 30 business days.</p>
+      </SubSection>
+    </Section>
+
+    <Section title="15. Children's Privacy">
       <p>This application is designed for internal organizational use only, intended for adult employees and collaborators as defined by applicable law.</p>
       <p className="mt-3">We do not knowingly collect information from children under 18 years of age. If we become aware of such a case, we will delete the information promptly.</p>
     </Section>
 
-    <Section title="15. International Data Transfers">
+    <Section title="16. International Data Transfers">
       <p>If data needs to be processed or stored on servers located in another country or region (e.g., international cloud services), we will take appropriate measures to protect the data in accordance with Vietnamese law and applicable international regulations.</p>
     </Section>
 
-    <Section title="16. Changes to This Privacy Policy">
+    <Section title="17. Changes to This Privacy Policy">
       <p>We may update this Privacy Policy from time to time to reflect changes in our services, applicable laws, or operational practices.</p>
       <p className="mt-3">When significant changes are made, we will:</p>
       <ul className="list-disc pl-5 space-y-1 mt-2">
@@ -539,7 +605,7 @@ const EnContent: React.FC = () => (
       <p className="mt-3">Your continued use of the application after an update means you accept the revised Privacy Policy.</p>
     </Section>
 
-    <Section title="17. Contact Us">
+    <Section title="18. Contact Us">
       <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your personal data, please contact:</p>
       <div className="mt-4 space-y-1.5 rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4 text-sm">
         <p className="font-semibold text-[#0f172a]">HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
