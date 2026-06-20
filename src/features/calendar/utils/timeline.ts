@@ -70,6 +70,65 @@ export const isMultiDayEvent = (event: CalendarEvent): boolean => {
   return localDayStartMs(end) > localDayStartMs(start);
 };
 
+/** Vị trí của một ngày trong khoảng trải của sự kiện nhiều ngày. */
+export type MultiDayPosition = "start" | "middle" | "end";
+
+/**
+ * Với sự kiện nhiều ngày, xác định `day` là ngày BẮT ĐẦU / GIỮA / KẾT THÚC của
+ * dải trải (để render kiểu thanh trải ngang: bắt đầu → dây nối → kết thúc).
+ * Trả `null` nếu event không phải nhiều ngày hoặc `day` nằm ngoài khoảng.
+ *
+ * Ngày kết thúc hiệu dụng khớp `eventOccursOnDay`: nếu endAt rơi đúng 00:00 của
+ * một ngày (thực chất đã hết ở ngày trước) thì ngày cuối hiển thị lùi lại 1 ngày.
+ */
+export const getMultiDayPosition = (
+  event: CalendarEvent,
+  day: Date,
+): MultiDayPosition | null => {
+  const start = eventStartDate(event);
+  if (!start) return null;
+  const end = eventEndDate(event) ?? start;
+
+  const startMs = localDayStartMs(start);
+  let endMs = localDayStartMs(end);
+  if (endMs > startMs && end.getHours() === 0 && end.getMinutes() === 0) {
+    endMs = localDayStartMs(new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1));
+  }
+  if (endMs <= startMs) return null; // chỉ trong 1 ngày → không phải dải trải
+
+  const dayMs = localDayStartMs(day);
+  if (dayMs < startMs || dayMs > endMs) return null;
+  if (dayMs === startMs) return "start";
+  if (dayMs === endMs) return "end";
+  return "middle";
+};
+
+/**
+ * Khoảng giờ hiển thị "HH:mm — HH:mm" theo GIỜ ĐỊA PHƯƠNG từ startAt/endAt.
+ * Dùng chung cho mọi màn lịch (widget/Day/Week/popup) để định dạng thời gian
+ * đồng nhất (đủ cả bắt đầu & kết thúc, gạch em-dash). Trả `null` nếu không có
+ * giờ rõ ràng; nếu thiếu endAt thì chỉ trả giờ bắt đầu.
+ */
+export const formatEventTimeRange = (event: CalendarEvent): string | null => {
+  const ext = event as ExtendedCalendarEvent;
+  const fmt = (d: Date): string =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+  if (ext.startAt) {
+    const start = new Date(ext.startAt);
+    if (!Number.isNaN(start.getTime())) {
+      const startStr = fmt(start);
+      if (ext.endAt) {
+        const end = new Date(ext.endAt);
+        if (!Number.isNaN(end.getTime())) return `${startStr} — ${fmt(end)}`;
+      }
+      return startStr;
+    }
+  }
+  // Fallback: chuỗi giờ sẵn có (lễ tĩnh / dữ liệu cũ không có ISO).
+  return event.time?.trim() ? event.time : null;
+};
+
 /**
  * Phút-từ-nửa-đêm của thời điểm bắt đầu, tính theo ngày `day` (nếu truyền).
  * Trả `null` nếu event là all-day hoặc không xác định được giờ (lễ tĩnh, task theo ngày…).

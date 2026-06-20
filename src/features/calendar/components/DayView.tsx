@@ -15,10 +15,19 @@ import {
   HOURS,
   MINUTES_PER_DAY,
   eventOccursOnDay,
+  formatEventTimeRange,
+  getMultiDayPosition,
   isMultiDayEvent,
   layoutDayEvents,
   type PositionedEvent,
 } from "../utils/timeline";
+
+/** Màu ngày KẾT THÚC của lịch nhiều ngày (đồng bộ thanh trải ở Tháng/widget). */
+const MULTI_DAY_END_COLOR = {
+  bg: "bg-[#DC2626]",
+  text: "text-white",
+  border: "border-[#DC2626]",
+} as const;
 import { useNowMinute } from "../hooks/useNowMinute";
 
 interface DayViewProps {
@@ -52,12 +61,16 @@ const sameDay = (a: Date, b: Date): boolean => a.toDateString() === b.toDateStri
 
 const TimedEventBlock: React.FC<{
   positioned: PositionedEvent;
+  date: Date;
   onEventClick: (event: CalendarEvent) => void;
-}> = ({ positioned, onEventClick }) => {
+}> = ({ positioned, date, onEventClick }) => {
   const { event, startMin, endMin, col, colCount } = positioned;
-  // Lịch dài hạn (nhiều ngày) → màu vàng nổi bật + chữ to & đậm hơn cho dễ thấy.
+  // Lịch dài hạn (nhiều ngày) → màu vàng nổi bật + chữ to & đậm hơn cho dễ thấy;
+  // riêng ngày KẾT THÚC tô đỏ (#DC2626) đồng bộ với view Tháng.
   const isLong = isMultiDayEvent(event);
-  const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
+  const span = isLong ? getMultiDayPosition(event, date) : null;
+  const colors =
+    span === "end" ? MULTI_DAY_END_COLOR : isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
   const top = startMin * PX_PER_MIN;
   const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
   const widthPct = 100 / colCount;
@@ -96,7 +109,7 @@ const TimedEventBlock: React.FC<{
       </span>
       {showTime && (
         <span className="block truncate text-[10px] opacity-70">
-          {fmtMin(startMin)}–{fmtMin(endMin)}
+          {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
         </span>
       )}
     </button>
@@ -139,10 +152,15 @@ export const DayView: React.FC<DayViewProps> = ({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <h2 className="text-lg font-semibold text-text-primary">
           {formatDateDisplay(date)}
         </h2>
+        {isToday && (
+          <span className="shrink-0 rounded-full bg-[#1565C0] px-2.5 py-1 text-xs font-bold text-white">
+            Hôm nay
+          </span>
+        )}
       </div>
 
       {/* Attendance summary */}
@@ -181,13 +199,21 @@ export const DayView: React.FC<DayViewProps> = ({
           </div>
           <div className="flex flex-1 flex-wrap gap-1 px-1 py-1.5">
             {allDay.map((event) => {
-              const colors = getEventColor(event.type);
+              // Lịch nhiều ngày → màu vàng nổi bật; riêng ngày KẾT THÚC tô đỏ
+              // (#DC2626), đồng bộ với view Tuần/Tháng/widget.
+              const span = isMultiDayEvent(event) ? getMultiDayPosition(event, date) : null;
+              const colors =
+                span === "end"
+                  ? MULTI_DAY_END_COLOR
+                  : span
+                    ? MULTI_DAY_EVENT_COLOR
+                    : getEventColor(event.type);
               return (
                 <button
                   key={event.id}
                   type="button"
                   onClick={() => onEventClick(event)}
-                  title={event.title}
+                  title={span === "end" ? `${event.title} · Kết thúc` : event.title}
                   className={clsx(
                     "max-w-full truncate rounded-md border px-2 py-0.5 text-xs font-medium transition-micro hover:opacity-90",
                     colors.bg,
@@ -255,6 +281,7 @@ export const DayView: React.FC<DayViewProps> = ({
               <TimedEventBlock
                 key={positioned.event.id}
                 positioned={positioned}
+                date={date}
                 onEventClick={onEventClick}
               />
             ))}

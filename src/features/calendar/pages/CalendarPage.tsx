@@ -20,7 +20,6 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   getEventColor,
-  MULTI_DAY_EVENT_COLOR,
   getEventTypeLabel,
   VIETNAMESE_MONTHS,
   VIETNAMESE_WEEKDAYS,
@@ -48,7 +47,7 @@ import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
-import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, isMultiDayEvent } from "../utils/timeline";
+import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, getMultiDayPosition, type MultiDayPosition } from "../utils/timeline";
 import {
   filterCalendarEventsByType,
   localizeEventTitle,
@@ -803,10 +802,60 @@ const EventBadge: React.FC<{
   event: LocalCalendarEvent;
   onClick: (event: LocalCalendarEvent) => void;
   compact?: boolean;
-}> = ({ event, onClick, compact = false }) => {
-  // Lịch dài hạn (nhiều ngày) → màu vàng + chữ to & đậm hơn cho nổi bật.
-  const isLong = isMultiDayEvent(event);
-  const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
+  /** Vị trí trong dải trải khi là lịch nhiều ngày (render thanh trải ngang). */
+  spanPosition?: MultiDayPosition | null;
+}> = ({ event, onClick, compact = false, spanPosition = null }) => {
+  // Lịch dài ngày → thanh TRẢI NGANG: ngày bắt đầu hiện tiêu đề, ngày giữa chỉ
+  // là dây nối, ngày kết thúc tô đỏ (#DC2626). Margin âm để bar lấn vào padding
+  // ô (p-1.5), nối liền thành dây qua các ngày.
+  if (spanPosition) {
+    const isEnd = spanPosition === "end";
+    const isStart = spanPosition === "start";
+    // Ngày GIỮA: chỉ một sợi chỉ mảnh căn giữa, nối liền hai badge to.
+    if (!isStart && !isEnd) {
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick(event);
+          }}
+          title={event.title}
+          className="-mx-1.5 flex h-5 w-full cursor-pointer items-center"
+        >
+          <span className="h-1 w-full bg-amber-400/80" />
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(event);
+        }}
+        title={isEnd ? `${event.title} · Kết thúc` : event.title}
+        className={clsx(
+          "relative flex h-5 w-full cursor-pointer items-center text-left text-xs font-semibold transition-micro hover:brightness-95 dark:hover:brightness-110",
+          isStart && "-mr-1.5 rounded-l pl-1.5",
+          isEnd && "-ml-1.5 rounded-r pl-1.5",
+          isEnd ? "bg-[#DC2626] text-white" : "bg-amber-400/80 text-amber-900 dark:text-amber-100",
+        )}
+      >
+        {isStart && <span className="truncate">{event.title}</span>}
+        {isEnd && <span className="truncate">Kết thúc</span>}
+        {/* Node tròn ở đầu/cuối dây để nhìn rõ là một liên kết. */}
+        <span
+          className={clsx(
+            "pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-amber-500",
+            isStart ? "right-0 translate-x-1/2" : "left-0 -translate-x-1/2",
+          )}
+        />
+      </button>
+    );
+  }
+
+  const colors = getEventColor(event.type);
 
   return (
     <button
@@ -820,11 +869,11 @@ const EventBadge: React.FC<{
         colors.bg,
         colors.border,
         compact ? "px-1.5 py-0.5" : "px-2 py-1",
-        isLong ? "text-sm" : "text-xs",
+        "text-xs",
       )}
       title={event.title}
     >
-      <span className={clsx("block truncate", colors.text, isLong ? "font-semibold" : "font-medium")}>
+      <span className={clsx("block truncate font-medium", colors.text)}>
         {event.title}
       </span>
     </button>
@@ -1872,9 +1921,17 @@ export const CalendarPage: React.FC = () => {
               {/* Calendar days grid */}
               <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
                 {calendarDays.map((dayInfo, index) => {
-                  const dayEvents = searchedEvents.filter((event) =>
-                    eventOccursOnDay(event, dayInfo.date),
-                  );
+                  // Ghim lịch dài ngày lên đầu để thanh trải nằm cùng hàng giữa
+                  // các ngày → nối liền thành dây; còn lại sắp theo giờ.
+                  const dayEvents = searchedEvents
+                    .filter((event) => eventOccursOnDay(event, dayInfo.date))
+                    .slice()
+                    .sort((a, b) => {
+                      const aSpan = getMultiDayPosition(a, dayInfo.date) !== null;
+                      const bSpan = getMultiDayPosition(b, dayInfo.date) !== null;
+                      if (aSpan !== bSpan) return aSpan ? -1 : 1;
+                      return (a.time ?? "").localeCompare(b.time ?? "");
+                    });
                   const maxVisibleEvents = 2;
                   const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
                   const remainingCount = dayEvents.length - maxVisibleEvents;
@@ -1925,6 +1982,7 @@ export const CalendarPage: React.FC = () => {
                             event={event}
                             onClick={handleEventClick}
                             compact
+                            spanPosition={getMultiDayPosition(event, dayInfo.date)}
                           />
                         ))}
                         {remainingCount > 0 && (

@@ -15,11 +15,20 @@ import {
   HOURS,
   MINUTES_PER_DAY,
   eventOccursOnDay,
+  formatEventTimeRange,
+  getMultiDayPosition,
   getWeekDays,
   isMultiDayEvent,
   layoutDayEvents,
   nowMinutes,
 } from "../utils/timeline";
+
+/** Màu ngày KẾT THÚC của lịch nhiều ngày (đồng bộ thanh trải ở Tháng/widget). */
+const MULTI_DAY_END_COLOR = {
+  bg: "bg-[#DC2626]",
+  text: "text-white",
+  border: "border-[#DC2626]",
+} as const;
 import { useNowMinute } from "../hooks/useNowMinute";
 
 interface AttendanceDay {
@@ -109,6 +118,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
+          const isWeekend = index >= 5;
           return (
             <button
               type="button"
@@ -116,16 +126,28 @@ export const WeekView: React.FC<WeekViewProps> = ({
               onClick={() => onDateClick(date)}
               className={clsx(
                 "flex-1 border-r border-border px-2 py-2 text-center transition-micro hover:bg-surface-hover",
-                isToday(date) && "bg-primary/5",
+                isWeekend && !isToday(date) && "bg-surface-overlay/40",
+                isToday(date) && "bg-[#DBEAFE]/30",
               )}
             >
-              <div className="text-xs text-text-muted">{WEEKDAY_LABELS[index]}</div>
               <div
                 className={clsx(
-                  "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
-                  !isToday(date) && "text-text-primary",
-                  isToday(date) && "bg-primary text-white",
-                  isSelected(date) && !isToday(date) && "bg-primary/10 ring-2 ring-primary/30",
+                  "text-xs font-medium",
+                  isToday(date)
+                    ? "text-[#1565C0]"
+                    : isWeekend
+                      ? "text-rose-500"
+                      : "text-text-muted",
+                )}
+              >
+                {WEEKDAY_LABELS[index]}
+              </div>
+              <div
+                className={clsx(
+                  "mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
+                  !isToday(date) && (isWeekend ? "text-rose-500" : "text-text-primary"),
+                  isToday(date) && "bg-[#1565C0] text-white",
+                  isSelected(date) && !isToday(date) && "bg-[#1976D2]/10 text-[#1565C0] ring-2 ring-[#1976D2]/40",
                 )}
               >
                 {date.getDate()}
@@ -150,32 +172,89 @@ export const WeekView: React.FC<WeekViewProps> = ({
           <div className="w-16 shrink-0 border-r border-border py-1 pr-2 text-right text-[10px] font-medium uppercase tracking-wide text-text-muted">
             All day
           </div>
-          {weekDays.map((date, index) => (
-            <div
-              key={date.toISOString()}
-              className="flex min-h-[28px] flex-1 flex-col gap-0.5 border-r border-border p-0.5"
-            >
-              {eventsByDay[index].allDay.map((event) => {
-                const colors = getEventColor(event.type);
-                return (
-                  <button
-                    key={event.id}
-                    type="button"
-                    onClick={() => onEventClick(event)}
-                    title={event.title}
-                    className={clsx(
-                      "truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition-micro hover:opacity-90",
-                      colors.bg,
-                      colors.border,
-                      colors.text,
-                    )}
-                  >
-                    {event.title}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {weekDays.map((date, index) => {
+            // Ghim lịch nhiều ngày lên đầu để dây nối thẳng hàng giữa các ngày.
+            const allDaySorted = [...eventsByDay[index].allDay].sort((a, b) => {
+              const aSpan = getMultiDayPosition(a, date) !== null;
+              const bSpan = getMultiDayPosition(b, date) !== null;
+              if (aSpan !== bSpan) return aSpan ? -1 : 1;
+              return 0;
+            });
+            return (
+              <div
+                key={date.toISOString()}
+                className="flex min-h-[28px] flex-1 flex-col gap-0.5 border-r border-border p-0.5"
+              >
+                {allDaySorted.map((event) => {
+                  // Lịch nhiều ngày → dây mỏng (bắt đầu → nối → kết thúc đỏ),
+                  // đồng bộ với widget tuần & lưới Tháng.
+                  const span = getMultiDayPosition(event, date);
+                  if (span) {
+                    const isEnd = span === "end";
+                    const isStart = span === "start";
+                    // Ngày GIỮA: chỉ một sợi chỉ mảnh căn giữa, nối liền hai
+                    // badge to ở ngày bắt đầu & kết thúc.
+                    if (!isStart && !isEnd) {
+                      return (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => onEventClick(event)}
+                          title={event.title}
+                          className="-mx-0.5 flex h-5 items-center"
+                        >
+                          <span className="h-1 w-full bg-amber-400/80" />
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => onEventClick(event)}
+                        title={isEnd ? `${event.title} · Kết thúc` : event.title}
+                        className={clsx(
+                          "relative flex h-5 min-w-0 items-center px-1 text-left text-[10px] font-semibold leading-none transition-micro hover:brightness-95 dark:hover:brightness-110",
+                          isStart && "-mr-0.5 rounded-l",
+                          isEnd && "-ml-0.5 rounded-r",
+                          isEnd
+                            ? "bg-[#DC2626] text-white"
+                            : "bg-amber-400/80 text-amber-900 dark:text-amber-100",
+                        )}
+                      >
+                        {isStart && <span className="truncate">{event.title}</span>}
+                        {isEnd && <span className="truncate">Kết thúc</span>}
+                        {/* Node tròn ở đầu/cuối dây để nhìn rõ là một liên kết. */}
+                        <span
+                          className={clsx(
+                            "pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-amber-500",
+                            isStart ? "right-0 translate-x-1/2" : "left-0 -translate-x-1/2",
+                          )}
+                        />
+                      </button>
+                    );
+                  }
+                  const colors = getEventColor(event.type);
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => onEventClick(event)}
+                      title={event.title}
+                      className={clsx(
+                        "truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition-micro hover:opacity-90",
+                        colors.bg,
+                        colors.border,
+                        colors.text,
+                      )}
+                    >
+                      {event.title}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -198,10 +277,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
           <div className="flex flex-1">
             {weekDays.map((date, index) => {
               const { timed } = eventsByDay[index];
+              const isWeekend = index >= 5;
               return (
                 <div
                   key={date.toISOString()}
-                  className="relative flex-1 border-r border-border"
+                  className={clsx(
+                    "relative flex-1 border-r border-border",
+                    isWeekend && !isToday(date) && "bg-surface-overlay/30",
+                    isToday(date) && "bg-[#DBEAFE]/15",
+                  )}
                 >
                   {/* Mỗi giờ = 2 slot 30 phút, hover & click tạo lịch (kiểu Teams) */}
                   {HOURS.map((hour) => (
@@ -244,9 +328,16 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
                   {/* Timed events */}
                   {timed.map(({ event, startMin, endMin, col, colCount }) => {
-                    // Lịch dài hạn (nhiều ngày) → màu vàng + chữ to & đậm hơn.
+                    // Lịch dài hạn (nhiều ngày) → màu vàng + chữ to & đậm hơn;
+                    // riêng ngày KẾT THÚC tô đỏ (#DC2626) đồng bộ với view Tháng.
                     const isLong = isMultiDayEvent(event);
-                    const colors = isLong ? MULTI_DAY_EVENT_COLOR : getEventColor(event.type);
+                    const span = isLong ? getMultiDayPosition(event, date) : null;
+                    const colors =
+                      span === "end"
+                        ? MULTI_DAY_END_COLOR
+                        : isLong
+                          ? MULTI_DAY_EVENT_COLOR
+                          : getEventColor(event.type);
                     const top = startMin * PX_PER_MIN;
                     const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
                     const widthPct = 100 / colCount;
@@ -282,7 +373,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
                           {event.title}
                         </span>
                         {height >= 28 && !isLong && (
-                          <span className="block truncate opacity-70">{fmtMin(startMin)}</span>
+                          <span className="block truncate opacity-70">
+                            {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
+                          </span>
                         )}
                       </button>
                     );
