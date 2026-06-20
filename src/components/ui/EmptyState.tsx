@@ -896,17 +896,17 @@ const WeeklyCalendarWidget: React.FC = () => {
     return getWeekDays(base);
   }, [today, weekOffset]);
 
-  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI THÊM 2 THÁNG ở đầu khoảng.
-  // Lý do: lịch dài hạn (công tác/nghỉ phép) bắt đầu từ tuần/tháng trước nhưng
-  // kéo sang tuần đang xem sẽ KHÔNG được backend trả về nếu chỉ hỏi đúng khoảng
-  // tuần (lọc theo startAt). Lùi `from` về đầu tháng cách 2 tháng để chắc chắn
-  // bắt được các event dài hạn bắc qua tháng; phần render vẫn lọc client theo
-  // eventOccursOnDay nên chỉ hiện đúng 7 ngày của tuần.
+  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI 6 THÁNG ở đầu khoảng.
+  // Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
+  // nhiều tháng trước nhưng vẫn kéo sang tuần đang xem; backend lọc theo startAt
+  // nên range hẹp sẽ KHÔNG trả các event dài bắt đầu xa. Lùi `from` về đầu tháng
+  // cách 6 tháng để chắc bắt được; render vẫn lọc client theo eventOccursOnDay
+  // nên chỉ hiện đúng 7 ngày của tuần.
   const weekRange = React.useMemo(() => {
     if (!weekDays.length) return { start: null, end: null };
     const first = weekDays[0];
     const last = weekDays[6];
-    const start = new Date(first.getFullYear(), first.getMonth() - 2, 1, 0, 0, 0, 0);
+    const start = new Date(first.getFullYear(), first.getMonth() - 6, 1, 0, 0, 0, 0);
     const end = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
     return {
       start: start.toISOString(),
@@ -1417,7 +1417,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                   // Lịch dài ngày → thanh TRẢI NGANG: ngày bắt đầu hiện tiêu đề,
                   // ngày giữa chỉ là dây nối, ngày kết thúc tô đỏ (#DC2626).
                   // Margin âm để bar lấn vào padding ô, nối liền qua các ngày.
-                  const span = ev.isMultiDay ? getMultiDayPosition(ev.detail.source, day) : null;
+                  const span = ev.isMultiDay && ev.detail.source ? getMultiDayPosition(ev.detail.source, day) : null;
                   if (span) {
                     const isEnd = span === "end";
                     const isStart = span === "start";
