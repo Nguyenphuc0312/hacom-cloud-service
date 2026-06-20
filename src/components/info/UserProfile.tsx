@@ -7,6 +7,7 @@ import {
   BuildingOffice2Icon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
+  CheckBadgeIcon,
   EnvelopeIcon,
   IdentificationIcon,
   PencilSquareIcon,
@@ -18,7 +19,11 @@ import { Avatar } from "../common/Avatar";
 import { Button, ConfirmDialog, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../../stores";
-import { useMyHrProfile } from "../../hooks/useMyHrProfile";
+import { useMyProfile } from "../../features/profile/useMyProfile";
+import {
+  formatJoinDate,
+  resolveEmploymentStatusLabel,
+} from "../../features/profile/profileFormat";
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
 import { extractApiError } from "../../lib/apiContract";
@@ -49,14 +54,20 @@ type ProfileUser = Partial<UserSummary> & {
   employee_code?: string;
   departmentName?: string;
   department_name?: string;
+  department?: string;
   orgUnit?: string;
   org_unit?: string;
+  company?: string;
   jobTitle?: string;
   job_title?: string;
   title?: string;
+  position?: string;
   corporateEmail?: string;
+  companyEmail?: string;
   emailFromHr?: string;
   email_from_hr?: string;
+  employmentStatus?: string;
+  dateOfJoining?: string;
 };
 
 type UserProfileConversationContext = "standalone" | "direct" | "group";
@@ -188,8 +199,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     [initialUser, userId],
   );
   const isSelf = userId === currentUserId;
-  // HRM is the source of truth for employment fields on the self profile.
-  const { employee: hrSelf } = useMyHrProfile({ enabled: isSelf });
+  // Same canonical self-profile resolver as Settings → Hồ sơ cá nhân, so both
+  // surfaces always show identical values (HR over chat). Skipped for others.
+  const myProfile = useMyProfile({ enabled: isSelf });
 
   // Profile fetched from GET /users/{id} for the *other* user. Updated only via
   // the async fetch below — never synchronously in an effect — so it never
@@ -228,7 +240,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     userId ? state.presenceMap[userId] : undefined,
   );
 
-  // Self profile is derived from the auth store, never the /users endpoint.
+  // Self profile is derived from the canonical resolver (auth store + HR),
+  // never the /users endpoint — keeping it identical to the Settings view.
   const selfProfile = React.useMemo<ProfileUser | null>(() => {
     if (!isSelf || !authUser) return null;
     return {
@@ -237,20 +250,27 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       username: authUser.username,
       firstName: authUser.firstName,
       lastName: authUser.lastName,
-      displayName: authUser.displayName,
+      // HR-aware name so the self view matches Settings.
+      displayName: myProfile.displayName,
       avatar: authUser.avatar,
       bio: authUser.bio,
       // HR fields override the chat copy when an HR profile is linked.
-      phone: hrSelf?.phone || authUser.phone,
-      jobTitle: hrSelf?.position?.name || undefined,
-      departmentName: hrSelf?.department?.name || undefined,
-      orgUnit: hrSelf?.unit?.name || undefined,
-      corporateEmail: hrSelf?.companyEmail || undefined,
-      employeeCode: hrSelf?.employeeCode || authUser.employeeCode || undefined,
+      phone: myProfile.phone ?? undefined,
+      // `readUserValue` checks `title` before `jobTitle`, so override the stale
+      // chat-api `title` that the spread carries — otherwise the panel would
+      // keep showing the old position after an HRM role change.
+      title: myProfile.jobTitle ?? undefined,
+      jobTitle: myProfile.jobTitle ?? undefined,
+      departmentName: myProfile.departmentName ?? undefined,
+      orgUnit: myProfile.orgUnit ?? undefined,
+      corporateEmail: myProfile.corporateEmail ?? undefined,
+      employeeCode: myProfile.employeeCode ?? undefined,
+      employmentStatus: myProfile.employmentStatus ?? undefined,
+      dateOfJoining: myProfile.dateOfJoining ?? undefined,
       createdAt: authUser.createdAt,
       status: authUser.status as UserStatus,
     };
-  }, [authUser, isSelf, hrSelf]);
+  }, [authUser, isSelf, myProfile]);
 
   // Single resolved user for rendering. For the other user we prefer the
   // fetched detail (only when it matches the current target), else fall back to
@@ -307,6 +327,47 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   const displayName = formatDisplayName(user);
   const username = user?.username ? `@${user.username}` : null;
+
+  // Resolve employment fields once. Canonical BE field names
+  // (position/department/company/companyEmail) are checked first so the panel
+  // auto-populates the moment chat-api enriches /users/{id} from HR; the legacy
+  // field names remain as fallback. See docs/USER_PROFILE_HR_SYNC_API.md.
+  const jobTitleValue = readUserValue(
+    user,
+    "position",
+    "title",
+    "jobTitle",
+    "job_title",
+  );
+  const departmentValue = readUserValue(
+    user,
+    "department",
+    "departmentName",
+    "department_name",
+  );
+  const companyValue = readUserValue(user, "company", "orgUnit", "org_unit");
+  const corporateEmailValue = readUserValue(
+    user,
+    "companyEmail",
+    "corporateEmail",
+    "emailFromHr",
+    "email_from_hr",
+  );
+  const employeeCodeValue = readUserValue(user, "employeeCode", "employee_code");
+  const employmentStatusValue = resolveEmploymentStatusLabel(
+    readUserValue(user, "employmentStatus"),
+    t,
+  );
+  const joinDateValue = formatJoinDate(readUserValue(user, "dateOfJoining"));
+  const hasEmploymentInfo = Boolean(
+    jobTitleValue ||
+      departmentValue ||
+      companyValue ||
+      corporateEmailValue ||
+      employeeCodeValue ||
+      employmentStatusValue ||
+      joinDateValue,
+  );
   // Live presence (WS) is the only source of truth — never `user.status`.
   // Self is always shown ONLINE (you are actively using the app and we don't
   // subscribe to our own presence channel).
@@ -557,19 +618,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </p>
                     )}
 
-                    {readUserValue(user, "title", "jobTitle", "job_title") && (
+                    {jobTitleValue && (
                       <p className="truncate text-body-sm font-medium text-text-primary">
-                        {readUserValue(user, "title", "jobTitle", "job_title")}
+                        {jobTitleValue}
                       </p>
                     )}
 
-                    {(readUserValue(user, "departmentName", "department_name") ||
-                      readUserValue(user, "orgUnit", "org_unit")) && (
+                    {(departmentValue || companyValue) && (
                       <p className="truncate text-body-sm text-text-muted">
-                        {[
-                          readUserValue(user, "departmentName", "department_name"),
-                          readUserValue(user, "orgUnit", "org_unit"),
-                        ]
+                        {[departmentValue, companyValue]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
@@ -634,13 +691,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </section>
               )}
 
-              {(readUserValue(user, "title", "jobTitle", "job_title") ||
-                readUserValue(user, "departmentName", "department_name") ||
-                readUserValue(user, "orgUnit", "org_unit") ||
-                readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr") ||
-                readUserValue(user, "employeeCode", "employee_code")) && (
+              {hasEmploymentInfo && (
                 <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {readUserValue(user, "title", "jobTitle", "job_title") && (
+                  {jobTitleValue && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
                         <BriefcaseIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
@@ -649,13 +702,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("profile:settings.jobTitle", { defaultValue: "Chức danh" })}
                           </p>
                           <p className="mt-1 text-sm text-text-primary">
-                            {readUserValue(user, "title", "jobTitle", "job_title")}
+                            {jobTitleValue}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {readUserValue(user, "departmentName", "department_name") && (
+                  {departmentValue && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
                         <BuildingOffice2Icon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
@@ -664,13 +717,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("profile:settings.departmentName", { defaultValue: "Phòng ban" })}
                           </p>
                           <p className="mt-1 text-sm text-text-primary">
-                            {readUserValue(user, "departmentName", "department_name")}
+                            {departmentValue}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {readUserValue(user, "orgUnit", "org_unit") && (
+                  {companyValue && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
                         <BuildingLibraryIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
@@ -679,13 +732,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("profile:settings.orgUnit", { defaultValue: "Công ty" })}
                           </p>
                           <p className="mt-1 text-sm text-text-primary">
-                            {readUserValue(user, "orgUnit", "org_unit")}
+                            {companyValue}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr") && (
+                  {corporateEmailValue && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
                         <EnvelopeIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0]" />
@@ -694,13 +747,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("profile:settings.corporateEmail", { defaultValue: "Email công ty" })}
                           </p>
                           <p className="mt-1 break-all text-sm text-text-primary">
-                            {readUserValue(user, "corporateEmail", "emailFromHr", "email_from_hr")}
+                            {corporateEmailValue}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {readUserValue(user, "employeeCode", "employee_code") && (
+                  {employeeCodeValue && (
                     <div className={statCardClass}>
                       <div className="flex items-start gap-3">
                         <IdentificationIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
@@ -709,7 +762,37 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             {t("profile:settings.employeeCode", { defaultValue: "Mã nhân viên" })}
                           </p>
                           <p className="mt-1 text-sm text-text-primary">
-                            {readUserValue(user, "employeeCode", "employee_code")}
+                            {employeeCodeValue}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {employmentStatusValue && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <CheckBadgeIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.employmentStatus", { defaultValue: "Trạng thái nhân sự" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {employmentStatusValue}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {joinDateValue && (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-[#1565C0]" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:settings.joinDate", { defaultValue: "Ngày vào làm" })}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {joinDateValue}
                           </p>
                         </div>
                       </div>
