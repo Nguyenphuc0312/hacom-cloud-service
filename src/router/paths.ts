@@ -26,4 +26,5 @@ export const ROUTE_PATHS = {
   FAQ: "/faq",
   REPORT_ISSUE: "/report-issue",
   PRIVACY_POLICY: "/privacy-policy",
+  DATA_DELETION: "/data-deletion",
 } as const;
