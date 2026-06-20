@@ -29,7 +29,7 @@ const ViContent: React.FC = () => (
       <p className="mt-3">Khi sử dụng ứng dụng, bạn xác nhận rằng bạn đã đọc, hiểu và đồng ý với các nội dung được quy định trong Chính sách Bảo mật này.</p>
     </Section>
 
-    <Section title="2. Hacom ID — Mã định danh người dùng">
+    <Section title="2. Hacom ID — Tài khoản">
       <p>Mỗi tài khoản trong hệ thống HACOM Chat được gắn một <span className="font-semibold text-[#0f172a]">Hacom ID</span> duy nhất — là mã số định danh nội bộ do hệ thống tự cấp phát khi tài khoản được tạo.</p>
       <div className="mt-3 space-y-2">
         <p><span className="font-medium">Hacom ID dùng để:</span></p>
@@ -111,9 +111,6 @@ const ViContent: React.FC = () => (
         </li>
         <li>
           <span className="font-medium">Thông tin sức khỏe và y tế:</span> hồ sơ bệnh án, chẩn đoán, đơn thuốc, thông tin bảo hiểm y tế hoặc bất kỳ dữ liệu y tế nào. HACOM Chat không cung cấp dịch vụ y tế hay chăm sóc sức khỏe.
-        </li>
-        <li>
-          <span className="font-medium">Vị trí địa lý (GPS):</span> chúng tôi không theo dõi vị trí thực tế của người dùng trong thời gian thực.
         </li>
         <li>
           <span className="font-medium">Danh bạ cá nhân:</span> chúng tôi không truy cập danh bạ điện thoại cá nhân của thiết bị.
@@ -239,6 +236,9 @@ const ViContent: React.FC = () => (
     </Section>
 
     <Section title="13. Quản lý tài khoản">
+      <p className="mb-3 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-3.5 text-sm text-[#334155]">
+        Tài khoản được tạo và quản lý bởi tổ chức. Người dùng không thể tự đăng ký. Nếu cần gỡ bỏ một tài khoản, quản trị viên của tổ chức có thể xóa vĩnh viễn tài khoản đó khỏi hệ thống.
+      </p>
       <p>Tài khoản Hacom ID được cấp phát và quản lý bởi doanh nghiệp. Khi nhân sự nghỉ việc hoặc theo yêu cầu của doanh nghiệp, quản trị viên hệ thống sẽ vô hiệu hóa hoặc xóa tài khoản theo quy trình nội bộ.</p>
       <p className="mt-3">Tài khoản người dùng được tạo, cập nhật, tạm khóa hoặc xóa bởi quản trị viên được ủy quyền của tổ chức.</p>
       <p className="mt-3">Khi quan hệ lao động, hợp đồng hoặc quyền được cấp phép sử dụng kết thúc, quyền truy cập ứng dụng của bạn sẽ bị chấm dứt hoặc hạn chế theo chính sách nội bộ.</p>
@@ -511,6 +511,9 @@ const EnContent: React.FC = () => (
     </Section>
 
     <Section title="13. Account Management">
+      <p className="mb-3 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-3.5 text-sm text-[#334155]">
+        Accounts are created and managed by the organization. Users cannot self-register. If an account needs to be removed, the organization's administrator can permanently delete it from the system.
+      </p>
       <p>Hacom ID accounts are provisioned and managed by the enterprise. When an employee leaves the company or upon the enterprise's request, the system administrator will disable or delete the account in accordance with internal procedures.</p>
       <p className="mt-3">User accounts are created, updated, suspended, and deleted by the organization's authorized administrators.</p>
       <p className="mt-3">If your employment, contract, or authorization ends, your access to the application will be terminated or limited according to internal policy.</p>
