@@ -15,6 +15,7 @@ import {
   HOURS,
   MINUTES_PER_DAY,
   eventOccursOnDay,
+  formatEventTimeRange,
   getMultiDayPosition,
   isMultiDayEvent,
   layoutDayEvents,
@@ -108,7 +109,7 @@ const TimedEventBlock: React.FC<{
       </span>
       {showTime && (
         <span className="block truncate text-[10px] opacity-70">
-          {fmtMin(startMin)}–{fmtMin(endMin)}
+          {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
         </span>
       )}
     </button>
@@ -151,10 +152,15 @@ export const DayView: React.FC<DayViewProps> = ({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <h2 className="text-lg font-semibold text-text-primary">
           {formatDateDisplay(date)}
         </h2>
+        {isToday && (
+          <span className="shrink-0 rounded-full bg-[#1565C0] px-2.5 py-1 text-xs font-bold text-white">
+            Hôm nay
+          </span>
+        )}
       </div>
 
       {/* Attendance summary */}

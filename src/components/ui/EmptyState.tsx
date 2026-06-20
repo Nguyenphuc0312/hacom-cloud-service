@@ -20,6 +20,7 @@ import {
   XMarkIcon,
   ClockIcon,
   MapPinIcon,
+  BuildingOfficeIcon,
   UserIcon,
   UsersIcon,
   VideoCameraIcon,
@@ -36,7 +37,7 @@ import {
   getEventColor,
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
-import { eventOccursOnDay, isMultiDayEvent, getMultiDayPosition } from "../../features/calendar/utils/timeline";
+import { eventOccursOnDay, isMultiDayEvent, getMultiDayPosition, formatEventTimeRange } from "../../features/calendar/utils/timeline";
 import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "./PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "./Modal";
@@ -365,6 +366,27 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
     }
   };
 
+  // Sự kiện API nhiều ngày (công tác dài hạn / qua đêm): bắt đầu & kết thúc khác
+  // ngày → hiện rõ cả hai mốc kèm ngày, tránh chỉ 1 ngày + giờ "08:00 — 10:00"
+  // (vốn nằm ở 2 ngày khác nhau) gây hiểu nhầm.
+  const apiStart = apiEvent?.startAt ? new Date(apiEvent.startAt) : null;
+  const apiEnd = apiEvent?.endAt ? new Date(apiEvent.endAt) : null;
+  const validStart = apiStart && !Number.isNaN(apiStart.getTime()) ? apiStart : null;
+  const validEnd = apiEnd && !Number.isNaN(apiEnd.getTime()) ? apiEnd : null;
+  const isApiMultiDay = !!(
+    validStart && validEnd && validStart.toDateString() !== validEnd.toDateString()
+  );
+  const fmtDateTime = (d: Date): string =>
+    d.toLocaleString("vi-VN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -388,9 +410,12 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           </div>
 
           <h3 className="text-xl font-semibold text-text-primary">{detail.title}</h3>
-          <p className="mt-1 text-sm font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
-            {formatDate(detail.date)}
-          </p>
+          {/* Nhiều ngày → mốc Bắt đầu/Kết thúc hiện ở khối thời gian bên dưới. */}
+          {!isApiMultiDay && (
+            <p className="mt-1 text-sm font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
+              {formatDate(detail.date)}
+            </p>
+          )}
 
           {isLocalMeeting && m!.createdByName && (
             <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
@@ -403,7 +428,8 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
           )}
 
           <div className="mt-4 space-y-3 text-sm">
-            {(isLocalMeeting ? (m!.startTime || m!.endTime) : detail.time) && (
+            {/* Giờ: sự kiện API hiển thị khoảng giờ ở block riêng bên dưới → tránh lặp. */}
+            {(isLocalMeeting ? (m!.startTime || m!.endTime) : (!isApiEvent && detail.time)) && (
               <div className="flex items-center gap-3">
                 <ClockIcon className="h-5 w-5 text-text-muted" />
                 <span className="text-text-primary">
@@ -483,15 +509,29 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             {/* API Event rich display */}
             {isApiEvent && apiEvent && (
               <>
-                {/* Time */}
-                {apiEvent.startAt && apiEvent.endAt && (
+                {/* Thời gian: nhiều ngày → Bắt đầu/Kết thúc kèm ngày; trong ngày → khoảng giờ. */}
+                {isApiMultiDay && validStart && validEnd ? (
+                  <div className="flex items-start gap-3">
+                    <CalendarDaysIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    <div className="space-y-0.5">
+                      <p className="text-text-primary">
+                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Bắt đầu: </span>
+                        {fmtDateTime(validStart)}
+                      </p>
+                      <p className="text-text-primary">
+                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Kết thúc: </span>
+                        {fmtDateTime(validEnd)}
+                      </p>
+                    </div>
+                  </div>
+                ) : apiEvent.startAt && apiEvent.endAt ? (
                   <div className="flex items-center gap-3">
                     <ClockIcon className="h-5 w-5 text-text-muted" />
                     <span className="text-text-primary">
                       {new Date(apiEvent.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} — {new Date(apiEvent.endAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}
                     </span>
                   </div>
-                )}
+                ) : null}
 
                 {/* Chairman */}
                 {apiEvent.meetingChairman && (
@@ -528,6 +568,21 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Hình thức (online/offline) */}
+                {apiEvent.meetingFormat && (
+                  <div className="flex items-center gap-3">
+                    {apiEvent.meetingFormat === "online" ? (
+                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    ) : (
+                      <BuildingOfficeIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    )}
+                    <span className="text-text-primary">
+                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Hình thức: </span>
+                      {apiEvent.meetingFormat === "online" ? "Trực tuyến (Online)" : "Trực tiếp (Offline)"}
+                    </span>
                   </div>
                 )}
 
@@ -784,11 +839,26 @@ const WeeklyCalendarWidget: React.FC = () => {
   const apiEventsMap = React.useMemo(() => {
     const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
     safeStoreEvents.forEach((event) => {
-      // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail
-      const attendeeNames = event.participants
+      // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail.
+      // Tên người tham gia: ưu tiên fullName của participant, fallback employee.fullName.
+      const participantNames = event.participants
         ? event.participants
-            .filter((p) => p.employee?.fullName)
-            .map((p) => p.employee!.fullName)
+            .map((p) => p.fullName ?? p.employee?.fullName ?? "")
+            .filter(Boolean)
+        : [];
+      // Chủ trì / hình thức / khách mời free-text nằm trong metadata (giống CalendarPage).
+      const meta =
+        event.metadata && typeof event.metadata === "object"
+          ? (event.metadata as Record<string, unknown>)
+          : {};
+      const meetingChairman =
+        typeof meta.meetingChairman === "string" ? meta.meetingChairman : null;
+      const meetingFormat =
+        meta.meetingFormat === "online" || meta.meetingFormat === "offline"
+          ? meta.meetingFormat
+          : null;
+      const freeTextNames = Array.isArray(meta.attendees)
+        ? meta.attendees.filter((a): a is string => typeof a === "string")
         : [];
       map[event.id] = {
         id: event.id,
@@ -796,8 +866,10 @@ const WeeklyCalendarWidget: React.FC = () => {
         startAt: event.startAt,
         endAt: event.endAt,
         description: event.description,
+        meetingChairman,
+        meetingFormat,
         meetingLocation: event.location ?? null,
-        attendees: attendeeNames,
+        attendees: [...participantNames, ...freeTextNames],
         visibility: event.visibility,
         ownerUserId: event.ownerId,
       };
@@ -1408,9 +1480,15 @@ const WeeklyCalendarWidget: React.FC = () => {
                       )}
                       title={ev.title}
                     >
-                      {ev.time && (
-                        <span className="font-bold opacity-80">{ev.time}</span>
-                      )}
+                      {(() => {
+                        const range = ev.detail.source
+                          ? formatEventTimeRange(ev.detail.source)
+                          : null;
+                        const display = range ?? ev.time;
+                        return display ? (
+                          <span className="font-bold opacity-80">{display}</span>
+                        ) : null;
+                      })()}
                       <span className="truncate">{ev.title}</span>
                     </button>
                   );

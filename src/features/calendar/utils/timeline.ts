@@ -104,6 +104,32 @@ export const getMultiDayPosition = (
 };
 
 /**
+ * Khoảng giờ hiển thị "HH:mm — HH:mm" theo GIỜ ĐỊA PHƯƠNG từ startAt/endAt.
+ * Dùng chung cho mọi màn lịch (widget/Day/Week/popup) để định dạng thời gian
+ * đồng nhất (đủ cả bắt đầu & kết thúc, gạch em-dash). Trả `null` nếu không có
+ * giờ rõ ràng; nếu thiếu endAt thì chỉ trả giờ bắt đầu.
+ */
+export const formatEventTimeRange = (event: CalendarEvent): string | null => {
+  const ext = event as ExtendedCalendarEvent;
+  const fmt = (d: Date): string =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+  if (ext.startAt) {
+    const start = new Date(ext.startAt);
+    if (!Number.isNaN(start.getTime())) {
+      const startStr = fmt(start);
+      if (ext.endAt) {
+        const end = new Date(ext.endAt);
+        if (!Number.isNaN(end.getTime())) return `${startStr} — ${fmt(end)}`;
+      }
+      return startStr;
+    }
+  }
+  // Fallback: chuỗi giờ sẵn có (lễ tĩnh / dữ liệu cũ không có ISO).
+  return event.time?.trim() ? event.time : null;
+};
+
+/**
  * Phút-từ-nửa-đêm của thời điểm bắt đầu, tính theo ngày `day` (nếu truyền).
  * Trả `null` nếu event là all-day hoặc không xác định được giờ (lễ tĩnh, task theo ngày…).
  * Với event nhiều ngày: các ngày sau ngày bắt đầu ⇒ bắt đầu từ 00:00.

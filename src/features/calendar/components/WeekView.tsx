@@ -15,6 +15,7 @@ import {
   HOURS,
   MINUTES_PER_DAY,
   eventOccursOnDay,
+  formatEventTimeRange,
   getMultiDayPosition,
   getWeekDays,
   isMultiDayEvent,
@@ -117,6 +118,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
+          const isWeekend = index >= 5;
           return (
             <button
               type="button"
@@ -124,16 +126,28 @@ export const WeekView: React.FC<WeekViewProps> = ({
               onClick={() => onDateClick(date)}
               className={clsx(
                 "flex-1 border-r border-border px-2 py-2 text-center transition-micro hover:bg-surface-hover",
-                isToday(date) && "bg-primary/5",
+                isWeekend && !isToday(date) && "bg-surface-overlay/40",
+                isToday(date) && "bg-[#DBEAFE]/30",
               )}
             >
-              <div className="text-xs text-text-muted">{WEEKDAY_LABELS[index]}</div>
               <div
                 className={clsx(
-                  "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
-                  !isToday(date) && "text-text-primary",
-                  isToday(date) && "bg-primary text-white",
-                  isSelected(date) && !isToday(date) && "bg-primary/10 ring-2 ring-primary/30",
+                  "text-xs font-medium",
+                  isToday(date)
+                    ? "text-[#1565C0]"
+                    : isWeekend
+                      ? "text-rose-500"
+                      : "text-text-muted",
+                )}
+              >
+                {WEEKDAY_LABELS[index]}
+              </div>
+              <div
+                className={clsx(
+                  "mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
+                  !isToday(date) && (isWeekend ? "text-rose-500" : "text-text-primary"),
+                  isToday(date) && "bg-[#1565C0] text-white",
+                  isSelected(date) && !isToday(date) && "bg-[#1976D2]/10 text-[#1565C0] ring-2 ring-[#1976D2]/40",
                 )}
               >
                 {date.getDate()}
@@ -263,10 +277,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
           <div className="flex flex-1">
             {weekDays.map((date, index) => {
               const { timed } = eventsByDay[index];
+              const isWeekend = index >= 5;
               return (
                 <div
                   key={date.toISOString()}
-                  className="relative flex-1 border-r border-border"
+                  className={clsx(
+                    "relative flex-1 border-r border-border",
+                    isWeekend && !isToday(date) && "bg-surface-overlay/30",
+                    isToday(date) && "bg-[#DBEAFE]/15",
+                  )}
                 >
                   {/* Mỗi giờ = 2 slot 30 phút, hover & click tạo lịch (kiểu Teams) */}
                   {HOURS.map((hour) => (
@@ -354,7 +373,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
                           {event.title}
                         </span>
                         {height >= 28 && !isLong && (
-                          <span className="block truncate opacity-70">{fmtMin(startMin)}</span>
+                          <span className="block truncate opacity-70">
+                            {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
+                          </span>
                         )}
                       </button>
                     );
