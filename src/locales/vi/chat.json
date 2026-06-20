@@ -159,12 +159,17 @@
   "search": {
     "title": "Tìm kiếm tin nhắn",
     "placeholder": "Tìm trong cuộc trò chuyện",
+    "idleTitle": "Tìm kiếm trong cuộc trò chuyện",
+    "idleDescription": "Hãy nhập từ khóa để bắt đầu tìm kiếm tin nhắn và file trong cuộc trò chuyện.",
     "error": "Không thể tìm kiếm tin nhắn",
     "noResults": "Không có tin nhắn phù hợp",
     "noResultsDescription": "Hãy thử từ khóa khác.",
     "resultCount": "{{count}} kết quả",
     "resultCount_one": "{{count}} kết quả",
-    "resultCount_other": "{{count}} kết quả"
+    "resultCount_other": "{{count}} kết quả",
+    "sectionMessages": "Tin nhắn",
+    "sectionFiles": "File",
+    "showMore": "Xem thêm"
   },
   "conversation": {
     "untitled": "Cuộc trò chuyện chưa đặt tên",

@@ -1114,13 +1114,17 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     <section
       key={conversation.id}
       className={clsx(
-        "chat-background chat-shell relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
+        "relative flex h-full min-h-0 overflow-hidden",
         className,
       )}
-      data-chat-layout-profile={layoutProfile}
-      data-chat-layout-state={layoutState}
-      {...dropZoneProps}
     >
+      {/* Chat column — shrinks when the docked search panel opens */}
+      <div
+        className="chat-background chat-shell relative flex min-w-0 flex-1 flex-col overflow-hidden animate-content-fade transition-[width] duration-300 ease-out"
+        data-chat-layout-profile={layoutProfile}
+        data-chat-layout-state={layoutState}
+        {...dropZoneProps}
+      >
       {/* Drag-and-drop overlay */}
       <DropOverlay isActive={isDragActive} onDismiss={dismiss} />
       <ChatHeader
@@ -1144,7 +1148,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         />
       )}
 
-      {overlayMode && (
+      {/* Pinned / Inspect remain floating overlays with a scrim */}
+      {(overlayMode === "pinned" || overlayMode === "inspect") && (
         <div className="pointer-events-none absolute inset-0 z-[45]">
           <button
             type="button"
@@ -1152,16 +1157,9 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             onClick={() => setOverlayMode(null)}
             aria-label={t("common:actions.close")}
           />
-          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border/60 bg-[hsl(var(--chat-panel-bg))] shadow-elev3 animate-slide-up-fade">
+          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[var(--app-inspector-width)] border-l border-border/60 bg-surface shadow-elev3 animate-slide-up-fade">
             <React.Suspense fallback={<OverlayPanelFallback />}>
-              {overlayMode === "search" ? (
-                <SearchPanel
-                  conversationId={conversation.id}
-                  onSelectMessage={handleJumpToMessage}
-                  onClose={() => setOverlayMode(null)}
-                  className="h-full"
-                />
-              ) : overlayMode === "inspect" ? (
+              {overlayMode === "inspect" ? (
                 <MessageInspectDrawer
                   message={inspectedMessage ?? null}
                   onClose={() => setOverlayMode(null)}
@@ -1315,6 +1313,30 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           />
         </React.Suspense>
       )}
+      </div>
+
+      {/* Search panel — docked beside the chat (pushes it left, no scrim),
+          matching the info panel behaviour */}
+      <div
+        className={clsx(
+          "h-full shrink-0 overflow-hidden border-border/60 transition-[width] duration-300 ease-out",
+          overlayMode === "search"
+            ? "w-full max-w-[var(--app-inspector-width)] border-l"
+            : "w-0 border-l-0",
+        )}
+        aria-hidden={overlayMode !== "search" ? true : undefined}
+      >
+        {overlayMode === "search" && (
+          <React.Suspense fallback={<OverlayPanelFallback />}>
+            <SearchPanel
+              conversationId={conversation.id}
+              onSelectMessage={handleJumpToMessage}
+              onClose={() => setOverlayMode(null)}
+              className="h-full w-[var(--app-inspector-width)]"
+            />
+          </React.Suspense>
+        )}
+      </div>
     </section>
   );
 };
