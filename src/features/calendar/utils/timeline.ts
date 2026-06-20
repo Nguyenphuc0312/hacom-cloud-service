@@ -70,6 +70,39 @@ export const isMultiDayEvent = (event: CalendarEvent): boolean => {
   return localDayStartMs(end) > localDayStartMs(start);
 };
 
+/** Vị trí của một ngày trong khoảng trải của sự kiện nhiều ngày. */
+export type MultiDayPosition = "start" | "middle" | "end";
+
+/**
+ * Với sự kiện nhiều ngày, xác định `day` là ngày BẮT ĐẦU / GIỮA / KẾT THÚC của
+ * dải trải (để render kiểu thanh trải ngang: bắt đầu → dây nối → kết thúc).
+ * Trả `null` nếu event không phải nhiều ngày hoặc `day` nằm ngoài khoảng.
+ *
+ * Ngày kết thúc hiệu dụng khớp `eventOccursOnDay`: nếu endAt rơi đúng 00:00 của
+ * một ngày (thực chất đã hết ở ngày trước) thì ngày cuối hiển thị lùi lại 1 ngày.
+ */
+export const getMultiDayPosition = (
+  event: CalendarEvent,
+  day: Date,
+): MultiDayPosition | null => {
+  const start = eventStartDate(event);
+  if (!start) return null;
+  const end = eventEndDate(event) ?? start;
+
+  const startMs = localDayStartMs(start);
+  let endMs = localDayStartMs(end);
+  if (endMs > startMs && end.getHours() === 0 && end.getMinutes() === 0) {
+    endMs = localDayStartMs(new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1));
+  }
+  if (endMs <= startMs) return null; // chỉ trong 1 ngày → không phải dải trải
+
+  const dayMs = localDayStartMs(day);
+  if (dayMs < startMs || dayMs > endMs) return null;
+  if (dayMs === startMs) return "start";
+  if (dayMs === endMs) return "end";
+  return "middle";
+};
+
 /**
  * Phút-từ-nửa-đêm của thời điểm bắt đầu, tính theo ngày `day` (nếu truyền).
  * Trả `null` nếu event là all-day hoặc không xác định được giờ (lễ tĩnh, task theo ngày…).

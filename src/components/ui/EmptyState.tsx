@@ -34,10 +34,9 @@ import { CheckCircleIcon as CheckCircleSolidIcon } from "@heroicons/react/24/sol
 import { Button } from "./Button";
 import {
   getEventColor,
-  MULTI_DAY_EVENT_COLOR,
   type CalendarEvent,
 } from "../../features/calendar/data/calendarEvents";
-import { eventOccursOnDay, isMultiDayEvent } from "../../features/calendar/utils/timeline";
+import { eventOccursOnDay, isMultiDayEvent, getMultiDayPosition } from "../../features/calendar/utils/timeline";
 import { MeetingFormModal, type MeetingFormData } from "./MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "./PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "./Modal";
@@ -715,7 +714,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
             </div>
           )}
 
-          {/* Mở trang lịch đầy đủ để xem chi tiết lịch họp */}
+          {/* Mở trang lịch đầy đủ để xem chi tiết lịch */}
           {onViewFull && (
             <div className="mt-5 border-t border-border pt-3 text-center">
               <button
@@ -723,7 +722,7 @@ const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
                 onClick={onViewFull}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-[#1565C0] transition-micro hover:underline dark:text-[#6BA8F0]"
               >
-                Xem chi tiết lịch họp →
+                Xem chi tiết lịch →
               </button>
             </div>
           )}
@@ -1239,8 +1238,8 @@ const WeeklyCalendarWidget: React.FC = () => {
           const isWeekend = i >= 5;
           const dayStr = formatDateStr(day);
 
-          // Chỉ họp & cá nhân; sắp theo giờ. Lịch dài hạn (nhiều ngày) tô màu
-          // nổi bật (MULTI_DAY_EVENT_COLOR) như /calendar và ẩn giờ (trải cả ngày).
+          // Chỉ họp & cá nhân; sắp theo giờ. Lịch dài hạn (nhiều ngày) render
+          // dạng thanh trải ngang (bắt đầu → dây nối → kết thúc đỏ).
           const allEvents: Array<{
             id: string;
             time?: string;
@@ -1272,6 +1271,12 @@ const WeeklyCalendarWidget: React.FC = () => {
                   apiEvent: apiEventsMap[e.id],
                 },
               };
+            })
+            // Ghim lịch dài ngày lên đầu để thanh trải nằm cùng hàng giữa các
+            // ngày → nối liền thành "dây nối" liên tục; còn lại sắp theo giờ.
+            .sort((a, b) => {
+              if (a.isMultiDay !== b.isMultiDay) return a.isMultiDay ? -1 : 1;
+              return (a.time ?? "").localeCompare(b.time ?? "");
             });
 
           const visibleEvents = allEvents.slice(0, MAX_VISIBLE_EVENTS);
@@ -1337,8 +1342,58 @@ const WeeklyCalendarWidget: React.FC = () => {
               {/* Events */}
               <div className="flex flex-1 flex-col gap-1">
                 {visibleEvents.map((ev) => {
-                  // Lịch dài hạn → màu vàng nổi bật (khớp /calendar); còn lại theo type.
-                  const colors = ev.isMultiDay ? MULTI_DAY_EVENT_COLOR : getEventColor(ev.type);
+                  // Lịch dài ngày → thanh TRẢI NGANG: ngày bắt đầu hiện tiêu đề,
+                  // ngày giữa chỉ là dây nối, ngày kết thúc tô đỏ (#DC2626).
+                  // Margin âm để bar lấn vào padding ô, nối liền qua các ngày.
+                  const span = ev.isMultiDay ? getMultiDayPosition(ev.detail.source, day) : null;
+                  if (span) {
+                    const isEnd = span === "end";
+                    const isStart = span === "start";
+                    // Ngày GIỮA: chỉ một sợi chỉ mảnh căn giữa, nối liền hai
+                    // badge to ở ngày bắt đầu & kết thúc.
+                    if (!isStart && !isEnd) {
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => setSelectedDetail(ev.detail)}
+                          title={ev.title}
+                          className="-mx-2 flex h-5 items-center sm:-mx-2.5"
+                        >
+                          <span className="h-1 w-full bg-amber-400/80" />
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        onClick={() => setSelectedDetail(ev.detail)}
+                        title={isEnd ? `${ev.title} · Kết thúc` : ev.title}
+                        className={clsx(
+                          "relative flex h-5 min-w-0 items-center px-1.5 text-left text-[10px] font-semibold leading-none transition-micro hover:brightness-95 dark:hover:brightness-110 sm:text-[11px]",
+                          isStart && "-mr-2 rounded-l sm:-mr-2.5",
+                          isEnd && "-ml-2 rounded-r sm:-ml-2.5",
+                          isEnd
+                            ? "bg-[#DC2626] text-white"
+                            : "bg-amber-400/80 text-amber-900 dark:text-amber-100",
+                        )}
+                      >
+                        {isStart && <span className="truncate">{ev.title}</span>}
+                        {isEnd && <span className="truncate">Kết thúc</span>}
+                        {/* Node tròn ở đầu/cuối dây để nhìn rõ là một liên kết. */}
+                        <span
+                          className={clsx(
+                            "pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-amber-500",
+                            isStart ? "right-0 translate-x-1/2" : "left-0 -translate-x-1/2",
+                          )}
+                        />
+                      </button>
+                    );
+                  }
+
+                  // Lịch trong ngày → badge bình thường theo loại.
+                  const colors = getEventColor(ev.type);
                   return (
                     <button
                       key={ev.id}
@@ -1353,7 +1408,7 @@ const WeeklyCalendarWidget: React.FC = () => {
                       )}
                       title={ev.title}
                     >
-                      {ev.time && !ev.isMultiDay && (
+                      {ev.time && (
                         <span className="font-bold opacity-80">{ev.time}</span>
                       )}
                       <span className="truncate">{ev.title}</span>
