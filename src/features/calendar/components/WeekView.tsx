@@ -128,7 +128,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
               key={date.toISOString()}
               onClick={() => onDateClick(date)}
               className={clsx(
-                "flex-1 border-r border-border px-2 py-2 text-center transition-micro hover:bg-surface-hover",
+                "min-w-0 flex-1 border-r border-border px-2 py-2 text-center transition-micro hover:bg-surface-hover",
                 isWeekend && !isToday(date) && "bg-surface-overlay/40",
                 isToday(date) && "bg-[#DBEAFE]/30",
               )}
@@ -186,7 +186,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
             return (
               <div
                 key={date.toISOString()}
-                className="flex min-h-[28px] flex-1 flex-col gap-0.5 border-r border-border p-0.5"
+                className="flex min-h-[28px] min-w-0 flex-1 flex-col gap-0.5 border-r border-border p-0.5"
               >
                 {allDaySorted.map((event) => {
                   // Lịch nhiều ngày → dây mỏng (bắt đầu → nối → kết thúc đỏ),
@@ -245,7 +245,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                       onClick={() => onEventClick(event)}
                       title={event.title}
                       className={clsx(
-                        "truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition-micro hover:opacity-90",
+                        "block w-full min-w-0 max-w-full truncate rounded border px-1 py-0.5 text-left text-[10px] font-medium transition-micro hover:opacity-90",
                         colors.bg,
                         colors.border,
                         colors.text,
