@@ -13,6 +13,7 @@ Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File 
 - **`WEBAPI.md`** — hợp đồng API FE↔BE (map `services/api.ts` ↔ endpoint BE, RTK Query, WS realtime, envelope). Đọc khi thêm/sửa API hoặc nối FE↔BE.
 - **`APIcalendar.md`** — toàn bộ API liên quan đến Lịch (events/chấm công/hồ sơ HR/thông báo qua hr-api-service + task/lễ). Đọc khi đụng tính năng lịch.
 - **`docs/CALENDAR_SPEC.md`** — đặc tả sản phẩm Day/Week View kiểu Teams (hiện trạng vs mục tiêu, gap, lộ trình). Đọc khi làm/đổi Day-Week View.
+- **`d:\HacomCTY\chat-api-service\docs\requests\`** — 🔴 **KÊNH GIAO TIẾP CHUẨN (source of truth) FE↔BE↔API↔shared-types.** Mọi đề xuất đổi contract / yêu cầu thêm field / nghiệm thu **xuyên repo** phải có 1 file ở đây — không trao đổi miệng/chat trôi nổi. Xem mục 15.
 
 ---
 
@@ -323,3 +324,28 @@ npm run build && node scripts/verify-dist-assets.mjs
 
 - Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBFE.md`** trước (đã `@import` ở đầu file) để lấy đúng bảng màu, gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc.
 - Ghi nhớ nhanh **hai vùng màu tách biệt**: SideRail + LoginPage = đỏ/vàng (**không đổi**); toàn bộ app còn lại = xanh dương. Chi tiết token (Button variants, badge unread, focus ring, active item…) xem đầy đủ trong **`WEBFE.md`**.
+
+---
+
+## 15. Kênh giao tiếp chuẩn xuyên repo — `chat-api-service/docs/requests/`
+
+> **Vị trí:** `d:\HacomCTY\chat-api-service\docs\requests\` (cùng máy, repo `chat-api-service`).
+> Đây là **source of truth** cho mọi trao đổi hợp đồng (contract) / yêu cầu thêm-đổi field / nghiệm thu **giữa FE ↔ BE-api ↔ shared-types ↔ auth ↔ hr**. Không trao đổi miệng/chat trôi nổi — **mọi đề xuất đổi contract phải có 1 file ở đây** (có version, review được, truy vết được, là căn cứ nghiệm thu).
+
+**Quy trình khi đụng ranh giới 2 repo (FE cần BE trả thêm field / đổi shape, hoặc nghiệm thu BE đã ship):**
+1. **Đọc trước** `docs/requests/README.md` (quy ước đầy đủ) + 2 template `_TEMPLATE_CONTRACT.md` / `_TEMPLATE_ACCEPTANCE.md` trong folder đó.
+2. **Đọc `.md` của project FE liên quan** (WEBAPI.md / APIcalendar.md / spec…) để gộp đúng nội dung hiện trạng vào file contract/acceptance theo chuẩn template — không viết lại từ trí nhớ.
+3. **Tạo/cập nhật file** trong folder đó theo template + header trạng thái bắt buộc.
+
+**Hai loại file:** `contract` (yêu cầu bên kia đổi contract) và `ACCEPTANCE` (nghiệm thu bên kia đã ship đúng tới đâu). Một feature thường có cả hai (contract trước → acceptance sau).
+
+**⚠️ Ràng buộc của FE (repo này):**
+- **Chỉ được tạo/sửa file do FE khởi xướng**, đặt tên prefix **`FE__`** (theo quy ước README mục 4): `FE__<feature-kebab>__contract.md` hoặc `FE__<feature-kebab>__ACCEPTANCE.md`.
+- **KHÔNG sửa** file do bên khác khởi xướng (`API__…`, `AUTH__…`, `HR__…`, `TYPES__…`) — chỉ đọc để đối chiếu/nghiệm thu.
+- File **không xoá** sau khi chốt (giữ lịch sử) — việc mới → file mới.
+
+**Header trạng thái bắt buộc** (frontmatter dạng quote ở đầu mỗi file): `Loại` / `Người yêu cầu` (mã bên GỬI, trùng prefix tên file) / `Đối tượng` / `Liên quan` / `shared-types ≥ x.y.z` / `Trạng thái` (`ĐỀ XUẤT → CHỜ XÁC NHẬN → ĐANG LÀM → ĐÃ SHIP → ĐÃ CHỐT`, hoặc `BLOCKED`) / `Ngày` (tuyệt đối).
+
+**Mã bên (party code):** `FE` = chat-web-client • `API` = chat-api-service • `AUTH` = chat-auth-service • `HR` = hr-api-service • `TYPES` = @hacom/chat-shared-types.
+
+> Nội dung phải dẫn chiếu **code thật** (`file_path:line`), có **cách kiểm chứng chạy thật** (curl/jq + response kỳ vọng), và field thiếu nguồn/quyền → trả `null` (không 4xx). Khi cần chi tiết hơn, **hỏi user và đọc kỹ** README + template trong folder trước khi viết.
