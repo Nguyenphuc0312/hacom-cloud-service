@@ -4,20 +4,9 @@ import { useTranslation } from "react-i18next";
 import { Avatar } from "../../../components/common/Avatar";
 import { SettingsCard, SettingsSection } from "../../../components/settings";
 import { Button } from "../../../components/ui";
-import { useAuthStore } from "../../../stores";
-import { useMyHrProfile } from "../../../hooks/useMyHrProfile";
-import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
+import { useMyProfile } from "../useMyProfile";
+import { formatJoinDate, resolveEmploymentStatusLabel } from "../profileFormat";
 import { ProfileEditDialog } from "./ProfileEditDialog";
-
-/** Format an ISO date (e.g. "2026-04-15") as dd/MM/yyyy; null on bad input. */
-const formatJoinDate = (iso: string | null | undefined): string | null => {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()}`;
-};
 
 interface ProfileSettingsSectionProps {
   id?: string;
@@ -39,97 +28,39 @@ const SummaryItem: React.FC<SummaryItemProps> = ({ label, value }) => (
   </div>
 );
 
-const readValue = (
-  user: Record<string, unknown> | null | undefined,
-  ...keys: string[]
-) => {
-  if (!user) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = user[key];
-    if (typeof value === "string") {
-      const normalized = value.trim();
-      if (normalized) {
-        return normalized;
-      }
-    }
-  }
-
-  return null;
-};
-
 export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
   id,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
-  const user = useAuthStore((state) => state.user);
-  // HRM is the source of truth for employment fields (chức vụ / phòng ban /
-  // trạng thái / ngày vào làm). Fetched directly from hr-api-service and kept
-  // fresh on tab focus/reconnect, so HRM edits show up without a full reload.
-  const { hrProfile, employee: hr } = useMyHrProfile();
+  // Single source of truth for the current user's profile (HR over chat).
+  const profile = useMyProfile();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const actionButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
-  const userRecord = (user as Record<string, unknown> | null) ?? null;
-  // HRM is the authoritative source for the legal name. Feed it into name
-  // resolution via `fullNameFromHr` so a real HR name always wins over an empty
-  // or code-like chat-api displayName.
-  const nameCandidate = user
-    ? { ...user, fullNameFromHr: hr?.fullName || hrProfile?.fullName || null }
-    : null;
-  const displayName =
-    resolveUserDisplayName(nameCandidate, { allowLegacyFallback: true }) ||
-    t("common:labels.user");
+  const displayName = profile.displayName || t("common:labels.user");
   // "Tên người dùng" is the login username/code (e.g. HC987656), distinct from
   // the display name above — keep it showing the real account identifier.
-  const username =
-    readValue(userRecord, "username") ||
-    hr?.employeeCode ||
-    readValue(userRecord, "employeeCode", "employee_code") ||
-    displayName;
+  const username = profile.username || displayName;
   const phone =
-    hr?.phone ||
-    user?.phone ||
+    profile.phone ||
     t("profile:settings.phoneEmpty", {
       defaultValue: "No phone number saved",
     });
-  const corporateEmail =
-    hr?.companyEmail ||
-    readValue(userRecord, "corporateEmail", "emailFromHr", "email_from_hr") ||
-    user?.email ||
-    t("common:status.unknown");
-  const employeeCode =
-    hr?.employeeCode ||
-    readValue(userRecord, "employeeCode", "employee_code") ||
-    t("common:status.unknown");
-  const departmentName =
-    hr?.department?.name ||
-    readValue(userRecord, "departmentName", "department_name") ||
-    t("common:status.unknown");
-  const orgUnit =
-    hr?.unit?.name ||
-    readValue(userRecord, "orgUnit", "org_unit") ||
-    t("common:status.unknown");
+  const corporateEmail = profile.corporateEmail || t("common:status.unknown");
+  const employeeCode = profile.employeeCode || t("common:status.unknown");
+  const departmentName = profile.departmentName || t("common:status.unknown");
+  const orgUnit = profile.orgUnit || t("common:status.unknown");
   const jobTitle =
-    hr?.position?.name ||
-    readValue(userRecord, "jobTitle", "job_title", "title", "position") ||
+    profile.jobTitle ||
     t("profile:settings.jobTitleEmpty", {
       defaultValue: "Chưa cập nhật chức danh",
     });
-  const employmentStatusLabels: Record<string, string> = {
-    PROBATION: t("profile:settings.employmentStatusValues.PROBATION"),
-    ACTIVE: t("profile:settings.employmentStatusValues.ACTIVE"),
-    SUSPENDED: t("profile:settings.employmentStatusValues.SUSPENDED"),
-    TERMINATED: t("profile:settings.employmentStatusValues.TERMINATED"),
-    RESIGNED: t("profile:settings.employmentStatusValues.RESIGNED"),
-  };
-  const employmentStatus = hr?.employmentStatus
-    ? employmentStatusLabels[hr.employmentStatus] ?? hr.employmentStatus
-    : null;
-  const joinDate = formatJoinDate(hr?.dateOfJoining);
-  const userStatus = user?.status || "online";
+  const employmentStatus = resolveEmploymentStatusLabel(
+    profile.employmentStatus,
+    t,
+  );
+  const joinDate = formatJoinDate(profile.dateOfJoining);
+  const userStatus = profile.status;
 
   return (
     <>
@@ -154,7 +85,7 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
           <div className="flex flex-col gap-5 border-b border-border bg-[#FFC857]/4 p-5 sm:flex-row sm:items-center">
             <div className="relative shrink-0">
               <Avatar
-                src={user?.avatar}
+                src={profile.avatar}
                 alt={displayName}
                 size="xl"
                 className="h-16 w-16 rounded-2xl ring-2 ring-[#C41E3A]/20"

@@ -10,8 +10,8 @@ import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../c
 import { unwrapApiSuccess } from "../../../lib/apiContract"; 
 import { userApi } from "../../../services/api"; 
 import uploadClient from "../../../services/uploadClient";
-import { useAuthStore, type User } from "../../../stores"; 
-import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
+import { useAuthStore, type User } from "../../../stores";
+import { useMyProfile } from "../useMyProfile";
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -82,27 +82,6 @@ interface ProfileDraft {
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 
-const readValue = (
-  user: Record<string, unknown> | null | undefined,
-  ...keys: string[]
-) => {
-  if (!user) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = user[key];
-    if (typeof value === "string") {
-      const normalized = value.trim();
-      if (normalized) {
-        return normalized;
-      }
-    }
-  }
-
-  return null;
-};
-
 const createDraft = (user: User | null): ProfileDraft => ({
   displayName: user?.displayName || "",
   username: user?.username || "",
@@ -159,6 +138,9 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  // Same canonical resolver as Settings/info-panel so the header shows the
+  // identical name + corporate email everywhere.
+  const profile = useMyProfile();
   const [draft, setDraft] = React.useState<ProfileDraft>(() => createDraft(user));
   const [baseline, setBaseline] = React.useState<ProfileDraft>(() => createDraft(user));
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
@@ -175,15 +157,9 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
   const displayNameRef = React.useRef<HTMLInputElement | null>(null);
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const currentUserRecord = (user as Record<string, unknown> | null) ?? null;
-  const corporateEmail =
-    readValue(currentUserRecord, "corporateEmail", "emailFromHr", "email_from_hr") ||
-    user?.email ||
-    "";
+  const corporateEmail = profile.corporateEmail || "";
   const displayLabel =
-    draft.displayName.trim() ||
-    resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
-    t("common:labels.user");
+    draft.displayName.trim() || profile.displayName || t("common:labels.user");
   const effectiveAvatar = avatarPreview || user?.avatar;
 
   React.useEffect(() => {
