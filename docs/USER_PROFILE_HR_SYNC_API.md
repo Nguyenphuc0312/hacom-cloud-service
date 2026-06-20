@@ -1,4 +1,4 @@
-# Yêu cầu API — Đồng bộ hồ sơ HR cho hồ sơ người dùng
+  # Yêu cầu API — Đồng bộ hồ sơ HR cho hồ sơ người dùng
 
 > **Người yêu cầu:** FE web client (`chat-web-client`)
 > **Đối tượng implement:** team BE `chat-api-service` (+ `@hacom/chat-shared-types`)
