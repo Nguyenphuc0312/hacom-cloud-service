@@ -1331,6 +1331,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             <SearchPanel
               conversationId={conversation.id}
               onSelectMessage={handleJumpToMessage}
+              onNavigateToMessageId={handleNavigateToMessage}
               onClose={() => setOverlayMode(null)}
               className="h-full w-[var(--app-inspector-width)]"
             />

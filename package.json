@@ -11,7 +11,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run --exclude \"**/*.bench.test.*\"",
     "test:perf:unit": "vitest run src/features/chat/performance/chatTimelinePerformance.bench.test.tsx",
-    "test:chat-runtime": "vitest run src/features/chat/domain/messageIdentityOrdering.test.ts src/features/chat/domain/messageMerge.test.ts src/features/api/chatApi.timeline.test.ts src/features/realtime/realtimeMiddleware.timeline.test.ts src/components/chat/useChatScrollController.test.tsx src/components/chat/MessageList.test.ts src/features/chat/hooks/useConversationMessagesRTK.test.tsx src/features/chat/hooks/useMessageJumpTargetRTK.test.tsx src/hooks/useSendMessage.test.tsx src/hooks/useUploadQueue.test.tsx src/components/input/MessageInput.test.tsx src/components/modals/ShareContactModal.test.tsx src/config/resourceUrlPolicy.test.ts src/services/tokenService.test.ts",
+    "test:chat-runtime": "vitest run src/features/chat/domain/messageMerge.test.ts src/features/chat/domain/messageMerge.readReceiptBatch.test.ts src/hooks/useMessageGrouping.inPlace.test.ts src/features/chat/hooks/useConversationTimelineRows.inPlace.test.tsx src/features/chat/simple-virtual-timeline/simpleMessageChange.test.ts src/features/chat/simple-virtual-timeline/useSimpleChatScroll.test.tsx src/features/chat/realtime/chatRealtimeAdapter.test.ts src/features/realtime/realtimeBatchCoordinator.test.ts src/hooks/useWebSocket.sync-machine.test.ts src/hooks/useSendMessage.test.tsx src/hooks/useUploadQueue.test.tsx src/features/chat/usecases/reaction-usecases.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:perf": "playwright test -c playwright.performance.config.ts",
     "test:e2e:headed": "playwright test --headed",

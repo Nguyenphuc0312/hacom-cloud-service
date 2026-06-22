@@ -169,6 +169,7 @@
     "resultCount_other": "{{count}} kết quả",
     "sectionMessages": "Tin nhắn",
     "sectionFiles": "File",
+    "jumpToFileMessage": "Đến tin nhắn chứa file",
     "showMore": "Xem thêm"
   },
   "conversation": {
