@@ -10,8 +10,7 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PinIcon, PinOffIcon } from "@hugeicons/core-free-icons";
+import { Pin, PinOff } from "lucide-react";
 import { Avatar } from "../common/Avatar";
 import { NotificationListSkeleton } from "../ui";
 import { getMessagePreview } from "../../utils/messageHelpers";
@@ -49,8 +48,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3">
-        <HugeiconsIcon
-          icon={PinIcon}
+        <Pin
           className="h-[18px] w-[18px] text-[#1565C0]"
           strokeWidth={1.5}
         />
@@ -84,8 +82,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
 
         {!isLoading && !error && pinnedMessages.length === 0 && (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-            <HugeiconsIcon
-              icon={PinIcon}
+            <Pin
               className="h-9 w-9 text-text-muted/50"
               strokeWidth={1.5}
             />
@@ -150,8 +147,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
                       defaultValue: "Bỏ ghim",
                     })}
                   >
-                    <HugeiconsIcon
-                      icon={PinOffIcon}
+                    <PinOff
                       className="h-[18px] w-[18px]"
                       strokeWidth={1.5}
                     />

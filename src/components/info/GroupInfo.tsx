@@ -20,8 +20,7 @@ import {
   BellSlashIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PencilEdit01Icon, Pin02Icon } from "@hugeicons/core-free-icons";
+import { SquarePen, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
@@ -1043,7 +1042,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label={t("profile:groupInfo.renameGroup")}
                 >
-                  <HugeiconsIcon icon={PencilEdit01Icon} className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  <SquarePen className="h-3.5 w-3.5" strokeWidth={1.5} />
                 </button>
               )}
             </div>
@@ -1097,7 +1096,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
                 isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15",
               )}>
-                <HugeiconsIcon icon={Pin02Icon} size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
+                <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
               </div>
               <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
                 {isPinned ? "Bỏ ghim" : "Ghim nhóm"}

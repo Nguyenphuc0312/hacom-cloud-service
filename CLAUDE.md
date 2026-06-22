@@ -123,7 +123,7 @@ src/
 │   ├── activation/          # luồng kích hoạt tài khoản (OTP + set password)
 │   ├── ai-assistant/        # AI chat (zustand store riêng)
 │   ├── tasks/               # quản lý task (axios riêng + realtime hook)
-│   ├── calendar/            # lịch: CalendarPage gộp events HR + chấm công + task + ngày lễ tĩnh (calendarEvents). Lịch/HR đi qua hr-api-service — xem APIcalendar.md
+│   ├── calendar/            # lịch: CalendarPage gộp events HR + chấm công + task + ngày lễ tĩnh (calendarEvents). Lịch/HR đi qua hr-api-service — xem APIcalendar.md. `components/WeeklyCalendarWidget` = widget lịch tuần thu gọn cho màn NoChatSelected (tách khỏi EmptyState).
 │   ├── friends/ friend-qr/  # bạn bè + QR add friend (shareCode)
 │   ├── notification/        # notification store
 │   └── profile/             # chỉnh sửa hồ sơ
@@ -134,7 +134,7 @@ src/
 │   ├── message/             # render từng loại message (Text/Image/Video/Voice/File/Sticker…)
 │   ├── input/               # MessageInput (Tiptap), attachments, emoji, format toolbar
 │   ├── layout/              # Sidebar, ChatWindow, CommandPalette, sidebar/*
-│   ├── conversation/ modals/ settings/ auth/ friends/ notification/ preview/ voice/ info/ common/ error/ dev/
+│   ├── auth/ common/ error/ friends/ info/ modals/ preview/ settings/
 │
 ├── hooks/                   # custom hooks toàn cục (xem mục 9)
 ├── services/               # HTTP clients & auth (api.ts, authService, tokenService, uploadClient…)
