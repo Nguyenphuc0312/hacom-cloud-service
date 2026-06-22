@@ -1,21 +1,35 @@
-/**
- * MessageItem Component Module
- * 
- * A Clean Architecture implementation of message item rendering with
- * modular, single-responsibility components.
- * 
- * See ARCHITECTURE.md for detailed design documentation.
- */
+# MessageItem
 
-// ============================================================================
-// QUICK START
-// ============================================================================
+Render một dòng timeline trong chat. Tách theo single-responsibility để dễ memo hóa và test. Đây là tài liệu duy nhất cho module (đã gộp từ `ARCHITECTURE.md` + `DATA_FLOW.md` cũ).
 
-// 1. Basic Import
-import { MessageItem } from '@/components/chat/MessageItem';
-import type { MessageItemProps } from '@/components/chat/MessageItem';
+## Cấu trúc file
 
-// 2. Use in render
+| File | Trách nhiệm |
+|---|---|
+| `MessageItem.tsx` | Orchestrator: resolve message từ `item`/props, `React.memo` + custom comparator `areEqualMessageItem`, ghi `recordChatRenderCount` |
+| `MessageItemWrapper.tsx` | Container styling: spacing (`getTimelineItemSpacingClass`), highlight khi chọn, click handler cho selection mode |
+| `MessageItemSelection.tsx` | Checkbox chọn tin (chỉ render khi `isSelectionMode`), chặn bubbling, i18n aria-label |
+| `MessageItemContent.tsx` | Content router theo `item.kind` (xem bên dưới) |
+| `types.ts` | `MessageItemProps`, `MessageItemContentProps`, `MessageItemSelectionProps`, `MessageItemWrapperProps` |
+| `utils.ts` | Pure functions: `resolveLiveMessage`, `getLayoutSensitiveSignature`, `getAttachmentLayoutSignature`, `getReplyLayoutSignature`, `getForwardedSignature` |
+| `index.ts` | Barrel export công khai |
+
+## Routing theo `item.kind` (trong `MessageItemContent`)
+
+| kind | Render |
+|---|---|
+| `date` | `DateDivider` |
+| `unread` | `UnreadDivider` |
+| `system` | `SystemMessage` |
+| `message` | `MessageCluster` (→ `MessageRow`/`MessageBodyRenderer`, `ReactionBar`, actions, reply preview, thread indicator) |
+
+Parent chỉ cần truyền `item` — không cần tự switch theo kind.
+
+## Dùng
+
+```tsx
+import { MessageItem } from "@/components/chat/MessageItem";
+
 <MessageItem
   item={timelineItem}
   message={message}
@@ -23,246 +37,23 @@ import type { MessageItemProps } from '@/components/chat/MessageItem';
   onReact={handleReact}
   onEdit={handleEdit}
   onDelete={handleDelete}
+  onForward={handleForward}
   density="comfortable"
-/>
+  isSelectionMode={false}
+/>;
+```
 
-// ============================================================================
-// DETAILED USAGE EXAMPLE
-// ============================================================================
+Data chảy xuống (parent → child) qua props; callback chảy lên (child → parent). State (selectedIds, isSelectionMode…) sống ở parent; con chỉ nhận props.
 
-import React, { useCallback } from 'react';
-import { MessageItem } from '@/components/chat/MessageItem';
-import type { Message, Attachment } from '@/types';
-import type { ConversationTimelineItem } from '@/features/chat/hooks/useConversationTimelineRows';
+## Memoization (quan trọng)
 
-interface MessageListProps {
-  items: ConversationTimelineItem[];
-  messages: Record<string, Message>;
-}
+`React.memo(MessageItem, areEqualMessageItem)`:
+- Fast path: `item` reference không đổi → so sánh shallow các prop còn lại.
+- Theo kind: `date` so `getTime()`; `unread` luôn bằng; `system`/`message` so `getLayoutSensitiveSignature()`.
+- Signature gộp: core (type/sender/content/status/sendState), flags (edited/deleted/pinned), relations (reply/forward signature), attachments, social (reactions/readBy/mentions), thread count.
 
-export const MessageList: React.FC<MessageListProps> = ({ items, messages }) => {
-  // Define callbacks
-  const handleReply = useCallback((message: Message) => {
-    console.log('Reply to:', message.id);
-    // Your logic here
-  }, []);
+Khi đổi logic render bubble, **giữ signature phản ánh đúng phần ảnh hưởng layout** — nếu không sẽ stale do memo. Đo lại bằng `recordChatRenderCount` (xem React DevTools Profiler).
 
-  const handleReact = useCallback((messageId: string, emoji: string) => {
-    console.log('React with', emoji, 'to', messageId);
-    // Your logic here
-  }, []);
+## Thêm tính năng
 
-  const handleEdit = useCallback(async (message: Message) => {
-    console.log('Edit:', message.id);
-    // Your async logic here
-  }, []);
-
-  const handleDelete = useCallback(async (messageId: string, mode?: 'FOR_ME' | 'FOR_EVERYONE') => {
-    console.log('Delete:', messageId, 'mode:', mode);
-    // Your async logic here
-  }, []);
-
-  const handleForward = useCallback((message: Message) => {
-    console.log('Forward:', message.id);
-    // Your logic here
-  }, []);
-
-  const handleImageClick = useCallback((imageUrl: string) => {
-    // Open image viewer
-  }, []);
-
-  const handleFilePreview = useCallback((attachment: Attachment) => {
-    // Show file preview
-  }, []);
-
-  // Render
-  return (
-    <div className="flex flex-col gap-0">
-      {items.map((item) => (
-        <MessageItem
-          key={item.key}
-          item={item}
-          message={messages[item.key]}
-          onReply={handleReply}
-          onReact={handleReact}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onForward={handleForward}
-          onImageClick={handleImageClick}
-          onFilePreview={handleFilePreview}
-          density="comfortable"
-          isSelectionMode={false}
-          textRenderMode="expanded"
-        />
-      ))}
-    </div>
-  );
-};
-
-// ============================================================================
-// ADVANCED USAGE - WITH SELECTION MODE
-// ============================================================================
-
-interface MessageListWithSelectionProps {
-  items: ConversationTimelineItem[];
-  messages: Record<string, Message>;
-  selectedIds: Set<string>;
-  onSelectionChange: (selectedIds: Set<string>) => void;
-}
-
-export const MessageListWithSelection: React.FC<MessageListWithSelectionProps> = ({
-  items,
-  messages,
-  selectedIds,
-  onSelectionChange,
-}) => {
-  const handleToggleSelect = useCallback((messageId: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(messageId)) {
-      newSelected.delete(messageId);
-    } else {
-      newSelected.add(messageId);
-    }
-    onSelectionChange(newSelected);
-  }, [selectedIds, onSelectionChange]);
-
-  const handleDelete = useCallback(async (messageId: string) => {
-    // Delete logic
-  }, []);
-
-  return (
-    <div className="flex flex-col gap-0">
-      {items.map((item) => (
-        <MessageItem
-          key={item.key}
-          item={item}
-          message={messages[item.key]}
-          onReply={() => {}}
-          onReact={() => {}}
-          onDelete={handleDelete}
-          density="comfortable"
-          isSelectionMode={true}
-          isSelected={selectedIds.has(item.key)}
-          onToggleSelect={handleToggleSelect}
-        />
-      ))}
-    </div>
-  );
-};
-
-// ============================================================================
-// FILE STRUCTURE & RESPONSIBILITIES
-// ============================================================================
-
-/*
-MessageItem/
-├── MessageItem.tsx
-│   └── Main component
-│       - Orchestrates sub-components
-│       - React.memo optimization
-│       - Custom comparison logic
-│       - Performance tracking
-│
-├── MessageItemContent.tsx
-│   └── Content routing
-│       - Renders DateDivider for 'date' items
-│       - Renders UnreadDivider for 'unread' items
-│       - Renders SystemMessage for 'system' items
-│       - Renders MessageCluster for 'message' items
-│
-├── MessageItemSelection.tsx
-│   └── Selection checkbox UI
-│       - Renders checkbox
-│       - Prevents event bubbling
-│       - i18n accessibility label
-│
-├── MessageItemWrapper.tsx
-│   └── Container with styling
-│       - Applies spacing classes
-│       - Selection highlight styles
-│       - Click handler for selection mode
-│
-├── types.ts
-│   └── TypeScript interfaces
-│       - MessageItemProps
-│       - MessageItemContentProps
-│       - MessageItemSelectionProps
-│       - MessageItemWrapperProps
-│
-├── utils.ts
-│   └── Pure utility functions
-│       - getAttachmentLayoutSignature()
-│       - getReplyLayoutSignature()
-│       - getForwardedSignature()
-│       - getLayoutSensitiveSignature()
-│       - resolveLiveMessage()
-│
-├── index.ts
-│   └── Public API barrel exports
-│
-└── ARCHITECTURE.md
-    └── Detailed design documentation
-*/
-
-// ============================================================================
-// COMMON PATTERNS & TIPS
-// ============================================================================
-
-/**
- * Pattern 1: Memoized Callback Handlers
- * 
- * Always memoize callbacks to prevent unnecessary re-renders of MessageItem
- */
-const handleReply = useCallback((message: Message) => {
-  // Implementation
-}, []); // Empty deps if no dependencies
-
-/**
- * Pattern 2: Handling Different Item Types
- * 
- * MessageItem automatically handles routing:
- * - item.kind === 'date'    → DateDivider
- * - item.kind === 'unread'  → UnreadDivider
- * - item.kind === 'system'  → SystemMessage
- * - item.kind === 'message' → MessageCluster
- * 
- * No need to check type in parent - just pass the item!
- */
-
-/**
- * Pattern 3: Selection Mode
- * 
- * Enable selection by passing:
- * - isSelectionMode={true}
- * - isSelected={selectedIds.has(item.key)}
- * - onToggleSelect={handleToggleSelect}
- */
-
-/**
- * Pattern 4: Density Settings
- * 
- * Affects spacing of items. Options:
- * - 'compact'     - Minimal spacing
- * - 'comfortable' - Default spacing
- * - 'expanded'    - Maximum spacing
- */
-
-/**
- * Pattern 5: Long Text Handling
- * 
- * For messages with long text:
- * - textRenderMode='collapsed'  - Show first N lines with "expand" button
- * - textRenderMode='expanded'   - Show full text
- * - isCollapsibleText={true}    - Enable collapse/expand toggle
- * - onToggleTextExpand={() => {}} - Handle expand/collapse
- */
-
-/**
- * Performance Tips:
- * 
- * 1. Keep callbacks memoized with useCallback
- * 2. Don't recreate MessageItem arrays on every render
- * 3. Use React.memo - already applied in component
- * 4. Monitor renderCount with recordChatRenderCount
- * 5. Avoid passing new objects/arrays as props
- */
+Giữ một-trách-nhiệm-một-file: prop mới → cập nhật `types.ts`; util thuần mới → `utils.ts`; UI con mới → file riêng (vd `MessageItemDragHandle.tsx`) rồi compose trong `MessageItem.tsx` và export ở `index.ts`.

@@ -1,8 +1,7 @@
 ﻿import React, { useCallback } from "react";
 import { clsx } from "clsx";
 import { HeartIcon } from "@heroicons/react/24/outline";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PinIcon } from "@hugeicons/core-free-icons";
+import { Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface MessageActionBarProps {
@@ -110,8 +109,7 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
           aria-label={t("chat:pinned.title", "Ghim")}
           className={actionBtnClass}
         >
-          <HugeiconsIcon
-            icon={PinIcon}
+          <Pin
             className="h-[18px] w-[18px]"
             strokeWidth={1.5}
           />
