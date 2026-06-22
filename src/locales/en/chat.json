@@ -169,6 +169,7 @@
     "resultCount_other": "{{count}} results",
     "sectionMessages": "Messages",
     "sectionFiles": "Files",
+    "jumpToFileMessage": "Jump to message",
     "showMore": "Show more"
   },
   "conversation": {

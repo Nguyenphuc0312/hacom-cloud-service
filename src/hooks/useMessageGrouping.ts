@@ -150,6 +150,36 @@ const findTimelineItemEndIndexForMessage = (
   return 0;
 };
 
+/**
+ * Đảm bảo timeline có tối đa 1 unread divider, giữ vạch đầu tiên (ranh giới
+ * read→unread đúng) và bỏ các vạch trùng. Cần thiết vì nhánh incremental-append
+ * dựng lại slice đuôi (message đầu slice có previousMessage=undefined) khiến
+ * fallback theo lastReadAt chèn thêm divider, ghép với vạch sẵn có trong prefix.
+ * Trả về chính mảng cũ khi không có trùng để giữ identity (không phá memo).
+ */
+const dedupeUnreadDividers = (items: TimelineItem[]): TimelineItem[] => {
+  let seenUnread = false;
+  let hasDuplicate = false;
+  for (const item of items) {
+    if (item.kind === "unread") {
+      if (seenUnread) {
+        hasDuplicate = true;
+        break;
+      }
+      seenUnread = true;
+    }
+  }
+  if (!hasDuplicate) return items;
+
+  let kept = false;
+  return items.filter((item) => {
+    if (item.kind !== "unread") return true;
+    if (kept) return false;
+    kept = true;
+    return true;
+  });
+};
+
 export const useMessageGrouping = ({
   messages,
   currentUserId,
@@ -243,7 +273,7 @@ export const useMessageGrouping = ({
     );
 
     let reconciliationStartIndex = 0;
-    const items = canIncrementallyAppend
+    const rawItems = canIncrementallyAppend
       ? (() => {
           const prevMessages = prevSnapshot!.messages;
           const prevItems = prevSnapshot!.items;
@@ -285,6 +315,8 @@ export const useMessageGrouping = ({
           groupingThresholdMs,
           unreadMarker,
         });
+
+    const items = dedupeUnreadDividers(rawItems);
 
     const prevKeyMap = cache.keyMap;
     const nextKeyMap = canIncrementallyAppend

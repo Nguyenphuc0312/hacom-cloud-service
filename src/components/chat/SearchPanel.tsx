@@ -26,9 +26,7 @@ import { formatRelativeTime } from "../../utils/formatTime";
 import { getMessageSearchPreview } from "../../utils/messageLengthPolicy";
 import { formatFileSize, getFileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "../message/FileTypeIcon";
-import { downloadResourceWithName } from "../../utils/downloadFile";
-import { fileApi } from "../../services/api";
-import { unwrapApiSuccess } from "../../lib/apiContract";
+import { FileName } from "../common/FileName";
 import { resolvePublicResourceUrl } from "../../config";
 import type { Message } from "../../types";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
@@ -36,8 +34,10 @@ import { resolveUserDisplayName } from "../../features/chat/identity/resolveUser
 interface SearchPanelProps {
   /** Current conversation ID to scope search (optional) */
   conversationId?: string;
-  /** Called when a search result is clicked */
+  /** Called when a message search result is clicked */
   onSelectMessage: (message: Message) => void;
+  /** Called when a file result is clicked — jumps to the owning message by id */
+  onNavigateToMessageId: (messageId: string) => void;
   /** Close the search panel */
   onClose: () => void;
   className?: string;
@@ -75,54 +75,39 @@ const HighlightedText: React.FC<{ text: string; query: string }> = ({
   );
 };
 
-/** A file search result row — icon, name (with match highlight), meta + download */
+/**
+ * A file search result row — icon, name, meta. Clicking jumps to the message
+ * that contains the file (not a download); the long base name truncates while
+ * the extension stays visible (e.g. "DanhSachDiemDanh….xlsx").
+ */
 const FileResultRow: React.FC<{
   item: ConversationResourcesFileItem;
-  conversationId: string;
-  query: string;
-}> = ({ item, conversationId, query }) => {
+  onNavigate: (messageId: string) => void;
+}> = ({ item, onNavigate }) => {
   const { t } = useTranslation();
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeTime(new Date(item.createdAt));
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const handleDownload = useCallback(async () => {
-    if (isDownloading) return;
-    setIsDownloading(true);
-    try {
-      const res = await fileApi.getDownloadUrl({
-        conversationId,
-        attachmentId: item.fileId,
-      });
-      const payload = unwrapApiSuccess(res);
-      if (payload.url) {
-        await downloadResourceWithName(payload.url, item.fileName);
-      }
-    } catch {
-      // silent — user can retry
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [conversationId, isDownloading, item.fileId, item.fileName]);
 
   return (
     <button
       type="button"
-      onClick={() => void handleDownload()}
-      disabled={isDownloading}
+      onClick={() => onNavigate(item.messageId)}
       title={item.fileName}
-      aria-label={t("common:actions.download", { defaultValue: "Download" })}
+      aria-label={t("chat:search.jumpToFileMessage", {
+        defaultValue: "Jump to message",
+      })}
       className={clsx(
         "flex w-full items-center gap-3 px-4 py-2.5 text-left",
-        "transition-colors hover:bg-surface-overlay disabled:opacity-60",
+        "transition-colors hover:bg-surface-overlay",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 focus-visible:ring-inset",
       )}
     >
       <FileTypeIcon type={iconType} className="h-9 w-9 shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-primary">
-          <HighlightedText text={item.fileName} query={query} />
-        </p>
+        <FileName
+          name={item.fileName}
+          className="text-sm font-medium text-text-primary"
+        />
         <p className="truncate text-xs text-text-muted">
           {formatFileSize(item.sizeBytes)} · {item.senderName} · {date}
         </p>
@@ -134,6 +119,7 @@ const FileResultRow: React.FC<{
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   conversationId,
   onSelectMessage,
+  onNavigateToMessageId,
   onClose,
   className,
 }) => {
@@ -531,8 +517,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               <FileResultRow
                 key={item.messageId + item.fileId}
                 item={item}
-                conversationId={conversationId ?? ""}
-                query={trimmedQuery}
+                onNavigate={onNavigateToMessageId}
               />
             ))}
             {hasMoreFiles && (
