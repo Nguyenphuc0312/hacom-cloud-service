@@ -252,16 +252,15 @@ const buildBoundaryDecorators = (
   message: Message,
   previousMessage: Message | undefined,
   unreadMarker?: UnreadTimelineMarker | null,
+  suppressUnread = false,
 ): TimelineItem[] => {
   const decorators: Array<{ priority: number; item: TimelineItem }> = [];
   const shouldInsertDateDivider =
     !previousMessage ||
     !isSameDay(new Date(message.createdAt), new Date(previousMessage.createdAt));
-  const shouldInsertUnread = shouldInsertUnreadDivider(
-    message,
-    previousMessage,
-    unreadMarker,
-  );
+  const shouldInsertUnread =
+    !suppressUnread &&
+    shouldInsertUnreadDivider(message, previousMessage, unreadMarker);
 
   if (shouldInsertUnread) {
     decorators.push({
@@ -298,6 +297,10 @@ export const buildTimelineItems = ({
 }: TimelinePlannerParams): TimelineItem[] => {
   const items: TimelineItem[] = [];
   const isGroupChat = isGroupConversation(conversationType);
+  // Chỉ chèn unread divider tối đa 1 lần/timeline. Khi BE không trả
+  // firstUnreadMessageId, fallback theo lastReadAt có thể khớp nhiều ranh giới
+  // (cache merge thêm trang cũ) → trước đây hiện 2 vạch "Tin nhắn chưa đọc".
+  let unreadDividerInserted = false;
 
   messages.forEach((message, index) => {
     if (!message) return;
@@ -315,9 +318,16 @@ export const buildTimelineItems = ({
       groupingThresholdMs,
     );
 
-    items.push(
-      ...buildBoundaryDecorators(message, previousMessage, unreadMarker),
+    const decorators = buildBoundaryDecorators(
+      message,
+      previousMessage,
+      unreadMarker,
+      unreadDividerInserted,
     );
+    if (decorators.some((decorator) => decorator.kind === "unread")) {
+      unreadDividerInserted = true;
+    }
+    items.push(...decorators);
 
     if (message.type === "system") {
       items.push({
