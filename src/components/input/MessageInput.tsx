@@ -307,6 +307,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         }
       }
       event.target.value = "";
+      // Trả focus về editor: sau khi hộp thoại chọn file native đóng, focus
+      // còn nằm trên nút đính kèm nên Enter sẽ mở lại picker thay vì gửi.
+      tipTapRef.current?.focus();
     },
     [attachmentsDisabled, disabledReason, onAddFiles, t],
   );
