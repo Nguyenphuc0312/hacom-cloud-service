@@ -313,6 +313,39 @@ export function useSimpleChatScroll(
     const el = scrollRef.current;
     if (!el) return;
 
+    // Rule 5 (load older) runs FIRST, before the skipNextUserScroll guard below.
+    // Reaching the top must always be able to fetch older history, even when this
+    // scroll event lands inside the 300ms programmatic-echo window. The skip guard
+    // only governs user-vs-programmatic *classification* (pull-to-bottom / detached
+    // state) — it must not swallow load-older detection. Otherwise, when the
+    // programmatic scroll is a no-op (already at bottom) it fires no echo event to
+    // consume the flag, so the user's first real scroll-to-top within the window is
+    // dropped and history never loads. Guards (hasOlder / isLoadingOlderRef /
+    // isFetchingOlder / scrollTop threshold) keep this from firing on the bottom
+    // echo of a normal programmatic scroll.
+    if (
+      hasOlder &&
+      !isLoadingOlderRef.current &&
+      !isFetchingOlder &&
+      el.scrollTop <= LOAD_OLDER_THRESHOLD_PX
+    ) {
+      isLoadingOlderRef.current = true;
+      pendingPrependRestoreRef.current = {
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+      };
+      logSimpleTimeline("load_older_start", {
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+      });
+      void Promise.resolve(loadOlder?.()).catch(() => {
+        // If load-older fails, clear our pending restore so the next render
+        // doesn't try to apply a stale delta against unchanged content.
+        pendingPrependRestoreRef.current = null;
+        isLoadingOlderRef.current = false;
+      });
+    }
+
     // When a programmatic scroll fires (e.g. from Rule 1's initial scroll), we
     // don't want to treat it as a real user scroll. However, we need to keep
     // userScrollingRef = true so that Rule 4's "remote message while detached"
@@ -365,31 +398,7 @@ export function useSimpleChatScroll(
       userScrollIdleTimerRef.current = null;
     }, USER_SCROLL_IDLE_MS);
 
-    if (
-      hasOlder &&
-      !isLoadingOlderRef.current &&
-      !isFetchingOlder &&
-      el.scrollTop <= LOAD_OLDER_THRESHOLD_PX
-    ) {
-      isLoadingOlderRef.current = true;
-      pendingPrependRestoreRef.current = {
-        scrollHeight: el.scrollHeight,
-        scrollTop: el.scrollTop,
-      };
-      logSimpleTimeline("load_older_start", {
-        scrollHeight: el.scrollHeight,
-        scrollTop: el.scrollTop,
-      });
-      logSimpleTimeline("user_scroll", { scrollTop: el.scrollTop });
-      void Promise.resolve(loadOlder?.()).catch(() => {
-        // If load-older fails, clear our pending restore so the next render
-        // doesn't try to apply a stale delta against unchanged content.
-        pendingPrependRestoreRef.current = null;
-        isLoadingOlderRef.current = false;
-      });
-    } else {
-      logSimpleTimeline("user_scroll", { scrollTop: el.scrollTop });
-    }
+    logSimpleTimeline("user_scroll", { scrollTop: el.scrollTop });
   }, [hasOlder, isFetchingOlder, loadOlder, onBottomVisible]);
 
   // Rule 6: media settled.
