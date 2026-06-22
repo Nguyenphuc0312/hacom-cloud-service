@@ -9,8 +9,6 @@ import { useDebouncedCallback } from "../../hooks/useDebounce";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
   ExclamationCircleIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
@@ -431,7 +429,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
         {/* Results count */}
         {results.length > 0 && (
-          <div className="sticky top-0 z-10 flex items-center justify-between border-y border-border/70 bg-surface/95 px-4 py-2 backdrop-blur">
+          <div className="sticky top-0 z-10 flex items-center border-y border-border/70 bg-surface/95 px-4 py-2 backdrop-blur">
             <p className="text-xs font-medium text-text-secondary">
               <span className="text-text-primary">{safeActiveIndex + 1}</span>
               <span className="text-text-muted">
@@ -441,28 +439,6 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 })}
               </span>
             </p>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={goToPrevious}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
-                aria-label={t("chat:search.previousResult", {
-                  defaultValue: "Previous result",
-                })}
-              >
-                <ChevronUpIcon className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={goToNext}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
-                aria-label={t("chat:search.nextResult", {
-                  defaultValue: "Next result",
-                })}
-              >
-                <ChevronDownIcon className="h-4 w-4" />
-              </button>
-            </div>
           </div>
         )}
 
