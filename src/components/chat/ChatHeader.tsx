@@ -7,8 +7,7 @@ import {
   PhoneIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PanelLeftIcon, PinIcon } from "@hugeicons/core-free-icons";
+import { Pin, PanelLeft } from "lucide-react";
 import { Avatar } from "../common/Avatar";
 import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
@@ -235,8 +234,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 className={iconButtonClass}
                 aria-label={t("chat:pinned.title")}
               >
-                <HugeiconsIcon
-                  icon={PinIcon}
+                <Pin
                   className="h-[18px] w-[18px]"
                   strokeWidth={1.5}
                 />
@@ -271,8 +269,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               className={iconButtonClass}
               aria-label={t("chat:header.toggleInfoPanel")}
             >
-              <HugeiconsIcon
-                icon={PanelLeftIcon}
+              <PanelLeft
                 className="h-[18px] w-[18px]"
                 strokeWidth={1.5}
               />

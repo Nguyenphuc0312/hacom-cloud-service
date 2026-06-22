@@ -1,0 +1,1394 @@
+/**
+ * @fileoverview WeeklyCalendarWidget — lịch tuần thu gọn (họp + cá nhân) hiển thị
+ * ở màn "chưa chọn hội thoại" (NoChatSelected). Dùng chung calendar store với
+ * /calendar; mapping/màu/giờ khớp CalendarPage. Tách ra từ EmptyState.tsx để giữ
+ * EmptyState là primitive UI thuần.
+ */
+
+import React from "react";
+import clsx from "clsx";
+import { useNavigate } from "react-router-dom";
+import {
+  XMarkIcon,
+  ClockIcon,
+  UserIcon,
+  UsersIcon,
+  VideoCameraIcon,
+  MapPinIcon,
+  DocumentTextIcon,
+  CalendarDaysIcon,
+  BuildingOfficeIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  TrashIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "@heroicons/react/24/outline";
+import { CheckCircleIcon as CheckCircleSolidIcon } from "@heroicons/react/24/solid";
+import { Button } from "../../../components/ui/Button";
+import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
+import {
+  MeetingFormModal,
+  type MeetingFormData,
+} from "../../../components/ui/MeetingFormModal";
+import {
+  PersonalEventFormModal,
+  type PersonalEventFormData,
+} from "../../../components/ui/PersonalEventFormModal";
+import { useAuthStore } from "../../../stores";
+import { useCalendarStore } from "../../../stores/calendarStore";
+import { toast } from "../../../utils/toast";
+import { getEventColor, type CalendarEvent } from "../data/calendarEvents";
+import {
+  eventOccursOnDay,
+  isMultiDayEvent,
+  getMultiDayPosition,
+  formatEventTimeRange,
+} from "../utils/timeline";
+import {
+  meetingVisibilityToApi,
+  personalVisibilityToApi,
+} from "../utils/calendarVisibility";
+import { mapHrmEventToCalendarEvent } from "../utils/calendarEventMapping";
+
+// Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
+// có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
+const MarkdownContent = React.lazy(
+  () => import("../../../components/message/MarkdownContent"),
+);
+
+const formatDateStr = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"] as const;
+
+/** ISO 8601 week number — week containing the first Thursday is week 1 */
+const getISOWeek = (date: Date): number => {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+};
+
+const getWeekDays = (base: Date): Date[] => {
+  const day = base.getDay();
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+};
+
+const MAX_VISIBLE_EVENTS = 3;
+
+/**
+ * Event BUSY_ONLY khi xem lịch người khác bị backend che tiêu đề thành "Busy".
+ * Chuẩn hóa sang tiếng Việt "Bận".
+ */
+const localizeEventTitle = (title: string | null | undefined): string => {
+  const t = (title ?? "").trim();
+  return t.toLowerCase() === "busy" ? "Bận" : t;
+};
+
+interface SelectedEventDetail {
+  kind: "meeting" | "personal";
+  id: string;
+  title: string;
+  date: string;
+  time?: string;
+  /** Có giá trị khi click vào lịch local (đã tạo qua MeetingFormModal) */
+  meeting?: MeetingFormData;
+  /** Có giá trị khi click vào sự kiện API (HR calendar hoặc chat calendar) */
+  apiEvent?: Partial<{
+    id: string;
+    title: string;
+    startAt: string;
+    endAt: string;
+    description: string | null;
+    meetingChairman: string | null;
+    meetingFormat: string | null;
+    meetingLocation: string | null;
+    attendees: string[];
+    visibility: string;
+    status: string;
+    ownerUserId: string;
+    ownerEmployeeId: string | null;
+  }>;
+  /** CalendarEvent gốc (đã chuẩn hóa) của item được click. */
+  source?: CalendarEvent;
+}
+
+interface EventDetailPopupProps {
+  detail: SelectedEventDetail;
+  currentUserId: string | undefined;
+  currentUserName: string;
+  onClose: () => void;
+  onEdit?: (meeting: MeetingFormData) => void;
+  onDelete?: (meetingId: string) => void;
+  onDeleteApiEvent?: (eventId: string) => Promise<void>;
+  onToggleRead?: (meetingId: string) => void;
+  /** Mở trang lịch đầy đủ để xem chi tiết. */
+  onViewFull?: () => void;
+}
+
+const formatReadAt = (iso: string): string => {
+  try {
+    return new Date(iso).toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+};
+
+const isParticipantMatch = (
+  participants: { name: string }[],
+  chairman: string,
+  currentName: string,
+): boolean => {
+  const lower = currentName.trim().toLowerCase();
+  if (!lower) return false;
+  if (chairman.trim().toLowerCase() === lower) return true;
+  return participants.some((p) => p.name.trim().toLowerCase() === lower);
+};
+
+const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
+  detail,
+  currentUserId,
+  currentUserName,
+  onClose,
+  onEdit,
+  onDelete,
+  onDeleteApiEvent,
+  onToggleRead,
+  onViewFull,
+}) => {
+  const isLocalMeeting = !!detail.meeting;
+  const isApiEvent = !!detail.apiEvent;
+  const m = detail.meeting;
+  const apiEvent = detail.apiEvent;
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [showApiDeleteConfirm, setShowApiDeleteConfirm] = React.useState(false);
+
+  const isCreator = !!(m && currentUserId && m.createdById === currentUserId);
+  const isApiOwner = !!(apiEvent && currentUserId && apiEvent.ownerUserId === currentUserId);
+  const isTaggedParticipant = !!(
+    m && !isCreator && isParticipantMatch(m.participants, m.chairman, currentUserName)
+  );
+  const hasMarkedRead = !!(
+    m?.readBy?.some((r) => r.userId === currentUserId)
+  );
+  const readCount = m?.readBy?.length ?? 0;
+  const totalAudience = m
+    ? m.participants.length + (m.chairman ? 1 : 0)
+    : 0;
+  const accent = detail.kind === "meeting"
+    ? { dot: "bg-[#1976D2]", chip: "bg-[#1976D2]/10 text-[#1565C0] dark:text-[#6BA8F0]", label: "Lịch họp" }
+    : { dot: "bg-amber-500", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300", label: "Cá nhân" };
+
+  const formatDate = (d: string) => {
+    try {
+      return new Date(`${d}T00:00:00`).toLocaleDateString("vi-VN", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return d;
+    }
+  };
+
+  // Sự kiện API nhiều ngày (công tác dài hạn / qua đêm): bắt đầu & kết thúc khác
+  // ngày → hiện rõ cả hai mốc kèm ngày, tránh chỉ 1 ngày + giờ "08:00 — 10:00"
+  // (vốn nằm ở 2 ngày khác nhau) gây hiểu nhầm.
+  const apiStart = apiEvent?.startAt ? new Date(apiEvent.startAt) : null;
+  const apiEnd = apiEvent?.endAt ? new Date(apiEvent.endAt) : null;
+  const validStart = apiStart && !Number.isNaN(apiStart.getTime()) ? apiStart : null;
+  const validEnd = apiEnd && !Number.isNaN(apiEnd.getTime()) ? apiEnd : null;
+  const isApiMultiDay = !!(
+    validStart && validEnd && validStart.toDateString() !== validEnd.toDateString()
+  );
+  const fmtDateTime = (d: Date): string =>
+    d.toLocaleString("vi-VN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
+        <button
+          type="button"
+          onClick={onClose}
+          title="Đóng"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+
+        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
+          <div className={clsx("mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium", accent.chip)}>
+            <span className={clsx("h-2 w-2 rounded-full", accent.dot)} />
+            {accent.label}
+          </div>
+
+          <h3 className="text-xl font-semibold text-text-primary">{detail.title}</h3>
+          {/* Nhiều ngày → mốc Bắt đầu/Kết thúc hiện ở khối thời gian bên dưới. */}
+          {!isApiMultiDay && (
+            <p className="mt-1 text-sm font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
+              {formatDate(detail.date)}
+            </p>
+          )}
+
+          {isLocalMeeting && m!.createdByName && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
+              <span>Người tạo:</span>
+              <span className="font-medium text-text-primary">
+                {m!.createdByName}
+                {isCreator && <span className="ml-1 text-[#1565C0]">(bạn)</span>}
+              </span>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3 text-sm">
+            {/* Giờ: sự kiện API hiển thị khoảng giờ ở block riêng bên dưới → tránh lặp. */}
+            {(isLocalMeeting ? (m!.startTime || m!.endTime) : (!isApiEvent && detail.time)) && (
+              <div className="flex items-center gap-3">
+                <ClockIcon className="h-5 w-5 text-text-muted" />
+                <span className="text-text-primary">
+                  {isLocalMeeting
+                    ? `${m!.startTime || "--:--"} — ${m!.endTime || "--:--"}`
+                    : detail.time}
+                </span>
+              </div>
+            )}
+
+            {isLocalMeeting && m!.chairman && (
+              <div className="flex items-center gap-3">
+                <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                <span className="text-text-primary">
+                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
+                  {m!.chairman}
+                </span>
+              </div>
+            )}
+
+            {isLocalMeeting && m!.participants.length > 0 && (
+              <div className="flex items-start gap-3">
+                <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                <div className="flex-1">
+                  <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
+                    Thành viên ({m!.participants.length}):
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {m!.participants.map((p, idx) => (
+                      <span
+                        key={`${p.name}-${idx}`}
+                        className={clsx(
+                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs",
+                          p.hasConflict
+                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                            : "bg-surface-hover text-text-primary",
+                        )}
+                      >
+                        {p.hasConflict && <ExclamationTriangleIcon className="h-3 w-3" />}
+                        {p.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isLocalMeeting && (
+              <div className="flex items-center gap-3">
+                {m!.format === "online" ? (
+                  <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                ) : (
+                  <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                )}
+                <span className="text-text-primary">
+                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
+                    {m!.format === "online" ? "Hình thức: " : "Địa điểm: "}
+                  </span>
+                  {m!.format === "online" ? "Trực tuyến" : (m!.location || "Chưa cập nhật")}
+                </span>
+              </div>
+            )}
+
+            {isLocalMeeting && m!.notes && (
+              <div className="flex items-start gap-3">
+                <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
+                  <React.Suspense
+                    fallback={<p className="whitespace-pre-wrap">{m!.notes}</p>}
+                  >
+                    <MarkdownContent content={m!.notes} isOwn={false} />
+                  </React.Suspense>
+                </div>
+              </div>
+            )}
+
+            {/* API Event rich display */}
+            {isApiEvent && apiEvent && (
+              <>
+                {/* Thời gian: nhiều ngày → Bắt đầu/Kết thúc kèm ngày; trong ngày → khoảng giờ. */}
+                {isApiMultiDay && validStart && validEnd ? (
+                  <div className="flex items-start gap-3">
+                    <CalendarDaysIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    <div className="space-y-0.5">
+                      <p className="text-text-primary">
+                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Bắt đầu: </span>
+                        {fmtDateTime(validStart)}
+                      </p>
+                      <p className="text-text-primary">
+                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Kết thúc: </span>
+                        {fmtDateTime(validEnd)}
+                      </p>
+                    </div>
+                  </div>
+                ) : apiEvent.startAt && apiEvent.endAt ? (
+                  <div className="flex items-center gap-3">
+                    <ClockIcon className="h-5 w-5 text-text-muted" />
+                    <span className="text-text-primary">
+                      {new Date(apiEvent.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} — {new Date(apiEvent.endAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Chairman */}
+                {apiEvent.meetingChairman && (
+                  <div className="flex items-center gap-3">
+                    <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    <span className="text-text-primary">
+                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
+                      {apiEvent.meetingChairman}
+                    </span>
+                  </div>
+                )}
+
+                {/* Attendees */}
+                {apiEvent.attendees && apiEvent.attendees.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
+                        Thành viên ({apiEvent.attendees.length})
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {apiEvent.attendees.slice(0, 10).map((name, idx) => (
+                          <span
+                            key={`${name}-${idx}`}
+                            className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-primary"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                        {apiEvent.attendees.length > 10 && (
+                          <span className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
+                            +{apiEvent.attendees.length - 10} người khác
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hình thức (online/offline) */}
+                {apiEvent.meetingFormat && (
+                  <div className="flex items-center gap-3">
+                    {apiEvent.meetingFormat === "online" ? (
+                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    ) : (
+                      <BuildingOfficeIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    )}
+                    <span className="text-text-primary">
+                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Hình thức: </span>
+                      {apiEvent.meetingFormat === "online" ? "Trực tuyến (Online)" : "Trực tiếp (Offline)"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Location / Meeting Link */}
+                {apiEvent.meetingLocation && (
+                  <div className="flex items-center gap-3">
+                    {apiEvent.meetingFormat === "online" ? (
+                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    ) : (
+                      <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
+                    )}
+                    <span className="text-text-primary break-all">
+                      {apiEvent.meetingFormat === "online" ? "Trực tuyến: " : "Địa điểm: "}
+                      {apiEvent.meetingLocation}
+                    </span>
+                  </div>
+                )}
+
+                {/* Description (ghi chú) — render markdown để bảng/danh sách đẹp */}
+                {apiEvent.description && (
+                  <div className="flex items-start gap-3">
+                    <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                    <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
+                      <React.Suspense
+                        fallback={<p className="whitespace-pre-wrap">{apiEvent.description}</p>}
+                      >
+                        <MarkdownContent content={apiEvent.description} isOwn={false} />
+                      </React.Suspense>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!isLocalMeeting && !isApiEvent && detail.source?.description && (
+              <p className="text-text-secondary">{detail.source.description}</p>
+            )}
+          </div>
+
+          {/* Đã xem / đã nhận */}
+          {isLocalMeeting && (
+            <div className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 dark:bg-emerald-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <EyeIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                    Đã xem
+                  </span>
+                  <span
+                    className={clsx(
+                      "rounded-full px-2 py-0.5 text-xs font-bold",
+                      readCount > 0
+                        ? "bg-emerald-500 text-white"
+                        : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+                    )}
+                  >
+                    {readCount}/{totalAudience}
+                  </span>
+                </div>
+                {isTaggedParticipant && (
+                  <button
+                    type="button"
+                    onClick={() => m && onToggleRead?.(m.id)}
+                    className={clsx(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-micro",
+                      hasMarkedRead
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
+                        : "bg-[#1976D2]/10 text-[#1565C0] hover:bg-[#1976D2]/12",
+                    )}
+                  >
+                    {hasMarkedRead ? (
+                      <>
+                        <CheckCircleSolidIcon className="h-3.5 w-3.5" />
+                        Đã xem
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon className="h-3.5 w-3.5" />
+                        Đánh dấu đã xem
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {readCount > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {m!.readBy!.map((r) => (
+                    <li
+                      key={r.userId}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <span className="flex items-center gap-1.5 text-text-primary">
+                        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500" />
+                        {r.name}
+                      </span>
+                      <span className="text-text-muted">{formatReadAt(r.readAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {readCount === 0 && (
+                <p className="mt-2 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                  Chưa có ai đánh dấu đã xem.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Action footer for API events */}
+          {isApiEvent && isApiOwner && (
+            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<TrashIcon className="h-4 w-4" />}
+                className="text-danger hover:bg-danger/10"
+                onClick={() => setShowApiDeleteConfirm(true)}
+              >
+                Xóa
+              </Button>
+            </div>
+          )}
+
+          <ConfirmDialog
+            isOpen={showApiDeleteConfirm}
+            onClose={() => setShowApiDeleteConfirm(false)}
+            onConfirm={async () => {
+              setShowApiDeleteConfirm(false);
+              await onDeleteApiEvent?.(detail.id);
+            }}
+            title="Xóa sự kiện"
+            message="Bạn có chắc muốn xóa sự kiện này? Hành động không thể hoàn tác."
+            confirmText="Xóa"
+            variant="danger"
+          />
+
+          {/* Action footer: chỉ người tạo mới có Sửa/Xóa */}
+          {isLocalMeeting && isCreator && (
+            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
+              {!confirmDelete ? (
+                <>
+                  <Button
+                    variant="brand-outline"
+                    size="sm"
+                    leftIcon={<PencilSquareIcon className="h-4 w-4" />}
+                    onClick={() => m && onEdit?.(m)}
+                  >
+                    Sửa
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<TrashIcon className="h-4 w-4" />}
+                    className="text-danger hover:bg-danger/10"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    Xóa
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="mr-auto text-xs text-danger">
+                    Xác nhận xóa lịch họp này?
+                  </span>
+                  <Button
+                    variant="brand-outline"
+                    size="sm"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Hủy
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="bg-danger hover:bg-danger/90"
+                    onClick={() => m && onDelete?.(m.id)}
+                  >
+                    Xóa
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Mở trang lịch đầy đủ để xem chi tiết lịch */}
+          {onViewFull && (
+            <div className="mt-5 border-t border-border pt-3 text-center">
+              <button
+                type="button"
+                onClick={onViewFull}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-[#1565C0] transition-micro hover:underline dark:text-[#6BA8F0]"
+              >
+                Xem chi tiết lịch →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+class WidgetErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error("[WidgetErrorBoundary] WeeklyCalendarWidget render error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
+          Không tải được lịch tuần. Vui lòng thử lại sau.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const WeeklyCalendarWidgetInner: React.FC = () => {
+  const navigate = useNavigate();
+  const today = React.useMemo(() => new Date(), []);
+  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [modalDefaultDate, setModalDefaultDate] = React.useState<string | undefined>();
+  // "Thêm lịch" type chooser — họp vs cá nhân (đồng bộ với CalendarPage).
+  const [eventTypeChooserOpen, setEventTypeChooserOpen] = React.useState(false);
+  const [personalModalOpen, setPersonalModalOpen] = React.useState(false);
+  const [selectedDetail, setSelectedDetail] = React.useState<SelectedEventDetail | null>(null);
+  const [editingMeeting, setEditingMeeting] = React.useState<MeetingFormData | null>(null);
+
+  // Calendar store - shared source of truth
+  const storeEvents = useCalendarStore((s) => s.events);
+  const storeIsLoading = useCalendarStore((s) => s.isLoading);
+  const storeError = useCalendarStore((s) => s.error);
+  const storeErrorCode = useCalendarStore((s) => s.errorCode);
+  const fetchEvents = useCalendarStore((s) => s.fetchEvents);
+  const createEvent = useCalendarStore((s) => s.createEvent);
+  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
+
+  // Store full API events for detail view
+  const safeStoreEvents = React.useMemo(
+    () => (Array.isArray(storeEvents) ? storeEvents : []),
+    [storeEvents],
+  );
+  const apiEventsMap = React.useMemo(() => {
+    const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
+    safeStoreEvents.forEach((event) => {
+      // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail.
+      // Tên người tham gia: ưu tiên fullName của participant, fallback employee.fullName.
+      const participantNames = event.participants
+        ? event.participants
+            .map((p) => p.fullName ?? p.employee?.fullName ?? "")
+            .filter(Boolean)
+        : [];
+      // Chủ trì / hình thức / khách mời free-text nằm trong metadata (giống CalendarPage).
+      const meta =
+        event.metadata && typeof event.metadata === "object"
+          ? (event.metadata as Record<string, unknown>)
+          : {};
+      const meetingChairman =
+        typeof meta.meetingChairman === "string" ? meta.meetingChairman : null;
+      const meetingFormat =
+        meta.meetingFormat === "online" || meta.meetingFormat === "offline"
+          ? meta.meetingFormat
+          : null;
+      const freeTextNames = Array.isArray(meta.attendees)
+        ? meta.attendees.filter((a): a is string => typeof a === "string")
+        : [];
+      map[event.id] = {
+        id: event.id,
+        title: localizeEventTitle(event.title),
+        startAt: event.startAt,
+        endAt: event.endAt,
+        description: event.description,
+        meetingChairman,
+        meetingFormat,
+        meetingLocation: event.location ?? null,
+        attendees: [...participantNames, ...freeTextNames],
+        visibility: event.visibility,
+        ownerUserId: event.ownerId,
+      };
+    });
+    return map;
+  }, [safeStoreEvents]);
+
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id;
+  const currentUserName = React.useMemo(
+    () =>
+      currentUser?.effectiveDisplayName ||
+      currentUser?.displayName ||
+      currentUser?.fullName ||
+      currentUser?.fullNameFromHR ||
+      currentUser?.username ||
+      "",
+    [currentUser],
+  );
+
+  const weekDays = React.useMemo(() => {
+    const base = new Date(today);
+    base.setDate(today.getDate() + weekOffset * 7);
+    return getWeekDays(base);
+  }, [today, weekOffset]);
+
+  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI 6 THÁNG ở đầu khoảng.
+  // Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
+  // nhiều tháng trước nhưng vẫn kéo sang tuần đang xem; backend lọc theo startAt
+  // nên range hẹp sẽ KHÔNG trả các event dài bắt đầu xa. Lùi `from` về đầu tháng
+  // cách 6 tháng để chắc bắt được; render vẫn lọc client theo eventOccursOnDay
+  // nên chỉ hiện đúng 7 ngày của tuần.
+  const weekRange = React.useMemo(() => {
+    if (!weekDays.length) return { start: null, end: null };
+    const first = weekDays[0];
+    const last = weekDays[6];
+    const start = new Date(first.getFullYear(), first.getMonth() - 6, 1, 0, 0, 0, 0);
+    const end = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
+    return {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    };
+  }, [weekDays]);
+
+  // Fetch events khi đổi tuần; đồng thời tự cập nhật khi quay lại tab và theo
+  // chu kỳ 60s — không có WS cho lịch nên đây là cách giữ đồng bộ với thay đổi
+  // từ /calendar hoặc người khác (mời họp).
+  React.useEffect(() => {
+    if (!weekRange.start || !weekRange.end) return;
+    const refetch = () => {
+      void fetchEvents(weekRange.start!, weekRange.end!);
+    };
+    refetch();
+    const onFocus = () => refetch();
+    window.addEventListener("focus", onFocus);
+    const intervalId = window.setInterval(refetch, 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [weekRange.start, weekRange.end, fetchEvents]);
+
+  // Widget chỉ hiển thị lịch HỌP và lịch CÁ NHÂN (kể cả cá nhân dài hạn). Map
+  // store events dùng CHUNG mapping với CalendarPage: type qua mapApiEventTypeToLocal
+  // (meeting/personal…), giữ startAt/endAt để event nhiều ngày trải đủ cột ngày,
+  // giờ/ngày convert UTC→local. Nhờ vậy màu phân loại (getEventColor) khớp /calendar.
+  const events: CalendarEvent[] = React.useMemo(
+    () =>
+      safeStoreEvents
+        .map(mapHrmEventToCalendarEvent)
+        // Chỉ HỌP & CÁ NHÂN (OTHER/LEAVE/REMINDER… đã map về personal); loại bỏ
+        // mọi loại khác (vd attendance/task) nếu backend trả về.
+        .filter((e) => e.type === "meeting" || e.type === "personal"),
+    [safeStoreEvents],
+  );
+
+  const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
+    (a.time ?? "").localeCompare(b.time ?? "");
+
+  // Mở bộ chọn loại lịch (họp / cá nhân) với ngày điền sẵn.
+  const openEventTypeChooser = (day: Date) => {
+    setEditingMeeting(null);
+    setModalDefaultDate(formatDateStr(day));
+    setEventTypeChooserOpen(true);
+  };
+
+  const handleSaveMeeting = async (data: MeetingFormData) => {
+    try {
+      // Diễn giải ngày+giờ đã chọn là giờ LOCAL rồi quy về mốc tuyệt đối (UTC
+      // ISO). Nối "Z" trực tiếp sẽ coi giờ local là UTC (lệch 7h ở VN).
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      // Người được tag phải nhận được lịch → gửi mọi ref backend resolve được
+      // (employee cuid / employeeCode / authUserId). Tên free-text (không có
+      // identity) lưu vào metadata.attendees để hiển thị. Chủ trì tag từ bạn bè
+      // cũng được mời để lịch hiện trên lịch của họ.
+      const refs = new Set<string>();
+      const freeTextNames: string[] = [];
+      for (const p of data.participants ?? []) {
+        const ref = p.employeeId || p.employeeCode || p.userId;
+        if (ref) refs.add(ref);
+        else if (p.name.trim()) freeTextNames.push(p.name.trim());
+      }
+      const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
+      if (chairmanRef) refs.add(chairmanRef);
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        startAt,
+        endAt,
+        eventType: "MEETING" as const,
+        visibility: meetingVisibilityToApi(data.visibility),
+        isAllDay: false,
+        location: data.location || undefined,
+        timezone,
+        participantIds: Array.from(refs),
+        attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
+        meetingChairman: data.chairman || undefined,
+        meetingFormat: data.format,
+      };
+
+      const result = await createEvent(input);
+
+      if (result) {
+        toast.success("Đã thêm lịch họp");
+        // Refetch to update the calendar
+        if (weekRange.start && weekRange.end) {
+          await fetchEvents(weekRange.start, weekRange.end);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to create event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    }
+  };
+
+  // Lịch cá nhân: chỉ mình bạn, không người tham gia/chủ trì.
+  const handleSavePersonalEvent = async (data: PersonalEventFormData) => {
+    try {
+      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
+      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+
+      const input = {
+        title: data.title,
+        description: data.notes || undefined,
+        startAt,
+        endAt,
+        eventType: "PERSONAL" as const,
+        visibility: personalVisibilityToApi(data.visibility),
+        isAllDay: false,
+        timezone,
+      };
+
+      const result = await createEvent(input);
+      if (result) {
+        toast.success("Đã thêm lịch cá nhân");
+        if (weekRange.start && weekRange.end) {
+          await fetchEvents(weekRange.start, weekRange.end);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to create personal event:", error);
+      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+    }
+  };
+
+  const handleEditMeeting = (meeting: MeetingFormData) => {
+    setSelectedDetail(null);
+    setEditingMeeting(meeting);
+    setModalDefaultDate(meeting.date);
+    setModalOpen(true);
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    try {
+      await deleteEvent(meetingId);
+      toast.success("Đã xóa lịch");
+      setSelectedDetail(null);
+      // Refetch to update the calendar
+      if (weekRange.start && weekRange.end) {
+        await fetchEvents(weekRange.start, weekRange.end);
+      }
+    } catch (error) {
+      console.error("Failed to delete event:", error);
+      toast.error("Không thể xóa lịch");
+    }
+  };
+
+  // Handler for deleting API events
+  const handleDeleteApiEvent = async (eventId: string) => {
+    await handleDeleteMeeting(eventId);
+  };
+
+  // Note: handleToggleRead is not supported by API yet - disabled for API-based events
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleToggleRead = (_meetingId: string) => {
+    // Read receipts not yet supported by backend
+  };
+
+  const isToday = (d: Date) =>
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear();
+
+  const isCurrentWeek = weekOffset === 0;
+
+  const todayLabel = React.useMemo(() => {
+    const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+    return `${dayNames[today.getDay()]}, ${today.getDate()}/${today.getMonth() + 1}`;
+  }, [today]);
+
+  const weekLabel = React.useMemo(() => {
+    if (!weekDays.length) return "";
+    const thursday = weekDays[3];
+    const weekNum = getISOWeek(thursday);
+    return `${weekNum} · Tháng ${thursday.getMonth() + 1}/${thursday.getFullYear()}`;
+  }, [weekDays]);
+
+  return (
+    <div className="mt-5 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-elev1">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <CalendarDaysIcon className="h-5 w-5 text-[#1565C0]" />
+          <span className="text-sm font-bold text-text-primary">Lịch tuần</span>
+          <span className="text-sm text-text-muted">{weekLabel}</span>
+          {isCurrentWeek && (
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="rounded-full px-2 py-0.5 text-xs font-bold text-white transition-micro hover:bg-[#1976D2] active:scale-[0.98] bg-[#1565C0]"
+              style={{
+                boxShadow: "0 1px 4px rgba(21, 101, 192, 0.3)",
+              }}
+            >
+              Hôm nay · {todayLabel}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Legend — chỉ họp & cá nhân (khớp getEventColor) */}
+          <div className="hidden items-center gap-3 sm:flex">
+            <span className="flex items-center gap-1 text-xs text-text-muted">
+              <span className="h-2 w-2 rounded-full bg-teal-500" />
+              Họp
+            </span>
+            <span className="flex items-center gap-1 text-xs text-text-muted">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              Cá nhân
+            </span>
+          </div>
+          <div className="flex items-center gap-0.5">
+            {!isCurrentWeek && (
+              <button
+                type="button"
+                onClick={() => setWeekOffset(0)}
+                className="rounded px-2 py-1 text-xs font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro"
+              >
+                Tuần này
+              </button>
+            )}
+            <button
+              type="button"
+              title="Tuần trước"
+              onClick={() => setWeekOffset((p) => p - 1)}
+              className="rounded p-1 text-text-muted hover:bg-surface-hover transition-micro"
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="Tuần sau"
+              onClick={() => setWeekOffset((p) => p + 1)}
+              className="rounded p-1 text-text-muted hover:bg-surface-hover transition-micro"
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bộ chọn loại lịch: họp vs cá nhân (đồng bộ với CalendarPage) */}
+      <Modal
+        isOpen={eventTypeChooserOpen}
+        onClose={() => setEventTypeChooserOpen(false)}
+        title="Thêm lịch"
+        size="sm"
+      >
+        <p className="mb-4 text-sm text-text-secondary">
+          Chọn loại lịch bạn muốn thêm.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-[#1976D2]/60 hover:bg-[#1565C0]/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
+              <UsersIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch họp</span>
+            <span className="text-[11px] text-text-muted">Mời người tham gia, chủ trì, địa điểm</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEventTypeChooserOpen(false);
+              setPersonalModalOpen(true);
+            }}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 text-center transition-micro hover:border-amber-500/60 hover:bg-amber-500/5"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <UserIcon className="h-6 w-6" />
+            </span>
+            <span className="text-sm font-medium text-text-primary">Lịch cá nhân</span>
+            <span className="text-[11px] text-text-muted">Chỉ mình bạn — ngày, giờ, nội dung</span>
+          </button>
+        </div>
+      </Modal>
+
+      <MeetingFormModal
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingMeeting(null);
+        }}
+        onBack={
+          // Khi tạo mới (không phải sửa) → "Quay lại" mở lại bộ chọn loại lịch.
+          editingMeeting
+            ? undefined
+            : () => {
+                setModalOpen(false);
+                setEventTypeChooserOpen(true);
+              }
+        }
+        onSave={handleSaveMeeting}
+        defaultDate={modalDefaultDate}
+        initialData={editingMeeting}
+      />
+
+      <PersonalEventFormModal
+        isOpen={personalModalOpen}
+        onClose={() => setPersonalModalOpen(false)}
+        onBack={() => {
+          setPersonalModalOpen(false);
+          setEventTypeChooserOpen(true);
+        }}
+        onSave={handleSavePersonalEvent}
+        defaultDate={modalDefaultDate}
+      />
+
+      {selectedDetail && (
+        <EventDetailPopup
+          detail={selectedDetail}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          onClose={() => setSelectedDetail(null)}
+          onEdit={handleEditMeeting}
+          onDelete={handleDeleteMeeting}
+          onDeleteApiEvent={handleDeleteApiEvent}
+          onToggleRead={handleToggleRead}
+          onViewFull={() => navigate("/calendar")}
+        />
+      )}
+
+      {/* Loading indicator — subtle bar, never hides the grid */}
+      {storeIsLoading && (
+        <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-1.5">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
+          <span className="text-[11px] text-text-muted">Đang tải lịch...</span>
+        </div>
+      )}
+
+      {/* Error notice banner — soft, inline, never replaces the grid */}
+      {storeError && !storeIsLoading && (
+        <div className="mx-3 my-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-900/20">
+          <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {storeErrorCode === "EMPLOYEE_LINK_REQUIRED"
+                ? "Tài khoản chưa liên kết hồ sơ nhân sự. Lịch họp và phòng ban sẽ hiển thị sau khi liên kết."
+                : storeError}
+            </p>
+            {storeErrorCode !== "FORBIDDEN" &&
+              storeErrorCode !== "EMPLOYEE_INACTIVE" &&
+              storeErrorCode !== "EMPLOYEE_LINK_REQUIRED" && (
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (weekRange.start && weekRange.end) {
+                      void fetchEvents(weekRange.start, weekRange.end);
+                    }
+                  }}
+                  className="text-[11px] font-semibold text-amber-700 hover:underline dark:text-amber-300"
+                >
+                  Thử lại
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/calendar")}
+                  className="text-[11px] font-semibold text-[#1565C0] hover:underline"
+                >
+                  Xem lịch đầy đủ →
+                </button>
+              </div>
+            )}
+            {storeErrorCode === "EMPLOYEE_LINK_REQUIRED" && (
+              <button
+                type="button"
+                onClick={() => navigate("/calendar")}
+                className="mt-1 text-[11px] font-semibold text-[#1565C0] hover:underline"
+              >
+                Xem lịch →
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grid — always rendered so the calendar shell is never lost due to an API error */}
+      <div className="grid grid-cols-7 divide-x divide-border">
+        {weekDays.map((day, i) => {
+          const todayDay = isToday(day);
+          // eventOccursOnDay (không phải getEventsByDate) để lịch cá nhân DÀI HẠN
+          // trải đủ các ngày từ startAt→endAt, không chỉ ngày bắt đầu.
+          const dayEvents = events.filter((e) => eventOccursOnDay(e, day));
+          const isWeekend = i >= 5;
+          const dayStr = formatDateStr(day);
+
+          // Chỉ họp & cá nhân; sắp theo giờ. Lịch dài hạn (nhiều ngày) render
+          // dạng thanh trải ngang (bắt đầu → dây nối → kết thúc đỏ).
+          const allEvents: Array<{
+            id: string;
+            time?: string;
+            title: string;
+            type: CalendarEvent["type"];
+            isMultiDay: boolean;
+            kind: "meeting" | "personal";
+            detail: SelectedEventDetail;
+          }> = dayEvents
+            .slice()
+            .sort(sortByTime)
+            .map((e) => {
+              const kind: "meeting" | "personal" =
+                e.type === "meeting" ? "meeting" : "personal";
+              return {
+                id: e.id,
+                time: e.time,
+                title: e.title,
+                type: e.type,
+                isMultiDay: isMultiDayEvent(e),
+                kind,
+                detail: {
+                  kind,
+                  id: e.id,
+                  title: e.title,
+                  date: dayStr,
+                  time: e.time,
+                  source: e,
+                  apiEvent: apiEventsMap[e.id],
+                },
+              };
+            })
+            // Ghim lịch dài ngày lên đầu để thanh trải nằm cùng hàng giữa các
+            // ngày → nối liền thành "dây nối" liên tục; còn lại sắp theo giờ.
+            .sort((a, b) => {
+              if (a.isMultiDay !== b.isMultiDay) return a.isMultiDay ? -1 : 1;
+              return (a.time ?? "").localeCompare(b.time ?? "");
+            });
+
+          const visibleEvents = allEvents.slice(0, MAX_VISIBLE_EVENTS);
+          const overflowCount = allEvents.length - visibleEvents.length;
+          const totalCount = allEvents.length;
+
+          return (
+            <div
+              key={i}
+              className={clsx(
+                "flex flex-col p-2 sm:p-2.5",
+                "min-h-[140px]",
+                isWeekend && "bg-surface-overlay",
+              )}
+              style={todayDay && !isWeekend ? { backgroundColor: "rgba(255, 200, 87, 0.08)" } : undefined}
+            >
+              {/* Day header */}
+              <div className="mb-2 flex flex-col items-center gap-1">
+                {/* Hàng 1: tên thứ, căn giữa */}
+                <span
+                  className={clsx(
+                    "text-[11px] font-semibold sm:text-xs",
+                    isWeekend ? "text-rose-500" : "text-text-muted",
+                  )}
+                  style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
+                >
+                  {WEEKDAY_LABELS[i]}
+                </span>
+                {/* Hàng 2: số ngày (trái) + nút Thêm lịch (phải) */}
+                <div className="flex w-full items-center justify-between">
+                  <div className="relative">
+                    <span
+                      className={clsx(
+                        "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold sm:h-6 sm:w-6 sm:text-xs",
+                        !todayDay && (isWeekend ? "text-rose-500" : "text-text-primary"),
+                      )}
+                      style={
+                        todayDay
+                          ? { background: "#DBEAFE", color: "#1565C0", boxShadow: "0 1px 4px rgba(255,200,87,0.45)" }
+                          : undefined
+                      }
+                    >
+                      {day.getDate()}
+                    </span>
+                    {totalCount > 0 && (
+                      <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#FFC857] px-0.5 text-[9px] font-bold text-[#C41E3A]">
+                        {totalCount}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    title={`Thêm lịch ngày ${day.getDate()}`}
+                    onClick={() => openEventTypeChooser(day)}
+                    className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
+                  >
+                    <PlusIcon className="h-3 w-3" />
+                    <span className="hidden sm:inline">Thêm lịch</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Events */}
+              <div className="flex flex-1 flex-col gap-1">
+                {visibleEvents.map((ev) => {
+                  // Lịch dài ngày → thanh TRẢI NGANG: ngày bắt đầu hiện tiêu đề,
+                  // ngày giữa chỉ là dây nối, ngày kết thúc tô đỏ (#DC2626).
+                  // Margin âm để bar lấn vào padding ô, nối liền qua các ngày.
+                  const span = ev.isMultiDay && ev.detail.source ? getMultiDayPosition(ev.detail.source, day) : null;
+                  if (span) {
+                    const isEnd = span === "end";
+                    const isStart = span === "start";
+                    // Ngày GIỮA: chỉ một sợi chỉ mảnh căn giữa, nối liền hai
+                    // badge to ở ngày bắt đầu & kết thúc.
+                    if (!isStart && !isEnd) {
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => setSelectedDetail(ev.detail)}
+                          title={ev.title}
+                          className="-mx-2 flex h-5 items-center sm:-mx-2.5"
+                        >
+                          <span className="h-1 w-full bg-amber-400/80" />
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        onClick={() => setSelectedDetail(ev.detail)}
+                        title={isEnd ? `${ev.title} · Kết thúc` : ev.title}
+                        className={clsx(
+                          "relative flex h-5 min-w-0 items-center px-1.5 text-left text-[10px] font-semibold leading-none transition-micro hover:brightness-95 dark:hover:brightness-110 sm:text-[11px]",
+                          isStart && "-mr-2 rounded-l sm:-mr-2.5",
+                          isEnd && "-ml-2 rounded-r sm:-ml-2.5",
+                          isEnd
+                            ? "bg-[#DC2626] text-white"
+                            : "bg-amber-400/80 text-amber-900 dark:text-amber-100",
+                        )}
+                      >
+                        {isStart && <span className="truncate">{ev.title}</span>}
+                        {isEnd && <span className="truncate">Kết thúc</span>}
+                        {/* Node tròn ở đầu/cuối dây để nhìn rõ là một liên kết. */}
+                        <span
+                          className={clsx(
+                            "pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-amber-500",
+                            isStart ? "right-0 translate-x-1/2" : "left-0 -translate-x-1/2",
+                          )}
+                        />
+                      </button>
+                    );
+                  }
+
+                  // Lịch trong ngày → badge bình thường theo loại.
+                  const colors = getEventColor(ev.type);
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setSelectedDetail(ev.detail)}
+                      className={clsx(
+                        "flex min-w-0 w-full flex-col rounded border px-1.5 py-1 text-left text-[10px] leading-snug sm:text-[11px]",
+                        "hover:brightness-95 dark:hover:brightness-110 transition-micro",
+                        colors.bg,
+                        colors.border,
+                        colors.text,
+                      )}
+                      title={ev.title}
+                    >
+                      {(() => {
+                        const range = ev.detail.source
+                          ? formatEventTimeRange(ev.detail.source)
+                          : null;
+                        const display = range ?? ev.time;
+                        return display ? (
+                          <span className="font-bold opacity-80">{display}</span>
+                        ) : null;
+                      })()}
+                      <span className="truncate">{ev.title}</span>
+                    </button>
+                  );
+                })}
+
+                {overflowCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/calendar")}
+                    className="text-left text-[10px] font-semibold text-[#1565C0] hover:underline sm:text-[11px]"
+                  >
+                    +{overflowCount} mục khác
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-border px-4 py-2">
+        <span className="flex items-center gap-1 text-[11px] text-text-muted">
+          <span className="flex h-4 w-4 items-center justify-center rounded border border-border text-[9px] font-bold text-text-muted">i</span>
+          Nhấn vào sự kiện để xem chi tiết
+        </span>
+        <button
+          type="button"
+          onClick={() => navigate("/calendar")}
+          className="text-xs font-semibold text-[#1565C0] transition-micro hover:text-[#1976D2] active:scale-95"
+        >
+          Xem lịch đầy đủ →
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * WeeklyCalendarWidget — bản dùng ngoài đã bọc sẵn error boundary (render lịch
+ * lỗi không làm sập màn NoChatSelected).
+ */
+export const WeeklyCalendarWidget: React.FC = () => (
+  <WidgetErrorBoundary>
+    <WeeklyCalendarWidgetInner />
+  </WidgetErrorBoundary>
+);
+
+export default WeeklyCalendarWidget;

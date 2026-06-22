@@ -33,3 +33,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Lint/build scratch output
+lint_output.txt
+vite-dev*.log

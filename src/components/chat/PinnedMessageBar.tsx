@@ -8,8 +8,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PinIcon } from "@hugeicons/core-free-icons";
+import { Pin } from "lucide-react";
 import { ConversationLane } from "../layout/ConversationLane";
 import { getMessagePreview } from "../../utils/messageHelpers";
 import type { Message } from "../../types";
@@ -63,8 +62,7 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
               className="h-7 w-0.5 shrink-0 rounded-full"
               style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
             />
-            <HugeiconsIcon
-              icon={PinIcon}
+            <Pin
               className="h-[18px] w-[18px] shrink-0 text-[#1565C0]"
               strokeWidth={1.5}
             />

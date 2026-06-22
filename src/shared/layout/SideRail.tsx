@@ -16,8 +16,7 @@ import {
   Cog6ToothIcon as Cog6ToothSolid,
   SparklesIcon as SparklesSolid,
 } from "@heroicons/react/24/solid";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Contact01Icon, MentoringIcon } from "@hugeicons/core-free-icons";
+import { Contact, HandHelping } from "lucide-react";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
 import { useChatStore } from "../../stores";
@@ -56,7 +55,7 @@ const railItems: SideRailItem[] = [
   {
     id: "contacts",
     label: "sidebar:rail.contacts",
-    icon: (_props: object) => <HugeiconsIcon icon={Contact01Icon} size={22} color="currentColor" strokeWidth={1.8} />,
+    icon: () => <Contact size={22} color="currentColor" strokeWidth={1.8} />,
     to: ROUTE_PATHS.FRIENDS,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.FRIENDS ||
@@ -68,7 +67,7 @@ const railItems: SideRailItem[] = [
 ];
 
 const bottomItems: SideRailItem[] = [
-  { id: "help", label: "sidebar:rail.help", icon: (_props: object) => <HugeiconsIcon icon={MentoringIcon} size={22} color="currentColor" strokeWidth={1.8} />, to: ROUTE_PATHS.HELP },
+  { id: "help", label: "sidebar:rail.help", icon: () => <HandHelping size={22} color="currentColor" strokeWidth={1.8} />, to: ROUTE_PATHS.HELP },
   {
     id: "settings",
     label: "sidebar:rail.settings",
