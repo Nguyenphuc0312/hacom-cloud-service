@@ -47,17 +47,22 @@ const MAX_SCALE = 3.0;
 const PAGE_PRELOAD_AHEAD = 2;
 const PAGE_PRELOAD_BEHIND = 1;
 
-// PDF.js worker configuration - loaded dynamically
+// PDF.js worker configuration - loaded dynamically.
+// Use Vite's `?worker` import so the worker is bundled and instantiated by Vite
+// (via workerPort) instead of being fetched at runtime as a dynamically-imported
+// ES module. The runtime dynamic-import approach fails in production when the
+// static server serves the `.mjs` chunk with the wrong MIME type ("Setting up
+// fake worker failed: Failed to fetch dynamically imported module").
 let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 
 async function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
   if (pdfjsLib) return pdfjsLib;
 
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.mjs",
-    import.meta.url,
-  ).toString();
+  const [pdfjs, { default: PdfWorker }] = await Promise.all([
+    import("pdfjs-dist"),
+    import("pdfjs-dist/build/pdf.worker.min.mjs?worker"),
+  ]);
+  pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
   pdfjsLib = pdfjs;
   return pdfjs;
 }
