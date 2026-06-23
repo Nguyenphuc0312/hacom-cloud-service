@@ -1,6 +1,7 @@
 import type { AiSource } from "../types";
+import { AI_CHAT_BASE_URL } from "../../../services/ai-chat/constants";
 
-const AI_BASE_URL = "https://ai-chat.fitora.id.vn";
+const AI_BASE_URL = AI_CHAT_BASE_URL;
 
 /**
  * Chỉ cho phép mở URL thuộc domain AI và path /api/sources/.
