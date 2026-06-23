@@ -14,7 +14,7 @@ import { getAccessToken } from "../../../services/tokenService";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
-  "https://ai-chat.fitora.id.vn";
+  "https://ai.hacomholdings.com.vn";
 
 const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
 const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;

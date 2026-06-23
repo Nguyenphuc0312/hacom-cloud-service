@@ -31,7 +31,7 @@ function extractPathname(href: string): string | null {
     if (trimmed.startsWith("/")) {
       return trimmed.split("?")[0];
     }
-    return new URL(trimmed, "https://ai-chat.fitora.id.vn").pathname;
+    return new URL(trimmed, "https://ai.hacomholdings.com.vn").pathname;
   } catch {
     return trimmed.split("?")[0];
   }
