@@ -22,7 +22,7 @@
  */
 export const AI_CHAT_BASE_URL: string =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
-  "https://ai-chat.fitora.id.vn";
+  "https://ai.hacomholdings.com.vn";
 
 // ---------------------------------------------------------------------------
 // Timeout policies
