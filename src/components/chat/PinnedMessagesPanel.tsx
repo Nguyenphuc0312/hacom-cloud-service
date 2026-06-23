@@ -46,27 +46,18 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
       role="region"
       aria-label={t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3">
-        <Pin
-          className="h-[18px] w-[18px] text-[#1565C0]"
-          strokeWidth={1.5}
-        />
-        <h3 className="flex-1 text-sm font-semibold text-text-primary">
+      {/* Header — matches the search / info (GroupInfo) panel header */}
+      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
+        <h3 className="text-sm font-bold text-text-primary">
           {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
         </h3>
-        {pinnedMessages.length > 0 && (
-          <span className="rounded-full bg-[#1976D2]/10 px-2 py-0.5 text-xs font-medium text-[#1565C0]">
-            {pinnedMessages.length}
-          </span>
-        )}
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-1 text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary active:scale-95"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           aria-label={t("common:actions.close", { defaultValue: "Đóng" })}
         >
-          <XMarkIcon className="h-4 w-4" />
+          <XMarkIcon className="h-5 w-5" />
         </button>
       </div>
 

@@ -1148,8 +1148,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         />
       )}
 
-      {/* Pinned / Inspect remain floating overlays with a scrim */}
-      {(overlayMode === "pinned" || overlayMode === "inspect") && (
+      {/* Inspect remains a floating overlay with a scrim */}
+      {overlayMode === "inspect" && (
         <div className="pointer-events-none absolute inset-0 z-[45]">
           <button
             type="button"
@@ -1159,26 +1159,11 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           />
           <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[var(--app-inspector-width)] border-l border-border/60 bg-surface shadow-elev3 animate-slide-up-fade">
             <React.Suspense fallback={<OverlayPanelFallback />}>
-              {overlayMode === "inspect" ? (
-                <MessageInspectDrawer
-                  message={inspectedMessage ?? null}
-                  onClose={() => setOverlayMode(null)}
-                  className="h-full"
-                />
-              ) : (
-                <PinnedMessagesPanel
-                  pinnedMessages={pinnedMessages}
-                  isLoading={isPinnedLoading}
-                  error={pinnedError}
-                  currentUserId={currentUser.id}
-                  onClose={() => setOverlayMode(null)}
-                  onJumpToMessage={handleJumpToMessage}
-                  onUnpin={(message) =>
-                    togglePin({ ...message, isPinned: true })
-                  }
-                  className="h-full"
-                />
-              )}
+              <MessageInspectDrawer
+                message={inspectedMessage ?? null}
+                onClose={() => setOverlayMode(null)}
+                className="h-full"
+              />
             </React.Suspense>
           </div>
         </div>
@@ -1315,16 +1300,20 @@ const [composerHeight, setComposerHeight] = React.useState(0);
       )}
       </div>
 
-      {/* Search panel — docked beside the chat (pushes it left, no scrim),
-          matching the info panel behaviour */}
+      {/* Search / Pinned panels — docked beside the chat (push it left, no
+          scrim), matching the info panel behaviour */}
       <div
         className={clsx(
           "h-full shrink-0 overflow-hidden border-border/60 transition-[width] duration-300 ease-out",
-          overlayMode === "search"
+          overlayMode === "search" || overlayMode === "pinned"
             ? "w-full max-w-[var(--app-inspector-width)] border-l"
             : "w-0 border-l-0",
         )}
-        aria-hidden={overlayMode !== "search" ? true : undefined}
+        aria-hidden={
+          overlayMode !== "search" && overlayMode !== "pinned"
+            ? true
+            : undefined
+        }
       >
         {overlayMode === "search" && (
           <React.Suspense fallback={<OverlayPanelFallback />}>
@@ -1333,6 +1322,21 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               onSelectMessage={handleJumpToMessage}
               onNavigateToMessageId={handleNavigateToMessage}
               onClose={() => setOverlayMode(null)}
+              className="h-full w-[var(--app-inspector-width)]"
+            />
+          </React.Suspense>
+        )}
+
+        {overlayMode === "pinned" && (
+          <React.Suspense fallback={<OverlayPanelFallback />}>
+            <PinnedMessagesPanel
+              pinnedMessages={pinnedMessages}
+              isLoading={isPinnedLoading}
+              error={pinnedError}
+              currentUserId={currentUser.id}
+              onClose={() => setOverlayMode(null)}
+              onJumpToMessage={handleJumpToMessage}
+              onUnpin={(message) => togglePin({ ...message, isPinned: true })}
               className="h-full w-[var(--app-inspector-width)]"
             />
           </React.Suspense>
