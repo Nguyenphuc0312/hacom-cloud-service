@@ -71,7 +71,13 @@ export function stripHtmlToText(html: string): string {
 }
 
 export function hasRichFormatting(html: string): boolean {
-  return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre)\b/i.test(html);
+  // `a` is included so any message containing a hyperlink is sent as
+  // rich_text — this preserves the `href` even when the link's display text
+  // differs from the URL (e.g. inserted via the toolbar as
+  // `<a href="https://real.url">click here</a>`). Without it, the send path
+  // falls back to `getText()` and drops the href entirely. The backend
+  // (message-content-format.util) keeps `<a href>` when sanitizing rich_text.
+  return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre|a)\b/i.test(html);
 }
 
 const LEGACY_HTML_RE =
