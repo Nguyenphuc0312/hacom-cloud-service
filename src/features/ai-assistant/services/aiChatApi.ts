@@ -942,6 +942,13 @@ export interface WorkReportTaskSubmit {
    * BE sẽ cấp id mới. Gửi lại id để giữ liên kết file ↔ việc.
    */
   id?: string;
+  /**
+   * Khoá tương quan do CLIENT sinh (ổn định theo dòng việc đang nhập). BE chỉ
+   * cần echo lại nguyên văn trong `report.tasks[].client_task_id` để FE map
+   * đúng việc → id thật mà KHÔNG phụ thuộc thứ tự/tên (xử lý append nhiều việc,
+   * trùng tên). BE chưa hỗ trợ → field bị bỏ qua, FE fallback theo id/tên/vị trí.
+   */
+  client_task_id?: string;
   task_name: string;
   requirements?: string;
   completed?: string;
@@ -962,6 +969,8 @@ export interface WorkReportSubmitBody {
 /** Một công việc trong response — BE trả kèm `id` để FE round-trip & gắn file. */
 export interface WorkReportTaskResult extends WorkReportTaskSubmit {
   id?: string;
+  /** Echo lại `client_task_id` của payload (nếu BE đã hỗ trợ) để FE map 1-1. */
+  client_task_id?: string;
 }
 
 export interface WorkReportSubmitResponse {
