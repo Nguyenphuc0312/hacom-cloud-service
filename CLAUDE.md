@@ -340,7 +340,7 @@ npm run build && node scripts/verify-dist-assets.mjs
 **Hai loại file:** `contract` (yêu cầu bên kia đổi contract) và `ACCEPTANCE` (nghiệm thu bên kia đã ship đúng tới đâu). Một feature thường có cả hai (contract trước → acceptance sau).
 
 **⚠️ Ràng buộc của FE (repo này):**
-- **Chỉ được tạo/sửa file do FE khởi xướng**, đặt tên prefix **`FE__`** (theo quy ước README mục 4): `FE__<feature-kebab>__contract.md` hoặc `FE__<feature-kebab>__ACCEPTANCE.md`.
+- **Chỉ được tạo/sửa file do FE khởi xướng**, đặt tên prefix **`FE__`** (theo quy ước README mục 4): `FE__<feature-kebab>__contract__<dd-mm-yy>.md` hoặc `FE__<feature-kebab>__ACCEPTANCE__<dd-mm-yy>.md`. **`<dd-mm-yy>` BẮT BUỘC** (ngày tạo, dùng `-`, khớp **Ngày** trong header — vd `23-06-26`).
 - **KHÔNG sửa** file do bên khác khởi xướng (`API__…`, `AUTH__…`, `HR__…`, `TYPES__…`) — chỉ đọc để đối chiếu/nghiệm thu.
 - File **không xoá** sau khi chốt (giữ lịch sử) — việc mới → file mới.
 

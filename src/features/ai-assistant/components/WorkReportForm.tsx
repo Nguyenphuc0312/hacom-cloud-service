@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   SaveIcon,
   XIcon,
@@ -23,6 +23,7 @@ import {
   deleteWorkReportTask,
   type WorkReportTaskSubmit,
 } from "../services/aiChatApi";
+import { ConfirmDialog } from "../../../components/ui";
 
 interface WorkReportFormProps {
   data: WorkReportFormRequest;
@@ -43,9 +44,22 @@ const FIELD_LABELS_VN: Record<string, string> = {
 const DEFAULT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp";
 const DEFAULT_MAX_MB = 25;
 
+/** Khoá tương quan ổn định phía client cho một dòng việc (xem saveReport). */
+function makeClientId(): string {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Dòng công việc trong state — kèm id (sau khi lưu) và file của riêng việc. */
 interface TaskRow {
+  /** Id thật do BE cấp (chỉ có sau khi lưu). */
   id?: string;
+  /**
+   * Khoá tương quan do client sinh, ỔN ĐỊNH suốt vòng đời dòng việc. Gửi kèm khi
+   * lưu để map đúng việc → id thật bất kể BE trả thứ tự nào / trùng tên.
+   */
+  clientId: string;
   task_name: string;
   requirements: string;
   completed: string;
@@ -54,14 +68,25 @@ interface TaskRow {
   attachments: WorkReportAttachment[];
 }
 
-const EMPTY_TASK: TaskRow = {
-  task_name: "",
-  requirements: "",
-  completed: "",
-  difficulties: "",
-  notes: "",
-  attachments: [],
-};
+function makeEmptyTask(): TaskRow {
+  return {
+    clientId: makeClientId(),
+    task_name: "",
+    requirements: "",
+    completed: "",
+    difficulties: "",
+    notes: "",
+    attachments: [],
+  };
+}
+
+/** Đuôi file (lowercase, kèm dấu chấm) có nằm trong danh sách cho phép không. */
+function isAcceptedExtension(filename: string, accepted: string[]): boolean {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0) return false;
+  const ext = filename.slice(dot).toLowerCase();
+  return accepted.some((a) => a.trim().toLowerCase() === ext);
+}
 
 function autoResize(el: HTMLTextAreaElement | null) {
   if (!el) return;
@@ -84,6 +109,7 @@ function formatDateVN(dateStr: string): string {
 function toTaskRow(t: Partial<WorkReportTaskItem>): TaskRow {
   return {
     id: t.id,
+    clientId: makeClientId(),
     task_name: t.task_name ?? "",
     requirements: t.requirements ?? "",
     completed: t.completed ?? "",
@@ -96,7 +122,7 @@ function toTaskRow(t: Partial<WorkReportTaskItem>): TaskRow {
 function initTasks(data: WorkReportFormRequest): TaskRow[] {
   // Chế độ "append" (nộp nhiều lần/ngày): form luôn TRỐNG — KHÔNG đọc `existing`.
   if (data.mode === "append" || data.submitted_tasks) {
-    return [{ ...EMPTY_TASK }];
+    return [makeEmptyTask()];
   }
   // Legacy (BE cũ): prefill để sửa báo cáo.
   if (data.existing?.tasks && data.existing.tasks.length > 0) {
@@ -105,7 +131,7 @@ function initTasks(data: WorkReportFormRequest): TaskRow[] {
   if (data.existing?.task_name) {
     return [toTaskRow(data.existing)];
   }
-  return [{ ...EMPTY_TASK }];
+  return [makeEmptyTask()];
 }
 
 // ── File item dùng chung (task + chung) ──────────────────────────────────────
@@ -172,9 +198,10 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   const attachEnabled = data.allow_attachments === true;
   // Chế độ đính kèm theo từng công việc (BE gửi attach_level="task").
   const taskAttachMode = attachEnabled && data.attach_level === "task";
-  const acceptAttr = data.accepted_file_types?.length
-    ? data.accepted_file_types.join(",")
-    : DEFAULT_ACCEPT;
+  const acceptedList = data.accepted_file_types?.length
+    ? data.accepted_file_types
+    : DEFAULT_ACCEPT.split(",");
+  const acceptAttr = acceptedList.join(",");
   const maxMb = data.max_file_mb ?? DEFAULT_MAX_MB;
 
   // File "chung" (chưa gắn việc) đã nộp hôm nay — chế độ "append" lấy từ
@@ -200,8 +227,15 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   const [attachError, setAttachError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
-  const busy = isSubmitting || savingForAttach;
+  // Id công việc do FE TỰ LƯU NHÁP để có chỗ đính kèm (không phải user bấm "Lưu
+  // báo cáo"). Khi bấm Hủy phải xóa các việc này khỏi BE — nếu không, báo cáo
+  // vẫn còn dù người dùng đã hủy (BE xóa việc sẽ xóa kèm file của nó).
+  const autoSavedTaskIds = useRef<Set<string>>(new Set());
+
+  const busy = isSubmitting || savingForAttach || isCancelling;
 
   const fieldLabel = (key: string) =>
     data.field_labels?.[key] ?? FIELD_LABELS_VN[key] ?? key;
@@ -210,7 +244,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
     setTasks((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
   };
 
-  const addTask = () => setTasks((prev) => [...prev, { ...EMPTY_TASK, attachments: [] }]);
+  const addTask = () => setTasks((prev) => [...prev, makeEmptyTask()]);
 
   const removeTask = (idx: number) => {
     // Bỏ một việc đang có file: BE sẽ chuyển file đó thành "chung". Phản chiếu
@@ -231,13 +265,14 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
    * dùng ngay (không phụ thuộc setState bất đồng bộ).
    */
   const saveReport = async (): Promise<TaskRow[]> => {
-    const rowIndexes: number[] = [];
+    const rows: { rowIdx: number; clientId: string; serverId?: string; name: string }[] = [];
     const payload: WorkReportTaskSubmit[] = [];
     tasks.forEach((t, idx) => {
       if (!t.task_name.trim()) return;
-      rowIndexes.push(idx);
+      rows.push({ rowIdx: idx, clientId: t.clientId, serverId: t.id, name: t.task_name });
       payload.push({
         id: t.id, // round-trip — thiếu id BE coi là việc mới, mất liên kết file
+        client_task_id: t.clientId, // BE echo lại để map 1-1 (xem TaskRow.clientId)
         task_name: t.task_name,
         requirements: t.requirements,
         completed: t.completed,
@@ -258,11 +293,40 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       tasks: payload,
     });
 
+    // BE có thể trả TOÀN BỘ việc tích lũy trong ngày (append) chứ không chỉ việc
+    // vừa gửi → KHÔNG map theo index. Khớp lần lượt theo độ tin cậy giảm dần:
+    //   1) client_task_id (BE echo)  2) id round-trip  3) tên (so khớp đã trim)
+    //   4) id "mới" chưa từng thấy trên form (việc vừa APPEND)  5) căn vị trí 1-1.
     const returned = res.report.tasks ?? [];
     const updated = tasks.map((r) => ({ ...r }));
-    rowIndexes.forEach((rowIdx, i) => {
-      const rid = returned[i]?.id;
-      if (rid != null && String(rid)) updated[rowIdx].id = String(rid);
+    const usedReturned = new Set<number>();
+    const sameLen = returned.length === rows.length;
+    // Id đã biết trước khi lưu → bất kỳ id nào KHÔNG nằm trong đây là việc BE
+    // vừa sinh (append). Dùng làm mỏ neo cho dòng việc MỚI khi BE không echo
+    // client_task_id và đã chuẩn hoá (trim) tên khiến so khớp tên trượt.
+    const knownServerIds = new Set(rows.map((r) => r.serverId).filter(Boolean) as string[]);
+    const norm = (s: string) => s.trim();
+
+    rows.forEach((row, i) => {
+      const find = (pred: (t: (typeof returned)[number], ix: number) => boolean) =>
+        returned.findIndex((t, ix) => !usedReturned.has(ix) && pred(t, ix));
+
+      let ri = find((t) => t.client_task_id != null && String(t.client_task_id) === row.clientId);
+      if (ri < 0 && row.serverId) {
+        ri = find((t) => t.id != null && String(t.id) === row.serverId);
+      }
+      if (ri < 0) ri = find((t) => norm(t.task_name ?? "") === norm(row.name));
+      if (ri < 0 && !row.serverId) {
+        // Dòng việc MỚI: gắn vào id BE vừa sinh (không thuộc tập id đã biết).
+        ri = find((t) => t.id != null && String(t.id) !== "" && !knownServerIds.has(String(t.id)));
+      }
+      if (ri < 0 && sameLen && !usedReturned.has(i)) ri = i;
+
+      if (ri >= 0) {
+        usedReturned.add(ri);
+        const rid = returned[ri]?.id;
+        if (rid != null && String(rid)) updated[row.rowIdx].id = String(rid);
+      }
     });
     setTasks(updated);
     return updated;
@@ -271,6 +335,12 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   // ── Upload theo TỪNG công việc (tự lưu nháp nếu việc chưa có id) ────────────
   const handlePickTaskFiles = async (taskIdx: number, fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
+    // CHỤP danh sách file NGAY (đồng bộ) trước mọi `await`. FileList là LIVE —
+    // gắn với <input>; handler onChange chạy `input.value = ""` ngay sau khi gọi
+    // hàm này, làm rỗng FileList trong lúc đang `await saveReport()`. Nếu đọc file
+    // sau await thì lần đính kèm ĐẦU (việc chưa có id → phải lưu nháp) sẽ thấy 0
+    // file → không upload, buộc bấm lần 2. Snapshot ở đây để tránh điều đó.
+    const files = Array.from(fileList);
     setAttachError(null);
 
     if (!tasks[taskIdx]?.task_name.trim()) {
@@ -296,8 +366,14 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       setAttachError("Chưa lấy được mã công việc. Vui lòng Lưu báo cáo rồi thử lại.");
       return;
     }
+    // Việc này đã được lưu (tự động) để đính kèm → ghi nhận để Hủy có thể xóa.
+    autoSavedTaskIds.current.add(taskId);
 
-    for (const file of Array.from(fileList)) {
+    for (const file of files) {
+      if (!isAcceptedExtension(file.name, acceptedList)) {
+        setAttachError(`"${file.name}" sai định dạng. Cho phép: ${acceptAttr}`);
+        continue;
+      }
       if (file.size > maxMb * 1024 * 1024) {
         setAttachError(`"${file.name}" vượt quá ${maxMb}MB.`);
         continue;
@@ -328,8 +404,14 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   // ── Upload cấp NGÀY (legacy, attach_level != "task") ───────────────────────
   const handlePickReportFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
+    // Snapshot trước await (xem ghi chú ở handlePickTaskFiles).
+    const files = Array.from(fileList);
     setAttachError(null);
-    for (const file of Array.from(fileList)) {
+    for (const file of files) {
+      if (!isAcceptedExtension(file.name, acceptedList)) {
+        setAttachError(`"${file.name}" sai định dạng. Cho phép: ${acceptAttr}`);
+        continue;
+      }
       if (file.size > maxMb * 1024 * 1024) {
         setAttachError(`"${file.name}" vượt quá ${maxMb}MB.`);
         continue;
@@ -421,11 +503,45 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
     setIsSubmitting(true);
     try {
       await saveReport();
+      // Đã chốt báo cáo có chủ đích → các việc tự-lưu-nháp giờ là hợp lệ, không
+      // còn coi là "rác cần dọn khi hủy".
+      autoSavedTaskIds.current.clear();
       onSuccess(`✅ Đã lưu báo cáo ngày ${formatDateVN(data.date)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu báo cáo");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Hủy: nếu đã có việc tự lưu nháp (để đính kèm) thì PHẢI xóa khỏi BE, nếu
+  // không báo cáo vẫn tồn tại dù người dùng đã hủy. Mở hộp thoại xác nhận ở giữa
+  // màn hình (ConfirmDialog) để tránh mất dữ liệu ngoài ý muốn — việc chưa lưu
+  // nháp gì thì hủy luôn.
+  const requestCancel = () => {
+    if (autoSavedTaskIds.current.size === 0) {
+      onCancel();
+      return;
+    }
+    setShowCancelConfirm(true);
+  };
+
+  // Người dùng xác nhận bỏ báo cáo → xóa các việc đã tự lưu nháp (BE xóa kèm
+  // tệp của nó) rồi đóng form.
+  const confirmCancel = async () => {
+    const ids = Array.from(autoSavedTaskIds.current);
+    setAttachError(null);
+    setIsCancelling(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteWorkReportTask(id)));
+      autoSavedTaskIds.current.clear();
+      if (results.some((r) => r.status === "rejected")) {
+        setAttachError("Không xóa được hết công việc đã lưu — vui lòng kiểm tra lại báo cáo.");
+      }
+    } finally {
+      setIsCancelling(false);
+      setShowCancelConfirm(false);
+      onCancel();
     }
   };
 
@@ -864,12 +980,12 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-surface-overlay/20">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={requestCancel}
           disabled={busy}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:bg-surface-hover transition-colors disabled:opacity-50"
         >
-          <XIcon size={14} />
-          Hủy
+          {isCancelling ? <Loader2Icon size={14} className="animate-spin" /> : <XIcon size={14} />}
+          {isCancelling ? "Đang hủy..." : "Hủy"}
         </button>
         <button
           type="submit"
@@ -880,6 +996,21 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
           {isSubmitting ? "Đang lưu..." : "Lưu báo cáo"}
         </button>
       </div>
+
+      {/* Xác nhận hủy — hộp thoại giữa màn hình (xóa việc đã tự lưu nháp). */}
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => {
+          if (!isCancelling) setShowCancelConfirm(false);
+        }}
+        onConfirm={() => void confirmCancel()}
+        title="Bỏ báo cáo đang nhập?"
+        message="Các công việc và tệp vừa thêm sẽ bị xóa khỏi báo cáo."
+        confirmText="Bỏ báo cáo"
+        cancelText="Tiếp tục nhập"
+        variant="danger"
+        isLoading={isCancelling}
+      />
     </form>
   );
 };
