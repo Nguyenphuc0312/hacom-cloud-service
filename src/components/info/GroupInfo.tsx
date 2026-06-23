@@ -960,7 +960,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           aria-label={t("common:actions.close")}
         >
-          <XMarkIcon className="h-4.5 w-4.5" />
+          <XMarkIcon className="h-5 w-5" />
         </button>
       </div>
 
