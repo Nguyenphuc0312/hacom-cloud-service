@@ -33,6 +33,7 @@ import { ComposerStatusBanner } from "./MessageInput/ComposerStatusBanner";
 import { ComposerReplyBanner } from "./MessageInput/ComposerReplyBanner";
 import { ComposerEditBanner } from "./MessageInput/ComposerEditBanner";
 import { ComposerMentionPanel } from "./MessageInput/ComposerMentionPanel";
+import { ComposerLinkPreview } from "./MessageInput/ComposerLinkPreview";
 import { ComposerActionBar } from "./MessageInput/ComposerActionBar";
 import { ComposerLengthFooter } from "./MessageInput/ComposerLengthFooter";
 import { COMPOSER_VISUAL_STATE_MAP } from "./MessageInput/constants";
@@ -883,6 +884,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             onCancelEdit={onCancelEdit}
           />
         )}
+
+        {mode !== "edit" && <ComposerLinkPreview draftValue={draftValue} />}
 
         {/* Multi-file upload tray */}
         {uploadDrafts &&
