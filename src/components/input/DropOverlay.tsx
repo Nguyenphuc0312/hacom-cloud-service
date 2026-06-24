@@ -69,7 +69,7 @@ const DropOverlayComponent: React.FC<DropOverlayProps> = ({
         )}
       >
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1976D2]/10">
-          <ArrowUpTrayIcon className="h-7 w-7 text-[#1565C0] animate-bounce-subtle" />
+          <ArrowUpTrayIcon className="h-7 w-7 text-[#1565C0]" />
         </div>
         <div className="text-center">
           <p className="text-base font-semibold text-text-primary">

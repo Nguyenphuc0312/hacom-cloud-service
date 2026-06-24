@@ -685,11 +685,6 @@ const MessageGroupItem: React.FC<{
                       : undefined)
                   }
                 >
-                  {/* Thanh nhận diện bên trái */}
-                  <span
-                    className="w-[3px] flex-shrink-0 self-stretch rounded-full bg-[#1565C0]"
-                  />
-
                   {/* Thumbnail (ảnh/video) hoặc badge loại file */}
                   {replyPreviewMeta?.renderThumbnail ? (
                     <div className="h-10 w-10 flex-shrink-0 self-center">

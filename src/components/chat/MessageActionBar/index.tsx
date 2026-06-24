@@ -16,7 +16,7 @@ interface MessageActionBarProps {
 
 const actionBtnClass = clsx(
   "flex h-8 w-8 items-center justify-center rounded-full",
-  "text-text-secondary hover:bg-surface-hover hover:text-[#1565C0]",
+  "text-text-secondary hover:bg-surface-hover hover:text-brand-solid",
   "transition-[opacity,transform,background-color] duration-100",
   "active:scale-90",
 );

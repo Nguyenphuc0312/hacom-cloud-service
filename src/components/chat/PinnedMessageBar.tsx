@@ -57,17 +57,12 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
               defaultValue: "Đi tới tin nhắn",
             })}
           >
-            <span
-              aria-hidden="true"
-              className="h-7 w-0.5 shrink-0 rounded-full"
-              style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
-            />
             <Pin
-              className="h-[18px] w-[18px] shrink-0 text-[#1565C0]"
+              className="h-[18px] w-[18px] shrink-0 text-brand-solid"
               strokeWidth={1.5}
             />
             <span className="flex min-w-0 flex-col">
-              <span className="text-[11px] font-medium leading-4 text-[#1565C0]">
+              <span className="text-[11px] font-medium leading-4 text-brand-solid">
                 {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
               </span>
               <span className="truncate text-xs leading-4 text-text-secondary">
@@ -85,11 +80,10 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             <button
               type="button"
               onClick={onOpenList}
-              style={{ background: "linear-gradient(135deg, #1976D2 0%, #1565C0 100%)" }}
               className={clsx(
                 "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-white",
-                "transition-micro hover:brightness-105 active:scale-95",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40",
+                "bg-brand-solid transition-micro hover:brightness-105 active:scale-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light/40",
               )}
               aria-label={t("chat:pinned.title", {
                 defaultValue: "Tin nhắn ghim",

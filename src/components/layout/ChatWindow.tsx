@@ -1120,7 +1120,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     >
       {/* Chat column — shrinks when the docked search panel opens */}
       <div
-        className="chat-background chat-shell relative flex min-w-0 flex-1 flex-col overflow-hidden animate-content-fade transition-[width] duration-300 ease-out"
+        className="chat-background chat-shell relative flex min-w-0 flex-1 flex-col overflow-hidden animate-content-fade transition-[width] duration-200 ease-out"
         data-chat-layout-profile={layoutProfile}
         data-chat-layout-state={layoutState}
         {...dropZoneProps}
