@@ -1,5 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import type { LinkPreviewMeta } from "../../../components/message/linkPreviewUtils";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
@@ -44,6 +45,7 @@ interface UseSendMessageResult {
       contentFormat?: "plain_text" | "rich_text";
       contentJson?: Record<string, unknown>;
       plainText?: string;
+      linkPreview?: LinkPreviewMeta;
     },
   ) => Promise<SendDisposition>;
   openFilePicker: (
@@ -60,6 +62,7 @@ interface UseSendMessageResult {
     contentFormat?: "plain_text" | "rich_text",
     contentJson?: Record<string, unknown>,
     plainText?: string,
+    linkPreview?: LinkPreviewMeta,
   ) => unknown | Promise<unknown>;
 }
 
@@ -220,6 +223,7 @@ export const useSendMessage = ({
       contentFormat?: "plain_text" | "rich_text",
       contentJson?: Record<string, unknown>,
       plainText?: string,
+      linkPreview?: LinkPreviewMeta,
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -298,6 +302,7 @@ export const useSendMessage = ({
           senderAvatar: currentUser?.avatar || undefined,
           mentions: mentions?.length ? mentions : undefined,
           attachments: toSendMessageAttachments(fileMeta),
+          linkPreview,
         })
           .unwrap()
           .catch(handleSendError);
@@ -338,6 +343,7 @@ export const useSendMessage = ({
         contentFormat?: "plain_text" | "rich_text";
         contentJson?: Record<string, unknown>;
         plainText?: string;
+        linkPreview?: LinkPreviewMeta;
       },
     ) => {
       const text = content.trim();
@@ -366,6 +372,7 @@ export const useSendMessage = ({
           options?.contentFormat,
           options?.contentJson,
           options?.plainText,
+          options?.linkPreview,
         );
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;

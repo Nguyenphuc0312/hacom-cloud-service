@@ -11,6 +11,7 @@ import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
 import { MessageLinkPreview } from "../../message/MessageLinkPreview";
+import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
 import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
@@ -582,6 +583,8 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
         content: message.content,
       });
       const firstUrl = extractFirstUrlFromContent(message.content, isRichText);
+      // Use cached metadata from message if BE persisted it; otherwise fetch via RTK Query
+      const cachedLinkPreview = message.metadata?.linkPreview;
       return (
         <div className="space-y-2">
           {renderTextContent(
@@ -593,7 +596,27 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             isCollapsibleText,
             onToggleTextExpand,
           )}
-          {firstUrl ? <MessageLinkPreview url={firstUrl} isOwn={isOwn} /> : null}
+          {firstUrl ? (
+            cachedLinkPreview ? (
+              <LinkPreviewCard
+                url={firstUrl}
+                isOwn={isOwn}
+                meta={{
+                  url: cachedLinkPreview.url,
+                  hostname: (() => {
+                    try { return new URL(cachedLinkPreview.url).hostname.replace(/^www\./, ""); } catch { return cachedLinkPreview.url; }
+                  })(),
+                  title: cachedLinkPreview.title,
+                  description: cachedLinkPreview.description,
+                  imageUrl: cachedLinkPreview.imageUrl,
+                  siteName: cachedLinkPreview.siteName,
+                  faviconUrl: cachedLinkPreview.favicon,
+                }}
+              />
+            ) : (
+              <MessageLinkPreview url={firstUrl} isOwn={isOwn} />
+            )
+          ) : null}
         </div>
       );
     }

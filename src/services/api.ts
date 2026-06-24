@@ -1206,8 +1206,8 @@ export const messageApi = {
     return response.data;
   },
 
-  sendMessage: async ( 
-    conversationId: string, 
+  sendMessage: async (
+    conversationId: string,
     data: {
       content: string;
       contentFormat?: 'plain_text' | 'rich_text';
@@ -1221,6 +1221,14 @@ export const messageApi = {
       tempId?: string;
       localId?: string;
       mentions?: string[];
+      linkPreview?: {
+        url: string;
+        title?: string;
+        description?: string;
+        imageUrl?: string;
+        siteName?: string;
+        favicon?: string;
+      };
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -1255,6 +1263,7 @@ export const messageApi = {
     if (data.contentJson) body.contentJson = data.contentJson;
     if (data.plainText) body.plainText = data.plainText;
     if (data.mentions?.length) body.mentions = data.mentions;
+    if (data.linkPreview) body.metadata = { linkPreview: data.linkPreview };
 
     const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
       canonicalConversationMessagesPath(conversationId),
