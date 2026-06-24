@@ -16,6 +16,7 @@
 import { getUserByIdUseCase } from "../features/chat/usecases/getUserById";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
+import { createSingleFlight } from "../utils/singleFlight";
 import { logger } from "../utils/logger";
 
 const USER_PROFILE_STALE_MS = 5 * 60 * 1000; // 5 minutes
@@ -31,11 +32,7 @@ const userProfileCache = new ExpiringLruCache<CachedUserProfile>({
   maxEntries: 200,
 });
 
-// Dedupe concurrent network calls for the same userId.
-const inFlightUserProfileRequests = new Map<
-  string,
-  Promise<CachedUserProfile>
->();
+const singleFlight = createSingleFlight<CachedUserProfile>();
 
 /** Synchronous, fresh-only cache read (used to seed UI without a flash). */
 export const getCachedUserProfile = (
@@ -63,36 +60,19 @@ export const fetchUserProfileOnce = (
     }
   }
 
-  const existing = inFlightUserProfileRequests.get(userId);
-  if (existing) {
-    if (import.meta.env.DEV) {
-      logger.debug("user-profile", "in_flight_reused", { userId });
-    }
-    return existing;
-  }
-
   if (import.meta.env.DEV) {
     logger.debug("user-profile", "fetch_start", { userId });
   }
 
-  const request = fetchUserProfileRaw(userId)
-    .then((profile) => {
-      userProfileCache.set(
-        userId,
-        profile,
-        Date.now() + USER_PROFILE_STALE_MS,
-      );
+  return singleFlight(userId, () =>
+    fetchUserProfileRaw(userId).then((profile) => {
+      userProfileCache.set(userId, profile, Date.now() + USER_PROFILE_STALE_MS);
       if (import.meta.env.DEV) {
         logger.debug("user-profile", "fetch_success", { userId });
       }
       return profile;
-    })
-    .finally(() => {
-      inFlightUserProfileRequests.delete(userId);
-    });
-
-  inFlightUserProfileRequests.set(userId, request);
-  return request;
+    }),
+  );
 };
 
 /** Drop a cached entry (e.g. after the user edits their own profile). */

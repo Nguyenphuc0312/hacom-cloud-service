@@ -1,15 +1,3 @@
-import * as XLSX from "xlsx";
-import {
-  Document,
-  Packer,
-  Table as DocxTable,
-  TableRow,
-  TableCell,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-  WidthType,
-} from "docx";
 
 export interface ParsedTable {
   headers: string[];
@@ -148,21 +136,19 @@ export async function exportTableToXlsx(
   filename: string,
   table: ParsedTable,
 ): Promise<boolean> {
-  const aoa = [table.headers, ...table.rows];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // Độ rộng cột theo nội dung dài nhất (10–60 ký tự).
-  ws["!cols"] = table.headers.map((_, c) => {
-    const maxLen = Math.max(
-      table.headers[c]?.length ?? 0,
-      ...table.rows.map((r) => (r[c] ?? "").length),
-    );
-    return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
-  });
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Báo cáo");
-  return saveFile(ensureExt(filename, ".xlsx"), MIME.xlsx, () => {
+  return saveFile(ensureExt(filename, ".xlsx"), MIME.xlsx, async () => {
+    const XLSX = await import("xlsx");
+    const aoa = [table.headers, ...table.rows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = table.headers.map((_, c) => {
+      const maxLen = Math.max(
+        table.headers[c]?.length ?? 0,
+        ...table.rows.map((r) => (r[c] ?? "").length),
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Báo cáo");
     const out = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
     return new Blob([out], { type: MIME.xlsx });
   });
@@ -174,67 +160,79 @@ export async function exportTableToDocx(
   title: string,
   table: ParsedTable,
 ): Promise<boolean> {
-  const headerRow = new TableRow({
-    tableHeader: true,
-    children: table.headers.map(
-      (h) =>
-        new TableCell({
-          shading: { fill: "1565C0" },
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: h, bold: true, color: "FFFFFF" })],
-            }),
-          ],
-        }),
-    ),
-  });
+  return saveFile(ensureExt(filename, ".docx"), MIME.docx, async () => {
+    const {
+      Document,
+      Packer,
+      Table: DocxTable,
+      TableRow,
+      TableCell,
+      Paragraph,
+      TextRun,
+      HeadingLevel,
+      WidthType,
+    } = await import("docx");
 
-  const bodyRows = table.rows.map(
-    (r) =>
-      new TableRow({
-        children: table.headers.map(
-          (_, c) =>
-            new TableCell({
-              children: (r[c] ?? "")
-                .split("\n")
-                .map((ln) => new Paragraph({ children: [new TextRun(ln)] })),
-            }),
-        ),
-      }),
-  );
-
-  const docTable = new DocxTable({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [headerRow, ...bodyRows],
-  });
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            heading: HeadingLevel.HEADING_1,
-            children: [new TextRun({ text: title, bold: true })],
-          }),
-          new Paragraph({
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: table.headers.map(
+        (h) =>
+          new TableCell({
+            shading: { fill: "1565C0" },
             children: [
-              new TextRun({
-                text: `Xuất ngày ${new Date().toLocaleDateString("vi-VN")}`,
-                italics: true,
-                color: "888888",
+              new Paragraph({
+                children: [new TextRun({ text: h, bold: true, color: "FFFFFF" })],
               }),
             ],
           }),
-          new Paragraph({}),
-          docTable,
-        ],
-      },
-    ],
-  });
+      ),
+    });
 
-  return saveFile(ensureExt(filename, ".docx"), MIME.docx, () =>
-    Packer.toBlob(doc),
-  );
+    const bodyRows = table.rows.map(
+      (r) =>
+        new TableRow({
+          children: table.headers.map(
+            (_, c) =>
+              new TableCell({
+                children: (r[c] ?? "")
+                  .split("\n")
+                  .map((ln) => new Paragraph({ children: [new TextRun(ln)] })),
+              }),
+          ),
+        }),
+    );
+
+    const docTable = new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [headerRow, ...bodyRows],
+    });
+
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            new Paragraph({
+              heading: HeadingLevel.HEADING_1,
+              children: [new TextRun({ text: title, bold: true })],
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Xuất ngày ${new Date().toLocaleDateString("vi-VN")}`,
+                  italics: true,
+                  color: "888888",
+                }),
+              ],
+            }),
+            new Paragraph({}),
+            docTable,
+          ],
+        },
+      ],
+    });
+
+    return Packer.toBlob(doc);
+  });
 }
 
 /** Nạp pdfmake + gắn vfs font (Roboto, hỗ trợ tiếng Việt). Dùng dynamic import. */
