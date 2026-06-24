@@ -196,4 +196,44 @@ describe("useUploadQueue", () => {
       expect(result.current.drafts[0]?.fileId).toBe("file-1");
     });
   });
+
+  it("keeps the draft in security_pending when the backend has not released the attachment", async () => {
+    uploadClientMock.reserveUpload.mockResolvedValue({
+      uploadId: "upload-1",
+      uploadUrl: "https://upload.example/1",
+      signedPutUrl: "https://upload.example/1",
+      uploadMethod: "PUT",
+      uploadHeaders: {},
+      expiresAt: "2026-05-13T01:00:00.000Z",
+    });
+    uploadClientMock.uploadToSignedUrl.mockResolvedValue(undefined);
+    uploadClientMock.completeUpload.mockResolvedValue({
+      uploadId: "upload-1",
+      fileId: "file-1",
+      releaseReason: "FILE_SCAN_PENDING",
+      attachment: {
+        id: "file-1",
+        canAttach: false,
+        canDownload: false,
+        canPreview: false,
+        releaseStatus: "blocked",
+        releaseReason: "FILE_SCAN_PENDING",
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conv-a" }),
+    );
+
+    await act(async () => {
+      result.current.addFiles([
+        new File(["hello"], "photo.png", { type: "image/png" }),
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.drafts[0]?.status).toBe("security_pending");
+      expect(result.current.drafts[0]?.errorCode).toBe("FILE_SCAN_PENDING");
+    });
+  });
 });

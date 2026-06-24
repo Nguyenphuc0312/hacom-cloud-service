@@ -100,6 +100,11 @@ export const uploadClient = {
     height?: number;
     duration?: number;
     thumbnailUrl?: string;
+    canAttach?: boolean;
+    canDownload?: boolean;
+    canPreview?: boolean;
+    releaseStatus?: "released" | "blocked";
+    releaseReason?: string;
   }) {
     return {
       fileId: input.fileId,
@@ -113,6 +118,11 @@ export const uploadClient = {
       height: input.height,
       duration: input.duration,
       thumbnailUrl: input.thumbnailUrl,
+      canAttach: input.canAttach,
+      canDownload: input.canDownload,
+      canPreview: input.canPreview,
+      releaseStatus: input.releaseStatus,
+      releaseReason: input.releaseReason,
     };
   },
 
