@@ -1,6 +1,5 @@
 import {
   format,
-  formatDistanceToNow,
   isToday,
   isYesterday,
   isThisWeek,
@@ -166,17 +165,6 @@ export function formatDuration(seconds: number): string {
   const mins = Math.floor(safeSeconds / 60);
   const secs = Math.floor(safeSeconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-/**
- * Format relative time with locale.
- */
-export function formatRelativeTimeVi(date: Date): string {
-  if (!isValidDate(date)) return "";
-  return formatDistanceToNow(date, {
-    addSuffix: true,
-    locale: getDateFnsLocale(),
-  });
 }
 
 /**
