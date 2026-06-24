@@ -16,17 +16,6 @@ import type {
 import { logger } from "../utils/logger";
 import { useEnrichedProfileStore } from "./enrichedProfileStore";
 
-// ponytail: localStorage shim until BE ships alias column; remove after shared-types bump
-const ALIAS_KEY = "hc:contact-aliases";
-const _loadAliases = (): Record<string, string> => {
-  try { return JSON.parse(localStorage.getItem(ALIAS_KEY) ?? "{}"); } catch { return {}; }
-};
-const _saveAlias = (userId: string, alias: string | null) => {
-  const map = _loadAliases();
-  if (alias) map[userId] = alias; else delete map[userId];
-  localStorage.setItem(ALIAS_KEY, JSON.stringify(map));
-};
-
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
 export interface FriendRequest {
@@ -418,8 +407,6 @@ const toFriendRecord = (
     return null;
   }
 
-  // ponytail: cast until shared-types ships the alias field
-  const dto = relation as FriendshipRelationDto & { alias?: string | null };
   return {
     ...friend,
     relationId: relation.relationId,
@@ -429,7 +416,7 @@ const toFriendRecord = (
     actionResult: relation.actionResult,
     createdAt: relation.createdAt,
     updatedAt: relation.updatedAt,
-    alias: dto.alias ?? null,
+    alias: relation.alias ?? null,
   };
 };
 
@@ -741,7 +728,6 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
   lastResyncReason: null,
 
   setLocalAlias: (userId, alias) => {
-    _saveAlias(userId, alias);
     set((state) => {
       const friends = state.friends.map((f) =>
         f.id === userId ? { ...f, alias } : f,
@@ -915,10 +901,8 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
 
       // Inject aliases into enrichedProfileStore so ChatHeader/RoomItem reflect them immediately
       const { setEnrichedName } = useEnrichedProfileStore.getState();
-      const storedAliases = _loadAliases();
       list.forEach((f) => {
-        const alias = f.alias ?? storedAliases[f.id] ?? null;
-        if (alias) setEnrichedName(f.id, alias);
+        if (f.alias) setEnrichedName(f.id, f.alias);
       });
 
       set((state) => {
