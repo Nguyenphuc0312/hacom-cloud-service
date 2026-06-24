@@ -47,6 +47,7 @@
     "i18next-resources-to-backend": "^1.2.1",
     "lucide-react": "^1.14.0",
     "pdfjs-dist": "^4.10.38",
+    "pdfmake": "^0.2.7",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
