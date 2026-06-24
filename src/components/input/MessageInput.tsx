@@ -119,6 +119,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
   const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
   const primarySendLockedRef = React.useRef(false);
+  const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
 
   const mentionListId = React.useId();
 
@@ -379,12 +380,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       contentFormat,
       contentJson,
       plainText,
+      linkPreview: pendingLinkPreview ?? undefined,
     });
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
 
+    setPendingLinkPreview(null);
     tipTapRef.current?.clearContent();
     setDraftValue("");
     onChange("");
@@ -402,6 +405,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     clearMentionState,
     draftValue,
     onChange,
+    pendingLinkPreview,
     scheduleComposerResize,
     optimisticAnnouncement,
     sendTextMessage,
@@ -885,7 +889,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           />
         )}
 
-        {mode !== "edit" && <ComposerLinkPreview draftValue={draftValue} />}
+        {mode !== "edit" && (
+          <ComposerLinkPreview
+            draftValue={draftValue}
+            onMetaChange={setPendingLinkPreview}
+          />
+        )}
 
         {/* Multi-file upload tray */}
         {uploadDrafts &&

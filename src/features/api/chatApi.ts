@@ -79,6 +79,15 @@ export interface SendMessageInput {
     displayName: string;
   }[];
   attachments?: SendMessageAttachmentInput[];
+  /** OG metadata pre-fetched in the composer; BE persists into message.metadata.linkPreview */
+  linkPreview?: {
+    url: string;
+    title?: string;
+    description?: string;
+    imageUrl?: string;
+    siteName?: string;
+    favicon?: string;
+  };
 }
 
 export interface SendMessageAttachmentInput {
@@ -334,6 +343,9 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
         }
       : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+    ...(input.linkPreview
+      ? { metadata: { linkPreview: input.linkPreview } }
+      : {}),
   };
 };
 
@@ -501,6 +513,7 @@ export const chatApi = createApi({
               ?.filter((m) => m.userId !== "all")
               .map((m) => m.userId),
             attachments: input.attachments,
+            linkPreview: input.linkPreview,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
         } catch (error) {
