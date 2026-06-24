@@ -45,23 +45,3 @@ export function createNormalizedURLSearchParams(
   return params;
 }
 
-/**
- * Normalize all string values in an object.
- * Useful for API request payloads containing Vietnamese text.
- *
- * @param obj - Object with string values
- * @returns New object with normalized values
- */
-export function normalizeObjectValues<T extends Record<string, any>>(
-  obj: T
-): T {
-  const normalized: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (typeof value === "string") {
-      normalized[key] = normalizeToNFC(value) || value;
-    } else {
-      normalized[key] = value;
-    }
-  }
-  return normalized as T;
-}

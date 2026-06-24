@@ -6,21 +6,11 @@ import type {
 } from "../types";
 
 
-import { MessageType, MessageStatus, RoomType } from "../types";
-import {
-  isDirectConversation,
-  normalizeRoomType,
-} from "../lib/conversationAdapter";
-import { isSameDay } from "./formatTime";
-import { sortConversationsByActivity } from "./conversationRanking";
+import { MessageType, MessageStatus } from "../types";
+import { isDirectConversation } from "../lib/conversationAdapter";
 import i18n from "../i18n";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { getPreviewFromMessage } from "./messageContent.utils";
-
-const isDirectType = (conversationType: unknown): boolean => {
-  const normalized = normalizeRoomType(conversationType);
-  return normalized === RoomType.PRIVATE || normalized === RoomType.DIRECT;
-};
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object"
@@ -36,6 +26,7 @@ interface DisplayNameOptions {
 }
 
 const GROUP_NAME_FALLBACK_MEMBER_COUNT = 2;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type MessagePreviewState =
   | "queued"
@@ -49,68 +40,6 @@ export type MessagePreviewState =
  */
 export function isOwnMessage(message: Message, currentUserId: string): boolean {
   return message.senderId === currentUserId;
-}
-
-/**
- * Check if message should show avatar (grouped-by-sender behavior).
- */
-export function shouldShowAvatar(
-  messages: Message[],
-  index: number,
-  conversationType: string,
-): boolean {
-  if (isDirectType(conversationType)) {
-    return false;
-  }
-
-  const message = messages[index];
-  const nextMessage = messages[index + 1];
-
-  if (!nextMessage) return true;
-  if (nextMessage.senderId !== message.senderId) return true;
-  if (
-    !isSameDay(new Date(nextMessage.createdAt), new Date(message.createdAt))
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Check if date divider should be shown.
- */
-export function shouldShowDateDivider(
-  messages: Message[],
-  index: number,
-): boolean {
-  if (index === 0) return true;
-
-  const currentDate = new Date(messages[index].createdAt);
-  const prevDate = new Date(messages[index - 1].createdAt);
-
-  return !isSameDay(currentDate, prevDate);
-}
-
-/**
- * Group messages by date.
- */
-export function groupMessagesByDate(
-  messages: Message[],
-): Map<string, Message[]> {
-  const groups = new Map<string, Message[]>();
-
-  messages.forEach((message) => {
-    const date = new Date(message.createdAt);
-    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, []);
-    }
-    groups.get(key)!.push(message);
-  });
-
-  return groups;
 }
 
 /**
@@ -233,25 +162,6 @@ export function getMessagePreviewState(
   return null;
 }
 
-/**
- * Get message status icon string.
- */
-export function getMessageStatusIcon(status: MessageStatus): string {
-  switch (status) {
-    case MessageStatus.SENDING:
-      return "sending";
-    case MessageStatus.SENT:
-      return "sent";
-    case MessageStatus.DELIVERED:
-      return "delivered";
-    case MessageStatus.READ:
-      return "read";
-    case MessageStatus.FAILED:
-      return "failed";
-    default:
-      return "";
-  }
-}
 
 export function getUserDisplayName(
   user: Partial<UserSummary> | null | undefined,
@@ -274,7 +184,6 @@ export function getUserDisplayName(
     },
   );
   const conversationTitle = asTrimmedString(options.conversationTitle);
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (primaryName) {
     return primaryName;
@@ -499,22 +408,6 @@ export function getOtherParticipant(
   return (conversation.participants || []).find(
     (participant) => participant.id !== currentUserId,
   );
-}
-
-/**
- * Sort conversations with product ranking signals (pin, unread, mention, recency).
- */
-export function sortConversations(
-  conversations?: Conversation[] | null,
-  options?: {
-    currentUserId?: string;
-    currentUsername?: string;
-    currentDisplayName?: string;
-    activeConversationId?: string | null;
-  },
-): Conversation[] {
-  void options;
-  return sortConversationsByActivity(conversations);
 }
 
 /**

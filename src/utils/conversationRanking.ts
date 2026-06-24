@@ -3,24 +3,6 @@ import { useUIStore } from "../stores/uiStore";
 
 type UnknownRecord = Record<string, unknown>;
 
-export interface ConversationRankContext {
-  currentUserId?: string;
-  currentUsername?: string;
-  currentDisplayName?: string;
-  activeConversationId?: string | null;
-}
-
-export interface ConversationRankBreakdown {
-  bucket: number;
-  score: number;
-  mention: number;
-  failed: number;
-  draft: number;
-  unread: number;
-  active: number;
-  recency: number;
-  mutedPenalty: number;
-}
 
 const asRecord = (value: unknown): UnknownRecord | null =>
   value !== null && typeof value === "object"
@@ -98,59 +80,6 @@ export const hasConversationMention = (
   );
 };
 
-const hasConversationDraft = (conversation: Conversation): boolean => {
-  const record = getConversationExtendedRecord(conversation);
-  const explicitDraft =
-    asBoolean(record?.hasDraft) ??
-    asBoolean(record?.isDraft) ??
-    asBoolean(record?.draft);
-  if (explicitDraft !== null) return explicitDraft;
-
-  const draftText =
-    asString(record?.draftText) ??
-    asString(record?.draftContent) ??
-    asString(record?.pendingDraft);
-  return Boolean(draftText);
-};
-
-const hasConversationFailedSend = (conversation: Conversation): boolean => {
-  const record = getConversationExtendedRecord(conversation);
-  const explicitFailure =
-    asBoolean(record?.hasFailedSend) ??
-    asBoolean(record?.failedSend) ??
-    asBoolean(record?.hasSendError);
-  if (explicitFailure !== null) return explicitFailure;
-
-  const failureCount =
-    asNumber(record?.failedSendCount) ??
-    asNumber(record?.failedMessageCount);
-  if (failureCount !== null) {
-    return failureCount > 0;
-  }
-
-  const lastMessageRecord =
-    conversation.lastMessage &&
-    typeof conversation.lastMessage === "object"
-      ? (conversation.lastMessage as unknown as Record<string, unknown>)
-      : null;
-  const isDeleted = asBoolean(lastMessageRecord?.isDeleted);
-  const lifecycleStatus = asString(lastMessageRecord?.lifecycleStatus);
-  if (isDeleted || lifecycleStatus === "recalled" || lifecycleStatus === "deleted_admin") {
-    return false;
-  }
-
-  const sendState =
-    typeof lastMessageRecord?.sendState === "string"
-      ? lastMessageRecord.sendState
-      : null;
-  const status =
-    typeof lastMessageRecord?.status === "string"
-      ? lastMessageRecord.status
-      : null;
-
-  return sendState === "failed" || status === "failed";
-};
-
 export const getConversationActivityTimestamp = (
   conversation: Conversation,
 ): number => {
@@ -181,51 +110,6 @@ export const getConversationSortIdentity = (
     asString(conversation.lastMessage?.id) ??
     conversation.id
   );
-};
-
-export const getConversationRankBreakdown = (
-  conversation: Conversation,
-  context: ConversationRankContext = {},
-): ConversationRankBreakdown => {
-  const currentUser = context.currentUserId
-    ? {
-        id: context.currentUserId,
-        username: context.currentUsername || "",
-        displayName: context.currentDisplayName || "",
-      }
-    : null;
-  const mention = hasConversationMention(conversation, currentUser) ? 1 : 0;
-  const failed = hasConversationFailedSend(conversation) ? 1 : 0;
-  const draft = hasConversationDraft(conversation) ? 1 : 0;
-  const unread = Math.max(0, conversation.unreadCount || 0);
-  const active =
-    context.activeConversationId &&
-    context.activeConversationId === conversation.id
-      ? 1
-      : 0;
-  const recency = getConversationActivityTimestamp(conversation);
-  const mutedPenalty = conversation.isMuted ? 1 : 0;
-  const bucket = 0;
-
-  return {
-    bucket,
-    score: recency,
-    mention,
-    failed,
-    draft,
-    unread,
-    active,
-    recency,
-    mutedPenalty,
-  };
-};
-
-export const rankConversations = (
-  conversations: Conversation[] | null | undefined,
-  context: ConversationRankContext = {},
-): Conversation[] => {
-  void context;
-  return sortConversationsByActivity(conversations);
 };
 
 export const sortConversationsByActivity = (
