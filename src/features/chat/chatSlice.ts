@@ -1,19 +1,14 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { SidebarConversationFilter } from "./state/chatSidebarStore";
 
 interface ChatSliceState {
   activeConversationId: string | null;
   selectedMessageId: string | null;
-  sidebarFilter: SidebarConversationFilter;
-  sidebarSearchQuery: string;
   draftByConversationId: Record<string, string>;
 }
 
 const initialState: ChatSliceState = {
   activeConversationId: null,
   selectedMessageId: null,
-  sidebarFilter: "all",
-  sidebarSearchQuery: "",
   draftByConversationId: {},
 };
 
@@ -26,15 +21,6 @@ export const chatSlice = createSlice({
     },
     setSelectedMessageId: (state, action: PayloadAction<string | null>) => {
       state.selectedMessageId = action.payload;
-    },
-    setSidebarFilter: (
-      state,
-      action: PayloadAction<SidebarConversationFilter>,
-    ) => {
-      state.sidebarFilter = action.payload;
-    },
-    setSidebarSearchQuery: (state, action: PayloadAction<string>) => {
-      state.sidebarSearchQuery = action.payload;
     },
     setDraft: (
       state,
