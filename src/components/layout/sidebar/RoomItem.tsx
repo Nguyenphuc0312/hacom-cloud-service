@@ -305,6 +305,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className="shrink-0 text-[#1976D2]/70"
+                role="img"
                 aria-label="Đã ghim"
               >
                 <path d="M12 16V21" />
