@@ -209,6 +209,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         className="absolute inset-0 animate-fade-in bg-text-primary/45 backdrop-blur-sm"
+        aria-hidden="true"
         onClick={closeOnOverlayClick ? onClose : undefined}
       />
 
@@ -322,6 +323,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"

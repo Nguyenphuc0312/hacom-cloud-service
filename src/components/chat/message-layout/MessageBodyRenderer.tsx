@@ -299,7 +299,7 @@ const ContactCard: React.FC<{
     >
       <p
         className={clsx(
-          "text-[10px] font-medium uppercase tracking-wider",
+          "text-[10px] font-medium",
           isOwn ? "opacity-55" : "text-text-muted",
         )}
       >
