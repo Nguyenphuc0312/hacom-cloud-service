@@ -21,6 +21,10 @@ import { resolvePublicResourceUrl } from "../../config";
 import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 import { SafeImage } from "../common/SafeImage";
+import {
+  getThumbnailPollDelayMs,
+  shouldContinueThumbnailPolling,
+} from "./imageThumbnailPolling";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -46,13 +50,6 @@ const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
 // that finishes late (large image / queue backlog) still self-heals without the
 // user refreshing. WebSocket `attachment:preview_ready` short-circuits all of
 // this when it arrives.
-const PENDING_BACKOFF_MS = [2000, 4000, 8000, 15000, 30000];
-const ACTIVE_WINDOW_MS = 120_000; // ~2 min of escalating polls
-const SLOW_INTERVAL_MS = 45_000; // then 30–60s heartbeat
-const MIN_POLL_DELAY_MS = 2000;
-const MAX_ACTIVE_DELAY_MS = 30_000;
-const MAX_SLOW_DELAY_MS = 60_000;
-
 export const ImageMessage: React.FC<ImageMessageProps> = ({
   conversationId,
   attachment,
@@ -77,7 +74,6 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   // Backoff bookkeeping. `pendingSinceRef` anchors the active window; `pollAttemptRef`
   // indexes the backoff schedule. We never hard-stop while the server says
   // retryable — once the active window elapses we keep a slow heartbeat going.
-  const pendingSinceRef = useRef<number | null>(null);
   const pollAttemptRef = useRef(0);
   // True once the active window has elapsed: show the "still processing, open the
   // original" fallback while continuing to poll slowly in the background.
@@ -152,7 +148,6 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   // retryable state (reaches ready, failed, not_found, etc.).
   useEffect(() => {
     if (!isThumbnailPending) {
-      pendingSinceRef.current = null;
       pollAttemptRef.current = 0;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRetryExhausted(false);
@@ -176,40 +171,37 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     if (!isThumbnailPending || !isVisible) return;
     if (typeof document !== "undefined" && document.hidden) return;
 
-    if (pendingSinceRef.current === null) {
-      pendingSinceRef.current = Date.now();
+    if (!shouldContinueThumbnailPolling(pollAttemptRef.current)) {
+      if (!retryExhausted) {
+        setRetryExhausted(true);
+      }
+      return;
     }
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const scheduleNext = () => {
-      const elapsed = Date.now() - (pendingSinceRef.current ?? Date.now());
-      const inActiveWindow = elapsed < ACTIVE_WINDOW_MS;
-
-      if (!inActiveWindow && !retryExhausted) {
-        setRetryExhausted(true);
+      if (!shouldContinueThumbnailPolling(pollAttemptRef.current)) {
+        if (!retryExhausted) {
+          setRetryExhausted(true);
+        }
+        return;
       }
 
-      // Base delay: backoff schedule while active, slow heartbeat after.
-      let delay = inActiveWindow
-        ? PENDING_BACKOFF_MS[
-            Math.min(pollAttemptRef.current, PENDING_BACKOFF_MS.length - 1)
-          ]
-        : SLOW_INTERVAL_MS;
-
-      // Honour the server's retryAfterMs when present, clamped to the phase.
-      const serverRetry = thumbnailUrl?.retryAfterMs;
-      if (typeof serverRetry === "number" && serverRetry > 0) {
-        delay = serverRetry;
-      }
-      const maxDelay = inActiveWindow ? MAX_ACTIVE_DELAY_MS : MAX_SLOW_DELAY_MS;
-      delay = Math.min(Math.max(delay, MIN_POLL_DELAY_MS), maxDelay);
+      const delay = getThumbnailPollDelayMs(
+        pollAttemptRef.current,
+        thumbnailUrl?.retryAfterMs,
+      );
 
       timer = setTimeout(() => {
         if (cancelled) return;
         pollAttemptRef.current += 1;
         void refreshThumbnail(false);
+        if (!shouldContinueThumbnailPolling(pollAttemptRef.current)) {
+          setRetryExhausted(true);
+          return;
+        }
         scheduleNext();
       }, delay);
     };
@@ -229,10 +221,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     tabVisibilityTick,
   ]);
 
-  // Manual retry: restarts the active window and forces a fresh network call,
+  // Manual retry: restarts the bounded polling budget and forces a fresh network call,
   // bypassing the TTL cache.
   const handleManualRetry = useCallback(() => {
-    pendingSinceRef.current = Date.now();
     pollAttemptRef.current = 0;
     setRetryExhausted(false);
     void refreshThumbnail(true);
