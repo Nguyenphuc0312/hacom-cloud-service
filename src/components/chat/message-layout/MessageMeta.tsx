@@ -72,27 +72,29 @@ const MessageStatusGlyph: React.FC<{ message: Message }> = React.memo(({ message
   }
 
   if (status === MessageStatus.READ) {
+    const label = t("chat:message.status.read", { defaultValue: "Read" });
     return (
       <span
         className="flex -space-x-1 text-secondary"
-        title={t("chat:message.status.read", { defaultValue: "Read" })}
+        title={label}
+        aria-label={label}
       >
-        <CheckIcon className="h-3 w-3" />
-        <CheckIcon className="h-3 w-3" />
+        <CheckIcon className="h-3 w-3" aria-hidden="true" />
+        <CheckIcon className="h-3 w-3" aria-hidden="true" />
       </span>
     );
   }
 
   if (status === MessageStatus.DELIVERED) {
+    const label = t("chat:message.status.delivered", { defaultValue: "Delivered" });
     return (
       <span
         className="flex -space-x-1"
-        title={t("chat:message.status.delivered", {
-          defaultValue: "Delivered",
-        })}
+        title={label}
+        aria-label={label}
       >
-        <CheckIcon className="h-3 w-3" />
-        <CheckIcon className="h-3 w-3" />
+        <CheckIcon className="h-3 w-3" aria-hidden="true" />
+        <CheckIcon className="h-3 w-3" aria-hidden="true" />
       </span>
     );
   }
@@ -169,7 +171,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
           onViewEditHistory ? (
             <button
               type="button"
-              className="inline-flex items-center gap-1 underline-offset-2 hover:underline focus:outline-none"
+              className="inline-flex items-center gap-1 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:rounded-sm"
               title={t("chat:message.editHistory.viewTitle", {
                 defaultValue: "Xem lịch sử chỉnh sửa",
               })}

@@ -64,7 +64,7 @@ Nó sẽ tạo `PRODUCT.md` chứa context thiết kế cho dự án. Chỉ cầ
 
 - **Màu đỏ/vàng** (SideRail, LoginPage) — Impeccable phải giữ nguyên, không tự ý đổi sang xanh.
 - **Màu xanh** `#1565C0` / `#1976D2` — brand color cho toàn bộ app còn lại.
-- Khi dùng `/impeccable colorize` hoặc `/impeccable craft`, nhắc thêm: *"giữ bảng màu trong WEBFE.md"*.
+- Khi dùng `/impeccable colorize` hoặc `/impeccable craft`,
 - Impeccable đọc file code thật (không hallucinate token) nên nên chỉ rõ file target.
 
 ---

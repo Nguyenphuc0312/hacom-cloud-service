@@ -140,13 +140,13 @@ export const LoginPage: React.FC = () => {
           </Link>
         </div>
 
-        <header className="mb-[clamp(10px,1.5dvh,16px)]">
+        <header className="mb-[clamp(10px,1.5dvh,16px)] text-center">
           <h1
-            className="mb-1 font-bold tracking-tight text-text-primary"
+            className="mb-1 font-bold tracking-tight text-text-primary [text-wrap:balance]"
             style={{ fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)" }}
           >
             Chào mừng trở lại với{" "}
-            <span className="bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] bg-clip-text text-transparent">
+            <span className="text-[#C41E3A]">
               Hacom Chat
             </span>
           </h1>
@@ -176,6 +176,7 @@ export const LoginPage: React.FC = () => {
             type="button"
             role="tab"
             aria-selected={authMethod === "qr"}
+            aria-controls="login-panel-qr"
             onClick={() => setAuthMethod("qr")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "qr"
               ? "bg-surface text-[#C41E3A] shadow-sm"
@@ -220,7 +221,12 @@ export const LoginPage: React.FC = () => {
         )}
 
         {authMethod === "qr" && (
-          <div className="space-y-3">
+          <div
+            role="tabpanel"
+            id="login-panel-qr"
+            aria-labelledby="login-tab-qr"
+            className="space-y-3"
+          >
             <div className="rounded-lg border border-border bg-surface-overlay px-3 py-2.5 text-center">
               <p className="flex items-center justify-center gap-2 text-sm font-semibold text-text-secondary">
                 <ShieldCheckIcon className="h-4 w-4 text-[#C41E3A]" aria-hidden="true" />
