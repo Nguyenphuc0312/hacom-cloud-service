@@ -1388,7 +1388,8 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        user: state.user,
+        // ponytail: strip avatar — presigned S3 URL (15-min TTL) expires before next session; bootstrap always re-fetches /users/profile
+        user: state.user ? { ...state.user, avatar: undefined } : state.user,
         authStatus: state.authStatus,
         activationContext: state.activationContext,
         lockedAccount: state.lockedAccount,
