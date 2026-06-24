@@ -60,6 +60,15 @@ const StatusBadge: React.FC<{
           {t("chat:attachmentTray.uploading")}
         </span>
       );
+    case "security_pending":
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-warning">
+          <ClockIcon className="h-3 w-3" />
+          {t("chat:attachmentTray.securityPending", {
+            defaultValue: "Đang kiểm tra tệp",
+          })}
+        </span>
+      );
     case "finalized":
     case "attached":
       return (

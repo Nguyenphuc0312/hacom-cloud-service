@@ -504,13 +504,21 @@ export function useUploadQueue({
         }
 
         updateDraft(localId, {
-          status: "finalized",
+          status: attachment.canAttach === false ? "security_pending" : "finalized",
           progress: 100,
           uploadId: signed.uploadId,
           fileId,
           expiresAt: signed.expiresAt,
-          errorCode: undefined,
-          errorMessage: undefined,
+          errorCode:
+            attachment.canAttach === false
+              ? completed.releaseReason || "FILE_NOT_RELEASED"
+              : undefined,
+          errorMessage:
+            attachment.canAttach === false
+              ? t("chat:attachmentTray.securityPending", {
+                  defaultValue: "Đang kiểm tra tệp",
+                })
+              : undefined,
           uploaded: uploadClient.attachToMessageDraft({
             uploadId: signed.uploadId,
             fileId,
@@ -523,6 +531,11 @@ export function useUploadQueue({
             height: attachment.height,
             duration: attachment.duration,
             thumbnailUrl: attachment.thumbnailUrl,
+            canAttach: attachment.canAttach,
+            canDownload: attachment.canDownload,
+            canPreview: attachment.canPreview,
+            releaseStatus: attachment.releaseStatus,
+            releaseReason: attachment.releaseReason,
           }),
         });
       } catch (error) {

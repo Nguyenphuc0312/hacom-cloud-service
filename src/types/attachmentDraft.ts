@@ -17,6 +17,7 @@ export type AttachmentDraftStatus =
   | "reserving"
   | "uploading"
   | "completing"
+  | "security_pending"
   | "finalized"
   | "attaching"
   | "attached"
@@ -37,6 +38,11 @@ export interface UploadedFileMeta {
   width?: number;
   height?: number;
   duration?: number;
+  canAttach?: boolean;
+  canDownload?: boolean;
+  canPreview?: boolean;
+  releaseStatus?: "released" | "blocked";
+  releaseReason?: string;
 }
 
 export interface AttachmentDraft {
@@ -232,6 +238,7 @@ export function isBlockingAttachmentDraft(draft: AttachmentDraft): boolean {
     "reserving",
     "uploading",
     "completing",
+    "security_pending",
     "attaching",
   ].includes(draft.status);
 }

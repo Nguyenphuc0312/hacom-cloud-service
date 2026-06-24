@@ -74,6 +74,9 @@ export const ALLOWED_UPLOAD_FILE_TYPES: Record<string, AllowedUploadFileType> = 
   "application/x-7z-compressed": { extensions: [".7z"], category: FileType.ARCHIVE },
   "application/vnd.rar": { extensions: [".rar"], category: FileType.ARCHIVE },
   "application/x-rar-compressed": { extensions: [".rar"], category: FileType.ARCHIVE },
+  "application/x-tar": { extensions: [".tar"], category: FileType.ARCHIVE },
+  "application/gzip": { extensions: [".gz", ".tgz", ".tar.gz"], category: FileType.ARCHIVE },
+  "application/x-gzip": { extensions: [".gz", ".tgz", ".tar.gz"], category: FileType.ARCHIVE },
 };
 
 export const DEFAULT_ALLOWED_UPLOAD_MIME_TYPES = Object.freeze(
@@ -114,6 +117,9 @@ export const DOCUMENT_UPLOAD_ACCEPT = [
   "application/x-7z-compressed",
   "application/vnd.rar",
   "application/x-rar-compressed",
+  "application/x-tar",
+  "application/gzip",
+  "application/x-gzip",
   "audio/mpeg",
   "audio/wav",
   "audio/x-wav",
@@ -127,13 +133,13 @@ export const UPLOAD_LIMITS = {
   maxTotalSizePerMessage: 471_859_200,
   maxBytesByCategory: {
     image: 39_321_600,
-    video: 314_572_800,
-    audio: 157_286_400,
-    document: 157_286_400,
-    archive: 157_286_400,
+    video: 104_857_600,
+    audio: 104_857_600,
+    document: 104_857_600,
+    archive: 104_857_600,
     generic: 78_643_200,
-    avatar: 7_864_320,
-    group_avatar: 7_864_320,
+    avatar: 10_485_760,
+    group_avatar: 10_485_760,
   },
 } as const;
 
@@ -167,6 +173,10 @@ const PREFERRED_MIME_BY_EXTENSION: Record<string, string> = {
   ".zip": "application/zip",
   ".7z": "application/x-7z-compressed",
   ".rar": "application/x-rar-compressed",
+  ".tar": "application/x-tar",
+  ".gz": "application/gzip",
+  ".tgz": "application/gzip",
+  ".tar.gz": "application/gzip",
 };
 
 export const normalizeUploadMimeType = (value: unknown): string =>
@@ -174,6 +184,9 @@ export const normalizeUploadMimeType = (value: unknown): string =>
 
 export const getUploadFileExtension = (fileName: string): string => {
   const trimmed = fileName.trim();
+  if (trimmed.toLowerCase().endsWith(".tar.gz")) {
+    return ".tar.gz";
+  }
   const dotIndex = trimmed.lastIndexOf(".");
   return dotIndex >= 0 ? trimmed.slice(dotIndex).toLowerCase() : "";
 };
