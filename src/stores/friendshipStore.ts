@@ -860,6 +860,12 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         : hadFriend && !hasFriend
           ? Math.max(0, current.friendsTotal - 1)
           : Math.max(current.friendsTotal, normalized.friends.length);
+    const updatedFriend = normalized.friends.find(
+      (f) => f.relationId === relation.relationId,
+    );
+    if (updatedFriend?.alias) {
+      useEnrichedProfileStore.getState().setEnrichedName(updatedFriend.id, updatedFriend.alias);
+    }
     set(() => ({
       ...normalized,
       ...toIndexedFields(normalized),
