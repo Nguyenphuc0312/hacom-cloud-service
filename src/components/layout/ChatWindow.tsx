@@ -53,7 +53,7 @@ import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
-import { useChatUiStore } from "../../features/chat/state";
+import { useChatUiStore } from "../../features/chat/state/chatUiStore";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
 import { chatApi as rtkChatApi } from "../../features/api/chatApi";
 import { store } from "../../store";
