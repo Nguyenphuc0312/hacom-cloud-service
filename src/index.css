@@ -135,7 +135,7 @@
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --motion-ease-press: ease-out;
   /* Tactile overshoot for press/pop feedback; emphasized for panels/dialogs. */
-  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
   --core-gray-0: 0 0% 100%;
@@ -143,8 +143,8 @@
   --core-gray-100: 220 18% 97%;
   --core-gray-200: 215 20% 87%;
   --core-gray-300: 215 16% 65%;
-  --core-gray-400: 215 16% 47%;
-  --core-gray-500: 215 13% 65%;
+  --core-gray-400: 215 16% 46%;
+  --core-gray-500: 215 13% 46%;
   --core-gray-600: 220 14% 25%;
   --core-gray-700: 221 24% 16%;
   --core-gray-800: 222 22% 12%;
@@ -153,6 +153,9 @@
   --core-brand-400: 214 90% 70%;
   --core-brand-500: 217 91% 60%;
   --core-brand-600: 221 83% 53%;
+  /* CLAUDE.md brand solids — dùng thay #1565C0 (solid fill) và #1976D2 (hover/border) */
+  --brand-solid: 212 80% 42%;
+  --brand-light: 207 67% 47%;
 
   --core-danger-500: 0 84% 60%;
   --core-danger-600: 0 72% 50%;
@@ -856,6 +859,15 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Touch device: bump control heights to meet 44px minimum tap target */
+@media (pointer: coarse) {
+  :root {
+    --control-height-sm: 40px;
+    --control-height-md: 44px;
+    --control-height-lg: 48px;
+  }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
 
@@ -1486,7 +1498,7 @@ a:focus-visible {
     border-radius: 14px;
     color: rgba(255, 255, 255, 0.7);
     background: transparent;
-    transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hc-side-rail__item:hover {
@@ -1574,7 +1586,7 @@ a:focus-visible {
     font-size: 13px;
     font-weight: 600;
     box-shadow: 0 2px 8px rgb(37 99 235 / 0.15);
-    transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hc-side-rail__avatar:hover {
@@ -1849,7 +1861,7 @@ a:focus-visible {
 }
 
 .animate-scale-in-emoji {
-  animation: scale-in-emoji 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: scale-in-emoji 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: bottom center;
 }
 

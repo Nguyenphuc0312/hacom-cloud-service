@@ -156,13 +156,7 @@ export const ReplyPreview: React.FC<ReplyPreviewProps> = ({
           isClickable ? "cursor-pointer hover:opacity-70 active:opacity-50" : "cursor-default",
         )}
       >
-        <div className="flex items-stretch">
-          {/* Left accent stripe */}
-          <div
-            className="w-[3px] flex-shrink-0 self-stretch rounded-full"
-            style={{ background: "linear-gradient(180deg, #1976D2 0%, #1565C0 100%)" }}
-          />
-
+        <div className="flex items-stretch rounded-md bg-brand-solid/10 border-l border-brand-solid/40">
           {/* Thumbnail for image/video */}
           {showMediaThumb && (
             <div className="flex-shrink-0 py-1.5 pl-2">

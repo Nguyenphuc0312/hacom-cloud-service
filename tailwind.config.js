@@ -82,6 +82,8 @@ export default {
         primary: withOpacity("--color-primary", "206 100% 41%"),
         "primary-hover": withOpacity("--color-primary-hover", "206 100% 35%"),
         "primary-active": withOpacity("--color-primary-active", "206 100% 35%"),
+        "brand-solid": withOpacity("--brand-solid", "212 80% 42%"),
+        "brand-light": withOpacity("--brand-light", "207 67% 47%"),
         secondary: withOpacity("--color-secondary", "203 88% 66%"),
         accent: withOpacity("--color-accent", "24 100% 50%"),
         success: withOpacity("--color-success", "152 80% 36%"),
@@ -217,15 +219,14 @@ export default {
         typing: "typing 1.4s infinite",
         "typing-delay-1": "typing 1.4s infinite 0.2s",
         "typing-delay-2": "typing 1.4s infinite 0.4s",
-        "slide-in-left": "slideInLeft 0.3s ease-out",
-        "slide-in-right": "slideInRight 0.3s ease-out",
-        "slide-in-up": "slideInUp 0.3s ease-out",
+        "slide-in-left": "slideInLeft 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-in-right": "slideInRight 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-in-up": "slideInUp 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "fade-in": "fadeIn 0.2s ease-out",
         "fade-in-fast": "fadeIn 150ms ease-out",
-        "bounce-in": "bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+        "bounce-in": "bounceIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "pulse-online": "pulseOnline 2s infinite",
-        "reaction-pop":
-          "reactionPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+        "reaction-pop": "reactionPop 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
         shake: "shake 0.5s ease-in-out",
         /* New polished animations */
         "typing-dot": "typingDot 1.4s ease-in-out infinite",
@@ -247,15 +248,15 @@ export default {
           "30%": { transform: "translateY(-8px)" },
         },
         slideInLeft: {
-          from: { opacity: "0", transform: "translateX(-20px)" },
+          from: { opacity: "0", transform: "translateX(-10px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
         slideInRight: {
-          from: { opacity: "0", transform: "translateX(20px)" },
+          from: { opacity: "0", transform: "translateX(10px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
         slideInUp: {
-          from: { opacity: "0", transform: "translateY(20px)" },
+          from: { opacity: "0", transform: "translateY(10px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         fadeIn: {
@@ -263,9 +264,7 @@ export default {
           to: { opacity: "1" },
         },
         bounceIn: {
-          "0%": { opacity: "0", transform: "scale(0.3)" },
-          "50%": { transform: "scale(1.05)" },
-          "70%": { transform: "scale(0.9)" },
+          "0%": { opacity: "0", transform: "scale(0.85)" },
           "100%": { opacity: "1", transform: "scale(1)" },
         },
         pulseOnline: {
@@ -274,9 +273,8 @@ export default {
           "100%": { boxShadow: "0 0 0 0 hsl(var(--color-online) / 0)" },
         },
         reactionPop: {
-          "0%": { transform: "scale(0)" },
-          "50%": { transform: "scale(1.3)" },
-          "100%": { transform: "scale(1)" },
+          "0%": { opacity: "0", transform: "scale(0.6)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
         },
         shake: {
           "0%, 100%": { transform: "translateX(0)" },
