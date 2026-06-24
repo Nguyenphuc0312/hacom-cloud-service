@@ -296,6 +296,7 @@ const applyAlreadyFriendsSnapshot = (
       canMessage: true,
     },
     actionResult: "idempotent_hit",
+    alias: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   });

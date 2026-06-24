@@ -497,7 +497,15 @@ export function useUploadQueue({
           conversationId: conversationId,
           objectKey: signed.objectKey,
         });
-        const attachment = completed.attachment;
+        // ponytail: cast until shared-types ships security fields (canAttach/canDownload/canPreview/releaseStatus/releaseReason)
+        const attachment = completed.attachment as typeof completed.attachment & {
+          canAttach?: boolean;
+          canDownload?: boolean;
+          canPreview?: boolean;
+          releaseStatus?: "released" | "blocked";
+          releaseReason?: string;
+        };
+        const completedWithRelease = completed as typeof completed & { releaseReason?: string };
         const fileId = attachment.id;
         if (!fileId) {
           throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
@@ -511,7 +519,7 @@ export function useUploadQueue({
           expiresAt: signed.expiresAt,
           errorCode:
             attachment.canAttach === false
-              ? completed.releaseReason || "FILE_NOT_RELEASED"
+              ? completedWithRelease.releaseReason || "FILE_NOT_RELEASED"
               : undefined,
           errorMessage:
             attachment.canAttach === false
