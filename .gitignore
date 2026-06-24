@@ -2,13 +2,10 @@
 .claude/
 .agents/
 # Documentation
-WEBAPI.md
-WEBBE.md
-WEBFE.md
+PONYTAIL.md
 CLAUDE.md
-yeucau-backend-ai-congty-lichsu.md
-chat-web-client\yeucauapicalenda.md
-skillFE.md
+IMPECCABLE.md
+DESIGN_TASTE.md
 # Logs
 logs
 *.log
