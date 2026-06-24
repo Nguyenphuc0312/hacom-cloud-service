@@ -120,5 +120,11 @@
     "toastSent": "Đã gửi lời mời kết bạn",
     "invalidCode": "Mã QR không hợp lệ hoặc đã hết hạn. Có thể người dùng đã reset mã mới.",
     "download": "Tải QR"
+  },
+  "alias": {
+    "placeholder": "Nhập tên gợi nhớ...",
+    "editTitle": "Đặt tên gợi nhớ",
+    "realName": "Tên thật:",
+    "saveFailed": "Không thể lưu tên gợi nhớ"
   }
 }

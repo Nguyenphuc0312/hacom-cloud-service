@@ -120,5 +120,11 @@
     "toastSent": "Friend request sent",
     "invalidCode": "The QR code is invalid or expired. The user may have already reset a new code.",
     "download": "Download QR"
+  },
+  "alias": {
+    "placeholder": "Enter a nickname...",
+    "editTitle": "Set nickname",
+    "realName": "Real name:",
+    "saveFailed": "Could not save nickname"
   }
 }

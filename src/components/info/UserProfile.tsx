@@ -8,6 +8,7 @@ import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
+  CheckIcon,
   EnvelopeIcon,
   IdentificationIcon,
   PencilSquareIcon,
@@ -40,6 +41,9 @@ import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPrevie
 import { resolvePublicResourceUrl } from "../../config";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../stores/friendshipStore";
+import { enrichUserProfile } from "../../services/enrichUserProfile";
+import { friendshipApi } from "../../services/api";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -220,6 +224,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
   const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
+
+  const currentAlias = useFriendshipStore((s) => s.friendByUserId[userId]?.alias ?? null);
+  const [isEditingAlias, setIsEditingAlias] = React.useState(false);
+  const [aliasInput, setAliasInput] = React.useState("");
+  const [isSavingAlias, setIsSavingAlias] = React.useState(false);
+  const aliasInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     refreshDirectory,
@@ -425,6 +435,32 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }, [isSelf, onStartConversation, t, userId]);
 
+  const startEditAlias = React.useCallback(() => {
+    setAliasInput(currentAlias ?? "");
+    setIsEditingAlias(true);
+    setTimeout(() => aliasInputRef.current?.focus(), 0);
+  }, [currentAlias]);
+
+  const saveAlias = React.useCallback(async () => {
+    const friendshipId =
+      relationship.kind === "friend" ? relationship.friendshipId : undefined;
+    if (!friendshipId) return;
+    const trimmed = aliasInput.trim();
+    const newAlias = trimmed || null;
+    setIsSavingAlias(true);
+    try {
+      await friendshipApi.setAlias(friendshipId, newAlias);
+      useFriendshipStore.getState().setLocalAlias(userId, newAlias);
+      if (!newAlias) enrichUserProfile(userId);
+      setIsEditingAlias(false);
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("friends:alias.saveFailed"));
+    } finally {
+      setIsSavingAlias(false);
+    }
+  }, [aliasInput, relationship, t, userId]);
+
   const renderActions = () => {
     if (relationship.kind === "self") {
       return (
@@ -598,19 +634,72 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   />
 
                   <div className="w-full min-w-0 space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <h2 className="text-2xl font-semibold text-text-primary">
-                        {displayName}
-                      </h2>
-                      <span
-                        className={clsx(
-                          "inline-flex rounded-full px-2.5 py-1 text-caption font-medium",
-                          badgeToneByRelationship[relationship.kind],
+                    {isEditingAlias ? (
+                      <div className="flex flex-col items-center gap-3 py-1">
+                        <input
+                          ref={aliasInputRef}
+                          value={aliasInput}
+                          onChange={(e) => setAliasInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveAlias();
+                            if (e.key === "Escape") setIsEditingAlias(false);
+                          }}
+                          placeholder={t("friends:alias.placeholder")}
+                          maxLength={100}
+                          disabled={isSavingAlias}
+                          className="w-full border-0 border-b-2 border-[#1565C0]/40 bg-transparent pb-1 text-center text-2xl font-semibold text-text-primary placeholder:font-normal placeholder:text-text-muted/50 focus:border-[#1565C0] focus:outline-none disabled:opacity-50 transition-colors"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void saveAlias()}
+                            disabled={isSavingAlias}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-[#E7E9EB] transition-colors hover:bg-[#1976D2] disabled:opacity-50"
+                          >
+                            <CheckIcon className="h-3.5 w-3.5" />
+                            {t("common:actions.save")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingAlias(false)}
+                            disabled={isSavingAlias}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-surface-overlay px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                          >
+                            <XMarkIcon className="h-3.5 w-3.5" />
+                            {t("common:actions.cancel")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <h2 className="text-2xl font-semibold text-text-primary">
+                          {currentAlias || displayName}
+                        </h2>
+                        {relationship.kind === "friend" && (
+                          <button
+                            type="button"
+                            onClick={startEditAlias}
+                            title={t("friends:alias.editTitle")}
+                            className="icon-button-surface h-6 w-6 opacity-50 transition-opacity hover:opacity-100"
+                          >
+                            <PencilSquareIcon className="h-3.5 w-3.5" />
+                          </button>
                         )}
-                      >
-                        {relationshipLabel}
-                      </span>
-                    </div>
+                        <span
+                          className={clsx(
+                            "inline-flex rounded-full px-2.5 py-1 text-caption font-medium",
+                            badgeToneByRelationship[relationship.kind],
+                          )}
+                        >
+                          {relationshipLabel}
+                        </span>
+                      </div>
+                    )}
+                    {currentAlias && !isEditingAlias && (
+                      <p className="text-body-sm text-text-muted">
+                        {t("friends:alias.realName")} {displayName}
+                      </p>
+                    )}
 
                     {username && (
                       <p className="truncate text-body-sm text-text-secondary">
