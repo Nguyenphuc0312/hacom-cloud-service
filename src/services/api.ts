@@ -1760,6 +1760,14 @@ export const friendshipApi = {
     return response.data;
   },
 
+  setAlias: async (friendshipId: string, alias: string | null) => {
+    const response = await apiClient.put<ApiResponse<{ alias: string | null }>>(
+      `/friends/${friendshipId}/alias`,
+      { alias },
+    );
+    return response.data;
+  },
+
   getSentRequests: async () => {
     const response = await apiClient.get<
       ApiResponse<{

@@ -14,6 +14,7 @@ import type {
   FriendshipResyncReason,
 } from "../features/chat/realtime/friendshipRealtime";
 import { logger } from "../utils/logger";
+import { useEnrichedProfileStore } from "./enrichedProfileStore";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
@@ -39,6 +40,7 @@ export interface FriendRecord extends User {
   actionResult: FriendshipActionResult;
   createdAt: string;
   updatedAt: string;
+  alias?: string | null;
 }
 
 export const EMPTY_CAPABILITIES: FriendshipCapabilitiesDto = {
@@ -132,6 +134,8 @@ interface FriendshipStoreState {
   resyncTriggeredCount: number;
   uiInconsistencyCount: number;
   lastResyncReason: FriendshipResyncReason | null;
+
+  setLocalAlias: (userId: string, alias: string | null) => void;
 
   setActionPending: (key: string, pending: boolean) => void;
   isActionPending: (key: string) => boolean;
@@ -403,6 +407,8 @@ const toFriendRecord = (
     return null;
   }
 
+  // ponytail: cast until shared-types ships the alias field
+  const dto = relation as FriendshipRelationDto & { alias?: string | null };
   return {
     ...friend,
     relationId: relation.relationId,
@@ -412,6 +418,7 @@ const toFriendRecord = (
     actionResult: relation.actionResult,
     createdAt: relation.createdAt,
     updatedAt: relation.updatedAt,
+    alias: dto.alias ?? null,
   };
 };
 
@@ -722,6 +729,24 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
   uiInconsistencyCount: 0,
   lastResyncReason: null,
 
+  setLocalAlias: (userId, alias) => {
+    set((state) => {
+      const friends = state.friends.map((f) =>
+        f.id === userId ? { ...f, alias } : f,
+      );
+      return {
+        friends,
+        friendByUserId: Object.fromEntries(friends.map((f) => [f.id, f])),
+      };
+    });
+    const { setEnrichedName, clearEnrichedName } = useEnrichedProfileStore.getState();
+    if (alias) {
+      setEnrichedName(userId, alias);
+    } else {
+      clearEnrichedName(userId);
+    }
+  },
+
   setActionPending: (key, pending) => {
     set((state) => ({
       actionPendingByKey: {
@@ -869,6 +894,10 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
       const list = relationPage.relations
         .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
+
+      // Inject aliases into enrichedProfileStore so ChatHeader/RoomItem reflect them immediately
+      const { setEnrichedName } = useEnrichedProfileStore.getState();
+      list.forEach((f) => { if (f.alias) setEnrichedName(f.id, f.alias); });
 
       set((state) => {
         const mergedFriends = append
