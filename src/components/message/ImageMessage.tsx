@@ -124,10 +124,10 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     thumbnailUrl?.status === 'not_found' ||
     thumbnailUrl?.status === 'forbidden';
 
-  // When batch API fails terminally, fall back to the URL the attachment payload
-  // already carries (thumbnailUrl > url). This covers forwarded messages where
-  // the backend hasn't yet associated the file with the new conversation.
-  const attachmentDirectUrl = terminalBatchStatus
+  // Fall back to the URL the attachment payload already carries when:
+  // - batch API fails terminally (forwarded messages, auth issues), OR
+  // - thumbnail pipeline is still processing (show image now, upgrade later)
+  const attachmentDirectUrl = (terminalBatchStatus || isThumbnailPending)
     ? resolvePublicResourceUrl(attachment.thumbnailUrl ?? attachment.url, {
         context: 'image',
         allowBlob: false,

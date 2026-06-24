@@ -1,18 +1,17 @@
 # CLAUDE.md — chat-web-client
 
-@WEBFE.md
-
 Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File này mô tả chi tiết kiến trúc để AI hiểu context mà **không cần đọc lại toàn bộ source**. Đọc file này trước; chỉ mở file cụ thể khi cần sửa.
 
 > Khi sửa code mà phát hiện file này sai/lỗi thời, hãy cập nhật lại nó.
 
 ### Hệ tài liệu (đọc đúng file theo việc)
-- **`CLAUDE.md`** (file này) — kiến trúc FE web client.
-- **`WEBFE.md`** — bảng màu / UI tokens (đã `@import` ở trên). Đọc trước khi chỉnh UI/UX.
-- **`WEBBE.md`** — backend `chat-api-service` (kiến trúc, endpoint, DB, auth, env). Đọc khi sửa/đụng backend.
-- **`WEBAPI.md`** — hợp đồng API FE↔BE (map `services/api.ts` ↔ endpoint BE, RTK Query, WS realtime, envelope). Đọc khi thêm/sửa API hoặc nối FE↔BE.
-- **`APIcalendar.md`** — toàn bộ API liên quan đến Lịch (events/chấm công/hồ sơ HR/thông báo qua hr-api-service + task/lễ). Đọc khi đụng tính năng lịch.
+- **`CLAUDE.md`** (file này) — kiến trúc FE web client + bảng màu UI (mục 14).
+- **`AGENTS.md`** — hướng dẫn cho AI agents (tools, workflow).
+- **`IMPECCABLE.md`** — hướng dẫn dùng skill `/impeccable` để thiết kế/cải thiện UI (app UI, components).
+- **`DESIGN_TASTE.md`** — hướng dẫn dùng skill `/design-taste-frontend` (landing page, portfolio, redesign marketing).
+- **`PONYTAIL.md`** — hướng dẫn bộ skill ponytail (`/ponytail`, `/ponytail-review`, `/ponytail-audit`, `/ponytail-debt`…).
 - **`docs/CALENDAR_SPEC.md`** — đặc tả sản phẩm Day/Week View kiểu Teams (hiện trạng vs mục tiêu, gap, lộ trình). Đọc khi làm/đổi Day-Week View.
+- **`docs/CHAT_UI_SPEC.md`** — đặc tả UI chat (message layout, timeline, components). Đọc khi sửa UI chat.
 - **`d:\HacomCTY\chat-api-service\docs\requests\`** — 🔴 **KÊNH GIAO TIẾP CHUẨN (source of truth) FE↔BE↔API↔shared-types.** Mọi đề xuất đổi contract / yêu cầu thêm field / nghiệm thu **xuyên repo** phải có 1 file ở đây — không trao đổi miệng/chat trôi nổi. Xem mục 15.
 
 ---
@@ -320,10 +319,41 @@ npm run build && node scripts/verify-dist-assets.mjs
 
 ---
 
-## 14. Chỉnh UI/UX — đọc `WEBFE.md`
+## 14. Chỉnh UI/UX — bảng màu & token
 
-- Khi user yêu cầu **chỉnh UI/UX**: đọc **`WEBFE.md`** trước (đã `@import` ở đầu file) để lấy đúng bảng màu, gradient, token — **không hardcode lại từ trí nhớ**. Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc.
-- Ghi nhớ nhanh **hai vùng màu tách biệt**: SideRail + LoginPage = đỏ/vàng (**không đổi**); toàn bộ app còn lại = xanh dương. Chi tiết token (Button variants, badge unread, focus ring, active item…) xem đầy đủ trong **`WEBFE.md`**.
+Chỉ sửa styling/tokens, **không** đụng logic hay cấu trúc. Nguồn gốc màu: `src/index.css`, `src/components/ui/Button.tsx`, `src/shared/layout/SideRail.tsx`.
+
+### Hai vùng màu tách biệt (BẮT BUỘC nhớ)
+
+| Vùng | Màu chủ | Ghi chú |
+|------|---------|---------|
+| **SideRail + LoginPage** | Đỏ + Vàng | `#D32F2F → #C41E3A`, badge `#FFC857` — **KHÔNG đổi** |
+| **Toàn bộ app còn lại** | Xanh dương | `#1565C0` (solid fill) / `#1976D2` (hover/border) |
+
+### Token xanh hay dùng (app UI)
+```
+Solid fill nút/toggle/checkbox:  bg-[#1565C0]  hover:bg-[#1976D2]
+Text brand:                       text-[#1565C0]
+Background badge/highlight nhạt:  bg-[#DBEAFE]/10  hoặc  bg-[#1976D2]/8
+Border active:                    border-[#1976D2]/60
+Focus ring:                       focus:ring-[#1565C0]/25
+```
+
+### Token đỏ/vàng (SideRail & LoginPage — giữ nguyên)
+```
+Gradient rail:     linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%)
+Badge unread rail: bg-[#FFC857] text-[#C41E3A]
+Nút Login:         gradient from-[#C41E3A] via-[#D32F2F] to-[#FFC857]
+```
+
+### Button variants
+- CTA chính → `variant="brand"` (xanh solid)
+- Hủy/phụ → `variant="brand-outline"` (xanh outline)
+- Xóa/phá hoại → `variant="danger"`
+- Badge unread sidebar → `bg-[#FFC857] text-[#C41E3A]` (vàng+đỏ, đồng bộ rail)
+
+> Không dùng `#ffffff` trắng tinh / `#000000` đen tuyền. Trắng → `#E7E9EB`, nền app → `#eef2f7`.  
+> Gradient xanh→xanh đã bỏ toàn app (AI-tell) — chỉ dùng solid `#1565C0`.
 
 ---
 
@@ -334,7 +364,7 @@ npm run build && node scripts/verify-dist-assets.mjs
 
 **Quy trình khi đụng ranh giới 2 repo (FE cần BE trả thêm field / đổi shape, hoặc nghiệm thu BE đã ship):**
 1. **Đọc trước** `docs/requests/README.md` (quy ước đầy đủ) + 2 template `_TEMPLATE_CONTRACT.md` / `_TEMPLATE_ACCEPTANCE.md` trong folder đó.
-2. **Đọc `.md` của project FE liên quan** (WEBAPI.md / APIcalendar.md / spec…) để gộp đúng nội dung hiện trạng vào file contract/acceptance theo chuẩn template — không viết lại từ trí nhớ.
+2. **Đọc spec FE liên quan** (`docs/CHAT_UI_SPEC.md` / `docs/CALENDAR_SPEC.md` / code thật) để gộp đúng nội dung hiện trạng vào file contract/acceptance — không viết lại từ trí nhớ.
 3. **Tạo/cập nhật file** trong folder đó theo template + header trạng thái bắt buộc.
 
 **Hai loại file:** `contract` (yêu cầu bên kia đổi contract) và `ACCEPTANCE` (nghiệm thu bên kia đã ship đúng tới đâu). Một feature thường có cả hai (contract trước → acceptance sau).
