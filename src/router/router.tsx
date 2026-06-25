@@ -12,6 +12,8 @@ import { NotFoundPage } from "../pages/errors";
 import { APP_BASE_PATH } from "../config";
 import { PrivacyPolicyPage } from "../pages/PrivacyPolicyPage";
 import { DataDeletionPage } from "../pages/DataDeletionPage";
+import { SupportPage } from "../pages/SupportPage";
+import { TermsPage } from "../pages/TermsPage";
 
 const routeTree: RouteObject[] = [
   {
@@ -38,6 +40,8 @@ const routeTree: RouteObject[] = [
       },
       { path: ROUTE_PATHS.PRIVACY_POLICY, element: <PrivacyPolicyPage /> },
       { path: ROUTE_PATHS.DATA_DELETION, element: <DataDeletionPage /> },
+      { path: ROUTE_PATHS.SUPPORT, element: <SupportPage /> },
+      { path: ROUTE_PATHS.TERMS, element: <TermsPage /> },
       { path: ROUTE_PATHS.ROOT, element: <Navigate to={ROUTE_PATHS.CHAT} replace /> },
       { path: "*", element: <NotFoundPage /> },
     ],
