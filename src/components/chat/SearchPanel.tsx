@@ -30,6 +30,7 @@ import { FileName } from "../common/FileName";
 import { resolvePublicResourceUrl } from "../../config";
 import type { Message } from "../../types";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 
 interface SearchPanelProps {
   /** Current conversation ID to scope search (optional) */
@@ -124,6 +125,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const queryScope = conversationId ?? QUERY_SCOPE_ALL;
@@ -438,10 +440,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         {/* Results list — capped at 10 until "Show more" is pressed */}
         {visibleResults.map((message, index) => {
           const participant = participantById[message.senderId];
-          const senderDisplayName = resolveUserDisplayName({
-            displayName: message.senderName ?? participant?.displayName,
-            username: message.senderId,
-          });
+          const senderDisplayName =
+            nameByUserId[message.senderId] ??
+            resolveUserDisplayName({
+              displayName: message.senderName ?? participant?.displayName,
+              username: message.senderId,
+            });
           const isActive = index === safeActiveIndex;
           const preview = getMessageSearchPreview(message.content ?? "", query);
           const senderAvatar = resolvePublicResourceUrl(

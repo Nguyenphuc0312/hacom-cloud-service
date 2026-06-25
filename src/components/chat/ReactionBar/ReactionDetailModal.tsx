@@ -6,6 +6,7 @@ import type { Reaction } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../../common/Avatar";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { useAuthStore, useChatStore } from "../../../stores";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { resolvePublicResourceUrl } from "../../../config";
 
 interface ReactionDetailModalProps {
@@ -29,6 +30,7 @@ export const ReactionDetailModal: React.FC<ReactionDetailModalProps> = ({
 
   const currentUser = useAuthStore((s) => s.user);
   const conversations = useChatStore((s) => s.conversations);
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
   const participantMap = useMemo(() => {
     const map: Record<string, { displayName: string; avatar?: string }> = {};
@@ -37,7 +39,7 @@ export const ReactionDetailModal: React.FC<ReactionDetailModalProps> = ({
       const conv = conversations.find((c) => c.id === conversationId);
       (conv?.participants ?? []).forEach((p) => {
         map[p.id] = {
-          displayName: resolveUserDisplayName(p),
+          displayName: nameByUserId[p.id] ?? resolveUserDisplayName(p),
           avatar: p.avatar,
         };
       });
@@ -45,13 +47,13 @@ export const ReactionDetailModal: React.FC<ReactionDetailModalProps> = ({
 
     if (currentUser) {
       map[currentUser.id] = {
-        displayName: resolveUserDisplayName(currentUser),
+        displayName: nameByUserId[currentUser.id] ?? resolveUserDisplayName(currentUser),
         avatar: currentUser.avatar,
       };
     }
 
     return map;
-  }, [conversations, conversationId, currentUser]);
+  }, [conversations, conversationId, currentUser, nameByUserId]);
 
   const totalCount = reactions.reduce((sum, r) => sum + r.count, 0);
 

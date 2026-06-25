@@ -163,9 +163,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                   <UserSearchResultItem
                     key={friend.id}
                     avatarUrl={friend.avatarUrl}
-                    avatarAlt={friend.displayName || friend.id}
+                    avatarAlt={friend.alias || friend.displayName || friend.id}
                     status={friend.status ?? null}
-                    primaryText={friend.displayName || friend.id}
+                    primaryText={friend.alias || friend.displayName || friend.id}
                     secondaryText={buildUserSearchSecondaryText(friend)}
                     disabled={isSubmitting}
                     onSelect={() => void handleAdd(friend.id)}
