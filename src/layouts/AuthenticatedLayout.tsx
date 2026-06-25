@@ -11,6 +11,7 @@ import {
   listenForOpenConversation,
 } from "../features/chat/events/chatUiEvents";
 import { useReminderStore } from "../stores/reminderStore";
+import { useFriendshipStore } from "../stores/friendshipStore";
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
@@ -21,6 +22,13 @@ export const AuthenticatedLayout: React.FC = () => {
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
   const checkReminder = useReminderStore((s) => s.checkReminder);
+
+  // Bootstrap friend aliases into enrichedProfileStore on every page load so
+  // ChatHeader/RoomItem show alias immediately without waiting for Friends tab.
+  React.useEffect(() => {
+    const { hasHydrated, fetchFriends } = useFriendshipStore.getState();
+    if (!hasHydrated) void fetchFriends();
+  }, []);
 
   React.useEffect(() => {
     checkReminder();
