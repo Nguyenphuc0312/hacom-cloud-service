@@ -50,6 +50,8 @@ export interface MessageInputProps {
   currentUserId?: string;
   onShareContact?: (contactUserId: string) => Promise<void>;
   conversationName?: string;
+  /** "direct"|"private" = 1-1 DM; "group" = nhóm. Poll chỉ hiện khi là nhóm. */
+  conversationType?: string;
 
   // ── Multi-file upload queue (from ChatWindow) ──
   uploadDrafts?: AttachmentDraft[];

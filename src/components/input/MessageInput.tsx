@@ -13,6 +13,10 @@ import {
   PollCreateDialog,
   type PollCreatePayload,
 } from "../../features/chat/components/PollCreateDialog";
+import {
+  ReminderCreateDialog,
+  type ReminderCreatePayload,
+} from "../../features/chat/components/ReminderCreateDialog";
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
@@ -77,6 +81,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     currentUserId,
     onShareContact,
     conversationName,
+    conversationType,
     // Multi-file upload queue
     uploadDrafts,
     onAddFiles,
@@ -110,6 +115,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = React.useState(false);
+  const [isReminderDialogOpen, setIsReminderDialogOpen] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
     null,
@@ -334,6 +340,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         }
       } else if (type === "poll") {
         setIsPollDialogOpen(true);
+      } else if (type === "reminder") {
+        setIsReminderDialogOpen(true);
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
@@ -572,6 +580,23 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         optionCount: payload.options.length,
         allowMultiple: payload.allowMultiple,
         anonymous: payload.anonymous,
+      });
+    },
+    [conversationId, t],
+  );
+
+  const handleCreateReminder = React.useCallback(
+    (payload: ReminderCreatePayload) => {
+      // ponytail: Phase 2 will call reminder API here
+      toast.info(
+        t("common:toast.featureInDevelopment", {
+          defaultValue: "Tính năng đang được phát triển",
+        }),
+      );
+      logMessageDebug("MessageInput", "reminder_create_demo_submitted", {
+        conversationId,
+        reminderDate: payload.reminderDate.toISOString(),
+        repeatType: payload.repeatType,
       });
     },
     [conversationId, t],
@@ -1004,6 +1029,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   Boolean(currentUserId) &&
                   Boolean(conversationId)
                 }
+                canPoll={
+                  conversationType !== "direct" &&
+                  conversationType !== "private"
+                }
                 onEmojiChange={handleEmojiChange}
                 onEmojiInsert={(emoji) => {
                   tipTapRef.current?.insertAtCursor(emoji);
@@ -1073,6 +1102,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           isOpen={isPollDialogOpen}
           onClose={() => setIsPollDialogOpen(false)}
           onSubmit={handleCreatePoll}
+        />
+
+        <ReminderCreateDialog
+          isOpen={isReminderDialogOpen}
+          onClose={() => setIsReminderDialogOpen(false)}
+          onSubmit={handleCreateReminder}
         />
       </ConversationLane>
     </div>

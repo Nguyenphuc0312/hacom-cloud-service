@@ -1260,6 +1260,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             mode={inputMode}
             onLayoutHeightChange={handleComposerLayoutHeightChange}
             conversationId={conversation.id}
+            conversationType={conversation.type}
             currentUserId={currentUser.id}
             mentionCandidates={mentionCandidates}
             replyToMessage={replyToMessage}

@@ -269,7 +269,8 @@
       "location": "Location",
       "contact": "Contact",
       "audio": "Audio",
-      "poll": "Poll"
+      "poll": "Poll",
+      "reminder": "Reminder"
     },
     "menu": {
       "searchPlaceholder": "Search emoji...",

@@ -269,7 +269,8 @@
       "location": "Vị trí",
       "contact": "Liên hệ",
       "audio": "Âm thanh",
-      "poll": "Bình chọn"
+      "poll": "Bình chọn",
+      "reminder": "Nhắc hẹn"
     },
     "menu": {
       "searchPlaceholder": "Tìm emoji...",
