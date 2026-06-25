@@ -2481,6 +2481,13 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribeSyncEvents);
 
+    const unsubscribeReminderFire = socket.on("reminder:fire", (data: unknown) => {
+      const payload = asRecord(data);
+      const content = asString(payload?.content) ?? t("chat:reminder.fired", { defaultValue: "Nhắc hẹn!" });
+      notifyGlobalToast({ level: "info", message: content, dedupeKey: asString(payload?.id) ?? undefined });
+    });
+    unsubscribersRef.current.push(unsubscribeReminderFire);
+
     logMessageDebug("useWebSocket", "listener_setup_completed", {
       listenerCount: unsubscribersRef.current.length,
       connectionState: socket.getConnectionState(),

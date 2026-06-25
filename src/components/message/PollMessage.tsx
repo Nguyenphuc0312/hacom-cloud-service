@@ -8,22 +8,21 @@ import {
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import clsx from "clsx";
+import { messageApi } from "../../services/api";
+import { toast } from "../ui";
 
 interface PollMessageProps {
   poll: PollInfo;
   isOwn: boolean;
   currentUserId?: string;
-  /** Phase 2: wire to real API */
-  onVote?: (pollId: string, optionIds: string[]) => void;
-  onClose?: (pollId: string) => void;
+  messageId?: string;
 }
 
 export const PollMessage: React.FC<PollMessageProps> = ({
   poll,
   isOwn,
   currentUserId,
-  onVote,
-  onClose,
+  messageId,
 }) => {
   // ponytail: local voted state — Phase 2 replaces with server state from PollInfo.options[].voterIds
   const myInitialVotes = React.useMemo(
@@ -81,7 +80,12 @@ export const PollMessage: React.FC<PollMessageProps> = ({
     }
 
     setVoted(nextVoted);
-    if (onVote) onVote(poll.id, Array.from(nextVoted));
+    if (messageId && nextVoted.size > 0) {
+      messageApi.votePoll(messageId, poll.id, Array.from(nextVoted)).catch(() => {
+        toast.error("Không thể ghi nhận bình chọn");
+        setVoted(voted);
+      });
+    }
   };
 
   const baseCard = clsx(
@@ -307,10 +311,14 @@ export const PollMessage: React.FC<PollMessageProps> = ({
           )}
         </span>
 
-        {isOwn && !isClosed && onClose && (
+        {isOwn && !isClosed && messageId && (
           <button
             type="button"
-            onClick={() => onClose(poll.id)}
+            onClick={() => {
+              messageApi.closePoll(messageId, poll.id).catch(() => {
+                toast.error("Không thể kết thúc bình chọn");
+              });
+            }}
             className="rounded-lg px-2 py-1 text-[11px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none"
           >
             Kết thúc
