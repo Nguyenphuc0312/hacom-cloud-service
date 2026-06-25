@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDaysIcon, PlusIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ChartBarIcon } from "@heroicons/react/24/solid";
 import { Modal } from "../../../components/ui";
 import type { CreatePollDto } from "@hacom/chat-shared-types/chat";
@@ -72,7 +72,12 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
   const [allowMultiple, setAllowMultiple] = React.useState(false);
   const [anonymous, setAnonymous] = React.useState(false);
   const [hasDeadline, setHasDeadline] = React.useState(false);
-  const [endsAt, setEndsAt] = React.useState("");
+  const [endsAt, setEndsAt] = React.useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
   const firstInputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const optionRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
@@ -85,7 +90,10 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
       setAllowMultiple(false);
       setAnonymous(false);
       setHasDeadline(false);
-      setEndsAt("");
+      const tomorrow9am = new Date();
+      tomorrow9am.setDate(tomorrow9am.getDate() + 1);
+      tomorrow9am.setHours(9, 0, 0, 0);
+      setEndsAt(tomorrow9am.toISOString().slice(0, 16));
     }
   }
 
@@ -139,12 +147,6 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
     return d.toISOString().slice(0, 16);
   })();
 
-  const formatEndsAt = (s: string): string => {
-    const d = new Date(s);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -188,8 +190,8 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
         </div>
       }
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+      {/* Header — sticky so it stays visible when options list scrolls */}
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-5 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1976D2]/10">
           <ChartBarIcon className="h-5 w-5 text-[#1565C0]" />
         </div>
@@ -209,7 +211,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
         {/* Question */}
         <div className="px-5 py-4">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <span className="text-xs font-medium text-text-muted">
               Câu hỏi
             </span>
             <span
@@ -239,7 +241,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
         {/* Options */}
         <div className="px-5 py-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <span className="text-xs font-medium text-text-muted">
               Các lựa chọn
             </span>
             <span className="text-xs text-text-muted">
@@ -312,21 +314,13 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
             onChange={setHasDeadline}
           />
           {hasDeadline && (
-            <label className="relative block cursor-pointer">
-              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2 transition-colors hover:border-[#1976D2]/40">
-                <span className={clsx("text-sm", endsAt ? "text-text-primary" : "text-text-muted")}>
-                  {endsAt ? formatEndsAt(endsAt) : "DD/MM/YY HH:MM"}
-                </span>
-                <CalendarDaysIcon className="h-4 w-4 text-text-muted" />
-              </div>
-              <input
-                type="datetime-local"
-                value={endsAt}
-                min={minEndsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
+            <input
+              type="datetime-local"
+              value={endsAt}
+              min={minEndsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              className="w-full rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2 text-sm text-text-primary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20 hover:border-[#1976D2]/40 transition-colors"
+            />
           )}
         </div>
       </div>

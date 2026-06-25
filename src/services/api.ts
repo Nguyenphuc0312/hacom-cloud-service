@@ -1221,6 +1221,7 @@ export const messageApi = {
       tempId?: string;
       localId?: string;
       mentions?: string[];
+      poll?: { question: string; options: string[]; allowMultiple?: boolean; anonymous?: boolean; endsAt?: Date };
       linkPreview?: {
         url: string;
         title?: string;
@@ -1264,6 +1265,10 @@ export const messageApi = {
     if (data.plainText) body.plainText = data.plainText;
     if (data.mentions?.length) body.mentions = data.mentions;
     if (data.linkPreview) body.metadata = { linkPreview: data.linkPreview };
+    if (data.poll) {
+      body.type = "poll";
+      body.metadata = { ...((body.metadata as Record<string, unknown>) ?? {}), poll: data.poll };
+    }
 
     const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
       canonicalConversationMessagesPath(conversationId),
@@ -1316,6 +1321,22 @@ export const messageApi = {
     // Backend uses toggle endpoint for both pin/unpin
     const response = await apiClient.post<ApiResponse<Message>>(
       `/messages/${messageId}/pin`,
+    );
+    return response.data;
+  },
+
+  votePoll: async (messageId: string, pollId: string, optionIds: string[]) => {
+    const response = await apiClient.post<ApiResponse<Message>>(
+      `/messages/${messageId}/poll/vote`,
+      { pollId, optionIds },
+    );
+    return response.data;
+  },
+
+  closePoll: async (messageId: string, pollId: string) => {
+    const response = await apiClient.post<ApiResponse<Message>>(
+      `/messages/${messageId}/poll/close`,
+      { pollId },
     );
     return response.data;
   },
@@ -1965,6 +1986,47 @@ export interface LinkPreviewData {
   mediaType?: string;
   fetchedAt?: string;
 }
+
+export interface ReminderDto {
+  id: string;
+  content: string;
+  reminderAt: string;
+  repeatType: "none" | "daily" | "weekly" | "monthly";
+  status: "pending" | "fired" | "cancelled";
+  conversationId?: string | null;
+  messageId?: string | null;
+  nextReminderAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export const reminderApi = {
+  create: async (data: {
+    content: string;
+    reminderAt: string;
+    repeatType?: "none" | "daily" | "weekly" | "monthly";
+    conversationId?: string;
+    messageId?: string;
+  }) => {
+    const response = await apiClient.post<ApiResponse<ReminderDto>>(
+      "/reminders",
+      data,
+    );
+    return response.data;
+  },
+
+  list: async (params?: { status?: "pending" | "fired" | "all"; limit?: number; offset?: number }) => {
+    const response = await apiClient.get<ApiResponse<{ items: ReminderDto[]; total: number; hasMore: boolean }>>(
+      "/reminders",
+      { params },
+    );
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    await apiClient.delete(`/reminders/${id}`);
+  },
+};
 
 export const linkPreviewApi = {
   get: async (url: string) => {

@@ -71,6 +71,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       icon: ChartBarIcon,
       color: "bg-[#1976D2]/10 text-[#1565C0]",
       enabled: canPoll,
+      disabledReason: t("chat:attachment.pollGroupOnly", { defaultValue: "Chỉ dành cho nhóm" }),
     },
     {
       id: "reminder",
@@ -150,13 +151,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
           tabIndex={0}
           onClick={() => onSelect(type.id)}
           disabled={!type.enabled}
-          title={
-            !type.enabled
-              ? t("common:toast.featureInDevelopment", {
-                defaultValue: "Coming soon",
-              })
-              : undefined
-          }
+          title={!type.enabled ? (type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })) : undefined}
           className={clsx(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             type.enabled
@@ -173,9 +168,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
             </span>
             {!type.enabled && (
               <p className="text-[11px] text-text-muted">
-                {t("common:toast.featureInDevelopment", {
-                  defaultValue: "Coming soon",
-                })}
+                {type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })}
               </p>
             )}
           </div>

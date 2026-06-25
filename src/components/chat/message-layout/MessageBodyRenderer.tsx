@@ -563,6 +563,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
           poll={poll}
           isOwn={isOwn}
           currentUserId={currentUserId}
+          messageId={message.id}
         />
       );
     }
