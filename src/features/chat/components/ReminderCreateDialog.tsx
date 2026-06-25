@@ -2,7 +2,6 @@ import React from "react";
 import {
   XMarkIcon,
   BellIcon,
-  CalendarDaysIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { Modal } from "../../../components/ui";
@@ -37,15 +36,6 @@ const toDatetimeLocal = (d: Date): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const formatDisplayDate = (d: Date): string => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const dd = pad(d.getDate());
-  const mm = pad(d.getMonth() + 1);
-  const yy = String(d.getFullYear()).slice(-2);
-  const hh = pad(d.getHours());
-  const min = pad(d.getMinutes());
-  return `${dd}/${mm}/${yy} ${hh}:${min}`;
-};
 
 const getQuickDate = (qt: Exclude<QuickTime, "custom">): Date => {
   const d = new Date();
@@ -160,8 +150,8 @@ export const ReminderCreateDialog: React.FC<ReminderCreateDialogProps> = ({
         </div>
       }
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+      {/* Header — sticky so it stays visible when content scrolls */}
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-5 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1976D2]/10">
           <BellIcon className="h-5 w-5 text-[#1565C0]" />
         </div>
@@ -180,7 +170,7 @@ export const ReminderCreateDialog: React.FC<ReminderCreateDialogProps> = ({
       <div className="divide-y divide-border/60">
         {/* Section 1: Content */}
         <div className="px-5 py-4">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <label className="mb-1.5 block text-xs font-medium text-text-muted">
             Nhập nội dung
           </label>
           <textarea
@@ -195,7 +185,7 @@ export const ReminderCreateDialog: React.FC<ReminderCreateDialogProps> = ({
 
         {/* Section 2: Quick time chips */}
         <div className="px-5 py-4">
-          <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <p className="mb-2.5 text-xs font-medium text-text-muted">
             Chọn thời gian
           </p>
           <div className="flex flex-wrap gap-2">
@@ -224,34 +214,22 @@ export const ReminderCreateDialog: React.FC<ReminderCreateDialogProps> = ({
 
         {/* Section 3: Date-time picker */}
         <div className="px-5 py-4">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <p className="mb-1.5 text-xs font-medium text-text-muted">
             Chọn ngày nhắc hẹn
           </p>
-          <label className="relative block cursor-pointer">
-            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2.5 transition-colors hover:border-[#1976D2]/40">
-              <span className="text-sm text-text-primary">
-                {formatDisplayDate(reminderDate)}
-              </span>
-              <CalendarDaysIcon className="h-4 w-4 text-text-muted" />
-            </div>
-            {/* Native input hidden behind the display div */}
-            <input
-              type="datetime-local"
-              value={toDatetimeLocal(reminderDate)}
-              min={minDate}
-              onChange={handleDateChange}
-              className="absolute inset-0 cursor-pointer opacity-0"
-            />
-          </label>
+          <input
+            type="datetime-local"
+            value={toDatetimeLocal(reminderDate)}
+            min={minDate}
+            onChange={handleDateChange}
+            className="w-full rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2.5 text-sm text-text-primary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20 hover:border-[#1976D2]/40 transition-colors"
+          />
         </div>
 
         {/* Section 4: Repeat */}
         <div className="px-5 py-4">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Chọn kiểu lặp lại
-            <span className="ml-1 font-normal normal-case text-text-muted/70">
-              (vd: Lặp lại hàng tuần)
-            </span>
+          <label className="mb-1.5 block text-xs font-medium text-text-muted">
+            Lặp lại
           </label>
           <div className="relative">
             <select

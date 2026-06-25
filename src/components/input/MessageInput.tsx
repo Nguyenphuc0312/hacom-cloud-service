@@ -9,6 +9,7 @@ import { RichTextToolbar } from "./RichTextToolbar";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
+import { messageApi, reminderApi } from "../../services/api";
 import {
   PollCreateDialog,
   type PollCreatePayload,
@@ -570,16 +571,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
   const handleCreatePoll = React.useCallback(
     (payload: PollCreatePayload) => {
-      toast.info(
-        t("common:toast.featureInDevelopment", {
-          defaultValue: "Tính năng đang được phát triển",
-        }),
-      );
-      logMessageDebug("MessageInput", "poll_create_demo_submitted", {
-        conversationId,
-        optionCount: payload.options.length,
-        allowMultiple: payload.allowMultiple,
-        anonymous: payload.anonymous,
+      if (!conversationId) return;
+      messageApi.sendMessage(conversationId, {
+        content: payload.question,
+        poll: payload,
+      }).catch(() => {
+        toast.error(t("common:toast.error", { defaultValue: "Không thể tạo bình chọn" }));
       });
     },
     [conversationId, t],
@@ -587,16 +584,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
   const handleCreateReminder = React.useCallback(
     (payload: ReminderCreatePayload) => {
-      // ponytail: Phase 2 will call reminder API here
-      toast.info(
-        t("common:toast.featureInDevelopment", {
-          defaultValue: "Tính năng đang được phát triển",
-        }),
-      );
-      logMessageDebug("MessageInput", "reminder_create_demo_submitted", {
-        conversationId,
-        reminderDate: payload.reminderDate.toISOString(),
+      reminderApi.create({
+        content: payload.content,
+        reminderAt: payload.reminderDate.toISOString(),
         repeatType: payload.repeatType,
+        conversationId: conversationId ?? undefined,
+      }).then(() => {
+        toast.success(t("chat:reminder.created", { defaultValue: "Đã tạo nhắc hẹn" }));
+      }).catch(() => {
+        toast.error(t("common:toast.error", { defaultValue: "Không thể tạo nhắc hẹn" }));
       });
     },
     [conversationId, t],
