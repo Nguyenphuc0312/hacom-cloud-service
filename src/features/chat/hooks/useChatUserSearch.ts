@@ -31,6 +31,8 @@ export interface ChatSearchUser {
   departmentName?: string | null;
   unitCode?: string | null;
   title?: string | null;
+  /** Friend alias (only set when entry comes from friendship list) */
+  alias?: string | null;
   isFriend: boolean;
   canAddFriend: boolean;
   friendshipStatus:
@@ -348,6 +350,7 @@ const friendRecordToSearchUser = (friend: FriendRecord): ChatSearchUser => ({
   departmentName: friend.departmentName ?? null,
   unitCode: friend.unitCode ?? null,
   title: friend.title ?? null,
+  alias: friend.alias ?? null,
   isFriend: true,
   canAddFriend: false,
   friendshipStatus: "accepted",

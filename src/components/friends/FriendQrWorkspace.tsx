@@ -365,11 +365,10 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       try {
         const response = await userApi.getUserById(resolved.profile.id);
         const payload = unwrapApiSuccess(response);
+        const bio = (payload as unknown as Record<string, unknown>)["bio"];
         if (isMounted) {
           setProfileBio(
-            typeof payload.bio === "string" && payload.bio.trim()
-              ? payload.bio.trim()
-              : null,
+            typeof bio === "string" && bio.trim() ? bio.trim() : null,
           );
         }
       } catch {

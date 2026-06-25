@@ -559,7 +559,7 @@ export const userApi = {
   },
 
   getUserById: async (userId: string) => {
-    const response = await apiClient.get<ApiResponse<User>>(`/users/${userId}`);
+    const response = await apiClient.get<ApiResponse<UserProfileSummaryDto>>(`/users/${userId}`);
     return response.data;
   },
 

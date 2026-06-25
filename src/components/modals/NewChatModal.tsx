@@ -30,6 +30,7 @@ import {
 import { sendFriendRequestUseCase } from "../../features/chat/usecases/sendFriendRequest";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useFriendshipStore } from "../../stores/friendshipStore";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -74,6 +75,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
   const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
   const refreshDirectory = useFriendshipStore((state) => state.refreshDirectory);
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   useEffect(() => {
     if (isOpen && !hasHydrated) {
       void refreshDirectory();
@@ -122,8 +124,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
   const getDisplayName = useCallback(
     (user: ChatSearchUser) =>
-      resolveUserDisplayName(user, { allowLegacyFallback: true }) || user.username,
-    [],
+      nameByUserId[user.id] ||
+      resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
+      user.username,
+    [nameByUserId],
   );
 
   const toggleSelectedUser = useCallback((user: ChatSearchUser) => {
