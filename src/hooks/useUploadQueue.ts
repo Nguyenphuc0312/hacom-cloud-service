@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { blobPreviewCache } from "../lib/blobPreviewCache";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { extractApiError } from "../lib/apiContract";
 import uploadClient, {
@@ -535,6 +536,7 @@ export function useUploadQueue({
             mimeType: draft.mimeType,
             sizeBytes: draft.sizeBytes,
             objectKey: attachment.objectKey,
+            url: attachment.url,
             width: attachment.width,
             height: attachment.height,
             duration: attachment.duration,
@@ -872,7 +874,17 @@ export function useUploadQueue({
       .filter(isFinalizedAttachmentDraft)
       .map((draft) => {
         if (draft.uploaded) {
-          return draft.uploaded;
+          // Create a separate blob URL (independent of draft.previewUrl which gets
+          // revoked in acknowledgeSent). This URL is stored in blobPreviewCache so
+          // ImageMessage can still display the image after the real server message
+          // (which has no attachment.url) replaces the optimistic message.
+          if (draft.file && draft.uploaded.fileId) {
+            const cacheBlobUrl = URL.createObjectURL(draft.file);
+            blobPreviewCache.set(draft.uploaded.fileId, cacheBlobUrl);
+          }
+          return draft.previewUrl
+            ? { ...draft.uploaded, url: draft.previewUrl }
+            : draft.uploaded;
         }
 
         return uploadClient.attachToMessageDraft({

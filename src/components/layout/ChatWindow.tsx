@@ -84,6 +84,7 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
     ...(meta.width != null ? { width: meta.width } : {}),
     ...(meta.height != null ? { height: meta.height } : {}),
     ...(meta.duration != null ? { duration: meta.duration } : {}),
+    ...(meta.url ? { url: meta.url } : {}),
     ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
   } as Attachment;
 }

@@ -19,6 +19,7 @@ import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { logger } from "../utils/logger";
+import { blobPreviewCache } from "../lib/blobPreviewCache";
 
 export interface ThumbnailUrlItem {
   fileId: string;
@@ -131,6 +132,7 @@ const emitPreviewSignal = (fileId: string): void => {
 export const markPreviewReady = (fileId: string): void => {
   if (!fileId) return;
   THUMBNAIL_CACHE.delete(fileId);
+  blobPreviewCache.delete(fileId); // revoke local blob, server URL now available
   emitPreviewSignal(fileId);
 };
 

@@ -96,6 +96,7 @@ export const uploadClient = {
     mimeType: string;
     sizeBytes: number;
     objectKey?: string;
+    url?: string;
     width?: number;
     height?: number;
     duration?: number;
@@ -114,6 +115,7 @@ export const uploadClient = {
       name: input.filename,
       purpose: input.purpose,
       objectKey: input.objectKey,
+      url: input.url,
       width: input.width,
       height: input.height,
       duration: input.duration,

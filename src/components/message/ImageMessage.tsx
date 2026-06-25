@@ -18,6 +18,7 @@ import type { Attachment, ImageClickPayload } from "../../types";
 import { useBatchThumbnailUrl, usePreviewUrl } from "../../hooks";
 import { useInViewport } from "../../hooks/useInViewport";
 import { resolvePublicResourceUrl } from "../../config";
+import { blobPreviewCache } from "../../lib/blobPreviewCache";
 import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 import { SafeImage } from "../common/SafeImage";
@@ -124,17 +125,23 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     thumbnailUrl?.status === 'not_found' ||
     thumbnailUrl?.status === 'forbidden';
 
-  // Fall back to the URL the attachment payload already carries when:
-  // - batch API fails terminally (forwarded messages, auth issues), OR
-  // - thumbnail pipeline is still processing (show image now, upgrade later)
-  const attachmentDirectUrl = (terminalBatchStatus || isThumbnailPending)
-    ? resolvePublicResourceUrl(attachment.thumbnailUrl ?? attachment.url, {
-        context: 'image',
-        allowBlob: false,
-      }) ?? null
-    : null;
+  // blobPreviewCache holds a separate ObjectURL created in getReadyMeta(), valid
+  // even after the draft's previewUrl is revoked in acknowledgeSent(). Used as
+  // fallback when the real server message (no attachment.url) replaces optimistic.
+  const cachedBlobUrl = blobPreviewCache.get(attachment.id) ?? null;
 
-  // Use thumbnail URL for display; fall back to attachment's own URL when batch API fails.
+  // Always use the attachment's own URL as immediate fallback — shows before the batch
+  // thumbnail API responds and while the thumbnail pipeline is still processing.
+  // The batch thumbnail URL (when ready) takes priority via activeSource ordering.
+  const attachmentDirectUrl = resolvePublicResourceUrl(
+    attachment.thumbnailUrl ?? attachment.url,
+    // allowBlob: true lets the optimistic message display the local blob preview
+    // URL (from draft.previewUrl) before the server presigned URL arrives.
+    { context: 'image', allowBlob: true },
+  ) ?? cachedBlobUrl ?? null;
+
+  // Use thumbnail URL for display; fall back to attachment's own URL when batch API
+  // hasn't responded yet, is still processing, or has failed terminally.
   const activeSource = thumbnailUrl?.url ?? attachmentDirectUrl ?? null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
