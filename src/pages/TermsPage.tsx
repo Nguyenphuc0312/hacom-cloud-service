@@ -69,7 +69,7 @@ const ViContent: React.FC = () => (
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
-        <p><span className="font-medium">Ngày có hiệu lực:</span> {UPDATED_DATE_VI}</p>
+        <p><span className="font-medium">Cập nhật lần cuối:</span> {UPDATED_DATE_VI}</p>
         <p><span className="font-medium">Công ty:</span> CÔNG TY CỔ PHẦN ĐẦU TƯ HACOM HOLDINGS</p>
         <p><span className="font-medium">Email:</span> <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:underline">admin@hacomholdings.vn</a></p>
         <p><span className="font-medium">Điện thoại:</span> <a href="tel:+842466646333" className="font-medium text-[#1565C0] hover:underline">(+84) 24 6664 6333</a></p>
@@ -283,7 +283,7 @@ const EnContent: React.FC = () => (
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
-        <p><span className="font-medium">Effective Date:</span> {UPDATED_DATE_EN}</p>
+        <p><span className="font-medium">Last updated:</span> {UPDATED_DATE_EN}</p>
         <p><span className="font-medium">Company:</span> HACOM HOLDINGS INVESTMENT JOINT STOCK COMPANY</p>
         <p><span className="font-medium">Email:</span> <a href="mailto:admin@hacomholdings.vn" className="font-medium text-[#1565C0] hover:underline">admin@hacomholdings.vn</a></p>
         <p><span className="font-medium">Phone:</span> <a href="tel:+842466646333" className="font-medium text-[#1565C0] hover:underline">(+84) 24 6664 6333</a></p>
