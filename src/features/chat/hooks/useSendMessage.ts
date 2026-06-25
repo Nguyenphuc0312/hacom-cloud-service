@@ -121,6 +121,7 @@ const toSendMessageAttachments = (
       }) ||
       "",
     fileSize: attachment.fileSize ?? 0,
+    url: attachment.url,
     width: attachment.width,
     height: attachment.height,
     duration: attachment.duration,
