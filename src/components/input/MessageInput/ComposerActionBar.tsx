@@ -18,6 +18,7 @@ interface ComposerActionBarProps {
   isFormatModeExpanded: boolean;
   showAttachmentMenu: boolean;
   canShareContact: boolean;
+  canPoll: boolean;
   onEmojiChange: (value: string) => void;
   onEmojiInsert: (emoji: string) => void;
   onOpenFilePicker: () => void;
@@ -35,6 +36,7 @@ export const ComposerActionBar: React.FC<ComposerActionBarProps> = ({
   isFormatModeExpanded,
   showAttachmentMenu,
   canShareContact,
+  canPoll,
   onEmojiChange,
   onEmojiInsert,
   onOpenFilePicker,
@@ -130,6 +132,7 @@ export const ComposerActionBar: React.FC<ComposerActionBarProps> = ({
             onSelect={onAttachmentSelect}
             onClose={onCloseAttachmentMenu}
             canShareContact={canShareContact}
+            canPoll={canPoll}
             className="absolute bottom-full right-0 z-dropdown mb-2"
           />
         )}

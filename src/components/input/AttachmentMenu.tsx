@@ -8,12 +8,14 @@ import {
   UserIcon,
   MusicalNoteIcon,
   ChartBarIcon,
+  BellIcon,
 } from "@heroicons/react/24/outline";
 
 interface AttachmentMenuProps {
   onSelect: (type: string) => void;
   onClose: () => void;
   canShareContact?: boolean;
+  canPoll?: boolean;
   className?: string;
 }
 
@@ -21,6 +23,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   onSelect,
   onClose,
   canShareContact = false,
+  canPoll = false,
   className,
 }) => {
   const { t } = useTranslation();
@@ -67,6 +70,13 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       label: t("chat:attachment.types.poll"),
       icon: ChartBarIcon,
       color: "bg-[#1976D2]/10 text-[#1565C0]",
+      enabled: canPoll,
+    },
+    {
+      id: "reminder",
+      label: t("chat:attachment.types.reminder", { defaultValue: "Nhắc hẹn" }),
+      icon: BellIcon,
+      color: "bg-warning/15 text-warning",
       enabled: true,
     },
   ];

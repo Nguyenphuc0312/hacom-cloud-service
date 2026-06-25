@@ -10,6 +10,7 @@ import { ImageGallery } from "../../message/ImageGallery";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
+import { PollMessage } from "../../message/PollMessage";
 import { MessageLinkPreview } from "../../message/MessageLinkPreview";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
@@ -554,6 +555,17 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
           onToggleExpand={onToggleTextExpand}
         />
       );
+    case MessageType.POLL: {
+      const poll = (message.metadata as { poll?: import("@hacom/chat-shared-types/chat").PollInfo } | undefined)?.poll;
+      if (!poll) return renderTextContent(message, isOwn, currentUsername, currentUserId, textRenderMode, isCollapsibleText, onToggleTextExpand);
+      return (
+        <PollMessage
+          poll={poll}
+          isOwn={isOwn}
+          currentUserId={currentUserId}
+        />
+      );
+    }
     case MessageType.STICKER:
       return (
         <div className="space-y-2">
