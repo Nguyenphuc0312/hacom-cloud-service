@@ -23,6 +23,7 @@ import {
 } from "../../utils/messageHelpers";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useAuthStore, useChatStore, useFriendshipStore } from "../../stores";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { Conversation } from "../../types";
 
 type CommandGroup = "navigation" | "actions" | "conversations" | "users";
@@ -166,6 +167,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const selectConversation = useChatStore((state) => state.selectConversation);
   const currentUser = useAuthStore((state) => state.user);
   const friends = useFriendshipStore((state) => state.friends);
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -217,13 +219,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       if (!friend.id || friend.id === currentUserId) {
         return;
       }
-      const fullName = resolveUserDisplayName(friend, {
-        allowLegacyFallback: true,
-      });
+      const label =
+        nameByUserId[friend.id] ||
+        resolveUserDisplayName(friend, { allowLegacyFallback: true }) ||
+        friend.username;
 
       users.set(friend.id, {
         id: friend.id,
-        label: fullName || friend.username,
+        label,
         username: friend.username,
       });
     });
@@ -268,7 +271,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     });
 
     return Array.from(users.values()).slice(0, 40);
-  }, [conversations, currentUserId, friends]);
+  }, [conversations, currentUserId, friends, nameByUserId]);
 
   const navigationCommands = React.useMemo<CommandItem[]>(
     () => [

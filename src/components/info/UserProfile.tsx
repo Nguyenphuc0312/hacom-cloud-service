@@ -95,22 +95,29 @@ const formatDisplayName = (user: ProfileUser | null | undefined): string => {
 
 /** Map a fetched user-detail payload to the panel's ProfileUser shape. */
 const toProfileUser = (payload: CachedUserProfile): ProfileUser => {
+  // Extra fields present in real API response but not typed in UserProfileSummaryDto
+  const raw = payload as unknown as Record<string, unknown>;
   return {
-  ...(payload as Partial<ProfileUser>),
-  id: payload.id,
-  username: payload.username,
-  firstName: payload.firstName,
-  lastName: payload.lastName,
-  displayName: payload.displayName,
-  // Backend trả avatar dưới field `avatarUrl`; `avatar` là fallback cho payload
-  // cũ. Dùng `||` để chuỗi rỗng không bị coi là giá trị hợp lệ.
-  avatar: resolvePublicResourceUrl(
-    payload.avatar || (payload as { avatarUrl?: string | null }).avatarUrl || undefined,
-  ),
-  bio: payload.bio,
-  phone: payload.phone,
-  createdAt: payload.createdAt,
-  status: (payload.status as UserStatus) || UserStatus.OFFLINE,
+    // Spread first — picks up any extra fields the server sends (bio, firstName, lastName, createdAt…)
+    ...(payload as Partial<ProfileUser>),
+    id: payload.id,
+    username: payload.username ?? undefined,
+    displayName: payload.displayName ?? undefined,
+    fullNameFromHR: payload.fullNameFromHr ?? undefined,
+    // avatarUrl is canonical in UserProfileSummaryDto; avatar kept as runtime fallback
+    avatar: resolvePublicResourceUrl(
+      (raw["avatar"] as string | undefined) || payload.avatarUrl || undefined,
+    ),
+    phone: payload.phone ?? undefined,
+    status: (payload.status as UserStatus) || UserStatus.OFFLINE,
+    // HR canonical fields (UserProfileSummaryDto names — what GET /users/{id} returns)
+    department: payload.department ?? undefined,
+    position: payload.position ?? undefined,
+    company: payload.company ?? undefined,
+    employeeCode: payload.employeeCode ?? undefined,
+    companyEmail: payload.companyEmail ?? undefined,
+    employmentStatus: payload.employmentStatus ?? undefined,
+    dateOfJoining: payload.dateOfJoining ?? undefined,
   };
 };
 
@@ -266,9 +273,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       bio: authUser.bio,
       // HR fields override the chat copy when an HR profile is linked.
       phone: myProfile.phone ?? undefined,
-      // `readUserValue` checks `title` before `jobTitle`, so override the stale
-      // chat-api `title` that the spread carries — otherwise the panel would
-      // keep showing the old position after an HRM role change.
+      // Canonical new names (UserProfileSummaryDto) — checked first by readUserValue
+      position: myProfile.jobTitle ?? undefined,
+      department: myProfile.departmentName ?? undefined,
+      company: myProfile.orgUnit ?? undefined,
+      companyEmail: myProfile.corporateEmail ?? undefined,
+      // Legacy aliases — fallback for readUserValue when new names absent
       title: myProfile.jobTitle ?? undefined,
       jobTitle: myProfile.jobTitle ?? undefined,
       departmentName: myProfile.departmentName ?? undefined,

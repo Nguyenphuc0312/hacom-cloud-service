@@ -8,6 +8,7 @@ import { resolveDisplayName } from "./utils/resolveDisplayName";
 import { RoomMemberRole } from "../../../../types";
 import type { UserStatus } from "../../../../types";
 import type { GroupCapabilityMatrix } from "./utils/canPerformAction";
+import { useEnrichedProfileStore } from "../../../../stores/enrichedProfileStore";
 
 interface MemberRowProps {
   memberId: string;
@@ -52,9 +53,10 @@ export const MemberRow: React.FC<MemberRowProps> = ({
 }) => {
   const { t } = useTranslation("profile");
 
+  const alias = useEnrichedProfileStore((s) => s.nameByUserId[memberId]);
   const { displayName: resolvedName, usedFallback } = resolveDisplayName({
-    displayName,
-    fullNameFromHR,
+    displayName: alias || displayName,
+    fullNameFromHR: alias ? undefined : fullNameFromHR,
     username,
   });
 
