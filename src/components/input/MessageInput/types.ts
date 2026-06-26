@@ -49,7 +49,10 @@ export interface MessageInputProps {
   composerMode?: ComposerMode;
   currentUserId?: string;
   onShareContact?: (contactUserId: string) => Promise<void>;
-  onShareLocation?: (location: LocationMessagePayload) => unknown | Promise<unknown>;
+  onShareLocation?: (
+    location: LocationMessagePayload,
+    clientMessageId?: string,
+  ) => unknown | Promise<unknown>;
   conversationName?: string;
   /** "direct"|"private" = 1-1 DM; "group" = nhóm. Poll chỉ hiện khi là nhóm. */
   conversationType?: string;

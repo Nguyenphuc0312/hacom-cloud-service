@@ -63,7 +63,7 @@ interface UseSendMessageResult {
     contentJson?: Record<string, unknown>,
     plainText?: string,
     linkPreview?: LinkPreviewMeta,
-    options?: { location?: LocationMessagePayload },
+    options?: { location?: LocationMessagePayload; clientMessageId?: string },
   ) => unknown | Promise<unknown>;
 }
 
@@ -227,7 +227,7 @@ export const useSendMessage = ({
       contentJson?: Record<string, unknown>,
       plainText?: string,
       linkPreview?: LinkPreviewMeta,
-      options?: { location?: LocationMessagePayload },
+      options?: { location?: LocationMessagePayload; clientMessageId?: string },
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -285,7 +285,7 @@ export const useSendMessage = ({
       };
 
       try {
-        const clientMessageId = createClientMessageId();
+        const clientMessageId = options?.clientMessageId || createClientMessageId();
         const localId = `temp-${clientMessageId}`;
         const sendPromise = sendMessageMutation({
           conversationId: resolvedConversationId,

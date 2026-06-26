@@ -16,6 +16,7 @@ interface AttachmentMenuProps {
   onClose: () => void;
   canShareContact?: boolean;
   canPoll?: boolean;
+  disabledItemIds?: string[];
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   onClose,
   canShareContact = false,
   canPoll = false,
+  disabledItemIds = [],
   className,
 }) => {
   const { t } = useTranslation();
@@ -47,6 +49,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
     {
       id: "location",
       label: t("chat:attachment.types.location"),
+      subtitle: t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí hiện tại" }),
       icon: MapPinIcon,
       color: "bg-success/15 text-success",
       enabled: true,
@@ -143,29 +146,36 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
         className,
       )}
     >
-      {attachmentTypes.map((type) => (
+      {attachmentTypes.map((type) => {
+        const isDisabled = !type.enabled || disabledItemIds.includes(type.id);
+        return (
         <button
           key={type.id}
           type="button"
           role="menuitem"
           tabIndex={0}
-          onClick={() => onSelect(type.id)}
-          disabled={!type.enabled}
+          onClick={() => {
+            if (!isDisabled) onSelect(type.id);
+          }}
+          disabled={isDisabled}
           title={!type.enabled ? (type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })) : undefined}
           className={clsx(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            type.enabled
-              ? "hover:bg-surface-overlay"
+            "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            !isDisabled
+              ? "hover:bg-surface-overlay active:bg-surface-active"
               : "cursor-not-allowed opacity-55",
           )}
         >
           <div className={clsx("p-2 rounded-lg", type.color)}>
-            <type.icon className="w-5 h-5" />
+            <type.icon className="w-5 h-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <span className="text-sm font-medium text-text-secondary">
               {type.label}
             </span>
+            {type.subtitle && !isDisabled && (
+              <p className="text-[11px] text-text-muted">{type.subtitle}</p>
+            )}
             {!type.enabled && (
               <p className="text-[11px] text-text-muted">
                 {type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })}
@@ -173,7 +183,8 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
             )}
           </div>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 };
