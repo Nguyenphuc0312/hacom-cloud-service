@@ -9,7 +9,7 @@ import { RichTextToolbar } from "./RichTextToolbar";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
-import { messageApi, reminderApi } from "../../services/api";
+import { reminderApi } from "../../services/api";
 import {
   PollCreateDialog,
   type PollCreatePayload,
@@ -21,6 +21,7 @@ import {
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
+import { useSendMessageMutation } from "../../features/api/chatApi";
 import { MessageType, type LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
@@ -305,6 +306,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     disabled: submitDisabled,
     onSend,
   });
+
+  // Poll create goes through the RTK mutation (not raw axios) so the new poll
+  // gets an optimistic timeline row + ack-replace — appears instantly, no reload.
+  const [sendPollMessage] = useSendMessageMutation();
 
   // Expose imperative methods to parent components
   React.useImperativeHandle(
@@ -856,14 +861,25 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const handleCreatePoll = React.useCallback(
     (payload: PollCreatePayload) => {
       if (!conversationId) return;
-      messageApi.sendMessage(conversationId, {
+      const clientMessageId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `poll-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sendPollMessage({
+        conversationId,
+        clientMessageId,
+        localId: `temp-${clientMessageId}`,
         content: payload.question,
+        type: MessageType.POLL,
         poll: payload,
-      }).catch(() => {
-        toast.error(t("common:toast.error", { defaultValue: "Không thể tạo bình chọn" }));
-      });
+        senderId: currentUserId ?? undefined,
+      })
+        .unwrap()
+        .catch(() => {
+          toast.error(t("common:toast.error", { defaultValue: "Không thể tạo bình chọn" }));
+        });
     },
-    [conversationId, t],
+    [conversationId, sendPollMessage, currentUserId, t],
   );
 
   const handleCreateReminder = React.useCallback(
