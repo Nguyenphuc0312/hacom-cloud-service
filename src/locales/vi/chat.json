@@ -317,6 +317,22 @@
     "permissionDenied": "Quyền truy cập microphone bị từ chối",
     "tryAgain": "Bấm để thử lại"
   },
+  "audio": {
+    "record": "Gửi tin nhắn thoại",
+    "holdToRecord": "Thoại",
+    "requestingPermission": "Đang yêu cầu quyền microphone...",
+    "ready": "Sẵn sàng ghi âm",
+    "cancel": "Hủy ghi âm",
+    "send": "Gửi tin nhắn thoại",
+    "permissionDenied": "Quyền truy cập microphone bị chặn. Vui lòng kiểm tra cài đặt trình duyệt.",
+    "permissionGuide": "Vào Cài đặt → Quyền riêng tư → Microphone để cấp quyền.",
+    "uploading": "Đang tải lên...",
+    "processing": "Đang xử lý...",
+    "sending": "Đang gửi...",
+    "stopping": "Đang dừng...",
+    "tooShort": "Đoạn ghi âm quá ngắn",
+    "unsupported": "Trình duyệt này chưa hỗ trợ ghi âm"
+  },
   "image": {
     "failedToLoad": "Không tải được ảnh",
     "previewAlt": "Xem trước ảnh",

@@ -64,9 +64,10 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
     {
       id: "audio",
       label: t("chat:attachment.types.audio"),
+      subtitle: t("chat:attachment.types.audioSubtitle", { defaultValue: "Gửi tin nhắn thoại" }),
       icon: MusicalNoteIcon,
       color: "bg-accent/15 text-accent",
-      enabled: false,
+      enabled: true,
     },
     {
       id: "poll",

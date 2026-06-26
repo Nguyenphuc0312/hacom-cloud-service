@@ -317,6 +317,22 @@
     "permissionDenied": "Microphone access denied",
     "tryAgain": "Click to try again"
   },
+  "audio": {
+    "record": "Record voice message",
+    "holdToRecord": "Voice",
+    "requestingPermission": "Requesting microphone...",
+    "ready": "Ready to record",
+    "cancel": "Cancel recording",
+    "send": "Send voice message",
+    "permissionDenied": "Microphone access is blocked. Check your browser settings.",
+    "permissionGuide": "Go to Settings → Privacy → Microphone to enable access.",
+    "uploading": "Uploading...",
+    "processing": "Processing...",
+    "sending": "Sending...",
+    "stopping": "Stopping...",
+    "tooShort": "Recording too short",
+    "unsupported": "This browser does not support audio recording"
+  },
   "image": {
     "failedToLoad": "Failed to load image",
     "previewAlt": "Image preview",
