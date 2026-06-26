@@ -21,7 +21,7 @@ import {
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
-import type { LocationMessagePayload } from "../../types";
+import { MessageType, type LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 import {
@@ -238,7 +238,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       });
       // Create VOICE message referencing uploaded file
       await messageApi.sendMessage(conversationId, {
-        type: "voice" as any,
+        type: MessageType.VOICE,
         clientMessageId,
         content: "",
         attachments: [{
@@ -261,8 +261,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   }, [audioStopRecording, audioUpload, conversationId, audioReset, t]);
 
   const handleAudioStart = React.useCallback(async () => {
-    await audioRequestPermission();
-    audioStartRecording();
+    const permissionReady = await audioRequestPermission();
+    if (permissionReady) {
+      audioStartRecording();
+    }
   }, [audioRequestPermission, audioStartRecording]);
 
   const canStartAudio = !disabled && navigator?.mediaDevices?.getUserMedia != null;
@@ -491,6 +493,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         }
         setLocationError(null);
         setPendingLocation(null);
+        const requestSeq = locationRequestSeqRef.current + 1;
+        locationRequestSeqRef.current = requestSeq;
         const clientMessageId = createLocationClientMessageId();
         setLocationFlow({ status: "requesting_permission", clientMessageId });
         if (typeof window !== "undefined" && !window.isSecureContext && !isLocalhost()) {
@@ -513,7 +517,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         setLocationFlowState("acquiring_location");
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || locationRequestSeqRef.current !== requestSeq) return;
             setPendingLocation({
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
@@ -525,7 +529,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             setLocationFlowState("confirming");
           },
           (error) => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || locationRequestSeqRef.current !== requestSeq) return;
             setLocationFlowState("error");
             if (error.code === error.PERMISSION_DENIED) {
               setLocationError(
@@ -565,6 +569,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       } else if (type === "reminder") {
         setIsReminderDialogOpen(true);
       } else if (type === "audio") {
+        if (locationFlowState !== "idle") {
+          setShowAttachmentMenu(false);
+          return;
+        }
         if (!canStartAudio) {
           toast.warning(t("chat:audio.unsupported", { defaultValue: "This browser does not support audio recording" }));
         } else {
@@ -577,12 +585,18 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     },
     [
       attachmentsDisabled,
+      canStartAudio,
       conversationId,
       currentUserId,
       disabledReason,
+      handleAudioStart,
+      locationFlowState,
       onShareContact,
       onShareLocation,
       openFilePicker,
+      setLocationError,
+      setLocationFlowState,
+      setPendingLocation,
       t,
     ],
   );
@@ -617,7 +631,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         }),
       );
     }
-  }, [locationFlow.clientMessageId, locationFlowState, onShareLocation, optimisticAnnouncement, pendingLocation, t]);
+  }, [
+    locationFlow.clientMessageId,
+    locationFlowState,
+    onShareLocation,
+    optimisticAnnouncement,
+    pendingLocation,
+    setLocationError,
+    setLocationFlowState,
+    setPendingLocation,
+    t,
+  ]);
 
   const handleSendText = React.useCallback(async () => {
     if (!messageValidation.canSendInlineMessage) {
@@ -1197,7 +1221,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
         {locationFlowState !== "idle" && (
           <div
-            className="mb-2 rounded-lg border border-border bg-surface px-3 py-3 shadow-sm"
+            className="mb-2 ml-auto w-full max-w-[440px] rounded-lg border border-border bg-surface px-4 py-3 shadow-lg shadow-black/10 sm:w-[min(440px,calc(100vw-32px))]"
             role="dialog"
             aria-modal="false"
             aria-labelledby="composer-location-title"
@@ -1205,24 +1229,19 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           >
             {(locationFlowState === "requesting_permission" ||
               locationFlowState === "acquiring_location") && (
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <div className="min-w-0 flex-1">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
                     Đang xác định vị trí của bạn
                   </p>
                   <p id="composer-location-description" className="text-xs text-text-muted">
                     Quá trình này có thể mất vài giây
                   </p>
-                  <p className="text-sm font-medium text-text-primary">
-                    {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
-                  </p>
-                  <p className="text-xs text-text-muted">
-                    {t("chat:location.acquiring", { defaultValue: "Đang lấy vị trí..." })}
-                  </p>
                 </div>
                 <button
                   type="button"
-                  className="rounded-md px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-overlay"
+                  className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
                   onClick={resetLocationFlow}
                 >
                   {t("common:cancel", { defaultValue: "Hủy" })}
@@ -1231,8 +1250,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             )}
 
             {locationFlowState === "confirming" && pendingLocation && (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+              <div className="space-y-3">
+                <div className="min-w-0">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
                     Gửi vị trí hiện tại
                   </p>
@@ -1261,9 +1280,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                       Vị trí đã được lấy từ vài phút trước.
                     </p>
                   )}
-                  <p className="text-sm font-medium text-text-primary">
-                    {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
-                  </p>
                   {typeof pendingLocation.accuracyM === "number" && (
                     <p className="text-xs text-text-muted">
                       {t("chat:location.accuracy", {
@@ -1273,47 +1289,63 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
                     {t("common:cancel", { defaultValue: "Hủy" })}
                   </button>
                   <button
                     type="button"
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
+                    aria-label={t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
                   >
-                    {t("common:send", { defaultValue: "Gửi" })}
+                    {t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
                   </button>
                 </div>
               </div>
             )}
 
             {(locationFlowState === "sending" || locationFlowState === "retrying") && (
-              <p className="text-sm text-text-secondary">
-                {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
-              </p>
+              <div className="space-y-3">
+                <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                  Gửi vị trí hiện tại
+                </p>
+                <p id="composer-location-description" className="text-xs text-text-muted">
+                  {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white opacity-80"
+                    disabled
+                  >
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
+                    {t("chat:location.sendingShort", { defaultValue: "Đang gửi..." })}
+                  </button>
+                </div>
+              </div>
             )}
 
             {["error", "permission_denied", "permission_blocked", "timeout", "unavailable", "send_failed"].includes(locationFlowState) && (
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-3">
                 <p className="text-sm text-danger">
                   {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
                     {t("common:cancel", { defaultValue: "Hủy" })}
                   </button>
                   <button
                     type="button"
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90"
                     onClick={() =>
                       pendingLocation
                         ? void confirmLocationSend()

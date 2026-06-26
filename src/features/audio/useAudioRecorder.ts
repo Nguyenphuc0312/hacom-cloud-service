@@ -32,6 +32,7 @@ const MIME_CANDIDATES = [
 
 const ANALYSER_FFT = 256;
 const AMPLITUDE_BARS = 40;
+const PERMISSION_REQUEST_TIMEOUT_MS = 25_000;
 
 // ---------------------------------------------------------------------------
 // Hook return type
@@ -46,7 +47,7 @@ interface UseAudioRecorderReturn {
   selectedMime: string;
   permissionState: PermissionState | null;
 
-  requestPermission: () => Promise<void>;
+  requestPermission: () => Promise<boolean>;
   startRecording: () => void;
   stopRecording: () => Promise<RecordedClip>;
   cancelRecording: () => void;
@@ -70,6 +71,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     useState<PermissionState | null>(null);
 
   // Refs — survive re-renders, cleaned up on unmount/cancel
+  const stateRef = useRef<AudioRecorderState>("IDLE");
+  const activeRequestIdRef = useRef(0);
+  const mountedRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -77,20 +81,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const animFrameRef = useRef(0);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const permissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedMimeRef = useRef("");
 
   // ---- State transition helper ----
   const transition = useCallback(
     (to: AudioRecorderState): boolean => {
-      let currentState: AudioRecorderState = "IDLE";
-      setState((prev) => {
-        currentState = prev;
-        return prev;
-      });
-
-      // Re-read current state
-      const from = currentState;
+      const from = stateRef.current;
       const allowed = ALLOWED_TRANSITIONS.get(from);
       if (!allowed?.has(to)) {
         console.warn(
@@ -98,6 +98,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         );
         return false;
       }
+      stateRef.current = to;
       setState(to);
       return true;
     },
@@ -107,6 +108,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const setErrorState = useCallback(
     (code: AudioRecorderErrorCode, message: string, retryable = false) => {
       setError({ code, message, retryable });
+      stateRef.current = "FAILED";
       setState("FAILED");
     },
     [],
@@ -114,6 +116,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   // ---- Cleanup ALL resources ----
   const fullCleanup = useCallback(() => {
+    activeRequestIdRef.current += 1;
+    if (permissionTimeoutRef.current) {
+      clearTimeout(permissionTimeoutRef.current);
+      permissionTimeoutRef.current = null;
+    }
     // Stop timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -134,19 +141,32 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.onerror = null;
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // Recorder may already be inactive/stopping.
+      }
     }
+    mediaRecorderRef.current = null;
     // Stop all MediaStream tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        t.onended = null;
+        if (t.readyState !== "ended") t.stop();
+      });
       streamRef.current = null;
     }
     // Close AudioContext
+    sourceNodeRef.current?.disconnect();
+    sourceNodeRef.current = null;
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
-      analyserRef.current = null;
     }
     // Clear chunks
     chunksRef.current = [];
@@ -161,7 +181,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   // ---- Unmount cleanup ----
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       fullCleanup();
     };
   }, [fullCleanup]);
@@ -194,17 +216,21 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const probeMime = useCallback(() => {
     for (const mime of MIME_CANDIDATES) {
       if (MediaRecorder.isTypeSupported(mime)) {
+        selectedMimeRef.current = mime;
         setSelectedMime(mime);
         return mime;
       }
     }
+    selectedMimeRef.current = "";
     setSelectedMime("");
     return "";
   }, []);
 
   // ---- Request microphone permission ----
-  const requestPermission = useCallback(async () => {
-    if (!transition("REQUESTING_PERMISSION")) return;
+  const requestPermission = useCallback(async (): Promise<boolean> => {
+    if (!transition("REQUESTING_PERMISSION")) return false;
+    const requestId = activeRequestIdRef.current + 1;
+    activeRequestIdRef.current = requestId;
 
     // HTTPS check (except localhost)
     if (
@@ -218,7 +244,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         "Microphone requires HTTPS (except localhost).",
         false,
       );
-      return;
+      return false;
     }
 
     // Browser support check
@@ -231,8 +257,22 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         "Audio recording is not supported in this browser.",
         false,
       );
-      return;
+      return false;
     }
+
+    permissionTimeoutRef.current = setTimeout(() => {
+      if (
+        mountedRef.current &&
+        activeRequestIdRef.current === requestId &&
+        stateRef.current === "REQUESTING_PERMISSION"
+      ) {
+        setErrorState(
+          "PERMISSION_DENIED",
+          "Không thể truy cập microphone. Hãy thử lại hoặc kiểm tra quyền microphone của trình duyệt.",
+          true,
+        );
+      }
+    }, PERMISSION_REQUEST_TIMEOUT_MS);
 
     try {
       // Check permission state
@@ -243,12 +283,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           });
           setPermissionState(status.state);
           if (status.state === "denied") {
+            if (permissionTimeoutRef.current) {
+              clearTimeout(permissionTimeoutRef.current);
+              permissionTimeoutRef.current = null;
+            }
             setErrorState(
               "PERMISSION_BLOCKED",
               "Microphone access is blocked. Please enable it in your browser settings.",
               false,
             );
-            return;
+            return false;
           }
         } catch {
           // Permissions API may not be available
@@ -265,42 +309,110 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         },
       });
 
-      streamRef.current = stream;
+      if (
+        !mountedRef.current ||
+        activeRequestIdRef.current !== requestId ||
+        stateRef.current !== "REQUESTING_PERMISSION"
+      ) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
 
-      // Set up Web Audio analyser
-      const audioCtx = new AudioContext();
-      audioCtxRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = ANALYSER_FFT;
-      analyser.smoothingTimeConstant = 0.3;
-      source.connect(analyser);
-      analyserRef.current = analyser;
+      if (permissionTimeoutRef.current) {
+        clearTimeout(permissionTimeoutRef.current);
+        permissionTimeoutRef.current = null;
+      }
+
+      streamRef.current = stream;
+      stream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+          if (
+            mountedRef.current &&
+            activeRequestIdRef.current === requestId &&
+            stateRef.current === "RECORDING"
+          ) {
+            setErrorState(
+              "RECORDING_INTERRUPTED",
+              "Microphone stopped unexpectedly.",
+              true,
+            );
+            fullCleanup();
+          }
+        };
+      });
+
+      // Set up Web Audio analyser as a visual enhancement only.
+      try {
+        const audioCtx = new AudioContext();
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume().catch(() => undefined);
+        }
+        audioCtxRef.current = audioCtx;
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = ANALYSER_FFT;
+        analyser.smoothingTimeConstant = 0.3;
+        source.connect(analyser);
+        sourceNodeRef.current = source;
+        analyserRef.current = analyser;
+      } catch {
+        sourceNodeRef.current = null;
+        analyserRef.current = null;
+      }
 
       probeMime();
-      transition("READY");
+      return transition("READY");
     } catch (err) {
-      const message =
-        err instanceof DOMException
-          ? err.name === "NotAllowedError"
-            ? "Microphone access was denied."
-            : err.name === "NotFoundError"
-              ? "No microphone found."
-              : err.message
-          : (err as Error).message;
+      if (
+        !mountedRef.current ||
+        activeRequestIdRef.current !== requestId ||
+        stateRef.current !== "REQUESTING_PERMISSION"
+      ) {
+        return false;
+      }
+      if (permissionTimeoutRef.current) {
+        clearTimeout(permissionTimeoutRef.current);
+        permissionTimeoutRef.current = null;
+      }
 
-      setErrorState(
-        message.includes("denied") || message.includes("NotAllowed")
-          ? "PERMISSION_DENIED"
-          : "RECORDER_UNSUPPORTED",
-        message,
-        true,
-      );
+      const errorName = err instanceof DOMException ? err.name : "";
+      if (errorName === "NotAllowedError") {
+        setErrorState(
+          "PERMISSION_DENIED",
+          "Không thể truy cập microphone. Hãy cho phép trình duyệt sử dụng microphone để gửi tin nhắn thoại.",
+          true,
+        );
+      } else if (errorName === "NotFoundError") {
+        setErrorState(
+          "RECORDER_UNSUPPORTED",
+          "Không tìm thấy microphone. Hãy kiểm tra thiết bị thu âm của bạn.",
+          false,
+        );
+      } else if (errorName === "NotReadableError") {
+        setErrorState(
+          "RECORDING_INTERRUPTED",
+          "Microphone đang được ứng dụng khác sử dụng.",
+          true,
+        );
+      } else if (errorName === "SecurityError") {
+        setErrorState(
+          "RECORDER_UNSUPPORTED",
+          "Không thể sử dụng microphone trong kết nối hiện tại.",
+          false,
+        );
+      } else {
+        setErrorState(
+          "RECORDER_UNSUPPORTED",
+          err instanceof Error ? err.message : "Không thể bắt đầu ghi âm.",
+          true,
+        );
+      }
+      return false;
     }
-  }, [transition, setErrorState, probeMime]);
+  }, [transition, setErrorState, fullCleanup, probeMime]);
 
   // ---- Start recording ----
-  const startRecording = useCallback(() => {
+  function startRecording(): void {
     if (!transition("RECORDING")) return;
 
     const stream = streamRef.current;
@@ -308,14 +420,21 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       setErrorState("RECORDER_UNSUPPORTED", "No microphone stream.", false);
       return;
     }
+    if (stream.getAudioTracks().every((track) => track.readyState === "ended")) {
+      setErrorState(
+        "RECORDING_INTERRUPTED",
+        "Microphone stopped before recording could start.",
+        true,
+      );
+      return;
+    }
 
-    fullCleanup();
     chunksRef.current = [];
 
-    const mime = selectedMime || undefined;
+    const mime = selectedMimeRef.current || undefined;
     try {
       const recorder = new MediaRecorder(stream, {
-        mimeType: mime,
+        ...(mime ? { mimeType: mime } : {}),
         audioBitsPerSecond: 128000,
       });
       mediaRecorderRef.current = recorder;
@@ -330,6 +449,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           "Recording was interrupted.",
           true,
         );
+        fullCleanup();
       };
 
       recorder.start(250);
@@ -359,15 +479,15 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     } catch (err) {
       setErrorState(
         "RECORDER_UNSUPPORTED",
-        `Cannot create recorder: ${(err as Error).message}`,
+        `Không thể bắt đầu ghi âm: ${(err as Error).message}`,
         false,
       );
-      setState("READY");
+      fullCleanup();
     }
-  }, [transition, fullCleanup, selectedMime, startAmplitudeLoop, setErrorState]);
+  }
 
   // ---- Stop recording ----
-  const stopRecording = useCallback((): Promise<RecordedClip> => {
+  function stopRecording(): Promise<RecordedClip> {
     return new Promise((resolve, reject) => {
       if (!transition("STOPPING")) {
         reject(new Error("Invalid state transition"));
@@ -431,7 +551,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       recorder.requestData();
       recorder.stop();
     });
-  }, [transition, setErrorState]);
+  }
 
   // ---- Cancel recording ----
   const cancelRecording = useCallback(() => {
@@ -453,8 +573,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const reset = useCallback(() => {
     fullCleanup();
     setError(null);
+    stateRef.current = "IDLE";
     setState("IDLE");
     setPermissionState(null);
+    selectedMimeRef.current = "";
     setSelectedMime("");
   }, [fullCleanup]);
 

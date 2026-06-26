@@ -56,7 +56,6 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
   elapsedMs,
   amplitude,
   error,
-  permissionState: _permissionState,
   onCancel,
   onSend,
   onRequestPermission,
@@ -103,18 +102,28 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
   // ---- REQUESTING_PERMISSION ----
   if (state === "REQUESTING_PERMISSION") {
     return (
-      <div className="flex items-center gap-3 px-3 py-2 border-t border-border-light bg-surface">
-        <div className="flex items-center gap-2 text-text-muted">
-          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">
-            {t("chat:audio.requestingPermission", {
-              defaultValue: "Requesting microphone...",
-            })}
-          </span>
+      <div
+        className="mb-2 flex max-w-[440px] items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 shadow-sm"
+        aria-live="polite"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-text-muted">
+          <div className="h-4 w-4 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text-primary">
+              {t("chat:audio.requestingPermission", {
+                defaultValue: "Đang chờ quyền microphone",
+              })}
+            </p>
+            <p className="text-xs text-text-muted">
+              {t("chat:audio.permissionPromptHint", {
+                defaultValue: "Hãy chọn Cho phép trong trình duyệt.",
+              })}
+            </p>
+          </div>
         </div>
         <button
           onClick={onCancel}
-          className="ml-auto px-3 py-1 text-sm text-text-muted hover:text-text"
+          className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay hover:text-text-primary"
           aria-label={t("common:cancel")}
         >
           {t("common:cancel")}
@@ -189,22 +198,20 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
   // ---- RECORDING ----
   if (state === "RECORDING") {
     return (
-      <div className="flex flex-col gap-2 px-3 py-2 border-t border-border-light bg-surface">
-        {/* Timer + Status */}
-        <div className="flex items-center gap-3">
+      <div className="mb-2 flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 shadow-sm" aria-live="polite">
           <button
             onClick={onCancel}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-error/10 text-error hover:bg-error/20 transition-colors"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-error/10 text-error transition-colors hover:bg-error/20"
             aria-label={t("chat:audio.cancel", { defaultValue: "Cancel recording" })}
           >
-            <TrashIcon className="w-5 h-5" />
+          <TrashIcon className="h-4 w-4" />
           </button>
 
-          <div className="flex items-center gap-2 flex-1">
-            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" aria-label={t("chat:voice.recording", { defaultValue: "Recording" })} />
             <span
               className={clsx(
-                "text-lg font-mono font-semibold tabular-nums",
+              "font-mono text-sm font-semibold tabular-nums",
                 isWarning ? "text-error" : "text-text",
               )}
             >
@@ -214,17 +221,7 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
             </span>
           </div>
 
-          <button
-            onClick={onSend}
-            className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-white hover:bg-primary-hover transition-colors"
-            aria-label={t("chat:audio.send", { defaultValue: "Send voice message" })}
-          >
-            <SendIcon className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Real amplitude waveform */}
-        <div className="flex items-end h-12 gap-[2px]">
+        <div className="flex h-8 min-w-[120px] flex-1 items-end gap-[2px]">
           {displayAmplitude.map((v, i) => (
             <div
               key={i}
@@ -237,6 +234,14 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
             />
           ))}
         </div>
+
+        <button
+          onClick={onSend}
+          className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
+          aria-label={t("chat:audio.send", { defaultValue: "Send voice message" })}
+        >
+          {t("chat:audio.send", { defaultValue: "Gửi" })}
+        </button>
       </div>
     );
   }
@@ -316,22 +321,6 @@ const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-    />
-  </svg>
-);
-
-const SendIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
     />
   </svg>
 );
