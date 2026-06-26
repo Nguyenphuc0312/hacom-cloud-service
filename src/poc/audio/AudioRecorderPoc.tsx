@@ -536,7 +536,6 @@ export const AudioRecorderPoc: React.FC = () => {
   }, [fullCleanup, cleanupClip]);
 
   // -- derived values -------------------------------------------------------
-  const durationMs = clip ? clip.durationMs : elapsedMs;
   const canStartRecording = recorderState === "ready";
 
   // =========================================================================
@@ -584,7 +583,7 @@ export const AudioRecorderPoc: React.FC = () => {
       </div>
 
       {/* ---- Recording controls ---- */}
-      {canStartRecording && recorderState !== "recording" && (
+      {canStartRecording && (
         <div style={{ marginBottom: 16 }}>
           <button onClick={startRecording} style={btnStyle("red")}>
             Start Recording

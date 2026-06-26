@@ -90,7 +90,7 @@ export interface AudioMessageSendResult {
 /**
  * Allowed transitions. Any transition not listed here is forbidden.
  */
-export const ALLOWED_TRANSITIONS: ReadonlyMap<AudioRecorderState, ReadonlySet<AudioRecorderState>> = new Map([
+export const ALLOWED_TRANSITIONS: ReadonlyMap<AudioRecorderState, ReadonlySet<AudioRecorderState>> = new Map<AudioRecorderState, ReadonlySet<AudioRecorderState>>([
   ["IDLE", new Set(["REQUESTING_PERMISSION"])],
   ["REQUESTING_PERMISSION", new Set(["READY", "FAILED", "CANCELLED"])],
   ["READY", new Set(["RECORDING", "CANCELLED"])],
