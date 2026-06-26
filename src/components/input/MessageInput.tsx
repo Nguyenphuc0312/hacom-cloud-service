@@ -21,6 +21,7 @@ import {
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
+import type { LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 import {
@@ -81,6 +82,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     composerMode = "online",
     currentUserId,
     onShareContact,
+    onShareLocation,
     conversationName,
     conversationType,
     // Multi-file upload queue
@@ -125,7 +127,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
   const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
+  const [locationFlowState, setLocationFlowState] = React.useState<
+    "idle" | "requesting_permission" | "acquiring_location" | "confirming" | "sending" | "sent" | "error"
+  >("idle");
+  const [pendingLocation, setPendingLocation] = React.useState<LocationMessagePayload | null>(null);
+  const [locationError, setLocationError] = React.useState<string | null>(null);
   const primarySendLockedRef = React.useRef(false);
+  const isMountedRef = React.useRef(true);
   const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
 
   const mentionListId = React.useId();
@@ -147,6 +155,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       renderCountRef.current += 1;
     }
   });
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const {
     isSending,
@@ -333,6 +348,70 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
       if (type === "photo" || type === "document") {
         openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
+      } else if (type === "location") {
+        if (!onShareLocation) {
+          toast.info(t("common:toast.featureInDevelopment"));
+          setShowAttachmentMenu(false);
+          return;
+        }
+        setLocationError(null);
+        setPendingLocation(null);
+        setLocationFlowState("requesting_permission");
+        if (!("geolocation" in navigator)) {
+          setLocationFlowState("error");
+          setLocationError(
+            t("chat:location.unavailable", {
+              defaultValue: "Trình duyệt hiện không hỗ trợ lấy vị trí.",
+            }),
+          );
+          setShowAttachmentMenu(false);
+          return;
+        }
+
+        setLocationFlowState("acquiring_location");
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (!isMountedRef.current) return;
+            setPendingLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              ...(typeof position.coords.accuracy === "number"
+                ? { accuracyM: position.coords.accuracy }
+                : {}),
+              capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
+            });
+            setLocationFlowState("confirming");
+          },
+          (error) => {
+            if (!isMountedRef.current) return;
+            setLocationFlowState("error");
+            if (error.code === error.PERMISSION_DENIED) {
+              setLocationError(
+                t("chat:location.permissionDenied", {
+                  defaultValue:
+                    "Bạn đã từ chối quyền vị trí. Hãy bật quyền vị trí cho trình duyệt rồi thử lại.",
+                }),
+              );
+            } else if (error.code === error.TIMEOUT) {
+              setLocationError(
+                t("chat:location.timeout", {
+                  defaultValue: "Không lấy được vị trí trong thời gian chờ. Bạn có thể thử lại.",
+                }),
+              );
+            } else {
+              setLocationError(
+                t("chat:location.failed", {
+                  defaultValue: "Không thể lấy vị trí hiện tại. Vui lòng thử lại.",
+                }),
+              );
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          },
+        );
       } else if (type === "contact") {
         if (onShareContact && currentUserId && conversationId) {
           setIsShareContactOpen(true);
@@ -354,10 +433,43 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       currentUserId,
       disabledReason,
       onShareContact,
+      onShareLocation,
       openFilePicker,
       t,
     ],
   );
+
+  const resetLocationFlow = React.useCallback(() => {
+    setLocationFlowState("idle");
+    setPendingLocation(null);
+    setLocationError(null);
+  }, []);
+
+  const confirmLocationSend = React.useCallback(async () => {
+    if (!pendingLocation || !onShareLocation) return;
+    setLocationFlowState("sending");
+    setLocationError(null);
+    try {
+      await Promise.resolve(onShareLocation(pendingLocation));
+      if (!isMountedRef.current) return;
+      setLocationFlowState("sent");
+      setPendingLocation(null);
+      setLiveRegionMessage(optimisticAnnouncement);
+      window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setLocationFlowState("idle");
+        }
+      }, 300);
+    } catch {
+      if (!isMountedRef.current) return;
+      setLocationFlowState("error");
+      setLocationError(
+        t("chat:location.sendFailed", {
+          defaultValue: "Gửi vị trí thất bại. Bạn có thể thử gửi lại.",
+        }),
+      );
+    }
+  }, [onShareLocation, optimisticAnnouncement, pendingLocation, t]);
 
   const handleSendText = React.useCallback(async () => {
     if (!messageValidation.canSendInlineMessage) {
@@ -915,6 +1027,101 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             draftValue={draftValue}
             onMetaChange={setPendingLinkPreview}
           />
+        )}
+
+        {locationFlowState !== "idle" && (
+          <div className="mb-2 rounded-lg border border-border bg-surface px-3 py-2 shadow-sm">
+            {(locationFlowState === "requesting_permission" ||
+              locationFlowState === "acquiring_location") && (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">
+                    {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {t("chat:location.acquiring", { defaultValue: "Đang lấy vị trí..." })}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-overlay"
+                  onClick={resetLocationFlow}
+                >
+                  {t("common:cancel", { defaultValue: "Hủy" })}
+                </button>
+              </div>
+            )}
+
+            {locationFlowState === "confirming" && pendingLocation && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">
+                    {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
+                  </p>
+                  {typeof pendingLocation.accuracyM === "number" && (
+                    <p className="text-xs text-text-muted">
+                      {t("chat:location.accuracy", {
+                        accuracy: `${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
+                        defaultValue: `Độ chính xác ${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
+                      })}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    onClick={resetLocationFlow}
+                  >
+                    {t("common:cancel", { defaultValue: "Hủy" })}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+                    onClick={() => void confirmLocationSend()}
+                  >
+                    {t("common:send", { defaultValue: "Gửi" })}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {locationFlowState === "sending" && (
+              <p className="text-sm text-text-secondary">
+                {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
+              </p>
+            )}
+
+            {locationFlowState === "error" && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-danger">
+                  {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    onClick={resetLocationFlow}
+                  >
+                    {t("common:cancel", { defaultValue: "Hủy" })}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+                    onClick={() =>
+                      pendingLocation
+                        ? void confirmLocationSend()
+                        : handleAttachmentSelect("location")
+                    }
+                  >
+                    {pendingLocation
+                      ? t("common:retry", { defaultValue: "Thử lại" })
+                      : t("chat:location.retry", { defaultValue: "Lấy lại vị trí" })}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Multi-file upload tray */}

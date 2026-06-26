@@ -20,7 +20,7 @@ import type {
   LinkPreviewData,
 } from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
-import type { Attachment, Conversation, Mention, Message } from "../../types";
+import type { Attachment, Conversation, LocationMessagePayload, Mention, Message } from "../../types";
 import {
   buildConversationMessagesCache,
   markMessageFailedInCache,
@@ -79,6 +79,7 @@ export interface SendMessageInput {
     displayName: string;
   }[];
   attachments?: SendMessageAttachmentInput[];
+  location?: LocationMessagePayload;
   /** OG metadata pre-fetched in the composer; BE persists into message.metadata.linkPreview */
   linkPreview?: {
     url: string;
@@ -343,6 +344,7 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
         }
       : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+    ...(input.location ? { location: input.location } : {}),
     ...(input.linkPreview
       ? { metadata: { linkPreview: input.linkPreview } }
       : {}),
@@ -513,6 +515,7 @@ export const chatApi = createApi({
               ?.filter((m) => m.userId !== "all")
               .map((m) => m.userId),
             attachments: input.attachments,
+            location: input.location,
             linkPreview: input.linkPreview,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
