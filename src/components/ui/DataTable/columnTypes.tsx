@@ -131,7 +131,6 @@ export interface RowAction<T = unknown> {
  */
 export function renderRowActions<T extends object>(
   actions: RowAction<T>[],
-  _onAction?: (action: RowAction<T>, record: T) => void,
 ): ReactNode {
   return (
     <div className="admin-row-actions">

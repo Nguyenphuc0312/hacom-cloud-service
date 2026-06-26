@@ -39,7 +39,6 @@ export interface DataTableProps<T extends object> extends Omit<TableProps<T>, 'p
  */
 export function DataTable<T extends object>({
   virtualScroll = false,
-  virtualRowHeight = 54,
   loadingSkeletonRows = 6,
   minHeight = 320,
   scroll,
