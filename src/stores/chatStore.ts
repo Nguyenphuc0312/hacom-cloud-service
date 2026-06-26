@@ -570,6 +570,50 @@ const normalizeMentions = (value: unknown): Message["mentions"] => {
   return result;
 };
 
+const normalizeLocationPayload = (
+  source: Record<string, unknown>,
+): Message["location"] => {
+  const content = asRecord(source.content);
+  const metadata = asRecord(source.metadata);
+  const location =
+    asRecord(source.location) ??
+    asRecord(content?.location) ??
+    asRecord(metadata?.location) ??
+    asRecord(source.locationData);
+
+  if (!location) return undefined;
+
+  const latitude =
+    asNumberValue(location.latitude) ?? asNumberValue(location.lat);
+  const longitude =
+    asNumberValue(location.longitude) ?? asNumberValue(location.lng);
+  const capturedAt =
+    asStringValue(location.capturedAt) ??
+    asStringValue(location.captured_at);
+
+  if (
+    latitude === undefined ||
+    longitude === undefined ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !capturedAt
+  ) {
+    return undefined;
+  }
+
+  const accuracyM =
+    asNumberValue(location.accuracyM) ?? asNumberValue(location.accuracy_m);
+
+  return {
+    latitude,
+    longitude,
+    ...(accuracyM !== undefined ? { accuracyM } : {}),
+    capturedAt,
+  };
+};
+
 const normalizeMessage = (
   input: unknown,
   fallbackConversationId?: string,
@@ -779,6 +823,7 @@ const normalizeMessage = (
     attachments: normalizeAttachments(source.attachments),
     reactions: normalizeReactions(source.reactions),
     mentions: normalizeMentions(source.mentions),
+    location: normalizeLocationPayload(source),
     status,
     isEdited: Boolean(source.isEdited),
     isPinned: Boolean(source.isPinned),
@@ -802,6 +847,8 @@ const normalizeMessage = (
       : [],
   };
 };
+
+export const __normalizeMessageForTest = normalizeMessage;
 
 const toDateValue = (value: unknown): number => {
   if (value instanceof Date) return value.getTime();
