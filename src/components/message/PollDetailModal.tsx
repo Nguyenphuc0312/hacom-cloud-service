@@ -235,7 +235,7 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                               <div
                                 key={uid}
                                 title={p.name}
-                                className="ring-[1.5px] ring-surface"
+                                className="rounded-full"
                                 style={{ marginLeft: i === 0 ? 0 : -6, zIndex: 3 - i }}
                               >
                                 <Avatar src={p.avatar} alt={p.name} size="xs" />
@@ -268,16 +268,23 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
             </>
           ) : (
             /* ── Detail view: voters grouped per option ── */
-            <div className="space-y-4">
+            <div className="space-y-5">
               {poll.options.map((option) => {
                 const voters = poll.anonymous ? [] : option.voterIds ?? [];
                 if (voters.length === 0) return null;
                 return (
                   <div key={option.id}>
-                    <p className="mb-2 text-[13px] font-semibold text-text-primary">
-                      {option.text} ({voters.length})
-                    </p>
-                    <div className="space-y-1">
+                    {/* Option header: text + count chip */}
+                    <div className="mb-2.5 flex items-center gap-2">
+                      <span className="truncate text-[13.5px] font-semibold text-text-primary">
+                        {option.text}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-[#1565C0]/[0.1] px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-[#1565C0]">
+                        {voters.length}
+                      </span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                    <div className="space-y-0.5">
                       {voters.map((uid) => {
                         const p = getProfile(uid);
                         const subtitle = [p.position, p.department].filter(Boolean).join(" · ");
@@ -286,7 +293,7 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                             key={uid}
                             type="button"
                             onClick={() => onViewProfile(uid)}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[#1565C0]/[0.06]"
+                            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-[#1565C0]/[0.06]"
                           >
                             <Avatar src={p.avatar} alt={p.name} size="sm" />
                             <div className="min-w-0 flex-1">
@@ -299,7 +306,7 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                                 )}
                               </span>
                               {subtitle && (
-                                <span className="block truncate text-[11.5px] text-text-muted">
+                                <span className="mt-0.5 block truncate text-[11.5px] text-text-muted">
                                   {subtitle}
                                 </span>
                               )}
