@@ -1,5 +1,5 @@
 import type { ComposerMode } from "../../../hooks/useComposerAvailability";
-import type { InputMode, Message } from "../../../types";
+import type { InputMode, LocationMessagePayload, Message } from "../../../types";
 import type { AttachmentDraft } from "../../../types/attachmentDraft";
 
 export interface MentionCandidate {
@@ -49,6 +49,7 @@ export interface MessageInputProps {
   composerMode?: ComposerMode;
   currentUserId?: string;
   onShareContact?: (contactUserId: string) => Promise<void>;
+  onShareLocation?: (location: LocationMessagePayload) => unknown | Promise<unknown>;
   conversationName?: string;
   /** "direct"|"private" = 1-1 DM; "group" = nhóm. Poll chỉ hiện khi là nhóm. */
   conversationType?: string;

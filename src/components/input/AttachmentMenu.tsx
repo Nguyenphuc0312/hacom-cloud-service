@@ -49,7 +49,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       label: t("chat:attachment.types.location"),
       icon: MapPinIcon,
       color: "bg-success/15 text-success",
-      enabled: false,
+      enabled: true,
     },
     {
       id: "contact",

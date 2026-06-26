@@ -11,6 +11,7 @@ import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
 import { PollMessage } from "../../message/PollMessage";
+import { LocationMessage } from "../../message/LocationMessage";
 import { MessageLinkPreview } from "../../message/MessageLinkPreview";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
@@ -534,6 +535,20 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 onToggleTextExpand,
               )}
         </div>
+      );
+    case MessageType.LOCATION:
+      return message.location ? (
+        <LocationMessage location={message.location} isOwn={isOwn} />
+      ) : (
+        renderTextContent(
+          message,
+          isOwn,
+          currentUsername,
+          currentUserId,
+          textRenderMode,
+          isCollapsibleText,
+          onToggleTextExpand,
+        )
       );
     case MessageType.CONTACT:
       return contactPayload ? (

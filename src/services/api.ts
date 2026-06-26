@@ -37,7 +37,7 @@ import type {
   UploadSignedUrlResponse,
 } from "@hacom/chat-shared-types/chat";
 import type { User } from "../stores/authStore";
-import type { Attachment, Conversation, Message } from "../types";
+import type { Attachment, Conversation, LocationMessagePayload, Message } from "../types";
 import { RoomMemberRole } from "../types";
 import {
   normalizeConversation,
@@ -1230,6 +1230,7 @@ export const messageApi = {
         siteName?: string;
         favicon?: string;
       };
+      location?: LocationMessagePayload;
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -1265,6 +1266,7 @@ export const messageApi = {
     if (data.plainText) body.plainText = data.plainText;
     if (data.mentions?.length) body.mentions = data.mentions;
     if (data.linkPreview) body.metadata = { linkPreview: data.linkPreview };
+    if (data.location) body.location = data.location;
     if (data.poll) {
       body.type = "poll";
       body.metadata = { ...((body.metadata as Record<string, unknown>) ?? {}), poll: data.poll };
