@@ -10,6 +10,7 @@ import { messageApi } from "../../services/api";
 import { toast } from "../ui";
 import { useAuthStore } from "../../stores";
 import { UserProfile } from "../info/UserProfile";
+import { Avatar } from "../common/Avatar";
 import { loadUserProfiles } from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 import { dispatchStartDirectMessage } from "../../features/chat/events/chatUiEvents";
@@ -20,6 +21,7 @@ interface PollMessageProps {
   isOwn: boolean;
   currentUserId?: string;
   messageId?: string;
+  conversationId?: string;
   senderName?: string;
 }
 
@@ -35,6 +37,7 @@ export const PollMessage: React.FC<PollMessageProps> = ({
   isOwn,
   currentUserId: currentUserIdProp,
   messageId,
+  conversationId,
   senderName,
 }) => {
   // ponytail: read from store — prop is often undefined (not threaded through MessageCluster)
@@ -62,16 +65,16 @@ export const PollMessage: React.FC<PollMessageProps> = ({
 
   const hasVoted = voted.size > 0;
   const isClosed = poll.isClosed;
-  const showResults = hasVoted || isClosed;
   const canVote = !isClosed && !!currentUserId;
 
   const totalVotes =
     Object.values(localVotes).reduce((s, v) => s + v, 0) || poll.totalVotes;
   const maxVotes = Math.max(...Object.values(localVotes), 1);
 
-  // Batch-load voter profiles whenever non-anonymous results / detail modal become visible
+  // Batch-load voter profiles for non-anonymous polls whenever there are voters —
+  // option rows now show voter avatars regardless of whether the viewer has voted.
   React.useEffect(() => {
-    if (poll.anonymous || (!showResults && !detailOpen)) return;
+    if (poll.anonymous) return;
     const allIds = [
       ...new Set(poll.options.flatMap((o) => o.voterIds ?? [])),
     ];
@@ -90,7 +93,7 @@ export const PollMessage: React.FC<PollMessageProps> = ({
       setResolvedProfiles(map);
       setProfilesLoading(false);
     });
-  }, [poll.anonymous, showResults, detailOpen, poll.options]);
+  }, [poll.anonymous, poll.options]);
 
   // Commit a full selection from the detail modal (already-diffed draft)
   const commitVote = (selected: Set<string>) => {
@@ -122,7 +125,7 @@ export const PollMessage: React.FC<PollMessageProps> = ({
   const voterCount = allVoters.length;
 
   return (
-    <div className="-mx-[var(--chat-message-padding-x)] -my-[var(--chat-message-padding-y)] min-w-[300px] max-w-[340px] overflow-hidden rounded-2xl bg-surface px-3.5 pb-3.5 pt-3">
+    <div className="min-w-[300px] max-w-[340px] overflow-hidden rounded-2xl border border-border/60 bg-surface px-3.5 pb-3.5 pt-3 shadow-sm">
 
       {/* Question */}
       <p className="text-[15px] font-semibold leading-snug text-text-primary">
@@ -160,6 +163,7 @@ export const PollMessage: React.FC<PollMessageProps> = ({
           const votes = localVotes[option.id] ?? option.votes;
           const barPct = hasAnyVotes ? Math.round((votes / maxVotes) * 100) : 0;
           const isVoted = voted.has(option.id);
+          const optionVoters = poll.anonymous ? [] : option.voterIds ?? [];
 
           return (
             <button
@@ -193,6 +197,30 @@ export const PollMessage: React.FC<PollMessageProps> = ({
               >
                 {option.text}
               </span>
+
+              {/* voter avatars on this option (non-anonymous) */}
+              {optionVoters.length > 0 && (
+                <div className="relative flex shrink-0 items-center">
+                  {optionVoters.slice(0, 3).map((uid, i) => {
+                    const p = resolvedProfiles[uid];
+                    return (
+                      <div
+                        key={uid}
+                        title={p?.name ?? uid}
+                        className="ring-[1.5px] ring-surface"
+                        style={{ marginLeft: i === 0 ? 0 : -6, zIndex: 3 - i }}
+                      >
+                        <Avatar src={p?.avatar ?? undefined} alt={p?.name ?? uid} size="xs" />
+                      </div>
+                    );
+                  })}
+                  {optionVoters.length > 3 && (
+                    <span className="ml-1 text-[11px] font-medium text-text-muted">
+                      +{optionVoters.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* vote count */}
               <span className="relative shrink-0 text-[13px] font-semibold tabular-nums text-text-secondary">
@@ -260,7 +288,18 @@ export const PollMessage: React.FC<PollMessageProps> = ({
             ? () => {
                 messageApi
                   .pinMessage(messageId)
-                  .then(() => toast.success("Đã ghim lên đầu trò chuyện"))
+                  .then(() => {
+                    toast.success("Đã ghim lên đầu trò chuyện");
+                    // ponytail: usePinnedMessages only refetches on this event; the direct
+                    // pin call (vs MessageActions path) wasn't firing it → panel stayed empty.
+                    if (conversationId && typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("group:pin:updated", {
+                          detail: { conversationId },
+                        }),
+                      );
+                    }
+                  })
                   .catch(() => toast.error("Không thể ghim bình chọn"));
               }
             : undefined

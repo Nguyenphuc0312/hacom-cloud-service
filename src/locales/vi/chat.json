@@ -395,6 +395,20 @@
     "search": "Tìm sticker...",
     "noResults": "Không tìm thấy sticker"
   },
+  "poll": {
+    "systemEvent": {
+      "createdByYou": "Bạn tạo cuộc bình chọn mới: {{question}}",
+      "created": "{{actor}} tạo cuộc bình chọn mới: {{question}}",
+      "votedByYou": "Bạn tham gia cuộc bình chọn: {{question}}",
+      "voted": "{{actor}} tham gia cuộc bình chọn: {{question}}",
+      "votedAnonymous": "Có người tham gia cuộc bình chọn: {{question}}",
+      "changedByYou": "Bạn đổi lựa chọn trong cuộc bình chọn: {{question}}",
+      "changed": "{{actor}} đổi lựa chọn trong cuộc bình chọn: {{question}}",
+      "changedAnonymous": "Có người đổi lựa chọn trong cuộc bình chọn: {{question}}",
+      "closed": "Cuộc bình chọn {{question}} đã kết thúc",
+      "view": "Xem"
+    }
+  },
   "notification": {
     "sentAttachment": "Đã gửi một tệp đính kèm.",
     "systemActivity": "Hoạt động hệ thống"
