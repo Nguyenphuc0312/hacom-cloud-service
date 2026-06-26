@@ -75,6 +75,13 @@ const buildDirectDmTraceRequestId = (): string => {
   return `direct-dm:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 };
 
+const generateClientMessageId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 export const buildCreateDirectConversationPayload = (
   userId: string,
 ): CreateDirectConversationDto => {
@@ -1252,12 +1259,15 @@ export const messageApi = {
       id: attachment.id,
       type: attachment.type,
     }));
-    const body: Record<string, unknown> = { 
-      content: data.content, 
-      type: data.type || "text", 
-      replyTo: data.replyToId, 
-      clientMessageId: data.clientMessageId, 
-      tempId: data.tempId, 
+    const body: Record<string, unknown> = {
+      content: data.content,
+      type: data.type || "text",
+      replyTo: data.replyToId,
+      // BE requires clientMessageId (idempotency key) on every message. Retry-aware
+      // callers (useSendMessage) pass a stable id; direct callers (poll create) don't,
+      // so default a fresh uuid here to avoid 422. ponytail: single guard covers all callers.
+      clientMessageId: data.clientMessageId ?? generateClientMessageId(),
+      tempId: data.tempId,
       localId: data.localId, 
       attachments: normalizedAttachments, 
     }; 
