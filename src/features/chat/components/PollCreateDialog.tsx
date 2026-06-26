@@ -1,6 +1,7 @@
 import React from "react";
-import { PlusIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { ChartBarIcon } from "@heroicons/react/24/solid";
+import ReactDOM from "react-dom";
+import { XMarkIcon, CalendarDaysIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { Modal } from "../../../components/ui";
 import type { CreatePollDto } from "@hacom/chat-shared-types/chat";
 import clsx from "clsx";
@@ -13,15 +14,15 @@ interface PollCreateDialogProps {
   onSubmit: (payload: PollCreatePayload) => void;
 }
 
-const toLocalDatetimeInput = (d: Date) => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+const QUESTION_LIMIT = 200;
+const OPTION_LIMIT = 100;
+const MAX_OPTIONS = 20;
 
-const QUESTION_LIMIT = 150;
-const OPTION_LIMIT = 80;
-const MAX_OPTIONS = 10;
+const pad = (n: number) => String(n).padStart(2, "0");
 
+/* ─────────────────────────────────────────────────────────────
+ * Toggle (Zalo style — pill switch, blue when on)
+ * ───────────────────────────────────────────────────────────── */
 const Toggle: React.FC<{
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -34,14 +35,14 @@ const Toggle: React.FC<{
     aria-checked={checked}
     onClick={() => onChange(!checked)}
     className={clsx(
-      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/40",
-      checked ? "bg-[#1565C0]" : "bg-border",
+      "relative inline-flex h-[22px] w-[42px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/40",
+      checked ? "bg-[#1565C0]" : "bg-[#cfd5db]",
     )}
   >
     <span
       className={clsx(
-        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200",
-        checked ? "translate-x-5" : "translate-x-0",
+        "pointer-events-none inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm transition duration-200",
+        checked ? "translate-x-[22px]" : "translate-x-[2px]",
       )}
     />
   </button>
@@ -49,24 +50,290 @@ const Toggle: React.FC<{
 
 const ToggleRow: React.FC<{
   label: string;
-  description?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   id: string;
-}> = ({ label, description, checked, onChange, id }) => (
-  <div className="flex items-center justify-between gap-4 py-0.5">
-    <div className="min-w-0">
-      <label htmlFor={id} className="cursor-pointer text-sm font-medium text-text-primary">
-        {label}
-      </label>
-      {description && (
-        <p className="text-xs text-text-muted">{description}</p>
+  hint?: boolean;
+}> = ({ label, checked, onChange, id, hint }) => (
+  <div className="flex items-center justify-between gap-3 py-[7px]">
+    <label
+      htmlFor={id}
+      className="flex cursor-pointer items-center gap-1 text-[13px] text-text-primary"
+    >
+      {label}
+      {hint && (
+        <span className="flex h-[14px] w-[14px] items-center justify-center rounded-full border border-text-muted/50 text-[9px] font-semibold text-text-muted">
+          ?
+        </span>
       )}
-    </div>
+    </label>
     <Toggle checked={checked} onChange={onChange} id={id} />
   </div>
 );
 
+const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h3 className="mb-1 mt-1 text-[13px] font-semibold text-text-primary">
+    {children}
+  </h3>
+);
+
+/* ─────────────────────────────────────────────────────────────
+ * Deadline picker (calendar popover) — Zalo style
+ * ───────────────────────────────────────────────────────────── */
+const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const MONTHS = [
+  "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+  "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12",
+];
+
+const DeadlinePicker: React.FC<{
+  value: Date | null;
+  onChange: (d: Date | null) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = React.useState(false);
+  const [viewMonth, setViewMonth] = React.useState(() => {
+    const base = value ?? new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+  const [dateText, setDateText] = React.useState(
+    value ? `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}` : "",
+  );
+  const [timeText, setTimeText] = React.useState(
+    value ? `${pad(value.getHours())}:${pad(value.getMinutes())}` : "",
+  );
+  const [draftDay, setDraftDay] = React.useState<Date | null>(value);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const popRef = React.useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = React.useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // Position the portal popover directly under the trigger (escapes modal overflow clipping)
+  React.useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const update = () => {
+      const r = triggerRef.current!.getBoundingClientRect();
+      const POP_W = 280;
+      const POP_H = 380;
+      let left = r.left;
+      let top = r.bottom + 6;
+      // Keep within viewport
+      if (left + POP_W > window.innerWidth - 8) left = window.innerWidth - POP_W - 8;
+      if (top + POP_H > window.innerHeight - 8) top = Math.max(8, r.top - POP_H - 6);
+      setCoords({ top, left });
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (
+        ref.current && !ref.current.contains(t) &&
+        popRef.current && !popRef.current.contains(t)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+
+  // 6 weeks grid (42 cells)
+  const cells: { day: number; current: boolean; date: Date }[] = [];
+  for (let i = 0; i < firstWeekday; i++) {
+    const day = daysInPrev - firstWeekday + 1 + i;
+    cells.push({ day, current: false, date: new Date(year, month - 1, day) });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ day: d, current: true, date: new Date(year, month, d) });
+  }
+  let next = 1;
+  while (cells.length < 42) {
+    cells.push({ day: next, current: false, date: new Date(year, month + 1, next) });
+    next++;
+  }
+
+  const today = new Date();
+  const isSameDay = (a: Date, b: Date | null) =>
+    !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const pickDay = (date: Date) => {
+    setDraftDay(date);
+    setDateText(`${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`);
+    if (!timeText) setTimeText("09:00");
+  };
+
+  const confirm = () => {
+    if (!draftDay) {
+      setOpen(false);
+      return;
+    }
+    const [hh, mm] = (timeText || "09:00").split(":").map((s) => parseInt(s, 10));
+    const result = new Date(draftDay);
+    result.setHours(Number.isFinite(hh) ? hh : 9, Number.isFinite(mm) ? mm : 0, 0, 0);
+    onChange(result);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    onChange(null);
+    setDraftDay(null);
+    setDateText("");
+    setTimeText("");
+    setOpen(false);
+  };
+
+  const label = value
+    ? `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()} ${pad(value.getHours())}:${pad(value.getMinutes())}`
+    : "Không thời hạn";
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={clsx(
+          "flex w-full items-center justify-between gap-2 rounded-lg border bg-surface-overlay/40 px-3 py-2.5 text-[13px] transition-colors",
+          open ? "border-[#1976D2]/60 ring-2 ring-[#1565C0]/20" : "border-border hover:border-[#1976D2]/40",
+          value ? "text-text-primary" : "text-text-muted",
+        )}
+      >
+        <span className="truncate">{label}</span>
+        <CalendarDaysIcon className="h-4 w-4 shrink-0 text-text-muted" />
+      </button>
+
+      {open && ReactDOM.createPortal(
+        <div
+          ref={popRef}
+          style={{ position: "fixed", top: coords.top, left: coords.left, zIndex: 1000 }}
+          className="w-[280px] rounded-xl border border-border bg-surface p-3 shadow-xl">
+          {/* Month header */}
+          <div className="mb-2 flex items-center justify-between px-1">
+            <span className="text-[13px] font-semibold text-text-primary">
+              {MONTHS[month]}, {year}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-overlay"
+                aria-label="Tháng trước"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-overlay"
+                aria-label="Tháng sau"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Weekday row */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="py-1 text-center text-[11px] font-medium text-text-muted">
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* Days grid */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((cell, i) => {
+              const selected = isSameDay(cell.date, draftDay);
+              const isToday = isSameDay(cell.date, today);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => pickDay(cell.date)}
+                  className={clsx(
+                    "flex h-8 w-full items-center justify-center rounded-md text-[12.5px] tabular-nums transition-colors",
+                    !cell.current && "text-text-muted/40",
+                    cell.current && !selected && "text-text-primary hover:bg-[#1976D2]/10",
+                    selected && "bg-[#1565C0] font-semibold text-white",
+                    !selected && isToday && cell.current && "font-semibold text-[#1565C0]",
+                  )}
+                >
+                  {cell.day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Date / time inputs */}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div>
+              <span className="mb-1 block text-[11px] text-text-muted">Ngày</span>
+              <input
+                value={dateText}
+                onChange={(e) => setDateText(e.target.value)}
+                placeholder="DD/MM/YYYY"
+                className="w-full rounded-md border border-border bg-surface-overlay/40 px-2 py-1.5 text-[12.5px] text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none"
+              />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-text-muted">Thời gian</span>
+              <input
+                value={timeText}
+                onChange={(e) => setTimeText(e.target.value)}
+                placeholder="hh:mm"
+                className="w-full rounded-md border border-border bg-surface-overlay/40 px-2 py-1.5 text-[12.5px] text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={clear}
+              className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
+            >
+              Xóa thời hạn
+            </button>
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={!draftDay}
+              className={clsx(
+                "rounded-lg px-4 py-1.5 text-[12.5px] font-semibold transition-colors",
+                draftDay
+                  ? "bg-[#1565C0] text-white hover:bg-[#1976D2]"
+                  : "cursor-not-allowed bg-[#1565C0]/30 text-white/70",
+              )}
+            >
+              Xác nhận
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * Main dialog — Zalo "Tạo bình chọn"
+ * ───────────────────────────────────────────────────────────── */
 export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
   isOpen,
   onClose,
@@ -74,15 +341,17 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
 }) => {
   const [question, setQuestion] = React.useState("");
   const [options, setOptions] = React.useState(["", ""]);
-  const [allowMultiple, setAllowMultiple] = React.useState(false);
-  const [anonymous, setAnonymous] = React.useState(false);
-  const [hasDeadline, setHasDeadline] = React.useState(false);
-  const [endsAt, setEndsAt] = React.useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    return toLocalDatetimeInput(d);
-  });
+  const [endsAt, setEndsAt] = React.useState<Date | null>(null);
+
+  // Thiết lập nâng cao
+  const [pinToTop, setPinToTop] = React.useState(false);
+  const [allowMultiple, setAllowMultiple] = React.useState(true);
+  const [allowAddOption, setAllowAddOption] = React.useState(true);
+
+  // Bình chọn ẩn danh
+  const [hideResultsBeforeVote, setHideResultsBeforeVote] = React.useState(false);
+  const [hideVoters, setHideVoters] = React.useState(false);
+
   const firstInputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const optionRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
@@ -92,13 +361,12 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
     if (isOpen) {
       setQuestion("");
       setOptions(["", ""]);
-      setAllowMultiple(false);
-      setAnonymous(false);
-      setHasDeadline(false);
-      const tomorrow9am = new Date();
-      tomorrow9am.setDate(tomorrow9am.getDate() + 1);
-      tomorrow9am.setHours(9, 0, 0, 0);
-      setEndsAt(tomorrow9am.toISOString().slice(0, 16));
+      setEndsAt(null);
+      setPinToTop(false);
+      setAllowMultiple(true);
+      setAllowAddOption(true);
+      setHideResultsBeforeVote(false);
+      setHideVoters(false);
     }
   }
 
@@ -111,20 +379,15 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
 
   const updateOption = (index: number, value: string) => {
     if (value.length > OPTION_LIMIT) return;
-    setOptions((cur) => cur.map((o, i) => (i === index ? value : o)));
+    setOptions((cur) => {
+      return cur.map((o, i) => (i === index ? value : o));
+    });
   };
 
   const addOption = () => {
     if (options.length >= MAX_OPTIONS) return;
     setOptions((cur) => [...cur, ""]);
-    setTimeout(() => {
-      optionRefs.current[options.length]?.focus();
-    }, 50);
-  };
-
-  const removeOption = (index: number) => {
-    if (options.length <= 2) return;
-    setOptions((cur) => cur.filter((_, i) => i !== index));
+    setTimeout(() => optionRefs.current[options.length]?.focus(), 50);
   };
 
   const handleOptionKeyDown = (
@@ -141,192 +404,196 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
     }
     if (e.key === "Backspace" && options[index] === "" && options.length > 2) {
       e.preventDefault();
-      removeOption(index);
+      setOptions((cur) => cur.filter((_, i) => i !== index));
       setTimeout(() => optionRefs.current[Math.max(0, index - 1)]?.focus(), 50);
     }
   };
-
-  const minEndsAt = (() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + 10);
-    return toLocalDatetimeInput(d);
-  })();
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      size="md"
+      size="full"
       initialFocusRef={firstInputRef}
-      contentClassName="rounded-2xl"
-      bodyClassName="p-0"
+      contentClassName="rounded-2xl max-w-[680px] max-h-[92vh]"
+      bodyClassName="p-0 overflow-visible"
       showCloseButton={false}
       footer={
-        <div className="flex items-center justify-end gap-2 px-5 pb-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3.5">
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/30"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-overlay"
+            aria-label="Cài đặt bình chọn"
           >
-            Hủy
+            <Cog6ToothIcon className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={() => {
-              onSubmit({
-                question: question.trim(),
-                options: cleanOptions,
-                allowMultiple,
-                anonymous,
-                endsAt: hasDeadline && endsAt ? new Date(endsAt) : undefined,
-              });
-              onClose();
-            }}
-            className={clsx(
-              "rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/40",
-              canSubmit
-                ? "bg-[#1565C0] text-white hover:bg-[#1976D2]"
-                : "cursor-not-allowed bg-[#1565C0]/40 text-white/70",
-            )}
-          >
-            Tạo bình chọn
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-surface-overlay px-5 py-2 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-overlay/70 focus-visible:outline-none"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit}
+              onClick={() => {
+                onSubmit({
+                  question: question.trim(),
+                  options: cleanOptions,
+                  allowMultiple,
+                  anonymous: hideVoters,
+                  endsAt: endsAt ?? undefined,
+                });
+                onClose();
+              }}
+              className={clsx(
+                "rounded-lg px-5 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/40",
+                canSubmit
+                  ? "bg-[#1565C0] text-white hover:bg-[#1976D2]"
+                  : "cursor-not-allowed bg-[#1565C0]/40 text-white/70",
+              )}
+            >
+              Tạo bình chọn
+            </button>
+          </div>
         </div>
       }
     >
-      {/* Header — sticky so it stays visible when options list scrolls */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-5 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1976D2]/10">
-          <ChartBarIcon className="h-5 w-5 text-[#1565C0]" />
-        </div>
-        <h2 className="flex-1 text-base font-semibold text-text-primary">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+        <h2 className="text-[16px] font-semibold text-text-primary">
           Tạo bình chọn
         </h2>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none"
+          aria-label="Đóng"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="space-y-0 divide-y divide-border/60">
-        {/* Question */}
-        <div className="px-5 py-4">
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs font-medium text-text-muted">
-              Câu hỏi
-            </span>
-            <span
-              className={clsx(
-                "text-xs tabular-nums",
-                question.length > QUESTION_LIMIT
-                  ? "text-danger"
-                  : "text-text-muted",
-              )}
-            >
-              {question.length}/{QUESTION_LIMIT}
-            </span>
+      {/* Two-column body */}
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 px-5 py-5 md:grid-cols-2">
+        {/* ── LEFT column ── */}
+        <div className="space-y-4">
+          {/* Chủ đề bình chọn */}
+          <div>
+            <label className="mb-1.5 block text-[13px] font-semibold text-text-primary">
+              Chủ đề bình chọn
+            </label>
+            <div className="relative">
+              <textarea
+                ref={firstInputRef}
+                value={question}
+                onChange={(e) =>
+                  e.target.value.length <= QUESTION_LIMIT &&
+                  setQuestion(e.target.value)
+                }
+                rows={5}
+                placeholder="Nhập chủ đề bình chọn"
+                className="w-full resize-none rounded-lg border border-border bg-surface-overlay/40 px-3 py-2.5 pb-7 text-[13px] text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20"
+              />
+              <span className="pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums text-text-muted">
+                {question.length}/{QUESTION_LIMIT}
+              </span>
+            </div>
           </div>
-          <textarea
-            ref={firstInputRef}
-            value={question}
-            onChange={(e) =>
-              e.target.value.length <= QUESTION_LIMIT &&
-              setQuestion(e.target.value)
-            }
-            rows={2}
-            placeholder="Nhập câu hỏi bình chọn..."
-            className="w-full resize-none rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20"
-          />
-        </div>
 
-        {/* Options */}
-        <div className="px-5 py-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-medium text-text-muted">
+          {/* Các lựa chọn */}
+          <div>
+            <label className="mb-1.5 block text-[13px] font-semibold text-text-primary">
               Các lựa chọn
-            </span>
-            <span className="text-xs text-text-muted">
-              {options.length}/{MAX_OPTIONS}
-            </span>
+            </label>
+            <div className="space-y-2">
+              {options.map((option, index) => (
+                <input
+                  key={index}
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  onKeyDown={(e) => handleOptionKeyDown(e, index)}
+                  placeholder={`Lựa chọn ${index + 1}`}
+                  className="w-full rounded-lg border border-border bg-surface-overlay/40 px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20"
+                />
+              ))}
+            </div>
+            {options.length < MAX_OPTIONS && (
+              <button
+                type="button"
+                onClick={addOption}
+                className="mt-2.5 inline-flex items-center gap-1 text-[13px] font-medium text-[#1565C0] transition-colors hover:text-[#1976D2] focus-visible:outline-none"
+              >
+                <span className="text-[15px] leading-none">+</span>
+                Thêm lựa chọn
+              </button>
+            )}
           </div>
-          <div className="space-y-2">
-            {options.map((option, index) => (
-              <div key={index} className="flex items-center gap-2.5">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1976D2]/10 text-xs font-semibold text-[#1565C0]">
-                  {index + 1}
-                </div>
-                <div className="relative flex-1">
-                  <input
-                    ref={(el) => { optionRefs.current[index] = el; }}
-                    value={option}
-                    onChange={(e) => updateOption(index, e.target.value)}
-                    onKeyDown={(e) => handleOptionKeyDown(e, index)}
-                    placeholder={`Lựa chọn ${index + 1}`}
-                    className="w-full rounded-xl border border-border bg-surface-overlay/40 py-2 pl-3 pr-12 text-sm text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20"
-                  />
-                  {option.length > 0 && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-text-muted">
-                      {option.length}/{OPTION_LIMIT}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeOption(index)}
-                  disabled={options.length <= 2}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline-none"
-                  aria-label="Xóa lựa chọn"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-          {options.length < MAX_OPTIONS && (
-            <button
-              type="button"
-              onClick={addOption}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/30"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Thêm lựa chọn
-            </button>
-          )}
         </div>
 
-        {/* Settings */}
-        <div className="space-y-3 px-5 py-4">
-          <ToggleRow
-            id="poll-multiple"
-            label="Cho phép chọn nhiều đáp án"
-            checked={allowMultiple}
-            onChange={setAllowMultiple}
-          />
-          <ToggleRow
-            id="poll-anonymous"
-            label="Ẩn danh người bình chọn"
-            checked={anonymous}
-            onChange={setAnonymous}
-          />
-          <ToggleRow
-            id="poll-deadline"
-            label="Đặt thời gian kết thúc"
-            checked={hasDeadline}
-            onChange={setHasDeadline}
-          />
-          {hasDeadline && (
-            <input
-              type="datetime-local"
-              value={endsAt}
-              min={minEndsAt}
-              onChange={(e) => setEndsAt(e.target.value)}
-              className="w-full rounded-xl border border-border bg-surface-overlay/40 px-3.5 py-2 text-sm text-text-primary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/20 hover:border-[#1976D2]/40 transition-colors"
-            />
-          )}
+        {/* ── RIGHT column ── */}
+        <div className="space-y-4">
+          {/* Thời hạn bình chọn */}
+          <div>
+            <label className="mb-1.5 block text-[13px] font-semibold text-text-primary">
+              Thời hạn bình chọn
+            </label>
+            <DeadlinePicker value={endsAt} onChange={setEndsAt} />
+          </div>
+
+          {/* Thiết lập nâng cao */}
+          <div>
+            <SectionTitle>Thiết lập nâng cao</SectionTitle>
+            <div className="divide-y divide-border/50">
+              <ToggleRow
+                id="poll-pin"
+                label="Ghim lên đầu trò chuyện"
+                checked={pinToTop}
+                onChange={setPinToTop}
+                hint
+              />
+              <ToggleRow
+                id="poll-multiple"
+                label="Chọn nhiều phương án"
+                checked={allowMultiple}
+                onChange={setAllowMultiple}
+                hint
+              />
+              <ToggleRow
+                id="poll-add-option"
+                label="Có thể thêm phương án"
+                checked={allowAddOption}
+                onChange={setAllowAddOption}
+                hint
+              />
+            </div>
+          </div>
+
+          {/* Bình chọn ẩn danh */}
+          <div>
+            <SectionTitle>Bình chọn ẩn danh</SectionTitle>
+            <div className="divide-y divide-border/50">
+              <ToggleRow
+                id="poll-hide-results"
+                label="Ẩn kết quả khi chưa bình chọn"
+                checked={hideResultsBeforeVote}
+                onChange={setHideResultsBeforeVote}
+                hint
+              />
+              <ToggleRow
+                id="poll-hide-voters"
+                label="Ẩn người bình chọn"
+                checked={hideVoters}
+                onChange={setHideVoters}
+                hint
+              />
+            </div>
+          </div>
         </div>
       </div>
     </Modal>
