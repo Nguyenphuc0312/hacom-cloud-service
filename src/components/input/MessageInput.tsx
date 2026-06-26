@@ -22,7 +22,7 @@ import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
 import { useSendMessageMutation } from "../../features/api/chatApi";
-import { MessageType } from "../../types";
+import { MessageType, type LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 import {
@@ -35,6 +35,16 @@ import {
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
 import { hasRichFormatting } from "../../utils/messageContent.utils";
+import {
+  formatLocationTime,
+  getFriendlyAccuracyLabel,
+  isLocationStale,
+} from "../../utils/locationMessage";
+import {
+  RecordingBar,
+  useAudioRecorder,
+  useAudioUpload,
+} from "../../features/audio";
 
 import { ComposerStatusBanner } from "./MessageInput/ComposerStatusBanner";
 import { ComposerReplyBanner } from "./MessageInput/ComposerReplyBanner";
@@ -54,6 +64,40 @@ import type {
 } from "./MessageInput/types";
 
 export type { MentionCandidate, MessageInputHandle };
+
+type LocationFlowStatus =
+  | "idle"
+  | "requesting_permission"
+  | "acquiring_location"
+  | "confirming"
+  | "sending"
+  | "sent"
+  | "permission_denied"
+  | "permission_blocked"
+  | "timeout"
+  | "unavailable"
+  | "error"
+  | "send_failed"
+  | "retrying";
+
+type LocationFlowState = {
+  status: LocationFlowStatus;
+  location?: LocationMessagePayload;
+  clientMessageId?: string;
+  message?: string;
+};
+
+const createLocationClientMessageId = (): string => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `location-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const isLocalhost = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+};
 
 const MessageInputComponent = React.forwardRef(function MessageInput(
   props: MessageInputProps,
@@ -83,6 +127,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     composerMode = "online",
     currentUserId,
     onShareContact,
+    onShareLocation,
     conversationName,
     conversationType,
     // Multi-file upload queue
@@ -127,8 +172,103 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
   const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
+  const [locationFlow, setLocationFlow] = React.useState<LocationFlowState>({
+    status: "idle",
+  });
+  const locationRequestSeqRef = React.useRef(0);
+  const locationFlowState = locationFlow.status;
+  const pendingLocation = locationFlow.location ?? null;
+  const locationError = locationFlow.message ?? null;
+  const setLocationFlowState = React.useCallback((status: LocationFlowStatus) => {
+    setLocationFlow((current) => ({ ...current, status }));
+  }, []);
+  const setPendingLocation = React.useCallback((location: LocationMessagePayload | null) => {
+    setLocationFlow((current) => ({
+      ...current,
+      location: location ?? undefined,
+    }));
+  }, []);
+  const setLocationError = React.useCallback((message: string | null) => {
+    setLocationFlow((current) => ({
+      ...current,
+      message: message ?? undefined,
+    }));
+  }, []);
   const primarySendLockedRef = React.useRef(false);
+  const isMountedRef = React.useRef(true);
   const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
+
+  // ---- Audio recording flow ----
+  const {
+    state: audioState,
+    error: audioError,
+    elapsedMs: audioElapsedMs,
+    amplitude: audioAmplitude,
+    permissionState: audioPermissionState,
+    requestPermission: audioRequestPermission,
+    startRecording: audioStartRecording,
+    stopRecording: audioStopRecording,
+    cancelRecording: audioCancelRecording,
+    reset: audioReset,
+  } = useAudioRecorder();
+  const audioUpload = useAudioUpload();
+  const audioFlowActive = audioState !== "IDLE" && audioState !== "CANCELLED" && audioState !== "SENT";
+
+  const handleAudioCancel = React.useCallback(() => {
+    audioCancelRecording();
+    audioReset();
+  }, [audioCancelRecording, audioReset]);
+
+  const handleAudioSend = React.useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const clip = await audioStopRecording();
+      if (!clip || clip.blob.size === 0) {
+        toast.warning(t("chat:audio.tooShort", { defaultValue: "Recording too short" }));
+        audioReset();
+        return;
+      }
+      const clientMessageId = (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`) || `voice-${Date.now()}`;
+      const uploadResult = await audioUpload.uploadAudio({
+        clip,
+        conversationId,
+        clientMessageId,
+        durationMs: clip.durationMs,
+      });
+      // Create VOICE message referencing uploaded file
+      await messageApi.sendMessage(conversationId, {
+        type: MessageType.VOICE,
+        clientMessageId,
+        content: "",
+        attachments: [{
+          id: uploadResult.fileId,
+          type: "voice",
+          fileName: `voice-recording.${clip.mimeType.includes("webm") ? "webm" : clip.mimeType.includes("mp4") ? "m4a" : "ogg"}`,
+          mimeType: clip.mimeType,
+          fileSize: clip.sizeBytes,
+          duration: clip.durationMs,
+        }],
+      });
+      toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(t("chat:voice.recordingError", { defaultValue: "Failed to send recording." }));
+      console.error("[AudioSend]", msg);
+    } finally {
+      audioReset();
+    }
+  }, [audioStopRecording, audioUpload, conversationId, audioReset, t]);
+
+  const handleAudioStart = React.useCallback(async () => {
+    const permissionReady = await audioRequestPermission();
+    if (permissionReady) {
+      audioStartRecording();
+    }
+  }, [audioRequestPermission, audioStartRecording]);
+
+  const canStartAudio = !disabled && navigator?.mediaDevices?.getUserMedia != null;
 
   const mentionListId = React.useId();
 
@@ -149,6 +289,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       renderCountRef.current += 1;
     }
   });
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const {
     isSending,
@@ -339,6 +486,83 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
       if (type === "photo" || type === "document") {
         openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
+      } else if (type === "location") {
+        if (locationFlowState !== "idle") {
+          setShowAttachmentMenu(false);
+          return;
+        }
+        if (!onShareLocation) {
+          toast.info(t("common:toast.featureInDevelopment"));
+          setShowAttachmentMenu(false);
+          return;
+        }
+        setLocationError(null);
+        setPendingLocation(null);
+        const requestSeq = locationRequestSeqRef.current + 1;
+        locationRequestSeqRef.current = requestSeq;
+        const clientMessageId = createLocationClientMessageId();
+        setLocationFlow({ status: "requesting_permission", clientMessageId });
+        if (typeof window !== "undefined" && !window.isSecureContext && !isLocalhost()) {
+          setLocationFlowState("unavailable");
+          setLocationError("Trình duyệt chỉ cho phép gửi vị trí trên HTTPS hoặc localhost.");
+          setShowAttachmentMenu(false);
+          return;
+        }
+        if (!("geolocation" in navigator)) {
+          setLocationFlowState("error");
+          setLocationError(
+            t("chat:location.unavailable", {
+              defaultValue: "Trình duyệt hiện không hỗ trợ lấy vị trí.",
+            }),
+          );
+          setShowAttachmentMenu(false);
+          return;
+        }
+
+        setLocationFlowState("acquiring_location");
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (!isMountedRef.current || locationRequestSeqRef.current !== requestSeq) return;
+            setPendingLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              ...(typeof position.coords.accuracy === "number"
+                ? { accuracyM: position.coords.accuracy }
+                : {}),
+              capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
+            });
+            setLocationFlowState("confirming");
+          },
+          (error) => {
+            if (!isMountedRef.current || locationRequestSeqRef.current !== requestSeq) return;
+            setLocationFlowState("error");
+            if (error.code === error.PERMISSION_DENIED) {
+              setLocationError(
+                t("chat:location.permissionDenied", {
+                  defaultValue:
+                    "Bạn đã từ chối quyền vị trí. Hãy bật quyền vị trí cho trình duyệt rồi thử lại.",
+                }),
+              );
+            } else if (error.code === error.TIMEOUT) {
+              setLocationError(
+                t("chat:location.timeout", {
+                  defaultValue: "Không lấy được vị trí trong thời gian chờ. Bạn có thể thử lại.",
+                }),
+              );
+            } else {
+              setLocationError(
+                t("chat:location.failed", {
+                  defaultValue: "Không thể lấy vị trí hiện tại. Vui lòng thử lại.",
+                }),
+              );
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          },
+        );
       } else if (type === "contact") {
         if (onShareContact && currentUserId && conversationId) {
           setIsShareContactOpen(true);
@@ -349,6 +573,16 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         setIsPollDialogOpen(true);
       } else if (type === "reminder") {
         setIsReminderDialogOpen(true);
+      } else if (type === "audio") {
+        if (locationFlowState !== "idle") {
+          setShowAttachmentMenu(false);
+          return;
+        }
+        if (!canStartAudio) {
+          toast.warning(t("chat:audio.unsupported", { defaultValue: "This browser does not support audio recording" }));
+        } else {
+          void handleAudioStart();
+        }
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
@@ -356,14 +590,63 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     },
     [
       attachmentsDisabled,
+      canStartAudio,
       conversationId,
       currentUserId,
       disabledReason,
+      handleAudioStart,
+      locationFlowState,
       onShareContact,
+      onShareLocation,
       openFilePicker,
+      setLocationError,
+      setLocationFlowState,
+      setPendingLocation,
       t,
     ],
   );
+
+  const resetLocationFlow = React.useCallback(() => {
+    locationRequestSeqRef.current += 1;
+    setLocationFlow({ status: "idle" });
+  }, []);
+
+  const confirmLocationSend = React.useCallback(async () => {
+    if (!pendingLocation || !onShareLocation) return;
+    if (locationFlowState === "sending" || locationFlowState === "retrying") return;
+    setLocationFlowState(locationFlowState === "send_failed" ? "retrying" : "sending");
+    setLocationError(null);
+    try {
+      await Promise.resolve(onShareLocation(pendingLocation, locationFlow.clientMessageId));
+      if (!isMountedRef.current) return;
+      setLocationFlowState("sent");
+      setPendingLocation(null);
+      setLiveRegionMessage(optimisticAnnouncement);
+      window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setLocationFlowState("idle");
+        }
+      }, 300);
+    } catch {
+      if (!isMountedRef.current) return;
+      setLocationFlowState("send_failed");
+      setLocationError(
+        t("chat:location.sendFailed", {
+          defaultValue: "Gửi vị trí thất bại. Bạn có thể thử gửi lại.",
+        }),
+      );
+    }
+  }, [
+    locationFlow.clientMessageId,
+    locationFlowState,
+    onShareLocation,
+    optimisticAnnouncement,
+    pendingLocation,
+    setLocationError,
+    setLocationFlowState,
+    setPendingLocation,
+    t,
+  ]);
 
   const handleSendText = React.useCallback(async () => {
     if (!messageValidation.canSendInlineMessage) {
@@ -751,6 +1034,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     !hasUploadingDrafts &&
     (hasQueueDrafts ? hasReadyDrafts || hasText : hasText);
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
+  const isLocationFlowBusy =
+    locationFlowState !== "idle" && locationFlowState !== "sent";
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
     ? "disabled"
@@ -912,6 +1197,22 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           {...(onAddFiles ? { multiple: true } : {})}
         />
 
+        {/* Audio recording bar — replaces composer when recording is active */}
+        {audioFlowActive && (
+          <RecordingBar
+            state={audioState}
+            elapsedMs={audioElapsedMs}
+            amplitude={audioAmplitude}
+            error={audioError}
+            permissionState={audioPermissionState}
+            onCancel={handleAudioCancel}
+            onSend={() => void handleAudioSend()}
+            onRequestPermission={() => void audioRequestPermission()}
+          />
+        )}
+
+        {!audioFlowActive && (
+          <>
         {mode === "reply" && replyToMessage && (
           <ComposerReplyBanner
             replyToMessage={replyToMessage}
@@ -932,6 +1233,149 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             draftValue={draftValue}
             onMetaChange={setPendingLinkPreview}
           />
+        )}
+
+        {locationFlowState !== "idle" && (
+          <div
+            className="mb-2 ml-auto w-full max-w-[440px] rounded-lg border border-border bg-surface px-4 py-3 shadow-lg shadow-black/10 sm:w-[min(440px,calc(100vw-32px))]"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="composer-location-title"
+            aria-describedby="composer-location-description"
+          >
+            {(locationFlowState === "requesting_permission" ||
+              locationFlowState === "acquiring_location") && (
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <div className="min-w-0 flex-1">
+                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                    Đang xác định vị trí của bạn
+                  </p>
+                  <p id="composer-location-description" className="text-xs text-text-muted">
+                    Quá trình này có thể mất vài giây
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                  onClick={resetLocationFlow}
+                >
+                  {t("common:cancel", { defaultValue: "Hủy" })}
+                </button>
+              </div>
+            )}
+
+            {locationFlowState === "confirming" && pendingLocation && (
+              <div className="space-y-3">
+                <div className="min-w-0">
+                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                    Gửi vị trí hiện tại
+                  </p>
+                  <p id="composer-location-description" className="text-xs text-text-muted">
+                    Vị trí này sẽ được gửi vào cuộc trò chuyện.
+                  </p>
+                  {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label && (
+                    <p
+                      className={clsx(
+                        "mt-1 text-xs",
+                        getFriendlyAccuracyLabel(pendingLocation.accuracyM).tone === "warning"
+                          ? "text-warning"
+                          : "text-text-muted",
+                      )}
+                    >
+                      {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label}
+                    </p>
+                  )}
+                  {formatLocationTime(pendingLocation.capturedAt) && (
+                    <p className="text-xs text-text-muted">
+                      Thời điểm: {formatLocationTime(pendingLocation.capturedAt)}
+                    </p>
+                  )}
+                  {isLocationStale(pendingLocation.capturedAt) && (
+                    <p className="text-xs text-warning">
+                      Vị trí đã được lấy từ vài phút trước.
+                    </p>
+                  )}
+                  {typeof pendingLocation.accuracyM === "number" && (
+                    <p className="text-xs text-text-muted">
+                      {t("chat:location.accuracy", {
+                        accuracy: `${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
+                        defaultValue: `Độ chính xác ${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
+                      })}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    onClick={resetLocationFlow}
+                  >
+                    {t("common:cancel", { defaultValue: "Hủy" })}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void confirmLocationSend()}
+                    aria-label={t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
+                  >
+                    {t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(locationFlowState === "sending" || locationFlowState === "retrying") && (
+              <div className="space-y-3">
+                <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                  Gửi vị trí hiện tại
+                </p>
+                <p id="composer-location-description" className="text-xs text-text-muted">
+                  {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white opacity-80"
+                    disabled
+                  >
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
+                    {t("chat:location.sendingShort", { defaultValue: "Đang gửi..." })}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {["error", "permission_denied", "permission_blocked", "timeout", "unavailable", "send_failed"].includes(locationFlowState) && (
+              <div className="space-y-3">
+                <p className="text-sm text-danger">
+                  {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    onClick={resetLocationFlow}
+                  >
+                    {t("common:cancel", { defaultValue: "Hủy" })}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90"
+                    onClick={() =>
+                      pendingLocation
+                        ? void confirmLocationSend()
+                        : handleAttachmentSelect("location")
+                    }
+                  >
+                    {pendingLocation
+                      ? t("common:retry", { defaultValue: "Thử lại" })
+                      : t("chat:location.retry", { defaultValue: "Lấy lại vị trí" })}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Multi-file upload tray */}
@@ -1046,6 +1490,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   conversationType !== "direct" &&
                   conversationType !== "private"
                 }
+                disabledAttachmentItemIds={isLocationFlowBusy ? ["location"] : []}
                 onEmojiChange={handleEmojiChange}
                 onEmojiInsert={(emoji) => {
                   tipTapRef.current?.insertAtCursor(emoji);
@@ -1122,6 +1567,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           onClose={() => setIsReminderDialogOpen(false)}
           onSubmit={handleCreateReminder}
         />
+          </>
+        )}
       </ConversationLane>
     </div>
   );

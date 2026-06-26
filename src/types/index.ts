@@ -201,6 +201,13 @@ export interface SendMessageResult {
   messageId: string;
 }
 
+export interface LocationMessagePayload {
+  latitude: number;
+  longitude: number;
+  accuracyM?: number;
+  capturedAt: string;
+}
+
 export interface Message
   extends Omit<
     SharedMessage,
@@ -256,6 +263,7 @@ export interface Message
   deletedAt?: Date | string;
   recalledBy?: string;
   recalledAt?: Date | string;
+  location?: LocationMessagePayload;
 }
 
 export interface TypingStatus {

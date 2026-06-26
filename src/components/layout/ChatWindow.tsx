@@ -31,6 +31,7 @@ import type {
   Conversation,
   ImageClickPayload,
   InputMode,
+  LocationMessagePayload,
   Message,
   TypingStatus,
   UserSummary,
@@ -59,6 +60,7 @@ import { chatApi as rtkChatApi } from "../../features/api/chatApi";
 import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { FeatureErrorBoundary } from "../error";
+import type { LinkPreviewMeta } from "../message/linkPreviewUtils";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
@@ -173,6 +175,11 @@ interface ChatWindowProps {
     type?: MessageType,
     /** Array of mention objects with userId and displayName for optimistic rendering */
     mentions?: { userId: string; displayName: string }[],
+    contentFormat?: "plain_text" | "rich_text",
+    contentJson?: Record<string, unknown>,
+    plainText?: string,
+    linkPreview?: LinkPreviewMeta,
+    options?: { location?: LocationMessagePayload; clientMessageId?: string },
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
@@ -626,6 +633,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       t,
       uploadQueue,
     ],
+  );
+
+  const handleShareLocation = React.useCallback(
+    (location: LocationMessagePayload, clientMessageId?: string) => {
+      const sendResult = onSendMessage(
+        "",
+        replyToMessage,
+        undefined,
+        MessageType.LOCATION,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { location, clientMessageId },
+      );
+      return Promise.resolve(sendResult).then((result) => {
+        setReplyToMessage(undefined);
+        setInputMode("normal");
+        return result;
+      });
+    },
+    [onSendMessage, replyToMessage],
   );
 
   // Search & pinned panel state
@@ -1276,6 +1306,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             disabledReasonTone={composerAvailability.statusTone}
             composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
+            onShareLocation={handleShareLocation}
             uploadDrafts={uploadQueue.drafts}
             conversationName={callDisplayName}
             onAddFiles={handleAddFiles}

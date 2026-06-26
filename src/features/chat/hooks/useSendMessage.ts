@@ -5,7 +5,7 @@ import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
 import { useAuthStore, useGroupStore } from "../../../stores";
-import type { Attachment, Message, MessageType } from "../../../types";
+import type { Attachment, LocationMessagePayload, Message, MessageType } from "../../../types";
 import { MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import {
@@ -63,6 +63,7 @@ interface UseSendMessageResult {
     contentJson?: Record<string, unknown>,
     plainText?: string,
     linkPreview?: LinkPreviewMeta,
+    options?: { location?: LocationMessagePayload; clientMessageId?: string },
   ) => unknown | Promise<unknown>;
 }
 
@@ -187,6 +188,7 @@ export const useRetrySendMessage = () => {
           senderAvatar: message.senderAvatar,
           mentions: message.mentions,
           attachments: toSendMessageAttachments(message.attachments),
+          location: message.location,
         }).unwrap();
       } finally {
         retryRequestsInFlight.delete(requestKey);
@@ -225,6 +227,7 @@ export const useSendMessage = ({
       contentJson?: Record<string, unknown>,
       plainText?: string,
       linkPreview?: LinkPreviewMeta,
+      options?: { location?: LocationMessagePayload; clientMessageId?: string },
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -282,7 +285,7 @@ export const useSendMessage = ({
       };
 
       try {
-        const clientMessageId = createClientMessageId();
+        const clientMessageId = options?.clientMessageId || createClientMessageId();
         const localId = `temp-${clientMessageId}`;
         const sendPromise = sendMessageMutation({
           conversationId: resolvedConversationId,
@@ -304,6 +307,7 @@ export const useSendMessage = ({
           mentions: mentions?.length ? mentions : undefined,
           attachments: toSendMessageAttachments(fileMeta),
           linkPreview,
+          location: options?.location,
         })
           .unwrap()
           .catch(handleSendError);
@@ -374,6 +378,7 @@ export const useSendMessage = ({
           options?.contentJson,
           options?.plainText,
           options?.linkPreview,
+          undefined,
         );
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;

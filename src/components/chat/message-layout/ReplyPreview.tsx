@@ -8,6 +8,7 @@ import {
   VideoCameraIcon,
   FaceSmileIcon,
   MusicalNoteIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 import type { Message } from "../../../types";
 import { MessageType } from "../../../types";
@@ -54,6 +55,7 @@ const MEDIA_META: Partial<Record<string, MediaMeta>> = {
   [MessageType.FILE]:    { icon: <DocumentIcon className="h-3.5 w-3.5" />, label: "Tệp đính kèm" },
   [MessageType.VOICE]:   { icon: <SpeakerWaveIcon className="h-3.5 w-3.5" />, label: "Tin nhắn thoại" },
   [MessageType.AUDIO]:   { icon: <MusicalNoteIcon className="h-3.5 w-3.5" />, label: "Audio" },
+  [MessageType.LOCATION]: { icon: <MapPinIcon className="h-3.5 w-3.5" />, label: "Vị trí được chia sẻ" },
   [MessageType.STICKER]: { icon: <FaceSmileIcon className="h-3.5 w-3.5" />, label: "Sticker" },
   [MessageType.GIF]:     { icon: <PhotoIcon className="h-3.5 w-3.5" />, label: "GIF" },
 };

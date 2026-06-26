@@ -11,6 +11,7 @@ import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
 import { PollMessage } from "../../message/PollMessage";
+import { LocationMessage } from "../../message/LocationMessage";
 import { MessageLinkPreview } from "../../message/MessageLinkPreview";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
@@ -376,6 +377,21 @@ const renderTextContent = (
   );
 };
 
+const UnsupportedLocationMessage: React.FC<{ isOwn: boolean }> = ({ isOwn }) => (
+  <div
+    className={clsx(
+      "min-w-[14rem] max-w-[18rem] rounded-lg border px-3 py-2 text-sm leading-snug",
+      isOwn
+        ? "border-white/20 bg-white/10 text-white/85"
+        : "border-border bg-surface-overlay/80 text-text-secondary",
+    )}
+    role="note"
+    data-error-code="LOCATION_PAYLOAD_MISSING"
+  >
+    Không thể hiển thị vị trí này
+  </div>
+);
+
 export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
@@ -534,6 +550,12 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 onToggleTextExpand,
               )}
         </div>
+      );
+    case MessageType.LOCATION:
+      return message.location ? (
+        <LocationMessage location={message.location} isOwn={isOwn} />
+      ) : (
+        <UnsupportedLocationMessage isOwn={isOwn} />
       );
     case MessageType.CONTACT:
       return contactPayload ? (
