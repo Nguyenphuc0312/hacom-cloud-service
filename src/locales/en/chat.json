@@ -395,6 +395,20 @@
     "search": "Search stickers...",
     "noResults": "No stickers found"
   },
+  "poll": {
+    "systemEvent": {
+      "createdByYou": "You created a new poll: {{question}}",
+      "created": "{{actor}} created a new poll: {{question}}",
+      "votedByYou": "You voted in the poll: {{question}}",
+      "voted": "{{actor}} voted in the poll: {{question}}",
+      "votedAnonymous": "Someone voted in the poll: {{question}}",
+      "changedByYou": "You changed your choice in the poll: {{question}}",
+      "changed": "{{actor}} changed their choice in the poll: {{question}}",
+      "changedAnonymous": "Someone changed their choice in the poll: {{question}}",
+      "closed": "The poll {{question}} has ended",
+      "view": "View"
+    }
+  },
   "notification": {
     "sentAttachment": "Sent an attachment.",
     "systemActivity": "System activity"
