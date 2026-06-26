@@ -125,6 +125,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     normalizedConversationType !== RoomType.PRIVATE &&
     normalizedConversationType !== RoomType.DIRECT;
   const coarsePointer = isCoarsePointer();
+  // ponytail: poll renders as a horizontally-centered card (Zalo-style, like a date/
+  // system row), never an own/right bubble — drop avatar/sender-label/bubble-chrome.
+  const isPoll = message.type === MessageType.POLL;
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number"
@@ -376,7 +379,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       }}
     >
       <MessageRow
-        isOwn={isOwn}
+        isOwn={isPoll ? false : isOwn}
         actionRail={
           (isHovered || showReactionPicker) ? (
             <div
@@ -411,10 +414,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           className={clsx(
             "chat-message-cluster-row flex w-full min-w-0 items-end",
             contract.cluster.rowGap,
-            isOwn ? "justify-end" : "justify-start",
+            isPoll ? "justify-center" : isOwn ? "justify-end" : "justify-start",
           )}
         >
-          {isGroupConversation && !isOwn && (
+          {isGroupConversation && !isOwn && !isPoll && (
             <div className="chat-message-avatar-slot w-9 shrink-0 self-end">
               {showAvatar ? (
                 <Avatar
@@ -430,7 +433,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           <div
             className={clsx(
               "min-w-0 relative",
-              isOwn ? "items-end" : "items-start",
+              isPoll ? "items-center" : isOwn ? "items-end" : "items-start",
               "flex max-w-[var(--chat-bubble-max)] flex-col",
               shouldAnimateInsert && "motion-message-insert",
             )}
@@ -438,7 +441,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
             <div
               className={clsx(
                 "flex w-full",
-                isOwn ? "justify-end" : "justify-start",
+                isPoll ? "justify-center" : isOwn ? "justify-end" : "justify-start",
               )}
             >
               {/* Wrapper inline để pill absolute neo đúng vào bubble */}
@@ -456,8 +459,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     mergeLevel={mergeLevel}
                     hasError={isFailedMessage(message)}
                     isPending={isPendingMessage(message)}
+                    bare={isPoll}
                   >
-                    {isGroupConversation && !isOwn && showSenderName && (
+                    {isGroupConversation && !isOwn && showSenderName && !isPoll && (
                       <p className={clsx(contract.cluster.senderLabel, "truncate")}>
                         {senderDisplayName}
                       </p>

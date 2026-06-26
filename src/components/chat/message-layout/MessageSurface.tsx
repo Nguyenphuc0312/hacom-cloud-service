@@ -9,6 +9,8 @@ interface MessageSurfaceProps {
   mergeLevel?: TimelineMergeLevel;
   hasError?: boolean;
   isPending?: boolean;
+  /** Render without bubble background/radius (e.g. poll card brings its own surface). */
+  bare?: boolean;
   children: React.ReactNode;
   className?: string;
 }
@@ -66,9 +68,17 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = React.memo(
     mergeLevel = "not-merged",
     hasError = false,
     isPending = false,
+    bare = false,
     children,
     className,
   }) => {
+    if (bare) {
+      return (
+        <div className={clsx("chat-message-surface relative box-border w-fit min-w-0 max-w-full", className)}>
+          {children}
+        </div>
+      );
+    }
     return (
       <div
         className={clsx(
@@ -97,6 +107,7 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = React.memo(
     prev.mergeLevel === next.mergeLevel &&
     prev.hasError === next.hasError &&
     prev.isPending === next.isPending &&
+    prev.bare === next.bare &&
     prev.children === next.children &&
     prev.className === next.className,
 );

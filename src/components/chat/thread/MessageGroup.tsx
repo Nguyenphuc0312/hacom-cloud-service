@@ -256,6 +256,9 @@ const MessageGroupItem: React.FC<{
     const [isHovered, setIsHovered] = React.useState(false);
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
+    // ponytail: poll renders as a centered, chrome-free card (Zalo-style) — no bubble
+    // bg/border, no sender label. Centering is handled by MessageGroupBase.
+    const isPoll = message.type === MessageType.POLL;
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
@@ -602,7 +605,7 @@ const MessageGroupItem: React.FC<{
       <div
         className={clsx(
           "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
-          isOwn ? "self-end" : "self-start",
+          isPoll ? "self-center" : isOwn ? "self-end" : "self-start",
           insertedMessageKeys.has(getMessageStableKey(message)) &&
           isPendingMessage(message) &&
           "motion-message-insert",
@@ -636,12 +639,12 @@ const MessageGroupItem: React.FC<{
         <div
           className={clsx(
             "flex min-w-0 flex-1 items-start",
-            isOwn ? "justify-end" : "justify-start",
+            isPoll ? "justify-center" : isOwn ? "justify-end" : "justify-start",
           )}
         >
           <div className={clsx(
             "min-w-0 max-w-full flex flex-col",
-            isOwn ? "items-end" : "items-start",
+            isPoll ? "items-center" : isOwn ? "items-end" : "items-start",
           )}>
             <div className="relative">
               {actionRail}
@@ -653,8 +656,9 @@ const MessageGroupItem: React.FC<{
               isRich={isRichBubble}
               hasError={isFailedMessage(message)}
               isHighlighted={isHighlighted}
+              bare={isPoll}
             >
-              {showSenderName && senderDisplayName && (
+              {showSenderName && senderDisplayName && !isPoll && (
                 <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
                   {senderDisplayName}
                 </p>
@@ -913,6 +917,10 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
     return null;
   }
 
+  // ponytail: a poll group renders centered (Zalo-style) — drop the avatar column
+  // and center the card instead of own/other side alignment.
+  const isPollGroup = leadMessage.type === MessageType.POLL;
+
   const senderDisplayName =
     enrichedSenderName ??
     resolveUserDisplayName({
@@ -924,10 +932,10 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
     <section
       className={clsx(
         "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5 pb-1.5",
-        row.isOwn && "grid-cols-[minmax(0,1fr)]",
+        (row.isOwn || isPollGroup) && "grid-cols-[minmax(0,1fr)]",
       )}
     >
-      {!row.isOwn && (
+      {!row.isOwn && !isPollGroup && (
         <div className="flex justify-center pt-0.5">
           {row.showAvatar ? (
             <Avatar
@@ -972,11 +980,11 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
       <div
         className={clsx(
           "min-w-0",
-          row.isOwn ? "items-end" : "items-start",
+          isPollGroup ? "items-center" : row.isOwn ? "items-end" : "items-start",
           "flex flex-col",
         )}
       >
-        <div className="flex w-full flex-col gap-1">
+        <div className={clsx("flex w-full flex-col gap-1", isPollGroup && "items-center")}>
           {row.items.map((item, index) => (
             <MessageGroupItem
               key={item.key}

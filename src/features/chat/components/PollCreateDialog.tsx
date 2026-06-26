@@ -345,7 +345,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
 
   // Thiết lập nâng cao
   const [pinToTop, setPinToTop] = React.useState(false);
-  const [allowMultiple, setAllowMultiple] = React.useState(true);
+  const [allowMultiple, setAllowMultiple] = React.useState(false);
   const [allowAddOption, setAllowAddOption] = React.useState(true);
 
   // Bình chọn ẩn danh
@@ -363,7 +363,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
       setOptions(["", ""]);
       setEndsAt(null);
       setPinToTop(false);
-      setAllowMultiple(true);
+      setAllowMultiple(false);
       setAllowAddOption(true);
       setHideResultsBeforeVote(false);
       setHideVoters(false);
