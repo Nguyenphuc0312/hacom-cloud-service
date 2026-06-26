@@ -1,5 +1,5 @@
 import { ErrorCode } from "@hacom/chat-shared-types/core";
-import type { MarkReadResponseData } from "@hacom/chat-shared-types/chat";
+import type { MarkReadResponseData, PollInfo } from "@hacom/chat-shared-types/chat";
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   ApiContractError,
@@ -87,6 +87,14 @@ export interface SendMessageInput {
     imageUrl?: string;
     siteName?: string;
     favicon?: string;
+  };
+  /** Poll payload — routed through the same mutation so the new poll gets an optimistic row + ack-replace (no reload). */
+  poll?: {
+    question: string;
+    options: string[];
+    allowMultiple?: boolean;
+    anonymous?: boolean;
+    endsAt?: Date;
   };
 }
 
@@ -345,7 +353,29 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
     ...(input.linkPreview
       ? { metadata: { linkPreview: input.linkPreview } }
-      : {}),
+      : input.poll
+        ? {
+            // Optimistic poll: temp ids/zeroed votes so the card renders instantly.
+            // The server ack overwrites this with the canonical PollInfo (real option ids).
+            metadata: {
+              poll: {
+                id: input.clientMessageId,
+                question: input.poll.question,
+                options: input.poll.options.map((text, i) => ({
+                  id: `opt-${i}`,
+                  text,
+                  votes: 0,
+                  voterIds: [],
+                })),
+                allowMultiple: input.poll.allowMultiple ?? false,
+                anonymous: input.poll.anonymous ?? false,
+                endsAt: input.poll.endsAt,
+                isClosed: false,
+                totalVotes: 0,
+              } as PollInfo,
+            },
+          }
+        : {}),
   };
 };
 
@@ -514,6 +544,7 @@ export const chatApi = createApi({
               .map((m) => m.userId),
             attachments: input.attachments,
             linkPreview: input.linkPreview,
+            poll: input.poll,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
         } catch (error) {

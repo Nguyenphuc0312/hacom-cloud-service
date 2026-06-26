@@ -134,6 +134,7 @@ const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
 };
 
 const MEMBER_PREVIEW_COUNT = 8;
+const POLL_PREVIEW_COUNT = 3;
 
 const VALID_ROLES = new Set<string>([
   RoomMemberRole.OWNER,
@@ -390,12 +391,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   // Polls section
   const [polls, setPolls] = React.useState<Message[]>([]);
   const [pollsLoading, setPollsLoading] = React.useState(false);
+  const [pollsShowAll, setPollsShowAll] = React.useState(false);
   const [voterProfilesMap, setVoterProfilesMap] = React.useState<Record<string, { name: string; avatar: string | null }>>({});
   const pollsSectionRef = React.useRef<HTMLDivElement>(null);
   const remindersSectionRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!conversation.id) return;
+    setPollsShowAll(false);
     setPollsLoading(true);
     void messageApi
       .searchMessages({ conversationId: conversation.id, type: MessageType.POLL, q: "", limit: 30 })
@@ -1347,7 +1350,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2 p-3">
-                  {polls.map((msg) => {
+                  {(pollsShowAll ? polls : polls.slice(0, POLL_PREVIEW_COUNT)).map((msg) => {
                     const poll = (msg.metadata as { poll?: PollInfo } | null | undefined)?.poll;
                     if (!poll) return null;
                     const activePoll = !poll.isClosed;
@@ -1358,7 +1361,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     return (
                       <div
                         key={msg.id}
-                        className="overflow-hidden rounded-xl border border-border bg-surface-overlay"
+                        className="overflow-hidden rounded-xl border border-border bg-surface-overlay transition-colors hover:border-[#1565C0]/30"
                       >
                         {/* Question row */}
                         <div className="flex items-start gap-2 px-3 pt-3 pb-2">
@@ -1401,7 +1404,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 <div
                                   className={clsx(
                                     "absolute inset-y-0 left-0 rounded-lg transition-all duration-500",
-                                    isWinner ? "bg-[#1565C0]/15" : "bg-[#1565C0]/06",
+                                    isWinner ? "bg-[#1565C0]/15" : "bg-[#1565C0]/[0.08]",
                                   )}
                                   style={{ width: `${pct}%` }}
                                 />
@@ -1448,7 +1451,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                   )}>
                                     {pct}%
                                     {opt.votes > 0 && (
-                                      <span className="ml-0.5 font-semibold text-[#1565C0]"> {opt.votes}</span>
+                                      <span className="ml-1 text-[10px] font-normal text-text-muted">· {opt.votes}</span>
                                     )}
                                   </span>
                                 </div>
@@ -1476,6 +1479,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       </div>
                     );
                   })}
+                  {polls.length > POLL_PREVIEW_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => setPollsShowAll((p) => !p)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1565C0]/08"
+                    >
+                      {pollsShowAll ? (
+                        <>Thu gọn <ChevronDownIcon className="h-3.5 w-3.5" /></>
+                      ) : (
+                        <>Xem tất cả {polls.length} bình chọn <ChevronRightIcon className="h-3.5 w-3.5" /></>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </CollapsibleSection>
