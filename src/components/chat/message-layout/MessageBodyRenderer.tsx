@@ -377,6 +377,21 @@ const renderTextContent = (
   );
 };
 
+const UnsupportedLocationMessage: React.FC<{ isOwn: boolean }> = ({ isOwn }) => (
+  <div
+    className={clsx(
+      "min-w-[14rem] max-w-[18rem] rounded-lg border px-3 py-2 text-sm leading-snug",
+      isOwn
+        ? "border-white/20 bg-white/10 text-white/85"
+        : "border-border bg-surface-overlay/80 text-text-secondary",
+    )}
+    role="note"
+    data-error-code="LOCATION_PAYLOAD_MISSING"
+  >
+    Không thể hiển thị vị trí này
+  </div>
+);
+
 export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
@@ -540,15 +555,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       return message.location ? (
         <LocationMessage location={message.location} isOwn={isOwn} />
       ) : (
-        renderTextContent(
-          message,
-          isOwn,
-          currentUsername,
-          currentUserId,
-          textRenderMode,
-          isCollapsibleText,
-          onToggleTextExpand,
-        )
+        <UnsupportedLocationMessage isOwn={isOwn} />
       );
     case MessageType.CONTACT:
       return contactPayload ? (
