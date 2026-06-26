@@ -20,7 +20,6 @@ import {
   useIsMessagePlaying,
   usePlaybackInfo,
 } from "./GlobalAudioPlayer";
-import type { PlaybackState } from "./AudioRecorderState";
 import { AUDIO_DURATION_LIMITS } from "./AudioRecorderState";
 
 // ---------------------------------------------------------------------------
@@ -100,7 +99,7 @@ const FakeWaveform: React.FC<{ progress: number; isOwn: boolean; bars?: number }
 
 export const AudioBubble: React.FC<AudioBubbleProps> = ({
   messageId,
-  conversationId,
+  conversationId: _conversationId,
   attachment,
   isOwn,
   sendStatus,

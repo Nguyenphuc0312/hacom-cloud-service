@@ -56,7 +56,7 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
   elapsedMs,
   amplitude,
   error,
-  permissionState,
+  permissionState: _permissionState,
   onCancel,
   onSend,
   onRequestPermission,
