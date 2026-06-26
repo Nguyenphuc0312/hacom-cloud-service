@@ -37,6 +37,7 @@ export const ALLOWED_UPLOAD_FILE_TYPES: Record<string, AllowedUploadFileType> = 
   "audio/x-wav": { extensions: [".wav"], category: FileType.AUDIO },
   "audio/ogg": { extensions: [".ogg"], category: FileType.AUDIO },
   "audio/webm": { extensions: [".webm", ".weba"], category: FileType.AUDIO },
+  "audio/webm;codecs=opus": { extensions: [".webm", ".weba"], category: FileType.AUDIO },
   "audio/mp4": { extensions: [".m4a"], category: FileType.AUDIO },
   "application/pdf": { extensions: [".pdf"], category: FileType.DOCUMENT },
   "text/plain": { extensions: [".txt"], category: FileType.DOCUMENT },
