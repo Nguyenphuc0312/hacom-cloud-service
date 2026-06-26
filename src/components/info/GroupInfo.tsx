@@ -19,6 +19,10 @@ import {
   BellIcon,
   BellSlashIcon,
   TrashIcon,
+  ChartBarIcon,
+  ClockIcon,
+  LockClosedIcon,
+  TrophyIcon,
 } from "@heroicons/react/24/outline";
 import { SquarePen, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -30,8 +34,12 @@ import {
   Input,
   toast,
 } from "../ui";
-import type { Conversation, UserSummary } from "../../types";
-import { RoomMemberRole, UserStatus } from "../../types";
+import type { Conversation, Message, UserSummary } from "../../types";
+import { MessageType, RoomMemberRole, UserStatus } from "../../types";
+import type { PollInfo } from "@hacom/chat-shared-types/chat";
+import { messageApi } from "../../services/api";
+import { loadUserProfiles } from "../../services/userBatchLoader";
+import { resolvePublicResourceUrl } from "../../config";
 import { useChatStore, useGroupStore } from "../../stores";
 import { useUIStore } from "../../stores/uiStore";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
@@ -378,6 +386,47 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
+
+  // Polls section
+  const [polls, setPolls] = React.useState<Message[]>([]);
+  const [pollsLoading, setPollsLoading] = React.useState(false);
+  const [voterProfilesMap, setVoterProfilesMap] = React.useState<Record<string, { name: string; avatar: string | null }>>({});
+  const pollsSectionRef = React.useRef<HTMLDivElement>(null);
+  const remindersSectionRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!conversation.id) return;
+    setPollsLoading(true);
+    void messageApi
+      .searchMessages({ conversationId: conversation.id, type: MessageType.POLL, q: "", limit: 30 })
+      .then((res) => {
+        const messages = unwrapApiSuccess(res)?.messages ?? [];
+        setPolls(messages);
+        // Batch-load all voter profiles across all polls
+        const allIds = [
+          ...new Set(
+            messages.flatMap((msg) => {
+              const poll = (msg.metadata as { poll?: PollInfo } | null | undefined)?.poll;
+              return poll?.options.flatMap((o) => o.voterIds ?? []) ?? [];
+            }),
+          ),
+        ];
+        if (allIds.length > 0) {
+          void loadUserProfiles(allIds).then((results) => {
+            const map: Record<string, { name: string; avatar: string | null }> = {};
+            for (const [id, s] of Object.entries(results)) {
+              map[id] = {
+              name: s?.displayName ?? s?.username ?? id,
+              avatar: resolvePublicResourceUrl((s as { avatar?: string })?.avatar || s?.avatarUrl || undefined) ?? null,
+            };
+            }
+            setVoterProfilesMap(map);
+          });
+        }
+      })
+      .catch(() => setPolls([]))
+      .finally(() => setPollsLoading(false));
+  }, [conversation.id]);
 
   const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
   const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
@@ -1267,6 +1316,198 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
           {/* Shared Resources */}
           <SharedResourcesPreview conversationId={conversation.id} />
+
+          {/* ── Polls Section ── */}
+          <div ref={pollsSectionRef}>
+            <CollapsibleSection
+              title="Bình chọn"
+              icon={<ChartBarIcon className="h-4 w-4" />}
+              defaultOpen={false}
+              badge={
+                polls.length > 0 ? (
+                  <span className="rounded-full bg-surface-overlay px-1.5 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+                    {polls.length}
+                  </span>
+                ) : undefined
+              }
+            >
+              {pollsLoading ? (
+                <div className="space-y-2 p-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="animate-pulse rounded-xl bg-surface-overlay p-3">
+                      <div className="mb-2 h-3 w-3/4 rounded bg-surface-active" />
+                      <div className="h-2 w-1/3 rounded bg-surface-active/70" />
+                    </div>
+                  ))}
+                </div>
+              ) : polls.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-6 text-center">
+                  <ChartBarIcon className="h-8 w-8 text-text-muted/40" />
+                  <p className="text-[12px] text-text-muted">Chưa có bình chọn nào</p>
+                </div>
+              ) : (
+                <div className="space-y-2 p-3">
+                  {polls.map((msg) => {
+                    const poll = (msg.metadata as { poll?: PollInfo } | null | undefined)?.poll;
+                    if (!poll) return null;
+                    const activePoll = !poll.isClosed;
+                    const winner = poll.options.reduce(
+                      (a, b) => (b.votes > a.votes ? b : a),
+                      poll.options[0],
+                    );
+                    return (
+                      <div
+                        key={msg.id}
+                        className="overflow-hidden rounded-xl border border-border bg-surface-overlay"
+                      >
+                        {/* Question row */}
+                        <div className="flex items-start gap-2 px-3 pt-3 pb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="line-clamp-2 text-[12.5px] font-semibold leading-snug text-text-primary">
+                              {poll.question}
+                            </p>
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              {activePoll ? (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-[#1565C0]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#1565C0]">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-[#1565C0] animate-pulse" />
+                                  Đang mở
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-surface-active px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
+                                  <LockClosedIcon className="h-2.5 w-2.5" />
+                                  Đã kết thúc
+                                </span>
+                              )}
+                              <span className="text-[11px] text-text-muted tabular-nums">
+                                {poll.totalVotes} lượt
+                              </span>
+                              {poll.allowMultiple && (
+                                <span className="text-[10px] text-text-muted">· Chọn nhiều</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Options preview — top 3 */}
+                        <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                          {poll.options.slice(0, 3).map((opt) => {
+                            const pct = poll.totalVotes > 0
+                              ? Math.round((opt.votes / poll.totalVotes) * 100)
+                              : 0;
+                            const isWinner = !activePoll && opt.id === winner?.id && poll.totalVotes > 0;
+                            return (
+                              <div key={opt.id} className="relative overflow-hidden rounded-lg">
+                                {/* Bar background */}
+                                <div
+                                  className={clsx(
+                                    "absolute inset-y-0 left-0 rounded-lg transition-all duration-500",
+                                    isWinner ? "bg-[#1565C0]/15" : "bg-[#1565C0]/06",
+                                  )}
+                                  style={{ width: `${pct}%` }}
+                                />
+                                <div className="relative flex items-center gap-1.5 px-2 py-1.5">
+                                  {isWinner && (
+                                    <TrophyIcon className="h-3 w-3 shrink-0 text-[#F59E0B]" />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <span className={clsx(
+                                      "block truncate text-[11.5px]",
+                                      isWinner ? "font-semibold text-text-primary" : "text-text-secondary",
+                                    )}>
+                                      {opt.text}
+                                    </span>
+                                    {/* Voter avatar stack */}
+                                    {!poll.anonymous && (opt.voterIds ?? []).length > 0 && (
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <div className="flex items-center">
+                                          {(opt.voterIds ?? []).slice(0, 3).map((uid, i) => {
+                                            const vp = voterProfilesMap[uid];
+                                            return (
+                                              <div
+                                                key={uid}
+                                                title={vp?.name ?? uid}
+                                                className="ring-[1.5px] ring-surface-overlay"
+                                                style={{ marginLeft: i === 0 ? 0 : -5, position: "relative", zIndex: 3 - i }}
+                                              >
+                                                <Avatar src={vp?.avatar ?? null} alt={vp?.name ?? uid} size="xs" />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        {(opt.voterIds ?? []).length > 3 && (
+                                          <span className="text-[10px] text-text-muted">
+                                            +{(opt.voterIds ?? []).length - 3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className={clsx(
+                                    "shrink-0 text-[11px] tabular-nums",
+                                    isWinner ? "font-semibold text-[#1565C0]" : "text-text-muted",
+                                  )}>
+                                    {pct}%
+                                    {opt.votes > 0 && (
+                                      <span className="ml-0.5 font-semibold text-[#1565C0]"> {opt.votes}</span>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {poll.options.length > 3 && (
+                            <p className="text-[10.5px] text-text-muted px-1">
+                              +{poll.options.length - 3} lựa chọn khác
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Footer — sender + time */}
+                        {msg.senderName && (
+                          <div className="border-t border-border/50 px-3 py-1.5 flex items-center gap-1 text-[10.5px] text-text-muted">
+                            <span className="truncate">{msg.senderName}</span>
+                            {msg.createdAt && (
+                              <span className="shrink-0">
+                                · {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CollapsibleSection>
+          </div>
+
+          {/* ── Reminders Section ── */}
+          <div ref={remindersSectionRef}>
+            <CollapsibleSection
+              title="Nhắc hẹn"
+              icon={<ClockIcon className="h-4 w-4" />}
+              defaultOpen={false}
+            >
+              <div className="flex flex-col items-center gap-3 py-6 px-4 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1565C0]/08">
+                  <ClockIcon className="h-6 w-6 text-[#1565C0]/50" />
+                </div>
+                <div>
+                  <p className="text-[12.5px] font-medium text-text-primary">Chưa có nhắc hẹn nào</p>
+                  <p className="mt-0.5 text-[11px] text-text-muted">
+                    Đặt nhắc hẹn từ tin nhắn để không bỏ lỡ việc quan trọng
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-xl bg-[#1565C0]/10 px-4 py-2 text-[12px] font-medium text-[#1565C0] transition-colors hover:bg-[#1565C0]/16"
+                  onClick={() => navigate("/calendar")}
+                >
+                  Mở lịch
+                </button>
+              </div>
+            </CollapsibleSection>
+          </div>
 
           {/* Security Section — admin only */}
           {isAdmin && (
