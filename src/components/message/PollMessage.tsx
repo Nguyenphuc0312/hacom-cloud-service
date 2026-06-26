@@ -11,7 +11,10 @@ import { toast } from "../ui";
 import { useAuthStore } from "../../stores";
 import { UserProfile } from "../info/UserProfile";
 import { Avatar } from "../common/Avatar";
-import { loadUserProfiles } from "../../services/userBatchLoader";
+import {
+  loadUserProfiles,
+  invalidateUserProfileSummary,
+} from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 import { dispatchStartDirectMessage } from "../../features/chat/events/chatUiEvents";
 import { PollDetailModal } from "./PollDetailModal";
@@ -73,27 +76,43 @@ export const PollMessage: React.FC<PollMessageProps> = ({
 
   // Batch-load voter profiles for non-anonymous polls whenever there are voters —
   // option rows now show voter avatars regardless of whether the viewer has voted.
+  const loadProfiles = React.useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setProfilesLoading(true);
+    void loadUserProfiles(ids).then((results) => {
+      setResolvedProfiles((prev) => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(results)) {
+          next[id] = {
+            name: s?.displayName ?? s?.username ?? id,
+            avatar: resolvePublicResourceUrl((s as { avatar?: string })?.avatar || s?.avatarUrl || undefined) ?? null,
+            position: s?.position ?? null,
+            department: s?.department ?? null,
+          };
+        }
+        return next;
+      });
+      setProfilesLoading(false);
+    });
+  }, []);
+
   React.useEffect(() => {
     if (poll.anonymous) return;
     const allIds = [
       ...new Set(poll.options.flatMap((o) => o.voterIds ?? [])),
     ];
-    if (allIds.length === 0) return;
-    setProfilesLoading(true);
-    void loadUserProfiles(allIds).then((results) => {
-      const map: Record<string, ResolvedProfile> = {};
-      for (const [id, s] of Object.entries(results)) {
-        map[id] = {
-          name: s?.displayName ?? s?.username ?? id,
-          avatar: resolvePublicResourceUrl((s as { avatar?: string })?.avatar || s?.avatarUrl || undefined) ?? null,
-          position: s?.position ?? null,
-          department: s?.department ?? null,
-        };
-      }
-      setResolvedProfiles(map);
-      setProfilesLoading(false);
-    });
-  }, [poll.anonymous, poll.options]);
+    loadProfiles(allIds);
+  }, [poll.anonymous, poll.options, loadProfiles]);
+
+  // Presigned avatar URLs expire (~15min). On a 403/load failure, drop the
+  // cached summary and re-resolve that one voter so a fresh URL is signed.
+  const handleAvatarError = React.useCallback(
+    (uid: string) => {
+      invalidateUserProfileSummary(uid);
+      loadProfiles([uid]);
+    },
+    [loadProfiles],
+  );
 
   // Commit a full selection from the detail modal (already-diffed draft)
   const commitVote = (selected: Set<string>) => {
@@ -207,10 +226,15 @@ export const PollMessage: React.FC<PollMessageProps> = ({
                       <div
                         key={uid}
                         title={p?.name ?? uid}
-                        className="ring-[1.5px] ring-surface"
+                        className="rounded-full"
                         style={{ marginLeft: i === 0 ? 0 : -6, zIndex: 3 - i }}
                       >
-                        <Avatar src={p?.avatar ?? undefined} alt={p?.name ?? uid} size="xs" />
+                        <Avatar
+                          src={p?.avatar ?? undefined}
+                          alt={p?.name ?? uid}
+                          size="xs"
+                          onImageError={() => handleAvatarError(uid)}
+                        />
                       </div>
                     );
                   })}

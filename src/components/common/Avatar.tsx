@@ -16,6 +16,8 @@ interface AvatarProps {
   showStatus?: boolean;
   className?: string;
   onClick?: () => void;
+  /** Fired when the <img> fails to load (e.g. expired presigned URL). */
+  onImageError?: (src: string) => void;
 }
 
 const sizeClasses: Record<AvatarSize, string> = {
@@ -82,6 +84,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   showStatus = false,
   className,
   onClick,
+  onImageError,
 }) => {
   const { t } = useTranslation();
   const normalizedAlt = typeof alt === "string" ? alt.trim() : "";
@@ -121,6 +124,7 @@ export const Avatar: React.FC<AvatarProps> = ({
           onClick && "cursor-pointer transition-opacity hover:opacity-90",
         )}
         fallback={fallback}
+        onError={onImageError ? (_e, failedSrc) => onImageError(failedSrc) : undefined}
       />
 
       {showStatus && status && (
