@@ -9,7 +9,7 @@ import { RichTextToolbar } from "./RichTextToolbar";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
-import { reminderApi } from "../../services/api";
+import { messageApi, reminderApi } from "../../services/api";
 import {
   PollCreateDialog,
   type PollCreatePayload,
