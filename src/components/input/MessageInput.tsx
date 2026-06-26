@@ -34,6 +34,11 @@ import {
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
 import { hasRichFormatting } from "../../utils/messageContent.utils";
+import {
+  formatLocationTime,
+  getFriendlyAccuracyLabel,
+  isLocationStale,
+} from "../../utils/locationMessage";
 
 import { ComposerStatusBanner } from "./MessageInput/ComposerStatusBanner";
 import { ComposerReplyBanner } from "./MessageInput/ComposerReplyBanner";
@@ -53,6 +58,40 @@ import type {
 } from "./MessageInput/types";
 
 export type { MentionCandidate, MessageInputHandle };
+
+type LocationFlowStatus =
+  | "idle"
+  | "requesting_permission"
+  | "acquiring_location"
+  | "confirming"
+  | "sending"
+  | "sent"
+  | "permission_denied"
+  | "permission_blocked"
+  | "timeout"
+  | "unavailable"
+  | "error"
+  | "send_failed"
+  | "retrying";
+
+type LocationFlowState = {
+  status: LocationFlowStatus;
+  location?: LocationMessagePayload;
+  clientMessageId?: string;
+  message?: string;
+};
+
+const createLocationClientMessageId = (): string => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `location-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const isLocalhost = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+};
 
 const MessageInputComponent = React.forwardRef(function MessageInput(
   props: MessageInputProps,
@@ -127,11 +166,28 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
   const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
-  const [locationFlowState, setLocationFlowState] = React.useState<
-    "idle" | "requesting_permission" | "acquiring_location" | "confirming" | "sending" | "sent" | "error"
-  >("idle");
-  const [pendingLocation, setPendingLocation] = React.useState<LocationMessagePayload | null>(null);
-  const [locationError, setLocationError] = React.useState<string | null>(null);
+  const [locationFlow, setLocationFlow] = React.useState<LocationFlowState>({
+    status: "idle",
+  });
+  const locationRequestSeqRef = React.useRef(0);
+  const locationFlowState = locationFlow.status;
+  const pendingLocation = locationFlow.location ?? null;
+  const locationError = locationFlow.message ?? null;
+  const setLocationFlowState = React.useCallback((status: LocationFlowStatus) => {
+    setLocationFlow((current) => ({ ...current, status }));
+  }, []);
+  const setPendingLocation = React.useCallback((location: LocationMessagePayload | null) => {
+    setLocationFlow((current) => ({
+      ...current,
+      location: location ?? undefined,
+    }));
+  }, []);
+  const setLocationError = React.useCallback((message: string | null) => {
+    setLocationFlow((current) => ({
+      ...current,
+      message: message ?? undefined,
+    }));
+  }, []);
   const primarySendLockedRef = React.useRef(false);
   const isMountedRef = React.useRef(true);
   const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
@@ -349,6 +405,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       if (type === "photo" || type === "document") {
         openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
       } else if (type === "location") {
+        if (locationFlowState !== "idle") {
+          setShowAttachmentMenu(false);
+          return;
+        }
         if (!onShareLocation) {
           toast.info(t("common:toast.featureInDevelopment"));
           setShowAttachmentMenu(false);
@@ -356,7 +416,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         }
         setLocationError(null);
         setPendingLocation(null);
-        setLocationFlowState("requesting_permission");
+        const clientMessageId = createLocationClientMessageId();
+        setLocationFlow({ status: "requesting_permission", clientMessageId });
+        if (typeof window !== "undefined" && !window.isSecureContext && !isLocalhost()) {
+          setLocationFlowState("unavailable");
+          setLocationError("Trình duyệt chỉ cho phép gửi vị trí trên HTTPS hoặc localhost.");
+          setShowAttachmentMenu(false);
+          return;
+        }
         if (!("geolocation" in navigator)) {
           setLocationFlowState("error");
           setLocationError(
@@ -440,17 +507,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   );
 
   const resetLocationFlow = React.useCallback(() => {
-    setLocationFlowState("idle");
-    setPendingLocation(null);
-    setLocationError(null);
+    locationRequestSeqRef.current += 1;
+    setLocationFlow({ status: "idle" });
   }, []);
 
   const confirmLocationSend = React.useCallback(async () => {
     if (!pendingLocation || !onShareLocation) return;
-    setLocationFlowState("sending");
+    if (locationFlowState === "sending" || locationFlowState === "retrying") return;
+    setLocationFlowState(locationFlowState === "send_failed" ? "retrying" : "sending");
     setLocationError(null);
     try {
-      await Promise.resolve(onShareLocation(pendingLocation));
+      await Promise.resolve(onShareLocation(pendingLocation, locationFlow.clientMessageId));
       if (!isMountedRef.current) return;
       setLocationFlowState("sent");
       setPendingLocation(null);
@@ -462,14 +529,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       }, 300);
     } catch {
       if (!isMountedRef.current) return;
-      setLocationFlowState("error");
+      setLocationFlowState("send_failed");
       setLocationError(
         t("chat:location.sendFailed", {
           defaultValue: "Gửi vị trí thất bại. Bạn có thể thử gửi lại.",
         }),
       );
     }
-  }, [onShareLocation, optimisticAnnouncement, pendingLocation, t]);
+  }, [locationFlow.clientMessageId, locationFlowState, onShareLocation, optimisticAnnouncement, pendingLocation, t]);
 
   const handleSendText = React.useCallback(async () => {
     if (!messageValidation.canSendInlineMessage) {
@@ -846,6 +913,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     !hasUploadingDrafts &&
     (hasQueueDrafts ? hasReadyDrafts || hasText : hasText);
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
+  const isLocationFlowBusy =
+    locationFlowState !== "idle" && locationFlowState !== "sent";
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
     ? "disabled"
@@ -1030,11 +1099,23 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         )}
 
         {locationFlowState !== "idle" && (
-          <div className="mb-2 rounded-lg border border-border bg-surface px-3 py-2 shadow-sm">
+          <div
+            className="mb-2 rounded-lg border border-border bg-surface px-3 py-3 shadow-sm"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="composer-location-title"
+            aria-describedby="composer-location-description"
+          >
             {(locationFlowState === "requesting_permission" ||
               locationFlowState === "acquiring_location") && (
               <div className="flex items-center justify-between gap-3">
                 <div>
+                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                    Đang xác định vị trí của bạn
+                  </p>
+                  <p id="composer-location-description" className="text-xs text-text-muted">
+                    Quá trình này có thể mất vài giây
+                  </p>
                   <p className="text-sm font-medium text-text-primary">
                     {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
                   </p>
@@ -1055,6 +1136,34 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             {locationFlowState === "confirming" && pendingLocation && (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
+                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                    Gửi vị trí hiện tại
+                  </p>
+                  <p id="composer-location-description" className="text-xs text-text-muted">
+                    Vị trí này sẽ được gửi vào cuộc trò chuyện.
+                  </p>
+                  {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label && (
+                    <p
+                      className={clsx(
+                        "mt-1 text-xs",
+                        getFriendlyAccuracyLabel(pendingLocation.accuracyM).tone === "warning"
+                          ? "text-warning"
+                          : "text-text-muted",
+                      )}
+                    >
+                      {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label}
+                    </p>
+                  )}
+                  {formatLocationTime(pendingLocation.capturedAt) && (
+                    <p className="text-xs text-text-muted">
+                      Thời điểm: {formatLocationTime(pendingLocation.capturedAt)}
+                    </p>
+                  )}
+                  {isLocationStale(pendingLocation.capturedAt) && (
+                    <p className="text-xs text-warning">
+                      Vị trí đã được lấy từ vài phút trước.
+                    </p>
+                  )}
                   <p className="text-sm font-medium text-text-primary">
                     {t("chat:location.current", { defaultValue: "Vị trí hiện tại" })}
                   </p>
@@ -1077,7 +1186,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   </button>
                   <button
                     type="button"
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
                   >
                     {t("common:send", { defaultValue: "Gửi" })}
@@ -1086,13 +1195,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               </div>
             )}
 
-            {locationFlowState === "sending" && (
+            {(locationFlowState === "sending" || locationFlowState === "retrying") && (
               <p className="text-sm text-text-secondary">
                 {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
               </p>
             )}
 
-            {locationFlowState === "error" && (
+            {["error", "permission_denied", "permission_blocked", "timeout", "unavailable", "send_failed"].includes(locationFlowState) && (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-danger">
                   {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
@@ -1236,6 +1345,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   conversationType !== "direct" &&
                   conversationType !== "private"
                 }
+                disabledAttachmentItemIds={isLocationFlowBusy ? ["location"] : []}
                 onEmojiChange={handleEmojiChange}
                 onEmojiInsert={(emoji) => {
                   tipTapRef.current?.insertAtCursor(emoji);

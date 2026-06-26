@@ -179,7 +179,7 @@ interface ChatWindowProps {
     contentJson?: Record<string, unknown>,
     plainText?: string,
     linkPreview?: LinkPreviewMeta,
-    options?: { location?: LocationMessagePayload },
+    options?: { location?: LocationMessagePayload; clientMessageId?: string },
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
@@ -636,7 +636,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   const handleShareLocation = React.useCallback(
-    (location: LocationMessagePayload) => {
+    (location: LocationMessagePayload, clientMessageId?: string) => {
       const sendResult = onSendMessage(
         "",
         replyToMessage,
@@ -647,7 +647,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         undefined,
         undefined,
         undefined,
-        { location },
+        { location, clientMessageId },
       );
       return Promise.resolve(sendResult).then((result) => {
         setReplyToMessage(undefined);
