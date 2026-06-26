@@ -13,6 +13,11 @@ interface PollCreateDialogProps {
   onSubmit: (payload: PollCreatePayload) => void;
 }
 
+const toLocalDatetimeInput = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const QUESTION_LIMIT = 150;
 const OPTION_LIMIT = 80;
 const MAX_OPTIONS = 10;
@@ -76,7 +81,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(9, 0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    return toLocalDatetimeInput(d);
   });
   const firstInputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const optionRefs = React.useRef<(HTMLInputElement | null)[]>([]);
@@ -144,7 +149,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
   const minEndsAt = (() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + 10);
-    return d.toISOString().slice(0, 16);
+    return toLocalDatetimeInput(d);
   })();
 
   return (

@@ -6,7 +6,7 @@ import { MessageActions } from "../../message/MessageActions";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import ReactDOM from "react-dom";
 import type { Attachment, Conversation, ImageClickPayload, Message } from "../../../types";
-import { RoomType } from "../../../types";
+import { MessageType, RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
 import { useAuthStore } from "../../../stores";
 import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
@@ -522,6 +522,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     ? (id) => setEditHistoryMessageId(id)
                     : undefined
                 }
+                className={message.type === MessageType.POLL ? "!text-[#1565C0]/70" : undefined}
               />
             )}
 
