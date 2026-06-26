@@ -39,6 +39,11 @@ import {
   getFriendlyAccuracyLabel,
   isLocationStale,
 } from "../../utils/locationMessage";
+import {
+  RecordingBar,
+  useAudioRecorder,
+  useAudioUpload,
+} from "../../features/audio";
 
 import { ComposerStatusBanner } from "./MessageInput/ComposerStatusBanner";
 import { ComposerReplyBanner } from "./MessageInput/ComposerReplyBanner";
@@ -191,6 +196,76 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const primarySendLockedRef = React.useRef(false);
   const isMountedRef = React.useRef(true);
   const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
+
+  // ---- Audio recording flow ----
+  const {
+    state: audioState,
+    error: audioError,
+    elapsedMs: audioElapsedMs,
+    amplitude: audioAmplitude,
+    permissionState: audioPermissionState,
+    requestPermission: audioRequestPermission,
+    startRecording: audioStartRecording,
+    stopRecording: audioStopRecording,
+    cancelRecording: audioCancelRecording,
+    reset: audioReset,
+  } = useAudioRecorder();
+  const audioUpload = useAudioUpload();
+  const audioFlowActive = audioState !== "IDLE" && audioState !== "CANCELLED" && audioState !== "SENT";
+
+  const handleAudioCancel = React.useCallback(() => {
+    audioCancelRecording();
+    audioReset();
+  }, [audioCancelRecording, audioReset]);
+
+  const handleAudioSend = React.useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const clip = await audioStopRecording();
+      if (!clip || clip.blob.size === 0) {
+        toast.warning(t("chat:audio.tooShort", { defaultValue: "Recording too short" }));
+        audioReset();
+        return;
+      }
+      const clientMessageId = (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`) || `voice-${Date.now()}`;
+      const uploadResult = await audioUpload.uploadAudio({
+        clip,
+        conversationId,
+        clientMessageId,
+        durationMs: clip.durationMs,
+      });
+      // Create VOICE message referencing uploaded file
+      await messageApi.sendMessage(conversationId, {
+        type: "voice" as any,
+        clientMessageId,
+        content: "",
+        attachments: [{
+          id: uploadResult.fileId,
+          type: "voice",
+          fileName: `voice-recording.${clip.mimeType.includes("webm") ? "webm" : clip.mimeType.includes("mp4") ? "m4a" : "ogg"}`,
+          mimeType: clip.mimeType,
+          fileSize: clip.sizeBytes,
+          duration: clip.durationMs,
+        }],
+      });
+      toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(t("chat:voice.recordingError", { defaultValue: "Failed to send recording." }));
+      console.error("[AudioSend]", msg);
+    } finally {
+      audioReset();
+    }
+  }, [audioStopRecording, audioUpload, conversationId, audioReset, t]);
+
+  const handleAudioStart = React.useCallback(async () => {
+    await audioRequestPermission();
+    audioStartRecording();
+  }, [audioRequestPermission, audioStartRecording]);
+
+  const canStartAudio = !disabled && navigator?.mediaDevices?.getUserMedia != null;
 
   const mentionListId = React.useId();
 
@@ -489,6 +564,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         setIsPollDialogOpen(true);
       } else if (type === "reminder") {
         setIsReminderDialogOpen(true);
+      } else if (type === "audio") {
+        if (!canStartAudio) {
+          toast.warning(t("chat:audio.unsupported", { defaultValue: "This browser does not support audio recording" }));
+        } else {
+          void handleAudioStart();
+        }
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
@@ -1076,6 +1157,22 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           {...(onAddFiles ? { multiple: true } : {})}
         />
 
+        {/* Audio recording bar — replaces composer when recording is active */}
+        {audioFlowActive && (
+          <RecordingBar
+            state={audioState}
+            elapsedMs={audioElapsedMs}
+            amplitude={audioAmplitude}
+            error={audioError}
+            permissionState={audioPermissionState}
+            onCancel={handleAudioCancel}
+            onSend={() => void handleAudioSend()}
+            onRequestPermission={() => void audioRequestPermission()}
+          />
+        )}
+
+        {!audioFlowActive && (
+          <>
         {mode === "reply" && replyToMessage && (
           <ComposerReplyBanner
             replyToMessage={replyToMessage}
@@ -1422,6 +1519,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           onClose={() => setIsReminderDialogOpen(false)}
           onSubmit={handleCreateReminder}
         />
+          </>
+        )}
       </ConversationLane>
     </div>
   );
