@@ -564,6 +564,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
           isOwn={isOwn}
           currentUserId={currentUserId}
           messageId={message.id}
+          senderName={message.senderName}
         />
       );
     }
