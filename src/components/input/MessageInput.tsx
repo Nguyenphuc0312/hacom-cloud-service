@@ -21,7 +21,12 @@ import {
 import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
-import { useSendMessageMutation } from "../../features/api/chatApi";
+import {
+  chatApi,
+  fetchConversationTail,
+  useSendMessageMutation,
+} from "../../features/api/chatApi";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { MessageType, type LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
@@ -310,6 +315,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   // Poll create goes through the RTK mutation (not raw axios) so the new poll
   // gets an optimistic timeline row + ack-replace — appears instantly, no reload.
   const [sendPollMessage] = useSendMessageMutation();
+  const dispatch = useAppDispatch();
+  const newestLoadedSeq = useAppSelector((s) =>
+    conversationId
+      ? (chatApi.endpoints.getMessages.select({ conversationId })(s).data
+          ?.newestLoadedSeq ?? null)
+      : null,
+  );
 
   // Expose imperative methods to parent components
   React.useImperativeHandle(
@@ -859,7 +871,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   ]);
 
   const handleCreatePoll = React.useCallback(
-    (payload: PollCreatePayload) => {
+    (payload: PollCreatePayload, options: { pinToTop: boolean }) => {
       if (!conversationId) return;
       const clientMessageId =
         typeof crypto !== "undefined" && crypto.randomUUID
@@ -875,11 +887,39 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         senderId: currentUserId ?? undefined,
       })
         .unwrap()
+        .then((created) => {
+          // "Ghim lên đầu trò chuyện" toggle: the create DTO has no pin field, so
+          // pin the real message once it's acked (same path as PollMessage's pin).
+          if (options.pinToTop && created?.id) {
+            messageApi
+              .pinMessage(created.id)
+              .then(() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(
+                    new CustomEvent("group:pin:updated", {
+                      detail: { conversationId },
+                    }),
+                  );
+                }
+              })
+              .catch(() =>
+                toast.error(
+                  t("common:toast.error", {
+                    defaultValue: "Không thể ghim bình chọn",
+                  }),
+                ),
+              );
+          }
+          // The "Bạn tạo cuộc bình chọn mới… Xem" system line is BE-generated and
+          // only reaches us via a later message:new echo — pull the tail so it
+          // shows now instead of waiting for a reload.
+          dispatch(fetchConversationTail(conversationId, newestLoadedSeq));
+        })
         .catch(() => {
           toast.error(t("common:toast.error", { defaultValue: "Không thể tạo bình chọn" }));
         });
     },
-    [conversationId, sendPollMessage, currentUserId, t],
+    [conversationId, sendPollMessage, currentUserId, t, dispatch, newestLoadedSeq],
   );
 
   const handleCreateReminder = React.useCallback(

@@ -73,7 +73,7 @@ import {
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
-import { chatApi } from "../features/api/chatApi";
+import { chatApi, fetchConversationTail } from "../features/api/chatApi";
 import {
   getMessageSeq,
 } from "../features/chat/domain/messageMerge";
@@ -237,6 +237,31 @@ const toRealtimeCacheMessage = (
 const getConversationMessageCache = (conversationId: string) =>
   chatApi.endpoints.getMessages.select({ conversationId })(store.getState())
     .data?.messages ?? [];
+
+// A poll action (create/vote/close) by anyone also produces a separate BE
+// system line ("X tham gia/đổi lựa chọn… Xem") that doesn't reliably arrive via
+// its own message:new echo (see FE__poll-self-realtime-echo contract). The poll
+// message:new/updated itself DOES arrive live, so when it does we pull the tail
+// to surface that system line without a reload. ponytail: reuses the append
+// fetch; BE delivering the system echo would let us drop this.
+const pollTailFetchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pullConversationTailForPoll = (conversationId: string): void => {
+  if (!conversationId) return;
+  // Debounce: a burst of votes emits many poll events; coalesce into one fetch.
+  const existing = pollTailFetchTimers.get(conversationId);
+  if (existing) clearTimeout(existing);
+  pollTailFetchTimers.set(
+    conversationId,
+    setTimeout(() => {
+      pollTailFetchTimers.delete(conversationId);
+      const newestLoadedSeq =
+        chatApi.endpoints.getMessages.select({ conversationId })(
+          store.getState(),
+        ).data?.newestLoadedSeq ?? null;
+      store.dispatch(fetchConversationTail(conversationId, newestLoadedSeq));
+    }, 400),
+  );
+};
 
 const hasMessageInRtkCache = (
   conversationId: string,
@@ -1472,6 +1497,11 @@ export const useWebSocket = (
 
       if (eventType === "message:new") {
         sendDeliveryAckForMessage(normalizedEvent);
+      }
+
+      // Poll activity by anyone → pull the tail so the BE system line shows live.
+      if (asString(messagePayload.type) === "poll") {
+        pullConversationTailForPoll(conversationId);
       }
 
       if (isAmbiguousSelfReconcile) {

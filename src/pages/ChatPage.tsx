@@ -1050,6 +1050,20 @@ export const ChatPage: React.FC = () => {
     );
   }, []);
 
+  // Jump the open timeline to a message in the current conversation (e.g. tapping
+  // a poll in the info-panel history list). Bump the version so re-tapping the
+  // same message re-triggers the scroll. Close the info panel so the jump is
+  // visible (on mobile it overlays the timeline).
+  const handleJumpToMessageInConversation = useCallback(
+    (messageId: string) => {
+      if (!messageId) return;
+      setExternalJumpTargetMessageId(messageId);
+      setExternalJumpRequestVersion((current) => current + 1);
+      closeInfoPanel();
+    },
+    [closeInfoPanel],
+  );
+
   useEffect(() => {
     return listenForContactProfileView(({ userId }) => {
       if (!userId) return;
@@ -1287,6 +1301,7 @@ export const ChatPage: React.FC = () => {
                       currentUserId={currentUserSummary.id}
                       onClose={closeInfoPanel}
                       onStartConversation={handleStartChat}
+                      onJumpToMessage={handleJumpToMessageInConversation}
                     />
                   ) : null}
                 </React.Suspense>
