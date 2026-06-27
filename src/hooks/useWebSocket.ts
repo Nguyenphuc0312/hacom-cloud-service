@@ -1417,6 +1417,15 @@ export const useWebSocket = (
         incomingSeq,
       });
       if (eventType === "message:new") {
+        logMessageDebug("useWebSocket", "realtime.message.normalized", {
+          conversationId,
+          messageId,
+          clientMessageId,
+          type: asString(messagePayload.type) ?? null,
+          activeConversationId: useChatStore.getState().selectedConversationId,
+          willAppendToActiveList:
+            useChatStore.getState().selectedConversationId === conversationId,
+        });
         markChatPerformance("fe.socket.message.received", conversationId, {
           eventId,
           messageId,

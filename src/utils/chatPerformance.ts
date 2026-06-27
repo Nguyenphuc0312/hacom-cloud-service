@@ -15,6 +15,7 @@ type ChatPerformanceWindow = Window & {
 };
 
 const isPerfEnvFlagEnabled = (): boolean =>
+  import.meta.env.VITE_DEBUG_REALTIME === "true" ||
   import.meta.env.VITE_CHAT_PERF_DEBUG === "true" ||
   import.meta.env.VITE_SOCKET_PERF_DEBUG === "true";
 
@@ -286,4 +287,15 @@ export const recordChatRenderCount = (
     renderCount: nextCount,
     ...details,
   });
+  if (
+    componentName === "MessageItem" ||
+    componentName === "MessageGroupItem"
+  ) {
+    recordChatPerformanceEvent("realtime.message.rendered", undefined, {
+      componentName,
+      messageId: instanceKey,
+      renderCount: nextCount,
+      ...details,
+    });
+  }
 };
