@@ -166,7 +166,10 @@ export const PollMessage: React.FC<PollMessageProps> = ({
     });
     const prevVoted = voted;
     setVoted(new Set(selected));
-    if (messageId && selected.size > 0) {
+    // Send even when selected is empty: that clears my vote server-side
+    // (BE filters me out of every option). Skipping it left voterIds — and so
+    // the avatars — stale until a reload.
+    if (messageId) {
       messageApi
         .votePoll(messageId, poll.id, Array.from(selected))
         .then(refreshTimeline)
