@@ -1,5 +1,6 @@
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type { MarkReadResponseData, PollInfo } from "@hacom/chat-shared-types/chat";
+import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   ApiContractError,
@@ -10,7 +11,7 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../../lib/conversationAdapter";
-import { conversationApi, messageApi, conversationResourcesApi, fileApi, linkPreviewApi } from "../../services/api";
+import { conversationApi, messageApi, conversationResourcesApi, fileApi, linkPreviewApi, userApi } from "../../services/api";
 import type {
   ConversationSidebarSummary,
   ConversationResourcesMediaItem,
@@ -403,9 +404,68 @@ const createInlineMessageTooLongError = (
 export const chatApi = createApi({
   reducerPath: "chatApi",
   baseQuery: fakeBaseQuery<ChatQueryError>(),
-  tagTypes: ["Conversation", "Messages", "Unread", "ConversationResources"],
+  tagTypes: [
+    "Conversation",
+    "Messages",
+    "Unread",
+    "ConversationResources",
+    "ConversationMember",
+    "User",
+    "UserProfile",
+    "UserBatch",
+  ],
   keepUnusedDataFor: 60, // Phase 2: Keep conversation data for 60 seconds
   endpoints: (build) => ({
+    getUserProfile: build.query<UserProfileSummaryDto, string>({
+      async queryFn(userId) {
+        try {
+          const response = await userApi.getUserById(userId);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      keepUnusedDataFor: 30,
+      providesTags: (_result, _error, userId) => [
+        { type: "User", id: userId },
+        { type: "UserProfile", id: userId },
+      ],
+    }),
+
+    getUsersBatch: build.query<Record<string, UserProfileSummaryDto | null>, string[]>({
+      async queryFn(userIds) {
+        try {
+          return { data: await userApi.getUsersByIds(userIds) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      serializeQueryArgs: ({ endpointName, queryArgs }) =>
+        `${endpointName}:${Array.from(new Set(queryArgs)).sort().join(",")}`,
+      forceRefetch({ currentArg, previousArg }) {
+        return (
+          Array.from(new Set(currentArg ?? [])).sort().join(",") !==
+          Array.from(new Set(previousArg ?? [])).sort().join(",")
+        );
+      },
+      keepUnusedDataFor: 30,
+      providesTags: (result, _error, userIds) => {
+        const ids = Array.from(
+          new Set([
+            ...(userIds ?? []),
+            ...Object.keys(result ?? {}),
+          ].filter(Boolean)),
+        );
+        return [
+          { type: "UserBatch" as const, id: "LIST" },
+          ...ids.flatMap((id) => [
+            { type: "User" as const, id },
+            { type: "UserBatch" as const, id },
+          ]),
+        ];
+      },
+    }),
+
     getConversations: build.query<Conversation[], GetConversationsArgs | void>({
       async queryFn(args) {
         try {
@@ -955,6 +1015,8 @@ export const {
   useAddReactionMutation,
   useGetConversationByIdQuery,
   useGetConversationsQuery,
+  useGetUserProfileQuery,
+  useGetUsersBatchQuery,
   useLazyGetMessageByIdQuery,
   useLazyGetMessagesQuery,
   useGetMessagesQuery,

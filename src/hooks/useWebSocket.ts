@@ -86,6 +86,8 @@ import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentit
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import { invalidateUserProfile } from "../services/userProfileCache";
+import { invalidateUserProfileSummary } from "../services/userBatchLoader";
 import {
   realtimeMessageDeleted,
   realtimeMessageDelivered,
@@ -1922,6 +1924,25 @@ export const useWebSocket = (
           asRecord(payload.participant) ?? asRecord(payload.user) ?? null;
         if (!conversationId || !participant) {
           return;
+        }
+
+        const userId =
+          asString(participant.id) ??
+          asString(participant.userId) ??
+          asString(payload.userId) ??
+          asString(payload.participantId);
+        if (userId) {
+          invalidateUserProfile(userId);
+          invalidateUserProfileSummary(userId);
+          dispatch(
+            chatApi.util.invalidateTags([
+              { type: "User", id: userId },
+              { type: "UserProfile", id: userId },
+              { type: "UserBatch", id: userId },
+              { type: "ConversationMember", id: userId },
+              { type: "ConversationMember", id: conversationId },
+            ]),
+          );
         }
 
         applyConversationParticipantSummary(conversationId, participant);

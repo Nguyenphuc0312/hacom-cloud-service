@@ -15,6 +15,7 @@ import {
   loadUserProfiles,
   primeUserProfileCache,
   getCachedUserProfileSummary,
+  invalidateUserProfileSummary,
   __resetUserBatchLoaderForTests,
 } from "./userBatchLoader";
 
@@ -124,6 +125,32 @@ describe("userBatchLoader", () => {
     const result = await loadUserProfile("seeded");
     expect(result).toEqual(summary("seeded"));
     expect(getUsersByIds).not.toHaveBeenCalled();
+  });
+
+  it("invalidates one cached summary so a profile update can rebuild from /users/batch", async () => {
+    primeUserProfileCache({ changed: summary("changed") });
+    expect(await loadUserProfile("changed")).toEqual(summary("changed"));
+
+    invalidateUserProfileSummary("changed");
+    getUsersByIds.mockResolvedValueOnce({
+      changed: {
+        ...summary("changed"),
+        department: "New Dept",
+        position: "New Title",
+        employmentStatus: "ACTIVE",
+      },
+    });
+
+    const result = loadUserProfile("changed");
+    await vi.advanceTimersByTimeAsync(70);
+
+    expect(await result).toMatchObject({
+      id: "changed",
+      department: "New Dept",
+      position: "New Title",
+      employmentStatus: "ACTIVE",
+    });
+    expect(getUsersByIds).toHaveBeenCalledWith(["changed"]);
   });
 
   it("chunks > MAX_FLUSH_BATCH (50) ids into multiple batches", async () => {
