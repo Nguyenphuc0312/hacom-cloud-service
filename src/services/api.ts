@@ -131,6 +131,8 @@ export interface ReserveFileUploadPayload {
   filename: string; 
   mimeType: string; 
   sizeBytes: number; 
+  durationMs?: number;
+  clientMessageId?: string;
 } 
 
 type ReserveFileUploadRequest = Omit<UploadSignedUrlRequest, "conversationId"> & {
@@ -1441,6 +1443,8 @@ export const fileApi = {
         fileName: payload.filename,
         mimeType: payload.mimeType,
         fileSize: payload.sizeBytes,
+        ...(typeof payload.durationMs === "number" ? { durationMs: payload.durationMs } : {}),
+        ...(payload.clientMessageId ? { clientMessageId: payload.clientMessageId } : {}),
       } satisfies ReserveFileUploadRequest,
     ); 
     return response.data; 

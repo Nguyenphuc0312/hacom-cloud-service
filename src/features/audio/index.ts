@@ -5,7 +5,7 @@
 export { AudioBubble } from "./AudioBubble";
 export { RecordingBar } from "./RecordingBar";
 export { useAudioRecorder } from "./useAudioRecorder";
-export { useAudioUpload } from "./useAudioUpload";
+export { useAudioUpload, AudioUploadError } from "./useAudioUpload";
 export { useGlobalAudioPlayer, useIsMessagePlaying, usePlaybackInfo } from "./GlobalAudioPlayer";
 export {
   type AudioRecorderState,
