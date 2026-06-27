@@ -13,6 +13,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { RecordedClip } from "./AudioRecorderState";
 import type { AudioRecorderErrorCode } from "./AudioRecorderState";
+import { extractApiError } from "../../lib/apiContract";
+import uploadClient from "../../services/uploadClient";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +47,73 @@ export interface AudioUploadResult {
   fileId: string;
   uploadId: string;
 }
+
+export class AudioUploadError extends Error {
+  public readonly code: AudioRecorderErrorCode;
+  public readonly statusCode?: number;
+
+  constructor(
+    message: string,
+    code: AudioRecorderErrorCode,
+    statusCode?: number,
+  ) {
+    super(message);
+    this.name = "AudioUploadError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof Error && error.name === "AbortError";
+
+const toAudioUploadError = (
+  error: unknown,
+  phase: UploadPhase,
+): AudioUploadError => {
+  if (error instanceof AudioUploadError) {
+    return error;
+  }
+
+  if (isAbortError(error)) {
+    return new AudioUploadError("Upload cancelled", "UNKNOWN");
+  }
+
+  const apiError = extractApiError(error);
+  if (apiError.statusCode === 401) {
+    return new AudioUploadError(
+      "Authentication is required to upload audio",
+      "AUTHENTICATION_REQUIRED",
+      apiError.statusCode,
+    );
+  }
+
+  if (phase === "init") {
+    return new AudioUploadError(
+      apiError.message,
+      "UPLOAD_URL_FAILURE",
+      apiError.statusCode,
+    );
+  }
+
+  if (phase === "uploading") {
+    return new AudioUploadError(
+      apiError.message,
+      "STORAGE_UPLOAD_FAILURE",
+      apiError.statusCode,
+    );
+  }
+
+  if (phase === "finalizing") {
+    return new AudioUploadError(
+      apiError.message,
+      "FINALIZE_FAILURE",
+      apiError.statusCode,
+    );
+  }
+
+  return new AudioUploadError(apiError.message, "UNKNOWN", apiError.statusCode);
+};
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -79,38 +148,24 @@ export function useAudioUpload() {
 
       abortRef.current = new AbortController();
       const signal = abortRef.current.signal;
+      let currentPhase: UploadPhase = "init";
 
       try {
         // ---- Phase 1: Init upload ----
+        currentPhase = "init";
         setUploadState({ phase: "init", progress: 0 });
 
-        const initRes = await fetch("/api/v1/files/upload-url", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-          body: JSON.stringify({
-            filename,
-            mimeType: clip.mimeType,
-            sizeBytes: clip.sizeBytes,
-            durationMs,
-            purpose: "audio_message",
-            conversationId,
-            clientMessageId,
-          }),
-          signal,
+        const signed = await uploadClient.reserveUpload({
+          filename,
+          mimeType: clip.mimeType,
+          sizeBytes: clip.sizeBytes,
+          durationMs,
+          purpose: "message_attachment",
+          conversationId,
+          clientMessageId,
         });
 
-        if (!initRes.ok) {
-          const err = await initRes.json().catch(() => ({}));
-          throw new Error(
-            (err as any).message || `Upload init failed: ${initRes.status}`,
-          );
-        }
-
-        const initData = await initRes.json();
-        const { uploadId, uploadUrl, objectKey } = initData.data || initData;
+        const { uploadId, uploadUrl, objectKey } = signed;
 
         if (!uploadUrl || !uploadId) {
           throw new Error("Invalid upload init response");
@@ -123,18 +178,25 @@ export function useAudioUpload() {
           uploadId,
         });
 
-        const uploadRes = await fetch(uploadUrl, {
-          method: "PUT",
+        currentPhase = "uploading";
+        const file = new File([clip.blob], filename, { type: clip.mimeType });
+        await uploadClient.uploadToSignedUrl({
+          signedUrl: uploadUrl,
+          file,
+          method: signed.uploadMethod || "PUT",
           headers: {
+            ...(signed.uploadHeaders || {}),
             "Content-Type": clip.mimeType,
           },
-          body: clip.blob,
-          signal,
+          abortSignal: signal,
+          onProgress: (progress) => {
+            setUploadState({
+              phase: "uploading",
+              progress: Math.min(90, Math.max(10, progress)),
+              uploadId,
+            });
+          },
         });
-
-        if (!uploadRes.ok) {
-          throw new Error(`Upload failed: ${uploadRes.status}`);
-        }
 
         setUploadState({
           phase: "uploading",
@@ -143,34 +205,30 @@ export function useAudioUpload() {
         });
 
         // ---- Phase 3: Complete/Finalize ----
+        currentPhase = "finalizing";
         setUploadState({
           phase: "finalizing",
           progress: 95,
           uploadId,
         });
 
-        const completeRes = await fetch("/api/v1/files/complete", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-          body: JSON.stringify({
-            uploadId,
-            objectKey,
-          }),
-          signal,
+        const completed = await uploadClient.completeUpload({
+          uploadId,
+          conversationId,
+          objectKey,
         });
 
-        if (!completeRes.ok) {
-          const err = await completeRes.json().catch(() => ({}));
-          throw new Error(
-            (err as any).message || `Upload finalize failed: ${completeRes.status}`,
+        const attachment =
+          "attachment" in completed && completed.attachment
+            ? completed.attachment
+            : undefined;
+        const fileId = completed.fileId || attachment?.id;
+        if (!fileId) {
+          throw new AudioUploadError(
+            "Upload finalized without a file id",
+            "FINALIZE_FAILURE",
           );
         }
-
-        const completeData = await completeRes.json();
-        const fileId = completeData.data?.fileId || completeData.fileId;
 
         setUploadState({
           phase: "done",
@@ -181,21 +239,15 @@ export function useAudioUpload() {
 
         return { fileId, uploadId };
       } catch (err) {
-        const message = (err as Error).message || "Upload failed";
-        const isAbort = (err as Error).name === "AbortError";
-        const isNetwork = message.includes("fetch") || message.includes("network");
+        const uploadError = toAudioUploadError(err, currentPhase);
 
         setUploadState({
           phase: "failed",
           progress: 0,
-          errorCode: isAbort
-            ? undefined
-            : isNetwork
-              ? "UPLOAD_NETWORK_FAILURE"
-              : "FINALIZE_FAILURE",
+          errorCode: isAbortError(err) ? undefined : uploadError.code,
         });
 
-        throw err;
+        throw uploadError;
       }
     },
     [],

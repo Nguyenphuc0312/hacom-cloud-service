@@ -46,6 +46,7 @@ import {
   isLocationStale,
 } from "../../utils/locationMessage";
 import {
+  AudioUploadError,
   RecordingBar,
   useAudioRecorder,
   useAudioUpload,
@@ -90,6 +91,41 @@ type LocationFlowState = {
   location?: LocationMessagePayload;
   clientMessageId?: string;
   message?: string;
+};
+
+const getAudioSendErrorMessage = (
+  error: unknown,
+  t: ReturnType<typeof useTranslation>["t"],
+): string => {
+  if (error instanceof AudioUploadError) {
+    switch (error.code) {
+      case "AUTHENTICATION_REQUIRED":
+        return t("chat:voice.authExpired", {
+          defaultValue: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+        });
+      case "UPLOAD_URL_FAILURE":
+        return t("chat:voice.uploadUrlError", {
+          defaultValue: "Không thể chuẩn bị tải tin nhắn thoại lên. Vui lòng thử lại.",
+        });
+      case "STORAGE_UPLOAD_FAILURE":
+      case "UPLOAD_NETWORK_FAILURE":
+        return t("chat:voice.storageUploadError", {
+          defaultValue: "Không thể tải tin nhắn thoại lên. Kiểm tra kết nối rồi thử lại.",
+        });
+      case "FINALIZE_FAILURE":
+        return t("chat:voice.finalizeError", {
+          defaultValue: "Tin nhắn thoại đã tải lên nhưng chưa thể hoàn tất. Vui lòng thử lại.",
+        });
+      default:
+        return t("chat:voice.sendError", {
+          defaultValue: "Không thể gửi tin nhắn thoại. Vui lòng thử lại.",
+        });
+    }
+  }
+
+  return t("chat:voice.sendError", {
+    defaultValue: "Không thể gửi tin nhắn thoại. Vui lòng thử lại.",
+  });
 };
 
 const createLocationClientMessageId = (): string => {
@@ -259,7 +295,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      toast.error(t("chat:voice.recordingError", { defaultValue: "Failed to send recording." }));
+      toast.error(getAudioSendErrorMessage(err, t));
       console.error("[AudioSend]", msg);
     } finally {
       audioReset();
