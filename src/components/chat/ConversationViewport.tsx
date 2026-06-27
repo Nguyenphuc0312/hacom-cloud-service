@@ -2,8 +2,10 @@ import React from "react";
 import type { Attachment, Conversation, ImageClickPayload, Message } from "../../types";
 import { SimpleVirtualizedChatTimeline } from "../../features/chat/simple-virtual-timeline";
 import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
+import { getMessageSeq } from "../../features/chat/domain/messageMerge";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
+import { logMessageDebug } from "../../utils/messageDebug";
 
 interface ConversationViewportProps {
   layoutState: ChatLayoutState;
@@ -122,6 +124,20 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
         isLoadingOlder,
         loadOlder,
       } = useConversationMessagesRTK(conversation.id);
+
+      React.useEffect(() => {
+        const latestMessage = messages[messages.length - 1];
+        logMessageDebug("ConversationViewport", "[MESSAGE PANEL RENDER]", {
+          conversationId: conversation.id,
+          messageCount: messages.length,
+          lastMessageId: latestMessage?.id ?? null,
+          lastSeq: getMessageSeq(latestMessage),
+          documentVisibility:
+            typeof document !== "undefined"
+              ? document.visibilityState
+              : "unknown",
+        });
+      }, [conversation.id, messages]);
 
       return (
         <SimpleVirtualizedChatTimeline

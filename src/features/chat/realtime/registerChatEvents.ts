@@ -45,6 +45,9 @@ export const registerChatEvents = (
   };
 
   register(WebSocketEvents.MESSAGE_NEW, handlers.onMessageNew);
+  register(WebSocketEvents.MESSAGE_CREATED, handlers.onMessageNew);
+  register(WebSocketEvents.ROOM_MESSAGE_CREATED, handlers.onMessageNew);
+  register(WebSocketEvents.NEW_MESSAGE, handlers.onMessageNew);
   register(WebSocketEvents.MESSAGE_UPDATED, handlers.onMessageUpdated);
   register(WebSocketEvents.MESSAGE_DELETED, handlers.onMessageDeleted);
   register(WebSocketEvents.MESSAGE_DELIVERED, handlers.onMessageDelivered);
