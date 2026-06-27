@@ -131,6 +131,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           conversationId: conversation.id,
           messageCount: messages.length,
           lastMessageId: latestMessage?.id ?? null,
+          renderedMessageId: latestMessage?.id ?? null,
           lastSeq: getMessageSeq(latestMessage),
           documentVisibility:
             typeof document !== "undefined"

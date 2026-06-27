@@ -237,6 +237,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     logMessageDebug("SimpleVirtualizedChatTimeline", "[VIRTUAL LIST]", {
       conversationId,
       messageCount: messages.length,
+      itemCount: threadRows.length,
       threadRowCount: threadRows.length,
       virtualItemsCount: virtualItems.length,
       totalSize,
