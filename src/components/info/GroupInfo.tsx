@@ -38,7 +38,10 @@ import type { Conversation, Message, UserSummary } from "../../types";
 import { MessageType, RoomMemberRole, UserStatus } from "../../types";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import { messageApi } from "../../services/api";
-import { loadUserProfiles } from "../../services/userBatchLoader";
+import {
+  loadUserProfiles,
+  invalidateUserProfileSummary,
+} from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 import { useChatStore, useGroupStore } from "../../stores";
 import { useUIStore } from "../../stores/uiStore";
@@ -83,6 +86,8 @@ interface GroupInfoProps {
   currentUserId: string;
   onClose: () => void;
   onStartConversation?: (userId: string) => void | Promise<void>;
+  /** Jump the open timeline to a message (e.g. tapping a poll in the history list). */
+  onJumpToMessage?: (messageId: string) => void;
   className?: string;
 }
 
@@ -341,6 +346,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   currentUserId,
   onClose,
   onStartConversation,
+  onJumpToMessage,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
@@ -396,6 +402,37 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const pollsSectionRef = React.useRef<HTMLDivElement>(null);
   const remindersSectionRef = React.useRef<HTMLDivElement>(null);
 
+  // Merge-load voter profiles (same robust path as PollMessage card) so a single
+  // expired avatar can be re-signed via onImageError without dropping the rest.
+  const loadVoterProfiles = React.useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    void loadUserProfiles(ids).then((results) => {
+      setVoterProfilesMap((prev) => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(results)) {
+          next[id] = {
+            name: s?.displayName ?? s?.username ?? id,
+            avatar:
+              resolvePublicResourceUrl(
+                (s as { avatar?: string })?.avatar || s?.avatarUrl || undefined,
+              ) ?? null,
+          };
+        }
+        return next;
+      });
+    });
+  }, []);
+
+  // Presigned avatar URLs expire (~15min) — in poll history they're often stale,
+  // so a 403 left a blank box. Drop the cached summary and re-resolve that voter.
+  const handleVoterAvatarError = React.useCallback(
+    (uid: string) => {
+      invalidateUserProfileSummary(uid);
+      loadVoterProfiles([uid]);
+    },
+    [loadVoterProfiles],
+  );
+
   React.useEffect(() => {
     if (!conversation.id) return;
     setPollsShowAll(false);
@@ -414,22 +451,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             }),
           ),
         ];
-        if (allIds.length > 0) {
-          void loadUserProfiles(allIds).then((results) => {
-            const map: Record<string, { name: string; avatar: string | null }> = {};
-            for (const [id, s] of Object.entries(results)) {
-              map[id] = {
-              name: s?.displayName ?? s?.username ?? id,
-              avatar: resolvePublicResourceUrl((s as { avatar?: string })?.avatar || s?.avatarUrl || undefined) ?? null,
-            };
-            }
-            setVoterProfilesMap(map);
-          });
-        }
+        loadVoterProfiles(allIds);
       })
       .catch(() => setPolls([]))
       .finally(() => setPollsLoading(false));
-  }, [conversation.id]);
+  }, [conversation.id, loadVoterProfiles]);
 
   const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
   const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
@@ -1361,7 +1387,28 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     return (
                       <div
                         key={msg.id}
-                        className="overflow-hidden rounded-xl border border-border bg-surface-overlay transition-colors hover:border-[#1565C0]/30"
+                        role={onJumpToMessage ? "button" : undefined}
+                        tabIndex={onJumpToMessage ? 0 : undefined}
+                        onClick={
+                          onJumpToMessage
+                            ? () => onJumpToMessage(msg.id)
+                            : undefined
+                        }
+                        onKeyDown={
+                          onJumpToMessage
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  onJumpToMessage(msg.id);
+                                }
+                              }
+                            : undefined
+                        }
+                        className={clsx(
+                          "overflow-hidden rounded-xl border border-border bg-surface-overlay transition-colors hover:border-[#1565C0]/30",
+                          onJumpToMessage &&
+                            "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/30",
+                        )}
                       >
                         {/* Question row */}
                         <div className="flex items-start gap-2 px-3 pt-3 pb-2">
@@ -1432,7 +1479,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                                 className="ring-[1.5px] ring-surface-overlay"
                                                 style={{ marginLeft: i === 0 ? 0 : -5, position: "relative", zIndex: 3 - i }}
                                               >
-                                                <Avatar src={vp?.avatar ?? null} alt={vp?.name ?? uid} size="xs" />
+                                                <Avatar
+                                                  src={vp?.avatar ?? null}
+                                                  alt={vp?.name ?? uid}
+                                                  size="xs"
+                                                  onImageError={() =>
+                                                    handleVoterAvatarError(uid)
+                                                  }
+                                                />
                                               </div>
                                             );
                                           })}

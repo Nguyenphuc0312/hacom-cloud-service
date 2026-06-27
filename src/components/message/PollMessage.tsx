@@ -9,6 +9,8 @@ import clsx from "clsx";
 import { messageApi } from "../../services/api";
 import { toast } from "../ui";
 import { useAuthStore } from "../../stores";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { chatApi, fetchConversationTail } from "../../features/api/chatApi";
 import { UserProfile } from "../info/UserProfile";
 import { Avatar } from "../common/Avatar";
 import {
@@ -61,6 +63,41 @@ export const PollMessage: React.FC<PollMessageProps> = ({
   const [localVotes, setLocalVotes] = React.useState<Record<string, number>>(
     () => Object.fromEntries(poll.options.map((o) => [o.id, o.votes])),
   );
+
+  const dispatch = useAppDispatch();
+
+  // Re-sync optimistic state to authoritative poll data when it changes via
+  // realtime/refetch. useState seeds once on mount, so without this an observer
+  // watching someone else vote (or our own vote after the refresh below) keeps
+  // showing stale counts until reload. Done in render (React's "adjust state on
+  // prop change" pattern) rather than an effect to avoid a cascading re-render.
+  const pollSignature =
+    poll.options
+      .map((o) => `${o.id}:${o.votes}:${(o.voterIds ?? []).join(",")}`)
+      .join("|") + `#${currentUserId ?? ""}`;
+  const [syncedSignature, setSyncedSignature] = React.useState(pollSignature);
+  if (pollSignature !== syncedSignature) {
+    setSyncedSignature(pollSignature);
+    setLocalVotes(Object.fromEntries(poll.options.map((o) => [o.id, o.votes])));
+    setVoted(new Set(myInitialVotes));
+  }
+
+  // The actor never receives an optimistic copy nor a usable HTTP body for the
+  // BE-generated poll system message ("Bạn tham gia/đổi lựa chọn… Xem"); it only
+  // lives on the server until the next message:new echo. Force-refetch the
+  // timeline after our own poll action so that system line appears immediately
+  // instead of waiting for a reload. ponytail: invalidateTags reuses the existing
+  // getMessages replace-merge; no new sync code.
+  const newestLoadedSeq = useAppSelector((s) =>
+    conversationId
+      ? (chatApi.endpoints.getMessages.select({ conversationId })(s).data
+          ?.newestLoadedSeq ?? null)
+      : null,
+  );
+  const refreshTimeline = React.useCallback(() => {
+    if (!conversationId) return;
+    dispatch(fetchConversationTail(conversationId, newestLoadedSeq));
+  }, [conversationId, dispatch, newestLoadedSeq]);
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
   const [resolvedProfiles, setResolvedProfiles] = React.useState<Record<string, ResolvedProfile>>({});
@@ -130,10 +167,13 @@ export const PollMessage: React.FC<PollMessageProps> = ({
     const prevVoted = voted;
     setVoted(new Set(selected));
     if (messageId && selected.size > 0) {
-      messageApi.votePoll(messageId, poll.id, Array.from(selected)).catch(() => {
-        toast.error("Không thể ghi nhận bình chọn");
-        setVoted(prevVoted);
-      });
+      messageApi
+        .votePoll(messageId, poll.id, Array.from(selected))
+        .then(refreshTimeline)
+        .catch(() => {
+          toast.error("Không thể ghi nhận bình chọn");
+          setVoted(prevVoted);
+        });
     }
   };
 
@@ -283,9 +323,12 @@ export const PollMessage: React.FC<PollMessageProps> = ({
         <button
           type="button"
           onClick={() => {
-            messageApi.closePoll(messageId, poll.id).catch(() => {
-              toast.error("Không thể kết thúc bình chọn");
-            });
+            messageApi
+              .closePoll(messageId, poll.id)
+              .then(refreshTimeline)
+              .catch(() => {
+                toast.error("Không thể kết thúc bình chọn");
+              });
           }}
           className="mt-2 w-full rounded-lg py-1.5 text-[12px] font-medium text-text-muted transition-colors hover:bg-surface-overlay focus-visible:outline-none"
         >
@@ -331,9 +374,12 @@ export const PollMessage: React.FC<PollMessageProps> = ({
         onClosePoll={
           isOwn && messageId
             ? () => {
-                messageApi.closePoll(messageId, poll.id).catch(() => {
-                  toast.error("Không thể kết thúc bình chọn");
-                });
+                messageApi
+                  .closePoll(messageId, poll.id)
+                  .then(refreshTimeline)
+                  .catch(() => {
+                    toast.error("Không thể kết thúc bình chọn");
+                  });
               }
             : undefined
         }

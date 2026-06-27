@@ -6,12 +6,20 @@ import { Modal } from "../../../components/ui";
 import type { CreatePollDto } from "@hacom/chat-shared-types/chat";
 import clsx from "clsx";
 
-export type PollCreatePayload = CreatePollDto;
+// `allowAddOption` / `hideResultsBeforeVote` chưa có trong CreatePollDto — FE gửi
+// sẵn trong metadata.poll, BE bỏ qua tới khi ship (xem FE__poll-advanced-options contract).
+export type PollCreatePayload = CreatePollDto & {
+  allowAddOption?: boolean;
+  hideResultsBeforeVote?: boolean;
+};
 
 interface PollCreateDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (payload: PollCreatePayload) => void;
+  onSubmit: (
+    payload: PollCreatePayload,
+    options: { pinToTop: boolean },
+  ) => void;
 }
 
 const QUESTION_LIMIT = 200;
@@ -439,13 +447,18 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
               type="button"
               disabled={!canSubmit}
               onClick={() => {
-                onSubmit({
-                  question: question.trim(),
-                  options: cleanOptions,
-                  allowMultiple,
-                  anonymous: hideVoters,
-                  endsAt: endsAt ?? undefined,
-                });
+                onSubmit(
+                  {
+                    question: question.trim(),
+                    options: cleanOptions,
+                    allowMultiple,
+                    anonymous: hideVoters,
+                    endsAt: endsAt ?? undefined,
+                    allowAddOption,
+                    hideResultsBeforeVote,
+                  },
+                  { pinToTop },
+                );
                 onClose();
               }}
               className={clsx(

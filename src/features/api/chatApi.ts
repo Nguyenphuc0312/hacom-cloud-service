@@ -969,4 +969,25 @@ export const {
   useBatchThumbnailUrlsMutation,
 } = chatApi;
 
+/**
+ * Pull any messages newer than what's loaded and append them to the timeline
+ * cache. Used after an action whose server-generated side-effect messages (e.g.
+ * poll "Bạn tham gia/đổi lựa chọn… Xem" system lines) only exist on the server
+ * and would otherwise not appear until a reload.
+ *
+ * Uses the `afterSeq` cursor → "append" merge so already-loaded older history is
+ * preserved (a plain refetch of the initial page would "replace" and drop pages
+ * the user scrolled up to load).
+ */
+export const fetchConversationTail = (
+  conversationId: string,
+  newestLoadedSeq: number | null,
+) =>
+  chatApi.endpoints.getMessages.initiate(
+    typeof newestLoadedSeq === "number"
+      ? { conversationId, afterSeq: newestLoadedSeq, limit: 20 }
+      : { conversationId, limit: 50 },
+    { subscribe: false, forceRefetch: true },
+  );
+
 export type { ConversationSidebarSummary, ConversationResourcesMediaItem, ConversationResourcesFileItem, ConversationResourcesLinkItem, ConversationResourcesPaginatedResult, LinkPreviewData };
