@@ -1372,6 +1372,17 @@ export const useWebSocket = (
         eventId,
         correlationKey,
       } = normalizedEvent;
+      logMessageDebug("useWebSocket", "[WS ROUTER]", {
+        eventType,
+        conversationId,
+        eventId,
+        messageId,
+        clientMessageId,
+        incomingSeq,
+        activeConversationId: useChatStore.getState().selectedConversationId,
+        documentVisibility:
+          typeof document !== "undefined" ? document.visibilityState : "unknown",
+      });
 
       // Early toast notification: We call maybeNotifyIncomingMessage BEFORE the
       // deduper check so that toast shows even on duplicate/replayed events.
@@ -2780,11 +2791,10 @@ export const useWebSocket = (
 
       const hiddenDurationMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0;
 
-      // Skip resync entirely for very short tab switches (< 1 min).
-      // The WebSocket keeps the session alive; no stale data risk.
-      if (hiddenDurationMs > 0 && hiddenDurationMs < 60_000) {
-        return;
-      }
+      // Even short hidden-tab intervals can miss a message-created frame on
+      // throttled browsers while summary events still update the sidebar. Resume
+      // always runs a lightweight active conversation reconcile; it dedupes by
+      // cursor/id and does not reload the page.
 
       // For long absences (≥ 5 min) where the WebSocket may still be connected,
       // proactively refresh the access token before the resync API calls fire.

@@ -49,8 +49,12 @@ const getConversationId = (
 ): string | null =>
   asString(payload.conversationId) ??
   asString(payload.conversation_id) ??
+  asString(payload.roomId) ??
+  asString(payload.room_id) ??
   asString(messagePayload.conversationId) ??
-  asString(messagePayload.conversation_id);
+  asString(messagePayload.conversation_id) ??
+  asString(messagePayload.roomId) ??
+  asString(messagePayload.room_id);
 
 const getNestedId = (
   source: Record<string, unknown>,

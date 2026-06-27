@@ -168,6 +168,22 @@ export const realtimeMiddleware: Middleware<
   const result = next(action);
 
   if (realtimeMessageReceived.match(action)) {
+    const beforeCache =
+      chatApi.endpoints.getMessages.select(
+        getMessageQueryArg(action.payload.conversationId),
+      )(storeApi.getState()).data?.messages ?? [];
+    logMessageDebug("realtimeMiddleware", "[MESSAGE APPEND BEFORE]", {
+      conversationId: action.payload.conversationId,
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      messageSeq:
+        action.payload.message.serverSeq ?? action.payload.message.messageSeq,
+      messageCount: beforeCache.length,
+      lastMessageId: beforeCache[beforeCache.length - 1]?.id ?? null,
+      activeConversationId: useChatStore.getState().selectedConversationId,
+      documentVisibility:
+        typeof document !== "undefined" ? document.visibilityState : "unknown",
+    });
     markChatPerformance("fe.cache.patch.start", action.payload.conversationId, {
       messageId: action.payload.message.id,
       clientMessageId: action.payload.message.clientMessageId,
@@ -200,6 +216,25 @@ export const realtimeMiddleware: Middleware<
         ),
       );
     }
+    const afterCache =
+      chatApi.endpoints.getMessages.select(
+        getMessageQueryArg(action.payload.conversationId),
+      )(storeApi.getState()).data?.messages ?? [];
+    logMessageDebug("realtimeMiddleware", "[MESSAGE APPEND AFTER]", {
+      conversationId: action.payload.conversationId,
+      messageId: action.payload.message.id,
+      patchCount: patch.patches.length,
+      seededMissingCache: patch.patches.length === 0 &&
+        shouldSeedMissingMessageCache(
+          action.payload.conversationId,
+          action.payload.message,
+        ),
+      messageCount: afterCache.length,
+      lastMessageId: afterCache[afterCache.length - 1]?.id ?? null,
+      appendedToActiveList:
+        useChatStore.getState().selectedConversationId ===
+        action.payload.conversationId,
+    });
     markChatPerformance("fe.cache.patch.done", action.payload.conversationId, {
       messageId: action.payload.message.id,
       clientMessageId: action.payload.message.clientMessageId,

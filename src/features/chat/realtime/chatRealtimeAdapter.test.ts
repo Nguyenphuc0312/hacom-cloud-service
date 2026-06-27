@@ -59,4 +59,22 @@ describe("normalizeMessageRealtimeEvent", () => {
 
     expect(event?.senderId).toBe("user-b");
   });
+
+  it("normalizes canonical roomId payloads to conversationId", () => {
+    const event = normalizeMessageRealtimeEvent(
+      {
+        roomId: "conv-1",
+        message: {
+          id: "msg-1",
+          roomId: "conv-1",
+          content: "hello",
+          type: "text",
+          senderId: "user-b",
+        },
+      },
+      "message:new",
+    );
+
+    expect(event?.conversationId).toBe("conv-1");
+  });
 });

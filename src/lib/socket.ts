@@ -83,6 +83,13 @@ const getDebugMessageType = (payload: unknown): string | null => {
   return asString(message?.type);
 };
 
+const MESSAGE_CREATED_EVENT_ALIASES = new Set<string>([
+  WsEventNames.MESSAGE_NEW,
+  RealtimeEventNames.MESSAGE_CREATED,
+  "room.message.created",
+  "new_message",
+]);
+
 export type EventHandler = (data: unknown) => void;
 
 // ============================================
@@ -422,8 +429,8 @@ class WebSocketManager {
           ),
         );
 
-    if (type === WsEventNames.MESSAGE_NEW) {
-      logMessageDebug("socket", "realtime.message.raw_received", {
+    if (MESSAGE_CREATED_EVENT_ALIASES.has(type)) {
+      logMessageDebug("socket", "[WS RAW]", {
         eventName: type,
         conversationId: getDebugConversationId(payload),
         messageId: getDebugMessageId(payload),
@@ -803,6 +810,9 @@ export const WebSocketEvents = {
   AUTH_REAUTH_REQUIRED: WsEventNames.AUTH_REAUTH_REQUIRED,
   AUTH_UNAUTHORIZED: WsEventNames.AUTH_UNAUTHORIZED,
   MESSAGE_NEW: WsEventNames.MESSAGE_NEW,
+  MESSAGE_CREATED: RealtimeEventNames.MESSAGE_CREATED,
+  ROOM_MESSAGE_CREATED: "room.message.created",
+  NEW_MESSAGE: "new_message",
   MESSAGE_UPDATED: WsEventNames.MESSAGE_UPDATED,
   MESSAGE_DELETED: WsEventNames.MESSAGE_DELETED,
   MESSAGE_RECALLED: "message:recalled",

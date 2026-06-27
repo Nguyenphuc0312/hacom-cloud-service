@@ -29,6 +29,7 @@ import {
   type ConversationThreadRow,
 } from "../hooks/useConversationThreadRows";
 import { useSimpleChatScroll } from "./useSimpleChatScroll";
+import { logMessageDebug } from "../../../utils/messageDebug";
 import { ScrollToLatestButton } from "./ScrollToLatestButton";
 
 export interface SimpleVirtualizedChatTimelineProps {
@@ -230,6 +231,28 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
+
+  React.useEffect(() => {
+    const latestMessage = messages[messages.length - 1];
+    logMessageDebug("SimpleVirtualizedChatTimeline", "[VIRTUAL LIST]", {
+      conversationId,
+      messageCount: messages.length,
+      threadRowCount: threadRows.length,
+      virtualItemsCount: virtualItems.length,
+      totalSize,
+      lastMessageId: latestMessage?.id ?? null,
+      isAtBottom,
+      pendingNewMessages,
+    });
+  }, [
+    conversationId,
+    isAtBottom,
+    messages,
+    pendingNewMessages,
+    threadRows.length,
+    totalSize,
+    virtualItems.length,
+  ]);
 
   // Rule 9: notify the scroll hook whenever totalSize changes so it can
   // re-anchor to the real bottom after ResizeObserver expands measurements.
