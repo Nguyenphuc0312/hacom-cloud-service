@@ -6,7 +6,11 @@ import {
 } from "@reduxjs/toolkit";
 import type { Message } from "../../types";
 import { MessageStatus } from "../../types";
-import { chatApi } from "../api/chatApi";
+import {
+  chatApi,
+  getMessageQueryArgForConversation,
+  messagesQueryKey,
+} from "../api/chatApi";
 import {
   buildConversationMessagesCache,
   patchMessageInCache,
@@ -93,8 +97,6 @@ export const realtimeMessageReactionChanged =
     "realtime/messageReactionChanged",
   );
 
-const getMessageQueryArg = (conversationId: string) => ({ conversationId });
-
 const shouldSeedMissingMessageCache = (
   conversationId: string,
   message: Message,
@@ -170,9 +172,15 @@ export const realtimeMiddleware: Middleware<
   if (realtimeMessageReceived.match(action)) {
     const beforeCache =
       chatApi.endpoints.getMessages.select(
-        getMessageQueryArg(action.payload.conversationId),
+        getMessageQueryArgForConversation(action.payload.conversationId),
       )(storeApi.getState()).data?.messages ?? [];
-    logMessageDebug("realtimeMiddleware", "[MESSAGE APPEND BEFORE]", {
+    logMessageDebug("realtimeMiddleware", "[RTKQ CACHE KEY]", {
+      conversationId: action.payload.conversationId,
+      endpointName: "getMessages",
+      key: messagesQueryKey(action.payload.conversationId),
+      args: getMessageQueryArgForConversation(action.payload.conversationId),
+    });
+    logMessageDebug("realtimeMiddleware", "[MESSAGE CACHE BEFORE]", {
       conversationId: action.payload.conversationId,
       messageId: action.payload.message.id,
       clientMessageId: action.payload.message.clientMessageId,
@@ -193,7 +201,7 @@ export const realtimeMiddleware: Middleware<
     const patch = storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
-        getMessageQueryArg(action.payload.conversationId),
+        getMessageQueryArgForConversation(action.payload.conversationId),
         (draft) => {
           upsertMessageInCache(draft, action.payload.message);
         },
@@ -209,7 +217,7 @@ export const realtimeMiddleware: Middleware<
       storeApi.dispatch(
         chatApi.util.upsertQueryData(
           "getMessages",
-          getMessageQueryArg(action.payload.conversationId),
+          getMessageQueryArgForConversation(action.payload.conversationId),
           buildConversationMessagesCache(action.payload.conversationId, [
             action.payload.message,
           ]),
@@ -218,7 +226,7 @@ export const realtimeMiddleware: Middleware<
     }
     const afterCache =
       chatApi.endpoints.getMessages.select(
-        getMessageQueryArg(action.payload.conversationId),
+        getMessageQueryArgForConversation(action.payload.conversationId),
       )(storeApi.getState()).data?.messages ?? [];
     logMessageDebug("realtimeMiddleware", "[MESSAGE APPEND AFTER]", {
       conversationId: action.payload.conversationId,
@@ -260,7 +268,7 @@ export const realtimeMiddleware: Middleware<
     const patch = storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
-        getMessageQueryArg(action.payload.conversationId),
+        getMessageQueryArgForConversation(action.payload.conversationId),
         (draft) => {
           upsertMessageInCache(draft, action.payload.message);
         },
@@ -276,7 +284,7 @@ export const realtimeMiddleware: Middleware<
       storeApi.dispatch(
         chatApi.util.upsertQueryData(
           "getMessages",
-          getMessageQueryArg(action.payload.conversationId),
+          getMessageQueryArgForConversation(action.payload.conversationId),
           buildConversationMessagesCache(action.payload.conversationId, [
             action.payload.message,
           ]),
@@ -298,7 +306,7 @@ export const realtimeMiddleware: Middleware<
     storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
-        getMessageQueryArg(conversationId),
+        getMessageQueryArgForConversation(conversationId),
         (draft) => {
           if (mode === "FOR_ME") {
             removeMessageFromCache(draft, messageId);

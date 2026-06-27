@@ -72,8 +72,13 @@ import {
   needsSelfMessageIdentityResync,
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
+import { decideSummaryActiveDeltaSync } from "../features/chat/realtime/summaryActiveDeltaReconcile";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
-import { chatApi, fetchConversationTail } from "../features/api/chatApi";
+import {
+  chatApi,
+  fetchConversationTail,
+  messagesQueryKey,
+} from "../features/api/chatApi";
 import {
   getMessageSeq,
 } from "../features/chat/domain/messageMerge";
@@ -272,6 +277,17 @@ const hasMessageInRtkCache = (
     message,
   ) >= 0;
 
+const hasMessageIdInRtkCache = (
+  conversationId: string,
+  messageId: string,
+): boolean =>
+  findMessageIdentityIndex(getConversationMessageCache(conversationId), {
+    id: messageId,
+    localId: messageId,
+    stableId: messageId,
+    clientMessageId: messageId,
+  }) >= 0;
+
 const toRealtimeConnectionStatus = (
   state: ConnectionState,
 ): Parameters<typeof realtimeActions.setConnectionStatus>[0] => {
@@ -436,6 +452,9 @@ export const useWebSocket = (
   const connectionLifecycleRef = useRef<ReturnType<
     typeof createWebSocketConnectionLifecycle
   > | null>(null);
+  const activeConversationDeltaTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
@@ -795,6 +814,55 @@ export const useWebSocket = (
     resyncClientState,
     reset: resetResyncCoordinator,
   } = resyncCoordinator;
+
+  const clearActiveConversationDeltaSyncTimers = useCallback(() => {
+    activeConversationDeltaTimersRef.current.forEach((timer) =>
+      clearTimeout(timer),
+    );
+    activeConversationDeltaTimersRef.current.clear();
+  }, []);
+
+  const syncActiveConversationDelta = useCallback(
+    (conversationId: string, reason: string): void => {
+      if (!conversationId) return;
+
+      const existing = activeConversationDeltaTimersRef.current.get(
+        conversationId,
+      );
+      if (existing) {
+        clearTimeout(existing);
+      }
+
+      const timer = setTimeout(() => {
+        activeConversationDeltaTimersRef.current.delete(conversationId);
+        const messages = getConversationMessageCache(conversationId);
+        const newestLoadedSeq = getLatestServerSeq(messages);
+
+        logMessageDebug("useWebSocket", "[ACTIVE DELTA SYNC]", {
+          conversationId,
+          reason,
+          key: messagesQueryKey(conversationId),
+          newestLoadedSeq,
+          cachedMessageCount: messages.length,
+          activeConversationId: useChatStore.getState().selectedConversationId,
+        });
+
+        store.dispatch(fetchConversationTail(conversationId, newestLoadedSeq));
+      }, 500);
+
+      activeConversationDeltaTimersRef.current.set(conversationId, timer);
+    },
+    [],
+  );
+
+  const syncSelectedActiveConversationDelta = useCallback(
+    (reason: string): void => {
+      const conversationId = useChatStore.getState().selectedConversationId;
+      if (!conversationId) return;
+      syncActiveConversationDelta(conversationId, reason);
+    },
+    [syncActiveConversationDelta],
+  );
 
   const maybeNotifyIncomingMessage = useCallback(
     (input: {
@@ -1269,6 +1337,7 @@ export const useWebSocket = (
       // sidebar never shows stale counts after a disconnection.
       void refreshUnreadSummarySnapshot();
       void useFriendshipStore.getState().fetchPendingCount();
+      syncSelectedActiveConversationDelta("socket-connect");
       logMessageDebug("useWebSocket", "badge_synced_on_connect", {});
     };
 
@@ -1383,6 +1452,14 @@ export const useWebSocket = (
         documentVisibility:
           typeof document !== "undefined" ? document.visibilityState : "unknown",
       });
+      logMessageDebug("useWebSocket", "[MESSAGE EVENT RECEIVED]", {
+        eventType,
+        conversationId,
+        messageId,
+        clientMessageId,
+        incomingSeq,
+        eventId,
+      });
 
       // Early toast notification: We call maybeNotifyIncomingMessage BEFORE the
       // deduper check so that toast shows even on duplicate/replayed events.
@@ -1473,6 +1550,12 @@ export const useWebSocket = (
       const currentUserId = useAuthStore.getState().user?.id;
       const isActiveConversation =
         chatState.selectedConversationId === conversationId;
+      logMessageDebug("useWebSocket", "[ACTIVE CONVERSATION CHECK]", {
+        activeConversationId: chatState.selectedConversationId,
+        eventConversationId: conversationId,
+        isActive: isActiveConversation,
+        source: "message-event",
+      });
       const visibleAndFocused = isDocumentVisibleAndFocused();
       const isAmbiguousSelfReconcile = needsSelfMessageIdentityResync({
         event: normalizedEvent,
@@ -1871,6 +1954,9 @@ export const useWebSocket = (
       if (!conversationId) return;
 
       handleConversationJoinedAck(conversationId);
+      if (useChatStore.getState().selectedConversationId === conversationId) {
+        syncActiveConversationDelta(conversationId, "join-ack-active");
+      }
     };
 
     const handleConversationLeft = (data: unknown) => {
@@ -1929,10 +2015,81 @@ export const useWebSocket = (
     };
 
     const handleConversationSummaryUpdated = (data: unknown) => {
+      const payload = asRecord(data);
       const normalized = normalizeConversation(data);
       if (!normalized) {
         return;
       }
+
+      const rawLastMessage =
+        asRecord(payload?.lastMessage) ?? asRecord(payload?.last_message);
+      const summaryLastMessageId =
+        asString(payload?.lastMessageId) ??
+        asString(payload?.last_message_id) ??
+        asString(rawLastMessage?.id) ??
+        asString(rawLastMessage?._id) ??
+        asString(rawLastMessage?.messageId) ??
+        normalized.lastMessageId ??
+        normalized.lastMessage?.id ??
+        null;
+      const hasUsableLastMessageId = Boolean(
+        summaryLastMessageId && !summaryLastMessageId.startsWith("last-"),
+      );
+      const activeConversationId =
+        useChatStore.getState().selectedConversationId;
+
+      logMessageDebug("useWebSocket", "[SUMMARY RECEIVED]", {
+        conversationId: normalized.id,
+        lastMessageId: summaryLastMessageId,
+        hasUsableLastMessageId,
+        summaryVersion: normalized.summaryVersion,
+        activeConversationId,
+      });
+
+      const reconcileActiveConversationFromSummary = (reason: string) => {
+        const currentActiveConversationId =
+          useChatStore.getState().selectedConversationId;
+        const hasMessage =
+          hasUsableLastMessageId && summaryLastMessageId
+            ? hasMessageIdInRtkCache(normalized.id, summaryLastMessageId)
+            : false;
+        const decision = decideSummaryActiveDeltaSync({
+          activeConversationId: currentActiveConversationId,
+          eventConversationId: normalized.id,
+          hasUsableLastMessageId,
+          hasMessageInCache: hasMessage,
+        });
+        logMessageDebug("useWebSocket", "[ACTIVE CONVERSATION CHECK]", {
+          activeConversationId: currentActiveConversationId,
+          eventConversationId: normalized.id,
+          isActive: decision.isActive,
+          source: "summary-event",
+        });
+
+        if (!decision.isActive) {
+          return;
+        }
+
+        const cachedMessages = getConversationMessageCache(normalized.id);
+
+        logMessageDebug("useWebSocket", "[RTKQ CACHE KEY]", {
+          conversationId: normalized.id,
+          endpointName: "getMessages",
+          key: messagesQueryKey(normalized.id),
+        });
+        logMessageDebug("useWebSocket", "[MESSAGE CACHE BEFORE]", {
+          conversationId: normalized.id,
+          lastMessageId: summaryLastMessageId,
+          hasMessage,
+          messageCount: cachedMessages.length,
+          newestLoadedSeq: getLatestServerSeq(cachedMessages),
+          reason,
+        });
+
+        if (decision.shouldSync && decision.reason) {
+          syncActiveConversationDelta(normalized.id, decision.reason);
+        }
+      };
 
       const summaryResult = upsertConversationSummary(normalized);
       if (!summaryResult.applied) {
@@ -1942,6 +2099,7 @@ export const useWebSocket = (
           previousVersion: summaryResult.previousVersion,
           nextVersion: summaryResult.nextVersion,
         });
+        reconcileActiveConversationFromSummary("summary-ignored");
         return;
       }
       if (summaryResult.gapDetected) {
@@ -1956,6 +2114,7 @@ export const useWebSocket = (
         source: "socket",
         conversationId: normalized.id,
       });
+      reconcileActiveConversationFromSummary("summary-applied");
     };
 
     const handleConversationMembershipUpdated = (data: unknown) => {
@@ -2567,6 +2726,8 @@ export const useWebSocket = (
     scheduleConversationSnapshotRefresh,
     scheduleRemoteTypingExpiry,
     shouldProcessTypingEvent,
+    syncActiveConversationDelta,
+    syncSelectedActiveConversationDelta,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
@@ -2774,6 +2935,7 @@ export const useWebSocket = (
       if (!shouldHandleResume()) {
         return;
       }
+      syncSelectedActiveConversationDelta("browser-online");
       handleBrowserOnline();
     };
 
@@ -2803,6 +2965,7 @@ export const useWebSocket = (
         void ensureFreshAccessToken("proactive").catch(() => undefined);
       }
 
+      syncSelectedActiveConversationDelta("visibility-visible");
       handleResume("visibility_resume");
     };
 
@@ -2810,6 +2973,7 @@ export const useWebSocket = (
       if (!shouldHandleResume()) {
         return;
       }
+      syncSelectedActiveConversationDelta("pageshow");
       handleResume("pageshow");
     };
 
@@ -2819,6 +2983,7 @@ export const useWebSocket = (
         document.visibilityState !== "hidden" &&
         shouldHandleResume()
       ) {
+        syncSelectedActiveConversationDelta("window-focus");
         handleResume("focus");
       }
     };
@@ -2834,7 +2999,7 @@ export const useWebSocket = (
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [handleBrowserOnline, handleResume]);
+  }, [handleBrowserOnline, handleResume, syncSelectedActiveConversationDelta]);
 
   useEffect(() => {
     if (!autoConnect) {
@@ -2857,6 +3022,7 @@ export const useWebSocket = (
       }
       clearAllRemoteTypingTimers();
       clearAllConversationJoinRetries();
+      clearActiveConversationDeltaSyncTimers();
 
       // 2. Clear the emit queue so no pending messages are flushed into a
       // socket that is about to be destroyed or has already changed identity.
@@ -2877,6 +3043,7 @@ export const useWebSocket = (
     autoConnect,
     connect,
     disconnect,
+    clearActiveConversationDeltaSyncTimers,
     clearAllRemoteTypingTimers,
     clearAllConversationJoinRetries,
     isAuthenticated,

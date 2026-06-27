@@ -265,7 +265,10 @@ const resolveMergeMode = (arg: GetMessagesArgs): MessageMergeMode => {
   return "replace";
 };
 
-const getMessageQueryArgForConversation = (
+export const messagesQueryKey = (conversationId: string): string =>
+  `getMessages:${conversationId}`;
+
+export const getMessageQueryArgForConversation = (
   conversationId: string,
 ): GetMessagesArgs => ({ conversationId });
 
@@ -986,7 +989,7 @@ export const fetchConversationTail = (
   chatApi.endpoints.getMessages.initiate(
     typeof newestLoadedSeq === "number"
       ? { conversationId, afterSeq: newestLoadedSeq, limit: 20 }
-      : { conversationId, limit: 50 },
+      : { conversationId, limit: 20 },
     { subscribe: false, forceRefetch: true },
   );
 
