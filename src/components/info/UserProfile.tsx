@@ -21,6 +21,7 @@ import { Button, ConfirmDialog, PanelSection, ProfileSkeleton, toast } from "../
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../../stores";
 import { useMyProfile } from "../../features/profile/useMyProfile";
+import { useGetUserProfileQuery } from "../../features/api/chatApi";
 import {
   formatJoinDate,
   resolveEmploymentStatusLabel,
@@ -28,13 +29,9 @@ import {
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
 import { extractApiError } from "../../lib/apiContract";
+import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
 import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
-import {
-  fetchUserProfileOnce,
-  getCachedUserProfile,
-  type CachedUserProfile,
-} from "../../services/userProfileCache";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { formatCalendarDate, formatCalendarDateTime } from "../../utils/formatTime";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
@@ -93,8 +90,8 @@ const formatDisplayName = (user: ProfileUser | null | undefined): string => {
   return getUserDisplayName(user, { allowTechnicalFallback: true }) || user.id;
 };
 
-/** Map a fetched user-detail payload to the panel's ProfileUser shape. */
-const toProfileUser = (payload: CachedUserProfile): ProfileUser => {
+/** Map the latest chat-api user DTO to the panel's ProfileUser shape. */
+const toProfileUser = (payload: UserProfileSummaryDto): ProfileUser => {
   // Extra fields present in real API response but not typed in UserProfileSummaryDto
   const raw = payload as unknown as Record<string, unknown>;
   return {
@@ -214,19 +211,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   // surfaces always show identical values (HR over chat). Skipped for others.
   const myProfile = useMyProfile({ enabled: isSelf });
 
-  // Profile fetched from GET /users/{id} for the *other* user. Updated only via
-  // the async fetch below — never synchronously in an effect — so it never
-  // reacts to message/conversation/render churn.
-  const [fetchedUser, setFetchedUser] = React.useState<ProfileUser | null>(
-    () => {
-      if (isSelf || !userId) return null;
-      const cached = getCachedUserProfile(userId);
-      return cached ? toProfileUser(cached) : null;
-    },
-  );
-  const [isLoading, setIsLoading] = React.useState<boolean>(
-    () => !isSelf && Boolean(userId) && !getCachedUserProfile(userId),
-  );
+  const {
+    data: latestUserProfile,
+    isLoading: isLoadingLatestUser,
+  } = useGetUserProfileQuery(userId, {
+    skip: isSelf || !userId,
+    refetchOnMountOrArgChange: true,
+  });
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
@@ -292,14 +283,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     };
   }, [authUser, isSelf, myProfile]);
 
-  // Single resolved user for rendering. For the other user we prefer the
-  // fetched detail (only when it matches the current target), else fall back to
-  // the placeholder — this stays correct even if `userId` changes without a
-  // remount (e.g. the friends preview panel).
+  const latestOtherProfile = React.useMemo<ProfileUser | null>(() => {
+    if (isSelf || !latestUserProfile || latestUserProfile.id !== userId) {
+      return null;
+    }
+    return toProfileUser(latestUserProfile);
+  }, [isSelf, latestUserProfile, userId]);
+
+  // Single resolved user for rendering. For other users the latest API DTO wins;
+  // snapshots passed by message/conversation/member surfaces are placeholders only.
   const user: ProfileUser | null = isSelf
     ? selfProfile
-    : fetchedUser && fetchedUser.id === userId
-      ? { ...fetchedUser, avatar: resolvedInitialUser?.avatar || fetchedUser.avatar }
+    : latestOtherProfile
+      ? { ...latestOtherProfile, avatar: latestOtherProfile.avatar || resolvedInitialUser?.avatar }
       : (resolvedInitialUser ?? null);
 
   React.useEffect(() => {
@@ -307,39 +303,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     void refreshProfile().catch(() => null);
   }, [isSelf, refreshProfile]);
 
-  // Fetch the target user's detail ONCE per userId (cached + in-flight deduped
-  // in userProfileCache). Depends only on `userId`/`isSelf` — NOT on the
-  // conversation, messages, lastMessage or initialUser object — so new
-  // messages, realtime events and re-renders never re-trigger GET /users/{id}.
-  // setState happens only in the async callbacks, never synchronously here.
   React.useEffect(() => {
-    if (isSelf || !userId) return;
-
-    let isMounted = true;
-
-    fetchUserProfileOnce(userId)
-      .then((payload) => {
-        if (!isMounted) return;
-        setFetchedUser(toProfileUser(payload));
-
-        // Store the resolved name so sidebar, header, and message clusters
-        // all reflect it without being overwritten by API/WS refreshes.
-        const resolvedName = resolveUserDisplayName(payload, { allowLegacyFallback: false });
-        if (resolvedName && resolvedName !== "Unknown user") {
-          useEnrichedProfileStore.getState().setEnrichedName(userId, resolvedName);
-        }
-      })
-      .catch(() => {
-        // Keep whatever placeholder/cached value is already displayed.
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isSelf, userId]);
+    if (isSelf || !userId || !latestUserProfile) return;
+    const resolvedName = resolveUserDisplayName(latestUserProfile, {
+      allowLegacyFallback: false,
+    });
+    if (resolvedName && resolvedName !== "Unknown user") {
+      useEnrichedProfileStore.getState().setEnrichedName(userId, resolvedName);
+    }
+  }, [isSelf, latestUserProfile, userId]);
 
   React.useEffect(() => {
     void refreshDirectory();
@@ -347,6 +319,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   const displayName = formatDisplayName(user);
   const username = user?.username ? `@${user.username}` : null;
+  const isLoading = !isSelf && Boolean(userId) && isLoadingLatestUser && !resolvedInitialUser;
 
   // Resolve employment fields once. Canonical BE field names
   // (position/department/company/companyEmail) are checked first so the panel
