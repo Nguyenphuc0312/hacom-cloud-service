@@ -16,6 +16,7 @@ import {
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
 import { useChatStore } from "../../stores";
 import { markChatPerformance } from "../../utils/chatPerformance";
+import { logMessageDebug } from "../../utils/messageDebug";
 import {
   createRealtimeBatchCoordinator,
   type RealtimeBatchCoordinator,
@@ -203,6 +204,16 @@ export const realtimeMiddleware: Middleware<
       messageId: action.payload.message.id,
       clientMessageId: action.payload.message.clientMessageId,
       patchCount: patch.patches.length,
+    });
+    logMessageDebug("realtimeMiddleware", "realtime.message.cache_updated", {
+      conversationId: action.payload.conversationId,
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      patchCount: patch.patches.length,
+      activeConversationId: useChatStore.getState().selectedConversationId,
+      appendedToActiveList:
+        useChatStore.getState().selectedConversationId ===
+        action.payload.conversationId,
     });
   }
 

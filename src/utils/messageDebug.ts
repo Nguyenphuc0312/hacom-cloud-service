@@ -15,6 +15,7 @@ type MessageDebugWindow = Window & {
 export const isMessageDebugEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
   return (
+    import.meta.env.VITE_DEBUG_REALTIME === "true" ||
     new URLSearchParams(window.location.search).get("debugMessages") === "1"
   );
 };

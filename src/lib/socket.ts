@@ -24,6 +24,7 @@ import {
   normalizeToken,
 } from "../utils/jwtHelpers";
 import { logger } from "../utils/logger";
+import { logMessageDebug } from "../utils/messageDebug";
 
 // ============================================
 // Types
@@ -45,6 +46,42 @@ export interface WebSocketEvent {
   data?: unknown;
   [key: string]: unknown;
 }
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
+const asString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const getDebugConversationId = (payload: unknown): string | null => {
+  const record = asRecord(payload);
+  const message = asRecord(record?.message);
+  return (
+    asString(record?.conversationId) ??
+    asString(record?.roomId) ??
+    asString(message?.conversationId) ??
+    asString(message?.roomId)
+  );
+};
+
+const getDebugMessageId = (payload: unknown): string | null => {
+  const record = asRecord(payload);
+  const message = asRecord(record?.message) ?? record;
+  return (
+    asString(message?.id) ??
+    asString(message?._id) ??
+    asString(message?.messageId) ??
+    asString(record?.messageId)
+  );
+};
+
+const getDebugMessageType = (payload: unknown): string | null => {
+  const record = asRecord(payload);
+  const message = asRecord(record?.message) ?? record;
+  return asString(message?.type);
+};
 
 export type EventHandler = (data: unknown) => void;
 
@@ -384,6 +421,15 @@ class WebSocketManager {
             ([key]) => key !== "type" && key !== "event",
           ),
         );
+
+    if (type === WsEventNames.MESSAGE_NEW) {
+      logMessageDebug("socket", "realtime.message.raw_received", {
+        eventName: type,
+        conversationId: getDebugConversationId(payload),
+        messageId: getDebugMessageId(payload),
+        type: getDebugMessageType(payload),
+      });
+    }
 
     logger.debug(
       "socket",
