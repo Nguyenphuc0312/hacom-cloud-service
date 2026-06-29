@@ -107,6 +107,8 @@ interface GroupMember {
   full_name_from_hr?: string;
   employeeCode?: string;
   employee_code?: string;
+  departmentName?: string;
+  companyName?: string;
   avatar?: string;
   status?: UserSummary["status"];
   role: GroupMemberRole;
@@ -235,6 +237,8 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
     full_name_from_hr: asString(raw.full_name_from_hr) ?? asString(user?.full_name_from_hr) ?? asString(raw.fullNameFromHR) ?? asString(user?.fullNameFromHR),
     employeeCode: asString(raw.employeeCode) ?? asString(raw.employee_code) ?? asString(user?.employeeCode) ?? asString(user?.employee_code),
     employee_code: asString(raw.employee_code) ?? asString(user?.employee_code) ?? asString(raw.employeeCode) ?? asString(user?.employeeCode),
+    departmentName: asString(raw.departmentName) ?? asString(raw.department_name) ?? asString(user?.departmentName) ?? asString(user?.department_name) ?? asString(user?.department),
+    companyName: asString(raw.companyName) ?? asString(raw.company_name) ?? asString(user?.companyName) ?? asString(user?.company_name) ?? asString(user?.company) ?? asString(user?.orgUnit) ?? asString(user?.org_unit),
     avatar: asString(raw.avatar) ?? asString(user?.avatar),
     status: asStatus(raw.status) ?? asStatus(user?.status),
     role,
@@ -362,6 +366,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>({});
+  // Phòng ban/công ty không nằm trong member payload → enrich từ /users/batch
+  // (giống FriendsPage), để dòng phụ hiện "phòng ban · công ty".
+  const [membersHrByUserId, setMembersHrByUserId] = useState<
+    Record<string, { departmentName?: string; companyName?: string }>
+  >({});
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
@@ -504,12 +513,54 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     Object.values(membersByUserId).forEach((member) => {
       if (!merged.has(member.id)) merged.set(member.id, member);
     });
-    return Array.from(merged.values()).sort((a, b) => {
-      const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
-      if (roleDiff !== 0) return roleDiff;
-      return resolveMemberName(a).toLowerCase().localeCompare(resolveMemberName(b).toLowerCase());
+    return Array.from(merged.values())
+      .map((member) => {
+        const hr = membersHrByUserId[member.id];
+        return {
+          ...member,
+          departmentName: member.departmentName ?? hr?.departmentName,
+          companyName: member.companyName ?? hr?.companyName,
+        };
+      })
+      .sort((a, b) => {
+        const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
+        if (roleDiff !== 0) return roleDiff;
+        return resolveMemberName(a).toLowerCase().localeCompare(resolveMemberName(b).toLowerCase());
+      });
+  }, [createdBy, membersByUserId, membersHrByUserId, participants]);
+
+  const memberIdsKey = React.useMemo(
+    () =>
+      Array.from(
+        new Set([...Object.keys(membersByUserId), ...participants.map((p) => p.id)]),
+      )
+        .sort()
+        .join(","),
+    [membersByUserId, participants],
+  );
+  React.useEffect(() => {
+    const ids = memberIdsKey ? memberIdsKey.split(",") : [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void loadUserProfiles(ids).then((profileMap) => {
+      if (cancelled) return;
+      const resolved: Record<string, { departmentName?: string; companyName?: string }> = {};
+      for (const [id, profile] of Object.entries(profileMap)) {
+        if (!profile) continue;
+        const p = profile as { department?: string | null; company?: string | null };
+        if (p.department || p.company) {
+          resolved[id] = {
+            departmentName: p.department ?? undefined,
+            companyName: p.company ?? undefined,
+          };
+        }
+      }
+      if (Object.keys(resolved).length > 0) {
+        setMembersHrByUserId((prev) => ({ ...prev, ...resolved }));
+      }
     });
-  }, [createdBy, membersByUserId, participants]);
+    return () => { cancelled = true; };
+  }, [memberIdsKey]);
 
   const filteredMembers = React.useMemo(() => {
     let result = members;
