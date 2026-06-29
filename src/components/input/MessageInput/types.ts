@@ -10,6 +10,9 @@ export interface MentionCandidate {
   /** HR full name if available */
   fullName?: string | null;
   employeeCode?: string;
+  /** HR department / company for the secondary line */
+  departmentName?: string;
+  companyName?: string;
   /** Resolved display name for insert (fullName > displayName > username) */
   resolvedName?: string;
 }
