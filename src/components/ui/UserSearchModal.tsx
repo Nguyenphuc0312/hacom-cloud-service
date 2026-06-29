@@ -6,6 +6,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import clsx from "clsx";
 import { MagnifyingGlassIcon, XMarkIcon, CalendarIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { userApi } from "@/services/api";
+import { loadUserProfiles } from "@/services/userBatchLoader";
 import { useAuthStore } from "@/stores/authStore";
 import { Avatar } from "@/components/common/Avatar";
 import { Modal } from "@/components/ui/Modal";
@@ -22,7 +23,7 @@ interface SearchResult {
   displayName: string;
   avatar?: string;
   department?: string;
-  title?: string;
+  company?: string;
 }
 
 export const UserSearchModal: React.FC<UserSearchModalProps> = ({
@@ -69,10 +70,27 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
                 user.email ||
                 "Unknown User",
               avatar: user.avatar || undefined,
-              department: user.departmentName || user.orgUnit || "",
-              title: user.title || "",
+              department: user.departmentName || "",
+              company: user.orgUnit || "",
             }));
           setResults(mappedResults);
+
+          // /users/search không trả avatar/công ty đầy đủ → enrich từ /users/batch
+          // (giống lịch & bạn bè). Cache nên mở lại tìm kiếm gần như tức thì.
+          void loadUserProfiles(mappedResults.map((r) => r.id)).then((profileMap) => {
+            setResults((prev) =>
+              prev.map((r) => {
+                const p = profileMap[r.id];
+                if (!p) return r;
+                return {
+                  ...r,
+                  avatar: r.avatar ?? p.avatarUrl ?? undefined,
+                  department: r.department || p.department || "",
+                  company: r.company || p.company || "",
+                };
+              }),
+            );
+          });
         } else {
           setResults([]);
         }
@@ -189,9 +207,9 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
                   <p className="truncate text-sm font-medium text-text-primary">
                     {user.displayName}
                   </p>
-                  {(user.department || user.title) && (
+                  {(user.department || user.company) && (
                     <p className="truncate text-xs text-text-muted">
-                      {[user.title, user.department].filter(Boolean).join(" · ")}
+                      {[user.department, user.company].filter(Boolean).join(" · ")}
                     </p>
                   )}
                 </div>
