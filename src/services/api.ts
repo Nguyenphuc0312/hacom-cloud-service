@@ -1230,7 +1230,7 @@ export const messageApi = {
       tempId?: string;
       localId?: string;
       mentions?: string[];
-      poll?: { question: string; options: string[]; allowMultiple?: boolean; anonymous?: boolean; endsAt?: Date };
+      poll?: { question: string; options: string[]; allowMultiple?: boolean; anonymous?: boolean; endsAt?: Date; allowAddOption?: boolean; hideResultsBeforeVote?: boolean };
       linkPreview?: {
         url: string;
         title?: string;
@@ -1351,6 +1351,16 @@ export const messageApi = {
     const response = await apiClient.post<ApiResponse<Message>>(
       `/messages/${messageId}/poll/close`,
       { pollId },
+    );
+    return response.data;
+  },
+
+  // Only allowed when poll.allowAddOption === true and poll is open (BE enforces, 403 otherwise).
+  // See FE__poll-add-option-endpoint contract.
+  addPollOption: async (messageId: string, pollId: string, text: string) => {
+    const response = await apiClient.post<ApiResponse<Message>>(
+      `/messages/${messageId}/poll/options`,
+      { pollId, text },
     );
     return response.data;
   },
