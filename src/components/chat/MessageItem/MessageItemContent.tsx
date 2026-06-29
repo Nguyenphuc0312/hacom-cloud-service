@@ -59,6 +59,7 @@ export const MessageItemContent: React.FC<MessageItemContentProps> = ({
     return (
       <SystemMessage
         message={resolvedMessage}
+        collapsedMessages={item.collapsedMessages}
         onNavigateToMessage={onNavigateToMessage}
         className={
           density === "compact"

@@ -13,6 +13,26 @@ export type MessageSemanticFamily =
 export const getMessageStableKey = (message: Message): string =>
   message.stableId || message.clientMessageId || message.localId || message.id;
 
+// A system message that carries a poll activity event ("X joined/changed the
+// poll… Xem"). Consecutive ones are collapsed in the timeline planner so only
+// the newest pill shows by default — see timelinePlanner / SystemMessage.
+export const isPollEventSystemMessage = (message: Message): boolean => {
+  if (message.type !== "system") return false;
+  const meta =
+    message.metadata && typeof message.metadata === "object"
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  const ev = meta?.pollEvent;
+  if (!ev || typeof ev !== "object") return false;
+  const kind = (ev as Record<string, unknown>).kind;
+  return (
+    kind === "created" ||
+    kind === "voted" ||
+    kind === "changed" ||
+    kind === "closed"
+  );
+};
+
 export const getMessageSemanticFamily = (
   message: Message,
 ): MessageSemanticFamily => {

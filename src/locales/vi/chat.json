@@ -422,7 +422,8 @@
       "changed": "{{actor}} đổi lựa chọn trong cuộc bình chọn: {{question}}",
       "changedAnonymous": "Có người đổi lựa chọn trong cuộc bình chọn: {{question}}",
       "closed": "Cuộc bình chọn {{question}} đã kết thúc",
-      "view": "Xem"
+      "view": "Xem",
+      "showMore": "Xem thêm {{count}} hoạt động"
     }
   },
   "notification": {

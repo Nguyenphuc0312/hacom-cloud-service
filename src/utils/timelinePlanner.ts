@@ -5,6 +5,7 @@ import {
   getMessageStableKey,
   isFailedMessage,
   isPendingMessage,
+  isPollEventSystemMessage,
   type MessageSemanticFamily,
 } from "./messageTimeline";
 
@@ -58,7 +59,14 @@ export type MessageTimelineItem = {
 
 export type TimelineItem =
   | { kind: "date"; key: string; date: Date }
-  | { kind: "system"; key: string; message: Message }
+  | {
+      kind: "system";
+      key: string;
+      message: Message;
+      // Older poll-event system messages folded into this newest one; rendered
+      // behind a "Xem thêm" toggle. Absent/empty for normal system messages.
+      collapsedMessages?: Message[];
+    }
   | { kind: "unread"; key: string }
   | MessageTimelineItem;
 
@@ -330,6 +338,26 @@ export const buildTimelineItems = ({
     items.push(...decorators);
 
     if (message.type === "system") {
+      // Fold a run of consecutive poll-event system messages into one row: the
+      // newest is the visible pill, older ones go behind "Xem thêm". The run is
+      // broken by any decorator (date/unread divider) or a non-poll-event row.
+      const previousItem = items[items.length - 1];
+      if (
+        isPollEventSystemMessage(message) &&
+        decorators.length === 0 &&
+        previousItem &&
+        previousItem.kind === "system" &&
+        isPollEventSystemMessage(previousItem.message)
+      ) {
+        previousItem.collapsedMessages = [
+          ...(previousItem.collapsedMessages ?? []),
+          previousItem.message,
+        ];
+        previousItem.message = message;
+        // Key follows the newest pill so identity tracks the visible content.
+        previousItem.key = `system-${getTimelineMessageKey(message)}`;
+        return;
+      }
       items.push({
         kind: "system",
         key: `system-${getTimelineMessageKey(message)}`,
@@ -403,6 +431,8 @@ export const messagesHaveSameGroupingInputs = (
   );
 };
 
+const EMPTY_COLLAPSED: Message[] = [];
+
 export const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean => {
   if (a === b) return true;
   if (a.kind !== b.kind || a.key !== b.key) return false;
@@ -416,7 +446,13 @@ export const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean
   }
 
   if (a.kind === "system" && b.kind === "system") {
-    return a.message === b.message;
+    const aCollapsed = a.collapsedMessages ?? EMPTY_COLLAPSED;
+    const bCollapsed = b.collapsedMessages ?? EMPTY_COLLAPSED;
+    return (
+      a.message === b.message &&
+      aCollapsed.length === bCollapsed.length &&
+      aCollapsed.every((m, i) => m === bCollapsed[i])
+    );
   }
 
   if (a.kind === "message" && b.kind === "message") {
