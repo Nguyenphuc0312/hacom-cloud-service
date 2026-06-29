@@ -481,7 +481,7 @@
       "autoScrollDesc": "Tự động cuộn đến tin nhắn mới nhất",
       "enterKeyLabel": "Hành vi phím Enter",
       "enterSend": "Enter để gửi",
-      "enterSendDesc": "Nhấn Enter để gửi, Shift+Enter để xuống dòng",
+      "enterSendDesc": "Nhấn Enter để gửi, Shift+Enter hoặc Alt+Enter để xuống dòng",
       "enterNewline": "Enter để xuống dòng",
       "enterNewlineDesc": "Nhấn Ctrl+Enter để gửi",
       "saveSearchHistory": "Lưu lịch sử tìm kiếm",
