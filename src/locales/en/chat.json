@@ -422,7 +422,8 @@
       "changed": "{{actor}} changed their choice in the poll: {{question}}",
       "changedAnonymous": "Someone changed their choice in the poll: {{question}}",
       "closed": "The poll {{question}} has ended",
-      "view": "View"
+      "view": "View",
+      "showMore": "Show {{count}} more activities"
     }
   },
   "notification": {

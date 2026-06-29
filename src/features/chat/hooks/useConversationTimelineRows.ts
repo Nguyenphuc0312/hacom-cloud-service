@@ -230,6 +230,13 @@ const areConversationTimelineItemsEqual = (
   }
 
   if (previousItem.kind === "system" && nextItem.kind === "system") {
+    const prevCollapsed = previousItem.collapsedMessages ?? [];
+    const nextCollapsed = nextItem.collapsedMessages ?? [];
+    const collapsedEqual =
+      prevCollapsed.length === nextCollapsed.length &&
+      prevCollapsed.every((m, i) => m === nextCollapsed[i]);
+    if (!collapsedEqual) return false;
+
     if (
       previousItem.messageId === nextItem.messageId &&
       previousItem.message === nextItem.message

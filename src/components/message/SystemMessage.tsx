@@ -6,6 +6,9 @@ import { useAuthStore } from "../../stores";
 
 interface SystemMessageProps {
   message: Message;
+  // Older poll-event system messages folded into this row (oldest→newest),
+  // revealed behind a "Xem thêm" toggle. See timelinePlanner collapse logic.
+  collapsedMessages?: Message[];
   className?: string;
   onNavigateToMessage?: (messageId: string) => void;
 }
@@ -46,18 +49,14 @@ const getPollEvent = (message: Message): PollEvent | null => {
   return null;
 };
 
-export const SystemMessage: React.FC<SystemMessageProps> = ({
-  message,
-  className,
-  onNavigateToMessage,
-}) => {
-  const { t } = useTranslation("chat");
-  const currentUserId = useAuthStore((s) => s.user?.id);
+const SEVERITY_PILL = "border-border/70 bg-[hsl(var(--chat-panel-bg))] text-text-secondary";
+
+const resolveSeverity = (message: Message): "info" | "warn" | "error" => {
   const metadata =
     message.metadata && typeof message.metadata === "object"
       ? (message.metadata as Record<string, unknown>)
       : null;
-  const severityRaw =
+  const raw =
     typeof metadata?.severity === "string"
       ? metadata.severity
       : typeof metadata?.level === "string"
@@ -65,70 +64,119 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
         : typeof metadata?.variant === "string"
           ? metadata.variant
           : "info";
-  const severity =
-    severityRaw === "warn" || severityRaw === "warning"
-      ? "warn"
-      : severityRaw === "error"
-        ? "error"
-        : "info";
+  if (raw === "warn" || raw === "warning") return "warn";
+  if (raw === "error") return "error";
+  return "info";
+};
 
-  const pollEvent = getPollEvent(message);
-
-  const pillClass = clsx(
+const pillClassFor = (severity: "info" | "warn" | "error") =>
+  clsx(
     "rounded-full border px-3.5 py-1 text-[11px] font-medium tracking-[0.01em]",
     severity === "error"
       ? "border-danger/25 bg-danger/10 text-danger"
       : severity === "warn"
         ? "border-warning/25 bg-warning/12 text-warning"
-        : "border-border/70 bg-[hsl(var(--chat-panel-bg))] text-text-secondary",
+        : SEVERITY_PILL,
   );
 
+// One poll-event pill ("X tham gia/đổi lựa chọn… Xem").
+const PollEventPill: React.FC<{
+  pollEvent: PollEvent;
+  currentUserId?: string;
+  onNavigateToMessage?: (messageId: string) => void;
+}> = ({ pollEvent, currentUserId, onNavigateToMessage }) => {
+  const { t } = useTranslation("chat");
+  const isYou = !!currentUserId && pollEvent.actorId === currentUserId;
+  const isAnonymous = !isYou && !pollEvent.actorName;
+  const opts = { question: pollEvent.question, actor: pollEvent.actorName ?? "" };
+  const text = (() => {
+    switch (pollEvent.kind) {
+      case "created":
+        return isYou ? t("poll.systemEvent.createdByYou", opts) : t("poll.systemEvent.created", opts);
+      case "voted":
+        return isYou
+          ? t("poll.systemEvent.votedByYou", opts)
+          : isAnonymous
+            ? t("poll.systemEvent.votedAnonymous", opts)
+            : t("poll.systemEvent.voted", opts);
+      case "changed":
+        return isYou
+          ? t("poll.systemEvent.changedByYou", opts)
+          : isAnonymous
+            ? t("poll.systemEvent.changedAnonymous", opts)
+            : t("poll.systemEvent.changed", opts);
+      case "closed":
+        return t("poll.systemEvent.closed", opts);
+    }
+  })();
+
+  return (
+    <span className={clsx(pillClassFor("info"), "inline-flex items-center gap-1.5")}>
+      {text}
+      {pollEvent.kind !== "closed" && pollEvent.messageId && onNavigateToMessage && (
+        <button
+          type="button"
+          onClick={() => onNavigateToMessage(pollEvent.messageId)}
+          className="font-semibold text-[#1565C0] transition-colors hover:text-[#1976D2] focus-visible:outline-none"
+        >
+          {t("poll.systemEvent.view")}
+        </button>
+      )}
+    </span>
+  );
+};
+
+export const SystemMessage: React.FC<SystemMessageProps> = ({
+  message,
+  collapsedMessages,
+  className,
+  onNavigateToMessage,
+}) => {
+  const { t } = useTranslation("chat");
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const [expanded, setExpanded] = React.useState(false);
+
+  const pollEvent = getPollEvent(message);
+
   if (pollEvent) {
-    const isYou = !!currentUserId && pollEvent.actorId === currentUserId;
-    const isAnonymous = !isYou && !pollEvent.actorName;
-    const text = (() => {
-      const opts = { question: pollEvent.question, actor: pollEvent.actorName ?? "" };
-      switch (pollEvent.kind) {
-        case "created":
-          return isYou ? t("poll.systemEvent.createdByYou", opts) : t("poll.systemEvent.created", opts);
-        case "voted":
-          return isYou
-            ? t("poll.systemEvent.votedByYou", opts)
-            : isAnonymous
-              ? t("poll.systemEvent.votedAnonymous", opts)
-              : t("poll.systemEvent.voted", opts);
-        case "changed":
-          return isYou
-            ? t("poll.systemEvent.changedByYou", opts)
-            : isAnonymous
-              ? t("poll.systemEvent.changedAnonymous", opts)
-              : t("poll.systemEvent.changed", opts);
-        case "closed":
-          return t("poll.systemEvent.closed", opts);
-      }
-    })();
+    // Older folded pills (oldest→newest), shown only when expanded.
+    const older = (collapsedMessages ?? [])
+      .map((m) => getPollEvent(m))
+      .filter((e): e is PollEvent => e !== null);
+    const hiddenCount = older.length;
 
     return (
-      <div className={clsx("my-4 flex justify-center", className)}>
-        <span className={clsx(pillClass, "inline-flex items-center gap-1.5")}>
-          {text}
-          {pollEvent.kind !== "closed" && pollEvent.messageId && onNavigateToMessage && (
-            <button
-              type="button"
-              onClick={() => onNavigateToMessage(pollEvent.messageId)}
-              className="font-semibold text-[#1565C0] transition-colors hover:text-[#1976D2] focus-visible:outline-none"
-            >
-              {t("poll.systemEvent.view")}
-            </button>
-          )}
-        </span>
+      <div className={clsx("my-4 flex flex-col items-center gap-2", className)}>
+        {hiddenCount > 0 && !expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="rounded-full px-3 py-1 text-[11px] font-medium text-[#1565C0] transition-colors hover:text-[#1976D2] focus-visible:outline-none"
+          >
+            {t("poll.systemEvent.showMore", { count: hiddenCount })}
+          </button>
+        )}
+        {expanded &&
+          older.map((e, i) => (
+            <PollEventPill
+              key={e.messageId + i}
+              pollEvent={e}
+              currentUserId={currentUserId}
+              onNavigateToMessage={onNavigateToMessage}
+            />
+          ))}
+        <PollEventPill
+          pollEvent={pollEvent}
+          currentUserId={currentUserId}
+          onNavigateToMessage={onNavigateToMessage}
+        />
       </div>
     );
   }
 
   return (
     <div className={clsx("my-4 flex justify-center", className)}>
-      <span className={pillClass}>{message.content}</span>
+      <span className={pillClassFor(resolveSeverity(message))}>{message.content}</span>
     </div>
   );
 };
