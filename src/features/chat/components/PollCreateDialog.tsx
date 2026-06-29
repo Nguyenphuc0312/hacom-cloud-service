@@ -1,17 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom";
-import { XMarkIcon, CalendarDaysIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { Modal } from "../../../components/ui";
 import type { CreatePollDto } from "@hacom/chat-shared-types/chat";
 import clsx from "clsx";
 
-// `allowAddOption` / `hideResultsBeforeVote` chưa có trong CreatePollDto — FE gửi
-// sẵn trong metadata.poll, BE bỏ qua tới khi ship (xem FE__poll-advanced-options contract).
-export type PollCreatePayload = CreatePollDto & {
-  allowAddOption?: boolean;
-  hideResultsBeforeVote?: boolean;
-};
+// shared-types ≥ 1.7.0: allowAddOption + hideResultsBeforeVote nằm sẵn trong CreatePollDto.
+export type PollCreatePayload = CreatePollDto;
 
 interface PollCreateDialogProps {
   isOpen: boolean;
@@ -427,14 +423,7 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
       bodyClassName="p-0 overflow-visible"
       showCloseButton={false}
       footer={
-        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3.5">
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-overlay"
-            aria-label="Cài đặt bình chọn"
-          >
-            <Cog6ToothIcon className="h-5 w-5" />
-          </button>
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3.5">
           <div className="flex items-center gap-2">
             <button
               type="button"
