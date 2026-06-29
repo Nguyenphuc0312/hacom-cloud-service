@@ -82,7 +82,7 @@ const avatarBg = (name: string): string => {
 };
 
 /** Chồng avatar (ảnh thật → fallback initials) + +N, kiểu Dribbble. */
-export type Attendee = { name: string; avatarUrl?: string | null };
+export type Attendee = { name: string; avatarUrl?: string | null; userId?: string | null };
 export const AvatarStack: React.FC<{ people: Attendee[]; max?: number }> = ({ people, max = 3 }) => {
   const shown = people.slice(0, max);
   const extra = people.length - shown.length;
