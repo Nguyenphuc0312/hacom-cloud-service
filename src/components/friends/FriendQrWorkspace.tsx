@@ -25,6 +25,7 @@ import {
   toast,
 } from "../ui";
 import { useAuthStore } from "../../stores";
+import { useMyProfile } from "../../features/profile/useMyProfile";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useFriendship } from "../../hooks/useFriendship";
 import {
@@ -81,6 +82,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id ?? null;
+  const myProfile = useMyProfile();
 
   const {
     getRelationshipState,
@@ -640,18 +642,22 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
         <div className="mt-6 flex flex-col items-center gap-4">
           <Avatar
-            src={currentUser?.avatar}
-            alt={getDisplayName(currentUser, t("friends:qr.unknownUser"))}
+            src={myProfile.avatar ?? currentUser?.avatar}
+            alt={myProfile.displayName || getDisplayName(currentUser, t("friends:qr.unknownUser"))}
             size="lg"
           />
           <div className="text-center">
             <p className="text-base font-semibold text-text-primary">
-              {getDisplayName(currentUser, t("friends:qr.unknownUser"))}
+              {myProfile.displayName ||
+                getDisplayName(currentUser, t("friends:qr.unknownUser"))}
             </p>
-            {currentUser?.username ? (
+            {myProfile.departmentName ? (
               <p className="text-sm text-text-secondary">
-                @{currentUser.username}
+                {myProfile.departmentName}
               </p>
+            ) : null}
+            {myProfile.orgUnit ? (
+              <p className="text-sm text-text-muted">{myProfile.orgUnit}</p>
             ) : null}
           </div>
 
