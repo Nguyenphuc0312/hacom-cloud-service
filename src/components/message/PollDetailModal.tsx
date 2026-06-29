@@ -26,6 +26,8 @@ interface PollDetailModalProps {
   voted: Set<string>;
   localVotes: Record<string, number>;
   totalVotes: number;
+  /** Hide counts/voters until this viewer votes (hideResultsBeforeVote). */
+  resultsHidden: boolean;
   canVote: boolean;
   isOwn: boolean;
   senderName?: string;
@@ -33,6 +35,8 @@ interface PollDetailModalProps {
   profiles: Record<string, ResolvedProfile>;
   /** Commit the draft selection (saves the vote). */
   onConfirm: (selected: Set<string>) => void;
+  /** Add a new option; undefined when poll.allowAddOption is false. */
+  onAddOption?: (text: string) => Promise<unknown>;
   onPin?: () => void;
   onClosePoll?: () => void;
   onViewProfile: (userId: string) => void;
@@ -47,12 +51,14 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
   voted,
   localVotes,
   totalVotes,
+  resultsHidden,
   canVote,
   isOwn,
   senderName,
   currentUserId,
   profiles,
   onConfirm,
+  onAddOption,
   onPin,
   onClosePoll,
   onViewProfile,
@@ -60,6 +66,9 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
   const [view, setView] = React.useState<View>("main");
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmDiscard, setConfirmDiscard] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+  const [newOption, setNewOption] = React.useState("");
+  const [submittingOption, setSubmittingOption] = React.useState(false);
   // Local draft of my selection — only committed on "Xác nhận"
   const [draft, setDraft] = React.useState<Set<string>>(() => new Set(voted));
   const gearRef = React.useRef<HTMLDivElement | null>(null);
@@ -72,6 +81,8 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
       setView("main");
       setMenuOpen(false);
       setConfirmDiscard(false);
+      setAdding(false);
+      setNewOption("");
       setDraft(new Set(voted));
     }
   }
@@ -116,9 +127,10 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
   const getProfile = (uid: string): ResolvedProfile =>
     profiles[uid] ?? { name: uid, avatar: null, position: null, department: null };
 
-  const voterCount = poll.anonymous
-    ? 0
-    : new Set(poll.options.flatMap((o) => o.voterIds ?? [])).size;
+  const voterCount =
+    poll.anonymous || resultsHidden
+      ? 0
+      : new Set(poll.options.flatMap((o) => o.voterIds ?? [])).size;
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -192,7 +204,8 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                 {poll.options.map((option) => {
                   const isVoted = draft.has(option.id);
                   const votes = localVotes[option.id] ?? option.votes;
-                  const voters = poll.anonymous ? [] : option.voterIds ?? [];
+                  const voters =
+                    poll.anonymous || resultsHidden ? [] : option.voterIds ?? [];
                   return (
                     <div key={option.id} className="flex items-center gap-2.5">
                       {/* radio / checkbox */}
@@ -245,25 +258,72 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                         </div>
                       </button>
 
-                      {/* vote count */}
-                      <span className="w-5 shrink-0 text-right text-[13px] font-semibold tabular-nums text-text-secondary">
-                        {votes}
-                      </span>
+                      {/* vote count — hidden until viewer votes when hideResultsBeforeVote */}
+                      {!resultsHidden && (
+                        <span className="w-5 shrink-0 text-right text-[13px] font-semibold tabular-nums text-text-secondary">
+                          {votes}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Add option (visual — like Zalo) */}
-              {!poll.isClosed && (
-                <button
-                  type="button"
-                  disabled
-                  className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-[#1565C0]/50"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  Thêm lựa chọn
-                </button>
+              {/* Add option (Zalo-style) — only when poll.allowAddOption */}
+              {onAddOption && !poll.isClosed && (
+                adding ? (
+                  <form
+                    className="mt-3 flex items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const text = newOption.trim();
+                      if (!text || submittingOption) return;
+                      setSubmittingOption(true);
+                      onAddOption(text)
+                        .then(() => {
+                          setNewOption("");
+                          setAdding(false);
+                        })
+                        .finally(() => setSubmittingOption(false));
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={newOption}
+                      onChange={(e) => setNewOption(e.target.value)}
+                      maxLength={100}
+                      placeholder="Nhập lựa chọn mới…"
+                      disabled={submittingOption}
+                      className="flex-1 rounded-lg border border-border bg-surface-overlay/40 px-3 py-2 text-[13.5px] text-text-primary outline-none focus:border-[#1565C0]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newOption.trim() || submittingOption}
+                      className="shrink-0 rounded-lg bg-[#1565C0] px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Thêm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdding(false);
+                        setNewOption("");
+                      }}
+                      className="shrink-0 rounded-lg px-2 py-2 text-[13px] text-text-muted transition-colors hover:bg-surface-overlay"
+                    >
+                      Hủy
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAdding(true)}
+                    className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-[#1565C0] transition-colors hover:text-[#1976D2]"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Thêm lựa chọn
+                  </button>
+                )
               )}
             </>
           ) : (

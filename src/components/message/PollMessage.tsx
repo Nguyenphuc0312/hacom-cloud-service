@@ -107,6 +107,11 @@ export const PollMessage: React.FC<PollMessageProps> = ({
   const isClosed = poll.isClosed;
   const canVote = !isClosed && !!currentUserId;
 
+  // "Ẩn kết quả khi chưa bình chọn": BE masks REST to 0, but the WS frame still
+  // carries real counts (room-wide broadcast can't mask per-viewer) — so we also
+  // hide visually until this viewer votes. Closed poll → results public to all.
+  const resultsHidden = !!poll.hideResultsBeforeVote && !hasVoted && !isClosed;
+
   const totalVotes =
     Object.values(localVotes).reduce((s, v) => s + v, 0) || poll.totalVotes;
   const maxVotes = Math.max(...Object.values(localVotes), 1);
@@ -180,11 +185,25 @@ export const PollMessage: React.FC<PollMessageProps> = ({
     }
   };
 
-  const hasAnyVotes = totalVotes > 0;
+  // Add a new option (only when poll.allowAddOption). Realtime message:updated
+  // brings the new option back to everyone; we refetch our own tail for the
+  // system line, same as vote/close.
+  const addOption = (text: string) => {
+    if (!messageId) return Promise.reject(new Error("no messageId"));
+    return messageApi
+      .addPollOption(messageId, poll.id, text.trim())
+      .then(refreshTimeline)
+      .catch((e) => {
+        toast.error("Không thể thêm lựa chọn");
+        throw e;
+      });
+  };
+
+  const hasAnyVotes = !resultsHidden && totalVotes > 0;
   const allVoters = !poll.anonymous
     ? [...new Set(poll.options.flatMap((o) => o.voterIds ?? []))]
     : [];
-  const voterCount = allVoters.length;
+  const voterCount = resultsHidden ? 0 : allVoters.length;
 
   return (
     <div className="min-w-[300px] max-w-[340px] overflow-hidden rounded-2xl border border-border/60 bg-surface px-3.5 pb-3.5 pt-3 shadow-sm">
@@ -202,6 +221,11 @@ export const PollMessage: React.FC<PollMessageProps> = ({
         <p className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-medium text-text-muted">
           <LockClosedIcon className="h-3 w-3" />
           Đã kết thúc
+        </p>
+      )}
+      {resultsHidden && (
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          Bình chọn để xem kết quả
         </p>
       )}
 
@@ -225,7 +249,8 @@ export const PollMessage: React.FC<PollMessageProps> = ({
           const votes = localVotes[option.id] ?? option.votes;
           const barPct = hasAnyVotes ? Math.round((votes / maxVotes) * 100) : 0;
           const isVoted = voted.has(option.id);
-          const optionVoters = poll.anonymous ? [] : option.voterIds ?? [];
+          const optionVoters =
+            poll.anonymous || resultsHidden ? [] : option.voterIds ?? [];
 
           return (
             <button
@@ -289,10 +314,12 @@ export const PollMessage: React.FC<PollMessageProps> = ({
                 </div>
               )}
 
-              {/* vote count */}
-              <span className="relative shrink-0 text-[13px] font-semibold tabular-nums text-text-secondary">
-                {votes}
-              </span>
+              {/* vote count — hidden until viewer votes when hideResultsBeforeVote */}
+              {!resultsHidden && (
+                <span className="relative shrink-0 text-[13px] font-semibold tabular-nums text-text-secondary">
+                  {votes}
+                </span>
+              )}
 
               {/* selected tick — blue circle */}
               {isVoted && (
@@ -347,12 +374,14 @@ export const PollMessage: React.FC<PollMessageProps> = ({
         voted={voted}
         localVotes={localVotes}
         totalVotes={totalVotes}
+        resultsHidden={resultsHidden}
         canVote={canVote}
         isOwn={isOwn}
         senderName={senderName}
         currentUserId={currentUserId}
         profiles={resolvedProfiles}
         onConfirm={(selected) => commitVote(selected)}
+        onAddOption={poll.allowAddOption && messageId ? addOption : undefined}
         onPin={
           messageId
             ? () => {
