@@ -27,7 +27,7 @@ import {
   useSendMessageMutation,
 } from "../../features/api/chatApi";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { MessageType, type LocationMessagePayload } from "../../types";
+import { FileType, MessageType, type LocationMessagePayload } from "../../types";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 import {
@@ -253,6 +253,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     reset: audioReset,
   } = useAudioRecorder();
   const audioUpload = useAudioUpload();
+  const [sendVoiceMessage] = useSendMessageMutation();
   const audioFlowActive = audioState !== "IDLE" && audioState !== "CANCELLED" && audioState !== "SENT";
 
   const handleAudioCancel = React.useCallback(() => {
@@ -278,20 +279,38 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         clientMessageId,
         durationMs: clip.durationMs,
       });
-      // Create VOICE message referencing uploaded file
-      await messageApi.sendMessage(conversationId, {
-        type: MessageType.VOICE,
+      const originalFileName = `voice-recording.${
+        clip.mimeType.includes("webm")
+          ? "webm"
+          : clip.mimeType.includes("mp4")
+            ? "m4a"
+            : "ogg"
+      }`;
+      await sendVoiceMessage({
+        conversationId,
         clientMessageId,
+        localId: `temp-${clientMessageId}`,
+        type: MessageType.VOICE,
         content: "",
-        attachments: [{
-          id: uploadResult.fileId,
-          type: "voice",
-          fileName: `voice-recording.${clip.mimeType.includes("webm") ? "webm" : clip.mimeType.includes("mp4") ? "m4a" : "ogg"}`,
+        attachments: [
+          {
+            id: uploadResult.fileId,
+            type: FileType.AUDIO,
+            fileName: originalFileName,
+            mimeType: clip.mimeType,
+            fileSize: clip.sizeBytes,
+            duration: Math.max(1, Math.round(clip.durationMs / 1000)),
+          },
+        ],
+        audio: {
+          fileId: uploadResult.fileId,
           mimeType: clip.mimeType,
-          fileSize: clip.sizeBytes,
-          duration: clip.durationMs,
-        }],
-      });
+          durationMs: clip.durationMs,
+          sizeBytes: clip.sizeBytes,
+          waveform: audioAmplitude,
+          originalFileName,
+        },
+      }).unwrap();
       toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -300,7 +319,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioReset();
     }
-  }, [audioStopRecording, audioUpload, conversationId, audioReset, t]);
+  }, [audioStopRecording, audioUpload, conversationId, audioReset, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();

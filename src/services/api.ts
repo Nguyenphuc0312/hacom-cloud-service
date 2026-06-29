@@ -1240,6 +1240,7 @@ export const messageApi = {
         favicon?: string;
       };
       location?: LocationMessagePayload;
+      audio?: import("../types").AudioMessagePayload;
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -1279,6 +1280,7 @@ export const messageApi = {
     if (data.mentions?.length) body.mentions = data.mentions;
     if (data.linkPreview) body.metadata = { linkPreview: data.linkPreview };
     if (data.location) body.location = data.location;
+    if (data.audio) body.audio = data.audio;
     if (data.poll) {
       body.type = "poll";
       body.metadata = { ...((body.metadata as Record<string, unknown>) ?? {}), poll: data.poll };

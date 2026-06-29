@@ -6,6 +6,7 @@ import {
   formatAccuracyMeters,
   isValidLocationCoordinate,
   openLocationInMaps,
+  resolveAccuracyMeters,
 } from "../../utils/locationMessage";
 import { toast } from "../ui";
 
@@ -18,7 +19,7 @@ export const LocationMessage: React.FC<LocationMessageProps> = ({
   location,
   isOwn,
 }) => {
-  const accuracy = formatAccuracyMeters(location.accuracyM);
+  const accuracy = formatAccuracyMeters(resolveAccuracyMeters(location));
   const canOpen = isValidLocationCoordinate(location);
 
   const handleOpen = React.useCallback(() => {

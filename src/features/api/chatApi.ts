@@ -21,7 +21,7 @@ import type {
   LinkPreviewData,
 } from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
-import type { Attachment, Conversation, LocationMessagePayload, Mention, Message } from "../../types";
+import type { Attachment, AudioMessagePayload, Conversation, LocationMessagePayload, Mention, Message } from "../../types";
 import {
   buildConversationMessagesCache,
   markMessageFailedInCache,
@@ -80,6 +80,7 @@ export interface SendMessageInput {
     displayName: string;
   }[];
   attachments?: SendMessageAttachmentInput[];
+  audio?: AudioMessagePayload;
   location?: LocationMessagePayload;
   /** OG metadata pre-fetched in the composer; BE persists into message.metadata.linkPreview */
   linkPreview?: {
@@ -356,6 +357,7 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
         }
       : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+    ...(input.audio ? { audio: input.audio } : {}),
     ...(input.location ? { location: input.location } : {}),
     ...(input.linkPreview
       ? { metadata: { linkPreview: input.linkPreview } }
@@ -608,6 +610,7 @@ export const chatApi = createApi({
               ?.filter((m) => m.userId !== "all")
               .map((m) => m.userId),
             attachments: input.attachments,
+            audio: input.audio,
             location: input.location,
             linkPreview: input.linkPreview,
             poll: input.poll,
