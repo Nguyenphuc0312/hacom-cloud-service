@@ -19,7 +19,6 @@ import {
 } from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 import { dispatchStartDirectMessage } from "../../features/chat/events/chatUiEvents";
-import { getSafeUserPosition } from "../../utils/userDisplay";
 import { PollDetailModal } from "./PollDetailModal";
 
 interface PollMessageProps {
@@ -129,7 +128,7 @@ export const PollMessage: React.FC<PollMessageProps> = ({
           next[id] = {
             name: s?.displayName ?? s?.username ?? id,
             avatar: resolvePublicResourceUrl((s as { avatar?: string })?.avatar || s?.avatarUrl || undefined) ?? null,
-            position: getSafeUserPosition(s),
+            position: s?.position ?? null,
             department: s?.department ?? null,
           };
         }

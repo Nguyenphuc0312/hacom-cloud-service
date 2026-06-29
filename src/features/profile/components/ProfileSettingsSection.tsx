@@ -95,11 +95,9 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
               <p className="break-words text-lg font-semibold leading-7 text-text-primary">
                 {displayName}
               </p>
-              {profile.jobTitle && (
-                <p className="mt-1 break-words text-sm font-medium text-[#C41E3A]">
-                  {jobTitle}
-                </p>
-              )}
+              <p className="mt-1 break-words text-sm font-medium text-[#C41E3A]">
+                {jobTitle}
+              </p>
               <p className="mt-1 break-words text-sm text-text-secondary">
                 {departmentName}
               </p>

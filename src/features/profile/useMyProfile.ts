@@ -20,7 +20,6 @@ import { useAuthStore, type User } from "../../stores";
 import { useMyHrProfile } from "../../hooks/useMyHrProfile";
 import type { HrEmployee, HrMeProfile } from "../api/hrProfileApi";
 import { resolveUserDisplayName } from "../chat/identity/resolveUserDisplayName";
-import { getSafeUserPosition } from "../../utils/userDisplay";
 
 /** First non-empty trimmed string value across the given keys. */
 const readValue = (
@@ -123,10 +122,9 @@ export const useMyProfile = (options?: { enabled?: boolean }): MyProfile => {
         hr?.department?.name ||
         readValue(record, "departmentName", "department_name"),
       orgUnit: hr?.unit?.name || readValue(record, "orgUnit", "org_unit"),
-      jobTitle: getSafeUserPosition({
-        position: hr?.position,
-        jobTitle: readValue(record, "jobTitle", "job_title", "position"),
-      }),
+      jobTitle:
+        hr?.position?.name ||
+        readValue(record, "jobTitle", "job_title", "title", "position"),
       employmentStatus: hr?.employmentStatus || null,
       dateOfJoining: hr?.dateOfJoining || null,
       avatar: user?.avatar,
