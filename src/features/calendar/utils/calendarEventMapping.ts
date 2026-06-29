@@ -88,22 +88,30 @@ export const mapHrmEventToCalendarEvent = (event: HRCalendarEvent): ExtendedCale
  */
 const buildAttendeeAvatars = (
   event: HRCalendarEvent,
-): Array<{ name: string; avatarUrl?: string | null }> => {
-  const out: Array<{ name: string; avatarUrl?: string | null }> = [];
+): Array<{ name: string; avatarUrl?: string | null; userId?: string | null }> => {
+  const out: Array<{ name: string; avatarUrl?: string | null; userId?: string | null }> = [];
   const seen = new Set<string>();
-  const push = (name: string, avatarUrl?: string | null) => {
+  const push = (name: string, avatarUrl?: string | null, userId?: string | null) => {
     const key = name.trim().toLowerCase();
     if (!key || seen.has(key)) return;
     seen.add(key);
-    out.push({ name: name.trim(), avatarUrl });
+    out.push({ name: name.trim(), avatarUrl, userId });
   };
 
   const ownerName = event.owner?.fullName ?? event.ownerName ?? "";
-  // owner?.avatarUrl: BE chưa trả (xem contract calendar-participant-avatar) → undefined.
-  push(ownerName, (event.owner as { avatarUrl?: string | null } | null)?.avatarUrl);
+  // userId = chat authUserId → CalendarPage batch-load avatar từ chat-web (như Poll).
+  push(
+    ownerName,
+    (event.owner as { avatarUrl?: string | null } | null)?.avatarUrl,
+    event.ownerAuthUserId,
+  );
 
   for (const p of event.participants ?? []) {
-    push(p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "", p.avatarUrl);
+    push(
+      p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "",
+      p.avatarUrl,
+      p.authUserId,
+    );
   }
   return out;
 };

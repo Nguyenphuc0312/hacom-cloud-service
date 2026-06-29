@@ -59,6 +59,8 @@ import {
 } from "../utils/calendarEventMapping";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
+import { loadUserProfiles } from "../../../services/userBatchLoader";
+import { resolvePublicResourceUrl } from "../../../config";
 
 // Lazy: kéo react-markdown (~100kB) vào chunk riêng, chỉ tải khi mở chi tiết
 // lịch có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
@@ -1220,6 +1222,51 @@ export const CalendarPage: React.FC = () => {
     return apiEvents.map(mapHrmEventToCalendarEvent);
   }, [apiEvents]);
 
+  // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll) bằng authUserId —
+  // không phụ thuộc hr-api. Batch-load 1 lần cho mọi participant đang hiển thị.
+  const [participantAvatars, setParticipantAvatars] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    const ids = [
+      ...new Set(
+        calendarEventsFromApi.flatMap((e) =>
+          (e.attendeeAvatars ?? [])
+            .map((a) => a.userId)
+            .filter((id): id is string => !!id),
+        ),
+      ),
+    ];
+    if (ids.length === 0) return;
+    void loadUserProfiles(ids).then((results) => {
+      setParticipantAvatars((prev) => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(results)) {
+          next[id] =
+            resolvePublicResourceUrl(
+              (s as { avatar?: string })?.avatar || s?.avatarUrl || undefined,
+            ) ?? null;
+        }
+        return next;
+      });
+    });
+  }, [calendarEventsFromApi]);
+
+  // Tiêm avatar đã resolve (chat-web) vào event trước khi đẩy xuống Day/Week/Widget.
+  const calendarEventsWithAvatars = useMemo((): ExtendedCalendarEvent[] => {
+    if (Object.keys(participantAvatars).length === 0) return calendarEventsFromApi;
+    return calendarEventsFromApi.map((e) =>
+      e.attendeeAvatars?.length
+        ? {
+            ...e,
+            attendeeAvatars: e.attendeeAvatars.map((a) =>
+              a.userId && participantAvatars[a.userId]
+                ? { ...a, avatarUrl: participantAvatars[a.userId] }
+                : a,
+            ),
+          }
+        : e,
+    );
+  }, [calendarEventsFromApi, participantAvatars]);
+
   // Fetch attendance data when month changes.
   // Skip when viewing another user's calendar — never show current user's attendance
   // alongside someone else's events. A future phase can fetch target user's attendance here.
@@ -1300,7 +1347,7 @@ export const CalendarPage: React.FC = () => {
   };
 
   // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
-  const allEvents = calendarEventsFromApi;
+  const allEvents = calendarEventsWithAvatars;
 
   // Filter events based on selected filters
   const filteredEvents = useMemo(() => {
