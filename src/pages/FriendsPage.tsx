@@ -145,8 +145,6 @@ const toDisplayName = (user: ContactUser): string => {
   return "Người dùng";
 };
 
-const DISPLAY_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 const normalizeStatus = (value: unknown): UserStatus | undefined => {
   const statuses = new Set<string>(Object.values(UserStatus));
   return typeof value === "string" && statuses.has(value)
@@ -375,16 +373,19 @@ const ContactRow: React.FC<ContactRowProps> = ({
   // `user.status` field. See resolveLivePresenceStatus for the rationale.
   const status = resolveLivePresenceStatus(livePresence);
 
+  // Online → "Trực tuyến". Offline → phòng ban · công ty (KHÔNG hiện mã NV);
+  // fallback last-seen rồi @username chỉ khi thiếu cả phòng ban lẫn công ty.
   const defaultSubtitle =
     status === UserStatus.ONLINE
       ? t("common:status.online")
-      : livePresence?.lastSeenAt
-        ? t("common:status.lastSeen", {
-            time: formatCalendarDateTime(new Date(livePresence.lastSeenAt)),
-          })
-        : user.username
-          ? `@${user.username}`
-          : t("common:status.offline");
+      : buildSuggestionSubtitle(user) ??
+        (livePresence?.lastSeenAt
+          ? t("common:status.lastSeen", {
+              time: formatCalendarDateTime(new Date(livePresence.lastSeenAt)),
+            })
+          : user.username
+            ? `@${user.username}`
+            : t("common:status.offline"));
 
   return (
     <button
@@ -787,17 +788,15 @@ export const FriendsPage: React.FC = () => {
   // Enrich display names for friends whose displayName is an email (FriendshipUserDto
   // doesn't carry firstName/lastName; fetch /users/{id} to get the actual name).
   const [enrichedNameMap, setEnrichedNameMap] = useState<Record<string, string>>({});
+  // Phòng ban/công ty không nằm trong FriendshipUserDto → enrich từ /users/batch
+  // (giống tên), để dòng phụ khi offline hiện "phòng ban · công ty".
+  const [enrichedHrMap, setEnrichedHrMap] = useState<
+    Record<string, { department?: string | null; company?: string | null }>
+  >({});
   useEffect(() => {
-    // Collect every friend whose displayName is just an email and enrich them in
-    // ONE batch request (previously this was a forEach → N `GET /users/{id}`).
-    const idsToEnrich = friends
-      .filter(
-        (friend) =>
-          typeof friend.displayName === "string" &&
-          DISPLAY_EMAIL_PATTERN.test(friend.displayName),
-      )
-      .map((friend) => friend.id);
-
+    // Enrich MỌI bạn bè trong ONE batch request: tên (khi displayName là email)
+    // + phòng ban/công ty (luôn cần cho dòng phụ).
+    const idsToEnrich = friends.map((friend) => friend.id);
     if (idsToEnrich.length === 0) return;
 
     let cancelled = false;
@@ -805,28 +804,38 @@ export const FriendsPage: React.FC = () => {
       .then((profileMap) => {
         if (cancelled) return;
 
-        const resolved: Record<string, string> = {};
+        const resolvedNames: Record<string, string> = {};
+        const resolvedHr: Record<
+          string,
+          { department?: string | null; company?: string | null }
+        > = {};
         for (const [id, profile] of Object.entries(profileMap)) {
           if (!profile) continue;
           const name = resolveUserDisplayName(profile, { allowLegacyFallback: false });
           if (name && name !== "Unknown user") {
-            resolved[id] = name;
+            resolvedNames[id] = name;
+          }
+          if (profile.department || profile.company) {
+            resolvedHr[id] = { department: profile.department, company: profile.company };
           }
         }
-        if (Object.keys(resolved).length === 0) return;
 
-        // Single state update; only changes keys that actually moved.
-        setEnrichedNameMap((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          for (const [id, name] of Object.entries(resolved)) {
-            if (next[id] !== name) {
-              next[id] = name;
-              changed = true;
+        if (Object.keys(resolvedNames).length > 0) {
+          setEnrichedNameMap((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const [id, name] of Object.entries(resolvedNames)) {
+              if (next[id] !== name) {
+                next[id] = name;
+                changed = true;
+              }
             }
-          }
-          return changed ? next : prev;
-        });
+            return changed ? next : prev;
+          });
+        }
+        if (Object.keys(resolvedHr).length > 0) {
+          setEnrichedHrMap((prev) => ({ ...prev, ...resolvedHr }));
+        }
       })
       .catch(() => null);
 
@@ -840,9 +849,15 @@ export const FriendsPage: React.FC = () => {
       friends.map((friend) => {
         const contact = toContactUser(friend);
         const enriched = enrichedNameMap[friend.id];
-        return enriched ? { ...contact, displayName: enriched } : contact;
+        const hr = enrichedHrMap[friend.id];
+        return {
+          ...contact,
+          ...(enriched ? { displayName: enriched } : {}),
+          departmentName: contact.departmentName ?? hr?.department ?? undefined,
+          orgUnit: contact.orgUnit ?? hr?.company ?? undefined,
+        };
       }),
-    [friends, enrichedNameMap],
+    [friends, enrichedNameMap, enrichedHrMap],
   );
 
   const handleListScroll = useCallback(
