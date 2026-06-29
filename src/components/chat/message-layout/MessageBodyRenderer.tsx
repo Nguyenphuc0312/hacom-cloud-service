@@ -529,6 +529,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
         </div>
       );
     case MessageType.VOICE:
+    case MessageType.AUDIO:
       return (
         <div className="space-y-2">
           {attachments.length > 0

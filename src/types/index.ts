@@ -205,7 +205,23 @@ export interface LocationMessagePayload {
   latitude: number;
   longitude: number;
   accuracyM?: number;
+  accuracy?: number;
   capturedAt: string;
+  address?: string;
+  placeName?: string;
+  name?: string;
+  mapUrl?: string;
+  provider?: "browser" | "manual" | "google_maps" | "openstreetmap";
+}
+
+export interface AudioMessagePayload {
+  fileId: string;
+  url?: string;
+  mimeType: string;
+  durationMs: number;
+  sizeBytes?: number;
+  waveform?: number[];
+  originalFileName?: string;
 }
 
 export interface Message

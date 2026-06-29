@@ -5,7 +5,7 @@ import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
 import { useAuthStore, useGroupStore } from "../../../stores";
-import type { Attachment, LocationMessagePayload, Message, MessageType } from "../../../types";
+import type { Attachment, AudioMessagePayload, LocationMessagePayload, Message, MessageType } from "../../../types";
 import { MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import {
@@ -63,7 +63,11 @@ interface UseSendMessageResult {
     contentJson?: Record<string, unknown>,
     plainText?: string,
     linkPreview?: LinkPreviewMeta,
-    options?: { location?: LocationMessagePayload; clientMessageId?: string },
+    options?: {
+      location?: LocationMessagePayload;
+      audio?: AudioMessagePayload;
+      clientMessageId?: string;
+    },
   ) => unknown | Promise<unknown>;
 }
 
@@ -189,6 +193,7 @@ export const useRetrySendMessage = () => {
           mentions: message.mentions,
           attachments: toSendMessageAttachments(message.attachments),
           location: message.location,
+          audio: message.audio,
         }).unwrap();
       } finally {
         retryRequestsInFlight.delete(requestKey);
@@ -227,7 +232,11 @@ export const useSendMessage = ({
       contentJson?: Record<string, unknown>,
       plainText?: string,
       linkPreview?: LinkPreviewMeta,
-      options?: { location?: LocationMessagePayload; clientMessageId?: string },
+      options?: {
+        location?: LocationMessagePayload;
+        audio?: AudioMessagePayload;
+        clientMessageId?: string;
+      },
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -308,6 +317,7 @@ export const useSendMessage = ({
           attachments: toSendMessageAttachments(fileMeta),
           linkPreview,
           location: options?.location,
+          audio: options?.audio,
         })
           .unwrap()
           .catch(handleSendError);

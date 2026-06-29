@@ -31,6 +31,11 @@ export const tryBuildGoogleMapsSearchUrl = (
   return buildGoogleMapsSearchUrl(location);
 };
 
+export const resolveAccuracyMeters = (
+  location: Pick<LocationMessagePayload, "accuracyM" | "accuracy">,
+): number | undefined =>
+  typeof location.accuracyM === "number" ? location.accuracyM : location.accuracy;
+
 export const formatAccuracyMeters = (accuracyM?: number): string | null => {
   if (typeof accuracyM !== "number" || !Number.isFinite(accuracyM) || accuracyM < 0) {
     return null;
@@ -78,7 +83,7 @@ export const isLocationStale = (
 
 export const openLocationInMaps = (location: LocationMessagePayload): boolean => {
   if (typeof window === "undefined") return false;
-  const url = tryBuildGoogleMapsSearchUrl(location);
+  const url = location.mapUrl || tryBuildGoogleMapsSearchUrl(location);
   if (!url) return false;
 
   const next = window.open(url, "_blank", "noopener,noreferrer");
