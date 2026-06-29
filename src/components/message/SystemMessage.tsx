@@ -145,8 +145,10 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
       .filter((e): e is PollEvent => e !== null);
     const hiddenCount = older.length;
 
+    // Khít với card poll ngay bên dưới (sau bump seq, card poll có seq mới nhất
+    // nên nằm dưới pill cùng poll) — cụm "Xem thêm" + pill + card đi liền như Zalo.
     return (
-      <div className={clsx("my-4 flex flex-col items-center gap-2", className)}>
+      <div className="mt-4 mb-1 flex flex-col items-center gap-1.5">
         {hiddenCount > 0 && !expanded && (
           <button
             type="button"
