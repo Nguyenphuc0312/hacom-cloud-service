@@ -33,6 +33,7 @@ import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
 import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+import { getSafeUserPosition } from "../../utils/userDisplay";
 import { formatCalendarDate, formatCalendarDateTime } from "../../utils/formatTime";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 import { resolvePublicResourceUrl } from "../../config";
@@ -109,7 +110,7 @@ const toProfileUser = (payload: UserProfileSummaryDto): ProfileUser => {
     status: (payload.status as UserStatus) || UserStatus.OFFLINE,
     // HR canonical fields (UserProfileSummaryDto names — what GET /users/{id} returns)
     department: payload.department ?? undefined,
-    position: payload.position ?? undefined,
+    position: getSafeUserPosition(payload) ?? undefined,
     company: payload.company ?? undefined,
     employeeCode: payload.employeeCode ?? undefined,
     companyEmail: payload.companyEmail ?? undefined,
@@ -264,14 +265,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       bio: authUser.bio,
       // HR fields override the chat copy when an HR profile is linked.
       phone: myProfile.phone ?? undefined,
-      // Canonical new names (UserProfileSummaryDto) — checked first by readUserValue
-      position: myProfile.jobTitle ?? undefined,
       department: myProfile.departmentName ?? undefined,
       company: myProfile.orgUnit ?? undefined,
       companyEmail: myProfile.corporateEmail ?? undefined,
-      // Legacy aliases — fallback for readUserValue when new names absent
-      title: myProfile.jobTitle ?? undefined,
-      jobTitle: myProfile.jobTitle ?? undefined,
       departmentName: myProfile.departmentName ?? undefined,
       orgUnit: myProfile.orgUnit ?? undefined,
       corporateEmail: myProfile.corporateEmail ?? undefined,
@@ -325,13 +321,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   // (position/department/company/companyEmail) are checked first so the panel
   // auto-populates the moment chat-api enriches /users/{id} from HR; the legacy
   // field names remain as fallback. See docs/USER_PROFILE_HR_SYNC_API.md.
-  const jobTitleValue = readUserValue(
-    user,
-    "position",
-    "title",
-    "jobTitle",
-    "job_title",
-  );
+  const jobTitleValue = getSafeUserPosition(user);
   const departmentValue = readUserValue(
     user,
     "department",

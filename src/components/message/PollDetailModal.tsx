@@ -10,6 +10,7 @@ import {
 import clsx from "clsx";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
+import { getSafeUserPosition } from "../../utils/userDisplay";
 
 export type ResolvedProfile = {
   name: string;
@@ -347,7 +348,9 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
                     <div className="space-y-0.5">
                       {voters.map((uid) => {
                         const p = getProfile(uid);
-                        const subtitle = [p.position, p.department].filter(Boolean).join(" · ");
+                        const subtitle = [getSafeUserPosition(p), p.department]
+                          .filter(Boolean)
+                          .join(" · ");
                         return (
                           <button
                             key={uid}

@@ -5,6 +5,7 @@ import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { UserStatus } from "../../../types";
 import { searchUsersUseCase } from "../usecases/searchUsers";
 import { ExpiringLruCache } from "../../../utils/expiringLruCache";
+import { getSafeUserPosition } from "../../../utils/userDisplay";
 import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshipStore";
 import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
 import { USERS_SEARCH_PAGE_SIZE } from "../../../services/api";
@@ -128,9 +129,7 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
       asString(value.unitCode) ??
       asString(value.unit_code) ??
       null,
-    title:
-      asString(value.title) ??
-      null,
+    title: getSafeUserPosition(value),
     isFriend:
       asBoolean(value.isFriend) ??
       asBoolean(value.is_friend) ??
@@ -349,7 +348,7 @@ const friendRecordToSearchUser = (friend: FriendRecord): ChatSearchUser => ({
   employeeCode: friend.employeeCode ?? friend.employee_code ?? null,
   departmentName: friend.departmentName ?? null,
   unitCode: friend.unitCode ?? null,
-  title: friend.title ?? null,
+  title: getSafeUserPosition(friend),
   alias: friend.alias ?? null,
   isFriend: true,
   canAddFriend: false,

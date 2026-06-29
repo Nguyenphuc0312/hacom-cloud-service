@@ -53,6 +53,7 @@ import {
 } from "../features/friends/friendshipAction";
 import { useFriendSuggestions } from "../features/friends/useFriendSuggestions";
 import { loadUserProfiles } from "../services/userBatchLoader";
+import { getSafeUserPosition } from "../utils/userDisplay";
 
 type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -193,7 +194,7 @@ const toContactUser = (value: {
   departmentName: value.departmentName,
   orgUnit: value.orgUnit,
   unitCode: value.unitCode,
-  title: value.title,
+  title: getSafeUserPosition(value) ?? undefined,
   createdAt: value.createdAt,
   isFriend: value.isFriend,
   canAddFriend: value.canAddFriend,
@@ -221,7 +222,7 @@ const toSuggestionContact = (dto: FriendSuggestionDto): SuggestionContact => ({
   departmentName: dto.departmentName ?? undefined,
   orgUnit: dto.unitName ?? undefined,
   unitCode: dto.unitCode ?? undefined,
-  title: dto.title ?? undefined,
+  title: getSafeUserPosition(dto) ?? undefined,
   isFriend: dto.isFriend,
   canAddFriend: dto.canAddFriend,
   friendshipStatus: dto.friendshipStatus,
@@ -293,7 +294,7 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
             : typeof row.unit_code === "string"
               ? row.unit_code
               : undefined,
-        title: typeof row.title === "string" ? row.title : undefined,
+        title: getSafeUserPosition(row) ?? undefined,
         isFriend: typeof row.isFriend === "boolean" ? row.isFriend : undefined,
         canAddFriend:
           typeof row.canAddFriend === "boolean" ? row.canAddFriend : undefined,

@@ -28,6 +28,7 @@ import { useFriendship } from "../../../hooks/useFriendship";
 import { conversationApi } from "../../../services/api";
 import { ROUTE_PATHS } from "../../../router/paths";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
+import { getSafeUserPosition } from "../../../utils/userDisplay";
 
 interface MessageBodyRendererProps {
   message: Message;
@@ -93,7 +94,7 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
     phone: asString(candidate.phone),
     email: asString(candidate.email),
     orgUnit: asString(candidate.orgUnit),
-    title: asString(candidate.title),
+    title: getSafeUserPosition(candidate) ?? undefined,
   };
 };
 
