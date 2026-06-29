@@ -11,6 +11,7 @@ import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useAuthStore } from "../../stores/authStore";
 import { Avatar } from "../common/Avatar";
 import { resolvePublicResourceUrl } from "../../config";
+import { getSafeUserPosition } from "../../utils/userDisplay";
 
 export interface MeetingParticipant {
   name: string;
@@ -210,7 +211,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
         avatar: f.avatar || "",
         employeeCode: f.employeeCode || f.employee_code || "",
         department: f.departmentName || f.orgUnit || "",
-        title: f.title || "",
+        title: getSafeUserPosition(f) || "",
         isSelf: false as const,
       }))
       .filter((f) => f.name)
@@ -239,7 +240,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       avatar: currentUser.avatar || "",
       employeeCode: currentUser.employeeCode || currentUser.employee_code || "",
       department: currentUser.departmentName || currentUser.orgUnit || "",
-      title: currentUser.title || "",
+      title: getSafeUserPosition(currentUser) || "",
       isSelf: true as const,
     };
   }, [currentUser, looksLikeCode]);
