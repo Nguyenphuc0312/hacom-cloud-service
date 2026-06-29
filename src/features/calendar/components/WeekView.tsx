@@ -10,7 +10,13 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
-import { getEventColor, MULTI_DAY_EVENT_COLOR, type CalendarEvent } from "../data/calendarEvents";
+import {
+  getEventColor,
+  MULTI_DAY_EVENT_COLOR,
+  type CalendarEvent,
+  type ExtendedCalendarEvent,
+} from "../data/calendarEvents";
+import { AvatarStack, type Attendee } from "./DayView";
 import {
   HOURS,
   MINUTES_PER_DAY,
@@ -295,7 +301,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   {HOURS.map((hour) => (
                     <div
                       key={hour}
-                      className="border-b border-border"
+                      className="border-b border-border/70"
                       style={{ height: `${HOUR_HEIGHT}px` }}
                     >
                       <button
@@ -303,7 +309,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         disabled={!onSlotClick}
                         onClick={onSlotClick ? () => onSlotClick(date, hour * 60) : undefined}
                         className={clsx(
-                          "block h-1/2 w-full border-b border-border/40",
+                          "block h-1/2 w-full border-b border-dashed border-border/30",
                           onSlotClick && "cursor-pointer hover:bg-[#1976D2]/10",
                         )}
                       />
@@ -345,6 +351,12 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     const top = startMin * PX_PER_MIN;
                     const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
                     const widthPct = 100 / colCount;
+                    const ext = event as ExtendedCalendarEvent;
+                    const people: Attendee[] = ext.attendeeAvatars?.length
+                      ? ext.attendeeAvatars
+                      : (ext.attendees ?? []).map((name) => ({ name }));
+                    // Cột tuần hẹp → chỉ hiện avatar khi đủ cao + 1 cột.
+                    const showAvatars = people.length > 0 && height >= 56 && colCount === 1 && !isLong;
                     return (
                       <button
                         key={event.id}
@@ -355,7 +367,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         }}
                         title={`${event.title} · ${fmtMin(startMin)}–${fmtMin(endMin)}`}
                         className={clsx(
-                          "absolute overflow-hidden rounded border px-1 py-0.5 text-left transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+                          "absolute flex flex-col overflow-hidden rounded-lg border px-1.5 py-0.5 text-left transition-micro hover:z-20 hover:shadow-md",
                           isLong ? "text-xs" : "text-[10px]",
                           colors.bg,
                           colors.border,
@@ -371,15 +383,20 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         <span
                           className={clsx(
                             "block truncate leading-tight",
-                            isLong ? "font-semibold" : "font-medium",
+                            isLong ? "font-semibold" : "font-semibold",
                           )}
                         >
                           {event.title}
                         </span>
                         {height >= 28 && !isLong && (
-                          <span className="block truncate opacity-70">
+                          <span className="block truncate font-medium opacity-70">
                             {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
                           </span>
+                        )}
+                        {showAvatars && (
+                          <div className="mt-auto pt-0.5">
+                            <AvatarStack people={people} max={3} />
+                          </div>
                         )}
                       </button>
                     );

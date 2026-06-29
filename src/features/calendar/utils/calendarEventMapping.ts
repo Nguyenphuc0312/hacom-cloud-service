@@ -77,7 +77,36 @@ export const mapHrmEventToCalendarEvent = (event: HRCalendarEvent): ExtendedCale
   startAt: event.startAt,
   endAt: event.endAt,
   isAllDay: event.isAllDay,
+  attendeeAvatars: buildAttendeeAvatars(event),
 });
+
+/**
+ * Avatar stack = owner (người tạo) + participants (người được mời), dedup.
+ * BE không tự thêm owner vào participants[] (xem CalendarPage buildParticipantPayload),
+ * nên FE ghép owner lên đầu để đồng bộ 2 chiều: cả người tạo lẫn người nhận đều
+ * thấy đủ mặt. avatarUrl của owner đợi BE (HRCalendarOwner chưa có) → fallback initials.
+ */
+const buildAttendeeAvatars = (
+  event: HRCalendarEvent,
+): Array<{ name: string; avatarUrl?: string | null }> => {
+  const out: Array<{ name: string; avatarUrl?: string | null }> = [];
+  const seen = new Set<string>();
+  const push = (name: string, avatarUrl?: string | null) => {
+    const key = name.trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ name: name.trim(), avatarUrl });
+  };
+
+  const ownerName = event.owner?.fullName ?? event.ownerName ?? "";
+  // owner?.avatarUrl: BE chưa trả (xem contract calendar-participant-avatar) → undefined.
+  push(ownerName, (event.owner as { avatarUrl?: string | null } | null)?.avatarUrl);
+
+  for (const p of event.participants ?? []) {
+    push(p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "", p.avatarUrl);
+  }
+  return out;
+};
 
 export const mergeCalendarEventSources = (
   ...sources: ReadonlyArray<ReadonlyArray<CalendarEvent>>

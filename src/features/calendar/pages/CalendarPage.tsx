@@ -34,6 +34,7 @@ import {
 import {
   hrCalendarApi,
   type HRCalendarEvent,
+  type HRCalendarParticipant,
 } from "../../api/hrCalendarApi";
 import {
   apiVisibilityToForm,
@@ -292,7 +293,38 @@ const EventDetailModal: React.FC<{
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
-  const hrParticipants = hrEvent?.participants ?? [];
+  // Owner (người tạo) không nằm trong participants[] từ BE, nhưng phải xuất hiện
+  // trong danh sách "Người tham gia" để đồng bộ với avatar stack ở Day/Week/Widget
+  // (cả 2 chiều người tạo ↔ người nhận thấy đủ mặt). Ghép owner lên đầu, dedup.
+  const hrParticipants = React.useMemo(() => {
+    const list = hrEvent?.participants ?? [];
+    const owner = hrEvent?.owner;
+    if (!owner) return list;
+    const ownerCode = owner.employeeCode?.toLowerCase();
+    const ownerName = owner.fullName?.trim().toLowerCase();
+    const already = list.some(
+      (p) =>
+        (ownerCode &&
+          (p.employeeCode?.toLowerCase() === ownerCode ||
+            p.employee?.employeeCode?.toLowerCase() === ownerCode)) ||
+        (ownerName &&
+          (p.fullName?.trim().toLowerCase() === ownerName ||
+            p.employee?.fullName?.trim().toLowerCase() === ownerName)),
+    );
+    if (already) return list;
+    // Người tạo mặc định coi như đã tham gia (ACCEPTED).
+    const ownerRow: HRCalendarParticipant = {
+      id: `owner-${owner.id}`,
+      employeeId: owner.id,
+      employeeCode: owner.employeeCode,
+      fullName: owner.fullName,
+      avatarUrl: (owner as { avatarUrl?: string | null }).avatarUrl ?? null,
+      employee: { id: owner.id, fullName: owner.fullName, employeeCode: owner.employeeCode },
+      response: "ACCEPTED",
+      createdAt: hrEvent?.createdAt ?? new Date().toISOString(),
+    };
+    return [ownerRow, ...list];
+  }, [hrEvent]);
   const isHrOwner = !!hrEvent?.canEdit;
   const canRespond = !!hrEvent?.isParticipant && !isHrOwner && !!onRespond;
   const respSummary = {
@@ -592,7 +624,8 @@ const EventDetailModal: React.FC<{
                   </div>
                 )}
               </div>
-              <div className="space-y-1.5">
+              {/* Ô cố định ~5 người; vượt thì cuộn trong khung, không phá layout modal. */}
+              <div className="max-h-[228px] space-y-1.5 overflow-y-auto pr-1">
                 {hrParticipants.map((p) => {
                   const name = p.fullName ?? p.employee?.fullName ?? "N/A";
                   const sub =
@@ -1121,6 +1154,15 @@ export const CalendarPage: React.FC = () => {
             .map((p) => p.employee!.fullName)
         : ("attendees" in event && Array.isArray(event.attendees) ? event.attendees : []);
 
+      const attendeeAvatars = "participants" in event && Array.isArray(event.participants)
+        ? event.participants
+            .map((p) => ({
+              name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "",
+              avatarUrl: p.avatarUrl,
+            }))
+            .filter((p) => p.name)
+        : undefined;
+
       const meta = getMeetingMetadata(event);
       map[event.id] = {
         id: event.id,
@@ -1135,6 +1177,7 @@ export const CalendarPage: React.FC = () => {
         meetingChairman: meta.meetingChairman,
         meetingFormat: meta.meetingFormat === "online" ? "online" : meta.meetingFormat === "offline" ? "offline" : undefined,
         attendees: attendeeNames,
+        attendeeAvatars,
         visibility: event.visibility,
         ownerId: event.ownerId,
         canEdit: event.canEdit,
