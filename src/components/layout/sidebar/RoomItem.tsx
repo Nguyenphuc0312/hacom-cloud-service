@@ -95,9 +95,9 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[#1976D2]/8",
-    title: "text-text-primary",
-    preview: "text-text-secondary",
+    container: "bg-[#1565C0]/20 ring-1 ring-inset ring-[#1976D2]/40",
+    title: "text-[#0D3F7A] font-bold",
+    preview: "text-text-primary font-medium",
     time: "text-text-secondary",
     timeBadge:
       "bg-transparent text-text-secondary",
@@ -260,15 +260,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       )}
       aria-label={displayName}
     >
-      {(visualState === "active" || visualState === "mention") && (
-        <span
-          className={clsx(
-            "absolute left-0 top-2 bottom-2 w-1 origin-left rounded-full animate-slide-up-fade",
-            visualState === "mention" ? "bg-danger" : "bg-[#1565C0]",
-          )}
-          aria-hidden="true"
-        />
-      )}
+     
       <div
         className={clsx(
           "grid w-full grid-cols-[auto,1fr,auto] items-center",

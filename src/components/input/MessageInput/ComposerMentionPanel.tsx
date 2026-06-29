@@ -45,14 +45,12 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
               candidate.displayName ||
               candidate.fullName ||
               candidate.username);
-          // Secondary: employee code or username for disambiguation
+          // Secondary: phòng ban · công ty
           const secondaryLabel = isMentionAll
             ? t("chat:composer.mentionAllDescription")
-            : (candidate.employeeCode && candidate.employeeCode !== primaryLabel
-              ? candidate.employeeCode
-              : candidate.username && candidate.username !== primaryLabel
-                ? `@${candidate.username}`
-                : null);
+            : ([candidate.departmentName, candidate.companyName]
+                .filter(Boolean)
+                .join(" · ") || null);
           return (
             <button
               key={`${candidate.id}:${candidate.username}`}

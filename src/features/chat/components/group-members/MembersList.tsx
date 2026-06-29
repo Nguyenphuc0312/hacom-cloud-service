@@ -12,6 +12,8 @@ interface GroupMember {
   username: string;
   displayName?: string;
   fullNameFromHR?: string;
+  departmentName?: string;
+  companyName?: string;
   avatar?: string;
   status?: UserStatus;
   role: RoomMemberRole;
@@ -94,6 +96,8 @@ export const MembersList: React.FC<MembersListProps> = ({
           username={member.username}
           displayName={member.displayName}
           fullNameFromHR={member.fullNameFromHR}
+          departmentName={member.departmentName}
+          companyName={member.companyName}
           avatar={member.avatar}
           status={member.status}
           role={member.role}
