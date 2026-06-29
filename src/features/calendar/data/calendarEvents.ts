@@ -41,8 +41,12 @@ export interface ExtendedCalendarEvent extends CalendarEvent {
   meetingChairman?: string;
   /** List of attendee names */
   attendees?: string[];
-  /** Participants with avatar for the avatar stack (name + presigned avatarUrl từ hr-api). */
-  attendeeAvatars?: Array<{ name: string; avatarUrl?: string | null }>;
+  /**
+   * Participants cho avatar stack. `userId` = chat authUserId → FE tự batch-load
+   * avatar từ chat-web (/users/batch, giống Poll), không phụ thuộc hr-api.
+   * `avatarUrl` chỉ là fallback nếu hr-api có sẵn.
+   */
+  attendeeAvatars?: Array<{ name: string; avatarUrl?: string | null; userId?: string | null }>;
   /** Event visibility */
   visibility?: "PRIVATE" | "BUSY_ONLY" | "TEAM" | "UNIT" | "PUBLIC";
   /** Event status */

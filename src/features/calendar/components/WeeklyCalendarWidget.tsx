@@ -44,6 +44,8 @@ import { useCalendarStore } from "../../../stores/calendarStore";
 import { toast } from "../../../utils/toast";
 import { getEventColor, type CalendarEvent, type ExtendedCalendarEvent } from "../data/calendarEvents";
 import { AvatarStack, type Attendee } from "./DayView";
+import { loadUserProfiles } from "../../../services/userBatchLoader";
+import { resolvePublicResourceUrl } from "../../../config";
 import {
   eventOccursOnDay,
   isMultiDayEvent,
@@ -791,7 +793,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   // store events dùng CHUNG mapping với CalendarPage: type qua mapApiEventTypeToLocal
   // (meeting/personal…), giữ startAt/endAt để event nhiều ngày trải đủ cột ngày,
   // giờ/ngày convert UTC→local. Nhờ vậy màu phân loại (getEventColor) khớp /calendar.
-  const events: CalendarEvent[] = React.useMemo(
+  const mappedEvents = React.useMemo(
     () =>
       safeStoreEvents
         .map(mapHrmEventToCalendarEvent)
@@ -800,6 +802,50 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
         .filter((e) => e.type === "meeting" || e.type === "personal"),
     [safeStoreEvents],
   );
+
+  // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll & /calendar).
+  const [participantAvatars, setParticipantAvatars] = React.useState<Record<string, string | null>>({});
+  React.useEffect(() => {
+    const ids = [
+      ...new Set(
+        mappedEvents.flatMap((e) =>
+          (e as ExtendedCalendarEvent).attendeeAvatars
+            ?.map((a) => a.userId)
+            .filter((id): id is string => !!id) ?? [],
+        ),
+      ),
+    ];
+    if (ids.length === 0) return;
+    void loadUserProfiles(ids).then((results) => {
+      setParticipantAvatars((prev) => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(results)) {
+          next[id] =
+            resolvePublicResourceUrl(
+              (s as { avatar?: string })?.avatar || s?.avatarUrl || undefined,
+            ) ?? null;
+        }
+        return next;
+      });
+    });
+  }, [mappedEvents]);
+
+  const events: CalendarEvent[] = React.useMemo(() => {
+    if (Object.keys(participantAvatars).length === 0) return mappedEvents;
+    return mappedEvents.map((e) => {
+      const ext = e as ExtendedCalendarEvent;
+      return ext.attendeeAvatars?.length
+        ? {
+            ...ext,
+            attendeeAvatars: ext.attendeeAvatars.map((a) =>
+              a.userId && participantAvatars[a.userId]
+                ? { ...a, avatarUrl: participantAvatars[a.userId] }
+                : a,
+            ),
+          }
+        : e;
+    });
+  }, [mappedEvents, participantAvatars]);
 
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
