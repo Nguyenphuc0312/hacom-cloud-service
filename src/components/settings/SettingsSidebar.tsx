@@ -126,8 +126,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   >
                     {isActive ? (
                       <span
-                        className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-[#1565C0]"
-                        aria-hidden="true"
+                        
                       />
                     ) : null}
                     {item.icon ? (

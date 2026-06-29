@@ -260,15 +260,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       )}
       aria-label={displayName}
     >
-      {(visualState === "active" || visualState === "mention") && (
-        <span
-          className={clsx(
-            "absolute left-0 top-1.5 bottom-1.5 w-1.5 origin-left rounded-r-full animate-slide-up-fade",
-            visualState === "mention" ? "bg-danger" : "bg-[#1565C0]",
-          )}
-          aria-hidden="true"
-        />
-      )}
+     
       <div
         className={clsx(
           "grid w-full grid-cols-[auto,1fr,auto] items-center",
