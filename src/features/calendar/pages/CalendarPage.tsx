@@ -59,8 +59,10 @@ import {
 } from "../utils/calendarEventMapping";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
-import { loadUserProfiles } from "../../../services/userBatchLoader";
+import { loadUserProfiles, type UserProfileSummary } from "../../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../../config";
+import { Avatar } from "../../../components/common/Avatar";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 
 // Lazy: kéo react-markdown (~100kB) vào chunk riêng, chỉ tải khi mở chi tiết
 // lịch có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
@@ -318,6 +320,7 @@ const EventDetailModal: React.FC<{
     const ownerRow: HRCalendarParticipant = {
       id: `owner-${owner.id}`,
       employeeId: owner.id,
+      authUserId: hrEvent?.ownerAuthUserId ?? null,
       employeeCode: owner.employeeCode,
       fullName: owner.fullName,
       avatarUrl: (owner as { avatarUrl?: string | null }).avatarUrl ?? null,
@@ -335,6 +338,25 @@ const EventDetailModal: React.FC<{
     declined: hrParticipants.filter((p) => p.response === "DECLINED").length,
     pending: hrParticipants.filter((p) => p.response === "PENDING").length,
   };
+  // Avatar + phòng ban/công ty lấy từ chat-web /users/batch theo authUserId
+  // (GIỐNG avatar stack ở Day/Week/Widget) — hr-api không trả company/avatar chuẩn.
+  const [participantProfiles, setParticipantProfiles] = React.useState<
+    Record<string, UserProfileSummary | null>
+  >({});
+  React.useEffect(() => {
+    const ids = [
+      ...new Set(
+        hrParticipants
+          .map((p) => p.authUserId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    if (ids.length === 0) return;
+    void loadUserProfiles(ids).then(setParticipantProfiles);
+  }, [hrParticipants]);
+  // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
+  // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
+  const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   const handleRespondClick = async (response: "ACCEPTED" | "DECLINED") => {
     if (!onRespond) return;
     setResponding(response);
@@ -629,11 +651,26 @@ const EventDetailModal: React.FC<{
               {/* Ô cố định ~5 người; vượt thì cuộn trong khung, không phá layout modal. */}
               <div className="max-h-[228px] space-y-1.5 overflow-y-auto pr-1">
                 {hrParticipants.map((p) => {
-                  const name = p.fullName ?? p.employee?.fullName ?? "N/A";
-                  const sub =
-                    p.departmentName ?? p.employeeCode ?? p.employee?.employeeCode ?? "";
+                  const profile = p.authUserId
+                    ? participantProfiles[p.authUserId]
+                    : null;
+                  const alias = p.authUserId ? aliasByUserId[p.authUserId] : undefined;
+                  const name =
+                    alias ?? p.fullName ?? p.employee?.fullName ?? "N/A";
+                  // Dòng phụ: phòng ban + công ty (từ /users/batch). Fallback phòng
+                  // ban hr-api nếu chưa có profile.
+                  const dept = profile?.department ?? p.departmentName ?? "";
+                  const company = profile?.company ?? "";
+                  const sub = [dept, company].filter(Boolean).join(" · ");
                   return (
                     <div key={p.id} className="flex items-center gap-2">
+                      <Avatar
+                        src={resolvePublicResourceUrl(
+                          profile?.avatarUrl ?? p.avatarUrl ?? undefined,
+                        )}
+                        alt={name}
+                        size="sm"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-text-primary">{name}</p>
                         {sub && <p className="truncate text-[11px] text-text-muted">{sub}</p>}
