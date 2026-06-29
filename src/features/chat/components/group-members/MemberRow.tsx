@@ -15,6 +15,8 @@ interface MemberRowProps {
   username: string;
   displayName?: string;
   fullNameFromHR?: string;
+  departmentName?: string;
+  companyName?: string;
   avatar?: string;
   status?: UserStatus;
   role: RoomMemberRole;
@@ -37,6 +39,8 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   username,
   displayName,
   fullNameFromHR,
+  departmentName,
+  companyName,
   avatar,
   role,
   currentUserId,
@@ -61,6 +65,7 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   });
 
   const isCurrentUser = memberId === currentUserId;
+  const orgLine = [departmentName, companyName].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -89,15 +94,17 @@ export const MemberRow: React.FC<MemberRowProps> = ({
           title={resolvedName}
         >
           {resolvedName}
-        </p>
-        <p className="truncate text-xs leading-snug text-text-muted">
-          @{username}
           {isCurrentUser && (
-            <span className="ml-1 font-medium text-text-secondary">
+            <span className="ml-1 text-xs font-medium text-text-secondary">
               · {t("profile:groupInfo.youSuffix")}
             </span>
           )}
         </p>
+        {orgLine && (
+          <p className="truncate text-xs leading-snug text-text-muted" title={orgLine}>
+            {orgLine}
+          </p>
+        )}
       </div>
 
       {/* Right column: role badge + actions kebab */}

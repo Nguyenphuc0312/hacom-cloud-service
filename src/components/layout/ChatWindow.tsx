@@ -52,6 +52,7 @@ import { resolveUserDisplayName } from "../../features/chat/identity/resolveUser
 import { getConversationDisplayName, getOtherParticipant } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
+import { loadUserProfiles } from "../../services/userBatchLoader";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state/chatUiStore";
@@ -978,6 +979,11 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   );
 
   const enrichedNameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  // Phòng ban/công ty không nằm trong participant payload → enrich từ /users/batch
+  // để dòng phụ trong dropdown @mention hiện "phòng ban · công ty".
+  const [mentionHrByUserId, setMentionHrByUserId] = React.useState<
+    Record<string, { departmentName?: string; companyName?: string }>
+  >({});
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -1030,6 +1036,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             }) || undefined,
           fullName: enrichedName || fullNameFromHR || undefined,
           employeeCode: employeeCode || undefined,
+          departmentName: mentionHrByUserId[participant.id]?.departmentName,
+          companyName: mentionHrByUserId[participant.id]?.companyName,
           resolvedName,
         };
       });
@@ -1047,7 +1055,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     }
 
     return individualCandidates;
-  }, [conversation, currentUser.id, enrichedNameByUserId]);
+  }, [conversation, currentUser.id, enrichedNameByUserId, mentionHrByUserId]);
 
   // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
   React.useLayoutEffect(() => {
@@ -1060,9 +1068,35 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
       : [];
+    const ids: string[] = [];
     for (const p of participants) {
-      if (p.id && p.id !== currentUser.id) enrichUserProfile(p.id);
+      if (p.id && p.id !== currentUser.id) {
+        enrichUserProfile(p.id);
+        ids.push(p.id);
+      }
     }
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void loadUserProfiles(ids).then((profileMap) => {
+      if (cancelled) return;
+      // ponytail: temp debug — remove after verifying dept/company presence
+      console.log("[mention profiles]", JSON.parse(JSON.stringify(profileMap)));
+      const resolved: Record<string, { departmentName?: string; companyName?: string }> = {};
+      for (const [id, profile] of Object.entries(profileMap)) {
+        if (!profile) continue;
+        const hr = profile as { department?: string | null; company?: string | null };
+        if (hr.department || hr.company) {
+          resolved[id] = {
+            departmentName: hr.department ?? undefined,
+            companyName: hr.company ?? undefined,
+          };
+        }
+      }
+      if (Object.keys(resolved).length > 0) {
+        setMentionHrByUserId((prev) => ({ ...prev, ...resolved }));
+      }
+    });
+    return () => { cancelled = true; };
   }, [conversation.id, conversation.participants, currentUser.id]);
 
   const handleShareContact = React.useCallback(
