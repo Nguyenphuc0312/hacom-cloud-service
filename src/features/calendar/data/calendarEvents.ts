@@ -41,6 +41,8 @@ export interface ExtendedCalendarEvent extends CalendarEvent {
   meetingChairman?: string;
   /** List of attendee names */
   attendees?: string[];
+  /** Participants with avatar for the avatar stack (name + presigned avatarUrl từ hr-api). */
+  attendeeAvatars?: Array<{ name: string; avatarUrl?: string | null }>;
   /** Event visibility */
   visibility?: "PRIVATE" | "BUSY_ONLY" | "TEAM" | "UNIT" | "PUBLIC";
   /** Event status */

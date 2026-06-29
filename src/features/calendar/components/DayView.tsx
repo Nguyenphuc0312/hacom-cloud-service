@@ -10,7 +10,12 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
-import { getEventColor, MULTI_DAY_EVENT_COLOR, type CalendarEvent } from "../data/calendarEvents";
+import {
+  getEventColor,
+  MULTI_DAY_EVENT_COLOR,
+  type CalendarEvent,
+  type ExtendedCalendarEvent,
+} from "../data/calendarEvents";
 import {
   HOURS,
   MINUTES_PER_DAY,
@@ -59,6 +64,64 @@ const fmtMin = (min: number): string => {
 
 const sameDay = (a: Date, b: Date): boolean => a.toDateString() === b.toDateString();
 
+/** Chữ cái đầu cho avatar (tên VN: lấy chữ cái của 2 từ cuối). */
+const initials = (name: string): string =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
+/** Màu nền avatar ổn định theo tên. */
+const AVATAR_BG = ["bg-[#1565C0]", "bg-rose-500", "bg-amber-500", "bg-teal-500", "bg-purple-500", "bg-emerald-500"];
+const avatarBg = (name: string): string => {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_BG[h % AVATAR_BG.length];
+};
+
+/** Chồng avatar (ảnh thật → fallback initials) + +N, kiểu Dribbble. */
+export type Attendee = { name: string; avatarUrl?: string | null };
+export const AvatarStack: React.FC<{ people: Attendee[]; max?: number }> = ({ people, max = 3 }) => {
+  const shown = people.slice(0, max);
+  const extra = people.length - shown.length;
+  return (
+    <div className="flex items-center">
+      <div className="flex -space-x-1.5">
+        {shown.map((p, i) =>
+          p.avatarUrl ? (
+            <img
+              key={`${p.name}-${i}`}
+              src={p.avatarUrl}
+              alt={p.name}
+              title={p.name}
+              loading="lazy"
+              className="h-5 w-5 rounded-full object-cover ring-1 ring-surface"
+            />
+          ) : (
+            <span
+              key={`${p.name}-${i}`}
+              title={p.name}
+              className={clsx(
+                "flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-1 ring-surface",
+                avatarBg(p.name),
+              )}
+            >
+              {initials(p.name)}
+            </span>
+          ),
+        )}
+      </div>
+      {extra > 0 && (
+        <span className="ml-1 rounded-full bg-surface/80 px-1 text-[9px] font-semibold text-text-secondary ring-1 ring-border">
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const TimedEventBlock: React.FC<{
   positioned: PositionedEvent;
   date: Date;
@@ -75,7 +138,15 @@ const TimedEventBlock: React.FC<{
   const height = Math.max((endMin - startMin) * PX_PER_MIN, MIN_BLOCK_HEIGHT);
   const widthPct = 100 / colCount;
   // Không hiện giờ clamp theo ngày cho event nhiều ngày (tránh "00:00–24:00" gây rối).
-  const showTime = height >= 34 && !isLong;
+  const showTime = height >= 40 && !isLong;
+  const ext = event as ExtendedCalendarEvent;
+  // Ưu tiên roster có avatar; fallback danh sách tên free-text.
+  const people: Attendee[] =
+    ext.attendeeAvatars?.length
+      ? ext.attendeeAvatars
+      : (ext.attendees ?? []).map((name) => ({ name }));
+  // Avatar stack chỉ khi đủ cao + đủ rộng (1 cột) để không vỡ layout.
+  const showAvatars = people.length > 0 && height >= 64 && colCount === 1;
 
   return (
     <button
@@ -86,7 +157,7 @@ const TimedEventBlock: React.FC<{
       }}
       title={`${event.title} · ${fmtMin(startMin)}–${fmtMin(endMin)}`}
       className={clsx(
-        "absolute overflow-hidden rounded-md border px-2 py-0.5 text-left transition-micro hover:z-20 hover:opacity-90 hover:shadow-md",
+        "absolute flex flex-col overflow-hidden rounded-xl border px-2.5 py-1.5 text-left transition-micro hover:z-20 hover:shadow-md",
         isLong ? "text-sm" : "text-xs",
         colors.bg,
         colors.border,
@@ -102,15 +173,20 @@ const TimedEventBlock: React.FC<{
       <span
         className={clsx(
           "block truncate leading-tight",
-          isLong ? "font-semibold" : "font-medium",
+          isLong ? "font-semibold" : "font-semibold",
         )}
       >
         {event.title}
       </span>
       {showTime && (
-        <span className="block truncate text-[10px] opacity-70">
+        <span className="block truncate text-[10px] font-medium opacity-70">
           {formatEventTimeRange(event) ?? `${fmtMin(startMin)} — ${fmtMin(endMin)}`}
         </span>
+      )}
+      {showAvatars && (
+        <div className="mt-auto pt-1">
+          <AvatarStack people={people} />
+        </div>
       )}
     </button>
   );
@@ -134,10 +210,8 @@ export const DayView: React.FC<DayViewProps> = ({
 
   const { timed, allDay } = useMemo(() => layoutDayEvents(dayEvents, 3, date), [dayEvents, date]);
 
-  const formatDateDisplay = (d: Date): string => {
-    const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
-    return `${weekdays[d.getDay()]}, ngày ${d.getDate()} tháng ${d.getMonth() + 1} năm ${d.getFullYear()}`;
-  };
+  const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
   // Auto-scroll tới giờ hiện tại (today) hoặc 07:00 (ngày khác) khi mở/đổi ngày.
   useEffect(() => {
@@ -151,11 +225,38 @@ export const DayView: React.FC<DayViewProps> = ({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Header */}
+      {/* Header — số ngày to kiểu date-picker, thứ + tháng/năm xếp cạnh */}
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <h2 className="text-lg font-semibold text-text-primary">
-          {formatDateDisplay(date)}
-        </h2>
+        <div className="flex items-center gap-3">
+          <div
+            className={clsx(
+              "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl",
+              isToday
+                ? "bg-[#1565C0] text-white shadow-sm shadow-[#1565C0]/25"
+                : isWeekend
+                  ? "bg-rose-500/10 text-rose-500"
+                  : "bg-[#DBEAFE]/40 text-[#1565C0]",
+            )}
+          >
+            <span className="text-xl font-bold leading-none">{date.getDate()}</span>
+            <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide opacity-80">
+              Th{date.getMonth() + 1}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <div
+              className={clsx(
+                "text-base font-semibold",
+                isWeekend ? "text-rose-500" : "text-text-primary",
+              )}
+            >
+              {weekdays[date.getDay()]}
+            </div>
+            <div className="text-xs text-text-muted">
+              Ngày {date.getDate()} tháng {date.getMonth() + 1} năm {date.getFullYear()}
+            </div>
+          </div>
+        </div>
         {isToday && (
           <span className="shrink-0 rounded-full bg-[#1565C0] px-2.5 py-1 text-xs font-bold text-white">
             Hôm nay
@@ -237,10 +338,10 @@ export const DayView: React.FC<DayViewProps> = ({
             {HOURS.map((hour) => (
               <div
                 key={hour}
-                className="border-b border-border px-2 py-0.5 text-right text-xs text-text-muted"
+                className="-translate-y-1.5 px-2 text-right text-[11px] font-medium text-text-muted"
                 style={{ height: `${HOUR_HEIGHT}px` }}
               >
-                {formatHour(hour)}
+                {hour > 0 && formatHour(hour)}
               </div>
             ))}
           </div>
@@ -250,7 +351,7 @@ export const DayView: React.FC<DayViewProps> = ({
             {HOURS.map((hour) => (
               <div
                 key={hour}
-                className="border-b border-border"
+                className="border-b border-border/70"
                 style={{ height: `${HOUR_HEIGHT}px` }}
               >
                 <button
@@ -259,7 +360,7 @@ export const DayView: React.FC<DayViewProps> = ({
                   onClick={onSlotClick ? () => onSlotClick(date, hour * 60) : undefined}
                   title={onSlotClick ? "Tạo lịch" : undefined}
                   className={clsx(
-                    "block h-1/2 w-full border-b border-border/40",
+                    "block h-1/2 w-full border-b border-dashed border-border/30",
                     onSlotClick && "cursor-pointer hover:bg-[#1976D2]/10",
                   )}
                 />
@@ -292,7 +393,9 @@ export const DayView: React.FC<DayViewProps> = ({
                 className="pointer-events-none absolute left-0 right-0 z-30 flex items-center"
                 style={{ top: `${nowMin * PX_PER_MIN}px` }}
               >
-                <div className="h-2 w-2 -translate-x-1 rounded-full bg-danger" />
+                <span className="-translate-x-1/2 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+                  {fmtMin(nowMin)}
+                </span>
                 <div className="h-0.5 flex-1 bg-danger" />
               </div>
             )}
