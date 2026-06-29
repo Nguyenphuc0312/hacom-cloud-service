@@ -42,7 +42,8 @@ import {
 import { useAuthStore } from "../../../stores";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { toast } from "../../../utils/toast";
-import { getEventColor, type CalendarEvent } from "../data/calendarEvents";
+import { getEventColor, type CalendarEvent, type ExtendedCalendarEvent } from "../data/calendarEvents";
+import { AvatarStack, type Attendee } from "./DayView";
 import {
   eventOccursOnDay,
   isMultiDayEvent,
@@ -1344,6 +1345,17 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                         ) : null;
                       })()}
                       <span className="truncate">{ev.title}</span>
+                      {(() => {
+                        const ext = ev.detail.source as ExtendedCalendarEvent | undefined;
+                        const people: Attendee[] = ext?.attendeeAvatars?.length
+                          ? ext.attendeeAvatars
+                          : (ext?.attendees ?? []).map((name) => ({ name }));
+                        return people.length > 0 ? (
+                          <div className="mt-1">
+                            <AvatarStack people={people} max={3} />
+                          </div>
+                        ) : null;
+                      })()}
                     </button>
                   );
                 })}
