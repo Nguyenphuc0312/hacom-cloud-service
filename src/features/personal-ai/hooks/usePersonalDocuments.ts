@@ -131,6 +131,7 @@ export function usePersonalDocuments() {
       const tempId = `uploading-${crypto.randomUUID()}`;
       addDocument({
         id: tempId,
+        document_id: tempId,
         name: file.name,
         size_bytes: file.size,
         uploaded_at: new Date().toISOString(),

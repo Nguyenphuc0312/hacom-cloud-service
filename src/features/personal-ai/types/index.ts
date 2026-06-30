@@ -3,6 +3,8 @@ import type { WorkReportFormRequest, DepartmentSelectionRequest } from "../../ai
 export type PersonalDocumentStatus = "uploading" | "indexed" | "error";
 
 export interface PersonalDocument {
+  /** Backend-owned document identity. This is the only id sent back to document APIs. */
+  document_id: string;
   id: string;
   name: string;
   page_count?: number;
@@ -63,6 +65,8 @@ export interface PersonalChatResponse {
 }
 
 export interface UploadDocumentResponse {
+  /** Backend-owned document identity. This is the only id sent back to document APIs. */
+  document_id: string;
   id: string;
   name: string;
   page_count?: number;
