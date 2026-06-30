@@ -81,6 +81,17 @@ function parseHttpErrorMessage(rawText: string): string | undefined {
   return rawText.trim();
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
 async function aiRequest(
   url: string,
   init: RequestInit = {},
@@ -109,35 +120,98 @@ async function aiRequest(
 }
 
 function normalizeDocument(raw: unknown): PersonalDocument | null {
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as Record<string, unknown>;
-  const id = String(obj.id ?? obj.document_id ?? "");
-  if (!id) return null;
+  const obj = asRecord(raw);
+  if (!obj) return null;
+
+  const nestedDocument = asRecord(obj.document);
+  const selectedIds = Array.isArray(obj.selected_document_ids)
+    ? obj.selected_document_ids
+    : [];
+  const currentDocuments = Array.isArray(obj.current_documents)
+    ? obj.current_documents
+    : [];
+  const firstCurrentDocument = asRecord(currentDocuments[0]);
+
+  const documentId = pickString(
+    nestedDocument?.document_id,
+    obj.document_id,
+    firstCurrentDocument?.document_id,
+    selectedIds[0],
+    nestedDocument?.id,
+    obj.id,
+    firstCurrentDocument?.id,
+  );
+  if (!documentId) return null;
+
+  const documentSource = nestedDocument ?? obj;
   return {
-    id,
-    name: String(obj.name ?? obj.filename ?? obj.file_name ?? "Untitled.pdf"),
+    document_id: documentId,
+    id: documentId,
+    name: String(
+      documentSource.name ??
+        documentSource.filename ??
+        documentSource.file_name ??
+        obj.name ??
+        obj.filename ??
+        obj.file_name ??
+        "Untitled.pdf",
+    ),
     page_count:
-      typeof obj.page_count === "number" ? obj.page_count : undefined,
-    size_bytes:
-      typeof obj.size_bytes === "number"
-        ? obj.size_bytes
-        : typeof obj.size === "number"
-          ? obj.size
+      typeof documentSource.page_count === "number"
+        ? documentSource.page_count
+        : typeof obj.page_count === "number"
+          ? obj.page_count
           : undefined,
-    uploaded_at: String(obj.uploaded_at ?? obj.created_at ?? new Date().toISOString()),
-    status: (["uploading", "indexed", "error"].includes(String(obj.status))
-      ? obj.status
+    size_bytes:
+      typeof documentSource.size_bytes === "number"
+        ? documentSource.size_bytes
+        : typeof documentSource.size === "number"
+          ? documentSource.size
+          : typeof obj.size_bytes === "number"
+            ? obj.size_bytes
+            : typeof obj.size === "number"
+              ? obj.size
+              : undefined,
+    uploaded_at: String(
+      documentSource.uploaded_at ??
+        documentSource.created_at ??
+        obj.uploaded_at ??
+        obj.created_at ??
+        new Date().toISOString(),
+    ),
+    status: (["uploading", "indexed", "error"].includes(
+      String(documentSource.status ?? obj.status),
+    )
+      ? documentSource.status ?? obj.status
       : "indexed") as PersonalDocument["status"],
   };
 }
 
+function normalizeUploadedDocumentPayload(
+  data: Record<string, unknown>,
+  fallbackName: string,
+): UploadDocumentResponse | null {
+  const doc = normalizeDocument(data);
+  if (!doc) return null;
+  const resolvedName =
+    doc.name && doc.name !== "Untitled.pdf" ? doc.name : fallbackName;
+  return { ...doc, name: resolvedName };
+}
+
+function invalidUploadResponseError(): PersonalAiError {
+  return new PersonalAiError(
+    0,
+    "http",
+    "Upload response did not include a backend document_id.",
+  );
+}
 function normalizeDocumentList(payload: unknown): PersonalDocument[] {
   if (Array.isArray(payload)) {
     return payload.map(normalizeDocument).filter((d): d is PersonalDocument => d !== null);
   }
   if (payload && typeof payload === "object") {
     const obj = payload as Record<string, unknown>;
-    for (const key of ["documents", "items", "data", "results"]) {
+    for (const key of ["documents", "items", "data", "results", "current_documents"]) {
       if (Array.isArray(obj[key])) return normalizeDocumentList(obj[key]);
     }
   }
@@ -228,28 +302,15 @@ export function uploadPersonalDocument(
       const status = xhr.status;
       if (status >= 200 && status < 300) {
         try {
-          const data = JSON.parse(xhr.responseText);
-          const doc = normalizeDocument(data);
+          const data = JSON.parse(xhr.responseText) as Record<string, unknown>;
+          const doc = normalizeUploadedDocumentPayload(data, file.name);
           if (doc) {
-            const resolvedName =
-              doc.name && doc.name !== "Untitled.pdf" ? doc.name : file.name;
-            resolve({ ...doc, name: resolvedName } as UploadDocumentResponse);
+            resolve(doc);
           } else {
-            // Backend returned something unexpected — create a minimal response
-            resolve({
-              id: String(data.id ?? data.document_id ?? crypto.randomUUID()),
-              name: file.name,
-              uploaded_at: new Date().toISOString(),
-              status: "indexed",
-            });
+            reject(invalidUploadResponseError());
           }
-        } catch {
-          resolve({
-            id: crypto.randomUUID(),
-            name: file.name,
-            uploaded_at: new Date().toISOString(),
-            status: "indexed",
-          });
+        } catch (err) {
+          reject(err instanceof PersonalAiError ? err : invalidUploadResponseError());
         }
       } else {
         reject(
