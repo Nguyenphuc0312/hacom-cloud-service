@@ -7,11 +7,30 @@ import {
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
-import type { PersonalChatMessage } from "../types";
+import type { PersonalChatMessage, PersonalDocument } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
 const TONGCVTUAN_TRIGGER = /^#tongcvtuan\s*$/i;
+const BARE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveBackendDocumentIds(
+  selectedIds: string[],
+  documents: PersonalDocument[],
+): string[] {
+  if (selectedIds.length === 0) return [];
+
+  const selected = new Set(selectedIds);
+  const resolved = documents
+    .filter((doc) => selected.has(doc.id) || selected.has(doc.document_id))
+    .map((doc) => doc.document_id);
+
+  const candidates = resolved.length > 0
+    ? resolved
+    : selectedIds.filter((id) => !BARE_UUID_RE.test(id));
+
+  return Array.from(new Set(candidates));
+}
 
 export function usePersonalChat() {
   const user = useAuthStore((s) => s.user);
@@ -19,6 +38,7 @@ export function usePersonalChat() {
     conversations,
     activeConversationId,
     selectedDocumentIds,
+    documents,
     createConversation,
     addMessage,
     appendToken,
@@ -166,6 +186,10 @@ export function usePersonalChat() {
       //  • User thường     → event `token` → nội dung báo cáo của bản thân,
       //    hiển thị trong bordered box "Xem báo cáo công việc".
       const isReportRequest = BAOCAOCV_TRIGGER.test(trimmed);
+      const selectedBackendDocumentIds = resolveBackendDocumentIds(
+        selectedDocumentIds,
+        documents,
+      );
 
       const assistantMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
@@ -174,7 +198,7 @@ export function usePersonalChat() {
         timestamp: new Date(),
         isStreaming: true,
         thinkingPhase:
-          isReportRequest || selectedDocumentIds.length > 0
+          isReportRequest || selectedBackendDocumentIds.length > 0
             ? "searching"
             : null,
         ...(isReportRequest && { reportRequest: true }),
@@ -211,7 +235,7 @@ export function usePersonalChat() {
             org_unit: user?.orgUnit ?? "",
             // Luôn gửi document_ids (mảng rỗng khi bỏ tick hết) để backend
             // chuyển sang chitchat mode thay vì dùng lại RAG context của session.
-            document_ids: selectedDocumentIds,
+            document_ids: selectedBackendDocumentIds,
           },
           {
             onToken: (token) => {
@@ -284,6 +308,7 @@ export function usePersonalChat() {
       activeConversationId,
       conversations,
       selectedDocumentIds,
+      documents,
       user,
       createConversation,
       addMessage,
