@@ -13,6 +13,7 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import {
   downloadResourceWithName,
   openResourceInNewTab,
@@ -81,7 +82,7 @@ export const ArchivePreview: React.FC<ArchivePreviewProps> = ({
         </div>
         <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-            {fileName}
+            {truncateFilename(fileName, 48)}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
             {extension && (

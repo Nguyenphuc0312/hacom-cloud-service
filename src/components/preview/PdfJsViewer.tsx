@@ -16,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { IconButton } from "../ui";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
@@ -237,7 +238,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               <FileTypeIcon type="pdf" className="h-5 w-5 text-red-500" />
             </div>
             <div>
-              <p className="text-sm font-medium text-text-primary" title={fileName}>{fileName}</p>
+              <p className="text-sm font-medium text-text-primary" title={fileName}>{truncateFilename(fileName, 48)}</p>
               <p className="text-xs text-text-muted">{formatFileSize(fileSize)} · {extension}</p>
             </div>
           </div>
@@ -262,7 +263,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               <FileTypeIcon type="pdf" className="h-5 w-5 text-red-500" />
             </div>
             <div>
-              <p className="text-sm font-medium text-text-primary" title={fileName}>{fileName}</p>
+              <p className="text-sm font-medium text-text-primary" title={fileName}>{truncateFilename(fileName, 48)}</p>
               <p className="text-xs text-text-muted">{formatFileSize(fileSize)} · {extension}</p>
             </div>
           </div>
@@ -308,7 +309,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               <FileTypeIcon type="pdf" className="h-5 w-5 text-red-500" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text-primary" title={fileName}>{fileName}</p>
+              <p className="truncate text-sm font-medium text-text-primary" title={fileName}>{truncateFilename(fileName, 48)}</p>
               <p className="text-xs text-text-muted">
                 {formatFileSize(fileSize)} · {extension}
                 {totalPages > 0 && ` · ${totalPages} pages`}

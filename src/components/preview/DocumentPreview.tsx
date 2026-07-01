@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { PreviewType } from "../../utils/mimeRegistry";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import {
   downloadResourceWithName,
@@ -157,7 +158,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-                {fileName}
+                {truncateFilename(fileName, 48)}
               </p>
               <p className="truncate text-xs text-text-muted">
                 {[extension?.toUpperCase(), formatFileSize(fileSize), docDescription]
@@ -214,7 +215,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         </div>
         <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-            {fileName}
+            {truncateFilename(fileName, 48)}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
             {extension && (
