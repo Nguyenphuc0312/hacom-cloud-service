@@ -664,6 +664,10 @@ export async function streamPersonalChat(
                   .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
               : undefined,
             exportable_table: parsed.exportable_table === true,
+            export_id:
+              typeof parsed.export_id === "string" && parsed.export_id
+                ? parsed.export_id
+                : undefined,
           };
         } catch {
           /* malformed done payload — recover below */
@@ -705,6 +709,10 @@ export async function streamPersonalChat(
                   .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
               : undefined,
             exportable_table: parsed.exportable_table === true,
+            export_id:
+              typeof parsed.export_id === "string" && parsed.export_id
+                ? parsed.export_id
+                : undefined,
           };
         } catch {
           /* unrecoverable */

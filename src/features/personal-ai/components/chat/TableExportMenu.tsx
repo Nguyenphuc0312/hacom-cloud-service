@@ -13,6 +13,7 @@ import {
   exportTableToXlsx,
   exportTableToDocx,
   exportTableToPdf,
+  ExportExpiredError,
 } from "../../services/tableExport";
 import { logger } from "../../../../utils/logger";
 import { toast } from "../../../../utils/toast";
@@ -22,6 +23,9 @@ interface TableExportMenuProps {
   content: string;
   /** Tiêu đề dùng cho file/bản in. */
   title: string;
+  /** session_id + exportId → Excel xuất từ snapshot dữ liệu gốc (đủ cột đã ẩn). */
+  sessionId?: string;
+  exportId?: string;
 }
 
 type ItemKey = "pdf" | "excel" | "word";
@@ -29,6 +33,8 @@ type ItemKey = "pdf" | "excel" | "word";
 export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   content,
   title,
+  sessionId,
+  exportId,
 }) => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<ItemKey | null>(null);
@@ -70,7 +76,14 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
       setBusy(key);
       let saved = false;
       if (key === "excel") {
-        saved = await exportTableToXlsx(fileBase, table, content, title);
+        saved = await exportTableToXlsx(
+          fileBase,
+          table,
+          content,
+          title,
+          sessionId,
+          exportId,
+        );
       } else if (key === "word") {
         saved = await exportTableToDocx(fileBase, title, table);
       } else {
@@ -83,7 +96,11 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
       }
     } catch (err) {
       logger.error("TableExportMenu", "export-failed", { key, err });
-      toast.error(`Xuất file ${FORMAT_LABEL[key]} thất bại. Vui lòng thử lại.`);
+      if (err instanceof ExportExpiredError) {
+        toast.error(err.message);
+      } else {
+        toast.error(`Xuất file ${FORMAT_LABEL[key]} thất bại. Vui lòng thử lại.`);
+      }
     } finally {
       setBusy(null);
     }

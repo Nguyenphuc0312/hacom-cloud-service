@@ -164,6 +164,8 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               <TableExportMenu
                 content={message.content}
                 title="Tổng hợp báo cáo công việc"
+                sessionId={message.exportSessionId}
+                exportId={message.exportId}
               />
             </div>
           )}
@@ -312,7 +314,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId, loadingWorkFileId, message.exportableTable, message.content],
+    [loadingFileId, loadingWorkFileId, message.exportableTable, message.content, message.exportId, message.exportSessionId],
   );
 
   const handleCopy = () => {

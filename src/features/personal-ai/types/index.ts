@@ -35,6 +35,10 @@ export interface PersonalChatMessage {
   reportRequest?: boolean;
   /** SSE `done.exportable_table` — bật nút "In" cho câu trả lời dạng bảng. */
   exportableTable?: boolean;
+  /** SSE `done.export_id` — token snapshot dữ liệu gốc trong session để BE xuất Excel đủ cột. */
+  exportId?: string;
+  /** session_id gắn với `exportId` (dùng cho endpoint export-table). */
+  exportSessionId?: string;
 }
 
 export interface PersonalCitation {
@@ -62,6 +66,8 @@ export interface PersonalChatResponse {
   sources?: PersonalCitation[];
   /** BE bật ở SSE `done` khi câu trả lời là bảng có thể "In". */
   exportable_table?: boolean;
+  /** SSE `done` — token snapshot dữ liệu gốc để BE xuất Excel đủ cột đã bị ẩn khỏi bảng chat. */
+  export_id?: string;
 }
 
 export interface UploadDocumentResponse {
