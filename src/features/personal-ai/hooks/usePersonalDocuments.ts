@@ -65,6 +65,19 @@ export function usePersonalDocuments() {
     return createConversation();
   }, [createConversation]);
 
+  /** Resolve FE selectedDocumentIds → backend document_ids (personal-...) */
+  const resolveBackendIds = useCallback(
+    (feIds: string[]): string[] => {
+      const docs = usePersonalAiStore.getState().documents;
+      const selected = new Set(feIds);
+      return docs
+        .filter((d) => selected.has(d.id) || selected.has(d.document_id))
+        .map((d) => d.document_id)
+        .filter((id) => id.startsWith("personal-"));
+    },
+    [],
+  );
+
   /** Load document list cho session hiện tại. Reload khi conversation đổi. */
   const loadDocuments = useCallback(
     async (force = false) => {
@@ -154,7 +167,7 @@ export function usePersonalDocuments() {
         // qua /documents/source, nếu không BE vẫn coi như chưa có nguồn nào dùng.
         const nextSelected = usePersonalAiStore.getState().selectedDocumentIds;
         try {
-          await selectPersonalSources(nextSelected, { employeeCode, sessionId });
+          await selectPersonalSources(resolveBackendIds(nextSelected), { employeeCode, sessionId });
         } catch {
           // Upload đã thành công nhưng đồng bộ nguồn thất bại — bỏ chọn doc mới
           // để FE khớp với BE và báo cho user.
@@ -186,6 +199,7 @@ export function usePersonalDocuments() {
     [
       employeeCode,
       ensureSessionId,
+      resolveBackendIds,
       addDocument,
       removeDocument,
       setSelectedDocumentIds,
@@ -224,7 +238,7 @@ export function usePersonalDocuments() {
       setSelectedDocumentIds(next);
 
       try {
-        await selectPersonalSources(next, {
+        await selectPersonalSources(resolveBackendIds(next), {
           employeeCode,
           sessionId: ensureSessionId(),
         });
@@ -239,7 +253,7 @@ export function usePersonalDocuments() {
         }
       }
     },
-    [employeeCode, ensureSessionId, setSelectedDocumentIds, loadDocuments],
+    [employeeCode, ensureSessionId, resolveBackendIds, setSelectedDocumentIds, loadDocuments],
   );
 
   /** Sync selected sources with backend */
@@ -247,7 +261,7 @@ export function usePersonalDocuments() {
     async (ids: string[]) => {
       setSelectedDocumentIds(ids);
       try {
-        await selectPersonalSources(ids, {
+        await selectPersonalSources(resolveBackendIds(ids), {
           employeeCode,
           sessionId: ensureSessionId(),
         });
@@ -255,7 +269,7 @@ export function usePersonalDocuments() {
         toast.error("Đồng bộ nguồn thất bại.");
       }
     },
-    [employeeCode, ensureSessionId, setSelectedDocumentIds],
+    [employeeCode, ensureSessionId, resolveBackendIds, setSelectedDocumentIds],
   );
 
   const activeDocuments = documents.filter((d) =>
