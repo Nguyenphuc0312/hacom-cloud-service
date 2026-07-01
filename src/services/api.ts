@@ -136,9 +136,9 @@ export interface ReserveFileUploadPayload {
   clientMessageId?: string;
 } 
 
-// Omit `purpose` từ shared base để dùng FileUploadPurpose local (đã có
-// `calendar_attachment`); shared-types chưa bump nên union của nó hẹp hơn.
-type ReserveFileUploadRequest = Omit<UploadSignedUrlRequest, "conversationId" | "purpose"> & {
+// shared-types ≥1.8.0 has `calendar_attachment` trong purpose, nên chỉ cần
+// siết `purpose` thành bắt buộc (FileUploadPurpose trùng union của shared).
+type ReserveFileUploadRequest = UploadSignedUrlRequest & {
   uploadId?: string;
   purpose: FileUploadPurpose;
   conversationId?: string;
