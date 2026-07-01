@@ -226,6 +226,26 @@ export const USE_AUTH_SERVICE =
     ? true
     : rawUseAuthService === "true";
 
+/**
+ * Đính kèm file/ảnh vào lịch (calendar attachments).
+ *
+ * FE đã hoàn thiện end-to-end và LUÔN BẬT (người dùng test được ngay). Vì BE
+ * chưa ship (chat-api purpose `calendar_attachment` + hr-api `attachmentFileIds`
+ * / `attachments[]`), FE chạy qua lớp MOCK (IndexedDB, calendarAttachmentMockStore)
+ * để lưu/hiển thị thật mà không cần BE.
+ *
+ * Khi BE sẵn sàng → set VITE_CALENDAR_ATTACHMENTS_MOCK=false để nối API thật.
+ * Xem: chat-api-service/docs/requests/FE__calendar-attachments__contract__01-07-26.md
+ */
+export const CALENDAR_ATTACHMENTS_ENABLED = true;
+
+/**
+ * Dùng lớp mock (IndexedDB) thay vì gọi chat-api/hr-api thật.
+ * Mặc định TRUE cho tới khi BE ship. Nối BE: đặt VITE_CALENDAR_ATTACHMENTS_MOCK=false.
+ */
+export const CALENDAR_ATTACHMENTS_USE_MOCK =
+  import.meta.env.VITE_CALENDAR_ATTACHMENTS_MOCK !== "false";
+
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 

@@ -1,21 +1,39 @@
 /**
  * CalendarAttachmentZone — khu vực đính kèm file/ảnh trong form lịch.
- * Lưu file dưới dạng local (File object + objectURL preview).
- * Chưa upload thật — parent nhận danh sách File[] và tự upload khi submit
- * (chờ BE bổ sung purpose `calendar_attachment`).
+ *
+ * Hai loại attachment cùng sống trong 1 danh sách:
+ *  - LOCAL (vừa chọn): có `file` (File object) + objectURL preview, chưa upload.
+ *  - REMOTE (đã upload trước, hiện khi EDIT): có `remoteFileId` + `downloadUrl`,
+ *    KHÔNG có `file`. Giữ nguyên khi sửa lịch → không mất file.
+ *
+ * Parent chịu trách nhiệm upload file local khi submit và ghép fileId (remote + mới)
+ * gửi BE (xem uploadCalendarAttachment.ts).
  */
 
 import React from "react";
 import clsx from "clsx";
-import { XMarkIcon, PaperClipIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import {
+  XMarkIcon,
+  PaperClipIcon,
+  ArrowDownTrayIcon,
+  ArrowTopRightOnSquareIcon,
+} from "@heroicons/react/24/outline";
+import { FileTypeIcon } from "../message/FileTypeIcon";
+import { getMimePreviewType } from "../../utils/mimeRegistry";
+import { getIconTypeFromPreviewType } from "../../utils/filePreviewUtils";
 
 export interface CalendarLocalAttachment {
-  id: string; // local only — `local-${Date.now()}-${i}`
-  file: File;
-  previewUrl: string | null; // objectURL cho ảnh, null cho file khác
+  id: string; // `local-…` cho file mới, hoặc = remoteFileId cho file đã upload
+  /** File object — chỉ có với attachment LOCAL (chưa upload). */
+  file?: File;
+  previewUrl: string | null; // objectURL (local ảnh) hoặc downloadUrl (remote ảnh)
   name: string;
   sizeBytes: number;
   mimeType: string;
+  /** fileId đã upload (REMOTE) — có nghĩa attachment này đã lưu ở BE. */
+  remoteFileId?: string;
+  /** URL tải/preview cho attachment REMOTE. */
+  downloadUrl?: string;
 }
 
 interface Props {
@@ -33,6 +51,112 @@ const formatSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+/**
+ * CalendarAttachmentList — danh sách attachment đã lưu (read-only) cho NGƯỜI XEM
+ * ở màn chi tiết event. Mỗi file là 1 card:
+ *  - Ảnh → thumbnail, bấm "Xem" mở full-res ở tab mới.
+ *  - PDF → icon đỏ, "Xem" mở inline (trình duyệt render PDF).
+ *  - Word/Excel/PowerPoint/khác → icon theo loại (getMimePreviewType), "Tải".
+ * Mọi file đều có nút "Tải" (download).
+ */
+export interface CalendarViewAttachment {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  thumbnailUrl?: string | null;
+}
+
+/** Loại file browser xem inline được ở tab mới (không phải tải). */
+const isInlineViewable = (previewType: string): boolean =>
+  previewType === "image" ||
+  previewType === "pdf" ||
+  previewType === "video" ||
+  previewType === "audio";
+
+const AttachmentCard: React.FC<{ a: CalendarViewAttachment }> = ({ a }) => {
+  const previewType = getMimePreviewType(a.mimeType, a.filename);
+  const iconType = getIconTypeFromPreviewType(previewType);
+  const image = previewType === "image";
+  const thumb = image ? a.thumbnailUrl || a.url : null;
+  const canView = isInlineViewable(previewType);
+
+  return (
+    <div className="group flex items-center gap-2.5 rounded-lg border border-border bg-surface-overlay p-2 transition-colors hover:border-[#1976D2]/40">
+      {/* Thumbnail ảnh / icon theo loại file */}
+      {thumb ? (
+        <a
+          href={a.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Xem ${a.filename}`}
+          className="shrink-0"
+        >
+          <img
+            src={thumb}
+            alt={a.filename}
+            loading="lazy"
+            className="h-12 w-12 rounded-md object-cover ring-1 ring-border transition group-hover:ring-[#1976D2]/50"
+          />
+        </a>
+      ) : (
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-hover">
+          <FileTypeIcon type={iconType} className="h-6 w-6" />
+        </div>
+      )}
+
+      {/* Tên + kích thước */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-text-primary" title={a.filename}>
+          {a.filename}
+        </p>
+        <p className="text-[11px] uppercase tracking-wide text-text-muted">
+          {(a.filename.split(".").pop() || previewType).toString()} · {formatSize(a.sizeBytes)}
+        </p>
+      </div>
+
+      {/* Actions: Xem (inline) + Tải */}
+      <div className="flex shrink-0 items-center gap-1">
+        {canView && (
+          <a
+            href={a.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Xem"
+            aria-label={`Xem ${a.filename}`}
+            className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
+          >
+            <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+          </a>
+        )}
+        <a
+          href={a.url}
+          download={a.filename}
+          title="Tải xuống"
+          aria-label={`Tải ${a.filename}`}
+          className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
+        >
+          <ArrowDownTrayIcon className="h-4 w-4" />
+        </a>
+      </div>
+    </div>
+  );
+};
+
+export const CalendarAttachmentList: React.FC<{ attachments: CalendarViewAttachment[] }> = ({
+  attachments,
+}) => {
+  if (attachments.length === 0) return null;
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {attachments.map((a) => (
+        <AttachmentCard key={a.fileId} a={a} />
+      ))}
+    </div>
+  );
+};
+
 export const CalendarAttachmentZone: React.FC<Props> = ({
   attachments,
   onChange,
@@ -43,11 +167,12 @@ export const CalendarAttachmentZone: React.FC<Props> = ({
   const [dragOver, setDragOver] = React.useState(false);
   const [errors, setErrors] = React.useState<string[]>([]);
 
-  // Revoke objectURLs khi unmount
+  // Revoke objectURLs khi unmount — CHỈ với local (có file); remote dùng
+  // downloadUrl thật, không phải objectURL nên không revoke.
   React.useEffect(() => {
     return () => {
       attachments.forEach((a) => {
-        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+        if (a.file && a.previewUrl) URL.revokeObjectURL(a.previewUrl);
       });
     };
     // ponytail: stale-dep intentional — only revoke on unmount
@@ -87,7 +212,7 @@ export const CalendarAttachmentZone: React.FC<Props> = ({
 
   const remove = (id: string) => {
     const found = attachments.find((a) => a.id === id);
-    if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
+    if (found?.file && found.previewUrl) URL.revokeObjectURL(found.previewUrl);
     onChange(attachments.filter((a) => a.id !== id));
   };
 
@@ -130,6 +255,7 @@ export const CalendarAttachmentZone: React.FC<Props> = ({
         ref={inputRef}
         type="file"
         multiple
+        aria-label="Chọn file đính kèm"
         className="hidden"
         onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }}
       />
@@ -155,18 +281,36 @@ export const CalendarAttachmentZone: React.FC<Props> = ({
                 />
               ) : (
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-hover">
-                  <PhotoIcon className="h-5 w-5 text-text-muted" />
+                  <FileTypeIcon
+                    type={getIconTypeFromPreviewType(getMimePreviewType(a.mimeType, a.name))}
+                    className="h-5 w-5"
+                  />
                 </div>
               )}
               <div className="min-w-0 max-w-[120px]">
                 <p className="truncate text-xs font-medium text-text-primary">{a.name}</p>
-                <p className="text-[10px] text-text-muted">{formatSize(a.sizeBytes)}</p>
+                <p className="text-[10px] text-text-muted">
+                  {formatSize(a.sizeBytes)}
+                  {a.remoteFileId && <span className="text-emerald-600 dark:text-emerald-400"> · đã lưu</span>}
+                </p>
               </div>
+              {a.remoteFileId && a.downloadUrl && (
+                <a
+                  href={a.downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Tải ${a.name}`}
+                  className="ml-1 rounded-full p-0.5 text-text-muted opacity-60 hover:bg-[#1976D2]/10 hover:text-[#1565C0] hover:opacity-100"
+                >
+                  <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                </a>
+              )}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); remove(a.id); }}
                 aria-label={`Xóa ${a.name}`}
-                className="ml-1 rounded-full p-0.5 opacity-50 hover:bg-danger/10 hover:opacity-100 hover:text-danger"
+                className="ml-0.5 rounded-full p-0.5 opacity-50 hover:bg-danger/10 hover:opacity-100 hover:text-danger"
               >
                 <XMarkIcon className="h-3.5 w-3.5" />
               </button>

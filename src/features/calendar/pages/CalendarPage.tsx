@@ -18,6 +18,7 @@ import {
   TrashIcon,
   EyeIcon,
   DocumentTextIcon,
+  PaperClipIcon,
 } from "@heroicons/react/24/outline";
 import {
   getEventColor,
@@ -61,7 +62,25 @@ import {
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles, type UserProfileSummary } from "../../../services/userBatchLoader";
-import { resolvePublicResourceUrl } from "../../../config";
+import {
+  resolvePublicResourceUrl,
+  CALENDAR_ATTACHMENTS_ENABLED,
+  CALENDAR_ATTACHMENTS_USE_MOCK,
+} from "../../../config";
+import {
+  CalendarAttachmentList,
+  type CalendarLocalAttachment,
+} from "../../../components/ui/CalendarAttachmentZone";
+import {
+  uploadCalendarAttachments,
+  splitCalendarAttachments,
+  CalendarAttachmentUploadError,
+} from "../utils/uploadCalendarAttachment";
+import {
+  mockSetEventAttachments,
+  mockGetAttachmentsForEvents,
+} from "../utils/calendarAttachmentMockStore";
+import type { CalendarAttachmentDto } from "../../../features/api/hrCalendarApi";
 import { Avatar } from "../../../components/common/Avatar";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 
@@ -70,6 +89,52 @@ import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 const MarkdownContent = React.lazy(
   () => import("../../../components/message/MarkdownContent"),
 );
+
+const isImageMime = (mime: string) => mime.startsWith("image/");
+
+/**
+ * Map attachment đã lưu ở BE (HRCalendarEvent.attachments) → dạng form REMOTE,
+ * để pre-fill khi mở form sửa → không mất file cũ.
+ */
+const remoteAttachmentsToForm = (
+  attachments: CalendarAttachmentDto[] | null | undefined,
+): CalendarLocalAttachment[] =>
+  (attachments ?? []).map((a) => ({
+    id: a.fileId,
+    previewUrl: isImageMime(a.mimeType) ? (a.thumbnailUrl ?? a.url) : null,
+    name: a.filename,
+    sizeBytes: a.sizeBytes,
+    mimeType: a.mimeType,
+    remoteFileId: a.fileId,
+    downloadUrl: a.url,
+  }));
+
+/**
+ * Từ attachments trong form: upload file mới, gộp với fileId cũ (remote) →
+ * `attachmentFileIds` (full desired set BE reconcile). Trả về undefined khi
+ * feature-flag off HOẶC không có attachment nào (bỏ field → BE không đụng tới).
+ */
+const resolveAttachmentFileIds = async (
+  attachments: CalendarLocalAttachment[] | undefined,
+): Promise<string[] | undefined> => {
+  if (!CALENDAR_ATTACHMENTS_ENABLED) return undefined;
+  if (!attachments || attachments.length === 0) return [];
+  const { filesToUpload, existingFileIds } = splitCalendarAttachments(attachments);
+  const uploaded = await uploadCalendarAttachments(filesToUpload);
+  return [...existingFileIds, ...uploaded.map((u) => u.fileId)];
+};
+
+/**
+ * MOCK: sau khi create/update, lưu mapping eventId → fileIds vào IndexedDB để
+ * lần sau list/detail hiển thị lại. No-op khi không dùng mock (BE tự lưu).
+ */
+const persistMockAttachmentMapping = async (
+  eventId: string | undefined,
+  fileIds: string[] | undefined,
+): Promise<void> => {
+  if (!CALENDAR_ATTACHMENTS_USE_MOCK || !eventId || fileIds === undefined) return;
+  await mockSetEventAttachments(eventId, fileIds);
+};
 
 /**
  * Calendar view types.
@@ -627,6 +692,17 @@ const EventDetailModal: React.FC<{
             </div>
           )}
 
+          {/* Đính kèm (file/ảnh) — chỉ hiện khi BE trả attachments cho event này */}
+          {hrEvent?.attachments && hrEvent.attachments.length > 0 && (
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
+                <PaperClipIcon className="h-4 w-4" />
+                Đính kèm ({hrEvent.attachments.length})
+              </p>
+              <CalendarAttachmentList attachments={hrEvent.attachments} />
+            </div>
+          )}
+
           {/* HR participant roster (with response status) */}
           {hrEvent && hrParticipants.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
@@ -1117,6 +1193,9 @@ export const CalendarPage: React.FC = () => {
       // identity) lưu vào metadata.attendees để hiển thị.
       const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
 
+      // Upload file đính kèm (nếu bật flag) TRƯỚC khi tạo event → lấy fileIds.
+      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
+
       const input = {
         title: data.title,
         description: data.notes || undefined,
@@ -1132,19 +1211,26 @@ export const CalendarPage: React.FC = () => {
         attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
         meetingChairman: data.chairman || undefined,
         meetingFormat: data.format,
+        attachmentFileIds,
       };
 
       // Use store's createEvent which handles API call + state update (+ toast)
       const result = await useCalendarStore.getState().createEvent(input);
 
       if (result) {
+        // MOCK: lưu mapping eventId → fileIds để list/detail hiển thị lại.
+        await persistMockAttachmentMapping(result.id, attachmentFileIds);
         // Store chỉ chèn event nếu khớp range nội bộ của store (có thể lệch
         // với tháng đang xem của trang) → refetch theo range của trang.
         refetchCurrentMonth();
       }
     } catch (error) {
       console.error("Failed to create event:", error);
-      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+      toast.error(
+        error instanceof CalendarAttachmentUploadError
+          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
+          : "Không thể thêm lịch. Vui lòng thử lại.",
+      );
     } finally {
       setIsCreatingEvent(false);
     }
@@ -1162,6 +1248,8 @@ export const CalendarPage: React.FC = () => {
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
+      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
+
       const input = {
         title: data.title,
         description: data.notes || undefined,
@@ -1174,15 +1262,21 @@ export const CalendarPage: React.FC = () => {
         visibility: personalVisibilityToApi(data.visibility),
         isAllDay: false,
         timezone,
+        attachmentFileIds,
       };
 
       const result = await useCalendarStore.getState().createEvent(input);
       if (result) {
+        await persistMockAttachmentMapping(result.id, attachmentFileIds);
         refetchCurrentMonth();
       }
     } catch (error) {
       console.error("Failed to create personal event:", error);
-      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+      toast.error(
+        error instanceof CalendarAttachmentUploadError
+          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
+          : "Không thể thêm lịch. Vui lòng thử lại.",
+      );
     } finally {
       setIsCreatingEvent(false);
     }
@@ -1286,6 +1380,22 @@ export const CalendarPage: React.FC = () => {
   // Day/Week View dựng block theo thời lượng + overlap — xem utils/timeline.ts).
   const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
     return apiEvents.map(mapHrmEventToCalendarEvent);
+  }, [apiEvents]);
+
+  // MOCK attachments (khi BE chưa trả `attachments[]`): nạp từ IndexedDB theo
+  // eventId để viewer + form sửa hiển thị lại. No-op khi nối BE thật.
+  const [mockAttachmentsByEventId, setMockAttachmentsByEventId] = useState<
+    Record<string, CalendarAttachmentDto[]>
+  >({});
+  useEffect(() => {
+    if (!CALENDAR_ATTACHMENTS_USE_MOCK || apiEvents.length === 0) return;
+    let cancelled = false;
+    void mockGetAttachmentsForEvents(apiEvents.map((e) => e.id)).then((map) => {
+      if (!cancelled) setMockAttachmentsByEventId(map);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [apiEvents]);
 
   // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll) bằng authUserId —
@@ -1573,10 +1683,17 @@ export const CalendarPage: React.FC = () => {
   );
 
   // Raw HR event for the selected item — carries participant roster + response.
-  const selectedHrEvent = useMemo(
-    () => (selectedEvent ? apiEvents.find((e) => e.id === selectedEvent.id) : undefined),
-    [selectedEvent, apiEvents],
-  );
+  const selectedHrEvent = useMemo(() => {
+    if (!selectedEvent) return undefined;
+    const found = apiEvents.find((e) => e.id === selectedEvent.id);
+    if (!found) return undefined;
+    // MOCK: overlay attachments từ IndexedDB nếu BE chưa trả (found.attachments rỗng).
+    const mockAtts = mockAttachmentsByEventId[found.id];
+    if (mockAtts && (!found.attachments || found.attachments.length === 0)) {
+      return { ...found, attachments: mockAtts };
+    }
+    return found;
+  }, [selectedEvent, apiEvents, mockAttachmentsByEventId]);
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
@@ -1621,7 +1738,7 @@ export const CalendarPage: React.FC = () => {
         endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
         notes: extEvent.description || "",
         visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
-        attachments: [],
+        attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
       };
       setEditingPersonalEvent(personalData);
       return;
@@ -1656,7 +1773,7 @@ export const CalendarPage: React.FC = () => {
       visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       location: extEvent.meetingLocation || "",
       notes: extEvent.description || "",
-      attachments: [],
+      attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
       createdById: extEvent.ownerId,
     };
 
@@ -1719,6 +1836,10 @@ export const CalendarPage: React.FC = () => {
       // người tham gia (thêm người mới được tag, gỡ người bị bỏ tag).
       const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
 
+      // Upload file mới + gộp fileId cũ (remote) = full desired set → BE reconcile
+      // (giữ file cũ khi sửa, thêm file mới, gỡ file đã xóa khỏi form).
+      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
+
       // Gửi cả chuỗi rỗng (khác create): backend chỉ bỏ qua khi undefined,
       // nên "" mới xóa được ghi chú/địa điểm cũ.
       const input = {
@@ -1733,15 +1854,21 @@ export const CalendarPage: React.FC = () => {
         attendees: freeTextNames,
         meetingChairman: data.chairman || undefined,
         meetingFormat: data.format,
+        attachmentFileIds,
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
       if (success) {
+        await persistMockAttachmentMapping(data.id, attachmentFileIds);
         void handleEditSuccess();
       }
     } catch (error) {
       console.error("Failed to update event:", error);
-      toast.error("Không thể cập nhật sự kiện");
+      toast.error(
+        error instanceof CalendarAttachmentUploadError
+          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
+          : "Không thể cập nhật sự kiện",
+      );
       throw error;
     }
   }, [handleEditSuccess]);
@@ -1757,6 +1884,8 @@ export const CalendarPage: React.FC = () => {
       const timezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
 
+      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
+
       // Gửi cả chuỗi rỗng để xóa được ghi chú cũ (backend bỏ qua undefined).
       const input = {
         title: data.title,
@@ -1765,17 +1894,23 @@ export const CalendarPage: React.FC = () => {
         endAt,
         timezone,
         visibility: personalVisibilityToApi(data.visibility),
+        attachmentFileIds,
       };
 
       const success = await useCalendarStore.getState().updateEvent(data.id, input);
       if (success) {
+        await persistMockAttachmentMapping(data.id, attachmentFileIds);
         setEditingPersonalEvent(null);
         setSelectedEvent(null);
         refetchCurrentMonth();
       }
     } catch (error) {
       console.error("Failed to update personal event:", error);
-      toast.error("Không thể cập nhật sự kiện");
+      toast.error(
+        error instanceof CalendarAttachmentUploadError
+          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
+          : "Không thể cập nhật sự kiện",
+      );
       throw error;
     }
   }, [refetchCurrentMonth]);
