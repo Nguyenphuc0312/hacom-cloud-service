@@ -155,15 +155,28 @@ function getAccessTokenForExport(): string | null {
   return null;
 }
 
+/** Snapshot export hết hạn (BE trả 404) — cần hỏi lại báo cáo rồi xuất lại. */
+export class ExportExpiredError extends Error {
+  constructor() {
+    super("Dữ liệu export đã hết hạn. Vui lòng hỏi lại báo cáo rồi xuất file.");
+    this.name = "ExportExpiredError";
+  }
+}
+
 /**
  * Xuất Excel qua BE: POST /api/work-reports/export-table
- * BE nhận { title, content } (markdown) và trả về file .xlsx binary.
+ *
+ * Ưu tiên xuất từ snapshot dữ liệu gốc: gửi kèm `session_id + export_id` để BE
+ * khôi phục đủ cột (Công ty/Nhân viên/Mã NV) dù bảng chat đã ẩn. Thiếu export_id
+ * thì fallback về `content` (markdown hiện tại) — chỉ có các cột đang hiển thị.
  */
 export async function exportTableToXlsx(
   filename: string,
   _table: ParsedTable,
   rawContent: string,
   title: string,
+  sessionId?: string,
+  exportId?: string,
 ): Promise<boolean> {
   const { getAccessToken } = await import("../../../services/tokenService");
   const token = getAccessToken() ?? getAccessTokenForExport();
@@ -174,14 +187,23 @@ export async function exportTableToXlsx(
       "x-api-contract": "3",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ title, content: rawContent }),
+    body: JSON.stringify({
+      title,
+      content: rawContent,
+      ...(sessionId && exportId
+        ? { session_id: sessionId, export_id: exportId }
+        : {}),
+    }),
   });
   if (!resp.ok) {
+    // 404 = snapshot export hết hạn khỏi session → yêu cầu hỏi lại báo cáo.
+    if (resp.status === 404 && sessionId && exportId) throw new ExportExpiredError();
     const text = await resp.text().catch(() => "");
     throw new Error(`export-table ${resp.status}: ${text}`);
   }
   const blob = await resp.blob();
-  downloadBlob(blob, ensureExt(filename, ".xlsx"));
+  const headerName = resp.headers.get("X-File-Name");
+  downloadBlob(blob, headerName || ensureExt(filename, ".xlsx"));
   return true;
 }
 

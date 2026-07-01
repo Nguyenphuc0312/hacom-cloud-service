@@ -272,8 +272,14 @@ export function usePersonalChat() {
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
 
         // Bật nút "In" nếu câu trả lời là bảng có thể xuất (SSE done.exportable_table).
+        // Lưu kèm export_id + session_id để Excel xuất từ snapshot dữ liệu gốc (đủ
+        // cột Công ty/Nhân viên/Mã NV đã bị ẩn khỏi bảng chat).
         if (response.exportable_table) {
-          patchMessage(convIdSnapshot, assistantMessage.id, { exportableTable: true });
+          patchMessage(convIdSnapshot, assistantMessage.id, {
+            exportableTable: true,
+            exportId: response.export_id,
+            exportSessionId: response.session_id || serverSessionId || undefined,
+          });
         }
 
         // Cập nhật serverSessionId nếu backend trả về session_id mới.
