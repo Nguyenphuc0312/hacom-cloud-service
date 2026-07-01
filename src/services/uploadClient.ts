@@ -81,7 +81,8 @@ export const uploadClient = {
 
   async completeUpload(payload: {
     uploadId: string;
-    conversationId: string;
+    // Optional: calendar_attachment không thuộc hội thoại nào → BE bỏ qua.
+    conversationId?: string;
     objectKey?: string;
     checksum?: string;
   }) {

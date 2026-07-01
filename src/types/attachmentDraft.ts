@@ -9,7 +9,8 @@ export type FileKind = "image" | "video" | "pdf" | "doc" | "other";
 export type FileUploadPurpose =
   | "message_attachment"
   | "user_avatar"
-  | "group_avatar";
+  | "group_avatar"
+  | "calendar_attachment";
 
 export type AttachmentDraftStatus =
   | "idle"

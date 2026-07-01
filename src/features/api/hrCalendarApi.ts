@@ -43,6 +43,21 @@ export interface HRCalendarOwner {
 }
 
 /**
+ * Attachment đính kèm 1 event (file/ảnh).
+ * File được upload trước qua chat-api (purpose `calendar_attachment`), hr-api
+ * chỉ lưu + trả lại metadata. `url` là URL tải/preview (public hoặc presigned).
+ * Xem contract: chat-api-service/docs/requests/FE__calendar-attachments__contract__01-07-26.md
+ */
+export interface CalendarAttachmentDto {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  thumbnailUrl?: string | null;
+}
+
+/**
  * Full HR Calendar Event from hr-api-service
  */
 export interface HRCalendarEvent {
@@ -65,6 +80,8 @@ export interface HRCalendarEvent {
   location: string | null;
   /** Meeting extras (meetingChairman, meetingFormat, attendees free-text…) — null khi BUSY_ONLY masked */
   metadata?: Record<string, unknown> | null;
+  /** File/ảnh đính kèm — null/undefined nếu BE chưa hỗ trợ hoặc event không có. */
+  attachments?: CalendarAttachmentDto[] | null;
   participants: HRCalendarParticipant[];
   canEdit: boolean;
   canDelete: boolean;
@@ -247,6 +264,8 @@ export const hrCalendarApi = {
     attendees?: string[];
     meetingChairman?: string;
     meetingFormat?: string;
+    /** fileId đã upload xong qua chat-api (purpose calendar_attachment). BE lưu + trả lại trong `attachments`. */
+    attachmentFileIds?: string[];
   }): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.post<{ data: HRCalendarEvent }>(
       "/calendar/events",
@@ -276,6 +295,8 @@ export const hrCalendarApi = {
       attendees?: string[];
       meetingChairman?: string;
       meetingFormat?: string;
+      /** Full desired set fileId (giống participantIds reconcile): gửi đủ để giữ file cũ + thêm file mới. Bỏ field = không đụng attachments. */
+      attachmentFileIds?: string[];
     }
   ): Promise<HRCalendarEvent> => {
     const response = await hrApiClient.patch<{ data: HRCalendarEvent }>(

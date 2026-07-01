@@ -121,7 +121,8 @@ const LEGACY_INTERNAL_GROUP_AVATAR_PREFIXES = ["/uploads/", "/chat-files/"];
 export type FileUploadPurpose =
   | "message_attachment"
   | "user_avatar"
-  | "group_avatar";
+  | "group_avatar"
+  | "calendar_attachment";
 
 export interface ReserveFileUploadPayload { 
   uploadId?: string;
@@ -135,7 +136,9 @@ export interface ReserveFileUploadPayload {
   clientMessageId?: string;
 } 
 
-type ReserveFileUploadRequest = Omit<UploadSignedUrlRequest, "conversationId"> & {
+// Omit `purpose` từ shared base để dùng FileUploadPurpose local (đã có
+// `calendar_attachment`); shared-types chưa bump nên union của nó hẹp hơn.
+type ReserveFileUploadRequest = Omit<UploadSignedUrlRequest, "conversationId" | "purpose"> & {
   uploadId?: string;
   purpose: FileUploadPurpose;
   conversationId?: string;
