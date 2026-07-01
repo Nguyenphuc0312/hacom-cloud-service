@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import { TableCellsIcon } from "@heroicons/react/24/outline";
 import { formatFileSize, MAX_CSV_PREVIEW_ROWS } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
 interface CsvPreviewProps {
@@ -196,7 +197,7 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {fileName}
+              {truncateFilename(fileName, 48)}
             </p>
             <p className="text-xs text-text-muted">
               {formatFileSize(fileSize)} · {extension}

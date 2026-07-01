@@ -22,6 +22,7 @@ import { FileType } from "@hacom/chat-shared-types/chat";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import { getMimePreviewType } from "../../utils/mimeRegistry";
 import { getIconTypeFromPreviewType } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { FilePreviewModal } from "../modals/FilePreviewModal";
 import { useFilePreview, type PreviewTarget } from "../../hooks/useFilePreview";
 
@@ -111,10 +112,10 @@ const AttachmentCard: React.FC<{
         </div>
       )}
 
-      {/* Tên + kích thước */}
+      {/* Tên + kích thước — cắt giữa giữ đuôi mở rộng (…docx) như chuẩn file chat */}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-primary" title={a.filename}>
-          {a.filename}
+          {truncateFilename(a.filename, 40)}
         </p>
         <p className="text-[11px] uppercase tracking-wide text-text-muted">
           {(a.filename.split(".").pop() || previewType).toString()} · {formatSize(a.sizeBytes)}

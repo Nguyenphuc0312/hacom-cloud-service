@@ -37,6 +37,7 @@ import {
   downloadResourceWithName,
   openResourceInNewTab,
 } from "../../utils/downloadFile";
+import { truncateFilename } from "../../utils/truncateFilename";
 
 interface FilePreviewModalProps {
   isOpen: boolean;
@@ -86,6 +87,8 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   }, [attachment]);
 
   const fileName = attachment?.fileName ?? "";
+  // Tên dài → cắt giữa giữ đuôi (….docx) như chuẩn file chat; tooltip giữ tên đầy đủ.
+  const displayName = fileName ? truncateFilename(fileName, 48) : "";
   const fileMimeType = attachment?.mimeType ?? "";
   const fileSize = formatFileSize(attachment?.fileSize);
   const extension = getFileExtension(fileName || "file");
@@ -256,8 +259,8 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
           <FileTypeIcon type={iconType} className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1 text-left">
-          <p className="truncate text-sm font-medium text-text-inverse">
-            {fileName || t("chat:file.unknown")}
+          <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
+            {displayName || t("chat:file.unknown")}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-inverse/58">
             {extension && (
@@ -459,8 +462,8 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
               <MusicalNoteIcon className="h-6 w-6 text-text-inverse" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-text-inverse">
-                {fileName || t("chat:file.unknown")}
+              <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
+                {displayName || t("chat:file.unknown")}
               </p>
               <p className="mt-1 text-xs text-text-inverse/58">
                 {metadataLine}
@@ -526,8 +529,8 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
             <FileTypeIcon type={iconType} className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-inverse">
-              {fileName || t("chat:file.unknown")}
+            <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
+              {displayName || t("chat:file.unknown")}
             </p>
             <p className="truncate text-xs text-text-inverse/50">
               {metadataLine}

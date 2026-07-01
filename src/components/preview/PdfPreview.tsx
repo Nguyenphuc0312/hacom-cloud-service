@@ -15,6 +15,7 @@ import {
 import { IconButton } from "../ui";
 import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
@@ -104,7 +105,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {fileName}
+              {truncateFilename(fileName, 48)}
             </p>
             <p className="text-xs text-text-muted">
               {formatFileSize(fileSize)} · {extension}
