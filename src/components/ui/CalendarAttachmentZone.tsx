@@ -18,9 +18,12 @@ import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
+import { FileType } from "@hacom/chat-shared-types/chat";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import { getMimePreviewType } from "../../utils/mimeRegistry";
 import { getIconTypeFromPreviewType } from "../../utils/filePreviewUtils";
+import { FilePreviewModal } from "../modals/FilePreviewModal";
+import { useFilePreview, type PreviewTarget } from "../../hooks/useFilePreview";
 
 export interface CalendarLocalAttachment {
   id: string; // `local-…` cho file mới, hoặc = remoteFileId cho file đã upload
@@ -75,23 +78,25 @@ const isInlineViewable = (previewType: string): boolean =>
   previewType === "video" ||
   previewType === "audio";
 
-const AttachmentCard: React.FC<{ a: CalendarViewAttachment }> = ({ a }) => {
+const AttachmentCard: React.FC<{
+  a: CalendarViewAttachment;
+  /** Mở xem inline trong app (lightbox). undefined = file không xem inline được → chỉ tải. */
+  onView?: () => void;
+}> = ({ a, onView }) => {
   const previewType = getMimePreviewType(a.mimeType, a.filename);
   const iconType = getIconTypeFromPreviewType(previewType);
   const image = previewType === "image";
   const thumb = image ? a.thumbnailUrl || a.url : null;
-  const canView = isInlineViewable(previewType);
 
   return (
     <div className="group flex items-center gap-2.5 rounded-lg border border-border bg-surface-overlay p-2 transition-colors hover:border-[#1976D2]/40">
-      {/* Thumbnail ảnh / icon theo loại file */}
+      {/* Thumbnail ảnh / icon theo loại file — bấm để xem inline trong app */}
       {thumb ? (
-        <a
-          href={a.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={onView}
           title={`Xem ${a.filename}`}
-          className="shrink-0"
+          className="shrink-0 cursor-pointer"
         >
           <img
             src={thumb}
@@ -99,7 +104,7 @@ const AttachmentCard: React.FC<{ a: CalendarViewAttachment }> = ({ a }) => {
             loading="lazy"
             className="h-12 w-12 rounded-md object-cover ring-1 ring-border transition group-hover:ring-[#1976D2]/50"
           />
-        </a>
+        </button>
       ) : (
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-hover">
           <FileTypeIcon type={iconType} className="h-6 w-6" />
@@ -116,19 +121,18 @@ const AttachmentCard: React.FC<{ a: CalendarViewAttachment }> = ({ a }) => {
         </p>
       </div>
 
-      {/* Actions: Xem (inline) + Tải */}
+      {/* Actions: Xem (inline trong app) + Tải */}
       <div className="flex shrink-0 items-center gap-1">
-        {canView && (
-          <a
-            href={a.url}
-            target="_blank"
-            rel="noopener noreferrer"
+        {onView && (
+          <button
+            type="button"
+            onClick={onView}
             title="Xem"
             aria-label={`Xem ${a.filename}`}
             className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
           >
             <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-          </a>
+          </button>
         )}
         <a
           href={a.url}
@@ -144,16 +148,74 @@ const AttachmentCard: React.FC<{ a: CalendarViewAttachment }> = ({ a }) => {
   );
 };
 
+/** Map attachment lịch → PreviewTarget cho FilePreviewModal (dùng `url` sẵn có). */
+const toPreviewTarget = (a: CalendarViewAttachment): PreviewTarget => {
+  const previewType = getMimePreviewType(a.mimeType, a.filename);
+  return {
+    // Không thuộc hội thoại nào → conversationId rỗng; hook sẽ dùng thẳng `url`.
+    conversationId: "",
+    previewType,
+    attachment: {
+      id: a.fileId,
+      type: FileType.OTHER,
+      url: a.url,
+      downloadUrl: a.url,
+      thumbnailUrl: a.thumbnailUrl ?? undefined,
+      fileName: a.filename,
+      fileSize: a.sizeBytes,
+      mimeType: a.mimeType,
+    },
+  };
+};
+
 export const CalendarAttachmentList: React.FC<{ attachments: CalendarViewAttachment[] }> = ({
   attachments,
 }) => {
+  const preview = useFilePreview();
+
   if (attachments.length === 0) return null;
+
+  // Gallery = các file xem inline được (ảnh/pdf/video/audio) → điều hướng qua lại trong lightbox.
+  const viewable = attachments.filter((a) =>
+    isInlineViewable(getMimePreviewType(a.mimeType, a.filename)),
+  );
+  const gallery = viewable.map(toPreviewTarget);
+
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {attachments.map((a) => (
-        <AttachmentCard key={a.fileId} a={a} />
-      ))}
-    </div>
+    <>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {attachments.map((a) => {
+          const canView = isInlineViewable(getMimePreviewType(a.mimeType, a.filename));
+          return (
+            <AttachmentCard
+              key={a.fileId}
+              a={a}
+              onView={
+                canView
+                  ? () => preview.open(toPreviewTarget(a), gallery)
+                  : undefined
+              }
+            />
+          );
+        })}
+      </div>
+
+      <FilePreviewModal
+        isOpen={preview.isOpen}
+        onClose={preview.close}
+        current={preview.current}
+        currentIndex={preview.currentIndex}
+        totalItems={preview.totalItems}
+        secureUrl={preview.secureUrl}
+        isLoadingUrl={preview.isLoadingUrl}
+        urlError={preview.urlError}
+        hasPrev={preview.hasPrev}
+        hasNext={preview.hasNext}
+        onPrev={preview.prev}
+        onNext={preview.next}
+        onRefreshUrl={preview.refreshUrl}
+      />
+    </>
   );
 };
 
