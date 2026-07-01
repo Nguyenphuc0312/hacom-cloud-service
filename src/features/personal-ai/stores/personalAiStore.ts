@@ -446,11 +446,12 @@ export const usePersonalAiStore = create<PersonalAiState>()(
     {
       name: "hacom-personal-ai-workspace",
       storage: createJSONStorage(() => localStorage),
-      // Chỉ lưu lastSessionId và selectedDocumentIds.
+      // Chỉ lưu lastSessionId để restore session sau F5.
+      // selectedDocumentIds KHÔNG persist — scope theo từng hội thoại, hội thoại
+      // mới phải bắt đầu không có nguồn nào (Quy tắc 2 contract NotebookLM).
       // conversations KHÔNG persist — API là source of truth, stale cache gây lỗi cross-user.
       partialize: (s) => ({
         lastSessionId: s.lastSessionId,
-        selectedDocumentIds: s.selectedDocumentIds,
       }),
     },
   ),

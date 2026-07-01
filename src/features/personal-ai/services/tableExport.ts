@@ -131,27 +131,58 @@ const MIME = {
   pdf: "application/pdf",
 } as const;
 
-/** Xuất Excel .xlsx thật (SheetJS). Resolve true nếu đã lưu. */
+const AI_BASE_URL =
+  (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
+  "https://ai.hacomholdings.com.vn";
+
+function getAccessTokenForExport(): string | null {
+  // Đọc token từ localStorage — đồng bộ với tokenService.ts
+  try {
+    const raw = localStorage.getItem("access_token") ?? localStorage.getItem("hacom_access_token");
+    if (raw) return raw;
+    // Fallback: tìm trong persist store của authStore
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) ?? "";
+      if (key.includes("auth")) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) ?? "{}") as Record<string, unknown>;
+          const token = (parsed as Record<string, unknown>).accessToken ?? (parsed?.state as Record<string, unknown>)?.accessToken;
+          if (typeof token === "string" && token) return token;
+        } catch { /* skip */ }
+      }
+    }
+  } catch { /* skip */ }
+  return null;
+}
+
+/**
+ * Xuất Excel qua BE: POST /api/work-reports/export-table
+ * BE nhận { title, content } (markdown) và trả về file .xlsx binary.
+ */
 export async function exportTableToXlsx(
   filename: string,
-  table: ParsedTable,
+  _table: ParsedTable,
+  rawContent: string,
+  title: string,
 ): Promise<boolean> {
-  return saveFile(ensureExt(filename, ".xlsx"), MIME.xlsx, async () => {
-    const XLSX = await import("xlsx");
-    const aoa = [table.headers, ...table.rows];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = table.headers.map((_, c) => {
-      const maxLen = Math.max(
-        table.headers[c]?.length ?? 0,
-        ...table.rows.map((r) => (r[c] ?? "").length),
-      );
-      return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
-    });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Báo cáo");
-    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-    return new Blob([out], { type: MIME.xlsx });
+  const { getAccessToken } = await import("../../../services/tokenService");
+  const token = getAccessToken() ?? getAccessTokenForExport();
+  const resp = await fetch(`${AI_BASE_URL}/api/work-reports/export-table`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-contract": "3",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ title, content: rawContent }),
   });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`export-table ${resp.status}: ${text}`);
+  }
+  const blob = await resp.blob();
+  downloadBlob(blob, ensureExt(filename, ".xlsx"));
+  return true;
 }
 
 /** Xuất Word .docx thật (docx). */
