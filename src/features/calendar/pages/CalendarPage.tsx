@@ -1077,7 +1077,7 @@ export const CalendarPage: React.FC = () => {
     if (!pendingOpenEventId || !apiEvents.length) return;
     const match = apiEvents.find((e) => e.id === pendingOpenEventId);
     if (match) {
-      setSelectedEvent(match);
+      setSelectedEvent(mapHrmEventToCalendarEvent(match));
       setPendingOpenEventId(null);
     }
   }, [pendingOpenEventId, apiEvents]);
@@ -1277,6 +1277,7 @@ export const CalendarPage: React.FC = () => {
         visibility: apiVisibilityToForm(event.visibility),
         location: event.location ?? "",
         notes: "",
+        attachments: [],
       };
     });
   }, [apiEvents]);
@@ -1620,6 +1621,7 @@ export const CalendarPage: React.FC = () => {
         endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
         notes: extEvent.description || "",
         visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
+        attachments: [],
       };
       setEditingPersonalEvent(personalData);
       return;
@@ -1654,6 +1656,7 @@ export const CalendarPage: React.FC = () => {
       visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
       location: extEvent.meetingLocation || "",
       notes: extEvent.description || "",
+      attachments: [],
       createdById: extEvent.ownerId,
     };
 
