@@ -16,7 +16,13 @@ export function truncateFilename(name: string, maxLen = 35): string {
   }
 
   const lastDotIndex = name.lastIndexOf(".");
-  const hasExtension = lastDotIndex > 0 && lastDotIndex < name.length - 1;
+  // Chỉ coi là phần mở rộng khi đuôi NGẮN (<= 8 ký tự kể cả dấu chấm) — tránh
+  // hiểu nhầm dấu chấm giữa tên (vd "26.04.11_Kế hoạch") là extension. Khớp
+  // convention của splitFileName().
+  const hasExtension =
+    lastDotIndex > 0 &&
+    lastDotIndex < name.length - 1 &&
+    name.length - lastDotIndex <= 8;
 
   let base: string;
   let ext: string;
