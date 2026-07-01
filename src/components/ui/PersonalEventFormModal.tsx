@@ -8,6 +8,7 @@ import React from "react";
 import clsx from "clsx";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
 
 export interface PersonalEventFormData {
   id: string;
@@ -20,6 +21,8 @@ export interface PersonalEventFormData {
   /** Quyền xem: "private" = chỉ hiện "Bận" cho người khác (BUSY_ONLY);
    *  "public" = ai cũng xem được đầy đủ (PUBLIC). Mặc định "private". */
   visibility: "private" | "public";
+  /** File đính kèm — BE cần bổ sung purpose `calendar_attachment` để upload thật. */
+  attachments: CalendarLocalAttachment[];
 }
 
 interface PersonalEventFormModalProps {
@@ -163,6 +166,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
   const [startTime, setStartTime] = React.useState("08:00");
   const [endTime, setEndTime] = React.useState("09:00");
   const [notes, setNotes] = React.useState("");
+  const [attachments, setAttachments] = React.useState<CalendarLocalAttachment[]>([]);
   const [visibility, setVisibility] = React.useState<"private" | "public">("private");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
@@ -176,6 +180,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       setStartTime(initialData.startTime);
       setEndTime(initialData.endTime);
       setNotes(initialData.notes);
+      setAttachments(initialData.attachments ?? []);
       setVisibility(initialData.visibility ?? "private");
       setErrors({});
     } else {
@@ -186,6 +191,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       setStartTime(defaultStartTime ?? "08:00");
       setEndTime(defaultEndTime ?? "09:00");
       setNotes("");
+      setAttachments([]);
       setVisibility("private");
       setErrors({});
     }
@@ -220,6 +226,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
       endTime,
       notes: notes.trim(),
       visibility,
+      attachments,
     };
     onClose();
     try {
@@ -364,9 +371,9 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
           )}
         </div>
 
-        {/* Ghi chú */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-text-primary">Ghi chú</label>
+        {/* Ghi chú + Đính kèm */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-text-primary">Ghi chú</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -374,6 +381,7 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
             rows={3}
             className="w-full resize-none rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
           />
+          <CalendarAttachmentZone attachments={attachments} onChange={setAttachments} />
         </div>
 
         {/* Quyền xem (riêng tư / công khai) */}

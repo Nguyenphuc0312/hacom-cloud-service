@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useAuthStore } from "../../stores/authStore";
 import { Avatar } from "../common/Avatar";
@@ -51,6 +52,8 @@ export interface MeetingFormData {
   /** Quyền xem: "private" = chỉ hiện "Bận" cho người khác (BUSY_ONLY);
    *  "public" = ai cũng xem được đầy đủ (PUBLIC). Mặc định "private". */
   visibility: "private" | "public";
+  /** File đính kèm — BE cần bổ sung purpose `calendar_attachment` để upload thật. */
+  attachments: CalendarLocalAttachment[];
   /** ID của người tạo lịch — dùng để phân quyền sửa/xóa */
   createdById?: string;
   /** Tên hiển thị người tạo lịch */
@@ -168,6 +171,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const [locationInput, setLocationInput] = React.useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = React.useState(false);
   const [notes, setNotes] = React.useState("");
+  const [attachments, setAttachments] = React.useState<CalendarLocalAttachment[]>([]);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
@@ -325,6 +329,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setLocation(initialData.location);
       setLocationInput(initialData.location);
       setNotes(initialData.notes);
+      setAttachments(initialData.attachments ?? []);
       setErrors({});
     } else {
       const d0 = defaultDate ?? today();
@@ -344,6 +349,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setLocation("");
       setLocationInput("");
       setNotes("");
+      setAttachments([]);
       setErrors({});
     }
   }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData]);
@@ -443,6 +449,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       visibility,
       location: locToSave,
       notes: notes.trim(),
+      attachments,
       createdById: initialData?.createdById,
       createdByName: initialData?.createdByName,
       readBy: initialData?.readBy,
@@ -1005,9 +1012,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           </p>
         </div>
 
-        {/* 7. Ghi chú */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-text-primary">Ghi chú</label>
+        {/* 7. Ghi chú + Đính kèm */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-text-primary">Ghi chú</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -1015,6 +1022,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             rows={3}
             className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15 resize-none"
           />
+          <CalendarAttachmentZone attachments={attachments} onChange={setAttachments} />
         </div>
       </div>
     </Modal>
