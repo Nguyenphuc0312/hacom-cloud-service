@@ -67,7 +67,10 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   const handleExport = async (key: ItemKey) => {
     setOpen(false);
     const table = parseMarkdownTable(content);
-    if (!table || table.headers.length === 0) {
+    const hasTable = !!table && table.headers.length > 0;
+    // PDF/Word dựng client-side từ bảng markdown → bắt buộc có bảng. Excel xuất
+    // ở BE từ snapshot (export_id) hoặc markdown → không cần parse được bảng.
+    if (key !== "excel" && !hasTable) {
       logger.warn("TableExportMenu", "no-table-found");
       toast.error("Không tìm thấy bảng để xuất file.");
       return;
@@ -78,16 +81,16 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
       if (key === "excel") {
         saved = await exportTableToXlsx(
           fileBase,
-          table,
+          table ?? { headers: [], rows: [] },
           content,
           title,
           sessionId,
           exportId,
         );
       } else if (key === "word") {
-        saved = await exportTableToDocx(fileBase, title, table);
+        saved = await exportTableToDocx(fileBase, title, table!);
       } else {
-        saved = await exportTableToPdf(fileBase, title, table);
+        saved = await exportTableToPdf(fileBase, title, table!);
       }
       // Chỉ báo thành công khi file đã thật sự được lưu (không báo nếu người
       // dùng bấm Hủy ở hộp thoại "Save as").

@@ -360,6 +360,8 @@ const EventDetailModal: React.FC<{
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
   const [responding, setResponding] = React.useState<null | "ACCEPTED" | "DECLINED">(null);
+  // Khối đính kèm collapse — mặc định đóng cho gọn modal.
+  const [attachmentsOpen, setAttachmentsOpen] = React.useState(false);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -692,14 +694,26 @@ const EventDetailModal: React.FC<{
             </div>
           )}
 
-          {/* Đính kèm (file/ảnh) — chỉ hiện khi BE trả attachments cho event này */}
+          {/* Đính kèm (file/ảnh) — collapse, chỉ hiện khi BE trả attachments cho event này */}
           {hrEvent?.attachments && hrEvent.attachments.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
+              <button
+                type="button"
+                onClick={() => setAttachmentsOpen((v) => !v)}
+                aria-expanded={attachmentsOpen ? "true" : "false"}
+                className="flex w-full items-center gap-1.5 text-xs font-medium text-[#1565C0] hover:text-[#0D47A1] dark:text-[#6BA8F0] dark:hover:text-[#93C5FD]"
+              >
                 <PaperClipIcon className="h-4 w-4" />
                 Đính kèm ({hrEvent.attachments.length})
-              </p>
-              <CalendarAttachmentList attachments={hrEvent.attachments} />
+                <ChevronRightIcon
+                  className={`ml-auto h-4 w-4 transition-transform ${attachmentsOpen ? "rotate-90" : ""}`}
+                />
+              </button>
+              {attachmentsOpen && (
+                <div className="mt-2">
+                  <CalendarAttachmentList attachments={hrEvent.attachments} />
+                </div>
+              )}
             </div>
           )}
 
