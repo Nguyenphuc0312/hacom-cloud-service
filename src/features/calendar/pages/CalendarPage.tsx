@@ -1,4 +1,5 @@
-﻿import React, { useState, useMemo, useCallback, useEffect } from "react";
+﻿import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import clsx from "clsx";
 import {
   ChevronLeftIcon,
@@ -1009,6 +1010,11 @@ export const CalendarPage: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<LocalCalendarEvent | ExtendedCalendarEvent | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Khi navigate từ widget lịch tuần với state { openEventId, openEventSource, view }
+  const location = useLocation();
+  const handledNavState = useRef(false);
+  const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
+
   // Attendance data state
   const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
   const [, setIsLoadingAttendance] = useState(false);
@@ -1053,6 +1059,28 @@ export const CalendarPage: React.FC = () => {
   const handleSelectUser = (userId: string, userName: string) => {
     setViewingUser(userId, userName);
   };
+
+  // Đọc navigation state từ widget lịch tuần → switch sang week view + mở event
+  useEffect(() => {
+    if (handledNavState.current) return;
+    const navState = location.state as { openEventId?: string; view?: string } | null;
+    if (!navState?.openEventId) return;
+    handledNavState.current = true;
+    setView("week");
+    setPendingOpenEventId(navState.openEventId);
+    // Clear state khỏi history để back/refresh không mở lại
+    window.history.replaceState({}, "");
+  }, [location.state, setView]);
+
+  // Khi apiEvents đã load và còn pending event id → tìm và mở
+  useEffect(() => {
+    if (!pendingOpenEventId || !apiEvents.length) return;
+    const match = apiEvents.find((e) => e.id === pendingOpenEventId);
+    if (match) {
+      setSelectedEvent(match);
+      setPendingOpenEventId(null);
+    }
+  }, [pendingOpenEventId, apiEvents]);
 
   // Quay về "Lịch của tôi" ngay tại chỗ (không cần reload trang).
   // setMode tự gọi fetchEvents() theo currentMonth của STORE — vốn không đồng bộ

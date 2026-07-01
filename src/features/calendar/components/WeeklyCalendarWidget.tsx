@@ -1142,7 +1142,15 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
           onDelete={handleDeleteMeeting}
           onDeleteApiEvent={handleDeleteApiEvent}
           onToggleRead={handleToggleRead}
-          onViewFull={() => navigate("/calendar")}
+          onViewFull={() =>
+            navigate("/calendar", {
+              state: {
+                openEventId: selectedDetail.apiEvent?.id ?? selectedDetail.source?.id,
+                openEventSource: selectedDetail.source,
+                view: "week",
+              },
+            })
+          }
         />
       )}
 
