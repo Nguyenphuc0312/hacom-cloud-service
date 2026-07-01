@@ -229,22 +229,22 @@ export const USE_AUTH_SERVICE =
 /**
  * Đính kèm file/ảnh vào lịch (calendar attachments).
  *
- * FE đã hoàn thiện end-to-end. BE đã ship (chat-api purpose `calendar_attachment`
- * + hr-api `attachmentFileIds` / `attachments[]` resolve URL), nên FE gọi API THẬT:
- * file lưu ở server, mọi máy / người được tag đều xem được (không còn local IndexedDB).
+ * FE đã hoàn thiện end-to-end và LUÔN BẬT (người dùng test được ngay). Vì BE
+ * chưa ship (chat-api purpose `calendar_attachment` + hr-api `attachmentFileIds`
+ * / `attachments[]`), FE chạy qua lớp MOCK (IndexedDB, calendarAttachmentMockStore)
+ * để lưu/hiển thị thật mà không cần BE.
  *
- * Rollback về mock (chỉ local, KHÔNG share được giữa máy) nếu BE trục trặc:
- * set VITE_CALENDAR_ATTACHMENTS_MOCK=true.
+ * Khi BE sẵn sàng → set VITE_CALENDAR_ATTACHMENTS_MOCK=false để nối API thật.
  * Xem: chat-api-service/docs/requests/FE__calendar-attachments__contract__01-07-26.md
  */
 export const CALENDAR_ATTACHMENTS_ENABLED = true;
 
 /**
- * Dùng lớp mock (IndexedDB, chỉ local) thay vì gọi chat-api/hr-api thật.
- * Mặc định FALSE (BE đã ship). Rollback: đặt VITE_CALENDAR_ATTACHMENTS_MOCK=true.
+ * Dùng lớp mock (IndexedDB) thay vì gọi chat-api/hr-api thật.
+ * Mặc định TRUE cho tới khi BE ship. Nối BE: đặt VITE_CALENDAR_ATTACHMENTS_MOCK=false.
  */
 export const CALENDAR_ATTACHMENTS_USE_MOCK =
-  import.meta.env.VITE_CALENDAR_ATTACHMENTS_MOCK === "true";
+  import.meta.env.VITE_CALENDAR_ATTACHMENTS_MOCK !== "false";
 
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);

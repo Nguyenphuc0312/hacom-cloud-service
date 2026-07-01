@@ -44,6 +44,7 @@ import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentS
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
 import { TableExportMenu } from "./TableExportMenu";
+import { parseMarkdownTable } from "../../services/tableExport";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -154,21 +155,20 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
+  // Hiện nút Xuất khi BE bật cờ `exportable_table` HOẶC câu trả lời có bảng
+  // markdown (fallback không phụ thuộc BE — có bảng là xuất được). Có export_id
+  // thì Excel xuất full cột từ snapshot; không có thì fallback theo markdown.
+  const canExportTable = React.useMemo(() => {
+    if (message.exportableTable) return true;
+    const t = parseMarkdownTable(message.content);
+    return !!t && t.headers.length > 0;
+  }, [message.exportableTable, message.content]);
+
   const markdownComponents = React.useMemo(
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
       table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
         <div className="my-4">
-          {message.exportableTable && (
-            <div className="mb-2 flex justify-end">
-              <TableExportMenu
-                content={message.content}
-                title="Tổng hợp báo cáo công việc"
-                sessionId={message.exportSessionId}
-                exportId={message.exportId}
-              />
-            </div>
-          )}
           <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
             <table className="w-full border-collapse text-[13px]">{children}</table>
           </div>
@@ -314,7 +314,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId, loadingWorkFileId, message.exportableTable, message.content, message.exportId, message.exportSessionId],
+    [loadingFileId, loadingWorkFileId, message.content],
   );
 
   const handleCopy = () => {
@@ -389,6 +389,20 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
             {/* Thinking phase indicator */}
             {isAssistant && message.thinkingPhase && (
               <ThinkingIndicator phase={message.thinkingPhase} />
+            )}
+
+            {/* Nút xuất file báo cáo — đặt trên đầu, canh phải. Hiện theo cờ BE
+                (`exportable_table`) HOẶC khi câu trả lời có bảng markdown. Excel
+                xuất từ snapshot dữ liệu gốc qua export_id (đủ cột đã ẩn). */}
+            {isAssistant && !message.isStreaming && canExportTable && (
+              <div className="mb-2 flex w-full justify-end">
+                <TableExportMenu
+                  content={message.content}
+                  title="Tổng hợp báo cáo công việc"
+                  sessionId={message.exportSessionId}
+                  exportId={message.exportId}
+                />
+              </div>
             )}
 
             {/* Message body */}

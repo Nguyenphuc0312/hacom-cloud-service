@@ -71,12 +71,12 @@ export interface CalendarViewAttachment {
   thumbnailUrl?: string | null;
 }
 
-/** Loại file browser xem inline được ở tab mới (không phải tải). */
-const isInlineViewable = (previewType: string): boolean =>
-  previewType === "image" ||
-  previewType === "pdf" ||
-  previewType === "video" ||
-  previewType === "audio";
+/**
+ * Loại file FilePreviewModal xem inline được trong app (không chỉ tải).
+ * Gồm cả Word/Excel/PowerPoint (DocumentPreview render qua Office Online viewer)
+ * và text/csv/archive — mọi loại trừ "unknown" đều có viewer riêng.
+ */
+const isInlineViewable = (previewType: string): boolean => previewType !== "unknown";
 
 const AttachmentCard: React.FC<{
   a: CalendarViewAttachment;
@@ -175,16 +175,22 @@ export const CalendarAttachmentList: React.FC<{ attachments: CalendarViewAttachm
 
   if (attachments.length === 0) return null;
 
+  // File (không phải ảnh) lên đầu, ảnh xuống dưới — mỗi thứ 1 dòng.
+  const ordered = [...attachments].sort((x, y) => {
+    const xi = getMimePreviewType(x.mimeType, x.filename) === "image" ? 1 : 0;
+    const yi = getMimePreviewType(y.mimeType, y.filename) === "image" ? 1 : 0;
+    return xi - yi;
+  });
+
   // Gallery = các file xem inline được (ảnh/pdf/video/audio) → điều hướng qua lại trong lightbox.
-  const viewable = attachments.filter((a) =>
-    isInlineViewable(getMimePreviewType(a.mimeType, a.filename)),
-  );
-  const gallery = viewable.map(toPreviewTarget);
+  const gallery = ordered
+    .filter((a) => isInlineViewable(getMimePreviewType(a.mimeType, a.filename)))
+    .map(toPreviewTarget);
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {attachments.map((a) => {
+      <div className="flex flex-col gap-2">
+        {ordered.map((a) => {
           const canView = isInlineViewable(getMimePreviewType(a.mimeType, a.filename));
           return (
             <AttachmentCard
