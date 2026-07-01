@@ -1389,11 +1389,11 @@ export const CalendarPage: React.FC = () => {
     const defaultFilters: CalendarTypeFilter[] = [
       { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
       { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
-      { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: true },
+      { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: false },
     ];
-    
+
     if (filters.types.length === 0) return defaultFilters;
-    
+
     return defaultFilters.map(f => ({
       ...f,
       checked: filters.types.some(t => t.toLowerCase() === f.type || mapLocalTypeToApi(t) === f.type),
@@ -1401,9 +1401,9 @@ export const CalendarPage: React.FC = () => {
   }, [filters]);
 
   const handleFilterChange = (type: EventType) => {
-    const currentTypes = filters.types.length > 0 
-      ? filters.types 
-      : ["meeting", "personal", "attendance"] as EventType[];
+    const currentTypes = filters.types.length > 0
+      ? filters.types
+      : ["meeting", "personal"] as EventType[];
     
     const newTypes = currentTypes.includes(type)
       ? currentTypes.filter(t => t !== type)
