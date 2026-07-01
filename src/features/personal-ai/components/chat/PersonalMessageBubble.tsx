@@ -395,7 +395,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 (`exportable_table`) HOẶC khi câu trả lời có bảng markdown. Excel
                 xuất từ snapshot dữ liệu gốc qua export_id (đủ cột đã ẩn). */}
             {isAssistant && !message.isStreaming && canExportTable && (
-              <div className="mb-2 flex w-full justify-end">
+              <div className="-mb-8 flex w-full justify-end">
                 <TableExportMenu
                   content={message.content}
                   title="Tổng hợp báo cáo công việc"
