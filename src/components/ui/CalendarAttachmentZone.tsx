@@ -112,10 +112,14 @@ const AttachmentCard: React.FC<{
         </div>
       )}
 
-      {/* Tên + kích thước — cắt giữa giữ đuôi mở rộng (…docx) như chuẩn file chat */}
+      {/* Tên + kích thước — cắt giữa giữ đuôi (….pdf). KHÔNG dùng `truncate` (CSS
+          ellipsis cắt cuối sẽ ăn mất đuôi); helper đã giới hạn độ dài rồi. */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-primary" title={a.filename}>
-          {truncateFilename(a.filename, 40)}
+        <p
+          className="overflow-hidden whitespace-nowrap text-sm font-medium text-text-primary"
+          title={a.filename}
+        >
+          {truncateFilename(a.filename, 34)}
         </p>
         <p className="text-[11px] uppercase tracking-wide text-text-muted">
           {(a.filename.split(".").pop() || previewType).toString()} · {formatSize(a.sizeBytes)}
