@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import { formatFileSize, MAX_TEXT_PREVIEW_SIZE, MAX_TEXT_PREVIEW_LINES } from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 
 interface TextPreviewProps {
@@ -106,7 +107,7 @@ export const TextPreview: React.FC<TextPreviewProps> = ({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {fileName}
+              {truncateFilename(fileName, 48)}
             </p>
             <p className="text-xs text-text-muted">
               {formatFileSize(fileSize)} · {extension}
