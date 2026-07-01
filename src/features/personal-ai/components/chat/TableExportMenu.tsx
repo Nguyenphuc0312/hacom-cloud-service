@@ -70,7 +70,7 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
       setBusy(key);
       let saved = false;
       if (key === "excel") {
-        saved = await exportTableToXlsx(fileBase, table);
+        saved = await exportTableToXlsx(fileBase, table, content, title);
       } else if (key === "word") {
         saved = await exportTableToDocx(fileBase, title, table);
       } else {
