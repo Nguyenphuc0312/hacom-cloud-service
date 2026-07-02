@@ -256,9 +256,9 @@ const MessageGroupItem: React.FC<{
     const [isHovered, setIsHovered] = React.useState(false);
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
-    // ponytail: poll renders as a centered, chrome-free card (Zalo-style) — no bubble
-    // bg/border, no sender label. Centering is handled by MessageGroupBase.
-    const isPoll = message.type === MessageType.POLL;
+    // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
+    // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
+    const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
@@ -917,9 +917,10 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
     return null;
   }
 
-  // ponytail: a poll group renders centered (Zalo-style) — drop the avatar column
-  // and center the card instead of own/other side alignment.
-  const isPollGroup = leadMessage.type === MessageType.POLL;
+  // ponytail: a poll/reminder group renders centered (Zalo-style) — drop the avatar
+  // column and center the card instead of own/other side alignment.
+  const isPollGroup =
+    leadMessage.type === MessageType.POLL || leadMessage.type === MessageType.REMINDER;
 
   const senderDisplayName =
     enrichedSenderName ??

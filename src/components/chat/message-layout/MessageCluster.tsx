@@ -125,9 +125,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     normalizedConversationType !== RoomType.PRIVATE &&
     normalizedConversationType !== RoomType.DIRECT;
   const coarsePointer = isCoarsePointer();
-  // ponytail: poll renders as a horizontally-centered card (Zalo-style, like a date/
-  // system row), never an own/right bubble — drop avatar/sender-label/bubble-chrome.
-  const isPoll = message.type === MessageType.POLL;
+  // ponytail: poll AND reminder render as a horizontally-centered card (Zalo-style,
+  // like a date/system row), never an own/right bubble — drop avatar/sender-label/
+  // bubble-chrome. Same layout treatment for both interactive cards.
+  const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number"
@@ -526,7 +527,11 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     ? (id) => setEditHistoryMessageId(id)
                     : undefined
                 }
-                className={message.type === MessageType.POLL ? "!text-[#1565C0]/70" : undefined}
+                className={
+                  message.type === MessageType.POLL || message.type === MessageType.REMINDER
+                    ? "!text-[#1565C0]/70"
+                    : undefined
+                }
               />
             )}
 
