@@ -5,7 +5,7 @@
 import React from "react";
 import clsx from "clsx";
 import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
-import { Modal } from "./Modal";
+import { Modal, ConfirmDialog } from "./Modal";
 import { Button } from "./Button";
 import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
 import { useFriendshipStore } from "../../stores/friendshipStore";
@@ -173,6 +173,21 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const [notes, setNotes] = React.useState("");
   const [attachments, setAttachments] = React.useState<CalendarLocalAttachment[]>([]);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
+
+  // Sửa lịch → luôn hỏi trước khi bỏ; thêm mới → chỉ hỏi khi đã nhập nội dung/
+  // ghi chú/thêm người tham gia hoặc đính kèm (tránh làm phiền form trống).
+  const leaveAction = onBack ?? onClose;
+  const hasContent =
+    isEditMode ||
+    !!title.trim() ||
+    !!notes.trim() ||
+    participants.length > 0 ||
+    attachments.length > 0;
+  const requestCancel = () => {
+    if (hasContent) setShowCancelConfirm(true);
+    else leaveAction();
+  };
 
   const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
 
@@ -475,21 +490,23 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestCancel}
       title={isEditMode ? "Chỉnh sửa lịch họp" : "Thêm lịch họp"}
       size="lg"
       footer={
+        // Hủy (góc trái) tách xa Lưu & Gửi (góc phải) để tránh bấm nhầm;
+        // cảnh báo trùng lịch nằm cạnh nút Lưu.
         <div className="flex items-center justify-between gap-3">
-          {hasConflicts && (
-            <p className="flex items-center gap-1.5 text-xs text-danger">
-              <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
-              Một số người tham gia có lịch trùng giờ
-            </p>
-          )}
-          <div className="ml-auto flex gap-2">
-            <Button variant="brand-outline" onClick={onBack ?? onClose} type="button">
-              {onBack ? "Quay lại" : "Hủy"}
-            </Button>
+          <Button variant="brand-outline" onClick={requestCancel} type="button">
+            {onBack ? "Quay lại" : "Hủy"}
+          </Button>
+          <div className="flex items-center gap-3">
+            {hasConflicts && (
+              <p className="flex items-center gap-1.5 text-xs text-danger">
+                <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+                Một số người tham gia có lịch trùng giờ
+              </p>
+            )}
             <Button variant="brand" onClick={handleSave} type="button" disabled={isLoading}>
               {isLoading ? "Đang lưu..." : isEditMode ? "Cập nhật" : "Lưu & Gửi"}
             </Button>
@@ -1025,6 +1042,19 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           <CalendarAttachmentZone attachments={attachments} onChange={setAttachments} />
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          leaveAction();
+        }}
+        title={onBack ? "Quay lại" : "Hủy thay đổi"}
+        message="Bạn có thay đổi chưa lưu. Thoát bây giờ sẽ mất các thay đổi này. Tiếp tục?"
+        confirmText={onBack ? "Quay lại" : "Thoát"}
+        cancelText="Ở lại"
+        variant="warning"
+      />
     </Modal>
   );
 };

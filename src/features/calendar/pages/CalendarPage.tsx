@@ -808,10 +808,11 @@ const EventDetailModal: React.FC<{
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
+              tách xa nhau để tránh bấm nhầm. */}
           {(canEdit || canDelete) && (
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
-              {canDelete && (
+            <div className="mt-6 flex items-center justify-between gap-2 border-t border-border pt-4">
+              {canDelete ? (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
@@ -820,6 +821,8 @@ const EventDetailModal: React.FC<{
                   <TrashIcon className="h-4 w-4" />
                   Xóa
                 </button>
+              ) : (
+                <span />
               )}
               {canEdit && (
                 <button
