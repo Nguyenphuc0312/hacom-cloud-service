@@ -400,7 +400,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const rafId = window.requestAnimationFrame(() => {
       if (composerCanTypeRef.current) {
-        messageInputRef.current?.focus();
+        // Focus without scrolling — a plain focus() scrolls the caret into
+        // view and drags ancestor scroll containers (the sidebar list) to the
+        // top when opening a conversation.
+        messageInputRef.current?.focus({ scrollIntoView: false });
       }
     });
     return () => window.cancelAnimationFrame(rafId);
