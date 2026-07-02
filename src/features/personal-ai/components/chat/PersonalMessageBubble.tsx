@@ -391,20 +391,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               <ThinkingIndicator phase={message.thinkingPhase} />
             )}
 
-            {/* Nút xuất file báo cáo — đặt trên đầu, canh phải. Hiện theo cờ BE
-                (`exportable_table`) HOẶC khi câu trả lời có bảng markdown. Excel
-                xuất từ snapshot dữ liệu gốc qua export_id (đủ cột đã ẩn). */}
-            {isAssistant && !message.isStreaming && canExportTable && (
-              <div className="-mb-8 flex w-full justify-end">
-                <TableExportMenu
-                  content={message.content}
-                  title="Tổng hợp báo cáo công việc"
-                  sessionId={message.exportSessionId}
-                  exportId={message.exportId}
-                />
-              </div>
-            )}
-
             {/* Message body */}
             <div
               className={clsx(
@@ -504,14 +490,15 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 </div>
               )}
 
-            {/* Action bar */}
+            {/* Action bar: Sao chép toàn bộ câu trả lời + menu `...` cho bảng
+                (sao chép bảng / tải Excel). Menu chỉ hiện khi có bảng xuất được. */}
             {isAssistant && !message.isStreaming && (
               <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                 <button
                   type="button"
                   onClick={handleCopy}
                   className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-                  title="Sao chép"
+                  title="Sao chép câu trả lời"
                 >
                   {copied ? (
                     <CheckIcon size={13} className="text-green-600" />
@@ -519,6 +506,14 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     <CopyIcon size={13} />
                   )}
                 </button>
+                {canExportTable && (
+                  <TableExportMenu
+                    content={message.content}
+                    title="Tổng hợp báo cáo công việc"
+                    sessionId={message.exportSessionId}
+                    exportId={message.exportId}
+                  />
+                )}
               </div>
             )}
           </div>
