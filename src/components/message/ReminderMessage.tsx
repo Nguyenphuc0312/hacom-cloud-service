@@ -172,7 +172,11 @@ export const ReminderMessage: React.FC<ReminderMessageProps> = ({
 
   const badge = reminderDateBadge(reminder.remindAt);
   const whenText = formatReminderWhen(reminder.remindAt);
-  const participantCount = reminder.participants.length;
+  // "N người tham gia" chỉ đếm người đã bấm Tham gia (accepted) — không tính
+  // người từ chối hay chưa phản hồi.
+  const participantCount = reminder.participants.filter(
+    (p) => p.response === "accepted",
+  ).length;
 
   const statusLabel =
     myResponse === "accepted"
