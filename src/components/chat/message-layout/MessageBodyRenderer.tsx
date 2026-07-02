@@ -11,6 +11,7 @@ import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { StickerMessage } from "../../message/StickerMessage";
 import { PollMessage } from "../../message/PollMessage";
+import { ReminderMessage } from "../../message/ReminderMessage";
 import { LocationMessage } from "../../message/LocationMessage";
 import { MessageLinkPreview } from "../../message/MessageLinkPreview";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
@@ -584,6 +585,20 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       return (
         <PollMessage
           poll={poll}
+          isOwn={isOwn}
+          currentUserId={currentUserId}
+          messageId={message.id}
+          conversationId={message.conversationId}
+          senderName={message.senderName}
+        />
+      );
+    }
+    case MessageType.REMINDER: {
+      const reminder = (message.metadata as { reminder?: import("@hacom/chat-shared-types/chat").ReminderInfo } | undefined)?.reminder;
+      if (!reminder) return renderTextContent(message, isOwn, currentUsername, currentUserId, textRenderMode, isCollapsibleText, onToggleTextExpand);
+      return (
+        <ReminderMessage
+          reminder={reminder}
           isOwn={isOwn}
           currentUserId={currentUserId}
           messageId={message.id}

@@ -1234,6 +1234,7 @@ export const messageApi = {
       localId?: string;
       mentions?: string[];
       poll?: { question: string; options: string[]; allowMultiple?: boolean; anonymous?: boolean; endsAt?: Date; allowAddOption?: boolean; hideResultsBeforeVote?: boolean };
+      reminder?: { content: string; remindAt: string; repeat?: "none" | "daily" | "weekly" | "monthly"; participantIds?: string[] };
       linkPreview?: {
         url: string;
         title?: string;
@@ -1287,6 +1288,10 @@ export const messageApi = {
     if (data.poll) {
       body.type = "poll";
       body.metadata = { ...((body.metadata as Record<string, unknown>) ?? {}), poll: data.poll };
+    }
+    if (data.reminder) {
+      body.type = "reminder";
+      body.metadata = { ...((body.metadata as Record<string, unknown>) ?? {}), reminder: data.reminder };
     }
 
     const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
@@ -1368,6 +1373,45 @@ export const messageApi = {
       { pollId, text },
     );
     return response.data;
+  },
+
+  // ── In-chat reminder (thẻ nhắc hẹn) — mirrors the poll endpoints.
+  // See FE__chat-reminder contract. BE returns the updated reminder message so
+  // the timeline replace-merge picks up the new participant/response state.
+  respondReminder: async (
+    messageId: string,
+    reminderId: string,
+    response: "accepted" | "declined",
+  ) => {
+    const res = await apiClient.post<ApiResponse<Message>>(
+      `/messages/${messageId}/reminder/respond`,
+      { reminderId, response },
+    );
+    return res.data;
+  },
+
+  updateReminder: async (
+    messageId: string,
+    reminderId: string,
+    patch: {
+      content?: string;
+      remindAt?: string;
+      repeat?: "none" | "daily" | "weekly" | "monthly";
+    },
+  ) => {
+    const res = await apiClient.patch<ApiResponse<Message>>(
+      `/messages/${messageId}/reminder`,
+      { reminderId, ...patch },
+    );
+    return res.data;
+  },
+
+  cancelReminder: async (messageId: string, reminderId: string) => {
+    const res = await apiClient.post<ApiResponse<Message>>(
+      `/messages/${messageId}/reminder/cancel`,
+      { reminderId },
+    );
+    return res.data;
   },
 
   addReaction: async (messageId: string, emoji: string) => {

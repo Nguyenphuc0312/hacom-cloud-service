@@ -1604,8 +1604,10 @@ export const useWebSocket = (
         sendDeliveryAckForMessage(normalizedEvent);
       }
 
-      // Poll activity by anyone → pull the tail so the BE system line shows live.
-      if (asString(messagePayload.type) === "poll") {
+      // Poll/reminder activity by anyone → pull the tail so the BE system line
+      // (poll "…Xem", reminder "Bạn tạo nhắc hẹn mới… Xem") shows live.
+      const activityType = asString(messagePayload.type);
+      if (activityType === "poll" || activityType === "reminder") {
         pullConversationTailForPoll(conversationId);
       }
 

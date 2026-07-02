@@ -49,6 +49,45 @@ const getPollEvent = (message: Message): PollEvent | null => {
   return null;
 };
 
+// ponytail: mirrors MessageMetadata.reminderEvent in the FE__reminder contract.
+// Until the backend ships it, getReminderEvent() returns null and we fall back
+// to message.content.
+type ReminderEvent = {
+  kind: "created" | "updated" | "cancelled" | "fired";
+  messageId: string;
+  reminderId: string;
+  content: string;
+  remindAt: string;
+  actorId: string;
+  actorName: string | null;
+};
+
+const getReminderEvent = (message: Message): ReminderEvent | null => {
+  const meta =
+    message.metadata && typeof message.metadata === "object"
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  const ev = meta?.reminderEvent;
+  if (!ev || typeof ev !== "object") return null;
+  const e = ev as Record<string, unknown>;
+  if (
+    (e.kind === "created" || e.kind === "updated" || e.kind === "cancelled" || e.kind === "fired") &&
+    typeof e.messageId === "string" &&
+    typeof e.content === "string"
+  ) {
+    return {
+      kind: e.kind,
+      messageId: e.messageId,
+      reminderId: typeof e.reminderId === "string" ? e.reminderId : "",
+      content: e.content,
+      remindAt: typeof e.remindAt === "string" ? e.remindAt : "",
+      actorId: typeof e.actorId === "string" ? e.actorId : "",
+      actorName: typeof e.actorName === "string" ? e.actorName : null,
+    };
+  }
+  return null;
+};
+
 const SEVERITY_PILL = "border-border/70 bg-[hsl(var(--chat-panel-bg))] text-text-secondary";
 
 const resolveSeverity = (message: Message): "info" | "warn" | "error" => {
@@ -126,6 +165,50 @@ const PollEventPill: React.FC<{
   );
 };
 
+// One reminder-event pill ("Bạn tạo nhắc hẹn mới <content> - <when> . Xem").
+const ReminderEventPill: React.FC<{
+  reminderEvent: ReminderEvent;
+  currentUserId?: string;
+  onNavigateToMessage?: (messageId: string) => void;
+}> = ({ reminderEvent, currentUserId, onNavigateToMessage }) => {
+  const { t } = useTranslation("chat");
+  const isYou = !!currentUserId && reminderEvent.actorId === currentUserId;
+  const opts = { content: reminderEvent.content, actor: reminderEvent.actorName ?? "" };
+  const text = (() => {
+    switch (reminderEvent.kind) {
+      case "created":
+        return isYou
+          ? t("reminder.systemEvent.createdByYou", opts)
+          : t("reminder.systemEvent.created", opts);
+      case "updated":
+        return isYou
+          ? t("reminder.systemEvent.updatedByYou", opts)
+          : t("reminder.systemEvent.updated", opts);
+      case "cancelled":
+        return isYou
+          ? t("reminder.systemEvent.cancelledByYou", opts)
+          : t("reminder.systemEvent.cancelled", opts);
+      case "fired":
+        return t("reminder.systemEvent.fired", opts);
+    }
+  })();
+
+  return (
+    <span className={clsx(pillClassFor("info"), "inline-flex items-center gap-1.5")}>
+      {text}
+      {reminderEvent.kind !== "cancelled" && reminderEvent.messageId && onNavigateToMessage && (
+        <button
+          type="button"
+          onClick={() => onNavigateToMessage(reminderEvent.messageId)}
+          className="font-semibold text-[#1565C0] transition-colors hover:text-[#1976D2] focus-visible:outline-none"
+        >
+          {t("reminder.systemEvent.view")}
+        </button>
+      )}
+    </span>
+  );
+};
+
 export const SystemMessage: React.FC<SystemMessageProps> = ({
   message,
   collapsedMessages,
@@ -137,6 +220,19 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
   const [expanded, setExpanded] = React.useState(false);
 
   const pollEvent = getPollEvent(message);
+  const reminderEvent = getReminderEvent(message);
+
+  if (reminderEvent) {
+    return (
+      <div className="mt-4 mb-1 flex flex-col items-center gap-1.5">
+        <ReminderEventPill
+          reminderEvent={reminderEvent}
+          currentUserId={currentUserId}
+          onNavigateToMessage={onNavigateToMessage}
+        />
+      </div>
+    );
+  }
 
   if (pollEvent) {
     // Older folded pills (oldest→newest), shown only when expanded.
