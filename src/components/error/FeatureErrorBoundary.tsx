@@ -14,6 +14,10 @@ export interface FeatureErrorBoundaryProps {
   fallback?: React.ReactNode;
   /** Called when error resets (e.g. route change). */
   onReset?: () => void;
+  /** When this value changes, a caught error is cleared (retry the children).
+   *  Used instead of a React `key` so healthy children are NOT remounted on
+   *  every navigation — only the error state resets. */
+  resetKey?: string;
   /** Hide error details in production. */
   showDetails?: boolean;
 }
@@ -46,7 +50,11 @@ class FeatureErrorBoundaryInner extends React.Component<
   }
 
   public componentDidUpdate(prevProps: FeatureErrorBoundaryProps): void {
-    if (this.state.error && prevProps.name !== this.props.name) {
+    if (
+      this.state.error &&
+      (prevProps.name !== this.props.name ||
+        prevProps.resetKey !== this.props.resetKey)
+    ) {
       this.setState({ error: null });
       this.props.onReset?.();
     }
@@ -111,9 +119,11 @@ class FeatureErrorBoundaryInner extends React.Component<
 /**
  * Wraps a feature area with a React Error Boundary.
  * Prevents component crashes from taking down the entire page.
- * Resets on route change via pathname key.
+ * Resets a caught error on route change — via a resetKey prop, NOT a React
+ * `key`, so healthy children keep their state/scroll across navigation
+ * (a React key would remount them, e.g. resetting the sidebar list scroll).
  */
-export const FeatureErrorBoundary: React.FC<Omit<FeatureErrorBoundaryProps, "onReset">> = ({
+export const FeatureErrorBoundary: React.FC<Omit<FeatureErrorBoundaryProps, "onReset" | "resetKey">> = ({
   children,
   name,
   fallback,
@@ -123,8 +133,8 @@ export const FeatureErrorBoundary: React.FC<Omit<FeatureErrorBoundaryProps, "onR
 
   return (
     <FeatureErrorBoundaryInner
-      key={location.pathname}
       name={name}
+      resetKey={location.pathname}
       fallback={fallback}
       onReset={() => {}}
       showDetails={showDetails ?? import.meta.env.DEV}

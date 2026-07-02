@@ -12,7 +12,7 @@ export interface TipTapEditorHandle {
   getText: () => string;
   isEmpty: () => boolean;
   clearContent: () => void;
-  focus: () => void;
+  focus: (options?: { scrollIntoView?: boolean }) => void;
   insertAtCursor: (text: string) => void;
   getEditor: () => Editor | null;
 }
@@ -197,8 +197,13 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       clearContent: () => {
         editor?.commands.clearContent(true);
       },
-      focus: () => {
-        editor?.commands.focus("end");
+      focus: (options?: { scrollIntoView?: boolean }) => {
+        // scrollIntoView:false stops ProseMirror scrolling the caret into view,
+        // which otherwise makes ancestor scroll containers (incl. the sidebar
+        // list) jump when the composer auto-focuses on opening a conversation.
+        editor?.commands.focus("end", {
+          scrollIntoView: options?.scrollIntoView ?? true,
+        });
       },
       insertAtCursor: (text: string) => {
         editor?.chain().focus().insertContent(text).run();
