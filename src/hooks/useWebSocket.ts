@@ -2716,7 +2716,10 @@ export const useWebSocket = (
     const unsubscribeReminderFire = socket.on("reminder:fire", (data: unknown) => {
       const payload = asRecord(data);
       const content = asString(payload?.content) ?? t("chat:reminder.fired", { defaultValue: "Nhắc hẹn!" });
-      notifyGlobalToast({ level: "info", message: content, dedupeKey: asString(payload?.id) ?? undefined });
+      // dedupe theo id của reminder — card gửi `reminderId`, reminder cá nhân gửi `id`.
+      const dedupeKey =
+        asString(payload?.reminderId) ?? asString(payload?.id) ?? undefined;
+      notifyGlobalToast({ level: "info", message: content, dedupeKey });
     });
     unsubscribersRef.current.push(unsubscribeReminderFire);
 
