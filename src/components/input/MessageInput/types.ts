@@ -20,8 +20,9 @@ export interface MentionCandidate {
 /** Imperative handle for MessageInput — allows parent to programmatically control the composer */
 export interface MessageInputHandle {
   addFile: (file: File) => void;
-  /** Focus the editor — e.g. after selecting a new conversation */
-  focus: () => void;
+  /** Focus the editor — e.g. after selecting a new conversation.
+   *  Pass scrollIntoView:false to focus without scrolling ancestors. */
+  focus: (options?: { scrollIntoView?: boolean }) => void;
 }
 
 export interface MessageInputProps {

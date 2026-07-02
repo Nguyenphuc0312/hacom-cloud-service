@@ -393,8 +393,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           }
         }
       },
-      focus: () => {
-        tipTapRef.current?.focus();
+      focus: (options?: { scrollIntoView?: boolean }) => {
+        tipTapRef.current?.focus(options);
       },
     }),
     [onAddFiles],
