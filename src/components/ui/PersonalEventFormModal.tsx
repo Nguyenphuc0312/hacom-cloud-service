@@ -6,7 +6,7 @@
 
 import React from "react";
 import clsx from "clsx";
-import { Modal } from "./Modal";
+import { Modal, ConfirmDialog } from "./Modal";
 import { Button } from "./Button";
 import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
 
@@ -169,6 +169,17 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
   const [attachments, setAttachments] = React.useState<CalendarLocalAttachment[]>([]);
   const [visibility, setVisibility] = React.useState<"private" | "public">("private");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
+
+  // Có dữ liệu đáng để hỏi trước khi bỏ? Sửa lịch → luôn hỏi; thêm mới → chỉ hỏi
+  // khi user đã nhập nội dung/ghi chú hoặc đính kèm file (tránh làm phiền form trống).
+  const leaveAction = onBack ?? onClose;
+  const hasContent =
+    isEditMode || !!title.trim() || !!notes.trim() || attachments.length > 0;
+  const requestCancel = () => {
+    if (hasContent) setShowCancelConfirm(true);
+    else leaveAction();
+  };
 
   // Reset / pre-fill khi mở modal
   React.useEffect(() => {
@@ -239,12 +250,13 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestCancel}
       title={isEditMode ? "Chỉnh sửa lịch cá nhân" : "Thêm lịch cá nhân"}
       size="md"
       footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="brand-outline" onClick={onBack ?? onClose} type="button">
+        // Hủy (góc trái) tách xa Lưu/Cập nhật (góc phải) để tránh bấm nhầm.
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="brand-outline" onClick={requestCancel} type="button">
             {onBack ? "Quay lại" : "Hủy"}
           </Button>
           <Button variant="brand" onClick={handleSave} type="button" disabled={isLoading}>
@@ -411,6 +423,19 @@ export const PersonalEventFormModal: React.FC<PersonalEventFormModalProps> = ({
           </p>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          leaveAction();
+        }}
+        title={onBack ? "Quay lại" : "Hủy thay đổi"}
+        message="Bạn có thay đổi chưa lưu. Thoát bây giờ sẽ mất các thay đổi này. Tiếp tục?"
+        confirmText={onBack ? "Quay lại" : "Thoát"}
+        cancelText="Ở lại"
+        variant="warning"
+      />
     </Modal>
   );
 };
