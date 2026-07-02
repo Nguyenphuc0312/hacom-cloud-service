@@ -485,7 +485,7 @@ const EventDetailModal: React.FC<{
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-8">
+        <div className="scrollbar-hide max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
           {/* Header: Type badge + Status badge + Read-only badge */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {isViewingOthers && (

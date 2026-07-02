@@ -22,7 +22,7 @@ import {
 import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import { SafeImage } from "../common/SafeImage";
-import { TextPreview, CsvPreview, DocumentPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
+import { TextPreview, CsvPreview, DocumentPreview, ExcelPreview, WordPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
 import type { PreviewType } from "../../utils/mimeRegistry";
 import {
   getMimePreviewType,
@@ -53,6 +53,9 @@ interface FilePreviewModalProps {
   onPrev: () => void;
   onNext: () => void;
   onRefreshUrl: () => Promise<void>;
+  /** "full" (mặc định) = ảnh/video gần full màn; "compact" = nhỏ hơn (dùng cho
+   *  danh sách file lịch, đỡ chói mắt). Chỉ đổi cỡ media, không đổi doc/pdf. */
+  size?: "full" | "compact";
 }
 
 const MIN_SCALE = 1;
@@ -73,9 +76,16 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   onPrev,
   onNext,
   onRefreshUrl,
+  size = "full",
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
+  // Cỡ media (ảnh/video). Compact → khung nhỏ hẳn (max ~640px), ở giữa, không
+  // còn cảm giác full màn. Full = gần full viewport như lightbox chat.
+  const mediaBox =
+    size === "compact"
+      ? "max-h-[60vh] max-w-[min(640px,80vw)]"
+      : "max-h-[88vh] max-w-[92vw]";
   const resetKey = `${currentIndex}:${secureUrl ?? ""}`;
   const [scaleState, setScaleState] = useState({ key: resetKey, value: 1 });
 
@@ -377,7 +387,26 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    // Document (Word, etc.) fallback
+    // Word .docx → render client-side (docx-preview), chạy được cả localhost.
+    const ext = extension.toLowerCase();
+    const isDocx =
+      ext === "docx" || fileMimeType.includes("wordprocessingml");
+    const isXlsx =
+      ext === "xlsx" ||
+      ext === "xls" ||
+      fileMimeType.includes("spreadsheetml") ||
+      fileMimeType.includes("ms-excel");
+
+    if (previewType === "document" && isDocx) {
+      return <WordPreview url={secureUrl} fileName={fileName} />;
+    }
+
+    // Excel .xlsx/.xls → render bảng client-side (SheetJS).
+    if (previewType === "spreadsheet" && isXlsx) {
+      return <ExcelPreview url={secureUrl} fileName={fileName} />;
+    }
+
+    // Còn lại (.doc cũ, .pptx, ODF…) → Office Online viewer + fallback card.
     if (previewType === "document" || previewType === "spreadsheet" || previewType === "presentation") {
       return (
         <DocumentPreview
@@ -406,14 +435,20 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
     if (previewType === "image") {
       return (
         <div
-          className="flex max-h-[88vh] max-w-[92vw] items-center justify-center overflow-hidden"
+          className={clsx(
+            "flex items-center justify-center overflow-hidden",
+            mediaBox,
+          )}
           onClick={(event) => event.stopPropagation()}
           onWheel={handleWheel}
         >
           <SafeImage
             src={secureUrl}
             alt={fileName || t("chat:image.previewAlt")}
-            className="max-h-[88vh] max-w-[92vw] select-none object-contain transition-transform duration-150"
+            className={clsx(
+              "select-none object-contain transition-transform duration-150",
+              mediaBox,
+            )}
             style={{ transform: `scale(${scale})` }}
             draggable={false}
             fallback={
@@ -431,7 +466,7 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
     if (previewType === "video") {
       return (
         <div
-          className="flex max-h-[85vh] max-w-[92vw] items-center justify-center"
+          className={clsx("flex items-center justify-center", mediaBox)}
           onClick={(event) => event.stopPropagation()}
         >
           <video
@@ -439,7 +474,7 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
             controls
             playsInline
             preload="metadata"
-            className="max-h-[85vh] max-w-[92vw] rounded-xl"
+            className={clsx("rounded-xl", mediaBox)}
           >
             <track kind="captions" />
             {t("chat:filePreview.videoNotSupported", {
