@@ -1793,6 +1793,35 @@ a:focus-visible {
     scrollbar-gutter: stable;
   }
 
+  /* Ẩn thanh cuộn nhưng vẫn cuộn được (Firefox + WebKit). */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Bảng Excel do SheetJS (sheet_to_html) sinh ra — thêm viền cho dễ đọc. */
+  .excel-preview-table table {
+    border-collapse: collapse;
+    width: max-content;
+  }
+
+  .excel-preview-table td,
+  .excel-preview-table th {
+    border: 1px solid #d1d5db;
+    padding: 4px 8px;
+    white-space: nowrap;
+    min-width: 48px;
+  }
+
+  .excel-preview-table tr:first-child td {
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+
   @media (max-width: 1023px) {
     .hc-app-shell> :first-child {
       flex: 0 0 auto;
