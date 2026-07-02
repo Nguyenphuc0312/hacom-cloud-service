@@ -97,7 +97,10 @@ export const ReminderDetailModal: React.FC<ReminderDetailModalProps> = ({
 
   const badge = reminderDateBadge(reminder.remindAt);
   const whenText = formatReminderWhen(reminder.remindAt);
-  const participantCount = reminder.participants.length;
+  // "N người tham gia" chỉ đếm người đã bấm Tham gia (accepted).
+  const participantCount = reminder.participants.filter(
+    (p) => p.response === "accepted",
+  ).length;
 
   const statusLabel =
     myResponse === "accepted"
