@@ -426,6 +426,20 @@
       "showMore": "Show {{count}} more activities"
     }
   },
+  "reminder": {
+    "created": "Reminder created",
+    "fired": "Reminder!",
+    "systemEvent": {
+      "createdByYou": "You created a new reminder: {{content}}",
+      "created": "{{actor}} created a new reminder: {{content}}",
+      "updatedByYou": "You updated the reminder: {{content}}",
+      "updated": "{{actor}} updated the reminder: {{content}}",
+      "cancelledByYou": "You cancelled the reminder: {{content}}",
+      "cancelled": "{{actor}} cancelled the reminder: {{content}}",
+      "fired": "Reminder time: {{content}}",
+      "view": "View"
+    }
+  },
   "notification": {
     "sentAttachment": "Sent an attachment.",
     "systemActivity": "System activity"

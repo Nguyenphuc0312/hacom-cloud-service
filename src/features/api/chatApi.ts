@@ -1,5 +1,5 @@
 import { ErrorCode } from "@hacom/chat-shared-types/core";
-import type { MarkReadResponseData, PollInfo } from "@hacom/chat-shared-types/chat";
+import type { MarkReadResponseData, PollInfo, ReminderInfo } from "@hacom/chat-shared-types/chat";
 import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
@@ -98,6 +98,13 @@ export interface SendMessageInput {
     allowMultiple?: boolean;
     anonymous?: boolean;
     endsAt?: Date;
+  };
+  /** Reminder payload — same treatment as poll: optimistic reminder card + ack-replace. */
+  reminder?: {
+    content: string;
+    remindAt: string;
+    repeat?: "none" | "daily" | "weekly" | "monthly";
+    participantIds?: string[];
   };
 }
 
@@ -383,7 +390,30 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
               } as PollInfo,
             },
           }
-        : {}),
+        : input.reminder
+          ? {
+              // Optimistic reminder card — creator auto-accepts (like Zalo). The
+              // server ack overwrites with the canonical ReminderInfo (real id +
+              // full participant list resolved from conversation membership).
+              metadata: {
+                reminder: {
+                  id: input.clientMessageId,
+                  content: input.reminder.content,
+                  remindAt: input.reminder.remindAt,
+                  repeat: input.reminder.repeat ?? "none",
+                  creatorId: input.senderId ?? "current-user",
+                  isCancelled: false,
+                  isFired: false,
+                  participants: [
+                    {
+                      userId: input.senderId ?? "current-user",
+                      response: "accepted",
+                    },
+                  ],
+                } as ReminderInfo,
+              },
+            }
+          : {}),
   };
 };
 
@@ -614,6 +644,7 @@ export const chatApi = createApi({
             location: input.location,
             linkPreview: input.linkPreview,
             poll: input.poll,
+            reminder: input.reminder,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
         } catch (error) {

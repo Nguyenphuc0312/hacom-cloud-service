@@ -426,6 +426,20 @@
       "showMore": "Xem thêm {{count}} hoạt động"
     }
   },
+  "reminder": {
+    "created": "Đã tạo nhắc hẹn",
+    "fired": "Nhắc hẹn!",
+    "systemEvent": {
+      "createdByYou": "Bạn tạo nhắc hẹn mới: {{content}}",
+      "created": "{{actor}} tạo nhắc hẹn mới: {{content}}",
+      "updatedByYou": "Bạn cập nhật nhắc hẹn: {{content}}",
+      "updated": "{{actor}} cập nhật nhắc hẹn: {{content}}",
+      "cancelledByYou": "Bạn đã hủy nhắc hẹn: {{content}}",
+      "cancelled": "{{actor}} đã hủy nhắc hẹn: {{content}}",
+      "fired": "Đến giờ nhắc hẹn: {{content}}",
+      "view": "Xem"
+    }
+  },
   "notification": {
     "sentAttachment": "Đã gửi một tệp đính kèm.",
     "systemActivity": "Hoạt động hệ thống"

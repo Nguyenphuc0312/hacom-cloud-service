@@ -9,7 +9,7 @@ import { RichTextToolbar } from "./RichTextToolbar";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
-import { messageApi, reminderApi } from "../../services/api";
+import { messageApi } from "../../services/api";
 import {
   PollCreateDialog,
   type PollCreatePayload,
@@ -979,18 +979,39 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
   const handleCreateReminder = React.useCallback(
     (payload: ReminderCreatePayload) => {
-      reminderApi.create({
+      if (!conversationId) return;
+      const clientMessageId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `reminder-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Same path as poll: route through the sendMessage mutation so the reminder
+      // card renders optimistically and gets ack-replaced by the canonical
+      // ReminderInfo (real id + full participant list) — no reload.
+      sendPollMessage({
+        conversationId,
+        clientMessageId,
+        localId: `temp-${clientMessageId}`,
         content: payload.content,
-        reminderAt: payload.reminderDate.toISOString(),
-        repeatType: payload.repeatType,
-        conversationId: conversationId ?? undefined,
-      }).then(() => {
-        toast.success(t("chat:reminder.created", { defaultValue: "Đã tạo nhắc hẹn" }));
-      }).catch(() => {
-        toast.error(t("common:toast.error", { defaultValue: "Không thể tạo nhắc hẹn" }));
-      });
+        type: MessageType.REMINDER,
+        reminder: {
+          content: payload.content,
+          remindAt: payload.reminderDate.toISOString(),
+          repeat: payload.repeatType,
+        },
+        senderId: currentUserId ?? undefined,
+      })
+        .unwrap()
+        .then(() => {
+          toast.success(t("chat:reminder.created", { defaultValue: "Đã tạo nhắc hẹn" }));
+          // The "Bạn tạo nhắc hẹn mới… Xem" system line is BE-generated; pull the
+          // tail so it appears immediately instead of waiting for a reload.
+          dispatch(fetchConversationTail(conversationId, newestLoadedSeq));
+        })
+        .catch(() => {
+          toast.error(t("common:toast.error", { defaultValue: "Không thể tạo nhắc hẹn" }));
+        });
     },
-    [conversationId, t],
+    [conversationId, sendPollMessage, currentUserId, t, dispatch, newestLoadedSeq],
   );
 
   const handleMentionSelect = React.useCallback(
