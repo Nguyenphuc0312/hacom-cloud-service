@@ -310,8 +310,7 @@ Errors pages: `pages/errors/` (Forbidden, Unauthorized, NotFound, ServerError, O
 
 ## 13. Build & CI
 
-**KHÔNG tự động chạy build.** Chỉ chạy `npm run build` (hoặc bất kỳ lệnh build nào) khi user yêu cầu rõ ràng. Nếu thấy cần build để verify, **phải hỏi và được user đồng ý trước**, không được tự ý chạy.
-
+**tự động chạy build không cần yêu cầu lại .**
 Lưu ý lỗi build đã từng dính: **casing import sai** giữa Windows local và Linux CI (TS1261) — import phải khớp đúng hoa/thường tên file. Lệnh tối thiểu trước khi push (chỉ chạy khi được yêu cầu):
 ```bash
 npm run build && node scripts/verify-dist-assets.mjs
