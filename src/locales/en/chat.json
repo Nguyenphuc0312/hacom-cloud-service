@@ -31,6 +31,18 @@
     "edited": "edited",
     "forwardedFrom": "Forwarded from {{name}}",
     "forwardedLabel": "Forwarded message",
+    "forward": {
+      "title": "Share",
+      "searchPlaceholder": "Search...",
+      "confirm": "Share",
+      "sharing": "Share message",
+      "sharingFile": "Share file",
+      "notePlaceholder": "Type a message...",
+      "noConversations": "No matching people or groups",
+      "emptyTab": "No conversations yet",
+      "success": "Message forwarded",
+      "error": "Unable to forward message"
+    },
     "bubbleAria": "{{name}} at {{time}}",
     "status": {
       "uploading": "Uploading",
