@@ -67,12 +67,14 @@ const MIN_READY_TTL_MS = 30_000; // never gate a READY url for less than this
 const FALLBACK_TTL_MS = 5 * 60_000; // unparseable expiry → cache 5m (+ warn)
 const PENDING_TTL_MS = 10_000; // negative cache for PENDING thumbnails
 const FAILED_TTL_MS = 60_000; // negative cache for not_found/forbidden/error
+const MAX_THUMBNAIL_CACHE_ENTRIES = 500;
+const MAX_PREVIEW_SIGNAL_KEYS = 500;
 
 // Cache value = the resolved display item. The cache entry's expiry encodes
 // "refetch after" time, so ExpiringLruCache.get() returning undefined means
 // "this fileId needs a (re)fetch".
 const THUMBNAIL_CACHE = new ExpiringLruCache<ThumbnailUrlItem>({
-  maxEntries: 1000,
+  maxEntries: MAX_THUMBNAIL_CACHE_ENTRIES,
 });
 
 // Dedupe concurrent network calls for identical batches.
@@ -89,6 +91,14 @@ const inFlightBatchRequests = new Map<
 // rather than the primary delivery path.
 const previewSignalListeners = new Map<string, Set<() => void>>();
 
+const prunePreviewSignalListeners = (): void => {
+  for (const [fileId, listeners] of previewSignalListeners) {
+    if (listeners.size === 0) {
+      previewSignalListeners.delete(fileId);
+    }
+  }
+};
+
 const subscribePreviewSignal = (
   fileIds: string[],
   cb: () => void,
@@ -97,6 +107,14 @@ const subscribePreviewSignal = (
     if (!id) continue;
     let set = previewSignalListeners.get(id);
     if (!set) {
+      prunePreviewSignalListeners();
+      if (previewSignalListeners.size >= MAX_PREVIEW_SIGNAL_KEYS) {
+        logger.warn("thumbnail", "preview_signal_listener_cap_reached", {
+          fileId: id,
+          maxKeys: MAX_PREVIEW_SIGNAL_KEYS,
+        });
+        continue;
+      }
       set = new Set();
       previewSignalListeners.set(id, set);
     }
@@ -333,6 +351,14 @@ export const primeThumbnailCache = (items: ThumbnailUrlItem[]): void => {
 /** Drop a single fileId from the shared cache (e.g. broken signed URL). */
 export const evictThumbnailCache = (fileId: string): void => {
   if (fileId) THUMBNAIL_CACHE.delete(fileId);
+};
+
+export const __thumbnailCacheTestUtils = {
+  maxThumbnailEntries: MAX_THUMBNAIL_CACHE_ENTRIES,
+  maxPreviewSignalKeys: MAX_PREVIEW_SIGNAL_KEYS,
+  previewSignalKeyCount: () => previewSignalListeners.size,
+  clearThumbnailCache: () => THUMBNAIL_CACHE.clear(),
+  clearPreviewSignalListeners: () => previewSignalListeners.clear(),
 };
 
 export const useBatchThumbnailUrl = (

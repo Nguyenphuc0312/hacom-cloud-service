@@ -11,12 +11,14 @@ import { ThemeProvider, bootstrapThemeAttributes } from "./theme";
 import { ResponsiveProvider } from "./responsive/responsive";
 import { logger } from "./utils/logger";
 import { installChunkReloadGuard } from "./utils/chunkReload";
+import { installMemoryRuntimeProbe } from "./utils/memoryRuntimeProbe";
 
 // Catch stale-deploy chunk failures that surface as uncaught errors / rejected
 // dynamic imports (outside any React error boundary) and reload once.
 installChunkReloadGuard();
 
 bootstrapThemeAttributes();
+installMemoryRuntimeProbe();
 logger.info(
   "runtime",
   "diagnostics_installed",

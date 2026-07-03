@@ -1,5 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const batchThumbnailUrls = vi.fn();
 
@@ -21,6 +21,7 @@ vi.mock("../utils/logger", () => ({
 import {
   useBatchThumbnailUrl,
   markPreviewReady,
+  __thumbnailCacheTestUtils,
 } from "./useBatchThumbnailUrl";
 
 const processingItem = (fileId: string) => ({
@@ -47,6 +48,14 @@ const readyItem = (fileId: string) => ({
 describe("useBatchThumbnailUrl preview signal", () => {
   beforeEach(() => {
     batchThumbnailUrls.mockReset();
+    __thumbnailCacheTestUtils.clearThumbnailCache();
+    __thumbnailCacheTestUtils.clearPreviewSignalListeners();
+  });
+
+  afterEach(() => {
+    cleanup();
+    __thumbnailCacheTestUtils.clearThumbnailCache();
+    __thumbnailCacheTestUtils.clearPreviewSignalListeners();
   });
 
   it("refetches and resolves to ready when markPreviewReady fires", async () => {
@@ -79,5 +88,11 @@ describe("useBatchThumbnailUrl preview signal", () => {
 
   it("markPreviewReady is a no-op for empty fileId", () => {
     expect(() => markPreviewReady("")).not.toThrow();
+  });
+
+  it("keeps thumbnail and preview signal caches bounded", () => {
+    expect(__thumbnailCacheTestUtils.maxThumbnailEntries).toBe(500);
+    expect(__thumbnailCacheTestUtils.maxPreviewSignalKeys).toBe(500);
+    expect(__thumbnailCacheTestUtils.previewSignalKeyCount()).toBe(0);
   });
 });

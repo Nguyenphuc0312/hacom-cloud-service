@@ -7,6 +7,7 @@ import { getInitials } from "../../utils/mediaFallback";
 import { SafeImage } from "./SafeImage";
 
 type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+type PresenceAnimationMode = "none" | "active" | "recent-online";
 
 interface AvatarProps {
   src?: string | null;
@@ -14,6 +15,7 @@ interface AvatarProps {
   size?: AvatarSize;
   status?: UserStatus;
   showStatus?: boolean;
+  presenceAnimation?: PresenceAnimationMode;
   className?: string;
   onClick?: () => void;
   /** Fired when the <img> fails to load (e.g. expired presigned URL). */
@@ -82,16 +84,48 @@ export const Avatar: React.FC<AvatarProps> = ({
   size = "md",
   status,
   showStatus = false,
+  presenceAnimation = "none",
   className,
   onClick,
   onImageError,
 }) => {
   const { t } = useTranslation();
+  const [recentlyOnline, setRecentlyOnline] = React.useState(false);
+  const previousStatusRef = React.useRef(status);
   const normalizedAlt = typeof alt === "string" ? alt.trim() : "";
   const safeAlt = normalizedAlt || t("common:labels.user");
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
   const initials = getInitials(normalizedAlt);
+  const disablePresenceAnimation =
+    import.meta.env.VITE_DISABLE_PRESENCE_ANIMATION === "true";
+
+  React.useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = status;
+
+    if (status !== UserStatus.ONLINE) {
+      setRecentlyOnline(false);
+      return undefined;
+    }
+
+    if (previousStatus === UserStatus.ONLINE) {
+      return undefined;
+    }
+
+    setRecentlyOnline(true);
+    const timeoutId = window.setTimeout(() => {
+      setRecentlyOnline(false);
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [status]);
+
+  const shouldAnimateOnlineStatus =
+    !disablePresenceAnimation &&
+    status === UserStatus.ONLINE &&
+    (presenceAnimation === "active" ||
+      (presenceAnimation === "recent-online" && recentlyOnline));
   const fallback = (
     <div
       className={clsx(
@@ -133,8 +167,9 @@ export const Avatar: React.FC<AvatarProps> = ({
             "absolute bottom-0 right-0 rounded-full ring-2 ring-surface",
             statusSizeClasses[size],
             statusColors[status],
-            status === UserStatus.ONLINE && "animate-pulse-online",
+            shouldAnimateOnlineStatus && "motion-safe:animate-pulse-online",
           )}
+          data-render-probe="presence-dot"
           aria-label={`${t("common:statusLabel")}: ${t(statusLabelKeys[status])}`}
         />
       )}

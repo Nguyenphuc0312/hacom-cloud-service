@@ -169,6 +169,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 size="md"
                 status={liveStatus}
                 showStatus={isDirect}
+                presenceAnimation="recent-online"
                 className="chat-header-avatar"
               />
             ) : (

@@ -225,7 +225,7 @@ export default {
         "fade-in": "fadeIn 0.2s ease-out",
         "fade-in-fast": "fadeIn 150ms ease-out",
         "bounce-in": "bounceIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both",
-        "pulse-online": "pulseOnline 2s infinite",
+        "pulse-online": "pulseOnline 1.6s ease-out 2",
         "reaction-pop": "reactionPop 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
         shake: "shake 0.5s ease-in-out",
         /* New polished animations */
@@ -268,9 +268,8 @@ export default {
           "100%": { opacity: "1", transform: "scale(1)" },
         },
         pulseOnline: {
-          "0%": { boxShadow: "0 0 0 0 hsl(var(--color-online) / 0.55)" },
-          "70%": { boxShadow: "0 0 0 10px hsl(var(--color-online) / 0)" },
-          "100%": { boxShadow: "0 0 0 0 hsl(var(--color-online) / 0)" },
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "45%": { opacity: "0.55", transform: "scale(1.22)" },
         },
         reactionPop: {
           "0%": { opacity: "0", transform: "scale(0.6)" },

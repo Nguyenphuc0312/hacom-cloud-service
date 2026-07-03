@@ -32,6 +32,7 @@ export interface ImagePreviewModalProps {
   /** Gallery mode: pass all images + which one to open */
   images?: GalleryImage[];
   initialIndex?: number;
+  onIndexChange?: (index: number) => void;
   /** Sender info for single-image mode */
   senderName?: string;
   senderAvatar?: string;
@@ -110,6 +111,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   alt,
   images,
   initialIndex = 0,
+  onIndexChange,
   senderName,
   senderAvatar,
   sentAt,
@@ -150,6 +152,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [isOpen, initialIndex]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    onIndexChange?.(currentIndex);
+  }, [currentIndex, isOpen, onIndexChange]);
 
   // Reset zoom whenever the displayed image changes
   useEffect(() => {

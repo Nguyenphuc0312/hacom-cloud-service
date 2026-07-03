@@ -251,6 +251,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       aria-selected={isActive}
       data-room-state={visualState}
       data-keyboard-active={isKeyboardActive}
+      data-render-probe="conversation-item"
       className={clsx(
         "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
         "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",

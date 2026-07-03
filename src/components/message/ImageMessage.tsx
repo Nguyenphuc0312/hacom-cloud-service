@@ -26,6 +26,7 @@ import {
   getThumbnailPollDelayMs,
   shouldContinueThumbnailPolling,
 } from "./imageThumbnailPolling";
+import { areAttachmentsRenderEquivalent } from "../../utils/messageRenderSignature";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -51,7 +52,7 @@ const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
 // that finishes late (large image / queue backlog) still self-heals without the
 // user refreshing. WebSocket `attachment:preview_ready` short-circuits all of
 // this when it arrives.
-export const ImageMessage: React.FC<ImageMessageProps> = ({
+const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   conversationId,
   attachment,
   caption,
@@ -545,6 +546,27 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     </>
   );
 };
+
+const areEqualImageMessageProps = (
+  previous: ImageMessageProps,
+  next: ImageMessageProps,
+): boolean =>
+  previous.conversationId === next.conversationId &&
+  areAttachmentsRenderEquivalent(previous.attachment, next.attachment) &&
+  previous.caption === next.caption &&
+  previous.isOwn === next.isOwn &&
+  previous.onClick === next.onClick &&
+  previous.uploadProgress === next.uploadProgress &&
+  previous.className === next.className &&
+  previous.fillContainer === next.fillContainer &&
+  previous.senderName === next.senderName &&
+  previous.senderAvatar === next.senderAvatar &&
+  String(previous.sentAt ?? "") === String(next.sentAt ?? "");
+
+export const ImageMessage = React.memo(
+  ImageMessageComponent,
+  areEqualImageMessageProps,
+);
 
 /**
  * Format bytes to human readable string

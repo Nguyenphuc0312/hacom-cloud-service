@@ -19,6 +19,7 @@ import {
 import { isFailedMessage } from "../../../utils/messageTimeline";
 import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
+import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 
 interface MessageMetaProps {
   message: Message;
@@ -109,7 +110,7 @@ const MessageStatusGlyph: React.FC<{ message: Message }> = React.memo(({ message
   }
 
   return null;
-});
+}, (prev, next) => areMessagesRenderEquivalent(prev.message, next.message));
 
 export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
   ({
@@ -235,7 +236,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
     );
   },
   (prev, next) =>
-    prev.message === next.message &&
+    areMessagesRenderEquivalent(prev.message, next.message) &&
     prev.isOwn === next.isOwn &&
     prev.showStatus === next.showStatus &&
     prev.density === next.density &&
