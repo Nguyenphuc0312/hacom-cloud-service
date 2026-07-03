@@ -6,9 +6,9 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   ConversationListSkeleton,
-  ErrorState,
   StateBlock,
 } from "../../ui";
+import { ErrorState } from "../../ui/EmptyState";
 
 interface RoomListLoadingProps {
   count?: number;
