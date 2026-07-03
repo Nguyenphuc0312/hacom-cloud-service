@@ -1364,6 +1364,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         <React.Suspense fallback={null}>
           <ForwardModal
             messages={forwardMessages}
+            currentUserId={currentUser.id}
             onClose={() => setForwardMessages(null)}
           />
         </React.Suspense>
