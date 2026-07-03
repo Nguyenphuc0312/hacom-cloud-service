@@ -21,14 +21,13 @@ import { FeatureErrorBoundary } from "../components/error";
 import { AppShell, ModuleSidebar } from "../shared/layout";
 import {
   ConfirmDialog,
-  ErrorState,
-  NoChatSelected,
   NotificationListSkeleton,
   PageSkeleton,
   ProfileSkeleton,
   Skeleton,
 } from "../components/ui";
 import { toast } from "../components/ui";
+import { ErrorState, NoChatSelected } from "../components/ui/EmptyState";
 import {
   useAuthStore,
   useChatStore,

@@ -11,7 +11,8 @@ import {
 
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { Badge } from "../components/common/Badge";
-import { Button, EmptyState } from "../components/ui";
+import { Button } from "../components/ui";
+import { EmptyState } from "../components/ui/EmptyState";
 import {
   matchesFilter,
   useNotificationStore,

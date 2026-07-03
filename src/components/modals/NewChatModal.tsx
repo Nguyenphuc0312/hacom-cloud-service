@@ -14,10 +14,10 @@ import {
   Input,
   Button,
   DirectorySkeleton,
-  EmptySearchResults,
   SkeletonCircle,
   toast,
 } from "../ui";
+import { EmptySearchResults } from "../ui/EmptyState";
 import { extractApiError } from "../../lib/apiContract";
 import {
   buildUserSearchSecondaryText,
