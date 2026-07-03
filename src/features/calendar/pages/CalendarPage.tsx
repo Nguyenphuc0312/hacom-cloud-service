@@ -52,9 +52,9 @@ import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, getMultiDayPosition, type MultiDayPosition } from "../utils/timeline";
 import {
+  buildExtendedEventMap,
   filterCalendarEventsByType,
-  localizeEventTitle,
-  mapEventTypeForDisplay,
+  getMeetingMetadata,
   mapHrmEventToCalendarEvent,
   toLocalDateString,
   toLocalTimeString,
@@ -234,26 +234,6 @@ const formatDateVN = (dateStr: string): string => {
   } catch {
     return dateStr;
   }
-};
-
-/** Meeting extras stored in HR event metadata JSON. */
-interface MeetingMetadata {
-  meetingChairman?: string;
-  meetingFormat?: string;
-  attendees?: string[];
-}
-
-const getMeetingMetadata = (event: HRCalendarEvent | undefined): MeetingMetadata => {
-  const meta = event?.metadata;
-  if (!meta || typeof meta !== "object") return {};
-  const m = meta as Record<string, unknown>;
-  return {
-    meetingChairman: typeof m.meetingChairman === "string" ? m.meetingChairman : undefined,
-    meetingFormat: typeof m.meetingFormat === "string" ? m.meetingFormat : undefined,
-    attendees: Array.isArray(m.attendees)
-      ? m.attendees.filter((a): a is string => typeof a === "string")
-      : undefined,
-  };
 };
 
 /**
@@ -1255,8 +1235,6 @@ export const CalendarPage: React.FC = () => {
   // render — chỉ giữ data + log lỗi ra console cho dev.)
   const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
 
-  // Extended API events state (for detail view)
-  const [apiEventsMap, setApiEventsMap] = useState<Record<string, ExtendedCalendarEvent>>({});
 
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
@@ -1295,23 +1273,28 @@ export const CalendarPage: React.FC = () => {
     setViewingUser(userId, userName);
   };
 
-  // Đọc navigation state từ widget lịch tuần → switch sang week view + mở event
+  // Đọc navigation state từ widget lịch tuần → switch sang week view + mở event.
+  // Effect hợp lệ: react theo location.state (router). set-state đồng bộ là chủ ý
+  // (one-shot, guard bằng handledNavState) → theo convention repo, disable rule.
   useEffect(() => {
     if (handledNavState.current) return;
     const navState = location.state as { openEventId?: string; view?: string } | null;
     if (!navState?.openEventId) return;
     handledNavState.current = true;
     setView("week");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingOpenEventId(navState.openEventId);
     // Clear state khỏi history để back/refresh không mở lại
     window.history.replaceState({}, "");
   }, [location.state, setView]);
 
-  // Khi apiEvents đã load và còn pending event id → tìm và mở
+  // Khi apiEvents đã load và còn pending event id → tìm và mở. Effect hợp lệ:
+  // react theo data async về (không phải derive thuần).
   useEffect(() => {
     if (!pendingOpenEventId || !apiEvents.length) return;
     const match = apiEvents.find((e) => e.id === pendingOpenEventId);
     if (match) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedEvent(mapHrmEventToCalendarEvent(match));
       setPendingOpenEventId(null);
     }
@@ -1463,49 +1446,9 @@ export const CalendarPage: React.FC = () => {
     void fetchEvents(from, to);
   }, [currentYear, currentMonth, mode]);
 
-  // Build extended events map from API events
-  useEffect(() => {
-    const map: Record<string, ExtendedCalendarEvent> = {};
-    apiEvents.forEach((event: HRCalendarEvent) => {
-      // Extract attendee names from participants (hr-api-service) or attendees (chat-api-service)
-      const attendeeNames = "participants" in event && Array.isArray(event.participants)
-        ? event.participants
-            .filter((p) => p.employee?.fullName)
-            .map((p) => p.employee!.fullName)
-        : ("attendees" in event && Array.isArray(event.attendees) ? event.attendees : []);
-
-      const attendeeAvatars = "participants" in event && Array.isArray(event.participants)
-        ? event.participants
-            .map((p) => ({
-              name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "",
-              avatarUrl: p.avatarUrl,
-            }))
-            .filter((p) => p.name)
-        : undefined;
-
-      const meta = getMeetingMetadata(event);
-      map[event.id] = {
-        id: event.id,
-        title: localizeEventTitle(event.title),
-        date: toLocalDateString(event.startAt),
-        type: mapEventTypeForDisplay(event),
-        description: event.description ?? undefined,
-        time: toLocalTimeString(event.startAt),
-        startAt: event.startAt,
-        endAt: event.endAt,
-        meetingLocation: event.location ?? undefined,
-        meetingChairman: meta.meetingChairman,
-        meetingFormat: meta.meetingFormat === "online" ? "online" : meta.meetingFormat === "offline" ? "offline" : undefined,
-        attendees: attendeeNames,
-        attendeeAvatars,
-        visibility: event.visibility,
-        ownerId: event.ownerId,
-        canEdit: event.canEdit,
-        canDelete: event.canDelete,
-      };
-    });
-    setApiEventsMap(map);
-  }, [apiEvents]);
+  // Extended events map cho detail view — thuần derive từ apiEvents → useMemo
+  // (trước là effect+setState gây cascading render + chặn React Compiler).
+  const apiEventsMap = useMemo(() => buildExtendedEventMap(apiEvents), [apiEvents]);
 
   // Lịch họp đã tải trong tháng → dùng cho check trùng giờ khi tag người tham gia.
   // Chỉ phát hiện trùng trong phạm vi event mình thấy được (sở hữu / được mời).
@@ -1606,12 +1549,13 @@ export const CalendarPage: React.FC = () => {
   // Skip when viewing another user's calendar — never show current user's attendance
   // alongside someone else's events. A future phase can fetch target user's attendance here.
   useEffect(() => {
-    if (mode === "other") {
-      setAttendanceData([]);
-      return;
-    }
-
+    // Xem lịch người khác → không hiển thị chấm công của mình. Clear nằm trong
+    // async fn (không set-state đồng bộ trong effect body → tránh cascading render).
     const fetchAttendance = async () => {
+      if (mode === "other") {
+        setAttendanceData([]);
+        return;
+      }
       try {
         const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
         const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
@@ -1710,46 +1654,42 @@ export const CalendarPage: React.FC = () => {
     [selectedDate]
   );
 
-  // Navigate to previous month
-  const goToPrevMonth = useCallback(() => {
+  // Handlers thuần set-state: KHÔNG useCallback thủ công — để React Compiler tự
+  // memo (deps thủ công lệch deps compiler suy ra → nó bỏ optimize cả component).
+  const goToPrevMonth = () => {
     if (currentMonth === 0) {
       setCurrentYear((y) => y - 1);
       setCurrentMonth(11);
     } else {
       setCurrentMonth((m) => m - 1);
     }
-  }, [currentMonth]);
+  };
 
-  // Navigate to next month
-  const goToNextMonth = useCallback(() => {
+  const goToNextMonth = () => {
     if (currentMonth === 11) {
       setCurrentYear((y) => y + 1);
       setCurrentMonth(0);
     } else {
       setCurrentMonth((m) => m + 1);
     }
-  }, [currentMonth]);
+  };
 
-  // Go to today
-  const goToToday = useCallback(() => {
+  const goToToday = () => {
     const now = new Date();
     setCurrentYear(now.getFullYear());
     setCurrentMonth(now.getMonth());
     setSelectedDate(now);
-  }, []);
+  };
 
   // Dịch ngày đang chọn (day/week view) ±deltaDays, đồng bộ tháng/năm để refetch
   // đúng range (event của tháng kề tại biên tuần là giới hạn Phase 1).
-  const shiftSelected = useCallback(
-    (deltaDays: number) => {
-      const next = new Date(selectedDate);
-      next.setDate(next.getDate() + deltaDays);
-      setSelectedDate(next);
-      setCurrentYear(next.getFullYear());
-      setCurrentMonth(next.getMonth());
-    },
-    [selectedDate],
-  );
+  const shiftSelected = (deltaDays: number) => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + deltaDays);
+    setSelectedDate(next);
+    setCurrentYear(next.getFullYear());
+    setCurrentMonth(next.getMonth());
+  };
 
   // Nhãn tiêu đề theo chế độ xem.
   const dayTitle = useMemo(() => {
@@ -1766,28 +1706,25 @@ export const CalendarPage: React.FC = () => {
   }, [selectedDate]);
 
   // Handle mini calendar navigation
-  const handleMiniCalendarNavigate = useCallback((year: number, month: number) => {
+  const handleMiniCalendarNavigate = (year: number, month: number) => {
     setCurrentYear(year);
     setCurrentMonth(month);
     setSelectedDate(new Date(year, month, 1));
-  }, []);
+  };
 
   // Handle date selection — đồng bộ tháng/năm để ngày của tháng kề (ô mờ trong
   // lưới tháng) chuyển đúng tháng khi chọn, không chỉ set selectedDate.
-  const handleDateClick = useCallback((date: Date) => {
+  const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     setCurrentYear(date.getFullYear());
     setCurrentMonth(date.getMonth());
-  }, []);
+  };
 
   // Mở Day view của một ngày (click ô ngày trong lưới Tháng / tiêu đề ngày Tuần).
-  const handleOpenDay = useCallback(
-    (date: Date) => {
-      handleDateClick(date);
-      setView("day");
-    },
-    [handleDateClick, setView],
-  );
+  const handleOpenDay = (date: Date) => {
+    handleDateClick(date);
+    setView("day");
+  };
 
   // Click ô khung giờ trên lưới Day/Week → mở form tạo lịch với giờ điền sẵn,
   // snap về mốc 30 phút (kiểu Teams), thời lượng mặc định 30 phút.
@@ -2049,11 +1986,6 @@ export const CalendarPage: React.FC = () => {
     }
   }, [refetchCurrentMonth]);
 
-  // Toggle filter
-  const toggleFilter = useCallback((type: EventType) => {
-    handleFilterChange(type);
-  }, [handleFilterChange]);
-
   // Check if attendance filter is active
   const isAttendanceFilterActive = localFilters.find(f => f.type === "attendance")?.checked ?? true;
 
@@ -2185,7 +2117,7 @@ export const CalendarPage: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={filter.checked}
-                      onChange={() => toggleFilter(filter.type)}
+                      onChange={() => handleFilterChange(filter.type)}
                       className="h-4 w-4 rounded border-border accent-[#1565C0] focus:ring-2 focus:ring-[#1976D2]/30"
                     />
                     <span

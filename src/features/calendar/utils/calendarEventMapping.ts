@@ -116,6 +116,92 @@ const buildAttendeeAvatars = (
   return out;
 };
 
+/** Meeting extras stored in HR event metadata JSON. */
+export interface MeetingMetadata {
+  meetingChairman?: string;
+  meetingFormat?: string;
+  attendees?: string[];
+}
+
+export const getMeetingMetadata = (event: HRCalendarEvent | undefined): MeetingMetadata => {
+  const meta = event?.metadata;
+  if (!meta || typeof meta !== "object") return {};
+  const m = meta as Record<string, unknown>;
+  return {
+    meetingChairman: typeof m.meetingChairman === "string" ? m.meetingChairman : undefined,
+    meetingFormat: typeof m.meetingFormat === "string" ? m.meetingFormat : undefined,
+    attendees: Array.isArray(m.attendees)
+      ? m.attendees.filter((a): a is string => typeof a === "string")
+      : undefined,
+  };
+};
+
+/**
+ * Extended mapping cho detail view (EventDetailModal): base fields + meeting extras
+ * (chairman/format/location/visibility/quyền) + tên người tham gia. Thuần → memo hoá
+ * ở CalendarPage (không còn effect+setState). Tên người: participants (hr-api) hoặc
+ * attendees free-text (chat-api).
+ */
+export const mapHrmEventToExtendedDetail = (
+  event: HRCalendarEvent,
+): ExtendedCalendarEvent => {
+  const attendeeNames =
+    "participants" in event && Array.isArray(event.participants)
+      ? event.participants
+          .filter((p) => p.employee?.fullName)
+          .map((p) => p.employee!.fullName)
+      : "attendees" in event && Array.isArray(event.attendees)
+        ? (event.attendees as string[])
+        : [];
+
+  const attendeeAvatars =
+    "participants" in event && Array.isArray(event.participants)
+      ? event.participants
+          .map((p) => ({
+            name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "",
+            avatarUrl: p.avatarUrl,
+          }))
+          .filter((p) => p.name)
+      : undefined;
+
+  const meta = getMeetingMetadata(event);
+  return {
+    id: event.id,
+    title: localizeEventTitle(event.title),
+    date: toLocalDateString(event.startAt),
+    type: mapEventTypeForDisplay(event),
+    description: event.description ?? undefined,
+    time: toLocalTimeString(event.startAt),
+    startAt: event.startAt,
+    endAt: event.endAt,
+    meetingLocation: event.location ?? undefined,
+    meetingChairman: meta.meetingChairman,
+    meetingFormat:
+      meta.meetingFormat === "online"
+        ? "online"
+        : meta.meetingFormat === "offline"
+          ? "offline"
+          : undefined,
+    attendees: attendeeNames,
+    attendeeAvatars,
+    visibility: event.visibility,
+    ownerId: event.ownerId,
+    canEdit: event.canEdit,
+    canDelete: event.canDelete,
+  };
+};
+
+/** Build map eventId → extended detail (dùng cho detail view lookup). */
+export const buildExtendedEventMap = (
+  events: ReadonlyArray<HRCalendarEvent>,
+): Record<string, ExtendedCalendarEvent> => {
+  const map: Record<string, ExtendedCalendarEvent> = {};
+  for (const event of events) {
+    map[event.id] = mapHrmEventToExtendedDetail(event);
+  }
+  return map;
+};
+
 export const mergeCalendarEventSources = (
   ...sources: ReadonlyArray<ReadonlyArray<CalendarEvent>>
 ): CalendarEvent[] => sources.flat();
