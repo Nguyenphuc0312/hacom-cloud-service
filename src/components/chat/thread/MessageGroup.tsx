@@ -621,6 +621,7 @@ const MessageGroupItem: React.FC<{
         }}
         data-testid={`message-item-${message.id}`}
         data-message-id={message.id}
+        data-render-probe="message-item"
       >
         {isSelectionMode && (
           <div className="flex shrink-0 items-start pt-1.5">

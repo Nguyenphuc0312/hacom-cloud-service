@@ -44,6 +44,7 @@ export const MessageItemWrapper: React.FC<MessageItemWrapperProps> = ({
     <div
       data-testid={`message-item-${messageId}`}
       data-message-id={messageId}
+      data-render-probe="message-item"
       className={clsx(
         messageSpacingClass,
         "msg-row-hover -mx-1 px-1",

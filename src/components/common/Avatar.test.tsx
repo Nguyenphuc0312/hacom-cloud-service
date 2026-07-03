@@ -1,9 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { UserStatus } from "../../types";
 import { Avatar } from "./Avatar";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 describe("Avatar", () => {
   it("renders a valid avatar image", () => {
@@ -39,5 +44,40 @@ describe("Avatar", () => {
 
     expect(container.querySelector(".h-32.w-32")).toBeInTheDocument();
     expect(container.querySelector("svg")).toHaveClass("h-16", "w-16");
+  });
+
+  it("keeps online status static by default", () => {
+    const { container } = render(
+      <Avatar status={UserStatus.ONLINE} showStatus />,
+    );
+
+    expect(container.querySelector(".bg-state-online")).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-online")).not.toBeInTheDocument();
+  });
+
+  it("animates online status only when explicitly requested", () => {
+    const { container } = render(
+      <Avatar
+        status={UserStatus.ONLINE}
+        showStatus
+        presenceAnimation="active"
+      />,
+    );
+
+    expect(container.querySelector(".motion-safe\\:animate-pulse-online")).toBeInTheDocument();
+  });
+
+  it("honors VITE_DISABLE_PRESENCE_ANIMATION", () => {
+    vi.stubEnv("VITE_DISABLE_PRESENCE_ANIMATION", "true");
+
+    const { container } = render(
+      <Avatar
+        status={UserStatus.ONLINE}
+        showStatus
+        presenceAnimation="active"
+      />,
+    );
+
+    expect(container.querySelector(".animate-pulse-online")).not.toBeInTheDocument();
   });
 });

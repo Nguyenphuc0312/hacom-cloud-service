@@ -77,6 +77,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           hardBreak: {
             keepMarks: true,
           },
+          link: false,
         }),
         // eslint-disable-next-line react-hooks/refs
         Placeholder.configure({
