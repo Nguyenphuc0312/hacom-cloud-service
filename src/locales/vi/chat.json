@@ -31,6 +31,18 @@
     "edited": "đã chỉnh sửa",
     "forwardedFrom": "Chuyển tiếp từ {{name}}",
     "forwardedLabel": "Tin nhắn được chuyển tiếp",
+    "forward": {
+      "title": "Chia sẻ",
+      "searchPlaceholder": "Tìm kiếm...",
+      "confirm": "Chia sẻ",
+      "sharing": "Chia sẻ tin nhắn",
+      "sharingFile": "Chia sẻ file",
+      "notePlaceholder": "Nhập tin nhắn...",
+      "noConversations": "Không tìm thấy người hoặc nhóm phù hợp",
+      "emptyTab": "Chưa có cuộc trò chuyện nào",
+      "success": "Đã chuyển tiếp tin nhắn",
+      "error": "Không thể chuyển tiếp tin nhắn"
+    },
     "bubbleAria": "{{name}} lúc {{time}}",
     "status": {
       "uploading": "Đang tải lên",
