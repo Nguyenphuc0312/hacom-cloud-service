@@ -1332,6 +1332,10 @@ export const useWebSocket = (
 
     unsubscribersRef.current.forEach((unsub) => unsub());
     unsubscribersRef.current = [];
+    logMessageDebug("useWebSocket", "listener_cleanup_completed", {
+      socketListenerCount: socket.getListenerCount(),
+      connectionState: socket.getConnectionState(),
+    });
 
     const handleConnect = () => {
       connectionLifecycleRef.current?.handleSocketConnected();
@@ -2725,6 +2729,7 @@ export const useWebSocket = (
 
     logMessageDebug("useWebSocket", "listener_setup_completed", {
       listenerCount: unsubscribersRef.current.length,
+      socketListenerCount: socket.getListenerCount(),
       connectionState: socket.getConnectionState(),
     });
 

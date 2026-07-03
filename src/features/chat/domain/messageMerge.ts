@@ -61,6 +61,32 @@ const isLocalPendingMessage = (message: Message): boolean =>
   message.sendState === "retrying" ||
   message.sendState === "failed";
 
+const MAX_MESSAGES_PER_CONVERSATION_CACHE = 600;
+
+const trimMessagesForBoundedCache = (messages: Message[]): Message[] => {
+  if (messages.length <= MAX_MESSAGES_PER_CONVERSATION_CACHE) {
+    return messages;
+  }
+
+  const protectedMessages = messages.filter(isLocalPendingMessage);
+  const protectedKeys = new Set(protectedMessages.map(getStableMessageId));
+  const normalMessages = messages.filter(
+    (message) => !protectedKeys.has(getStableMessageId(message)),
+  );
+  const retainedTail = normalMessages.slice(
+    Math.max(
+      0,
+      normalMessages.length -
+        Math.max(
+          MAX_MESSAGES_PER_CONVERSATION_CACHE - protectedMessages.length,
+          0,
+        ),
+    ),
+  );
+
+  return sortMessagesByCanonicalOrder([...protectedMessages, ...retainedTail]);
+};
+
 const indexMessagesById = (messages: readonly Message[]) =>
   messages.reduce<Record<string, Message>>((accumulator, message) => {
     accumulator[getStableMessageId(message)] = message;
@@ -133,18 +159,19 @@ export const buildConversationMessagesCache = (
   const orderedMessages = sortMessagesByCanonicalOrder(
     normalizeMessagesForReduxCache(messages),
   );
-  let byId = indexMessagesById(orderedMessages);
-  if (hydrateReplyAttachments(orderedMessages, byId)) {
-    byId = indexMessagesById(orderedMessages);
+  const boundedMessages = trimMessagesForBoundedCache(orderedMessages);
+  let byId = indexMessagesById(boundedMessages);
+  if (hydrateReplyAttachments(boundedMessages, byId)) {
+    byId = indexMessagesById(boundedMessages);
   }
-  const oldest = orderedMessages[0] ?? null;
-  const newest = orderedMessages[orderedMessages.length - 1] ?? null;
+  const oldest = boundedMessages[0] ?? null;
+  const newest = boundedMessages[boundedMessages.length - 1] ?? null;
 
   return {
     conversationId,
-    messages: orderedMessages,
+    messages: boundedMessages,
     messageById: byId,
-    messageIds: orderedMessages.map(getStableMessageId),
+    messageIds: boundedMessages.map(getStableMessageId),
     oldestLoadedMessageId: oldest?.id ?? null,
     newestLoadedMessageId: newest?.id ?? null,
     oldestLoadedSeq: oldest ? getMessageSeq(oldest) : null,

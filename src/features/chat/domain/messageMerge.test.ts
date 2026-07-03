@@ -201,4 +201,35 @@ describe("messageMerge send/retry identity", () => {
       errorMessage: "network down",
     });
   });
+
+  it("bounds per-conversation cache while preserving pending local messages", () => {
+    const messages = Array.from({ length: 650 }, (_, index) =>
+      message({
+        id: `server-${index + 1}`,
+        messageSeq: index + 1,
+        createdAt: new Date(2026, 0, 1, 0, 0, index).toISOString() as unknown as Date,
+      }),
+    );
+    const pending = message({
+      id: "temp-client-1",
+      localId: "temp-client-1",
+      stableId: "client-1",
+      clientMessageId: "client-1",
+      status: MessageStatus.SENDING,
+      sendState: "sending",
+      transportStatus: "optimistic",
+      createdAt: new Date(2025, 0, 1).toISOString() as unknown as Date,
+    });
+
+    const cache = buildConversationMessagesCache("conv-1", [
+      pending,
+      ...messages,
+    ]);
+
+    expect(cache.messages).toHaveLength(600);
+    expect(cache.messages.some((item) => item.clientMessageId === "client-1"))
+      .toBe(true);
+    expect(cache.messages.some((item) => item.id === "server-1")).toBe(false);
+    expect(cache.messages.some((item) => item.id === "server-650")).toBe(true);
+  });
 });
