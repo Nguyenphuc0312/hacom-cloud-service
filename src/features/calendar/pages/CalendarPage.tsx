@@ -1073,6 +1073,150 @@ const AttendanceBadge: React.FC<{
   );
 };
 
+interface MonthGridDay {
+  date: Date;
+  isCurrentMonth: boolean;
+}
+
+/**
+ * Lưới lịch tháng (35 ô) — tách khỏi CalendarPage + memo hoá để mỗi lần mở/đóng
+ * modal (state ở CalendarPage) KHÔNG re-render + re-filter lại toàn bộ ô. Việc
+ * lọc/sắp event theo từng ngày gom vào 1 useMemo (chạy khi data đổi, không phải
+ * mỗi render). Props đều stable (useCallback/useMemo ở parent).
+ */
+const MonthGrid: React.FC<{
+  calendarDays: MonthGridDay[];
+  events: (LocalCalendarEvent | ExtendedCalendarEvent)[];
+  getAttendanceForDate: (date: Date) => AttendanceCalendarDay | undefined;
+  isToday: (date: Date) => boolean;
+  isSelected: (date: Date) => boolean;
+  isAttendanceFilterActive: boolean;
+  showAttendance: boolean;
+  onOpenDay: (date: Date) => void;
+  onEventClick: (event: LocalCalendarEvent | ExtendedCalendarEvent) => void;
+}> = React.memo(
+  ({
+    calendarDays,
+    events,
+    getAttendanceForDate,
+    isToday,
+    isSelected,
+    isAttendanceFilterActive,
+    showAttendance,
+    onOpenDay,
+    onEventClick,
+  }) => {
+    // Lọc + sắp event cho từng ô 1 lần / khi data đổi (thay vì mỗi render × mỗi ô).
+    const perDay = useMemo(
+      () =>
+        calendarDays.map((dayInfo) => {
+          const dayEvents = events
+            .filter((event) => eventOccursOnDay(event, dayInfo.date))
+            .slice()
+            .sort((a, b) => {
+              const aSpan = getMultiDayPosition(a, dayInfo.date) !== null;
+              const bSpan = getMultiDayPosition(b, dayInfo.date) !== null;
+              if (aSpan !== bSpan) return aSpan ? -1 : 1;
+              return (a.time ?? "").localeCompare(b.time ?? "");
+            });
+          return { dayInfo, dayEvents };
+        }),
+      [calendarDays, events],
+    );
+
+    return (
+      <div className="flex-1 overflow-auto p-4">
+        {/* Weekday headers */}
+        <div className="mb-2 grid grid-cols-7 gap-px">
+          {VIETNAMESE_WEEKDAYS.map((day, index) => (
+            <div
+              key={day}
+              className={clsx(
+                "py-2 text-center text-sm font-medium",
+                index === 0 ? "text-rose-500 dark:text-rose-400" : "text-text-secondary",
+              )}
+            >
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar days grid */}
+        <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
+          {perDay.map(({ dayInfo, dayEvents }, index) => {
+            const maxVisibleEvents = 2;
+            const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
+            const remainingCount = dayEvents.length - maxVisibleEvents;
+            const attendance = getAttendanceForDate(dayInfo.date);
+
+            return (
+              <div
+                key={index}
+                onClick={() => onOpenDay(dayInfo.date)}
+                title="Mở lịch ngày"
+                className={clsx(
+                  "min-h-[120px] cursor-pointer border-border bg-surface p-1.5 transition-micro",
+                  !dayInfo.isCurrentMonth && "bg-surface-overlay",
+                  dayInfo.isCurrentMonth && !isToday(dayInfo.date) && "hover:bg-surface-hover",
+                  isSelected(dayInfo.date) &&
+                    !isToday(dayInfo.date) &&
+                    "ring-1 ring-border-strong ring-inset",
+                )}
+              >
+                {/* Date number */}
+                <div className="mb-1 flex items-center justify-between">
+                  <span
+                    className={clsx(
+                      "flex h-7 w-7 items-center justify-center rounded-full text-sm",
+                      !dayInfo.isCurrentMonth && "text-text-disabled",
+                      dayInfo.isCurrentMonth && !isToday(dayInfo.date) && "text-text-primary",
+                      isToday(dayInfo.date) && "bg-[#1565C0] text-white font-semibold",
+                    )}
+                  >
+                    {dayInfo.date.getDate()}
+                  </span>
+                </div>
+
+                {/* Attendance badge — only show for own calendar */}
+                {attendance && isAttendanceFilterActive && showAttendance && (
+                  <div className="mb-1">
+                    <AttendanceBadge attendance={attendance} />
+                  </div>
+                )}
+
+                {/* Events */}
+                <div className="space-y-0.5">
+                  {visibleEvents.map((event) => (
+                    <EventBadge
+                      key={event.id}
+                      event={event}
+                      onClick={onEventClick}
+                      compact
+                      spanPosition={getMultiDayPosition(event, dayInfo.date)}
+                    />
+                  ))}
+                  {remainingCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenDay(dayInfo.date);
+                      }}
+                      className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-[#1565C0] transition-micro"
+                    >
+                      +{remainingCount} sự kiện
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  },
+);
+
 /**
  * Calendar page component.
  */
@@ -2214,107 +2358,17 @@ export const CalendarPage: React.FC = () => {
 
           {/* Calendar grid */}
           {currentView === "month" && (
-            <div className="flex-1 overflow-auto p-4">
-              {/* Weekday headers */}
-              <div className="mb-2 grid grid-cols-7 gap-px">
-                {VIETNAMESE_WEEKDAYS.map((day, index) => (
-                  <div
-                    key={day}
-                    className={clsx(
-                      "py-2 text-center text-sm font-medium",
-                      index === 0 ? "text-rose-500 dark:text-rose-400" : "text-text-secondary"
-                    )}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar days grid */}
-              <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
-                {calendarDays.map((dayInfo, index) => {
-                  // Ghim lịch dài ngày lên đầu để thanh trải nằm cùng hàng giữa
-                  // các ngày → nối liền thành dây; còn lại sắp theo giờ.
-                  const dayEvents = searchedEvents
-                    .filter((event) => eventOccursOnDay(event, dayInfo.date))
-                    .slice()
-                    .sort((a, b) => {
-                      const aSpan = getMultiDayPosition(a, dayInfo.date) !== null;
-                      const bSpan = getMultiDayPosition(b, dayInfo.date) !== null;
-                      if (aSpan !== bSpan) return aSpan ? -1 : 1;
-                      return (a.time ?? "").localeCompare(b.time ?? "");
-                    });
-                  const maxVisibleEvents = 2;
-                  const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
-                  const remainingCount = dayEvents.length - maxVisibleEvents;
-                  const attendance = getAttendanceForDate(dayInfo.date);
-
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => handleOpenDay(dayInfo.date)}
-                      title="Mở lịch ngày"
-                      className={clsx(
-                        "min-h-[120px] cursor-pointer border-border bg-surface p-1.5 transition-micro",
-                        !dayInfo.isCurrentMonth && "bg-surface-overlay",
-                        dayInfo.isCurrentMonth &&
-                          !isToday(dayInfo.date) &&
-                          "hover:bg-surface-hover",
-                        isSelected(dayInfo.date) &&
-                          !isToday(dayInfo.date) &&
-                          "ring-1 ring-border-strong ring-inset"
-                      )}
-                    >
-                      {/* Date number */}
-                      <div className="mb-1 flex items-center justify-between">
-                        <span
-                          className={clsx(
-                            "flex h-7 w-7 items-center justify-center rounded-full text-sm",
-                            !dayInfo.isCurrentMonth && "text-text-disabled",
-                            dayInfo.isCurrentMonth && !isToday(dayInfo.date) && "text-text-primary",
-                            isToday(dayInfo.date) && "bg-[#1565C0] text-white font-semibold"
-                          )}
-                        >
-                          {dayInfo.date.getDate()}
-                        </span>
-                      </div>
-
-                      {/* Attendance badge — only show for own calendar */}
-                      {attendance && isAttendanceFilterActive && mode !== "other" && (
-                        <div className="mb-1">
-                          <AttendanceBadge attendance={attendance} />
-                        </div>
-                      )}
-
-                      {/* Events */}
-                      <div className="space-y-0.5">
-                        {visibleEvents.map((event) => (
-                          <EventBadge
-                            key={event.id}
-                            event={event}
-                            onClick={handleEventClick}
-                            compact
-                            spanPosition={getMultiDayPosition(event, dayInfo.date)}
-                          />
-                        ))}
-                        {remainingCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDay(dayInfo.date);
-                            }}
-                            className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-[#1565C0] transition-micro"
-                          >
-                            +{remainingCount} sự kiện
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <MonthGrid
+              calendarDays={calendarDays}
+              events={searchedEvents}
+              getAttendanceForDate={getAttendanceForDate}
+              isToday={isToday}
+              isSelected={isSelected}
+              isAttendanceFilterActive={isAttendanceFilterActive}
+              showAttendance={mode !== "other"}
+              onOpenDay={handleOpenDay}
+              onEventClick={handleEventClick}
+            />
           )}
 
           {/* Day view */}
