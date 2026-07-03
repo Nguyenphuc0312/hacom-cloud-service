@@ -35,4 +35,25 @@ describe("registerChatEvents", () => {
 
     expect(onMessageNew).toHaveBeenCalledTimes(4);
   });
+
+  it("removes registered handlers with the returned cleanup", () => {
+    const socket = new FakeSocket();
+    const onMessageNew = vi.fn();
+    const onMessageUpdated = vi.fn();
+
+    const cleanup = registerChatEvents(socket, {
+      onMessageNew,
+      onMessageUpdated,
+    });
+
+    expect(socket.handlers.size).toBeGreaterThan(0);
+
+    cleanup();
+
+    socket.emit("message:new", { message: { id: "msg-1" } });
+    socket.emit("message:updated", { message: { id: "msg-1" } });
+    expect(onMessageNew).not.toHaveBeenCalled();
+    expect(onMessageUpdated).not.toHaveBeenCalled();
+    expect(socket.handlers.size).toBe(0);
+  });
 });

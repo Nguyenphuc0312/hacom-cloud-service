@@ -331,6 +331,7 @@ const initialState = {
 
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_MESSAGE_IDS: string[] = [];
+const MAX_INACTIVE_CONVERSATION_MESSAGES = 120;
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
@@ -1945,6 +1946,98 @@ const isCanonicalConversationMessage = (
   }
 
   return !isTempMessageId(message.id);
+};
+
+const isRetriableOrPendingLocalMessage = (message: Message): boolean =>
+  isTempMessageId(message.id) ||
+  message.transportStatus === "optimistic" ||
+  message.sendState === "queued" ||
+  message.sendState === "sending" ||
+  message.sendState === "retrying" ||
+  message.sendState === "failed" ||
+  message.status === MessageStatus.SENDING ||
+  message.status === MessageStatus.FAILED ||
+  message.status === "uploading";
+
+const trimInactiveConversationMessages = (messages: Message[]): Message[] => {
+  if (messages.length <= MAX_INACTIVE_CONVERSATION_MESSAGES) {
+    return messages;
+  }
+
+  const protectedMessages = messages.filter(isRetriableOrPendingLocalMessage);
+  const protectedKeys = new Set(protectedMessages.map(getStableMessageId));
+  const normalMessages = messages.filter(
+    (message) => !protectedKeys.has(getStableMessageId(message)),
+  );
+  const retainedNormalMessages = normalMessages.slice(
+    Math.max(
+      0,
+      normalMessages.length -
+        Math.max(
+          MAX_INACTIVE_CONVERSATION_MESSAGES - protectedMessages.length,
+          0,
+        ),
+    ),
+  );
+
+  return sortMessages([...protectedMessages, ...retainedNormalMessages]);
+};
+
+const buildInactiveMessageTrimState = (
+  state: ChatState,
+  activeConversationId: string | null,
+): Partial<ChatState> | null => {
+  let changed = false;
+  const nextMessages: Record<string, Message[]> = {};
+
+  Object.entries(state.messages).forEach(([conversationId, messages]) => {
+    if (conversationId === activeConversationId) {
+      nextMessages[conversationId] = messages;
+      return;
+    }
+
+    const trimmed = trimInactiveConversationMessages(messages);
+    if (trimmed !== messages) {
+      changed = true;
+    }
+    nextMessages[conversationId] = trimmed;
+  });
+
+  if (!changed) {
+    return null;
+  }
+
+  const nextMessageById: Record<string, Message> = {};
+  const nextMessageIdsByConversation: Record<string, string[]> = {};
+  const nextMessageAliasIndexByConversation: Record<
+    string,
+    Record<string, string>
+  > = {};
+  const nextMessageWindowByConversation: Record<
+    string,
+    ConversationMessageWindow
+  > = {};
+
+  Object.entries(nextMessages).forEach(([conversationId, messages]) => {
+    nextMessageIdsByConversation[conversationId] = messages.map((message) => {
+      const stableId = getStableMessageId(message);
+      nextMessageById[stableId] = message;
+      nextMessageById[message.id] = message;
+      return stableId;
+    });
+    nextMessageAliasIndexByConversation[conversationId] =
+      rebuildConversationMessageAliasIndex(messages);
+    nextMessageWindowByConversation[conversationId] =
+      buildConversationMessageWindow(messages);
+  });
+
+  return {
+    messages: nextMessages,
+    messageById: nextMessageById,
+    messageIdsByConversation: nextMessageIdsByConversation,
+    messageAliasIndexByConversation: nextMessageAliasIndexByConversation,
+    messageWindowByConversation: nextMessageWindowByConversation,
+  };
 };
 
 const buildConversationMessageWindow = (
@@ -3565,11 +3658,16 @@ export const useChatStore = create<ChatState>()(
       },
 
       selectConversation: (id) => {
-        set((state) =>
-          state.selectedConversationId === id
-            ? state
-            : { selectedConversationId: id },
-        );
+        set((state) => {
+          const trimState = buildInactiveMessageTrimState(state, id);
+          if (state.selectedConversationId === id) {
+            return trimState ?? state;
+          }
+          return {
+            ...(trimState ?? {}),
+            selectedConversationId: id,
+          };
+        });
       },
 
       markAsRead: unreadController.markAsRead,

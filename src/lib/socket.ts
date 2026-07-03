@@ -669,6 +669,18 @@ class WebSocketManager {
   /**
    * Hủy đăng ký event handler
    */
+  getListenerCount(eventType?: string): number {
+    if (eventType) {
+      return this.eventHandlers.get(eventType)?.size ?? 0;
+    }
+
+    let count = 0;
+    this.eventHandlers.forEach((handlers) => {
+      count += handlers.size;
+    });
+    return count;
+  }
+
   off(eventType: string, handler?: EventHandler): void {
     if (handler) {
       this.eventHandlers.get(eventType)?.delete(handler);
