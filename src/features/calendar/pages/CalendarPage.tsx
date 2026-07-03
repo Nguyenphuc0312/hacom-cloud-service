@@ -1238,7 +1238,6 @@ export const CalendarPage: React.FC = () => {
     fetchEvents,
     deleteEvent,
     isLoading: storeLoading,
-    error: _storeError,
   } = storeState;
 
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -1252,10 +1251,9 @@ export const CalendarPage: React.FC = () => {
   const handledNavState = useRef(false);
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
 
-  // Attendance data state
+  // Attendance data state. (Loading/error state đã bỏ: giá trị chưa từng được
+  // render — chỉ giữ data + log lỗi ra console cho dev.)
   const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
-  const [, setIsLoadingAttendance] = useState(false);
-  const [, setAttendanceError] = useState<string | null>(null);
 
   // Extended API events state (for detail view)
   const [apiEventsMap, setApiEventsMap] = useState<Record<string, ExtendedCalendarEvent>>({});
@@ -1610,45 +1608,20 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     if (mode === "other") {
       setAttendanceData([]);
-      setAttendanceError(null);
       return;
     }
 
     const fetchAttendance = async () => {
-      setIsLoadingAttendance(true);
-      setAttendanceError(null);
-
       try {
         const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
         const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
 
         const data = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
-
-        if (data.reason === "EMPLOYEE_NOT_LINKED") {
-          setAttendanceError("Tài khoản chưa liên kết hồ sơ nhân sự.");
-          setAttendanceData([]);
-        } else if (data.reason === "NO_ATTENDANCE_DATA") {
-          setAttendanceError("Chưa có dữ liệu chấm công trong khoảng thời gian này.");
-          setAttendanceData([]);
-        } else {
-          setAttendanceData(data.items ?? []);
-        }
+        // reason EMPLOYEE_NOT_LINKED / NO_ATTENDANCE_DATA → items rỗng → lịch trống (không có badge).
+        setAttendanceData(data.items ?? []);
       } catch (error: unknown) {
         console.error("Failed to fetch attendance:", error);
-        const msg = (error as Error)?.message ?? "";
-        const status = (error as { response?: { status?: number } })?.response?.status;
-        if (msg.includes("HR_API_HTML_RESPONSE")) {
-          setAttendanceError("Không thể kết nối dữ liệu chấm công HRM. Vui lòng kiểm tra cấu hình HR API.");
-        } else if (status === 401 || status === 403) {
-          setAttendanceError("Phiên đăng nhập hết hạn.");
-        } else if (!status) {
-          setAttendanceError("Không thể kết nối dữ liệu chấm công HRM.");
-        } else {
-          setAttendanceError("Không thể tải dữ liệu chấm công.");
-        }
         setAttendanceData([]);
-      } finally {
-        setIsLoadingAttendance(false);
       }
     };
 
