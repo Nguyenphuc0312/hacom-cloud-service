@@ -75,7 +75,9 @@ const fmtMin = (min: number): string => {
 const dateKey = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-export const WeekView: React.FC<WeekViewProps> = ({
+// memo: parent (CalendarPage) re-renders on every modal toggle; props are
+// stable (useCallback handlers) so memo lets Week view skip those re-renders.
+const WeekViewImpl: React.FC<WeekViewProps> = ({
   weekDate,
   events,
   attendanceData,
@@ -411,5 +413,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
   );
 };
 
+export const WeekView = React.memo(WeekViewImpl);
 
 export default WeekView;

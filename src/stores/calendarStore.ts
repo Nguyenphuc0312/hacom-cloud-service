@@ -10,8 +10,8 @@ import { toast } from "../utils/toast";
 export type CalendarMode = "my" | "other" | "unit";
 export type CalendarView = "day" | "week" | "month";
 
-// Use EventType (local lowercase) for UI filters
-export type CalendarEventFilterType = "vietnam_holiday" | "international" | "work" | "personal" | "task" | "meeting" | "attendance";
+// Use EventType (local lowercase) for UI filters — mirror EventType in calendarEvents.ts
+export type CalendarEventFilterType = "work" | "personal" | "task" | "meeting" | "attendance";
 
 export type CalendarErrorCode =
   | "EMPLOYEE_LINK_REQUIRED"

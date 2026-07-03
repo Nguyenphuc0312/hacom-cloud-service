@@ -1,9 +1,10 @@
 /**
- * Calendar event types and holiday data for the Calendar feature.
- * This is static frontend data - no backend API calls.
+ * Calendar event types, colors, and view helpers for the Calendar feature.
+ * Pure presentation data — events themselves come from the API (see CalendarPage).
  */
 
-export type EventType = "vietnam_holiday" | "international" | "work" | "personal" | "task" | "meeting" | "attendance";
+// Lịch chỉ có: họp, cá nhân, chấm công. `work`/`task` (công việc) đang phát triển, tạm ẩn.
+export type EventType = "work" | "personal" | "task" | "meeting" | "attendance";
 
 export interface CalendarEvent {
   id: string;
@@ -87,17 +88,6 @@ export const VIETNAMESE_MONTHS = [
 export const VIETNAMESE_WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"] as const;
 
 /**
- * Filter events by date.
- */
-export const getEventsByDate = (
-  events: CalendarEvent[],
-  date: Date
-): CalendarEvent[] => {
-  const dateStr = formatDateString(date);
-  return events.filter((event) => event.date === dateStr);
-};
-
-/**
  * Format a Date object to YYYY-MM-DD string.
  */
 export const formatDateString = (date: Date): string => {
@@ -124,10 +114,6 @@ export const MULTI_DAY_EVENT_COLOR = {
 
 export const getEventColor = (type: EventType): { bg: string; text: string; border: string } => {
   switch (type) {
-    case "vietnam_holiday":
-      return { bg: "bg-rose-500/10", text: "text-rose-600 dark:text-rose-300", border: "border-rose-500/20" };
-    case "international":
-      return { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-300", border: "border-blue-500/20" };
     case "work":
       return { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-300", border: "border-purple-500/20" };
     case "personal":
@@ -148,10 +134,6 @@ export const getEventColor = (type: EventType): { bg: string; text: string; bord
  */
 export const getEventTypeLabel = (type: EventType): string => {
   switch (type) {
-    case "vietnam_holiday":
-      return "Việt Nam";
-    case "international":
-      return "Quốc tế";
     case "work":
       return "Công việc";
     case "personal":
