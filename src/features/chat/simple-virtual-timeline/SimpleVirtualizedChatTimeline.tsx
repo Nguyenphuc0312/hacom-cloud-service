@@ -29,7 +29,10 @@ import {
   type ConversationThreadRow,
 } from "../hooks/useConversationThreadRows";
 import { useSimpleChatScroll } from "./useSimpleChatScroll";
-import { logMessageDebug } from "../../../utils/messageDebug";
+import {
+  isMessageDebugEnabled,
+  logMessageDebug,
+} from "../../../utils/messageDebug";
 import { ScrollToLatestButton } from "./ScrollToLatestButton";
 
 export interface SimpleVirtualizedChatTimelineProps {
@@ -153,6 +156,33 @@ const estimateRowHeight = (
   return baseHeight;
 };
 
+const buildJumpRowIndex = (
+  threadRows: readonly ConversationThreadRow[],
+): Map<string, number> => {
+  const map = new Map<string, number>();
+  threadRows.forEach((row, index) => {
+    if (row.kind !== "group") return;
+    for (const item of row.items) {
+      const message = item.message;
+      const aliases = new Set(
+        [
+          item.messageId,
+          message.id,
+          message.localId,
+          message.stableId,
+          message.clientMessageId,
+        ].filter((value): value is string => Boolean(value)),
+      );
+      aliases.forEach((alias) => {
+        if (!map.has(alias)) {
+          map.set(alias, index);
+        }
+      });
+    }
+  });
+  return map;
+};
+
 const SimpleVirtualizedChatTimelineComponent: React.FC<
   SimpleVirtualizedChatTimelineProps
 > = ({
@@ -232,8 +262,9 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
 
+  const latestMessageId = messages[messages.length - 1]?.id ?? null;
   React.useEffect(() => {
-    const latestMessage = messages[messages.length - 1];
+    if (!isMessageDebugEnabled()) return;
     logMessageDebug("SimpleVirtualizedChatTimeline", "[VIRTUAL LIST]", {
       conversationId,
       messageCount: messages.length,
@@ -241,14 +272,15 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
       threadRowCount: threadRows.length,
       virtualItemsCount: virtualItems.length,
       totalSize,
-      lastMessageId: latestMessage?.id ?? null,
+      lastMessageId: latestMessageId,
       isAtBottom,
       pendingNewMessages,
     });
   }, [
     conversationId,
     isAtBottom,
-    messages,
+    latestMessageId,
+    messages.length,
     pendingNewMessages,
     threadRows.length,
     totalSize,
@@ -354,26 +386,21 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   // retried once the message arrives in the list.
   const pendingJumpRef = React.useRef<string | null>(null);
 
-  // Map every message id (and its alternate ids) to the row that renders it.
-  const rowIndexByMessageId = React.useMemo(() => {
-    const map = new Map<string, number>();
-    threadRows.forEach((row, index) => {
-      if (row.kind !== "group") return;
-      for (const item of row.items) {
-        const m = item.message;
-        map.set(item.messageId, index);
-        if (m.id) map.set(m.id, index);
-        if (m.localId) map.set(m.localId, index);
-        if (m.stableId) map.set(m.stableId, index);
-        if (m.clientMessageId) map.set(m.clientMessageId, index);
-      }
-    });
-    return map;
+  // Build the alias row index lazily. Most renders never jump to a message, so
+  // building a large Map for every threadRows change is avoidable churn.
+  const rowIndexCacheRef = React.useRef<{
+    rows: readonly ConversationThreadRow[];
+    index: Map<string, number>;
+  } | null>(null);
+  const getJumpRowIndex = React.useCallback(() => {
+    const cached = rowIndexCacheRef.current;
+    if (cached?.rows === threadRows) {
+      return cached.index;
+    }
+    const index = buildJumpRowIndex(threadRows);
+    rowIndexCacheRef.current = { rows: threadRows, index };
+    return index;
   }, [threadRows]);
-  // Always read the freshest map without re-running the jump effect on every
-  // message change (which would re-scroll mid-highlight).
-  const rowIndexRef = React.useRef(rowIndexByMessageId);
-  rowIndexRef.current = rowIndexByMessageId;
 
   const runScrollAndHighlight = React.useCallback(
     (messageId: string, index: number) => {
@@ -403,11 +430,11 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   const tryResolvePendingJump = React.useCallback(() => {
     const id = pendingJumpRef.current;
     if (!id) return;
-    const index = rowIndexRef.current.get(id);
+    const index = getJumpRowIndex().get(id);
     if (index == null) return; // target not loaded yet — wait for next change
     pendingJumpRef.current = null;
     runScrollAndHighlight(id, index);
-  }, [runScrollAndHighlight]);
+  }, [getJumpRowIndex, runScrollAndHighlight]);
 
   // New jump request → remember it and try right away.
   React.useEffect(() => {
@@ -421,7 +448,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   // Retry a pending jump when the row set changes (target just loaded in).
   React.useEffect(() => {
     tryResolvePendingJump();
-  }, [rowIndexByMessageId, tryResolvePendingJump]);
+  }, [threadRows, tryResolvePendingJump]);
 
   React.useEffect(
     () => () => {

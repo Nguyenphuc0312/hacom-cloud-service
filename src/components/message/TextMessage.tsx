@@ -209,7 +209,19 @@ const renderWithMentions = (
   return out;
 };
 
-export const TextMessage: React.FC<TextMessageProps> = ({
+const getMentionsRenderSignature = (mentions?: Mention[]): string =>
+  mentions
+    ?.map((mention) =>
+      [
+        mention.userId,
+        mention.displayName,
+        mention.avatarUrl,
+        mention.employeeCode,
+      ].join(":"),
+    )
+    .join("|") ?? "";
+
+const TextMessageComponent: React.FC<TextMessageProps> = ({
   content,
   contentFormat,
   isOwn,
@@ -410,5 +422,26 @@ export const TextMessage: React.FC<TextMessageProps> = ({
     </div>
   );
 };
+
+const areEqualTextMessageProps = (
+  previous: TextMessageProps,
+  next: TextMessageProps,
+): boolean =>
+  previous.content === next.content &&
+  previous.contentFormat === next.contentFormat &&
+  previous.isOwn === next.isOwn &&
+  previous.currentUsername === next.currentUsername &&
+  previous.currentUserId === next.currentUserId &&
+  previous.renderMode === next.renderMode &&
+  previous.isCollapsible === next.isCollapsible &&
+  previous.onToggleExpand === next.onToggleExpand &&
+  previous.className === next.className &&
+  getMentionsRenderSignature(previous.mentions) ===
+    getMentionsRenderSignature(next.mentions);
+
+export const TextMessage = React.memo(
+  TextMessageComponent,
+  areEqualTextMessageProps,
+);
 
 export default TextMessage;

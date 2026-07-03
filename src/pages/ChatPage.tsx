@@ -96,6 +96,61 @@ const FilePreviewModal = React.lazy(
   () => import("../components/modals/FilePreviewModal"),
 );
 
+type GalleryImageWithAttachment = GalleryImage & {
+  attachmentId?: string;
+};
+
+const LIGHTBOX_PRELOAD_RADIUS = 4;
+const LIGHTBOX_PREVIEW_CONCURRENCY = 2;
+const LIGHTBOX_PREVIEW_URL_CAP = 64;
+
+const isImageAttachment = (attachment: Attachment): boolean =>
+  attachment.mimeType?.startsWith("image/") === true ||
+  /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(attachment.fileName ?? "");
+
+const getLightboxPreloadIds = (
+  images: readonly GalleryImageWithAttachment[],
+  currentIndex: number,
+): string[] => {
+  if (images.length === 0) return [];
+  const start = Math.max(0, currentIndex - LIGHTBOX_PRELOAD_RADIUS);
+  const end = Math.min(images.length - 1, currentIndex + LIGHTBOX_PRELOAD_RADIUS);
+  const ids = new Set<string>();
+  for (let index = start; index <= end; index += 1) {
+    const attachmentId = images[index]?.attachmentId;
+    if (attachmentId) ids.add(attachmentId);
+  }
+  return Array.from(ids);
+};
+
+const mergeBoundedPreviewUrls = (
+  current: Record<string, string>,
+  incoming: Record<string, string>,
+  priorityIds: readonly string[],
+): Record<string, string> => {
+  const merged = { ...current, ...incoming };
+  const entries = Object.entries(merged);
+  if (entries.length <= LIGHTBOX_PREVIEW_URL_CAP) {
+    return merged;
+  }
+
+  const next: Record<string, string> = {};
+  for (const id of priorityIds) {
+    const url = merged[id];
+    if (url) next[id] = url;
+  }
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (Object.keys(next).length >= LIGHTBOX_PREVIEW_URL_CAP) break;
+    const [id, url] = entries[index];
+    if (!(id in next)) {
+      next[id] = url;
+    }
+  }
+
+  return next;
+};
+
 /** Wrapper that builds the full gallery from RTK cache before opening the lightbox */
 const ImagePreviewModalGallery: React.FC<{
   imagePreview: ImageClickPayload;
@@ -109,35 +164,35 @@ const ImagePreviewModalGallery: React.FC<{
 
   // Track attachment IDs that need preview URLs
   const [previewUrls, setPreviewUrls] = React.useState<Record<string, string>>({});
+  const [currentIndex, setCurrentIndex] = React.useState(imagePreview.initialIndex ?? 0);
+  const inFlightPreviewIdsRef = React.useRef(new Set<string>());
 
-  const { images, initialIndex, attachmentIds } = useMemo(() => {
+  React.useEffect(() => {
+    setPreviewUrls({});
+    setCurrentIndex(imagePreview.initialIndex ?? 0);
+    inFlightPreviewIdsRef.current.clear();
+  }, [convId, imagePreview.groupKey, imagePreview.url, imagePreview.initialIndex]);
+
+  const { images, initialIndex } = useMemo(() => {
     const msgs = data?.messages ?? [];
-    const gallery: GalleryImage[] = [];
-    const attIds: string[] = [];
+    const gallery: GalleryImageWithAttachment[] = [];
     let found = 0;
 
     for (const msg of msgs) {
       const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
-      const imgAttachments = attachments.filter((a) =>
-        a.mimeType?.startsWith("image/") || /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(a.fileName ?? ""),
-      );
+      const imgAttachments = attachments.filter(isImageAttachment);
       for (const att of imgAttachments) {
         const isCurrentImage =
           att.id === imagePreview.groupKey ||
           att.url === imagePreview.url ||
           att.thumbnailUrl === imagePreview.url;
-        
+
         // For clicked image, use the already-resolved URL
         // For other images, use preview URL if available, otherwise use stored URL
-        let url = isCurrentImage
+        const url = isCurrentImage
           ? imagePreview.url
           : (previewUrls[att.id] ?? resolvePublicResourceUrl(att.thumbnailUrl ?? att.url) ?? "");
-        
-        // Track attachment IDs to fetch their preview URLs
-        if (!isCurrentImage && att.id && !previewUrls[att.id]) {
-          attIds.push(att.id);
-        }
-        
+
         if (isCurrentImage) found = gallery.length;
         gallery.push({
           url,
@@ -146,6 +201,7 @@ const ImagePreviewModalGallery: React.FC<{
           senderAvatar: msg.senderAvatar,
           sentAt: msg.serverTs,
           groupKey: msg.id,
+          attachmentId: att.id,
         });
       }
     }
@@ -160,50 +216,78 @@ const ImagePreviewModalGallery: React.FC<{
           sentAt: imagePreview.sentAt,
         }],
         initialIndex: 0,
-        attachmentIds: [],
       };
     }
-    return { images: gallery, initialIndex: found, attachmentIds: attIds };
+    return { images: gallery, initialIndex: found };
   }, [data, imagePreview, previewUrls]);
 
-  // Fetch preview URLs for all images that don't have them yet
   React.useEffect(() => {
-    if (!attachmentIds.length || !convId) return;
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
+  const preloadAttachmentIds = useMemo(
+    () => getLightboxPreloadIds(images, currentIndex),
+    [currentIndex, images],
+  );
+  const preloadAttachmentKey = preloadAttachmentIds.join("|");
+
+  // Fetch preview URLs only for the visible image and a small neighborhood.
+  React.useEffect(() => {
+    if (!preloadAttachmentIds.length || !convId) return;
 
     const abortController = new AbortController();
 
     const fetchPreviewsForAttachments = async () => {
       const newUrls: Record<string, string> = {};
-      
-      // Fetch all preview URLs in parallel
-      const results = await Promise.allSettled(
-        attachmentIds.map(async (attId) => {
+
+      const idsToFetch = preloadAttachmentIds.filter((attId) => {
+        if (previewUrls[attId]) return false;
+        if (inFlightPreviewIdsRef.current.has(attId)) return false;
+        inFlightPreviewIdsRef.current.add(attId);
+        return true;
+      });
+      if (idsToFetch.length === 0) return;
+
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < idsToFetch.length && !abortController.signal.aborted) {
+          const attId = idsToFetch[cursor];
+          cursor += 1;
+          try {
           const response = await fileApi.getPreviewUrl({
             conversationId: convId,
             attachmentId: attId,
             signal: abortController.signal,
           });
-          
+
           const payload = unwrapApiSuccess(response);
           const resolvedUrl = resolvePublicResourceUrl(payload.url, {
-            context: 'image',
+            context: "image",
             allowBlob: true,
           });
-          
-          return { attId, resolvedUrl };
-        })
-      );
-      
-      // Process results only if not aborted
-      if (!abortController.signal.aborted) {
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value.resolvedUrl) {
-            newUrls[result.value.attId] = result.value.resolvedUrl;
+            if (resolvedUrl) {
+              newUrls[attId] = resolvedUrl;
+            }
+          } catch {
+            // Keep fallback thumbnail/current URL; lightbox navigation must not fail.
+          } finally {
+            inFlightPreviewIdsRef.current.delete(attId);
           }
         }
-        
+      };
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(LIGHTBOX_PREVIEW_CONCURRENCY, idsToFetch.length) },
+          () => worker(),
+        ),
+      );
+
+      if (!abortController.signal.aborted) {
         if (Object.keys(newUrls).length > 0) {
-          setPreviewUrls((prev) => ({ ...prev, ...newUrls }));
+          setPreviewUrls((prev) =>
+            mergeBoundedPreviewUrls(prev, newUrls, preloadAttachmentIds),
+          );
         }
       }
     };
@@ -213,7 +297,7 @@ const ImagePreviewModalGallery: React.FC<{
     return () => {
       abortController.abort();
     };
-  }, [attachmentIds, convId]);
+  }, [convId, preloadAttachmentKey, preloadAttachmentIds, previewUrls]);
 
   return (
     <ImagePreviewModal
@@ -221,6 +305,7 @@ const ImagePreviewModalGallery: React.FC<{
       onClose={onClose}
       images={images}
       initialIndex={initialIndex}
+      onIndexChange={setCurrentIndex}
     />
   );
 };

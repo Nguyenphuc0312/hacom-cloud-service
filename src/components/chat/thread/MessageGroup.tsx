@@ -51,6 +51,7 @@ import { MessageActionBar } from "../MessageActionBar";
 import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
+import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
   [MessageType.IMAGE]: "Hình ảnh",
@@ -195,7 +196,7 @@ const MobileEmojiOverlay: React.FC<{
   );
 };
 
-const MessageGroupItem: React.FC<{
+interface MessageGroupItemProps {
   item: ConversationThreadMessageItem;
   isOwn: boolean;
   isGroupTail: boolean;
@@ -223,7 +224,38 @@ const MessageGroupItem: React.FC<{
   onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
   highlightedMessageId: string | null;
-}> = ({
+}
+
+const isMessageHighlighted = (
+  highlightedMessageId: string | null,
+  message: Message,
+): boolean =>
+  Boolean(
+    highlightedMessageId &&
+      (highlightedMessageId === message.id ||
+        highlightedMessageId === message.localId ||
+        highlightedMessageId === message.stableId ||
+        highlightedMessageId === message.clientMessageId),
+  );
+
+const isMessageInserted = (
+  insertedMessageKeys: Set<string>,
+  message: Message,
+): boolean => insertedMessageKeys.has(getMessageStableKey(message));
+
+const isLongTextExpanded = (
+  expandedLongMessageIds: Set<string>,
+  message: Message,
+): boolean =>
+  expandedLongMessageIds.has(message.id) ||
+  Boolean(message.localId && expandedLongMessageIds.has(message.localId)) ||
+  Boolean(message.stableId && expandedLongMessageIds.has(message.stableId)) ||
+  Boolean(
+    message.clientMessageId &&
+      expandedLongMessageIds.has(message.clientMessageId),
+  );
+
+const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   item,
   isOwn,
   isGroupTail,
@@ -459,6 +491,9 @@ const MessageGroupItem: React.FC<{
       },
       [message.id, onReact],
     );
+    const handleToggleTextExpand = React.useCallback(() => {
+      onToggleLongMessageExpand(message.id);
+    }, [message.id, onToggleLongMessageExpand]);
 
     const actionPolicy = React.useMemo(
       () =>
@@ -804,7 +839,7 @@ const MessageGroupItem: React.FC<{
                 currentUsername={currentUsername}
                 textRenderMode={renderState.renderMode}
                 isCollapsibleText={renderState.isCollapsible}
-                onToggleTextExpand={() => onToggleLongMessageExpand(message.id)}
+                onToggleTextExpand={handleToggleTextExpand}
                 onImageClick={onImageClick}
                 onFilePreview={onFilePreview}
               />
@@ -876,6 +911,51 @@ const MessageGroupItem: React.FC<{
       </div>
     );
   };
+
+const areEqualMessageGroupItemProps = (
+  previous: MessageGroupItemProps,
+  next: MessageGroupItemProps,
+): boolean => {
+  const previousMessage = previous.item.message;
+  const nextMessage = next.item.message;
+
+  return (
+    previous.item.key === next.item.key &&
+    previous.item.messageId === next.item.messageId &&
+    areMessagesRenderEquivalent(previousMessage, nextMessage) &&
+    previous.isOwn === next.isOwn &&
+    previous.isGroupTail === next.isGroupTail &&
+    previous.bubblePosition === next.bubblePosition &&
+    previous.showSenderName === next.showSenderName &&
+    previous.senderDisplayName === next.senderDisplayName &&
+    previous.onReply === next.onReply &&
+    previous.onReact === next.onReact &&
+    previous.onForward === next.onForward &&
+    previous.onPin === next.onPin &&
+    previous.onEdit === next.onEdit &&
+    previous.onDelete === next.onDelete &&
+    previous.onImageClick === next.onImageClick &&
+    previous.onFilePreview === next.onFilePreview &&
+    previous.isSelectionMode === next.isSelectionMode &&
+    previous.isSelected === next.isSelected &&
+    previous.onToggleSelect === next.onToggleSelect &&
+    previous.onNavigateToMessage === next.onNavigateToMessage &&
+    previous.currentUsername === next.currentUsername &&
+    previous.viewerCanRecallOthers === next.viewerCanRecallOthers &&
+    previous.onToggleLongMessageExpand === next.onToggleLongMessageExpand &&
+    isMessageInserted(previous.insertedMessageKeys, previousMessage) ===
+      isMessageInserted(next.insertedMessageKeys, nextMessage) &&
+    isLongTextExpanded(previous.expandedLongMessageIds, previousMessage) ===
+      isLongTextExpanded(next.expandedLongMessageIds, nextMessage) &&
+    isMessageHighlighted(previous.highlightedMessageId, previousMessage) ===
+      isMessageHighlighted(next.highlightedMessageId, nextMessage)
+  );
+};
+
+const MessageGroupItem = React.memo(
+  MessageGroupItemComponent,
+  areEqualMessageGroupItemProps,
+);
 
 const MessageGroupBase: React.FC<MessageGroupProps> = ({
   row,

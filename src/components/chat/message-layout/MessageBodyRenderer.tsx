@@ -24,6 +24,7 @@ import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
+import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { useAuthStore } from "../../../stores";
 import { useFriendship } from "../../../hooks/useFriendship";
 import { conversationApi } from "../../../services/api";
@@ -393,7 +394,7 @@ const UnsupportedLocationMessage: React.FC<{ isOwn: boolean }> = ({ isOwn }) => 
   </div>
 );
 
-export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
+const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
   currentUsername,
@@ -675,5 +676,24 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
     }
   }
 };
+
+const areEqualMessageBodyRendererProps = (
+  previous: MessageBodyRendererProps,
+  next: MessageBodyRendererProps,
+): boolean =>
+  areMessagesRenderEquivalent(previous.message, next.message) &&
+  previous.isOwn === next.isOwn &&
+  previous.currentUsername === next.currentUsername &&
+  previous.currentUserId === next.currentUserId &&
+  previous.textRenderMode === next.textRenderMode &&
+  previous.isCollapsibleText === next.isCollapsibleText &&
+  previous.onToggleTextExpand === next.onToggleTextExpand &&
+  previous.onImageClick === next.onImageClick &&
+  previous.onFilePreview === next.onFilePreview;
+
+export const MessageBodyRenderer = React.memo(
+  MessageBodyRendererComponent,
+  areEqualMessageBodyRendererProps,
+);
 
 export default MessageBodyRenderer;

@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import { registerStoreResetter } from "./storeResetRegistry";
+
+const MAX_ENRICHED_PROFILE_NAMES = 400;
 
 /**
  * Stores resolved display names fetched from /users/{id}.
@@ -6,25 +9,57 @@ import { create } from "zustand";
  */
 interface EnrichedProfileState {
   nameByUserId: Record<string, string>;
+  lruUserIds: string[];
   setEnrichedName: (userId: string, name: string) => void;
   clearEnrichedName: (userId: string) => void;
   getEnrichedName: (userId: string) => string | undefined;
+  clear: () => void;
 }
 
 export const useEnrichedProfileStore = create<EnrichedProfileState>((set, get) => ({
   nameByUserId: {},
+  lruUserIds: [],
   setEnrichedName: (userId, name) =>
-    set((state) =>
-      state.nameByUserId[userId] === name
-        ? state
-        : { nameByUserId: { ...state.nameByUserId, [userId]: name } },
-    ),
+    set((state) => {
+      if (!userId) return state;
+
+      const nextOrder = [
+        ...state.lruUserIds.filter((id) => id !== userId),
+        userId,
+      ];
+      const nextNames = { ...state.nameByUserId, [userId]: name };
+
+      while (nextOrder.length > MAX_ENRICHED_PROFILE_NAMES) {
+        const evictedUserId = nextOrder.shift();
+        if (evictedUserId) {
+          delete nextNames[evictedUserId];
+        }
+      }
+
+      if (
+        state.nameByUserId[userId] === name &&
+        state.lruUserIds.length === nextOrder.length &&
+        state.lruUserIds[state.lruUserIds.length - 1] === userId
+      ) {
+        return state;
+      }
+
+      return { nameByUserId: nextNames, lruUserIds: nextOrder };
+    }),
   clearEnrichedName: (userId) =>
     set((state) => {
       if (!(userId in state.nameByUserId)) return state;
       const next = { ...state.nameByUserId };
       delete next[userId];
-      return { nameByUserId: next };
+      return {
+        nameByUserId: next,
+        lruUserIds: state.lruUserIds.filter((id) => id !== userId),
+      };
     }),
   getEnrichedName: (userId) => get().nameByUserId[userId],
+  clear: () => set({ nameByUserId: {}, lruUserIds: [] }),
 }));
+
+registerStoreResetter("enriched-profile", () => {
+  useEnrichedProfileStore.getState().clear();
+});
