@@ -192,7 +192,9 @@ const TimedEventBlock: React.FC<{
   );
 };
 
-export const DayView: React.FC<DayViewProps> = ({
+// memo: parent (CalendarPage) re-renders on every modal toggle; props are
+// stable (useCallback handlers) so memo lets Day view skip those re-renders.
+const DayViewImpl: React.FC<DayViewProps> = ({
   date,
   events,
   attendance,
@@ -405,5 +407,7 @@ export const DayView: React.FC<DayViewProps> = ({
     </div>
   );
 };
+
+export const DayView = React.memo(DayViewImpl);
 
 export default DayView;
