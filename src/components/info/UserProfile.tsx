@@ -11,11 +11,13 @@ import {
   CheckIcon,
   EnvelopeIcon,
   IdentificationIcon,
+  ClockIcon,
   PencilSquareIcon,
   PhoneIcon,
   UserPlusIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 import { Avatar } from "../common/Avatar";
 import { Button, ConfirmDialog, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
@@ -30,8 +32,12 @@ import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
 import { extractApiError } from "../../lib/apiContract";
 import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
-import type { UserSummary } from "../../types";
-import { UserStatus } from "../../types";
+import type { Message, UserSummary } from "../../types";
+import { MessageType, UserStatus } from "../../types";
+import { messageApi } from "../../services/api";
+import { unwrapApiSuccess } from "../../lib/apiContract";
+import { ReminderHistoryList } from "./ReminderHistoryList";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { formatCalendarDate, formatCalendarDateTime } from "../../utils/formatTime";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
@@ -81,6 +87,8 @@ interface UserProfileProps {
   onClose: () => void;
   onStartConversation?: (userId: string) => void | Promise<void>;
   conversationContext?: UserProfileConversationContext;
+  /** Jump the open timeline to a message (e.g. tapping a reminder in the history list). */
+  onJumpToMessage?: (messageId: string) => void;
   className?: string;
 }
 
@@ -194,6 +202,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onClose,
   onStartConversation,
   conversationContext = "standalone",
+  onJumpToMessage,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common", "friends"]);
@@ -218,10 +227,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     skip: isSelf || !userId,
     refetchOnMountOrArgChange: true,
   });
+  const navigate = useNavigate();
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [isUnfriendConfirmOpen, setIsUnfriendConfirmOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
   const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
+
+  // Reminder history for 1-1 DMs — in-chat reminder cards live as REMINDER messages.
+  const [reminders, setReminders] = React.useState<Message[]>([]);
+  const [remindersLoading, setRemindersLoading] = React.useState(false);
+  const showReminders = conversationContext === "direct" && Boolean(conversationId);
+  React.useEffect(() => {
+    if (!showReminders || !conversationId) return;
+    setRemindersLoading(true);
+    void messageApi
+      .searchMessages({ conversationId, type: MessageType.REMINDER, q: "", limit: 30 })
+      .then((res) => setReminders(unwrapApiSuccess(res)?.messages ?? []))
+      .catch(() => setReminders([]))
+      .finally(() => setRemindersLoading(false));
+  }, [showReminders, conversationId]);
 
   const currentAlias = useFriendshipStore((s) => s.friendByUserId[userId]?.alias ?? null);
   const [isEditingAlias, setIsEditingAlias] = React.useState(false);
@@ -877,6 +901,28 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <section className="space-y-2">
                   <SharedResourcesPreview conversationId={conversationId} />
                 </section>
+              )}
+
+              {showReminders && (
+                <CollapsibleSection
+                  title="Nhắc hẹn"
+                  icon={<ClockIcon className="h-4 w-4" />}
+                  defaultOpen={false}
+                  badge={
+                    reminders.length > 0 ? (
+                      <span className="rounded-full bg-surface-overlay px-1.5 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+                        {reminders.length}
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <ReminderHistoryList
+                    reminders={reminders}
+                    loading={remindersLoading}
+                    onJumpToMessage={onJumpToMessage}
+                    onOpenCalendar={() => navigate("/calendar")}
+                  />
+                </CollapsibleSection>
               )}
 
               {relationship.kind === "friend" && capabilities.canUnfriend && (

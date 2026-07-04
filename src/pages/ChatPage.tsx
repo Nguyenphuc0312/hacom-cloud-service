@@ -1375,6 +1375,7 @@ export const ChatPage: React.FC = () => {
                         }}
                         onClose={closeInfoPanel}
                         onStartConversation={handleStartChat}
+                        onJumpToMessage={handleJumpToMessageInConversation}
                       />
                     ) : (
                       <ProfileSkeleton />
