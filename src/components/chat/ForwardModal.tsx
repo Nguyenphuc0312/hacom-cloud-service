@@ -15,7 +15,7 @@ import {
   getOtherParticipant,
 } from "../../utils/messageHelpers";
 import { stripHtmlToText } from "../../utils/messageContent.utils";
-import { resolvePublicResourceUrl } from "../../config";
+import { usePreviewUrl } from "../../hooks";
 import {
   formatFileSize,
   getFileIconType,
@@ -85,11 +85,35 @@ interface ForwardPreview {
   text: string;
   /** Secondary line for files: formatted size. */
   meta?: string;
-  /** Present for image/video files → render a thumbnail instead of the icon. */
-  thumbnailUrl?: string;
   /** Colored file-type icon when there's no thumbnail. */
   iconType?: FileIconType;
+  /** Image/video: source conversation + attachment id to fetch a thumbnail. */
+  imageSource?: { conversationId: string; attachmentId: string };
 }
+
+/** Thumbnail for a forwarded image/video, fetched via the same preview
+ *  pipeline the timeline uses (server presigned URL, not the inline field). */
+const ForwardThumb: React.FC<{
+  source: { conversationId: string; attachmentId: string };
+  alt: string;
+  fallbackIcon: FileIconType;
+}> = ({ source, alt, fallbackIcon }) => {
+  const { url } = usePreviewUrl(source.conversationId, source.attachmentId, {
+    autoFetch: true,
+  });
+  const [failed, setFailed] = React.useState(false);
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        className="h-full w-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <FileTypeIcon type={fallbackIcon} />;
+};
 
 /**
  * Preview of what's being forwarded, for the strip above the note input.
@@ -118,17 +142,17 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
 
   if (attachment) {
     const previewType = getPreviewType(attachment.mimeType, attachment.fileName);
-    const rawThumb =
-      previewType === "image" || previewType === "video"
-        ? attachment.thumbnailUrl || attachment.url || attachment.downloadUrl
-        : undefined;
+    const isVisual = previewType === "image" || previewType === "video";
     return {
       kind: "file",
       labelKey: "sharingFile",
       text: attachment.fileName || "Tệp đính kèm",
       meta: attachment.fileSize ? formatFileSize(attachment.fileSize) : undefined,
-      thumbnailUrl: rawThumb ? resolvePublicResourceUrl(rawThumb) : undefined,
       iconType: getFileIconType(attachment.mimeType, attachment.fileName),
+      imageSource:
+        isVisual && msg.conversationId
+          ? { conversationId: msg.conversationId, attachmentId: attachment.id }
+          : undefined,
     };
   }
   if (text.trim()) {
@@ -160,7 +184,6 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   const [tab, setTab] = React.useState<TabKey>("recent");
   const [query, setQuery] = React.useState("");
   const [note, setNote] = React.useState("");
-  const [thumbFailed, setThumbFailed] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [forwardMessages, { isLoading }] = useForwardMessagesMutation();
 
@@ -438,12 +461,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             {preview.kind === "file" ? (
               <div className="mt-1.5 flex items-center gap-2.5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface ring-1 ring-border">
-                  {preview.thumbnailUrl && !thumbFailed ? (
-                    <img
-                      src={preview.thumbnailUrl}
+                  {preview.imageSource ? (
+                    <ForwardThumb
+                      source={preview.imageSource}
                       alt={preview.text}
-                      className="h-full w-full object-cover"
-                      onError={() => setThumbFailed(true)}
+                      fallbackIcon={preview.iconType ?? "generic"}
                     />
                   ) : (
                     <FileTypeIcon type={preview.iconType ?? "generic"} />
