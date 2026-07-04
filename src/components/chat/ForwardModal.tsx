@@ -14,7 +14,11 @@ import {
   getConversationDisplayName,
   getOtherParticipant,
 } from "../../utils/messageHelpers";
-import { stripHtmlToText } from "../../utils/messageContent.utils";
+import {
+  stripHtmlToText,
+  shouldTreatMessageContentAsRichText,
+} from "../../utils/messageContent.utils";
+import { extractFirstUrlFromContent } from "../message/linkPreviewUtils";
 import { usePreviewUrl } from "../../hooks";
 import {
   formatFileSize,
@@ -77,11 +81,18 @@ const sectionLetter = (name: string): string => {
   return /[A-Z]/.test(first) ? first : "#";
 };
 
+type PreviewLabelKey =
+  | "sharing"
+  | "sharingFile"
+  | "sharingImage"
+  | "sharingVideo"
+  | "sharingLink";
+
 interface ForwardPreview {
+  /** "file" renders the icon/thumbnail + name + size row; others render text. */
   kind: "text" | "file";
-  /** i18n label id: "sharing" (message) or "sharingFile" (file). */
-  labelKey: "sharing" | "sharingFile";
-  /** Primary line: message text or file name. */
+  labelKey: PreviewLabelKey;
+  /** Primary line: message text, file name, or URL. */
   text: string;
   /** Secondary line for files: formatted size. */
   meta?: string;
@@ -90,6 +101,14 @@ interface ForwardPreview {
   /** Image/video: source conversation + attachment id to fetch a thumbnail. */
   imageSource?: { conversationId: string; attachmentId: string };
 }
+
+const PREVIEW_LABEL_DEFAULTS: Record<PreviewLabelKey, string> = {
+  sharing: "Chia sẻ tin nhắn",
+  sharingFile: "Chia sẻ file",
+  sharingImage: "Chia sẻ hình ảnh",
+  sharingVideo: "Chia sẻ video",
+  sharingLink: "Chia sẻ link",
+};
 
 /** Thumbnail for a forwarded image/video, fetched via the same preview
  *  pipeline the timeline uses (server presigned URL, not the inline field). */
@@ -142,21 +161,41 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
 
   if (attachment) {
     const previewType = getPreviewType(attachment.mimeType, attachment.fileName);
-    const isVisual = previewType === "image" || previewType === "video";
+    const isImage = previewType === "image";
+    const isVideo = previewType === "video";
     return {
       kind: "file",
-      labelKey: "sharingFile",
+      labelKey: isImage
+        ? "sharingImage"
+        : isVideo
+          ? "sharingVideo"
+          : "sharingFile",
       text: attachment.fileName || "Tệp đính kèm",
       meta: attachment.fileSize ? formatFileSize(attachment.fileSize) : undefined,
       iconType: getFileIconType(attachment.mimeType, attachment.fileName),
       imageSource:
-        isVisual && msg.conversationId
+        (isImage || isVideo) && msg.conversationId
           ? { conversationId: msg.conversationId, attachmentId: attachment.id }
           : undefined,
     };
   }
+
+  // Link message → show the URL under a "Chia sẻ link" label (like Zalo).
+  const isRich = shouldTreatMessageContentAsRichText({
+    contentFormat: msg.contentFormat,
+    content: rawText,
+  });
+  const url = extractFirstUrlFromContent(rawText, isRich);
+  if (url && (!text.trim() || text.trim() === url)) {
+    return { kind: "text", labelKey: "sharingLink", text: url };
+  }
+
   if (text.trim()) {
-    return { kind: "text", labelKey: "sharing", text: text.trim() };
+    return {
+      kind: "text",
+      labelKey: url ? "sharingLink" : "sharing",
+      text: text.trim(),
+    };
   }
   return { kind: "text", labelKey: "sharing", text: "[Tin nhắn]" };
 };
@@ -243,10 +282,9 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   }, [filtered, tab, currentUserId, enrichedNames]);
 
   const preview = React.useMemo(() => buildPreview(messages), [messages]);
-  const previewLabel =
-    preview.labelKey === "sharingFile"
-      ? t("chat:message.forward.sharingFile", { defaultValue: "Chia sẻ file" })
-      : t("chat:message.forward.sharing", { defaultValue: "Chia sẻ tin nhắn" });
+  const previewLabel = t(`chat:message.forward.${preview.labelKey}`, {
+    defaultValue: PREVIEW_LABEL_DEFAULTS[preview.labelKey],
+  });
 
   const toggleSelect = (conversationId: string) => {
     setSelected((prev) => {
