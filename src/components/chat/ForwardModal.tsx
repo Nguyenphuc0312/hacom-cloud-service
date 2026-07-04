@@ -7,8 +7,14 @@ import { useTranslation } from "react-i18next";
 import type { Attachment, Conversation, Message } from "../../types";
 import { RoomType } from "../../types";
 import { useChatStore } from "../../stores";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { isDirectConversation } from "../../lib/conversationAdapter";
-import { getConversationDisplayName } from "../../utils/messageHelpers";
+import {
+  getConversationDisplayName,
+  getOtherParticipant,
+} from "../../utils/messageHelpers";
+import { stripHtmlToText } from "../../utils/messageContent.utils";
 import { resolvePublicResourceUrl } from "../../config";
 import {
   formatFileSize,
@@ -31,11 +37,25 @@ interface ForwardModalProps {
   onClose: () => void;
 }
 
-const resolveConvName = (conv: Conversation, currentUserId: string): string =>
-  getConversationDisplayName(conv, currentUserId) ||
-  conv.displayName ||
-  conv.name ||
-  "Cuộc trò chuyện";
+const resolveConvName = (
+  conv: Conversation,
+  currentUserId: string,
+  enrichedNames: Record<string, string>,
+): string => {
+  // For DMs, prefer the enriched /users/{id} name — same source the sidebar
+  // uses so a remembered/HR name shows here too (not the raw original name).
+  if (isDirectConversation(conv)) {
+    const partnerId = getOtherParticipant(conv, currentUserId)?.id;
+    const enriched = partnerId ? enrichedNames[partnerId] : undefined;
+    if (enriched) return enriched;
+  }
+  return (
+    getConversationDisplayName(conv, currentUserId) ||
+    conv.displayName ||
+    conv.name ||
+    "Cuộc trò chuyện"
+  );
+};
 
 const isGroupConversation = (conv: Conversation): boolean =>
   conv.type === RoomType.GROUP ||
@@ -88,16 +108,19 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
   }
   const [msg] = messages;
   const attachment: Attachment | undefined = msg.attachments?.[0];
-  const text =
+  const rawText =
     typeof msg.content === "string"
       ? msg.content
       : (msg.content as { text?: string } | undefined)?.text ?? "";
+  // Content may be rich-text HTML (links, formatting) — show the visible text,
+  // not the markup.
+  const text = rawText ? stripHtmlToText(rawText) : "";
 
   if (attachment) {
     const previewType = getPreviewType(attachment.mimeType, attachment.fileName);
     const rawThumb =
       previewType === "image" || previewType === "video"
-        ? attachment.thumbnailUrl || attachment.url
+        ? attachment.thumbnailUrl || attachment.url || attachment.downloadUrl
         : undefined;
     return {
       kind: "file",
@@ -132,11 +155,24 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
     [orderedConversationIds, conversationById],
   );
 
+  const enrichedNames = useEnrichedProfileStore((s) => s.nameByUserId);
+
   const [tab, setTab] = React.useState<TabKey>("recent");
   const [query, setQuery] = React.useState("");
   const [note, setNote] = React.useState("");
+  const [thumbFailed, setThumbFailed] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [forwardMessages, { isLoading }] = useForwardMessagesMutation();
+
+  // Fetch full profiles for DM partners so remembered/HR names show (same as
+  // the sidebar). TTL-cached, so re-running on list changes is cheap.
+  React.useEffect(() => {
+    for (const conv of conversations) {
+      if (!isDirectConversation(conv)) continue;
+      const partnerId = getOtherParticipant(conv, currentUserId)?.id;
+      if (partnerId) enrichUserProfile(partnerId);
+    }
+  }, [conversations, currentUserId]);
 
   const tabs: Array<{ id: TabKey; label: string }> = [
     { id: "recent", label: "Gần đây" },
@@ -150,9 +186,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       if (tab === "groups" && !isGroupConversation(c)) return false;
       if (tab === "friends" && !isDirectConversation(c)) return false;
       if (!q) return true;
-      return resolveConvName(c, currentUserId).toLowerCase().includes(q);
+      return resolveConvName(c, currentUserId, enrichedNames)
+        .toLowerCase()
+        .includes(q);
     });
-  }, [conversations, tab, query, currentUserId]);
+  }, [conversations, tab, query, currentUserId, enrichedNames]);
 
   // Recent = activity order (as stored). Groups/Friends = alphabetical sections.
   const sections = React.useMemo(() => {
@@ -161,7 +199,9 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
     }
     const byLetter = new Map<string, Conversation[]>();
     for (const conv of filtered) {
-      const letter = sectionLetter(resolveConvName(conv, currentUserId));
+      const letter = sectionLetter(
+        resolveConvName(conv, currentUserId, enrichedNames),
+      );
       const bucket = byLetter.get(letter);
       if (bucket) bucket.push(conv);
       else byLetter.set(letter, [conv]);
@@ -171,13 +211,13 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       .map(([letter, items]) => ({
         letter,
         items: items.sort((x, y) =>
-          resolveConvName(x, currentUserId).localeCompare(
-            resolveConvName(y, currentUserId),
+          resolveConvName(x, currentUserId, enrichedNames).localeCompare(
+            resolveConvName(y, currentUserId, enrichedNames),
             "vi",
           ),
         ),
       }));
-  }, [filtered, tab, currentUserId]);
+  }, [filtered, tab, currentUserId, enrichedNames]);
 
   const preview = React.useMemo(() => buildPreview(messages), [messages]);
   const previewLabel =
@@ -268,7 +308,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 
         {/* Search */}
         <div className="shrink-0 px-5 pb-1">
-          <div className="flex items-center gap-2 rounded-full border border-border bg-surface-hover px-3.5 py-2.5 transition focus-within:border-[#1565C0]/60 focus-within:bg-surface focus-within:ring-2 focus-within:ring-[#1565C0]/20">
+          <div className="flex items-center gap-2 rounded-full border border-border bg-surface-hover px-3.5 py-2.5 transition-colors focus-within:border-[#1976D2]/60">
             <MagnifyingGlassIcon className="h-4 w-4 shrink-0 text-text-muted" />
             <input
               type="text"
@@ -277,7 +317,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
               })}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
+              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none focus:outline-none focus:ring-0"
               autoFocus
             />
           </div>
@@ -336,7 +376,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 )}
                 {section.items.map((conv) => {
                   const isSelected = selected.has(conv.id);
-                  const name = resolveConvName(conv, currentUserId);
+                  const name = resolveConvName(conv, currentUserId, enrichedNames);
                   const isGroup = isGroupConversation(conv);
                   return (
                     <button
@@ -391,18 +431,19 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 
         {/* Forwarded-message preview + optional note */}
         <div className="shrink-0 border-t border-border px-5 py-3">
-          <div className="rounded-[10px] bg-surface-subtle px-3 py-2">
+          <div className="rounded-[10px] border border-border bg-surface-hover px-3 py-2.5">
             <p className="text-xs font-semibold text-text-secondary">
               {previewLabel}
             </p>
             {preview.kind === "file" ? (
-              <div className="mt-1 flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface ring-1 ring-border">
-                  {preview.thumbnailUrl ? (
+              <div className="mt-1.5 flex items-center gap-2.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface ring-1 ring-border">
+                  {preview.thumbnailUrl && !thumbFailed ? (
                     <img
                       src={preview.thumbnailUrl}
                       alt={preview.text}
                       className="h-full w-full object-cover"
+                      onError={() => setThumbFailed(true)}
                     />
                   ) : (
                     <FileTypeIcon type={preview.iconType ?? "generic"} />
@@ -418,7 +459,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 </div>
               </div>
             ) : (
-              <p className="mt-0.5 truncate text-[13px] text-text-primary">
+              <p className="mt-1 line-clamp-2 text-[13px] text-text-primary">
                 {preview.text}
               </p>
             )}
