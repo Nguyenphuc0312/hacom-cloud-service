@@ -4,11 +4,19 @@ import clsx from "clsx";
 import { Users } from "lucide-react";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import type { Conversation, Message } from "../../types";
+import type { Attachment, Conversation, Message } from "../../types";
 import { RoomType } from "../../types";
 import { useChatStore } from "../../stores";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { getConversationDisplayName } from "../../utils/messageHelpers";
+import { resolvePublicResourceUrl } from "../../config";
+import {
+  formatFileSize,
+  getFileIconType,
+  getPreviewType,
+} from "../../utils/formatFileSize";
+import type { FileIconType } from "../../utils/formatFileSize";
+import { FileTypeIcon } from "../message/FileTypeIcon";
 import { Avatar } from "../common/Avatar";
 import { toast } from "../ui";
 import { useForwardMessagesMutation } from "../../features/api/chatApi";
@@ -49,29 +57,61 @@ const sectionLetter = (name: string): string => {
   return /[A-Z]/.test(first) ? first : "#";
 };
 
+interface ForwardPreview {
+  kind: "text" | "file";
+  /** i18n label id: "sharing" (message) or "sharingFile" (file). */
+  labelKey: "sharing" | "sharingFile";
+  /** Primary line: message text or file name. */
+  text: string;
+  /** Secondary line for files: formatted size. */
+  meta?: string;
+  /** Present for image/video files → render a thumbnail instead of the icon. */
+  thumbnailUrl?: string;
+  /** Colored file-type icon when there's no thumbnail. */
+  iconType?: FileIconType;
+}
+
 /**
  * Preview of what's being forwarded, for the strip above the note input.
- * Mirrors Zalo: file messages show the filename under a "Chia sẻ file" label.
+ * Mirrors Zalo: file → icon/thumbnail + name + size; image → thumbnail.
  */
-const buildPreview = (
-  messages: Message[],
-): { label: string; text: string } => {
-  if (messages.length === 0) return { label: "Chia sẻ tin nhắn", text: "" };
+const buildPreview = (messages: Message[]): ForwardPreview => {
+  if (messages.length === 0) {
+    return { kind: "text", labelKey: "sharing", text: "" };
+  }
   if (messages.length > 1) {
-    return { label: "Chia sẻ tin nhắn", text: `${messages.length} tin nhắn` };
+    return {
+      kind: "text",
+      labelKey: "sharing",
+      text: `${messages.length} tin nhắn`,
+    };
   }
   const [msg] = messages;
-  const attachment = msg.attachments?.[0];
+  const attachment: Attachment | undefined = msg.attachments?.[0];
   const text =
     typeof msg.content === "string"
       ? msg.content
       : (msg.content as { text?: string } | undefined)?.text ?? "";
-  if (attachment?.fileName) {
-    return { label: "Chia sẻ file", text: attachment.fileName };
+
+  if (attachment) {
+    const previewType = getPreviewType(attachment.mimeType, attachment.fileName);
+    const rawThumb =
+      previewType === "image" || previewType === "video"
+        ? attachment.thumbnailUrl || attachment.url
+        : undefined;
+    return {
+      kind: "file",
+      labelKey: "sharingFile",
+      text: attachment.fileName || "Tệp đính kèm",
+      meta: attachment.fileSize ? formatFileSize(attachment.fileSize) : undefined,
+      thumbnailUrl: rawThumb ? resolvePublicResourceUrl(rawThumb) : undefined,
+      iconType: getFileIconType(attachment.mimeType, attachment.fileName),
+    };
   }
-  if (text.trim()) return { label: "Chia sẻ tin nhắn", text: text.trim() };
-  if (attachment) return { label: "Chia sẻ tin nhắn", text: "[Tệp đính kèm]" };
-  return { label: "Chia sẻ tin nhắn", text: "[Tin nhắn]" };
+  if (text.trim()) {
+    return { kind: "text", labelKey: "sharing", text: text.trim() };
+  }
+  return { kind: "text", labelKey: "sharing", text: "[Tin nhắn]" };
 };
 
 export const ForwardModal: React.FC<ForwardModalProps> = ({
@@ -141,7 +181,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 
   const preview = React.useMemo(() => buildPreview(messages), [messages]);
   const previewLabel =
-    preview.label === "Chia sẻ file"
+    preview.labelKey === "sharingFile"
       ? t("chat:message.forward.sharingFile", { defaultValue: "Chia sẻ file" })
       : t("chat:message.forward.sharing", { defaultValue: "Chia sẻ tin nhắn" });
 
@@ -355,9 +395,33 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             <p className="text-xs font-semibold text-text-secondary">
               {previewLabel}
             </p>
-            <p className="mt-0.5 truncate text-[13px] text-text-primary">
-              {preview.text}
-            </p>
+            {preview.kind === "file" ? (
+              <div className="mt-1 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface ring-1 ring-border">
+                  {preview.thumbnailUrl ? (
+                    <img
+                      src={preview.thumbnailUrl}
+                      alt={preview.text}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <FileTypeIcon type={preview.iconType ?? "generic"} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-text-primary">
+                    {preview.text}
+                  </p>
+                  {preview.meta && (
+                    <p className="text-xs text-text-muted">{preview.meta}</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-0.5 truncate text-[13px] text-text-primary">
+                {preview.text}
+              </p>
+            )}
           </div>
           <input
             type="text"
