@@ -37,6 +37,8 @@ import {
 import type { Conversation, Message, UserSummary } from "../../types";
 import { MessageType, RoomMemberRole, UserStatus } from "../../types";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
+import { ReminderHistoryList } from "./ReminderHistoryList";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { messageApi } from "../../services/api";
 import {
   loadUserProfiles,
@@ -270,79 +272,6 @@ const areMemberMapsEqual = (
 
 
 
-interface CollapsibleSectionProps {
-  title: string;
-  icon: React.ReactNode;
-  badge?: React.ReactNode;
-  defaultOpen?: boolean;
-  danger?: boolean;
-  children: React.ReactNode;
-}
-
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
-  title,
-  icon,
-  badge,
-  defaultOpen = true,
-  danger = false,
-  children,
-}) => {
-  const [open, setOpen] = useState(defaultOpen);
-  const sectionId = React.useId();
-
-  return (
-    <div
-      className={clsx(
-        "overflow-hidden rounded-2xl border bg-surface",
-        danger ? "border-red-200 bg-red-50/30" : "border-border",
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((p) => !p)}
-        className={clsx(
-          "flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors",
-          danger ? "hover:bg-red-50/60" : "hover:bg-surface-hover",
-        )}
-        aria-expanded={open}
-        aria-controls={sectionId}
-      >
-        <span className={clsx("shrink-0", danger ? "text-red-600" : "text-text-muted")}>
-          {icon}
-        </span>
-        <span
-          className={clsx(
-            "flex-1 text-sm font-medium",
-            danger ? "text-red-600" : "text-text-primary",
-          )}
-        >
-          {title}
-        </span>
-        {badge}
-        <ChevronDownIcon
-          className={clsx(
-            "h-4 w-4 shrink-0 transition-transform duration-200",
-            danger ? "text-red-600" : "text-text-muted",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {open && (
-        <div
-          id={sectionId}
-          className={clsx(
-            "border-t",
-            danger ? "border-red-200" : "border-border",
-          )}
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export const GroupInfo: React.FC<GroupInfoProps> = ({
@@ -408,6 +337,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [pollsLoading, setPollsLoading] = React.useState(false);
   const [pollsShowAll, setPollsShowAll] = React.useState(false);
   const [voterProfilesMap, setVoterProfilesMap] = React.useState<Record<string, { name: string; avatar: string | null }>>({});
+  // Reminders section — in-chat reminder cards live as REMINDER messages, same as polls.
+  const [reminders, setReminders] = React.useState<Message[]>([]);
+  const [remindersLoading, setRemindersLoading] = React.useState(false);
   const pollsSectionRef = React.useRef<HTMLDivElement>(null);
   const remindersSectionRef = React.useRef<HTMLDivElement>(null);
 
@@ -464,6 +396,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       })
       .catch(() => setPolls([]))
       .finally(() => setPollsLoading(false));
+
+    setRemindersLoading(true);
+    void messageApi
+      .searchMessages({ conversationId: conversation.id, type: MessageType.REMINDER, q: "", limit: 30 })
+      .then((res) => {
+        setReminders(unwrapApiSuccess(res)?.messages ?? []);
+      })
+      .catch(() => setReminders([]))
+      .finally(() => setRemindersLoading(false));
   }, [conversation.id, loadVoterProfiles]);
 
   const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
@@ -1527,7 +1468,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                               <div
                                                 key={uid}
                                                 title={vp?.name ?? uid}
-                                                className="ring-[1.5px] ring-surface-overlay"
+                                                className="rounded-full"
                                                 style={{ marginLeft: i === 0 ? 0 : -5, position: "relative", zIndex: 3 - i }}
                                               >
                                                 <Avatar
@@ -1608,25 +1549,20 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               title="Nhắc hẹn"
               icon={<ClockIcon className="h-4 w-4" />}
               defaultOpen={false}
+              badge={
+                reminders.length > 0 ? (
+                  <span className="rounded-full bg-surface-overlay px-1.5 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+                    {reminders.length}
+                  </span>
+                ) : undefined
+              }
             >
-              <div className="flex flex-col items-center gap-3 py-6 px-4 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1565C0]/08">
-                  <ClockIcon className="h-6 w-6 text-[#1565C0]/50" />
-                </div>
-                <div>
-                  <p className="text-[12.5px] font-medium text-text-primary">Chưa có nhắc hẹn nào</p>
-                  <p className="mt-0.5 text-[11px] text-text-muted">
-                    Đặt nhắc hẹn từ tin nhắn để không bỏ lỡ việc quan trọng
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-xl bg-[#1565C0]/10 px-4 py-2 text-[12px] font-medium text-[#1565C0] transition-colors hover:bg-[#1565C0]/16"
-                  onClick={() => navigate("/calendar")}
-                >
-                  Mở lịch
-                </button>
-              </div>
+              <ReminderHistoryList
+                reminders={reminders}
+                loading={remindersLoading}
+                onJumpToMessage={onJumpToMessage}
+                onOpenCalendar={() => navigate("/calendar")}
+              />
             </CollapsibleSection>
           </div>
 
