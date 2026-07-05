@@ -90,7 +90,7 @@ const MarkdownContent = React.lazy(
   () => import("../../../components/message/MarkdownContent"),
 );
 
-const isImageMime = (mime: string) => mime.startsWith("image/");
+const isImageMime = (mime: string | null | undefined) => (mime ?? "").startsWith("image/");
 
 /**
  * Map attachment đã lưu ở BE (HRCalendarEvent.attachments) → dạng form REMOTE,
@@ -102,11 +102,11 @@ const remoteAttachmentsToForm = (
   (attachments ?? []).map((a) => ({
     id: a.fileId,
     previewUrl: isImageMime(a.mimeType) ? (a.thumbnailUrl ?? a.url) : null,
-    name: a.filename,
-    sizeBytes: a.sizeBytes,
-    mimeType: a.mimeType,
+    name: a.filename ?? a.fileId,
+    sizeBytes: a.sizeBytes ?? 0,
+    mimeType: a.mimeType ?? "application/octet-stream",
     remoteFileId: a.fileId,
-    downloadUrl: a.url,
+    downloadUrl: a.url ?? undefined,
   }));
 
 /**
@@ -691,7 +691,7 @@ const EventDetailModal: React.FC<{
               </button>
               {attachmentsOpen && (
                 <div className="mt-2">
-                  <CalendarAttachmentList attachments={hrEvent.attachments} />
+                  <CalendarAttachmentList eventId={hrEvent.id} attachments={hrEvent.attachments} />
                 </div>
               )}
             </div>

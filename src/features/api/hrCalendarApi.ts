@@ -50,10 +50,18 @@ export interface HRCalendarOwner {
  */
 export interface CalendarAttachmentDto {
   fileId: string;
-  filename: string;
-  mimeType: string;
-  sizeBytes: number;
-  url: string;
+  filename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  relationshipStatus?: "ACTIVE" | "REMOVED";
+  metadataStatus?: "PENDING" | "READY" | "RESOLVE_FAILED" | "DELETED";
+  downloadStatus?:
+    | "READY"
+    | "NOT_READY"
+    | "TEMPORARILY_UNAVAILABLE"
+    | "FORBIDDEN"
+    | "DELETED";
+  url: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -82,6 +90,7 @@ export interface HRCalendarEvent {
   metadata?: Record<string, unknown> | null;
   /** File/ảnh đính kèm — null/undefined nếu BE chưa hỗ trợ hoặc event không có. */
   attachments?: CalendarAttachmentDto[] | null;
+  attachmentResolveStatus?: "OK" | "PENDING" | "PARTIAL_FAILED" | "FAILED" | "NONE" | null;
   participants: HRCalendarParticipant[];
   canEdit: boolean;
   canDelete: boolean;
@@ -241,6 +250,26 @@ export const hrCalendarApi = {
   getEventPermissions: async (eventId: string): Promise<HRCalendarPermission> => {
     const response = await hrApiClient.get<{ data: HRCalendarPermission }>(
       `/calendar/events/${eventId}/permissions`
+    );
+    return response.data.data;
+  },
+
+  getAttachmentDownloadUrl: async (
+    eventId: string,
+    fileId: string,
+  ): Promise<{
+    fileId: string;
+    url: string | null;
+    downloadStatus: NonNullable<CalendarAttachmentDto["downloadStatus"]>;
+  }> => {
+    const response = await hrApiClient.get<{
+      data: {
+        fileId: string;
+        url: string | null;
+        downloadStatus: NonNullable<CalendarAttachmentDto["downloadStatus"]>;
+      };
+    }>(
+      `/calendar/events/${encodeURIComponent(eventId)}/attachments/${encodeURIComponent(fileId)}/download-url`,
     );
     return response.data.data;
   },
