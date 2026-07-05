@@ -25,6 +25,8 @@ import { getIconTypeFromPreviewType } from "../../utils/filePreviewUtils";
 import { truncateFilename } from "../../utils/truncateFilename";
 import { FilePreviewModal } from "../modals/FilePreviewModal";
 import { useFilePreview, type PreviewTarget } from "../../hooks/useFilePreview";
+import { hrCalendarApi } from "../../features/api/hrCalendarApi";
+import { toast } from "../../utils/toast";
 
 export interface CalendarLocalAttachment {
   id: string; // `local-…` cho file mới, hoặc = remoteFileId cho file đã upload
@@ -64,10 +66,18 @@ const formatSize = (bytes: number): string => {
  */
 export interface CalendarViewAttachment {
   fileId: string;
-  filename: string;
-  mimeType: string;
-  sizeBytes: number;
-  url: string;
+  filename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  relationshipStatus?: "ACTIVE" | "REMOVED";
+  metadataStatus?: "PENDING" | "READY" | "RESOLVE_FAILED" | "DELETED";
+  downloadStatus?:
+    | "READY"
+    | "NOT_READY"
+    | "TEMPORARILY_UNAVAILABLE"
+    | "FORBIDDEN"
+    | "DELETED";
+  url: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -77,15 +87,86 @@ export interface CalendarViewAttachment {
  */
 const isInlineViewable = (previewType: string): boolean => previewType !== "unknown";
 
+const readDownloadErrorStatus = (error: unknown): number | null => {
+  if (typeof error !== "object" || !error || !("response" in error)) {
+    return null;
+  }
+
+  const response = (error as { response?: { status?: unknown } }).response;
+  return typeof response?.status === "number" ? response.status : null;
+};
+
+const readDownloadErrorCode = (error: unknown): string | null => {
+  if (typeof error !== "object" || !error || !("response" in error)) {
+    return null;
+  }
+
+  const response = (error as {
+    response?: { data?: { error?: { code?: unknown }; message?: unknown } };
+  }).response;
+  const code = response?.data?.error?.code;
+  if (typeof code === "string" && code.trim()) {
+    return code;
+  }
+
+  const message = response?.data?.message;
+  return typeof message === "string" && message.trim() ? message : null;
+};
+
+const showDownloadErrorToast = (error: unknown): void => {
+  const status = readDownloadErrorStatus(error);
+  const code = readDownloadErrorCode(error);
+
+  if (status === 403 || code === "FORBIDDEN") {
+    toast.error("Bạn không có quyền tải tệp này.");
+    return;
+  }
+  if (status === 404 || status === 410 || code === "DELETED" || code === "FILE_DELETED") {
+    toast.error("Tệp đã bị xóa hoặc không còn khả dụng.");
+    return;
+  }
+  if (status === 409 || code === "FILE_NOT_READY") {
+    toast.error("Tệp đang được xử lý");
+    return;
+  }
+
+  toast.error("Tạm thời không tải được tệp. Vui lòng thử lại sau.");
+};
+
+const getAttachmentStatusText = (a: CalendarViewAttachment): string | null => {
+  if (a.metadataStatus === "PENDING" || a.downloadStatus === "NOT_READY") {
+    return "Tệp đang được xử lý";
+  }
+  if (a.metadataStatus === "DELETED" || a.downloadStatus === "DELETED") {
+    return "Tệp đã bị xóa hoặc không còn khả dụng";
+  }
+  if (a.downloadStatus === "FORBIDDEN") {
+    return "Bạn không có quyền tải tệp này";
+  }
+  if (a.downloadStatus === "TEMPORARILY_UNAVAILABLE" || a.metadataStatus === "RESOLVE_FAILED") {
+    return "Tạm thời không tải được tệp";
+  }
+  if (!a.url) {
+    return "Tạm thời không tải được tệp";
+  }
+  return null;
+};
+
 const AttachmentCard: React.FC<{
   a: CalendarViewAttachment;
   /** Mở FilePreviewModal xem inline trong app. undefined = không xem được → chỉ tải. */
   onView?: () => void;
-}> = ({ a, onView }) => {
-  const previewType = getMimePreviewType(a.mimeType, a.filename);
+  onDownload?: () => void;
+  isDownloading?: boolean;
+}> = ({ a, onView, onDownload, isDownloading = false }) => {
+  const filename = a.filename || a.fileId;
+  const mimeType = a.mimeType || "application/octet-stream";
+  const sizeBytes = a.sizeBytes ?? 0;
+  const previewType = getMimePreviewType(mimeType, filename);
   const iconType = getIconTypeFromPreviewType(previewType);
   const image = previewType === "image";
   const thumb = image ? a.thumbnailUrl || a.url : null;
+  const statusText = getAttachmentStatusText(a);
 
   return (
     <div className="group flex items-center gap-2.5 rounded-lg border border-border bg-surface-overlay p-2 transition-colors hover:border-[#1976D2]/40">
@@ -94,12 +175,12 @@ const AttachmentCard: React.FC<{
         <button
           type="button"
           onClick={onView}
-          title={`Xem ${a.filename}`}
+          title={`Xem ${filename}`}
           className="shrink-0 cursor-pointer"
         >
           <img
             src={thumb}
-            alt={a.filename}
+            alt={filename}
             loading="lazy"
             className="h-12 w-12 rounded-md object-cover ring-1 ring-border transition group-hover:ring-[#1976D2]/50"
           />
@@ -115,13 +196,19 @@ const AttachmentCard: React.FC<{
       <div className="min-w-0 flex-1">
         <p
           className="overflow-hidden whitespace-nowrap text-sm font-medium text-text-primary"
-          title={a.filename}
+          title={filename}
         >
-          {truncateFilename(a.filename, 34)}
+          {truncateFilename(filename, 34)}
         </p>
-        <p className="text-[11px] uppercase tracking-wide text-text-muted">
-          {(a.filename.split(".").pop() || previewType).toString()} · {formatSize(a.sizeBytes)}
-        </p>
+        {statusText ? (
+          <p className="text-[11px] normal-case tracking-normal text-amber-600 dark:text-amber-300">
+            {statusText}
+          </p>
+        ) : (
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">
+            {(filename.split(".").pop() || previewType).toString()} · {formatSize(sizeBytes)}
+          </p>
+        )}
       </div>
 
       {/* Actions: Xem (inline trong app) + Tải */}
@@ -131,21 +218,44 @@ const AttachmentCard: React.FC<{
             type="button"
             onClick={onView}
             title="Xem"
-            aria-label={`Xem ${a.filename}`}
+            aria-label={`Xem ${filename}`}
             className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
           >
             <EyeIcon className="h-4 w-4" />
           </button>
         )}
-        <a
-          href={a.url}
-          download={a.filename}
-          title="Tải xuống"
-          aria-label={`Tải ${a.filename}`}
-          className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
-        >
-          <ArrowDownTrayIcon className="h-4 w-4" />
-        </a>
+        {onDownload ? (
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={isDownloading}
+            title={isDownloading ? "Đang tạo liên kết tải" : "Tải xuống"}
+            aria-label={`Tải ${filename}`}
+            className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0] disabled:cursor-wait disabled:opacity-50"
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+          </button>
+        ) : a.url ? (
+          <a
+            href={a.url}
+            download={filename}
+            title="Tải xuống"
+            aria-label={`Tải ${filename}`}
+            className="rounded-md p-1.5 text-text-muted hover:bg-[#1976D2]/10 hover:text-[#1565C0]"
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title={statusText ?? "Chưa có URL tải"}
+            aria-label={statusText ?? `Chưa thể tải ${filename}`}
+            className="rounded-md p-1.5 text-text-muted opacity-40"
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -153,7 +263,9 @@ const AttachmentCard: React.FC<{
 
 /** Map attachment lịch → PreviewTarget cho FilePreviewModal (dùng `url` sẵn có). */
 const toPreviewTarget = (a: CalendarViewAttachment): PreviewTarget => {
-  const previewType = getMimePreviewType(a.mimeType, a.filename);
+  const filename = a.filename || a.fileId;
+  const mimeType = a.mimeType || "application/octet-stream";
+  const previewType = getMimePreviewType(mimeType, filename);
   return {
     // Không thuộc hội thoại nào → conversationId rỗng; hook sẽ dùng thẳng `url`.
     conversationId: "",
@@ -161,45 +273,106 @@ const toPreviewTarget = (a: CalendarViewAttachment): PreviewTarget => {
     attachment: {
       id: a.fileId,
       type: FileType.OTHER,
-      url: a.url,
-      downloadUrl: a.url,
+      url: a.url ?? undefined,
+      downloadUrl: a.url ?? undefined,
       thumbnailUrl: a.thumbnailUrl ?? undefined,
-      fileName: a.filename,
-      fileSize: a.sizeBytes,
-      mimeType: a.mimeType,
+      fileName: filename,
+      fileSize: a.sizeBytes ?? undefined,
+      mimeType,
     },
   };
 };
 
-export const CalendarAttachmentList: React.FC<{ attachments: CalendarViewAttachment[] }> = ({
-  attachments,
-}) => {
+export const CalendarAttachmentList: React.FC<{
+  attachments: CalendarViewAttachment[];
+  eventId?: string;
+}> = ({ attachments, eventId }) => {
   const preview = useFilePreview();
+  const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
 
   if (attachments.length === 0) return null;
 
   // File (không phải ảnh) lên đầu, ảnh xuống dưới — mỗi thứ 1 dòng.
   const ordered = [...attachments].sort((x, y) => {
-    const xi = getMimePreviewType(x.mimeType, x.filename) === "image" ? 1 : 0;
-    const yi = getMimePreviewType(y.mimeType, y.filename) === "image" ? 1 : 0;
+    const xi =
+      getMimePreviewType(x.mimeType || "application/octet-stream", x.filename || x.fileId) === "image"
+        ? 1
+        : 0;
+    const yi =
+      getMimePreviewType(y.mimeType || "application/octet-stream", y.filename || y.fileId) === "image"
+        ? 1
+        : 0;
     return xi - yi;
   });
 
   // Gallery = các file xem inline được → điều hướng qua lại trong lightbox.
   const gallery = ordered
-    .filter((a) => isInlineViewable(getMimePreviewType(a.mimeType, a.filename)))
+    .filter((a) => {
+      if (!a.url) return false;
+      return isInlineViewable(
+        getMimePreviewType(a.mimeType || "application/octet-stream", a.filename || a.fileId),
+      );
+    })
     .map(toPreviewTarget);
+
+  const handleDownload = React.useCallback(
+    async (attachment: CalendarViewAttachment) => {
+      if (!eventId) {
+        if (attachment.url) {
+          window.open(attachment.url, "_blank", "noopener,noreferrer");
+          return;
+        }
+        toast.error("Tạm thời không tải được tệp. Vui lòng thử lại sau.");
+        return;
+      }
+
+      setDownloadingFileId(attachment.fileId);
+      try {
+        const result = await hrCalendarApi.getAttachmentDownloadUrl(eventId, attachment.fileId);
+        if (!result.url) {
+          if (result.downloadStatus === "FORBIDDEN") {
+            toast.error("Bạn không có quyền tải tệp này.");
+            return;
+          }
+          if (result.downloadStatus === "DELETED") {
+            toast.error("Tệp đã bị xóa hoặc không còn khả dụng.");
+            return;
+          }
+          if (result.downloadStatus === "NOT_READY") {
+            toast.error("Tệp đang được xử lý");
+            return;
+          }
+          toast.error("Tạm thời không tải được tệp. Vui lòng thử lại sau.");
+          return;
+        }
+        window.open(result.url, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        showDownloadErrorToast(error);
+      } finally {
+        setDownloadingFileId((current) =>
+          current === attachment.fileId ? null : current,
+        );
+      }
+    },
+    [eventId],
+  );
 
   return (
     <>
       <div className="flex flex-col gap-2">
         {ordered.map((a) => {
-          const canView = isInlineViewable(getMimePreviewType(a.mimeType, a.filename));
+          const canView =
+            !!a.url &&
+            isInlineViewable(
+              getMimePreviewType(a.mimeType || "application/octet-stream", a.filename || a.fileId),
+            );
           return (
             <AttachmentCard
               key={a.fileId}
               a={a}
               onView={canView ? () => preview.open(toPreviewTarget(a), gallery) : undefined}
+              onDownload={() => void handleDownload(a)}
+              isDownloading={downloadingFileId === a.fileId}
             />
           );
         })}
