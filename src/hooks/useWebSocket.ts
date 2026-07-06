@@ -1473,11 +1473,15 @@ export const useWebSocket = (
       // ensures we don't show duplicate toasts for the same message.
       // This is separate from the RTK deduper which handles state deduplication.
       if (eventType === "message:new") {
+        // "tên gợi nhớ" (alias) wins over the realtime sender name in the toast.
+        const senderAlias = senderId
+          ? useFriendshipStore.getState().friendByUserId[senderId]?.alias ?? null
+          : null;
         maybeNotifyIncomingMessage({
           conversationId,
           messageId,
           senderId: senderId ?? null,
-          senderName: getRealtimeSenderName(payload, messagePayload),
+          senderName: senderAlias ?? getRealtimeSenderName(payload, messagePayload),
           content: getRealtimeMessageContent(payload, messagePayload),
           messageType: asString(messagePayload.type) ?? null,
           // Server sends Mention[] objects ({ userId, displayName, ... });
