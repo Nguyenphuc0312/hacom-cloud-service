@@ -1,3 +1,4 @@
+import { logger } from "../../../utils/logger";
 
 export interface ParsedTable {
   headers: string[];
@@ -133,6 +134,14 @@ export async function exportTableToXlsx(
 ): Promise<boolean> {
   const { getAccessToken } = await import("../../../services/tokenService");
   const token = getAccessToken() ?? getAccessTokenForExport();
+  // Cảnh báo nếu có export_id nhưng thiếu session_id (hoặc ngược lại): guard bên dưới
+  // sẽ bỏ CẢ HAI field → BE fallback markdown → file mất cột Mã. Không để rơi âm thầm.
+  if (Boolean(sessionId) !== Boolean(exportId)) {
+    logger.warn("tableExport", "snapshot-fields-mismatch", {
+      hasSessionId: Boolean(sessionId),
+      hasExportId: Boolean(exportId),
+    });
+  }
   const resp = await fetch(`${AI_BASE_URL}/api/work-reports/export-table`, {
     method: "POST",
     headers: {
