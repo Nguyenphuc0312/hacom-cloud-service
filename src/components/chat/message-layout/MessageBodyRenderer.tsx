@@ -19,7 +19,7 @@ import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
 import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
 import type { Attachment, ImageClickPayload, Message } from "../../../types";
-import { MessageType } from "../../../types";
+import { FileType, MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
@@ -436,7 +436,18 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
 
   const hasContent = Boolean(message.content && message.content.trim());
 
-  switch (message.type) {
+  // Voice bị server ack trả về type=FILE nhưng attachment vẫn là audio →
+  // render như voice bubble thay vì file card.
+  const isAudioAttachment = (a: Attachment): boolean =>
+    a.type === FileType.AUDIO || Boolean(a.mimeType?.startsWith("audio/"));
+  const effectiveType =
+    message.type === MessageType.FILE &&
+    attachments.length > 0 &&
+    attachments.every(isAudioAttachment)
+      ? MessageType.VOICE
+      : message.type;
+
+  switch (effectiveType) {
     case MessageType.IMAGE:
       return (
         <div className="space-y-2">

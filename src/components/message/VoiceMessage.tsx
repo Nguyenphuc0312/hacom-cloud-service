@@ -102,19 +102,15 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 
   const waveformBars = useMemo(() => {
     const seed = resolvedUrl?.length ?? attachment.id.length ?? 0;
+    // Dense, fine bars (Zalo/Telegram feel); min floor keeps quiet parts visible.
     return Array.from(
-      { length: 30 },
-      (_, i) => seededRandom(seed + i) * 60 + 20,
+      { length: 28 },
+      (_, i) => seededRandom(seed + i) * 68 + 32,
     );
   }, [attachment.id, resolvedUrl]);
 
   return (
-    <div
-      className={clsx(
-        "flex min-w-voice-message-min items-center gap-3",
-        className,
-      )}
-    >
+    <div className={clsx("flex min-w-[176px] max-w-[300px] items-center gap-2.5", className)}>
       <audio
         ref={audioRef}
         src={resolvedUrl}
@@ -128,23 +124,20 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
         onClick={togglePlay}
         disabled={isLoading}
         className={clsx(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-          isOwn
-            ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.3]"
-            : "bg-[#1565C0] text-white hover:bg-[#1976D2]",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-white shadow-sm transition-colors hover:bg-[#1976D2] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60",
         )}
         aria-label={isPlaying ? t("chat:voice.pause") : t("chat:voice.play")}
       >
         {isPlaying ? (
-          <PauseIcon className="h-5 w-5" />
+          <PauseIcon className="h-[18px] w-[18px]" />
         ) : (
-          <PlayIcon className="ml-1 h-5 w-5" />
+          <PlayIcon className="ml-0.5 h-[18px] w-[18px]" />
         )}
       </button>
 
-      <div className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div
-          className="relative flex h-8 cursor-pointer items-center gap-1"
+          className="relative flex h-7 cursor-pointer items-center gap-[2px]"
           onClick={handleSeek}
           role="slider"
           aria-label={t("chat:voice.progress")}
@@ -160,31 +153,33 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
               <div
                 key={index}
                 className={clsx(
-                  "w-1 rounded-full transition-colors",
+                  "min-w-[2px] flex-1 rounded-full transition-colors duration-150",
+                  isPlaying && "voice-bar-playing",
                   isPlayed
-                    ? isOwn
-                      ? "bg-[hsl(var(--chat-bubble-sent-text))]"
-                      : "bg-[#1976D2]"
+                    ? "bg-[#1565C0]"
                     : isOwn
-                      ? "bg-[hsl(var(--chat-bubble-sent-text))/0.45]"
-                      : "bg-border-strong/45",
+                      ? "bg-[#1565C0]/25"
+                      : "bg-[#1565C0]/20",
                 )}
-                style={{ height: `${height}%` }}
+                style={{
+                  height: `${height}%`,
+                  animationDelay: isPlaying ? `${-(index * 70)}ms` : undefined,
+                }}
               />
             );
           })}
         </div>
 
-        <p
+        <span
           className={clsx(
-            "mt-1 text-xs",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
+            "text-[11px] font-medium tabular-nums leading-none",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]" : "text-text-muted",
           )}
         >
           {isPlaying || currentTime > 0
             ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
             : formatDuration(duration)}
-        </p>
+        </span>
       </div>
     </div>
   );
