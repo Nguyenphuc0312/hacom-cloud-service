@@ -25,6 +25,7 @@ import {
   getOtherParticipant,
 } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { formatCalendarDateTime } from "../../utils/formatTime";
 
@@ -126,11 +127,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const enrichedName = useEnrichedProfileStore(
     React.useMemo(() => (s) => (otherUserId ? s.nameByUserId[otherUserId] : undefined), [otherUserId]),
   );
+  // "tên gợi nhớ" (alias) straight from the authoritative friend index — reliable
+  // regardless of the enrichedProfileStore injection race / friends pagination.
+  const alias = useFriendshipStore(
+    React.useMemo(
+      () => (s) => (otherUserId ? s.friendByUserId[otherUserId]?.alias ?? undefined : undefined),
+      [otherUserId],
+    ),
+  );
   React.useEffect(() => {
     if (isDirect && otherUserId) enrichUserProfile(otherUserId);
   }, [isDirect, otherUserId]);
 
-  const displayName = enrichedName ?? rawDisplayName;
+  const displayName = alias ?? enrichedName ?? rawDisplayName;
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   return (
