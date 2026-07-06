@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useChatStore } from "../../../stores";
-import type { Conversation, Message, UserSummary } from "../../../types";
+import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import {
   getConversationDisplayName,
@@ -27,6 +27,7 @@ import { compareConversationsByActivity } from "../../../utils/conversationRanki
 import { conversationResourcesApi } from "../../../services/api";
 import type { ConversationResourcesFileItem } from "../../../services/api";
 import { getFileIconType } from "../../../utils/formatFileSize";
+import { useDebounce } from "../../../hooks/useDebounce";
 import { useMessageSearch } from "../../../hooks/useMessageSearch";
 import { useChatUserSearch, useFriendSuggestions } from "./useChatUserSearch";
 import type { ChatSearchUser } from "./useChatUserSearch";
@@ -128,35 +129,30 @@ export const useGlobalGroupSearch = (
   }, [conversationById, orderedIds, query, currentUser.id]);
 };
 
-// --- Messages (real search endpoint + client-side sender/date filters) --------
+// --- Messages (real search endpoint, server-side sender/date filters) --------
+
+/** yyyy-mm-dd → local-day start/end ISO with offset (contract mapping (B)). */
+export const dayStartIso = (day: string | null): string | null =>
+  day ? new Date(`${day}T00:00:00`).toISOString() : null;
+export const dayEndIso = (day: string | null): string | null =>
+  day ? new Date(`${day}T23:59:59.999`).toISOString() : null;
 
 export const useGlobalMessageSearch = (
   query: string,
   filters: GlobalMessageFilters,
 ) => {
-  // ponytail: senderId/date are applied client-side over the fetched page. The
-  // contract asks BE to accept senderId/from/to for server-side filtering; once
-  // shipped, pass them into useMessageSearch's params and drop the local filter.
   const { setQuery, results, isLoading, hasMore, loadMore } = useMessageSearch({
     limit: 30,
+    senderId: filters.senderId,
+    from: dayStartIso(filters.from),
+    to: dayEndIso(filters.to),
   });
 
   useEffect(() => {
     setQuery(query);
   }, [query, setQuery]);
 
-  const filtered = useMemo(() => {
-    return results.filter((m: Message) => {
-      if (filters.senderId && m.senderId !== filters.senderId) return false;
-      const ts =
-        (typeof m.serverTs === "string" ? m.serverTs : m.serverTs?.toISOString?.()) ??
-        (typeof m.createdAt === "string" ? m.createdAt : undefined);
-      if (ts && !withinDateRange(ts, filters.from, filters.to)) return false;
-      return true;
-    });
-  }, [results, filters.senderId, filters.from, filters.to]);
-
-  return { messages: filtered, isLoading, hasMore, loadMore };
+  return { messages: results, isLoading, hasMore, loadMore };
 };
 
 // --- Files (aggregated across conversations, client-side) --------------------
@@ -168,66 +164,68 @@ export const useGlobalFileSearch = (
   enabled: boolean,
 ) => {
   const conversationById = useChatStore((s) => s.conversationById);
-  const orderedIds = useChatStore((s) => s.orderedConversationIds);
   const [files, setFiles] = useState<GlobalFileResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const debouncedQuery = useDebounce(query.trim(), 300);
 
-  // Aggregate the first page of files from the most-recent conversations. This
-  // is a FE bridge until a global endpoint exists (see contract).
+  // Real global endpoint: server scopes to the caller's conversations and
+  // applies q/type/date filters. Each item carries conversationId for nav; we
+  // enrich with the conversation display name from the local store.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setFiles([]);
+      return;
+    }
     let cancelled = false;
-    const topIds = orderedIds.slice(0, 15);
     setIsLoading(true);
 
-    Promise.allSettled(
-      topIds.map(async (id) => {
-        const res = await conversationResourcesApi.getFiles(id, 1, 20);
+    conversationResourcesApi
+      .searchFilesGlobal({
+        q: debouncedQuery || undefined,
+        type: filters.type,
+        from: dayStartIso(filters.from) ?? undefined,
+        to: dayEndIso(filters.to) ?? undefined,
+        page: 1,
+        limit: 40,
+      })
+      .then((res) => {
+        if (cancelled) return;
         const items = res.success ? res.data.data : [];
-        const conversation = conversationById[id];
-        const name = conversation
-          ? getConversationDisplayName(conversation, currentUser.id)
-          : id;
-        return items.map(
-          (item): GlobalFileResult => ({
-            ...item,
-            conversationId: id,
-            conversationName: name,
+        setFiles(
+          items.map((item): GlobalFileResult => {
+            const conversationId = item.conversationId ?? "";
+            const conversation = conversationById[conversationId];
+            return {
+              ...item,
+              conversationId,
+              conversationName: conversation
+                ? getConversationDisplayName(conversation, currentUser.id)
+                : conversationId,
+            };
           }),
         );
-      }),
-    ).then((settled) => {
-      if (cancelled) return;
-      const all = settled.flatMap((r) =>
-        r.status === "fulfilled" ? r.value : [],
-      );
-      setFiles(all);
-      setIsLoading(false);
-    });
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFiles([]);
+        setIsLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, orderedIds.join(",")]);
+  }, [
+    enabled,
+    debouncedQuery,
+    filters.type,
+    filters.from,
+    filters.to,
+    conversationById,
+    currentUser.id,
+  ]);
 
-  const filtered = useMemo(() => {
-    const q = normalize(query);
-    return files
-      .filter((f) => (q ? normalize(f.fileName).includes(q) : true))
-      .filter((f) =>
-        filters.type === "all"
-          ? true
-          : fileTypeOf(f.mimeType, f.fileName) === filters.type,
-      )
-      .filter((f) => withinDateRange(f.createdAt, filters.from, filters.to))
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-  }, [files, query, filters.type, filters.from, filters.to]);
-
-  return { files: filtered, isLoading };
+  return { files, isLoading };
 };
 
 /** Distinct senders across the user's conversations — feeds the sender filter. */

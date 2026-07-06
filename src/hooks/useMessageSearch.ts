@@ -22,8 +22,13 @@ interface UseMessageSearchOptions {
   debounceMs?: number;
   /** Results per page (default: 20) */
   limit?: number;
-  /** Optional conversation ID to scope search */
+  /** Optional conversation ID to scope search (omit → global across the user's conversations) */
   conversationId?: string;
+  /** Optional server-side filter: only messages from this sender */
+  senderId?: string | null;
+  /** Optional server-side date range (ISO datetime with offset) */
+  from?: string | null;
+  to?: string | null;
   /** Optional initial query, used when a panel restores per-conversation state */
   initialQuery?: string;
 }
@@ -51,10 +56,16 @@ const buildSearchCacheKey = (params: {
   query: string;
   page: number;
   limit: number;
+  senderId?: string | null;
+  from?: string | null;
+  to?: string | null;
 }): string =>
   [
     params.conversationId ?? "all",
     params.query.trim().toLowerCase(),
+    params.senderId ?? "",
+    params.from ?? "",
+    params.to ?? "",
     params.page,
     params.limit,
   ].join(":");
@@ -64,6 +75,9 @@ export const useMessageSearch = (
 ): UseMessageSearchReturn => {
   const { debounceMs = 400, limit = 20 } = options;
   const conversationId = options.conversationId;
+  const senderId = options.senderId ?? undefined;
+  const from = options.from ?? undefined;
+  const to = options.to ?? undefined;
 
   const [query, setQuery] = useState(() => options.initialQuery ?? "");
   const [results, setResults] = useState<Message[]>([]);
@@ -95,6 +109,9 @@ export const useMessageSearch = (
         query: normalizedQuery,
         page: searchPage,
         limit,
+        senderId,
+        from,
+        to,
       });
 
       if (!append) {
@@ -116,6 +133,9 @@ export const useMessageSearch = (
         const response = await messageApi.searchMessages({
           q: normalizedQuery,
           conversationId,
+          senderId,
+          from,
+          to,
           page: searchPage,
           limit,
           signal: abortRef.current.signal,
@@ -153,7 +173,7 @@ export const useMessageSearch = (
         }
       }
     },
-    [conversationId, limit],
+    [conversationId, limit, senderId, from, to],
   );
 
   // Trigger search when debounced query changes
