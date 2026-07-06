@@ -30,7 +30,7 @@ import { FileName } from "../common/FileName";
 import { resolvePublicResourceUrl } from "../../config";
 import type { Message } from "../../types";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { useEnrichedProfileStore, useResolvedName } from "../../stores/enrichedProfileStore";
 
 interface SearchPanelProps {
   /** Current conversation ID to scope search (optional) */
@@ -88,6 +88,7 @@ const FileResultRow: React.FC<{
   const { t } = useTranslation();
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeTime(new Date(item.createdAt));
+  const senderName = useResolvedName(item.senderId, item.senderName);
 
   return (
     <button
@@ -110,7 +111,7 @@ const FileResultRow: React.FC<{
           className="text-sm font-medium text-text-primary"
         />
         <p className="truncate text-xs text-text-muted">
-          {formatFileSize(item.sizeBytes)} · {item.senderName} · {date}
+          {formatFileSize(item.sizeBytes)} · {senderName} · {date}
         </p>
       </div>
     </button>

@@ -6,6 +6,7 @@ import { DirectorySkeleton } from "../../../../components/ui/Skeleton";
 import { RoomMemberRole } from "../../../../types";
 import type { UserStatus } from "../../../../types";
 import type { GroupCapabilityMatrix } from "./utils/canPerformAction";
+import { useEnrichedProfileStore } from "../../../../stores/enrichedProfileStore";
 
 interface GroupMember {
   id: string;
@@ -60,18 +61,19 @@ export const MembersList: React.FC<MembersListProps> = ({
   className,
 }) => {
   const { t } = useTranslation("profile");
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
-  // Sort members: owner first, then admin, then by name
+  // Sort members: owner first, then admin, then by name (alias-aware so the
+  // ordering matches the "tên gợi nhớ" MemberRow actually shows).
   const sortedMembers = React.useMemo(() => {
+    const nameOf = (m: GroupMember) =>
+      (nameByUserId[m.id] || m.fullNameFromHR || m.displayName || m.username || "").toLowerCase();
     return [...members].sort((a, b) => {
       const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
       if (roleDiff !== 0) return roleDiff;
-
-      const aName = (a.fullNameFromHR || a.displayName || a.username || "").toLowerCase();
-      const bName = (b.fullNameFromHR || b.displayName || b.username || "").toLowerCase();
-      return aName.localeCompare(bName);
+      return nameOf(a).localeCompare(nameOf(b));
     });
-  }, [members]);
+  }, [members, nameByUserId]);
 
   if (isLoading) {
     return <DirectorySkeleton count={5} />;

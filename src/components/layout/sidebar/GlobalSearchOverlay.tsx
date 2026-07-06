@@ -37,6 +37,7 @@ import {
 } from "../../../utils/messageHelpers";
 import type { Conversation, Message, UserSummary } from "../../../types";
 import { useChatStore } from "../../../stores";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import {
   dispatchOpenConversation,
   dispatchStartDirectMessage,
@@ -245,7 +246,12 @@ const MessageRow: React.FC<{
 const FileRow: React.FC<{
   file: GlobalFileResult;
   onClick: () => void;
-}> = ({ file, onClick }) => (
+}> = ({ file, onClick }) => {
+  // "tên gợi nhớ" (alias) wins over the uploader's real name.
+  const senderName = useEnrichedProfileStore(
+    (s) => s.nameByUserId[file.senderId] ?? file.senderName,
+  );
+  return (
   <RowButton onClick={onClick}>
     <FileTypeIcon
       type={getFileIconType(file.mimeType, file.fileName)}
@@ -257,12 +263,13 @@ const FileRow: React.FC<{
         className="text-[14px] font-medium text-text-primary"
       />
       <p className="truncate text-[12px] text-text-muted">
-        {formatFileSize(file.sizeBytes)} · {file.senderName} ·{" "}
+        {formatFileSize(file.sizeBytes)} · {senderName} ·{" "}
         {formatCalendarDate(new Date(file.createdAt))}
       </p>
     </div>
   </RowButton>
-);
+  );
+};
 
 // --- filter controls (messages + files) --------------------------------------
 
@@ -539,6 +546,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
   );
   const senders = useConversationSenders(currentUser);
   const conversationById = useChatStore((s) => s.conversationById);
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
   const senderById = useMemo(() => {
     const map = new Map<string, UserSummary>();
@@ -552,6 +560,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
     const participant = senderById.get(message.senderId);
     const isSelf = message.senderId === currentUser.id;
     const senderName =
+      nameByUserId[message.senderId] || // "tên gợi nhớ" (alias) wins
       message.senderName ||
       (participant
         ? getUserDisplayName(participant, { allowTechnicalFallback: true })

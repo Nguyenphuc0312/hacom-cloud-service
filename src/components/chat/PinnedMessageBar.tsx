@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
 import { ConversationLane } from "../layout/ConversationLane";
 import { getMessagePreview } from "../../utils/messageHelpers";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { Message } from "../../types";
 
 interface PinnedMessageBarProps {
@@ -29,12 +30,16 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const senderAlias = useEnrichedProfileStore((s) =>
+    pinnedMessages[0] ? s.nameByUserId[pinnedMessages[0].senderId] : undefined,
+  );
 
   const latest = pinnedMessages[0];
   if (!latest) return null;
 
   const count = pinnedMessages.length;
   const preview = getMessagePreview(latest, currentUserId, 120);
+  const senderName = senderAlias ?? latest.senderName;
 
   return (
     <div
@@ -66,9 +71,9 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
                 {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
               </span>
               <span className="truncate text-xs leading-4 text-text-secondary">
-                {latest.senderName ? (
+                {senderName ? (
                   <span className="font-medium text-text-primary">
-                    {latest.senderName}:{" "}
+                    {senderName}:{" "}
                   </span>
                 ) : null}
                 {preview}

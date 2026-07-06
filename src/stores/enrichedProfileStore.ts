@@ -63,3 +63,16 @@ export const useEnrichedProfileStore = create<EnrichedProfileState>((set, get) =
 registerStoreResetter("enriched-profile", () => {
   useEnrichedProfileStore.getState().clear();
 });
+
+/**
+ * Resolve a user's shown name with the "tên gợi nhớ" (alias) rule: the enriched
+ * name (alias-if-set, else real name) wins, else the caller's fallback. Use this
+ * anywhere a sender/friend name is rendered so the label stays consistent with
+ * ChatHeader/RoomItem/UserProfile.
+ */
+export function useResolvedName(userId: string | undefined, fallback: string): string {
+  const enriched = useEnrichedProfileStore((s) =>
+    userId ? s.nameByUserId[userId] : undefined,
+  );
+  return enriched || fallback;
+}
