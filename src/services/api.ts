@@ -1433,6 +1433,9 @@ export const messageApi = {
     q: string;
     conversationId?: string;
     type?: string;
+    senderId?: string;
+    from?: string;
+    to?: string;
     page?: number;
     limit?: number;
     signal?: AbortSignal;
@@ -1443,6 +1446,9 @@ export const messageApi = {
       query.set("conversationId", params.conversationId);
     }
     if (params.type) query.set("type", params.type);
+    if (params.senderId) query.set("senderId", params.senderId);
+    if (params.from) query.set("from", params.from);
+    if (params.to) query.set("to", params.to);
     if (params.page) query.set("page", String(params.page));
     if (params.limit) query.set("limit", String(params.limit));
     const response = await apiClient.get<
@@ -1964,6 +1970,8 @@ export interface ConversationResourcesMediaItem {
 
 export interface ConversationResourcesFileItem {
   messageId: string;
+  /** Owning conversation — present on global file search; needed for navigation. */
+  conversationId?: string;
   fileId: string;
   fileName: string;
   mimeType: string;
@@ -2029,6 +2037,30 @@ export const conversationResourcesApi = {
     const response = await apiClient.get<
       ApiResponse<ConversationResourcesPaginatedResult<ConversationResourcesFileItem>>
     >(`/conversations/${conversationId}/files?${query}`);
+    return response.data;
+  },
+
+  // Global file search across all of the caller's conversations (global-search
+  // "File" tab). Each item carries conversationId for navigation.
+  searchFilesGlobal: async (opts: {
+    q?: string;
+    type?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams({
+      page: String(opts.page ?? 1),
+      limit: String(opts.limit ?? 30),
+    });
+    if (opts.q) query.set('q', opts.q);
+    if (opts.type && opts.type !== 'all') query.set('type', opts.type);
+    if (opts.from) query.set('from', opts.from);
+    if (opts.to) query.set('to', opts.to);
+    const response = await apiClient.get<
+      ApiResponse<ConversationResourcesPaginatedResult<ConversationResourcesFileItem>>
+    >(`/messages/files/search?${query}`);
     return response.data;
   },
 
