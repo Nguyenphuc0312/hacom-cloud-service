@@ -40,10 +40,11 @@ import {
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
 import { hasRichFormatting } from "../../utils/messageContent.utils";
+import { MapPinIcon } from "@heroicons/react/24/outline";
 import {
   formatLocationTime,
   getFriendlyAccuracyLabel,
-  isLocationStale,
+  tryBuildGoogleMapsSearchUrl,
 } from "../../utils/locationMessage";
 import {
   AudioUploadError,
@@ -1281,7 +1282,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       ref={rootRef}
       onClick={handleFocusEditor}
       className={clsx(
-        "chat-composer-root border-t border-border/55 bg-[hsl(var(--chat-panel-bg))/0.96] pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur",
+        "chat-composer-root relative border-t border-border/55 bg-[hsl(var(--chat-panel-bg))/0.96] pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur",
         "cursor-text",
         className,
       )}
@@ -1354,7 +1355,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
         {locationFlowState !== "idle" && (
           <div
-            className="mb-2 ml-auto w-full max-w-[440px] rounded-lg border border-border bg-surface px-4 py-3 shadow-lg shadow-black/10 sm:w-[min(440px,calc(100vw-32px))]"
+            className="absolute bottom-full right-3 z-20 mb-2 w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-xl border border-border bg-surface shadow-xl shadow-black/15"
             role="dialog"
             aria-modal="false"
             aria-labelledby="composer-location-title"
@@ -1362,19 +1363,19 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           >
             {(locationFlowState === "requesting_permission" ||
               locationFlowState === "acquiring_location") && (
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              <div className="flex items-center gap-3 px-3.5 py-3">
+                <div className="h-4 w-4 shrink-0 rounded-full border-2 border-[#1565C0] border-t-transparent animate-spin" />
                 <div className="min-w-0 flex-1">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                    Đang xác định vị trí của bạn
+                    Đang xác định vị trí…
                   </p>
                   <p id="composer-location-description" className="text-xs text-text-muted">
-                    Quá trình này có thể mất vài giây
+                    Có thể mất vài giây
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                  className="shrink-0 rounded-md px-2.5 py-1 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
                   onClick={resetLocationFlow}
                 >
                   {t("common:cancel", { defaultValue: "Hủy" })}
@@ -1383,56 +1384,62 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             )}
 
             {locationFlowState === "confirming" && pendingLocation && (
-              <div className="space-y-3">
-                <div className="min-w-0">
-                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                    Gửi vị trí hiện tại
-                  </p>
-                  <p id="composer-location-description" className="text-xs text-text-muted">
-                    Vị trí này sẽ được gửi vào cuộc trò chuyện.
-                  </p>
-                  {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label && (
+              <div>
+                <div className="flex items-start gap-2.5 px-3.5 pb-2.5 pt-3">
+                  <span
+                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1565C0]/10 text-[#1565C0]"
+                    aria-hidden="true"
+                  >
+                    <MapPinIcon className="size-[18px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                        Gửi vị trí hiện tại
+                      </p>
+                      {tryBuildGoogleMapsSearchUrl(pendingLocation) && (
+                        <a
+                          href={tryBuildGoogleMapsSearchUrl(pendingLocation) ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-xs font-semibold text-[#1565C0] underline-offset-2 hover:underline"
+                        >
+                          Xem bản đồ
+                        </a>
+                      )}
+                    </div>
+                    <p id="composer-location-description" className="mt-0.5 truncate font-mono text-xs text-text-muted">
+                      {pendingLocation.latitude.toFixed(5)}, {pendingLocation.longitude.toFixed(5)}
+                    </p>
                     <p
                       className={clsx(
-                        "mt-1 text-xs",
+                        "mt-0.5 text-xs",
                         getFriendlyAccuracyLabel(pendingLocation.accuracyM).tone === "warning"
                           ? "text-warning"
                           : "text-text-muted",
                       )}
                     >
-                      {getFriendlyAccuracyLabel(pendingLocation.accuracyM).label}
+                      {[
+                        getFriendlyAccuracyLabel(pendingLocation.accuracyM).label,
+                        formatLocationTime(pendingLocation.capturedAt) &&
+                          `lúc ${formatLocationTime(pendingLocation.capturedAt)}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
-                  )}
-                  {formatLocationTime(pendingLocation.capturedAt) && (
-                    <p className="text-xs text-text-muted">
-                      Thời điểm: {formatLocationTime(pendingLocation.capturedAt)}
-                    </p>
-                  )}
-                  {isLocationStale(pendingLocation.capturedAt) && (
-                    <p className="text-xs text-warning">
-                      Vị trí đã được lấy từ vài phút trước.
-                    </p>
-                  )}
-                  {typeof pendingLocation.accuracyM === "number" && (
-                    <p className="text-xs text-text-muted">
-                      {t("chat:location.accuracy", {
-                        accuracy: `${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
-                        defaultValue: `Độ chính xác ${Math.round(pendingLocation.accuracyM * 10) / 10} m`,
-                      })}
-                    </p>
-                  )}
+                  </div>
                 </div>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex border-t border-border/70">
                   <button
                     type="button"
-                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    className="flex-1 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
                     {t("common:cancel", { defaultValue: "Hủy" })}
                   </button>
                   <button
                     type="button"
-                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 border-l border-border/70 py-2.5 text-sm font-semibold text-[#1565C0] transition-colors hover:bg-[#1565C0]/8 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
                     aria-label={t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
                   >
@@ -1443,42 +1450,35 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             )}
 
             {(locationFlowState === "sending" || locationFlowState === "retrying") && (
-              <div className="space-y-3">
-                <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                  Gửi vị trí hiện tại
-                </p>
-                <p id="composer-location-description" className="text-xs text-text-muted">
-                  {t("chat:location.sending", { defaultValue: "Đang gửi vị trí..." })}
-                </p>
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white opacity-80"
-                    disabled
-                  >
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
-                    {t("chat:location.sendingShort", { defaultValue: "Đang gửi..." })}
-                  </button>
+              <div className="flex items-center gap-3 px-3.5 py-3">
+                <span className="h-4 w-4 shrink-0 rounded-full border-2 border-[#1565C0] border-t-transparent animate-spin" />
+                <div className="min-w-0 flex-1">
+                  <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
+                    {t("chat:location.sendingShort", { defaultValue: "Đang gửi vị trí…" })}
+                  </p>
+                  <p id="composer-location-description" className="text-xs text-text-muted">
+                    {t("chat:location.sending", { defaultValue: "Vui lòng đợi trong giây lát" })}
+                  </p>
                 </div>
               </div>
             )}
 
             {["error", "permission_denied", "permission_blocked", "timeout", "unavailable", "send_failed"].includes(locationFlowState) && (
-              <div className="space-y-3">
-                <p className="text-sm text-danger">
+              <div>
+                <p className="px-3.5 pb-2.5 pt-3 text-sm text-danger">
                   {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
                 </p>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex border-t border-border/70">
                   <button
                     type="button"
-                    className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                    className="flex-1 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
                     {t("common:cancel", { defaultValue: "Hủy" })}
                   </button>
                   <button
                     type="button"
-                    className="inline-flex min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary/90"
+                    className="flex-1 border-l border-border/70 py-2.5 text-sm font-semibold text-[#1565C0] transition-colors hover:bg-[#1565C0]/8"
                     onClick={() =>
                       pendingLocation
                         ? void confirmLocationSend()
