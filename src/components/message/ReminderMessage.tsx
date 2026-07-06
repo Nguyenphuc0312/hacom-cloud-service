@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { messageApi } from "../../services/api";
 import { toast } from "../ui";
 import { useAuthStore } from "../../stores";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { chatApi, fetchConversationTail } from "../../features/api/chatApi";
 import { UserProfile } from "../info/UserProfile";
@@ -93,9 +94,10 @@ export const ReminderMessage: React.FC<ReminderMessageProps> = ({
     void loadUserProfiles(ids).then((results) => {
       setProfiles((prev) => {
         const nextMap = { ...prev };
+        const aliasMap = useEnrichedProfileStore.getState().nameByUserId;
         for (const [id, s] of Object.entries(results)) {
           nextMap[id] = {
-            name: s?.displayName ?? s?.username ?? id,
+            name: aliasMap[id] ?? s?.displayName ?? s?.username ?? id,
             avatar:
               resolvePublicResourceUrl(
                 (s as { avatar?: string })?.avatar || s?.avatarUrl || undefined,

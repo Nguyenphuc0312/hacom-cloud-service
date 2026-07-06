@@ -30,6 +30,7 @@ import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import { VideoPlayerModal } from "./VideoPlayerModal";
 import { FileName } from "../../common/FileName";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
+import { useResolvedName } from "../../../stores/enrichedProfileStore";
 
 export type SharedContentTab = "media" | "files" | "links";
 
@@ -465,6 +466,7 @@ const ModalFileRow: React.FC<{
 }> = ({ item, conversationId }) => {
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeDate(new Date(item.createdAt));
+  const senderName = useResolvedName(item.senderId, item.senderName);
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownload = async () => {
@@ -501,7 +503,7 @@ const ModalFileRow: React.FC<{
           className="text-sm font-medium text-text-primary"
         />
         <p className="truncate text-xs text-text-muted">
-          {formatFileSize(item.sizeBytes)} · {item.senderName} · {date}
+          {formatFileSize(item.sizeBytes)} · {senderName} · {date}
         </p>
       </div>
     </button>
@@ -585,6 +587,7 @@ const ModalLinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
   item,
 }) => {
   const date = formatRelativeDate(new Date(item.createdAt));
+  const senderName = useResolvedName(item.senderId, item.senderName);
 
   return (
     <a
@@ -602,7 +605,7 @@ const ModalLinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
         </p>
         <p className="truncate text-xs text-primary">{item.url}</p>
         <p className="truncate text-xs text-text-muted">
-          {item.senderName} · {date}
+          {senderName} · {date}
         </p>
       </div>
     </a>

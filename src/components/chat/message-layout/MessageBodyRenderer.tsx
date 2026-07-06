@@ -26,6 +26,7 @@ import { logger } from "../../../utils/logger";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { useAuthStore } from "../../../stores";
+import { useResolvedName } from "../../../stores/enrichedProfileStore";
 import { useFriendship } from "../../../hooks/useFriendship";
 import { conversationApi } from "../../../services/api";
 import { ROUTE_PATHS } from "../../../router/paths";
@@ -405,6 +406,10 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
   onImageClick,
   onFilePreview,
 }) => {
+  // "tên gợi nhớ" (alias) wins over the message's stored senderName, so
+  // Image/Poll/Reminder cards match the timeline header. Hook runs before any
+  // early return below.
+  const senderName = useResolvedName(message.senderId, message.senderName ?? "");
   if (
     message.isDeleted ||
     message.lifecycleStatus === "recalled" ||
@@ -453,7 +458,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
                     attachment={attachments[0]}
                     isOwn={isOwn}
                     onClick={onImageClick}
-                    senderName={message.senderName}
+                    senderName={senderName}
                     senderAvatar={message.senderAvatar}
                     sentAt={message.serverTs}
                   />
@@ -464,7 +469,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
                     attachments={attachments}
                     isOwn={isOwn}
                     onImageClick={onImageClick}
-                    senderName={message.senderName}
+                    senderName={senderName}
                     senderAvatar={message.senderAvatar}
                     sentAt={message.serverTs}
                   />
@@ -590,7 +595,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
           currentUserId={currentUserId}
           messageId={message.id}
           conversationId={message.conversationId}
-          senderName={message.senderName}
+          senderName={senderName}
         />
       );
     }
@@ -604,7 +609,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
           currentUserId={currentUserId}
           messageId={message.id}
           conversationId={message.conversationId}
-          senderName={message.senderName}
+          senderName={senderName}
         />
       );
     }

@@ -57,12 +57,13 @@ export const MemberRow: React.FC<MemberRowProps> = ({
 }) => {
   const { t } = useTranslation("profile");
 
-  const alias = useEnrichedProfileStore((s) => s.nameByUserId[memberId]);
-  const { displayName: resolvedName, usedFallback } = resolveDisplayName({
-    displayName: alias || displayName,
-    fullNameFromHR: alias ? undefined : fullNameFromHR,
-    username,
-  });
+  // enrichedProfileStore holds the alias when set, otherwise the enriched real
+  // name. It always wins — same rule as ChatHeader/RoomItem/MessageCluster — so
+  // the memorable name stays consistent with every other place it's shown.
+  const enrichedName = useEnrichedProfileStore((s) => s.nameByUserId[memberId]);
+  const resolved = resolveDisplayName({ displayName, fullNameFromHR, username });
+  const resolvedName = enrichedName || resolved.displayName;
+  const usedFallback = enrichedName ? false : resolved.usedFallback;
 
   const isCurrentUser = memberId === currentUserId;
   const orgLine = [departmentName, companyName].filter(Boolean).join(" · ");

@@ -47,6 +47,7 @@ import {
 import { resolvePublicResourceUrl } from "../../config";
 import { useChatStore, useGroupStore } from "../../stores";
 import { useUIStore } from "../../stores/uiStore";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
@@ -331,6 +332,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
+
+  // "tên gợi nhớ" (alias) map — wins over a poll's stored senderName.
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
   // Polls section
   const [polls, setPolls] = React.useState<Message[]>([]);
@@ -1512,9 +1516,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         </div>
 
                         {/* Footer — sender + time */}
-                        {msg.senderName && (
+                        {(nameByUserId[msg.senderId] || msg.senderName) && (
                           <div className="border-t border-border/50 px-3 py-1.5 flex items-center gap-1 text-[10.5px] text-text-muted">
-                            <span className="truncate">{msg.senderName}</span>
+                            <span className="truncate">{nameByUserId[msg.senderId] || msg.senderName}</span>
                             {msg.createdAt && (
                               <span className="shrink-0">
                                 · {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}

@@ -15,6 +15,7 @@ import { Avatar } from "../common/Avatar";
 import { NotificationListSkeleton } from "../ui";
 import { getMessagePreview } from "../../utils/messageHelpers";
 import { formatRelativeTime } from "../../utils/formatTime";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { Message } from "../../types";
 
 interface PinnedMessagesPanelProps {
@@ -39,6 +40,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
 
   return (
     <div
@@ -87,6 +89,9 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
           !error &&
           pinnedMessages.map((message) => {
             const preview = getMessagePreview(message, currentUserId, 140);
+            // Alias-if-set wins, same as the timeline/header.
+            const senderName =
+              nameByUserId[message.senderId] ?? message.senderName ?? "";
             return (
               <div
                 key={message.id}
@@ -105,13 +110,13 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
                 >
                   <Avatar
                     src={message.senderAvatar}
-                    alt={message.senderName ?? ""}
+                    alt={senderName}
                     size="sm"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-xs font-semibold text-text-primary">
-                        {message.senderName ?? ""}
+                        {senderName}
                       </span>
                       <span className="shrink-0 text-[11px] text-text-muted">
                         {formatRelativeTime(new Date(message.createdAt))}
