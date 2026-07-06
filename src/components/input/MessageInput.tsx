@@ -290,6 +290,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         conversationId,
         clientMessageId,
         localId: `temp-${clientMessageId}`,
+        senderId: currentUserId ?? undefined,
         type: MessageType.VOICE,
         content: "",
         attachments: [
@@ -319,7 +320,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioReset();
     }
-  }, [audioStopRecording, audioUpload, conversationId, audioReset, sendVoiceMessage, t]);
+  }, [audioStopRecording, audioUpload, conversationId, audioReset, sendVoiceMessage, currentUserId, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();
