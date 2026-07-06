@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { Message } from "../../types";
 import { useAuthStore } from "../../stores";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 
 interface SystemMessageProps {
   message: Message;
@@ -126,8 +127,13 @@ const PollEventPill: React.FC<{
 }> = ({ pollEvent, currentUserId, onNavigateToMessage }) => {
   const { t } = useTranslation("chat");
   const isYou = !!currentUserId && pollEvent.actorId === currentUserId;
-  const isAnonymous = !isYou && !pollEvent.actorName;
-  const opts = { question: pollEvent.question, actor: pollEvent.actorName ?? "" };
+  // "tên gợi nhớ" (alias) wins over the actorName the backend baked in.
+  const actorAlias = useFriendshipStore((s) =>
+    pollEvent.actorId ? s.friendByUserId[pollEvent.actorId]?.alias ?? null : null,
+  );
+  const actorName = actorAlias ?? pollEvent.actorName;
+  const isAnonymous = !isYou && !actorName;
+  const opts = { question: pollEvent.question, actor: actorName ?? "" };
   const text = (() => {
     switch (pollEvent.kind) {
       case "created":
@@ -173,7 +179,14 @@ const ReminderEventPill: React.FC<{
 }> = ({ reminderEvent, currentUserId, onNavigateToMessage }) => {
   const { t } = useTranslation("chat");
   const isYou = !!currentUserId && reminderEvent.actorId === currentUserId;
-  const opts = { content: reminderEvent.content, actor: reminderEvent.actorName ?? "" };
+  // "tên gợi nhớ" (alias) wins over the actorName the backend baked in.
+  const actorAlias = useFriendshipStore((s) =>
+    reminderEvent.actorId ? s.friendByUserId[reminderEvent.actorId]?.alias ?? null : null,
+  );
+  const opts = {
+    content: reminderEvent.content,
+    actor: actorAlias ?? reminderEvent.actorName ?? "",
+  };
   const text = (() => {
     switch (reminderEvent.kind) {
       case "created":

@@ -164,6 +164,7 @@ const resolveRoomItemVisualState = ({
 const buildPreviewText = (
   conversation: Conversation,
   currentUser: Pick<UserSummary, "id" | "displayName" | "username">,
+  lastSenderAlias?: string,
 ): string => {
   const lastMessage = conversation.lastMessage;
   if (!lastMessage) return "";
@@ -181,6 +182,7 @@ const buildPreviewText = (
   );
 
   const resolvedName =
+    lastSenderAlias?.trim() || // "tên gợi nhớ" wins over the real sender name
     getUserDisplayName(senderParticipant) ||
     getUserDisplayName(directPartner) ||
     lastMessage.senderName?.trim() ||
@@ -450,6 +452,15 @@ export const RoomItemContainer = React.memo(
         [directPartnerId],
       ),
     );
+    // Alias of the LAST-MESSAGE sender — used for the group preview prefix
+    // ("{tên gợi nhớ}: {message}"), which otherwise shows the sender's real name.
+    const lastSenderId = conversation?.lastMessage?.senderId;
+    const lastSenderAlias = useFriendshipStore(
+      useMemo(
+        () => (s) => (lastSenderId ? s.friendByUserId[lastSenderId]?.alias ?? undefined : undefined),
+        [lastSenderId],
+      ),
+    );
     useEffect(() => {
       if (directPartnerId) enrichUserProfile(directPartnerId);
     }, [directPartnerId]);
@@ -478,7 +489,7 @@ export const RoomItemContainer = React.memo(
       return {
         conversation,
         displayName,
-        previewText: buildPreviewText(conversation, currentUser),
+        previewText: buildPreviewText(conversation, currentUser, lastSenderAlias),
         previewState,
         timeLabel: referenceTime
           ? formatRelativeTime(new Date(referenceTime))
@@ -493,7 +504,7 @@ export const RoomItemContainer = React.memo(
           : undefined,
         isDirect,
       };
-    }, [conversation, currentUser, livePresence, enrichedName, alias]);
+    }, [conversation, currentUser, livePresence, enrichedName, alias, lastSenderAlias]);
 
     if (!viewModel) {
       return null;
