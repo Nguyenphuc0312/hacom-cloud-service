@@ -142,6 +142,14 @@ export async function exportTableToXlsx(
       hasExportId: Boolean(exportId),
     });
   }
+  // ponytail: diag tạm (BE response 06-07 §3) — Mốc 3: giá trị ngay trước POST.
+  // Nếu 1 trong 2 undefined → guard cả-hai-hoặc-không bỏ cả hai → payload chỉ
+  // title+content (đúng triệu chứng). Gỡ sau khi chốt gốc lỗi.
+  logger.info("tableExport", "export-body-precheck", {
+    hasSessionId: Boolean(sessionId),
+    hasExportId: Boolean(exportId),
+    willSendSnapshot: Boolean(sessionId && exportId),
+  });
   const resp = await fetch(`${AI_BASE_URL}/api/work-reports/export-table`, {
     method: "POST",
     headers: {
