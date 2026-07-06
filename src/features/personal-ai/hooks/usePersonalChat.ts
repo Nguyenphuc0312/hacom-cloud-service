@@ -271,14 +271,20 @@ export function usePersonalChat() {
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
 
-        // Bật nút "In" nếu câu trả lời là bảng có thể xuất (SSE done.exportable_table).
-        // Lưu kèm export_id + session_id để Excel xuất từ snapshot dữ liệu gốc (đủ
-        // cột Công ty/Nhân viên/Mã NV đã bị ẩn khỏi bảng chat).
-        if (response.exportable_table) {
+        // Lưu export_id + session_id nếu BE trả (SSE done) để Excel xuất từ
+        // snapshot dữ liệu gốc (đủ cột + có cột "Mã" cho đồng bộ round-trip).
+        // Tách khỏi cờ exportable_table: nút Xuất còn hiện qua fallback bảng
+        // markdown; nếu chỉ patch id khi exportable_table=true thì mất id khi BE
+        // trả id mà không kèm cờ → payload export thiếu session_id/export_id.
+        if (response.export_id) {
           patchMessage(convIdSnapshot, assistantMessage.id, {
             exportableTable: true,
             exportId: response.export_id,
             exportSessionId: response.session_id || serverSessionId || undefined,
+          });
+        } else if (response.exportable_table) {
+          patchMessage(convIdSnapshot, assistantMessage.id, {
+            exportableTable: true,
           });
         }
 
