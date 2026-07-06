@@ -46,8 +46,16 @@ export const AuthenticatedLayout: React.FC = () => {
 
   React.useEffect(() => {
     return listenForOpenConversation(({ conversationId, messageId }) => {
+      // Notify ChatPage first (sets the jump-to-message target), then route
+      // straight to the target conversation. Navigating to the specific id —
+      // not bare ROUTE_PATHS.CHAT — avoids overriding ChatPage's own navigate
+      // and works from any page (chat or not). Falls back to /chat if no id.
       dispatchNotificationClick({ conversationId, messageId });
-      navigate(ROUTE_PATHS.CHAT);
+      navigate(
+        conversationId
+          ? `${ROUTE_PATHS.CHAT}/${conversationId}`
+          : ROUTE_PATHS.CHAT,
+      );
     });
   }, [navigate]);
 
