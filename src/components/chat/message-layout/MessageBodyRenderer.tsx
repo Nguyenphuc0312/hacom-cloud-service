@@ -572,7 +572,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
       );
     case MessageType.LOCATION:
       return message.location ? (
-        <LocationMessage location={message.location} isOwn={isOwn} />
+        <LocationMessage location={message.location} isOwn={isOwn} senderName={senderName} />
       ) : (
         <UnsupportedLocationMessage isOwn={isOwn} />
       );
