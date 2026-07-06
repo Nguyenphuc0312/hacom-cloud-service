@@ -23,11 +23,12 @@ export const AuthenticatedLayout: React.FC = () => {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
   const checkReminder = useReminderStore((s) => s.checkReminder);
 
-  // Bootstrap friend aliases into enrichedProfileStore on every page load so
-  // ChatHeader/RoomItem show alias immediately without waiting for Friends tab.
+  // Bootstrap ALL friend aliases on page load so ChatHeader/RoomItem show the
+  // "tên gợi nhớ" immediately. Large limit → the alias index (friendByUserId)
+  // covers every friend, not just page 1, so DMs of friends #21+ aren't missed.
   React.useEffect(() => {
     const { hasHydrated, fetchFriends } = useFriendshipStore.getState();
-    if (!hasHydrated) void fetchFriends();
+    if (!hasHydrated) void fetchFriends({ limit: 100 });
   }, []);
 
   React.useEffect(() => {

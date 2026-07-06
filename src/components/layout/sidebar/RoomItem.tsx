@@ -10,6 +10,7 @@ import {
 } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../../stores/friendshipStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import type { Conversation, UserStatus, UserSummary } from "../../../types";
 import {
@@ -440,6 +441,15 @@ export const RoomItemContainer = React.memo(
         [directPartnerId],
       ),
     );
+    // "tên gợi nhớ" (alias) read straight from the authoritative friend index —
+    // not the enrichedProfileStore injection, which only covers page-1 friends
+    // and races enrichUserProfile. This makes the sidebar alias reliable.
+    const alias = useFriendshipStore(
+      useMemo(
+        () => (s) => (directPartnerId ? s.friendByUserId[directPartnerId]?.alias ?? undefined : undefined),
+        [directPartnerId],
+      ),
+    );
     useEffect(() => {
       if (directPartnerId) enrichUserProfile(directPartnerId);
     }, [directPartnerId]);
@@ -450,6 +460,7 @@ export const RoomItemContainer = React.memo(
       }
 
       const displayName =
+        alias ||
         enrichedName ||
         getConversationDisplayName(conversation, currentUser.id) ||
         i18n.t("common:labels.conversation");
@@ -482,7 +493,7 @@ export const RoomItemContainer = React.memo(
           : undefined,
         isDirect,
       };
-    }, [conversation, currentUser, livePresence, enrichedName]);
+    }, [conversation, currentUser, livePresence, enrichedName, alias]);
 
     if (!viewModel) {
       return null;
