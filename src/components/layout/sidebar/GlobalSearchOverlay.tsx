@@ -18,14 +18,14 @@ import {
   XMarkIcon,
   UserIcon,
   CalendarIcon,
-  ChevronRightIcon,
+  DocumentIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 
 import { Avatar } from "../../common/Avatar";
 import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { FileName } from "../../common/FileName";
-import { formatRelativeTime } from "../../../utils/formatTime";
+import { formatCalendarDate } from "../../../utils/formatTime";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import {
   getConversationDisplayName,
@@ -202,7 +202,7 @@ const MessageRow: React.FC<{
           </p>
           {ts ? (
             <span className="shrink-0 text-[11px] text-text-muted">
-              {formatRelativeTime(new Date(ts))}
+              {formatCalendarDate(new Date(ts))}
             </span>
           ) : null}
         </div>
@@ -230,7 +230,7 @@ const FileRow: React.FC<{
       />
       <p className="truncate text-[12px] text-text-muted">
         {formatFileSize(file.sizeBytes)} · {file.senderName} ·{" "}
-        {formatRelativeTime(new Date(file.createdAt))}
+        {formatCalendarDate(new Date(file.createdAt))}
       </p>
     </div>
   </RowButton>
@@ -260,17 +260,28 @@ const FilterChip: React.FC<{
   </button>
 );
 
-/** A small popover positioned under its trigger. Fixed to escape overflow. */
+/**
+ * A small popover under its trigger. `align="right"` anchors to the trigger's
+ * right edge so it opens leftward — needed for chips near the panel's right
+ * edge (the sidebar is narrow and clips overflow, so a left-aligned popover
+ * would be cut off).
+ */
 const Popover: React.FC<{
   open: boolean;
   onClose: () => void;
+  align?: "left" | "right";
   children: React.ReactNode;
-}> = ({ open, onClose, children }) => {
+}> = ({ open, onClose, align = "left", children }) => {
   if (!open) return null;
   return (
     <>
       <div className="fixed inset-0 z-dropdown" onClick={onClose} aria-hidden />
-      <div className="absolute left-0 top-full z-dropdown mt-1.5 min-w-[220px] rounded-lg border border-border/70 bg-surface p-1.5 shadow-lg">
+      <div
+        className={clsx(
+          "absolute top-full z-dropdown mt-1.5 min-w-[220px] rounded-lg border border-border/70 bg-surface p-1.5 shadow-lg",
+          align === "right" ? "right-0" : "left-0",
+        )}
+      >
         {children}
       </div>
     </>
@@ -280,6 +291,33 @@ const Popover: React.FC<{
 // --- main overlay ------------------------------------------------------------
 
 const PREVIEW_COUNT = 5;
+
+// --- date helpers (dd/mm/yyyy display, yyyy-mm-dd internal) -------------------
+
+/** yyyy-mm-dd → dd/mm/yyyy (empty string if not a full ISO day). */
+export const isoToDisplay = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+};
+
+/** dd/mm/yyyy → yyyy-mm-dd, or null if incomplete/invalid. */
+export const displayToIso = (display: string): string | null => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(display.trim());
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  // Reject overflow like 31/02 (Date rolls it over).
+  if (d.getDate() !== Number(dd) || d.getMonth() + 1 !== Number(mm)) return null;
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+/** Insert `/` separators as the user types digits (dd/mm/yyyy). */
+const maskDateInput = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)];
+  return parts.filter((p) => p.length > 0).join("/");
+};
 
 export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
   currentUser,
@@ -743,7 +781,10 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
 
   const dateLabel =
     filters.from || filters.to
-      ? [filters.from, filters.to].filter(Boolean).join(" → ")
+      ? [filters.from, filters.to]
+          .filter((d): d is string => Boolean(d))
+          .map(isoToDisplay)
+          .join(" → ")
       : t("sidebar:globalSearch.filter.date");
 
   const filteredSenders = senders.filter((s) =>
@@ -817,7 +858,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
               setSenderOpen(false);
             }}
           />
-          <Popover open={dateOpen} onClose={() => setDateOpen(false)}>
+          <Popover open={dateOpen} onClose={() => setDateOpen(false)} align="right">
             <DateRangeFields
               from={filters.from}
               to={filters.to}
@@ -906,7 +947,10 @@ const FilesTab: React.FC<FilesTabProps> = ({
 
   const dateLabel =
     filters.from || filters.to
-      ? [filters.from, filters.to].filter(Boolean).join(" → ")
+      ? [filters.from, filters.to]
+          .filter((d): d is string => Boolean(d))
+          .map(isoToDisplay)
+          .join(" → ")
       : t("sidebar:globalSearch.filter.date");
 
   return (
@@ -917,7 +961,7 @@ const FilesTab: React.FC<FilesTabProps> = ({
         </span>
         <div className="relative">
           <FilterChip
-            icon={<ChevronRightIcon className="h-4 w-4" />}
+            icon={<DocumentIcon className="h-4 w-4" />}
             label={typeLabel[filters.type]}
             active={filters.type !== "all"}
             onClick={() => {
@@ -957,7 +1001,7 @@ const FilesTab: React.FC<FilesTabProps> = ({
               setTypeOpen(false);
             }}
           />
-          <Popover open={dateOpen} onClose={() => setDateOpen(false)}>
+          <Popover open={dateOpen} onClose={() => setDateOpen(false)} align="right">
             <DateRangeFields
               from={filters.from}
               to={filters.to}
@@ -988,7 +1032,9 @@ const FilesTab: React.FC<FilesTabProps> = ({
   );
 };
 
-// --- date range (native inputs — no picker lib) ------------------------------
+// --- date range (dd/mm/yyyy text inputs — native <input type=date> shows the
+// browser-locale format (mm/dd/yyyy in en) and can't be forced to dd/mm/yyyy,
+// so we use masked text inputs and keep yyyy-mm-dd as the internal value) ------
 
 const DateRangeFields: React.FC<{
   from: string | null;
@@ -997,8 +1043,19 @@ const DateRangeFields: React.FC<{
   onCancel: () => void;
 }> = ({ from, to, onApply, onCancel }) => {
   const { t } = useTranslation();
-  const [localFrom, setLocalFrom] = useState(from ?? "");
-  const [localTo, setLocalTo] = useState(to ?? "");
+  const [localFrom, setLocalFrom] = useState(isoToDisplay(from ?? ""));
+  const [localTo, setLocalTo] = useState(isoToDisplay(to ?? ""));
+
+  const fromInvalid = localFrom.length > 0 && displayToIso(localFrom) === null;
+  const toInvalid = localTo.length > 0 && displayToIso(localTo) === null;
+
+  const inputClass = (invalid: boolean) =>
+    clsx(
+      "w-full rounded-md border bg-background px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none",
+      invalid
+        ? "border-danger/70 focus:border-danger"
+        : "border-border/70 focus:border-[#1976D2]/60",
+    );
 
   return (
     <div className="w-[240px] p-1.5">
@@ -1010,11 +1067,12 @@ const DateRangeFields: React.FC<{
           {t("sidebar:globalSearch.filter.from")}
         </span>
         <input
-          type="date"
+          type="text"
+          inputMode="numeric"
+          placeholder="dd/mm/yyyy"
           value={localFrom}
-          max={localTo || undefined}
-          onChange={(e) => setLocalFrom(e.target.value)}
-          className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-[13px] text-text-primary focus:border-[#1976D2]/60 focus:outline-none"
+          onChange={(e) => setLocalFrom(maskDateInput(e.target.value))}
+          className={inputClass(fromInvalid)}
         />
       </label>
       <label className="mb-2 block px-1">
@@ -1022,11 +1080,12 @@ const DateRangeFields: React.FC<{
           {t("sidebar:globalSearch.filter.to")}
         </span>
         <input
-          type="date"
+          type="text"
+          inputMode="numeric"
+          placeholder="dd/mm/yyyy"
           value={localTo}
-          min={localFrom || undefined}
-          onChange={(e) => setLocalTo(e.target.value)}
-          className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-[13px] text-text-primary focus:border-[#1976D2]/60 focus:outline-none"
+          onChange={(e) => setLocalTo(maskDateInput(e.target.value))}
+          className={inputClass(toInvalid)}
         />
       </label>
       <div className="flex justify-end gap-1.5 px-1">
@@ -1039,8 +1098,11 @@ const DateRangeFields: React.FC<{
         </button>
         <button
           type="button"
-          onClick={() => onApply(localFrom || null, localTo || null)}
-          className="rounded-md bg-[#1565C0] px-3 py-1.5 text-[13px] font-medium text-[#E7E9EB] transition-micro hover:bg-[#1976D2]"
+          disabled={fromInvalid || toInvalid}
+          onClick={() =>
+            onApply(displayToIso(localFrom), displayToIso(localTo))
+          }
+          className="rounded-md bg-[#1565C0] px-3 py-1.5 text-[13px] font-medium text-[#E7E9EB] transition-micro hover:bg-[#1976D2] disabled:opacity-50"
         >
           {t("sidebar:globalSearch.filter.confirm")}
         </button>
