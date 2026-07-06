@@ -8,6 +8,7 @@ interface SidebarSearchProps {
   layoutState: ChatLayoutState;
   value: string;
   onChange: (value: string) => void;
+  onFocus?: () => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -15,6 +16,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   layoutState,
   value,
   onChange,
+  onFocus,
   inputRef,
 }) => {
   const { t } = useTranslation();
@@ -35,6 +37,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           ref={inputRef}
           type="text"
           value={value}
+          onFocus={onFocus}
           onChange={(event) => onChange(event.target.value)}
           placeholder={t("sidebar:search.placeholder", {
             defaultValue: "Tìm cuộc trò chuyện",
