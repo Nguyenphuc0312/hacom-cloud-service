@@ -17,6 +17,7 @@ import { SidebarContainer } from "./sidebar/SidebarContainer";
 import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
+import { GlobalSearchOverlay } from "./sidebar/GlobalSearchOverlay";
 import { useChatSidebarStore } from "../../features/chat/state/chatSidebarStore";
 import { useSidebarConversationList } from "../../features/chat/hooks/useSidebarConversationList";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
@@ -58,6 +59,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const setSearchQuery = useChatSidebarStore((state) => state.setSearchQuery);
   const activeFilter = useChatSidebarStore((state) => state.filter);
   const setActiveFilter = useChatSidebarStore((state) => state.setFilter);
+  const isSearchOpen = useChatSidebarStore((state) => state.isSearchOpen);
+  const openSearch = useChatSidebarStore((state) => state.openSearch);
+  const closeSearch = useChatSidebarStore((state) => state.closeSearch);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const isAuthenticated = !!useAuthStore((s) => s.user);
   useNotifications(isAuthenticated);
@@ -93,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <SidebarContainer className={className}>
+      <SidebarContainer className={clsx("relative", className)}>
         <SidebarHeader
           layoutState={layoutState}
           currentUser={currentUser}
@@ -104,6 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           layoutState={layoutState}
           value={searchQuery}
           onChange={setSearchQuery}
+          onFocus={openSearch}
           inputRef={searchInputRef}
         />
 
@@ -157,9 +162,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onSelect={handleSelectRoom}
           />
         </div>
+
+        {isSearchOpen ? (
+          <GlobalSearchOverlay
+            currentUser={currentUser}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            onClose={closeSearch}
+            inputRef={searchInputRef}
+          />
+        ) : null}
       </SidebarContainer>
-
-
     </>
   );
 };

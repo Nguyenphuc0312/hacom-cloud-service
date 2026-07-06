@@ -13,6 +13,59 @@
     "aria": "Tìm kiếm cuộc trò chuyện",
     "clearAria": "Xóa tìm kiếm"
   },
+  "globalSearch": {
+    "close": "Đóng",
+    "tabs": {
+      "all": "Tất cả",
+      "contacts": "Liên hệ",
+      "messages": "Tin nhắn",
+      "files": "File"
+    },
+    "sections": {
+      "people": "Cá nhân",
+      "groups": "Nhóm"
+    },
+    "seeAll": {
+      "contacts": "Xem tất cả liên hệ",
+      "groups": "Xem tất cả nhóm",
+      "messages": "Xem tất cả tin nhắn",
+      "files": "Xem tất cả files"
+    },
+    "count": {
+      "contacts": "Liên hệ ({{count}})",
+      "groups": "Nhóm ({{count}})",
+      "messages": "Tin nhắn ({{count}})",
+      "files": "File ({{count}})"
+    },
+    "filter": {
+      "label": "Lọc theo:",
+      "sender": "Người gửi",
+      "date": "Ngày gửi",
+      "searchPlaceholder": "Tìm kiếm",
+      "pickRange": "Chọn khoảng thời gian",
+      "from": "Từ ngày",
+      "to": "Đến ngày",
+      "cancel": "Hủy",
+      "confirm": "Xác nhận",
+      "clear": "Xóa lọc"
+    },
+    "fileType": {
+      "all": "Tất cả",
+      "image": "Ảnh",
+      "video": "Video",
+      "document": "Tài liệu",
+      "audio": "Âm thanh",
+      "other": "Khác"
+    },
+    "empty": {
+      "prompt": "Nhập từ khóa để tìm liên hệ, tin nhắn và file.",
+      "noResults": "Không tìm thấy kết quả cho \"{{query}}\".",
+      "noContacts": "Không có liên hệ phù hợp.",
+      "noMessages": "Không có tin nhắn phù hợp.",
+      "noFiles": "Không có file phù hợp."
+    },
+    "resultAria": "Kết quả tìm kiếm"
+  },
   "tabs": {
     "all": "Tất cả",
     "direct": "Cá nhân",
