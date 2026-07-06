@@ -850,9 +850,12 @@ export const FriendsPage: React.FC = () => {
         const contact = toContactUser(friend);
         const enriched = enrichedNameMap[friend.id];
         const hr = enrichedHrMap[friend.id];
+        // "Tên gợi nhớ" (alias) wins over enriched/real name — same rule as
+        // ChatHeader/RoomItem/UserProfile so the list matches every other view.
+        const preferredName = friend.alias || enriched;
         return {
           ...contact,
-          ...(enriched ? { displayName: enriched } : {}),
+          ...(preferredName ? { displayName: preferredName } : {}),
           departmentName: contact.departmentName ?? hr?.department ?? undefined,
           orgUnit: contact.orgUnit ?? hr?.company ?? undefined,
         };

@@ -18,6 +18,18 @@ import { useEnrichedProfileStore } from "./enrichedProfileStore";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
+/**
+ * Single rule for mirroring a friend's alias into enrichedProfileStore, used by
+ * every alias-sync path (local edit, WS update, fetchFriends). Set when present,
+ * CLEAR when absent — clearing is what makes alias removal propagate everywhere
+ * instead of leaving a stale alias stuck in nameByUserId.
+ */
+function syncAliasToEnrichedProfile(userId: string, alias: string | null | undefined) {
+  const { setEnrichedName, clearEnrichedName } = useEnrichedProfileStore.getState();
+  if (alias) setEnrichedName(userId, alias);
+  else clearEnrichedName(userId);
+}
+
 export interface FriendRequest {
   relationId: string;
   pairKey: string | null;
@@ -737,12 +749,7 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         friendByUserId: Object.fromEntries(friends.map((f) => [f.id, f])),
       };
     });
-    const { setEnrichedName, clearEnrichedName } = useEnrichedProfileStore.getState();
-    if (alias) {
-      setEnrichedName(userId, alias);
-    } else {
-      clearEnrichedName(userId);
-    }
+    syncAliasToEnrichedProfile(userId, alias);
   },
 
   setActionPending: (key, pending) => {
@@ -849,8 +856,8 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     const updatedFriend = normalized.friends.find(
       (f) => f.relationId === relation.relationId,
     );
-    if (updatedFriend?.alias) {
-      useEnrichedProfileStore.getState().setEnrichedName(updatedFriend.id, updatedFriend.alias);
+    if (updatedFriend) {
+      syncAliasToEnrichedProfile(updatedFriend.id, updatedFriend.alias);
     }
     set(() => ({
       ...normalized,
@@ -899,11 +906,9 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
 
-      // Inject aliases into enrichedProfileStore so ChatHeader/RoomItem reflect them immediately
-      const { setEnrichedName } = useEnrichedProfileStore.getState();
-      list.forEach((f) => {
-        if (f.alias) setEnrichedName(f.id, f.alias);
-      });
+      // Mirror aliases into enrichedProfileStore so ChatHeader/RoomItem reflect them
+      // immediately — set when present, clear when removed server-side.
+      list.forEach((f) => syncAliasToEnrichedProfile(f.id, f.alias));
 
       set((state) => {
         const mergedFriends = append

@@ -9,6 +9,7 @@ import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { PublicUserSummary } from "@hacom/chat-shared-types/auth";
 import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
 import { useAuthStore } from "../../stores";
+import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 
 type TabKey = "my" | "choose";
 
@@ -48,6 +49,7 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const currentUser = useAuthStore((s) => s.user);
+  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   const displayName =
     currentUser
       ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
@@ -292,7 +294,10 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
               </p>
             ) : (
               <ul className="max-h-64 space-y-1 overflow-y-auto">
-                {results.map((item) => (
+                {results.map((item) => {
+                  const label =
+                    nameByUserId[item.id] || item.displayName;
+                  return (
                   <li key={item.id}>
                     <button
                       type="button"
@@ -306,12 +311,12 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
                     >
                       <Avatar
                         src={item.avatarUrl || undefined}
-                        alt={item.displayName || item.username || item.id}
+                        alt={label || item.username || item.id}
                         size="md"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-text-primary">
-                          {item.displayName}
+                          {label}
                         </p>
                         {item.username && (
                           <p className="truncate text-xs text-text-muted">
@@ -330,7 +335,8 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
