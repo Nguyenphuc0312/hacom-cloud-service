@@ -13,6 +13,59 @@
     "aria": "Search conversations",
     "clearAria": "Clear search"
   },
+  "globalSearch": {
+    "close": "Close",
+    "tabs": {
+      "all": "All",
+      "contacts": "Contacts",
+      "messages": "Messages",
+      "files": "Files"
+    },
+    "sections": {
+      "people": "People",
+      "groups": "Groups"
+    },
+    "seeAll": {
+      "contacts": "See all contacts",
+      "groups": "See all groups",
+      "messages": "See all messages",
+      "files": "See all files"
+    },
+    "count": {
+      "contacts": "Contacts ({{count}})",
+      "groups": "Groups ({{count}})",
+      "messages": "Messages ({{count}})",
+      "files": "Files ({{count}})"
+    },
+    "filter": {
+      "label": "Filter by:",
+      "sender": "Sender",
+      "date": "Date sent",
+      "searchPlaceholder": "Search",
+      "pickRange": "Pick a date range",
+      "from": "From",
+      "to": "To",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "clear": "Clear filters"
+    },
+    "fileType": {
+      "all": "All",
+      "image": "Images",
+      "video": "Video",
+      "document": "Documents",
+      "audio": "Audio",
+      "other": "Other"
+    },
+    "empty": {
+      "prompt": "Type a keyword to find contacts, messages and files.",
+      "noResults": "No results found for \"{{query}}\".",
+      "noContacts": "No matching contacts.",
+      "noMessages": "No matching messages.",
+      "noFiles": "No matching files."
+    },
+    "resultAria": "Search results"
+  },
   "tabs": {
     "all": "All",
     "direct": "Direct",
