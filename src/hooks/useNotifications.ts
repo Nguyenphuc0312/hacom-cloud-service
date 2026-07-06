@@ -8,10 +8,19 @@ import {
 import type { NotificationItem } from "../features/notification/state/notificationStore";
 import {
   notificationApi,
+  applyAliasToNotification,
   type BackendNotification,
   type BackendNotificationType,
 } from "../services/notificationApi";
+import { useFriendshipStore } from "../stores/friendshipStore";
 import { logger } from "../utils/logger";
+
+const aliasMap = (): Record<string, string | null | undefined> => {
+  const byUser = useFriendshipStore.getState().friendByUserId;
+  const out: Record<string, string | null | undefined> = {};
+  for (const id in byUser) out[id] = byUser[id]?.alias;
+  return out;
+};
 
 const backendTypeToKind = (
   type: BackendNotificationType,
@@ -33,11 +42,13 @@ const backendTypeToKind = (
   }
 };
 
-const backendToItem = (n: BackendNotification): NotificationItem => ({
+const backendToItem = (n: BackendNotification): NotificationItem => {
+  const { title, body } = applyAliasToNotification(n, aliasMap());
+  return {
   id: n.id,
   kind: backendTypeToKind(n.type),
-  title: n.title,
-  body: n.body ?? "",
+  title,
+  body: body ?? "",
   createdAt: n.createdAt,
   isRead: n.readAt !== null,
   readAt: n.readAt,
@@ -50,7 +61,8 @@ const backendToItem = (n: BackendNotification): NotificationItem => ({
   actorId: n.actorUserId,
   targetType: n.targetType ?? undefined,
   targetId: n.targetId ?? undefined,
-});
+  };
+};
 
 export const useNotifications = (isAuthenticated: boolean) => {
   const { upsertNotification, markAsRead, markAllAsRead } =

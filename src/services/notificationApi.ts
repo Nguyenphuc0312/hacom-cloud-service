@@ -44,6 +44,28 @@ export interface ListNotificationsResponse {
   };
 }
 
+/**
+ * Swap the actor's real name baked into a notification's title/body with the
+ * viewer's "tên gợi nhớ" (alias). BE stores the exact baked name in
+ * metadata.senderName, so this is an exact-substring replace (not a guess).
+ * Applied in the single backendToItem mapper → covers initial load + realtime.
+ * ponytail: FE interim — durable fix is BE rendering alias-aware notifications
+ * (tracked in FE__contact-alias-notifications contract).
+ */
+export const applyAliasToNotification = (
+  n: BackendNotification,
+  aliasByUserId: Record<string, string | null | undefined>,
+): { title: string; body: string | null } => {
+  const bakedName =
+    typeof n.metadata?.senderName === "string" ? n.metadata.senderName : null;
+  const alias = n.actorUserId ? aliasByUserId[n.actorUserId] ?? null : null;
+  if (!bakedName || !alias || bakedName === alias) {
+    return { title: n.title, body: n.body ?? null };
+  }
+  const swap = (s: string | null) => (s ? s.split(bakedName).join(alias) : s);
+  return { title: swap(n.title) ?? n.title, body: swap(n.body ?? null) };
+};
+
 export interface UnreadCountResponse {
   success: boolean;
   data: { unreadCount: number };
