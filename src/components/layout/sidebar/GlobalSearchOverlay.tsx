@@ -20,6 +20,8 @@ import {
   CalendarIcon,
   DocumentIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
 import { Avatar } from "../../common/Avatar";
@@ -27,12 +29,14 @@ import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { FileName } from "../../common/FileName";
 import { formatCalendarDate } from "../../../utils/formatTime";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
+import { resolvePublicResourceUrl } from "../../../config";
 import {
   getConversationDisplayName,
   getConversationAvatar,
   getUserDisplayName,
 } from "../../../utils/messageHelpers";
 import type { Conversation, Message, UserSummary } from "../../../types";
+import { useChatStore } from "../../../stores";
 import {
   dispatchOpenConversation,
   dispatchStartDirectMessage,
@@ -52,6 +56,15 @@ import {
 } from "../../../features/chat/hooks/useGlobalSearch";
 
 type SearchTab = "all" | "contacts" | "messages" | "files";
+
+/** Row metadata for a message search result (resolved from message + store). */
+interface MessageMeta {
+  conversationName: string;
+  conversationAvatar?: string | null;
+  senderName: string;
+  isSelf: boolean;
+}
+type ResolveMessageMeta = (message: Message) => MessageMeta;
 
 interface GlobalSearchOverlayProps {
   currentUser: UserSummary;
@@ -175,11 +188,24 @@ const ConversationRow: React.FC<{
 
 const MessageRow: React.FC<{
   message: Message;
+  /** Conversation the message lives in — the row's primary label. */
+  conversationName: string;
+  conversationAvatar?: string | null;
   senderName: string;
-  senderAvatar?: string | null;
+  /** True when the sender is the current user (prefix snippet with "Bạn"). */
+  isSelf: boolean;
   query: string;
   onClick: () => void;
-}> = ({ message, senderName, senderAvatar, query, onClick }) => {
+}> = ({
+  message,
+  conversationName,
+  conversationAvatar,
+  senderName,
+  isSelf,
+  query,
+  onClick,
+}) => {
+  const { t } = useTranslation();
   const ts =
     (typeof message.serverTs === "string"
       ? message.serverTs
@@ -187,18 +213,19 @@ const MessageRow: React.FC<{
         ? message.serverTs.toISOString()
         : undefined) ??
     (typeof message.createdAt === "string" ? message.createdAt : undefined);
+  const senderLabel = isSelf ? t("chat:message.you") : senderName;
   return (
     <RowButton onClick={onClick}>
       <Avatar
-        src={senderAvatar}
-        alt={senderName}
+        src={conversationAvatar}
+        alt={conversationName}
         size="md"
         className="shrink-0"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-[14px] font-medium text-text-primary">
-            {senderName}
+            {conversationName}
           </p>
           {ts ? (
             <span className="shrink-0 text-[11px] text-text-muted">
@@ -207,6 +234,7 @@ const MessageRow: React.FC<{
           ) : null}
         </div>
         <p className="truncate text-[12px] text-text-secondary">
+          <span className="text-text-muted">{senderLabel}: </span>
           <Highlight text={message.content ?? ""} query={query} />
         </p>
       </div>
@@ -319,6 +347,144 @@ const maskDateInput = (raw: string): string => {
   return parts.filter((p) => p.length > 0).join("/");
 };
 
+const pad2 = (n: number): string => String(n).padStart(2, "0");
+const toIso = (y: number, m0: number, d: number): string =>
+  `${y}-${pad2(m0 + 1)}-${pad2(d)}`;
+
+// --- mini month calendar (self-contained; no picker lib) ---------------------
+
+const WEEKDAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const MONTH_LABEL = (y: number, m0: number) => `Tháng ${m0 + 1}, ${y}`;
+
+interface MiniMonthCalendarProps {
+  /** Currently selected range (ISO yyyy-mm-dd) for highlighting. */
+  from: string | null;
+  to: string | null;
+  /** Month to show first (ISO of any day in it), defaults to `from` or today. */
+  initialIso?: string | null;
+  onPick: (iso: string) => void;
+}
+
+/** Build the 6×7 grid of days for the month containing (year, month0). */
+export const buildMonthCells = (
+  year: number,
+  month0: number,
+): Array<{ iso: string; day: number; inMonth: boolean }> => {
+  const firstDow = new Date(year, month0, 1).getDay(); // 0=CN
+  const daysInMonth = new Date(year, month0 + 1, 0).getDate();
+  const cells: Array<{ iso: string; day: number; inMonth: boolean }> = [];
+
+  // Leading days from previous month
+  const prevDays = new Date(year, month0, 0).getDate();
+  for (let i = firstDow - 1; i >= 0; i -= 1) {
+    const d = prevDays - i;
+    const m = month0 - 1;
+    const y = m < 0 ? year - 1 : year;
+    cells.push({ iso: toIso(y, (m + 12) % 12, d), day: d, inMonth: false });
+  }
+  // Current month
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    cells.push({ iso: toIso(year, month0, d), day: d, inMonth: true });
+  }
+  // Trailing to fill 6 rows (42 cells)
+  let next = 1;
+  while (cells.length < 42) {
+    const m = month0 + 1;
+    const y = m > 11 ? year + 1 : year;
+    cells.push({ iso: toIso(y, m % 12, next), day: next, inMonth: false });
+    next += 1;
+  }
+  return cells;
+};
+
+const MiniMonthCalendar: React.FC<MiniMonthCalendarProps> = ({
+  from,
+  to,
+  initialIso,
+  onPick,
+}) => {
+  const seed = initialIso || from || new Date().toISOString().slice(0, 10);
+  const seedDate = new Date(`${seed}T00:00:00`);
+  const [view, setView] = useState(() => ({
+    year: seedDate.getFullYear(),
+    month0: seedDate.getMonth(),
+  }));
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const cells = buildMonthCells(view.year, view.month0);
+
+  const inRange = (iso: string): boolean =>
+    Boolean(from && to && iso >= from && iso <= to);
+  const isEndpoint = (iso: string): boolean => iso === from || iso === to;
+
+  const step = (delta: number) =>
+    setView((v) => {
+      const d = new Date(v.year, v.month0 + delta, 1);
+      return { year: d.getFullYear(), month0: d.getMonth() };
+    });
+
+  return (
+    <div className="w-[240px] select-none px-1 pb-1">
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <span className="text-[13px] font-semibold text-text-primary">
+          {MONTH_LABEL(view.year, view.month0)}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => step(-1)}
+            className="inline-flex h-6 w-6 items-center justify-center rounded text-text-muted transition-micro hover:bg-surface-overlay hover:text-text-primary"
+            aria-label="Tháng trước"
+          >
+            <ChevronLeftIcon className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => step(1)}
+            className="inline-flex h-6 w-6 items-center justify-center rounded text-text-muted transition-micro hover:bg-surface-overlay hover:text-text-primary"
+            aria-label="Tháng sau"
+          >
+            <ChevronRightIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {WEEKDAY_LABELS.map((w) => (
+          <span key={w} className="text-[11px] font-medium text-text-muted">
+            {w}
+          </span>
+        ))}
+        {cells.map((cell) => {
+          const selected = isEndpoint(cell.iso);
+          const ranged = inRange(cell.iso) && !selected;
+          const isToday = cell.iso === todayIso;
+          return (
+            <button
+              key={cell.iso}
+              type="button"
+              onClick={() => onPick(cell.iso)}
+              className={clsx(
+                "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[12px] transition-micro",
+                selected
+                  ? "bg-[#1565C0] font-semibold text-[#E7E9EB]"
+                  : ranged
+                    ? "bg-[#1976D2]/12 text-text-primary"
+                    : cell.inMonth
+                      ? "text-text-primary hover:bg-surface-overlay"
+                      : "text-text-muted/60 hover:bg-surface-overlay",
+                !selected && isToday && "ring-1 ring-[#1976D2]/60",
+              )}
+            >
+              {cell.day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
   currentUser,
   query,
@@ -372,6 +538,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
     tab === "all" || tab === "files",
   );
   const senders = useConversationSenders(currentUser);
+  const conversationById = useChatStore((s) => s.conversationById);
 
   const senderById = useMemo(() => {
     const map = new Map<string, UserSummary>();
@@ -379,14 +546,35 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
     return map;
   }, [senders]);
 
-  const resolveSender = (message: Message) => {
-    const s = senderById.get(message.senderId);
-    return {
-      name: s
-        ? getUserDisplayName(s, { allowTechnicalFallback: true })
-        : message.senderId,
-      avatar: s?.avatar ?? null,
-    };
+  const resolveMessageMeta = (message: Message) => {
+    // Sender name: prefer the field the search endpoint hydrates; fall back to a
+    // known participant, then the current user, and never expose a raw id.
+    const participant = senderById.get(message.senderId);
+    const isSelf = message.senderId === currentUser.id;
+    const senderName =
+      message.senderName ||
+      (participant
+        ? getUserDisplayName(participant, { allowTechnicalFallback: true })
+        : "") ||
+      (isSelf
+        ? getUserDisplayName(currentUser, { allowTechnicalFallback: true })
+        : "") ||
+      t("common:labels.user");
+
+    // Conversation label: the message may live in a chat not in the local store
+    // yet (global search); fall back to the hydrated sender so the row is never
+    // a bare id.
+    const conversation = conversationById[message.conversationId];
+    const conversationName = conversation
+      ? getConversationDisplayName(conversation, currentUser.id)
+      : senderName;
+    const conversationAvatar = conversation
+      ? resolvePublicResourceUrl(
+          getConversationAvatar(conversation, currentUser.id),
+        ) ?? null
+      : resolvePublicResourceUrl(message.senderAvatar ?? undefined) ?? null;
+
+    return { conversationName, conversationAvatar, senderName, isSelf };
   };
 
   const tabs: Array<{ id: SearchTab; label: string }> = [
@@ -480,7 +668,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
             messages={messages}
             files={files}
             currentUser={currentUser}
-            resolveSender={resolveSender}
+            resolveMessageMeta={resolveMessageMeta}
             onSelectUser={onSelectUser}
             onSelectConversation={onSelectConversation}
             onGoTab={setTab}
@@ -501,7 +689,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
             senders={senders}
             filters={messageFilters}
             onFiltersChange={setMessageFilters}
-            resolveSender={resolveSender}
+            resolveMessageMeta={resolveMessageMeta}
             onSelectConversation={onSelectConversation}
           />
         ) : (
@@ -546,7 +734,7 @@ interface AllTabProps {
   messages: Message[];
   files: GlobalFileResult[];
   currentUser: UserSummary;
-  resolveSender: (m: Message) => { name: string; avatar?: string | null };
+  resolveMessageMeta: ResolveMessageMeta;
   onSelectUser: (userId: string) => void;
   onSelectConversation: (conversationId: string, messageId?: string) => void;
   onGoTab: (tab: SearchTab) => void;
@@ -559,7 +747,7 @@ const AllTab: React.FC<AllTabProps> = ({
   messages,
   files,
   currentUser,
-  resolveSender,
+  resolveMessageMeta,
   onSelectUser,
   onSelectConversation,
   onGoTab,
@@ -613,13 +801,15 @@ const AllTab: React.FC<AllTabProps> = ({
             })}
           />
           {messages.slice(0, PREVIEW_COUNT).map((message) => {
-            const sender = resolveSender(message);
+            const meta = resolveMessageMeta(message);
             return (
               <MessageRow
                 key={message.id}
                 message={message}
-                senderName={sender.name}
-                senderAvatar={sender.avatar}
+                conversationName={meta.conversationName}
+                conversationAvatar={meta.conversationAvatar}
+                senderName={meta.senderName}
+                isSelf={meta.isSelf}
                 query={query}
                 onClick={() =>
                   onSelectConversation(message.conversationId, message.id)
@@ -754,7 +944,7 @@ interface MessagesTabProps {
   senders: UserSummary[];
   filters: GlobalMessageFilters;
   onFiltersChange: (next: GlobalMessageFilters) => void;
-  resolveSender: (m: Message) => { name: string; avatar?: string | null };
+  resolveMessageMeta: ResolveMessageMeta;
   onSelectConversation: (conversationId: string, messageId?: string) => void;
 }
 
@@ -764,7 +954,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   senders,
   filters,
   onFiltersChange,
-  resolveSender,
+  resolveMessageMeta,
   onSelectConversation,
 }) => {
   const { t } = useTranslation();
@@ -888,13 +1078,15 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         <EmptyLine text={t("sidebar:globalSearch.empty.noMessages")} />
       ) : (
         messages.map((message) => {
-          const sender = resolveSender(message);
+          const meta = resolveMessageMeta(message);
           return (
             <MessageRow
               key={message.id}
               message={message}
-              senderName={sender.name}
-              senderAvatar={sender.avatar}
+              conversationName={meta.conversationName}
+              conversationAvatar={meta.conversationAvatar}
+              senderName={meta.senderName}
+              isSelf={meta.isSelf}
               query={query}
               onClick={() =>
                 onSelectConversation(message.conversationId, message.id)
@@ -1049,6 +1241,25 @@ const DateRangeFields: React.FC<{
   const fromInvalid = localFrom.length > 0 && displayToIso(localFrom) === null;
   const toInvalid = localTo.length > 0 && displayToIso(localTo) === null;
 
+  const fromIso = displayToIso(localFrom);
+  const toIsoVal = displayToIso(localTo);
+
+  // Calendar range pick: no from (or a complete range already) → start over
+  // with this day as from; otherwise close the range (swap if picked earlier).
+  const handlePick = (iso: string) => {
+    if (!fromIso || (fromIso && toIsoVal)) {
+      setLocalFrom(isoToDisplay(iso));
+      setLocalTo("");
+      return;
+    }
+    if (iso < fromIso) {
+      setLocalTo(localFrom);
+      setLocalFrom(isoToDisplay(iso));
+    } else {
+      setLocalTo(isoToDisplay(iso));
+    }
+  };
+
   const inputClass = (invalid: boolean) =>
     clsx(
       "w-full rounded-md border bg-background px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none",
@@ -1058,36 +1269,48 @@ const DateRangeFields: React.FC<{
     );
 
   return (
-    <div className="w-[240px] p-1.5">
+    <div className="w-[248px] p-1.5">
       <p className="px-1 pb-1.5 text-[12px] font-medium text-text-secondary">
         {t("sidebar:globalSearch.filter.pickRange")}
       </p>
-      <label className="mb-1.5 block px-1">
-        <span className="mb-0.5 block text-[11px] text-text-muted">
-          {t("sidebar:globalSearch.filter.from")}
-        </span>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="dd/mm/yyyy"
-          value={localFrom}
-          onChange={(e) => setLocalFrom(maskDateInput(e.target.value))}
-          className={inputClass(fromInvalid)}
+      <div className="mb-2 flex gap-1.5 px-1">
+        <label className="block flex-1">
+          <span className="mb-0.5 block text-[11px] text-text-muted">
+            {t("sidebar:globalSearch.filter.from")}
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="dd/mm/yyyy"
+            value={localFrom}
+            onChange={(e) => setLocalFrom(maskDateInput(e.target.value))}
+            className={inputClass(fromInvalid)}
+          />
+        </label>
+        <label className="block flex-1">
+          <span className="mb-0.5 block text-[11px] text-text-muted">
+            {t("sidebar:globalSearch.filter.to")}
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="dd/mm/yyyy"
+            value={localTo}
+            onChange={(e) => setLocalTo(maskDateInput(e.target.value))}
+            className={inputClass(toInvalid)}
+          />
+        </label>
+      </div>
+
+      <div className="mb-1.5 border-t border-border/50 pt-1.5">
+        <MiniMonthCalendar
+          from={fromIso}
+          to={toIsoVal}
+          initialIso={fromIso ?? toIsoVal}
+          onPick={handlePick}
         />
-      </label>
-      <label className="mb-2 block px-1">
-        <span className="mb-0.5 block text-[11px] text-text-muted">
-          {t("sidebar:globalSearch.filter.to")}
-        </span>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="dd/mm/yyyy"
-          value={localTo}
-          onChange={(e) => setLocalTo(maskDateInput(e.target.value))}
-          className={inputClass(toInvalid)}
-        />
-      </label>
+      </div>
+
       <div className="flex justify-end gap-1.5 px-1">
         <button
           type="button"
