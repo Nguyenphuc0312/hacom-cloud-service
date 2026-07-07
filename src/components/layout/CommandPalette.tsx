@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -172,7 +173,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const previousLocationKeyRef = React.useRef(location.key);
+  const [highlight, setHighlight] = React.useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    visible: false,
+  });
   const openShortcut = React.useMemo(() => getShortcutForPlatform(), []);
   const currentUserId = currentUser?.id ?? "";
 
@@ -488,12 +497,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const commandCount = indexedCommands.length;
 
   const [prevIsOpen, setPrevIsOpen] = React.useState(isOpen);
+  // Keep the palette mounted through its exit animation: "open" while visible,
+  // "closing" while the exit keyframe plays, "closed" once fully unmounted.
+  const [phase, setPhase] = React.useState<"open" | "closing" | "closed">(
+    isOpen ? "open" : "closed",
+  );
 
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (isOpen) {
+      setPhase("open");
       setQuery("");
       setActiveIndex(0);
+    } else {
+      setPhase((current) => (current === "closed" ? "closed" : "closing"));
     }
   }
 
@@ -525,16 +542,40 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   }
 
-  React.useEffect(() => {
-    if (!isOpen) {
+  // Keep the active row in view AND position the gliding highlight pill. Both
+  // must happen in one layout pass: scrollIntoView mutates scrollTop, and the
+  // pill's offset is measured relative to that same (post-scroll) scroll state.
+  React.useLayoutEffect(() => {
+    if (phase === "closed") {
       return;
     }
 
-    const activeNode = document.querySelector<HTMLElement>(
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const activeNode = container.querySelector<HTMLElement>(
       `[data-command-index="${activeIndex}"]`,
     );
-    activeNode?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, isOpen]);
+    if (!activeNode) {
+      setHighlight((current) => ({ ...current, visible: false }));
+      return;
+    }
+
+    activeNode.scrollIntoView({ block: "nearest" });
+
+    // offset* are layout values relative to the positioned scroll container and,
+    // unlike getBoundingClientRect, are immune to the panel's entrance scale
+    // transform — so the pill is sized correctly even measured mid-animation.
+    setHighlight({
+      top: activeNode.offsetTop,
+      left: activeNode.offsetLeft,
+      width: activeNode.offsetWidth,
+      height: activeNode.offsetHeight,
+      visible: true,
+    });
+  }, [activeIndex, groupedCommands, phase]);
 
   React.useEffect(() => {
     if (!isOpen) {
@@ -551,8 +592,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const executeCommand = React.useCallback(
     (command: CommandItem) => {
-      closePalette();
-      command.execute();
+      const run = () => {
+        closePalette();
+        command.execute();
+      };
+
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+      // Dissolve the palette into its destination via the View Transitions API.
+      // flushSync commits the close+navigate inside the transition so the old
+      // snapshot (palette up) crossfades to the new one. Unsupported → plain run.
+      if (
+        !prefersReducedMotion &&
+        typeof document !== "undefined" &&
+        "startViewTransition" in document
+      ) {
+        document.startViewTransition(() => flushSync(run));
+        return;
+      }
+
+      run();
     },
     [closePalette],
   );
@@ -594,9 +655,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     [activeIndex, closePalette, commandCount, executeCommand, indexedCommands],
   );
 
-  if (!isOpen) {
+  if (phase === "closed") {
     return null;
   }
+
+  const isClosing = phase === "closing";
 
   return (
     <div
@@ -607,14 +670,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       <button
         type="button"
         aria-label={t("common:actions.close")}
-        className="absolute inset-0 bg-text-primary/45 backdrop-blur-sm"
+        className={clsx(
+          "absolute inset-0 bg-text-primary/45 backdrop-blur-sm",
+          isClosing ? "cmdk-overlay-out" : "cmdk-overlay-in",
+        )}
         onClick={closePalette}
       />
 
       <div
+        onAnimationEnd={(event) => {
+          if (event.target === event.currentTarget && phase === "closing") {
+            setPhase("closed");
+          }
+        }}
         className={clsx(
           "relative mx-auto flex h-[min(74vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl",
-          "border border-border bg-surface-raised shadow-elev3 animate-slide-up-fade",
+          "border border-border bg-surface-raised shadow-elev3 origin-center",
+          isClosing ? "cmdk-panel-out" : "cmdk-panel-in",
         )}
       >
         <div className="border-b border-border px-4 py-3 sm:px-5">
@@ -638,7 +710,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 py-2 sm:px-3">
+        <div
+          ref={scrollRef}
+          className="relative flex-1 overflow-y-auto px-2 py-2 sm:px-3"
+        >
+          <div
+            aria-hidden="true"
+            className="cmdk-highlight pointer-events-none absolute left-0 top-0 rounded-xl border border-primary/30 bg-primary/12 shadow-xs"
+            style={{
+              transform: `translate3d(${highlight.left}px, ${highlight.top}px, 0)`,
+              width: highlight.width,
+              height: highlight.height,
+              opacity: highlight.visible ? 1 : 0,
+            }}
+          />
+
           {groupedCommands.length === 0 && (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
               {t("common:status.empty")}
@@ -662,9 +748,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       type="button"
                       data-command-index={command.index}
                       className={clsx(
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-micro",
+                        "relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-micro",
                         isActive
-                          ? "border-primary/30 bg-primary/12 text-text-primary shadow-xs"
+                          ? "border-transparent bg-transparent text-text-primary"
                           : "border-transparent text-text-secondary hover:border-border hover:bg-surface-hover hover:text-text-primary",
                       )}
                       onMouseEnter={() => setActiveIndex(command.index)}

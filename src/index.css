@@ -954,11 +954,98 @@ a:focus-visible {
   animation: shake 480ms ease-in-out 1;
 }
 
+/* Command palette — overdrive entrance/exit + gliding selection.
+   Entrance is a spring scale/fade morph from center; the selection pill
+   glides between items instead of the highlight jumping class-to-class. */
+@keyframes cmdkOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cmdkOverlayOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cmdkPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.965);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cmdkPanelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+.cmdk-overlay-in {
+  animation: cmdkOverlayIn 180ms var(--motion-ease-enter) both;
+}
+
+.cmdk-overlay-out {
+  animation: cmdkOverlayOut 150ms var(--motion-ease-exit) both;
+}
+
+.cmdk-panel-in {
+  animation: cmdkPanelIn 240ms var(--motion-ease-spring) both;
+}
+
+.cmdk-panel-out {
+  animation: cmdkPanelOut 150ms var(--motion-ease-exit) both;
+}
+
+.cmdk-highlight {
+  transition:
+    transform 260ms var(--motion-ease-spring),
+    width 260ms var(--motion-ease-spring),
+    height 260ms var(--motion-ease-spring),
+    opacity 160ms var(--motion-ease-enter);
+  will-change: transform, width, height;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   html.theme-ready,
   html.theme-ready * {
     transition: none !important;
+  }
+
+  /* Global rule above already neutralizes the pill transition; also collapse
+     the entrance/exit keyframes to a crossfade so nothing scales or slides. */
+  .cmdk-overlay-in,
+  .cmdk-overlay-out,
+  .cmdk-panel-in,
+  .cmdk-panel-out {
+    animation-duration: 1ms;
+    animation-timing-function: linear;
+  }
+
+  .cmdk-panel-in,
+  .cmdk-panel-out {
+    transform: none;
   }
 }
 
