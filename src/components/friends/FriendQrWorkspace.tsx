@@ -1,6 +1,5 @@
 ﻿import React from "react";
 import clsx from "clsx";
-import QRCode from "qrcode";
 import { useTranslation } from "react-i18next";
 import {
   CameraIcon,
@@ -170,6 +169,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
       try {
         const value = myQr.deepLink || myQr.shareCode;
+        const { default: QRCode } = await import("qrcode");
         const imageUrl = await QRCode.toDataURL(value, {
           errorCorrectionLevel: "M",
           width: 240,

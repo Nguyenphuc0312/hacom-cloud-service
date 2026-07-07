@@ -6,7 +6,6 @@ import React, {
   useState,
 } from "react";
 import clsx from "clsx";
-import QRCode from "qrcode";
 import { useTranslation } from "react-i18next";
 import { ArrowPathIcon, ClockIcon } from "@heroicons/react/24/outline";
 import {
@@ -173,6 +172,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
 
     try {
       const session = await qrLoginService.createSession();
+      const { default: QRCode } = await import("qrcode");
       const qrImageUrl = await QRCode.toDataURL(session.qrContent, {
         errorCorrectionLevel: "M",
         margin: 1,
