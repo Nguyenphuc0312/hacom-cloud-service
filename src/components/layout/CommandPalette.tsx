@@ -12,12 +12,15 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { ROUTE_PATHS } from "../../router/paths";
+import { resolvePublicResourceUrl } from "../../config";
+import { Avatar } from "../common/Avatar";
 import {
   emitOpenNewChatModal,
   markOpenNewChatIntent,
 } from "../../lib/commandPalette";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import {
+  getConversationAvatar,
   getConversationDisplayName,
   getMessagePreview,
   getOtherParticipant,
@@ -38,6 +41,10 @@ interface CommandItem {
   description?: string;
   keywords: string[];
   icon: CommandIcon;
+  /** For conversation/user rows: show a real avatar (with initials fallback)
+   *  instead of the generic icon. Resolved to a public URL, may be undefined. */
+  avatarSrc?: string;
+  showAvatar?: boolean;
   shortcut?: string;
   badge?: string;
   baseScore?: number;
@@ -58,6 +65,7 @@ interface UserCandidate {
   id: string;
   label: string;
   username?: string;
+  avatar?: string;
 }
 
 interface CommandPaletteProps {
@@ -168,7 +176,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const selectConversation = useChatStore((state) => state.selectConversation);
   const currentUser = useAuthStore((state) => state.user);
   const friends = useFriendshipStore((state) => state.friends);
+  const friendByUserId = useFriendshipStore((state) => state.friendByUserId);
   const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+
+  // "tên gợi nhớ" (alias) resolution — same priority the sidebar uses
+  // (RoomItem): the authoritative friend-index alias wins, then the enriched
+  // name injection, then whatever real-name fallback the caller has.
+  const resolveAliasName = React.useCallback(
+    (userId: string | undefined, fallback: string): string => {
+      if (!userId) {
+        return fallback;
+      }
+      return friendByUserId[userId]?.alias || nameByUserId[userId] || fallback;
+    },
+    [friendByUserId, nameByUserId],
+  );
 
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -237,6 +259,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         id: friend.id,
         label,
         username: friend.username,
+        avatar: friend.avatar,
       });
     });
 
@@ -260,6 +283,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             }) ||
             participant.username,
           username: existing?.username || participant.username,
+          avatar: existing?.avatar || participant.avatar,
         });
       });
 
@@ -275,6 +299,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             }) ||
             other.username,
           username: existing?.username || other.username,
+          avatar: existing?.avatar || other.avatar,
         });
       }
     });
@@ -336,9 +361,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     () =>
       conversations.map((conversation) => {
         const unreadCount = conversation.unreadCount ?? 0;
-        const label =
+        const baseName =
           getConversationDisplayName(conversation, currentUserId) ||
           t("common:labels.conversation");
+        // DM rows honour the partner's alias; groups keep their real name.
+        const partnerId = isDirectConversation(conversation)
+          ? getOtherParticipant(conversation, currentUserId)?.id
+          : undefined;
+        const label = resolveAliasName(partnerId, baseName);
         const description = conversation.lastMessage
           ? getMessagePreview(conversation.lastMessage, currentUserId, 72)
           : t("sidebar:room.noMessagesYet");
@@ -350,6 +380,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           description,
           keywords: getConversationKeywords(conversation),
           icon: ChatBubbleLeftRightIcon,
+          showAvatar: true,
+          avatarSrc:
+            resolvePublicResourceUrl(
+              getConversationAvatar(conversation, currentUserId),
+            ) ?? undefined,
           badge: unreadCount > 0 ? `${unreadCount}` : undefined,
           baseScore:
             (conversation.isPinned ? 10 : 0) +
@@ -363,7 +398,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           },
         } satisfies CommandItem;
       }),
-    [conversations, currentUserId, navigate, selectConversation, t],
+    [
+      conversations,
+      currentUserId,
+      navigate,
+      resolveAliasName,
+      selectConversation,
+      t,
+    ],
   );
 
   const userCommands = React.useMemo<CommandItem[]>(
@@ -376,12 +418,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         return {
           id: `user:${candidate.id}`,
           group: "users",
-          label: candidate.label,
+          label: resolveAliasName(candidate.id, candidate.label),
           description: directConversationId
             ? t("common:commandPalette.openDirectConversation")
             : t("common:commandPalette.searchInFriends"),
           keywords: [candidate.username ?? "", "user", "person", "friend"],
           icon: UserCircleIcon,
+          showAvatar: true,
+          avatarSrc:
+            resolvePublicResourceUrl(candidate.avatar) ?? undefined,
           execute: () => {
             if (directConversationId) {
               selectConversation(directConversationId);
@@ -399,6 +444,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     [
       directConversationByUserId,
       navigate,
+      resolveAliasName,
       selectConversation,
       t,
       userCandidates,
@@ -756,16 +802,25 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       onMouseEnter={() => setActiveIndex(command.index)}
                       onClick={() => executeCommand(command)}
                     >
-                      <span
-                        className={clsx(
-                          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-                          isActive
-                            ? "border-primary/30 bg-primary/15 text-primary"
-                            : "border-border/80 bg-surface-overlay text-text-muted",
-                        )}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </span>
+                      {command.showAvatar ? (
+                        <Avatar
+                          src={command.avatarSrc}
+                          alt={command.label}
+                          size="sm"
+                          className="shrink-0"
+                        />
+                      ) : (
+                        <span
+                          className={clsx(
+                            "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+                            isActive
+                              ? "border-primary/30 bg-primary/15 text-primary"
+                              : "border-border/80 bg-surface-overlay text-text-muted",
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                      )}
 
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body-sm font-medium">
