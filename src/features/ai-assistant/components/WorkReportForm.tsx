@@ -8,6 +8,7 @@ import {
   FileIcon,
   DownloadIcon,
   Loader2Icon,
+  CalendarIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import type {
@@ -34,8 +35,21 @@ interface WorkReportFormProps {
 const TASK_KEYS = ["task_name", "requirements", "completed", "difficulties"] as const;
 type TaskKey = typeof TASK_KEYS[number];
 
+// Thứ tự cột desktop: "Ngày hoàn thành" chèn ngay sau "Tên công việc" (đúng
+// thứ tự `fields` từ BE). Một grid template dùng chung cho header + input để
+// mọi cột thẳng hàng — độ rộng: tên việc rộng nhất, ngày cố định hẹp.
+const ORDERED_COLS = [
+  "task_name",
+  "completion_date",
+  "requirements",
+  "completed",
+  "difficulties",
+] as const;
+const DESKTOP_GRID_COLS = "1.3fr 150px 1.1fr 1.1fr 1.1fr 2rem";
+
 const FIELD_LABELS_VN: Record<string, string> = {
   task_name: "Tên công việc",
+  completion_date: "Ngày hoàn thành",
   requirements: "Yêu cầu",
   completed: "Đã làm",
   difficulties: "Khó khăn",
@@ -61,6 +75,8 @@ interface TaskRow {
    */
   clientId: string;
   task_name: string;
+  /** Deadline "yyyy-mm-dd" cho <input type="date"> (không bắt buộc). */
+  completion_date?: string;
   requirements: string;
   completed: string;
   difficulties: string;
@@ -72,6 +88,7 @@ function makeEmptyTask(): TaskRow {
   return {
     clientId: makeClientId(),
     task_name: "",
+    completion_date: "",
     requirements: "",
     completed: "",
     difficulties: "",
@@ -106,11 +123,93 @@ function formatDateVN(dateStr: string): string {
   return `${d}/${m}/${y}`;
 }
 
+// ── Ngày hoàn thành: state lưu chuỗi dd/mm/yyyy (BE nhận trực tiếp; submitted_tasks
+//    cũng trả dd/mm/yyyy). Chỉ chuyển đổi khi bắc cầu sang <input type="date">
+//    (native picker chỉ hiểu yyyy-mm-dd). ────────────────────────────────────
+
+/** "dd/mm/yyyy" (hợp lệ) → "yyyy-mm-dd" cho native picker; sai/rỗng → "". */
+export function vnToIso(vn: string): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(vn.trim());
+  if (!m) return "";
+  const [, d, mo, y] = m;
+  const iso = `${y}-${mo}-${d}`;
+  const dt = new Date(`${iso}T00:00:00`);
+  // Chặn ngày không tồn tại (32/13/…): Date sẽ cuộn tháng nên phải đối chiếu lại.
+  if (Number.isNaN(dt.getTime())) return "";
+  const back = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+  return back === vn.trim() ? iso : "";
+}
+
+/** "yyyy-mm-dd" (từ native picker) → "dd/mm/yyyy". */
+export function isoToVn(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+/**
+ * Ô "Ngày hoàn thành" hiển thị dd/mm/yyyy (không bắt buộc). Gõ tay HOẶC bấm nút
+ * lịch mở date-picker native. Giá trị luôn là dd/mm/yyyy (rỗng khi chưa nhập).
+ */
+const DateFieldVN: React.FC<{
+  value: string;
+  onChange: (vn: string) => void;
+  disabled?: boolean;
+  ariaLabel: string;
+  className?: string;
+  wrapClassName?: string;
+}> = ({ value, onChange, disabled, ariaLabel, className, wrapClassName }) => {
+  const pickerRef = useRef<HTMLInputElement>(null);
+
+  const openPicker = () => {
+    const el = pickerRef.current;
+    if (!el || disabled) return;
+    // showPicker() mở lịch mà không cần input hiện hữu; fallback focus+click.
+    if (typeof el.showPicker === "function") el.showPicker();
+    else el.focus();
+  };
+
+  return (
+    <div className={clsx("relative flex items-center", wrapClassName)}>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="dd/mm/yyyy"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        className={className}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        title="Chọn từ lịch"
+        aria-label="Chọn ngày từ lịch"
+        className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-[#1976D2]/10 hover:text-[#1565C0] disabled:opacity-50"
+      >
+        <CalendarIcon size={15} />
+      </button>
+      {/* Native date input ẩn — chỉ để mở picker; giá trị đồng bộ 2 chiều với text. */}
+      <input
+        ref={pickerRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={vnToIso(value)}
+        onChange={(e) => onChange(isoToVn(e.target.value))}
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+      />
+    </div>
+  );
+};
+
 function toTaskRow(t: Partial<WorkReportTaskItem>): TaskRow {
   return {
     id: t.id,
     clientId: makeClientId(),
     task_name: t.task_name ?? "",
+    completion_date: t.completion_date ?? "",
     requirements: t.requirements ?? "",
     completed: t.completed ?? "",
     difficulties: t.difficulties ?? "",
@@ -240,7 +339,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   const fieldLabel = (key: string) =>
     data.field_labels?.[key] ?? FIELD_LABELS_VN[key] ?? key;
 
-  const handleTaskChange = (idx: number, field: TaskKey | "notes", value: string) => {
+  const handleTaskChange = (idx: number, field: TaskKey | "notes" | "completion_date", value: string) => {
     setTasks((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
   };
 
@@ -274,6 +373,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         id: t.id, // round-trip — thiếu id BE coi là việc mới, mất liên kết file
         client_task_id: t.clientId, // BE echo lại để map 1-1 (xem TaskRow.clientId)
         task_name: t.task_name,
+        completion_date: t.completion_date || undefined, // deadline không bắt buộc
         requirements: t.requirements,
         completed: t.completed,
         difficulties: t.difficulties,
@@ -634,12 +734,13 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
 
       {/* Desktop: table layout */}
       <div className="hidden sm:block">
-        {/* Column headers */}
+        {/* Column headers — cột "Ngày hoàn thành" đứng ngay sau "Tên công việc"
+            (đúng thứ tự `fields`), thẳng hàng cùng grid với input bên dưới. */}
         <div
           className="grid border-b border-border"
-          style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 2rem" }}
+          style={{ gridTemplateColumns: DESKTOP_GRID_COLS }}
         >
-          {TASK_KEYS.map((key) => (
+          {ORDERED_COLS.map((key) => (
             <div
               key={key}
               className="px-3 py-2 text-xs font-medium text-text-secondary border-r border-border bg-surface-overlay/30"
@@ -653,20 +754,37 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         {/* Task rows — mỗi task có ghi chú + file riêng */}
         {tasks.map((task, idx) => (
           <div key={idx} className="border-b border-border">
-            {/* 4 trường chính */}
-            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 2rem" }}>
-              {TASK_KEYS.map((key) => (
-                <div key={key} className="border-r border-border">
-                  <textarea
-                    value={task[key]}
-                    onChange={(e) => handleTaskChange(idx, key, e.target.value)}
-                    placeholder={fieldLabel(key)}
-                    rows={3}
-                    disabled={busy}
-                    className={textareaClass}
-                  />
-                </div>
-              ))}
+            {/* Các trường chính (kể cả Ngày hoàn thành) — 1 hàng grid duy nhất */}
+            <div className="grid" style={{ gridTemplateColumns: DESKTOP_GRID_COLS }}>
+              {ORDERED_COLS.map((key) =>
+                key === "completion_date" ? (
+                  <div key={key} className="border-r border-border">
+                    <DateFieldVN
+                      value={task.completion_date ?? ""}
+                      onChange={(vn) => handleTaskChange(idx, "completion_date", vn)}
+                      disabled={busy}
+                      ariaLabel={fieldLabel("completion_date")}
+                      wrapClassName="px-2 py-2 gap-1"
+                      className={clsx(
+                        "min-w-0 flex-1 px-1 py-0 text-sm bg-transparent text-text-primary outline-none",
+                        "placeholder:text-text-muted",
+                        busy && "opacity-50",
+                      )}
+                    />
+                  </div>
+                ) : (
+                  <div key={key} className="border-r border-border">
+                    <textarea
+                      value={task[key]}
+                      onChange={(e) => handleTaskChange(idx, key, e.target.value)}
+                      placeholder={fieldLabel(key)}
+                      rows={3}
+                      disabled={busy}
+                      className={textareaClass}
+                    />
+                  </div>
+                ),
+              )}
               <div className="flex items-start justify-center pt-2">
                 {allowMultiple && tasks.length > 1 && (
                   <button
@@ -747,21 +865,45 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
               )}
             </div>
 
-            {TASK_KEYS.map((key) => (
-              <div key={key} className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-text-secondary">
-                  {fieldLabel(key)}
-                  {key === "task_name" && <span className="text-danger ml-1">*</span>}
-                </label>
-                <textarea
-                  value={task[key]}
-                  onChange={(e) => handleTaskChange(idx, key, e.target.value)}
-                  rows={2}
-                  disabled={busy}
-                  className={textareaClassMobile}
-                />
-              </div>
-            ))}
+            {/* Cùng thứ tự cột với desktop — Ngày hoàn thành ngay sau Tên công việc */}
+            {ORDERED_COLS.map((key) =>
+              key === "completion_date" ? (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    {fieldLabel("completion_date")}
+                  </label>
+                  <DateFieldVN
+                    value={task.completion_date ?? ""}
+                    onChange={(vn) => handleTaskChange(idx, "completion_date", vn)}
+                    disabled={busy}
+                    ariaLabel={fieldLabel("completion_date")}
+                    wrapClassName={clsx(
+                      "rounded-lg border border-border px-3 py-2 gap-1",
+                      "focus-within:border-[#1976D2]/60 focus-within:ring-1 focus-within:ring-[#1565C0]/25",
+                    )}
+                    className={clsx(
+                      "min-w-0 flex-1 text-sm bg-transparent text-text-primary outline-none",
+                      "placeholder:text-text-muted",
+                      busy && "opacity-50",
+                    )}
+                  />
+                </div>
+              ) : (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    {fieldLabel(key)}
+                    {key === "task_name" && <span className="text-danger ml-1">*</span>}
+                  </label>
+                  <textarea
+                    value={task[key]}
+                    onChange={(e) => handleTaskChange(idx, key, e.target.value)}
+                    rows={2}
+                    disabled={busy}
+                    className={textareaClassMobile}
+                  />
+                </div>
+              ),
+            )}
 
             {/* Ghi chú riêng của task (mobile) */}
             <div className="flex flex-col gap-1">
@@ -889,6 +1031,12 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
                     <div className="text-sm font-medium text-text-primary break-words">
                       {task.task_name || `Công việc ${idx + 1}`}
                     </div>
+                    {task.completion_date ? (
+                      <div className="mt-0.5 text-[11px] text-text-muted break-words">
+                        <span className="font-medium">{fieldLabel("completion_date")}:</span>{" "}
+                        {task.completion_date}
+                      </div>
+                    ) : null}
                     {TASK_KEYS.filter((k) => k !== "task_name").map((key) =>
                       task[key] ? (
                         <div key={key} className="mt-0.5 text-[11px] text-text-muted break-words">
