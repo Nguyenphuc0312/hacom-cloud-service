@@ -44,7 +44,7 @@ import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentS
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
 import { TableExportMenu } from "./TableExportMenu";
-import { parseMarkdownTable } from "../../services/tableExport";
+import { splitMarkdownTables } from "../../services/tableExport";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -167,19 +167,31 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
-  // Hiện nút Xuất khi BE bật cờ `exportable_table` HOẶC câu trả lời có bảng
-  // markdown (fallback không phụ thuộc BE — có bảng là xuất được). Có export_id
-  // thì Excel xuất full cột từ snapshot; không có thì fallback theo markdown.
-  const canExportTable = React.useMemo(() => {
-    if (message.exportableTable) return true;
-    const t = parseMarkdownTable(message.content);
-    return !!t && t.headers.length > 0;
-  }, [message.exportableTable, message.content]);
+  // Markdown gốc của TỪNG bảng → mỗi bảng có menu ... riêng, gửi đúng bảng của
+  // nó (fix bug download/copy chỉ được bảng đầu). Có nhiều bảng thì bỏ snapshot
+  // export_id (snapshot là toàn report, không tách theo bảng) → dùng fallback
+  // markdown theo từng block; chỉ khi đúng 1 bảng mới giữ snapshot đủ cột ẩn.
+  const tableBlocks = React.useMemo(
+    () => (isAssistant ? splitMarkdownTables(message.content) : []),
+    [isAssistant, message.content],
+  );
+  const perTableSnapshot = tableBlocks.length <= 1;
+  // Counter map thứ tự bảng render (DOM) → block markdown tương ứng. Reset ngay
+  // trước mỗi lần render ReactMarkdown ở dưới.
+  const tableIndexRef = React.useRef(0);
 
   const markdownComponents = React.useMemo(
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
-      table: ({ children, className }: React.ComponentPropsWithoutRef<"table">) => (
+      table: ({ children, className }: React.ComponentPropsWithoutRef<"table">) => {
+        const idx = tableIndexRef.current++;
+        // Ưu tiên markdown của RIÊNG bảng này (tách được → menu gửi đúng bảng đó).
+        // Không tách được (edge case parser) → fallback toàn bộ content để KHÔNG
+        // bao giờ mất nút. Nhiều bảng thì bỏ snapshot (snapshot là toàn report).
+        const block = tableBlocks[idx];
+        const menuContent = block ?? message.content;
+        const useSnapshot = perTableSnapshot; // 1 bảng (hoặc fallback) → giữ cột ẩn
+        return (
         <div className="my-4">
           <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
             {/* className mang "chat-report-table" (rehypeReportTableCols) → kích hoạt min-width cột. */}
@@ -187,8 +199,19 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               {children}
             </table>
           </div>
+          {/* Action bar của bảng — canh PHẢI, sát mép bảng. Menu mở LÊN trên
+              (bottom-full) để bấm không phải kéo trang xuống. */}
+          <div className="mt-1.5 flex justify-end">
+            <TableExportMenu
+              content={menuContent}
+              title="Tổng hợp báo cáo công việc"
+              sessionId={useSnapshot ? message.exportSessionId : undefined}
+              exportId={useSnapshot ? message.exportId : undefined}
+            />
+          </div>
         </div>
-      ),
+        );
+      },
       thead: ({ children }: React.ComponentPropsWithoutRef<"thead">) => (
         <thead className="bg-gradient-to-r from-surface-active to-surface-hover">{children}</thead>
       ),
@@ -334,7 +357,15 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         );
       },
     }),
-    [loadingFileId, loadingWorkFileId, message.content],
+    [
+      loadingFileId,
+      loadingWorkFileId,
+      message.content,
+      tableBlocks,
+      perTableSnapshot,
+      message.exportSessionId,
+      message.exportId,
+    ],
   );
 
   const handleCopy = () => {
@@ -484,6 +515,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 />
               ) : isAssistant ? (
                 <div className="prose-chatgpt">
+                  {((tableIndexRef.current = 0), null)}
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[
@@ -513,8 +545,9 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 </div>
               )}
 
-            {/* Action bar: Sao chép toàn bộ câu trả lời + menu `...` cho bảng
-                (sao chép bảng / tải Excel). Menu chỉ hiện khi có bảng xuất được. */}
+            {/* Action bar: chỉ nút Sao chép TOÀN BỘ câu trả lời. Menu `...` cho
+                từng bảng (sao chép/tải bảng đó) nằm ngay dưới mỗi bảng trong
+                markdownComponents.table. */}
             {isAssistant && !message.isStreaming && (
               <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                 <button
@@ -529,14 +562,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     <CopyIcon size={13} />
                   )}
                 </button>
-                {canExportTable && (
-                  <TableExportMenu
-                    content={message.content}
-                    title="Tổng hợp báo cáo công việc"
-                    sessionId={message.exportSessionId}
-                    exportId={message.exportId}
-                  />
-                )}
               </div>
             )}
           </div>
