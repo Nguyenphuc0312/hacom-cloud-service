@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import { RootLayout } from "../layouts/RootLayout";
@@ -10,14 +11,27 @@ import { ROUTE_PATHS } from "./paths";
 import { RouterErrorBoundary } from "../components/common/RouterErrorBoundary";
 import { NotFoundPage } from "../pages/errors";
 import { APP_BASE_PATH } from "../config";
-import { PrivacyPolicyPage } from "../pages/PrivacyPolicyPage";
-import { DataDeletionPage } from "../pages/DataDeletionPage";
-import { SupportPage } from "../pages/SupportPage";
-import { TermsPage } from "../pages/TermsPage";
+// Static legal/support pages — lazy so they stay out of the initial bundle
+// (~180 kB combined, rarely visited). Suspense is provided by RootLayout.
+const PrivacyPolicyPage = lazy(() =>
+  import("../pages/PrivacyPolicyPage").then((m) => ({ default: m.PrivacyPolicyPage })),
+);
+const DataDeletionPage = lazy(() =>
+  import("../pages/DataDeletionPage").then((m) => ({ default: m.DataDeletionPage })),
+);
+const SupportPage = lazy(() =>
+  import("../pages/SupportPage").then((m) => ({ default: m.SupportPage })),
+);
+const TermsPage = lazy(() =>
+  import("../pages/TermsPage").then((m) => ({ default: m.TermsPage })),
+);
 // ---------------------------------------------------------------------------
-// POC — Phase 2A audio recording evaluation (TEMPORARY, remove after eval)
+// POC — Phase 2A audio recording evaluation (TEMPORARY, remove after eval).
+// Lazy so this eval-only route doesn't weigh the initial bundle (~26 kB).
 // ---------------------------------------------------------------------------
-import { AudioRecorderPocPage } from "../poc/audio";
+const AudioRecorderPocPage = lazy(() =>
+  import("../poc/audio").then((m) => ({ default: m.AudioRecorderPocPage })),
+);
 
 const routeTree: RouteObject[] = [
   {

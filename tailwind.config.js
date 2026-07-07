@@ -196,6 +196,7 @@ export default {
         elev1: "var(--elevation-1, 0 2px 8px hsl(215 25% 15% / 0.12))",
         elev2: "var(--elevation-2, 0 8px 20px hsl(215 25% 15% / 0.16))",
         elev3: "var(--elevation-3, 0 12px 32px hsl(215 25% 15% / 0.2))",
+        "2xl": "var(--shadow-modal, 0 16px 40px -12px hsl(215 25% 15% / 0.22))",
       },
       spacing: {
         1: "var(--space-1, 4px)",

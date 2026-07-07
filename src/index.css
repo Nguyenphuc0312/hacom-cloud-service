@@ -108,13 +108,16 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
 
-  --shadow-xs: 0 1px 2px hsl(215 25% 15% / 0.08);
-  --shadow-sm: 0 4px 12px hsl(215 25% 15% / 0.12);
-  --shadow-md: 0 8px 24px hsl(215 25% 15% / 0.16);
-  --shadow-lg: 0 12px 34px hsl(215 25% 15% / 0.2);
-  --elevation-1: 0 2px 8px hsl(215 25% 15% / 0.12);
-  --elevation-2: 0 8px 20px hsl(215 25% 15% / 0.16);
-  --elevation-3: 0 12px 32px hsl(215 25% 15% / 0.2);
+  --shadow-xs: 0 1px 2px hsl(215 25% 15% / 0.06);
+  --shadow-sm: 0 3px 8px hsl(215 25% 15% / 0.09);
+  --shadow-md: 0 6px 18px hsl(215 25% 15% / 0.12);
+  --shadow-lg: 0 10px 26px hsl(215 25% 15% / 0.15);
+  --elevation-1: 0 1px 4px hsl(215 25% 15% / 0.09);
+  --elevation-2: 0 6px 16px hsl(215 25% 15% / 0.12);
+  --elevation-3: 0 10px 26px hsl(215 25% 15% / 0.15);
+  /* Top-elevation surfaces (modals/overlays). Softer + blue-ink-tinted vs
+     Tailwind's default black shadow-2xl, and theme-aware via the dark override. */
+  --shadow-modal: 0 16px 40px -12px hsl(215 25% 15% / 0.22);
 
   --theme-transition-duration: 180ms;
   --theme-transition-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -187,8 +190,11 @@
   --color-border-focus: var(--core-brand-500);
 
   --color-text-primary: var(--core-gray-900);
-  --color-text-secondary: var(--core-gray-400);
-  --color-text-muted: var(--core-gray-500);
+  /* secondary and muted previously both resolved to L46% (identical, and muted
+     sat on the 4.5:1 floor). Split them: secondary darker for a real tier,
+     muted kept lighter but clearing AA with margin. */
+  --color-text-secondary: 215 16% 40%;
+  --color-text-muted: 215 13% 44%;
   --color-text-inverse: var(--core-gray-0);
   --color-text-disabled: var(--core-gray-500);
 
@@ -333,6 +339,7 @@
   --elevation-1: 0 2px 8px hsl(220 40% 2% / 0.4);
   --elevation-2: 0 8px 20px hsl(220 40% 2% / 0.52);
   --elevation-3: 0 12px 32px hsl(220 40% 2% / 0.62);
+  --shadow-modal: 0 20px 44px -12px hsl(220 40% 2% / 0.62);
 
   color-scheme: dark;
 }
@@ -422,17 +429,21 @@
   --hc-warning-500: #f59e0b;
   --hc-danger-600: #dc2626;
   --hc-danger-50: #fef2f2;
-  --hc-bg-app: #eef2f7;
-  --hc-bg-page: #f7f8fa;
-  --hc-surface: #ffffff;
-  --hc-surface-soft: #f8fafc;
-  --hc-border: #d7dce3;
-  --hc-border-soft: #e5e7eb;
-  --hc-text-900: #0f172a;
-  --hc-text-700: #334155;
-  --hc-text-500: #64748b;
-  --hc-text-400: #94a3b8;
-  --hc-text-inverse: #ffffff;
+  /* Surface/text tokens mapped onto the HSL system so they inherit dark mode.
+     Light-mode values match the prior hex within ~1%; the brand/semantic hex
+     above stay fixed (identical in both themes; --hc-primary-800 is the navy
+     logo glyph on a permanent-white chip and must not follow the theme). */
+  --hc-bg-app: hsl(var(--color-background));
+  --hc-bg-page: hsl(var(--color-surface-overlay));
+  --hc-surface: hsl(var(--color-surface));
+  --hc-surface-soft: hsl(var(--color-surface-overlay));
+  --hc-border: hsl(var(--color-border-strong));
+  --hc-border-soft: hsl(var(--color-border));
+  --hc-text-900: hsl(var(--color-text-primary));
+  --hc-text-700: hsl(var(--color-text-secondary));
+  --hc-text-500: hsl(var(--color-text-muted));
+  --hc-text-400: hsl(var(--color-text-muted));
+  --hc-text-inverse: hsl(var(--color-text-inverse));
   --hc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --hc-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
   --hc-shadow-modal: 0 20px 40px rgba(15, 23, 42, 0.2);
@@ -899,7 +910,7 @@ a:focus-visible {
    Both selectors are kept for compatibility. */
 .tiptap-editor-inner p.is-empty::before,
 .tiptap-editor-inner.is-editor-empty p:first-child::before {
-  color: hsl(var(--color-text-muted) / 0.75);
+  color: hsl(var(--color-text-muted));
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -1279,7 +1290,7 @@ a:focus-visible {
     border-radius: 14px !important;
     background: hsl(var(--color-surface)) !important;
     color: hsl(var(--color-text-primary)) !important;
-    box-shadow: 0 18px 42px rgb(15 23 42 / 0.16) !important;
+    box-shadow: 0 12px 30px rgb(15 23 42 / 0.13) !important;
     padding: 14px 16px !important;
     font-size: 14px !important;
     font-weight: 650 !important;
@@ -1299,7 +1310,7 @@ a:focus-visible {
     border-radius: 12px;
     background: hsl(var(--color-surface));
     color: hsl(var(--color-text-primary));
-    box-shadow: 0 14px 34px rgb(15 23 42 / 0.16);
+    box-shadow: 0 10px 26px rgb(15 23 42 / 0.13);
     font-size: 14px;
     font-weight: 650;
     line-height: 1.35;
@@ -1522,8 +1533,7 @@ a:focus-visible {
   .hc-side-rail__item:hover {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2), 0 1px 3px rgba(255, 255, 255, 0.1);
-    transform: scale(1.07);
+    transform: scale(1.04);
   }
 
   .hc-side-rail__item:active {
@@ -1538,15 +1548,13 @@ a:focus-visible {
   .hc-side-rail__item--active {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25), 0 1px 4px rgba(255, 255, 255, 0.15);
-    transform: scale(1.13);
+    transform: scale(1.05);
   }
 
   .hc-side-rail__item--active:hover {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 6px 24px rgba(255, 255, 255, 0.3), 0 1px 4px rgba(255, 255, 255, 0.2);
-    transform: scale(1.25);
+    transform: scale(1.06);
   }
 
   .hc-side-rail__item-icon {
