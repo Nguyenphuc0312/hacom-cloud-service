@@ -108,13 +108,16 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
 
-  --shadow-xs: 0 1px 2px hsl(215 25% 15% / 0.08);
-  --shadow-sm: 0 4px 12px hsl(215 25% 15% / 0.12);
-  --shadow-md: 0 8px 24px hsl(215 25% 15% / 0.16);
-  --shadow-lg: 0 12px 34px hsl(215 25% 15% / 0.2);
-  --elevation-1: 0 2px 8px hsl(215 25% 15% / 0.12);
-  --elevation-2: 0 8px 20px hsl(215 25% 15% / 0.16);
-  --elevation-3: 0 12px 32px hsl(215 25% 15% / 0.2);
+  --shadow-xs: 0 1px 2px hsl(215 25% 15% / 0.06);
+  --shadow-sm: 0 3px 8px hsl(215 25% 15% / 0.09);
+  --shadow-md: 0 6px 18px hsl(215 25% 15% / 0.12);
+  --shadow-lg: 0 10px 26px hsl(215 25% 15% / 0.15);
+  --elevation-1: 0 1px 4px hsl(215 25% 15% / 0.09);
+  --elevation-2: 0 6px 16px hsl(215 25% 15% / 0.12);
+  --elevation-3: 0 10px 26px hsl(215 25% 15% / 0.15);
+  /* Top-elevation surfaces (modals/overlays). Softer + blue-ink-tinted vs
+     Tailwind's default black shadow-2xl, and theme-aware via the dark override. */
+  --shadow-modal: 0 16px 40px -12px hsl(215 25% 15% / 0.22);
 
   --theme-transition-duration: 180ms;
   --theme-transition-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -336,6 +339,7 @@
   --elevation-1: 0 2px 8px hsl(220 40% 2% / 0.4);
   --elevation-2: 0 8px 20px hsl(220 40% 2% / 0.52);
   --elevation-3: 0 12px 32px hsl(220 40% 2% / 0.62);
+  --shadow-modal: 0 20px 44px -12px hsl(220 40% 2% / 0.62);
 
   color-scheme: dark;
 }
@@ -1286,7 +1290,7 @@ a:focus-visible {
     border-radius: 14px !important;
     background: hsl(var(--color-surface)) !important;
     color: hsl(var(--color-text-primary)) !important;
-    box-shadow: 0 18px 42px rgb(15 23 42 / 0.16) !important;
+    box-shadow: 0 12px 30px rgb(15 23 42 / 0.13) !important;
     padding: 14px 16px !important;
     font-size: 14px !important;
     font-weight: 650 !important;
@@ -1306,7 +1310,7 @@ a:focus-visible {
     border-radius: 12px;
     background: hsl(var(--color-surface));
     color: hsl(var(--color-text-primary));
-    box-shadow: 0 14px 34px rgb(15 23 42 / 0.16);
+    box-shadow: 0 10px 26px rgb(15 23 42 / 0.13);
     font-size: 14px;
     font-weight: 650;
     line-height: 1.35;
@@ -1529,8 +1533,7 @@ a:focus-visible {
   .hc-side-rail__item:hover {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2), 0 1px 3px rgba(255, 255, 255, 0.1);
-    transform: scale(1.07);
+    transform: scale(1.04);
   }
 
   .hc-side-rail__item:active {
@@ -1545,15 +1548,13 @@ a:focus-visible {
   .hc-side-rail__item--active {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25), 0 1px 4px rgba(255, 255, 255, 0.15);
-    transform: scale(1.13);
+    transform: scale(1.05);
   }
 
   .hc-side-rail__item--active:hover {
     color: #FFFFFF;
     background: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 6px 24px rgba(255, 255, 255, 0.3), 0 1px 4px rgba(255, 255, 255, 0.2);
-    transform: scale(1.25);
+    transform: scale(1.06);
   }
 
   .hc-side-rail__item-icon {
