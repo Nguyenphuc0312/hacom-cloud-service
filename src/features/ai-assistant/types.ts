@@ -51,6 +51,8 @@ export interface WorkReportTaskItem {
    */
   id?: string;
   task_name: string;
+  /** Deadline (không bắt buộc). Nhập: "yyyy-mm-dd"; submitted_tasks trả "dd/mm/yyyy". */
+  completion_date?: string;
   requirements: string;
   completed: string;
   difficulties: string;
