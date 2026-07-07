@@ -12,7 +12,6 @@ import type { PersonalChatMessage, PersonalDocument } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
-const TONGCVTUAN_TRIGGER = /^#tongcvtuan\s*$/i;
 const BARE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resolveBackendDocumentIds(
@@ -167,20 +166,11 @@ export function usePersonalChat() {
         });
       }
 
-      // Detect #tongcvtuan — hiển thị danh sách file báo cáo tuần inline
-      // (GET /api/chat/personal/weekly-report/files). Component tự load dữ liệu.
-      if (TONGCVTUAN_TRIGGER.test(trimmed)) {
-        addMessage(conversationId, {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-          isStreaming: false,
-          thinkingPhase: null,
-          weeklyReportList: true,
-        });
-        return;
-      }
+      // #tongcvtuan — KHÔNG chặn ở FE nữa. Trước đây FE tự dựng widget file tuần
+      // (weeklyReportList) và `return`, nên handler BE không bao giờ chạy. Giờ để
+      // request stream qua SSE; BE quyết định theo quyền + biến thể ("theo phòng
+      // ban") và stream bảng markdown tổng hợp/roll-up. Widget file tuần vẫn còn
+      // (weeklyReportList) nếu cần gắn vào một nút riêng.
 
       // #baocaocv — đánh dấu là yêu cầu xem báo cáo. BE quyết định theo quyền:
       //  • Admin/Giám đốc → event `selection_request` → DepartmentSelector
