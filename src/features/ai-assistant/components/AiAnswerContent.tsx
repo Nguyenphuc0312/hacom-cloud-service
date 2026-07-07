@@ -5,6 +5,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { AiSource } from "../types";
 import { isSafeSourceUrl, preprocessCitations } from "../utils/sourceUtils";
 import { resolveWeeklyReportFileAction } from "../utils/weeklyReportFileLink";
+import { rehypeReportTableCols } from "../utils/rehypeReportTableCols";
 import { useWeeklyReportFileActions } from "../hooks/useWeeklyReportFileActions";
 import { AiWeeklyReportFilePreviewModal } from "./AiWeeklyReportFilePreviewModal";
 
@@ -20,6 +21,10 @@ const sanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), "target", "rel", "title"],
+    // Giữ class cột báo cáo do rehypeReportTableCols gán (col--date/org/mid/wide).
+    table: [...(defaultSchema.attributes?.table ?? []), "className"],
+    th: [...(defaultSchema.attributes?.th ?? []), "className"],
+    td: [...(defaultSchema.attributes?.td ?? []), "className"],
   },
 };
 
@@ -62,7 +67,7 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
       <div className="prose-chatgpt relative">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+          rehypePlugins={[rehypeReportTableCols, [rehypeSanitize, sanitizeSchema]]}
           components={{
             a: ({
               href,

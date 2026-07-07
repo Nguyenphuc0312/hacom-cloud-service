@@ -48,7 +48,8 @@ import { parseMarkdownTable } from "../../services/tableExport";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import { rehypeReportTableCols } from "../../../ai-assistant/utils/rehypeReportTableCols";
 import type { PersonalChatMessage, PersonalCitation } from "../../types";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 
@@ -56,6 +57,17 @@ interface PersonalMessageBubbleProps {
   message: PersonalChatMessage;
   isLast?: boolean;
 }
+
+// Giữ class cột báo cáo do rehypeReportTableCols gán (col--date/org/mid/wide).
+const reportTableSanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    table: [...(defaultSchema.attributes?.table ?? []), "className"],
+    th: [...(defaultSchema.attributes?.th ?? []), "className"],
+    td: [...(defaultSchema.attributes?.td ?? []), "className"],
+  },
+};
 
 const ThinkingIndicator: React.FC<{
   phase: PersonalChatMessage["thinkingPhase"];
@@ -167,10 +179,13 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const markdownComponents = React.useMemo(
     () => ({
       // ── Table ──────────────────────────────────────────────────────────
-      table: ({ children }: React.ComponentPropsWithoutRef<"table">) => (
+      table: ({ children, className }: React.ComponentPropsWithoutRef<"table">) => (
         <div className="my-4">
           <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
-            <table className="w-full border-collapse text-[13px]">{children}</table>
+            {/* className mang "chat-report-table" (rehypeReportTableCols) → kích hoạt min-width cột. */}
+            <table className={clsx("w-full border-collapse text-[13px]", className)}>
+              {children}
+            </table>
           </div>
         </div>
       ),
@@ -183,13 +198,18 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
       tr: ({ children }: React.ComponentPropsWithoutRef<"tr">) => (
         <tr className="transition-colors hover:bg-[#1976D2]/4">{children}</tr>
       ),
-      th: ({ children }: React.ComponentPropsWithoutRef<"th">) => (
-        <th className="whitespace-nowrap border-b border-border/60 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+      th: ({ children, className }: React.ComponentPropsWithoutRef<"th">) => (
+        <th
+          className={clsx(
+            "whitespace-nowrap border-b border-border/60 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted",
+            className,
+          )}
+        >
           {children}
         </th>
       ),
-      td: ({ children }: React.ComponentPropsWithoutRef<"td">) => (
-        <td className="px-4 py-2.5 align-top text-text-primary">
+      td: ({ children, className }: React.ComponentPropsWithoutRef<"td">) => (
+        <td className={clsx("px-4 py-2.5 align-top text-text-primary", className)}>
           <div className="whitespace-pre-wrap break-words">{children}</div>
         </td>
       ),
@@ -466,7 +486,10 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 <div className="prose-chatgpt">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeSanitize]}
+                    rehypePlugins={[
+                      rehypeReportTableCols,
+                      [rehypeSanitize, reportTableSanitizeSchema],
+                    ]}
                     components={markdownComponents}
                   >
                     {message.content}

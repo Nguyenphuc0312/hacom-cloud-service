@@ -143,6 +143,25 @@
   font-weight: 600;
 }
 
+/* ── Bảng báo cáo: độ rộng cột theo NHÃN header (rehypeReportTableCols) ── */
+/* Bảng rộng (phòng ban/công ty) cuộn ngang thay vì ép mọi cột 1 màn hình. */
+.prose-chatgpt {
+  overflow-x: auto;
+}
+.prose-chatgpt table.chat-report-table {
+  table-layout: auto;
+}
+.chat-report-table th,
+.chat-report-table td {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+}
+.chat-report-table .col--date { min-width: 92px;  white-space: nowrap; }
+.chat-report-table .col--org  { min-width: 120px; }
+.chat-report-table .col--mid  { min-width: 150px; }
+.chat-report-table .col--wide { min-width: 240px; } /* Công việc / Đã làm được / Đánh giá */
+
 .prose-chatgpt a {
   color: hsl(var(--color-primary));
   text-decoration: underline;

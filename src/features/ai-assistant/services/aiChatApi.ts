@@ -950,6 +950,8 @@ export interface WorkReportTaskSubmit {
    */
   client_task_id?: string;
   task_name: string;
+  /** Deadline "yyyy-mm-dd" (native date input) — rỗng/sai BE bỏ trống, không chặn lưu. */
+  completion_date?: string;
   requirements?: string;
   completed?: string;
   difficulties?: string;
