@@ -1355,7 +1355,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
         {locationFlowState !== "idle" && (
           <div
-            className="absolute bottom-full right-3 z-20 mb-2 w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-xl border border-border bg-surface shadow-xl shadow-black/15"
+            className="absolute bottom-full right-3 z-30 mb-2 w-[min(340px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-2xl shadow-black/25 ring-1 ring-black/5"
             role="dialog"
             aria-modal="false"
             aria-labelledby="composer-location-title"
@@ -1375,17 +1375,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 </div>
                 <button
                   type="button"
-                  className="shrink-0 rounded-md px-2.5 py-1 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
+                  className="shrink-0 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-text-secondary hover:bg-surface-overlay"
                   onClick={resetLocationFlow}
                 >
-                  {t("common:cancel", { defaultValue: "Hủy" })}
+                  Hủy
                 </button>
               </div>
             )}
 
             {locationFlowState === "confirming" && pendingLocation && (
               <div>
-                <div className="flex items-start gap-2.5 px-3.5 pb-2.5 pt-3">
+                <div className="flex items-start gap-2.5 px-4 pb-3 pt-3.5">
                   <span
                     className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#1565C0]/10 text-[#1565C0]"
                     aria-hidden="true"
@@ -1393,7 +1393,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     <MapPinIcon className="size-[18px]" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
                         Gửi vị trí hiện tại
                       </p>
@@ -1429,21 +1429,21 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     </p>
                   </div>
                 </div>
-                <div className="flex border-t border-border/70">
+                <div className="flex items-center gap-2 border-t border-border/70 bg-surface-overlay/40 px-3 py-2.5">
                   <button
                     type="button"
-                    className="flex-1 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
+                    className="h-9 flex-1 rounded-lg border border-border text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
-                    {t("common:cancel", { defaultValue: "Hủy" })}
+                    Hủy
                   </button>
                   <button
                     type="button"
-                    className="flex-1 border-l border-border/70 py-2.5 text-sm font-semibold text-[#1565C0] transition-colors hover:bg-[#1565C0]/8 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-9 flex-[1.4] rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
-                    aria-label={t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
+                    aria-label="Gửi vị trí"
                   >
-                    {t("chat:location.sendCurrent", { defaultValue: "Gửi vị trí" })}
+                    Gửi vị trí
                   </button>
                 </div>
               </div>
@@ -1454,10 +1454,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 <span className="h-4 w-4 shrink-0 rounded-full border-2 border-[#1565C0] border-t-transparent animate-spin" />
                 <div className="min-w-0 flex-1">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                    {t("chat:location.sendingShort", { defaultValue: "Đang gửi vị trí…" })}
+                    Đang gửi vị trí…
                   </p>
                   <p id="composer-location-description" className="text-xs text-text-muted">
-                    {t("chat:location.sending", { defaultValue: "Vui lòng đợi trong giây lát" })}
+                    Vui lòng đợi trong giây lát
                   </p>
                 </div>
               </div>
@@ -1466,28 +1466,26 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             {["error", "permission_denied", "permission_blocked", "timeout", "unavailable", "send_failed"].includes(locationFlowState) && (
               <div>
                 <p className="px-3.5 pb-2.5 pt-3 text-sm text-danger">
-                  {locationError ?? t("chat:location.failed", { defaultValue: "Không thể lấy vị trí hiện tại." })}
+                  {locationError ?? "Không thể lấy vị trí hiện tại."}
                 </p>
-                <div className="flex border-t border-border/70">
+                <div className="flex items-center gap-2 border-t border-border/70 bg-surface-overlay/40 px-3 py-2.5">
                   <button
                     type="button"
-                    className="flex-1 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
+                    className="h-9 flex-1 rounded-lg border border-border text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay"
                     onClick={resetLocationFlow}
                   >
-                    {t("common:cancel", { defaultValue: "Hủy" })}
+                    Hủy
                   </button>
                   <button
                     type="button"
-                    className="flex-1 border-l border-border/70 py-2.5 text-sm font-semibold text-[#1565C0] transition-colors hover:bg-[#1565C0]/8"
+                    className="h-9 flex-[1.4] rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2]"
                     onClick={() =>
                       pendingLocation
                         ? void confirmLocationSend()
                         : handleAttachmentSelect("location")
                     }
                   >
-                    {pendingLocation
-                      ? t("common:retry", { defaultValue: "Thử lại" })
-                      : t("chat:location.retry", { defaultValue: "Lấy lại vị trí" })}
+                    {pendingLocation ? "Thử lại" : "Lấy lại vị trí"}
                   </button>
                 </div>
               </div>
