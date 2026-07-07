@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  MoreHorizontalIcon,
   DownloadIcon,
   CopyIcon,
   CheckIcon,
   Loader2Icon,
+  TableIcon,
+  ChevronDownIcon,
 } from "lucide-react";
+import clsx from "clsx";
 import {
   parseMarkdownTable,
   exportTableToXlsx,
@@ -107,18 +109,30 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={busy}
-        className="flex items-center justify-center rounded-lg px-2 py-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
+        aria-haspopup="menu"
+        aria-expanded={open ? "true" : "false"}
+        className={clsx(
+          "flex items-center gap-1.5 rounded-lg border border-transparent px-2 py-1 text-[12px] font-medium text-text-muted transition-colors",
+          "hover:border-border hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50",
+          open && "border-border bg-surface-hover text-text-secondary",
+        )}
         title="Tùy chọn bảng"
       >
         {busy ? (
           <Loader2Icon size={14} className="animate-spin" />
         ) : (
-          <MoreHorizontalIcon size={15} />
+          <TableIcon size={13} strokeWidth={2} />
         )}
+        <span>Bảng</span>
+        <ChevronDownIcon
+          size={13}
+          strokeWidth={2}
+          className={clsx("transition-transform", open && "rotate-180")}
+        />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-10 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-lg">
+        <div className="absolute right-0 bottom-full z-10 mb-1 min-w-[180px] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-lg">
           <button
             type="button"
             onClick={() => void handleCopyTable()}

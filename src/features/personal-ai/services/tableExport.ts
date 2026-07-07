@@ -34,29 +34,61 @@ function stripCellMarkdown(cell: string): string {
     .trim();
 }
 
+/**
+ * Quét tất cả bảng markdown trong nội dung, trả về vị trí dòng bắt đầu/kết thúc
+ * của TỪNG bảng (header + separator + rows liền mạch). Dùng chung cho parse &
+ * split để không lệch cách nhận diện bảng.
+ */
+function findTableRanges(lines: string[]): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  let i = 0;
+  while (i < lines.length - 1) {
+    const line = lines[i];
+    if (!line.includes("|") || isSeparator(line) || !isSeparator(lines[i + 1])) {
+      i++;
+      continue;
+    }
+    let end = i + 2;
+    while (end < lines.length) {
+      const r = lines[end];
+      if (!r.includes("|") || r.trim() === "") break;
+      end++;
+    }
+    ranges.push({ start: i, end }); // [start, end)
+    i = end;
+  }
+  return ranges;
+}
+
+function tableFromRange(lines: string[], start: number, end: number): ParsedTable {
+  const headers = splitRow(lines[start]).map(stripCellMarkdown);
+  const rows: string[][] = [];
+  for (let j = start + 2; j < end; j++) {
+    if (isSeparator(lines[j])) continue;
+    const cells = splitRow(lines[j]).map(stripCellMarkdown);
+    while (cells.length < headers.length) cells.push("");
+    rows.push(cells.slice(0, headers.length));
+  }
+  return { headers, rows };
+}
+
 /** Lấy bảng markdown ĐẦU TIÊN trong nội dung; null nếu không có. */
 export function parseMarkdownTable(content: string): ParsedTable | null {
   const lines = content.split(/\r?\n/);
-  for (let i = 0; i < lines.length - 1; i++) {
-    const line = lines[i];
-    if (!line.includes("|") || isSeparator(line)) continue;
-    const next = lines[i + 1];
-    if (!next || !isSeparator(next)) continue;
+  const ranges = findTableRanges(lines);
+  if (ranges.length === 0) return null;
+  return tableFromRange(lines, ranges[0].start, ranges[0].end);
+}
 
-    const headers = splitRow(line).map(stripCellMarkdown);
-    const rows: string[][] = [];
-    for (let j = i + 2; j < lines.length; j++) {
-      const r = lines[j];
-      if (!r.includes("|") || r.trim() === "") break;
-      if (isSeparator(r)) continue;
-      const cells = splitRow(r).map(stripCellMarkdown);
-      // Chuẩn hóa số cột bằng header.
-      while (cells.length < headers.length) cells.push("");
-      rows.push(cells.slice(0, headers.length));
-    }
-    return { headers, rows };
-  }
-  return null;
+/**
+ * Cắt nội dung thành từng block markdown chứa ĐÚNG 1 bảng (giữ nguyên text gốc
+ * để BE fallback parse / copy đúng bảng đó). Thứ tự khớp thứ tự bảng render.
+ */
+export function splitMarkdownTables(content: string): string[] {
+  const lines = content.split(/\r?\n/);
+  return findTableRanges(lines).map((r) =>
+    lines.slice(r.start, r.end).join("\n"),
+  );
 }
 
 function ensureExt(name: string, ext: string): string {
