@@ -337,7 +337,7 @@ Background badge/highlight nhạt:  bg-[#DBEAFE]/10  hoặc  bg-[#1976D2]/8
 Border active:                    border-[#1976D2]/60
 Focus ring:                       focus:ring-[#1565C0]/25
 ```
-
+ 
 ### Token đỏ/vàng (SideRail & LoginPage — giữ nguyên)
 ```
 Gradient rail:     linear-gradient(180deg, #D32F2F 0%, #C41E3A 100%)
