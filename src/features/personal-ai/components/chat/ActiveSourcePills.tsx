@@ -24,9 +24,9 @@ export const ActiveSourcePills: React.FC<ActiveSourcePillsProps> = ({
       {isRagMode ? (
         <>
           {/* Mode badge */}
-          <div className="flex items-center gap-1 rounded-full bg-[#C41E3A]/10 px-2 py-1">
-            <ZapIcon size={10} strokeWidth={2.5} className="text-[#C41E3A]" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#C41E3A]">
+          <div className="flex items-center gap-1 rounded-full bg-[#1565C0]/10 px-2 py-1">
+            <ZapIcon size={10} strokeWidth={2.5} className="text-[#1565C0]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#1565C0]">
               Nguồn:
             </span>
           </div>
@@ -40,11 +40,11 @@ export const ActiveSourcePills: React.FC<ActiveSourcePillsProps> = ({
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.85 }}
                 transition={{ type: "spring", damping: 20, stiffness: 300 }}
-                className="flex items-center gap-1.5 rounded-full border border-[#FFC857]/30 bg-[#FFC857]/10 pl-2 pr-1 py-1"
+                className="flex items-center gap-1.5 rounded-full border border-[#1976D2]/30 bg-[#1976D2]/10 pl-2 pr-1 py-1"
               >
-                <FileTextIcon size={11} strokeWidth={2} className="text-[#C41E3A] shrink-0" />
+                <FileTextIcon size={11} strokeWidth={2} className="text-[#1565C0] shrink-0" />
                 <span
-                  className="max-w-[120px] truncate text-[11px] font-medium text-[#C41E3A]"
+                  className="max-w-[120px] truncate text-[11px] font-medium text-[#1565C0]"
                   title={doc.name}
                 >
                   {doc.name.replace(/\.pdf$/i, "")}
@@ -52,7 +52,7 @@ export const ActiveSourcePills: React.FC<ActiveSourcePillsProps> = ({
                 <button
                   type="button"
                   onClick={() => onRemoveSource(doc.id)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-[#C41E3A]/60 transition-colors hover:bg-[#C41E3A]/15 hover:text-[#C41E3A]"
+                  className="flex h-4 w-4 items-center justify-center rounded-full text-[#1565C0]/60 transition-colors hover:bg-[#1565C0]/15 hover:text-[#1565C0]"
                   aria-label={`Bỏ nguồn ${doc.name}`}
                 >
                   <XIcon size={9} strokeWidth={2.5} />

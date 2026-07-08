@@ -17,7 +17,7 @@ export const PersonalWorkspaceHeader: React.FC = () => {
           className="flex h-6 w-6 items-center justify-center rounded-md"
           style={{
             background:
-              "linear-gradient(135deg, #C41E3A 0%, #D32F2F 50%, #FFC857 100%)",
+              "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
           }}
         >
           <SparklesIcon size={13} strokeWidth={2.5} className="text-white" />
@@ -35,9 +35,9 @@ export const PersonalWorkspaceHeader: React.FC = () => {
               exit={{ opacity: 0, width: 0 }}
               className="overflow-hidden"
             >
-              <div className="flex items-center gap-1 rounded-full bg-[#C41E3A]/10 px-2 py-0.5">
-                <BookMarkedIcon size={10} strokeWidth={2} className="text-[#C41E3A]" />
-                <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-[#C41E3A]">
+              <div className="flex items-center gap-1 rounded-full bg-[#1565C0]/10 px-2 py-0.5">
+                <BookMarkedIcon size={10} strokeWidth={2} className="text-[#1565C0]" />
+                <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-[#1565C0]">
                   {activeDocuments.length} nguồn
                 </span>
               </div>
