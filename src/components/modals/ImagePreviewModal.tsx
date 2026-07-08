@@ -9,6 +9,7 @@ import {
   MagnifyingGlassMinusIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { SafeImage } from "../common/SafeImage";
@@ -37,16 +38,22 @@ export interface ImagePreviewModalProps {
   senderName?: string;
   senderAvatar?: string;
   sentAt?: Date | string;
+  /** Open the full "Kho lưu trữ" panel — shown as the last filmstrip cell when the gallery exceeds the strip cap */
+  onViewAll?: () => void;
 }
+
+/** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
+const FILMSTRIP_MAX = 30;
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 
-type ZoomState = { scale: number; x: number; y: number };
-const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
+type ZoomState = { scale: number; x: number; y: number; rotation: number };
+const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0, rotation: 0 };
 
+// Floating control in the bottom toolbar — Zalo-style pill button on the dark backdrop.
 const VIEWER_BTN =
-  "flex items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:bg-white/35";
+  "flex items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/15 hover:text-white active:bg-white/25";
 
 function formatSentAt(sentAt: Date | string | undefined): string {
   if (!sentAt) return "";
@@ -61,47 +68,30 @@ function formatSentAt(sentAt: Date | string | undefined): string {
   return `${timeStr} ${d.toLocaleDateString("vi-VN")}`;
 }
 
+/** Zalo-style day label for the vertical filmstrip's section headers. */
 function getDayLabel(sentAt: Date | string | undefined): string {
   if (!sentAt) return "Ảnh";
   const d = typeof sentAt === "string" ? new Date(sentAt) : sentAt;
   if (isNaN(d.getTime())) return "Ảnh";
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-  return diffDays === 0 ? "Hôm nay" : diffDays === 1 ? "Hôm qua" : d.toLocaleDateString("vi-VN");
+  const diffDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Hôm nay";
+  if (diffDays === 1) return "Hôm qua";
+  return d.toLocaleDateString("vi-VN");
 }
 
-/** Each MessageGroup = 1 thumbnail cell (the first image + "+N" badge if > 1) */
-interface MessageGroup {
-  indices: number[];   // all image indices in this message
-  dayLabel: string;
-}
-
-function groupByMessage(images: GalleryImage[]): { dayLabel: string; groups: MessageGroup[] }[] {
-  // Step 1: cluster consecutive images that share the same groupKey (or fall back to sender+minute)
-  const msgGroups: MessageGroup[] = [];
-  images.forEach((img, idx) => {
-    const key = img.groupKey
-      ?? `${img.senderName ?? ""}__${img.sentAt ? new Date(img.sentAt).toISOString().slice(0, 16) : idx}`;
-    const last = msgGroups[msgGroups.length - 1];
-    if (last && images[last.indices[0]].groupKey
-          ? images[last.indices[0]].groupKey === img.groupKey
-          : last?.indices.length > 0 &&
-            `${images[last.indices[0]].senderName ?? ""}__${images[last.indices[0]].sentAt ? new Date(images[last.indices[0]].sentAt!).toISOString().slice(0, 16) : last.indices[0]}` === key
-    ) {
-      last.indices.push(idx);
-    } else {
-      msgGroups.push({ indices: [idx], dayLabel: getDayLabel(img.sentAt) });
-    }
-  });
-
-  // Step 2: bucket by day label (preserve insertion order)
-  const dayMap: Map<string, MessageGroup[]> = new Map();
-  msgGroups.forEach((mg) => {
-    if (!dayMap.has(mg.dayLabel)) dayMap.set(mg.dayLabel, []);
-    dayMap.get(mg.dayLabel)!.push(mg);
-  });
-
-  return Array.from(dayMap.entries()).map(([dayLabel, groups]) => ({ dayLabel, groups }));
+/** Group filmstrip cells by day label, preserving chronological order. */
+function groupByDay(
+  images: GalleryImage[],
+  startIndex: number,
+): { label: string; indices: number[] }[] {
+  const out: { label: string; indices: number[] }[] = [];
+  for (let i = startIndex; i < images.length; i += 1) {
+    const label = getDayLabel(images[i].sentAt);
+    const last = out[out.length - 1];
+    if (last && last.label === label) last.indices.push(i);
+    else out.push({ label, indices: [i] });
+  }
+  return out;
 }
 
 export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
@@ -115,6 +105,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   senderName,
   senderAvatar,
   sentAt,
+  onViewAll,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
@@ -123,6 +114,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const [mounted, setMounted] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
 
   // Normalise to gallery array regardless of which props were used
   const gallery = useMemo<GalleryImage[]>(() => {
@@ -136,7 +128,14 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const hasNext = currentIndex < gallery.length - 1;
   const showNav = gallery.length > 1;
   const showThumbnailPanel = gallery.length > 1;
-  const dayMessageGroups = useMemo(() => groupByMessage(gallery), [gallery]);
+  // Filmstrip shows only the most-recent FILMSTRIP_MAX images (tail of the
+  // chronological gallery). Older images live in "Kho lưu trữ" (onViewAll).
+  const filmstripStart = Math.max(0, gallery.length - FILMSTRIP_MAX);
+  const hasMoreThanStrip = filmstripStart > 0;
+  const dayGroups = useMemo(
+    () => groupByDay(gallery, filmstripStart),
+    [gallery, filmstripStart],
+  );
 
   // Mount animation
   useEffect(() => {
@@ -216,6 +215,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     [],
   );
   const handleResetZoom = useCallback(() => setZoom(DEFAULT_ZOOM), []);
+  const handleRotate = useCallback(
+    () => setZoom((z) => ({ ...z, rotation: (z.rotation + 90) % 360 })),
+    [],
+  );
 
   const handleDownload = useCallback(async () => {
     if (!current?.url) return;
@@ -235,14 +238,23 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     }
   }, [current]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.15 : -0.15;
-    setZoom((z) => ({
-      ...z,
-      scale: Math.min(Math.max(+(z.scale + delta).toFixed(2), MIN_SCALE), MAX_SCALE),
-    }));
-  }, []);
+  // Wheel-to-zoom via a NATIVE non-passive listener. React's onWheel is passive,
+  // so its preventDefault() can't stop the browser's Ctrl+wheel page zoom — which
+  // was blowing up the whole app behind the (now no longer full-bleed) overlay.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!isOpen || !stage) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.2 : -0.2;
+      setZoom((z) => ({
+        ...z,
+        scale: Math.min(Math.max(+(z.scale + delta).toFixed(2), MIN_SCALE), MAX_SCALE),
+      }));
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, [isOpen]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -271,282 +283,261 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   if (!isOpen || !current || typeof document === "undefined") return null;
 
   const resolvedAlt = current.alt ?? t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
-  const { scale, x, y } = zoom;
+  const { scale, x, y, rotation } = zoom;
 
   const resolvedSenderName = current.senderName ?? "";
   const resolvedSenderAvatar = current.senderAvatar;
   const resolvedSentAt = formatSentAt(current.sentAt);
 
   const content = (
-    /* Backdrop — click outside to close */
+    /* Dimmed backdrop — click outside the card closes */
     <div
       className={clsx(
-        "fixed inset-0 flex items-center justify-center p-6 transition-[background-color] duration-150 ease-out",
-        mounted ? "bg-black/75" : "bg-transparent",
+        "fixed inset-0 flex items-center justify-center p-4 transition-opacity duration-150 ease-out sm:p-8",
+        mounted ? "opacity-100" : "opacity-0",
+        "bg-black/80",
       )}
       style={{ zIndex: "var(--hc-z-overlay)" }}
       onClick={onClose}
     >
-      {/* ── Modal container (compact, centered) ─────────────────── */}
+      {/* ── Card frame (bounded, rounded, bordered) ──────────────── */}
       <div
         className={clsx(
-          "relative flex max-h-[90dvh] max-w-[90vw] flex-col overflow-hidden rounded-2xl bg-[#1a1a1a] shadow-2xl transition-[transform,opacity] duration-[180ms] ease-out",
-          showThumbnailPanel ? "w-[820px]" : "w-auto",
-          mounted ? "opacity-100 scale-100" : "opacity-0 scale-[0.93]",
+          "relative flex h-full max-h-[92vh] w-full max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl transition-transform duration-150 ease-out",
+          mounted ? "scale-100" : "scale-95",
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Top bar ───────────────────────────────────────────── */}
-        <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
-          {/* Left: file name + counter */}
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-sm font-medium text-white/70" title={resolvedAlt}>
-              {resolvedAlt}
-            </span>
-            {showNav && (
-              <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-xs tabular-nums text-white/70">
-                {currentIndex + 1} / {gallery.length}
-              </span>
-            )}
-          </div>
-
-          {/* Right: zoom + download + close */}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleZoomOut}
-              aria-label={t("profile:imagePreview.zoomOut", { defaultValue: "Thu nhỏ" })}
-              className={clsx(VIEWER_BTN, "h-7 w-7")}
-            >
-              <MagnifyingGlassMinusIcon className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleResetZoom}
-              className="min-w-[48px] rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-white hover:bg-white/25"
-            >
-              {Math.round(scale * 100)}%
-            </button>
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              aria-label={t("profile:imagePreview.zoomIn", { defaultValue: "Phóng to" })}
-              className={clsx(VIEWER_BTN, "h-7 w-7")}
-            >
-              <MagnifyingGlassPlusIcon className="h-3.5 w-3.5" />
-            </button>
-            <div className="mx-1 h-4 w-px bg-white/20" />
-            <button
-              type="button"
-              onClick={() => void handleDownload()}
-              aria-label={t("profile:imagePreview.download", { defaultValue: "Tải về" })}
-              className={clsx(VIEWER_BTN, "h-7 w-7")}
-            >
-              <ArrowDownTrayIcon className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t("profile:imagePreview.close", { defaultValue: "Đóng" })}
-              className={clsx(VIEWER_BTN, "ml-1 h-8 w-8")}
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
-          </div>
+      {/* ── Title bar (solid dark, centered filename) — Zalo-style ─ */}
+      <div className="relative z-30 flex h-11 shrink-0 items-center justify-between gap-3 bg-[#2a2a2a] px-4">
+        {/* Left: counter */}
+        <span className="w-16 shrink-0 text-xs tabular-nums text-white/50">
+          {showNav ? `${currentIndex + 1} / ${gallery.length}` : ""}
+        </span>
+        {/* Center: filename */}
+        <span className="min-w-0 flex-1 truncate text-center text-sm font-medium text-white/90" title={resolvedAlt}>
+          {resolvedAlt}
+        </span>
+        {/* Right: close */}
+        <div className="flex w-16 shrink-0 items-center justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("profile:imagePreview.close", { defaultValue: "Đóng" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
         </div>
+      </div>
 
-        {/* ── Body: image area + thumbnail panel ──────────────────── */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Image area */}
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-black/40">
-            {/* Vertical nav buttons */}
-            {showNav && (
-              <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); goPrev(); }}
-                  disabled={!hasPrev}
-                  aria-label="Ảnh trước"
-                  className={clsx(
-                    "flex h-8 w-8 items-center justify-center rounded-full transition-all",
-                    hasPrev
-                      ? "bg-black/50 text-white hover:bg-black/70"
-                      : "pointer-events-none opacity-0",
-                  )}
-                >
-                  <ChevronUpIcon className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); goNext(); }}
-                  disabled={!hasNext}
-                  aria-label="Ảnh tiếp theo"
-                  className={clsx(
-                    "flex h-8 w-8 items-center justify-center rounded-full transition-all",
-                    hasNext
-                      ? "bg-black/50 text-white hover:bg-black/70"
-                      : "pointer-events-none opacity-0",
-                  )}
-                >
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
+      {/* ── Body: image stage + vertical day-grouped filmstrip ──── */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* ── Image stage ─────────────────────────────────────────── */}
+      <div
+        ref={stageRef}
+        className={clsx(
+          "flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4",
+          scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
+        )}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onDoubleClick={handleResetZoom}
+      >
+        {current.url ? (
+          <SafeImage
+            key={current.url}
+            src={current.url}
+            alt={resolvedAlt}
+            className={clsx(
+              "h-full w-full select-none object-contain",
+              !isDragging && "transition-[transform,opacity,scale] duration-[180ms] ease-out",
+              mounted ? "opacity-100 scale-100" : "opacity-0 scale-95",
+            )}
+            style={{
+              transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px) rotate(${rotation}deg)`,
+            }}
+            draggable={false}
+            fallback={
+              <div className="flex flex-col items-center gap-3 text-white/40">
+                <svg className="h-12 w-12 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                </svg>
+                <span className="text-sm">Không tải được ảnh</span>
               </div>
-            )}
-
-            {/* Image — drag/zoom area */}
-            <div
-              className={clsx(
-                "flex h-full w-full items-center justify-center p-4",
-                scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
-              )}
-              onWheel={handleWheel}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onDoubleClick={handleResetZoom}
-            >
-              {current.url ? (
-                <SafeImage
-                  key={current.url}
-                  src={current.url}
-                  alt={resolvedAlt}
-                  className={clsx(
-                    "max-h-[calc(90dvh-96px)] max-w-full select-none object-contain",
-                    !isDragging && "transition-[transform,opacity,scale] duration-[180ms] ease-out",
-                    mounted ? "opacity-100 scale-100" : "opacity-0 scale-95",
-                  )}
-                  style={{
-                    transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px)`,
-                  }}
-                  draggable={false}
-                  fallback={
-                    <div className="flex flex-col items-center gap-3 text-white/40">
-                      <svg className="h-12 w-12 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                      </svg>
-                      <span className="text-sm">Khong tai duoc anh</span>
-                    </div>
-                  }
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-3 text-white/40">
-                  <svg className="h-12 w-12 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                  </svg>
-                  <span className="text-sm">Đang tải ảnh...</span>
-                </div>
-              )}
-            </div>
+            }
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-3 text-white/40">
+            <svg className="h-12 w-12 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+            </svg>
+            <span className="text-sm">Đang tải ảnh...</span>
           </div>
+        )}
+      </div>
 
-          {/* ── Thumbnail panel (1 col, message-grouped) ─────────── */}
-          {showThumbnailPanel && (
-            <div className="flex w-[160px] shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-[#111]">
-              {dayMessageGroups.map(({ dayLabel, groups }) => (
-                <div key={dayLabel}>
-                  {/* Day header */}
-                  <p className="sticky top-0 z-10 bg-[#111]/95 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
-                    {dayLabel}
-                  </p>
-
-                  {/* Message group cells */}
-                  <div className="flex flex-col gap-1 px-2 pb-2">
-                    {groups.map((mg) => {
-                      const firstIdx = mg.indices[0];
-                      const firstImg = gallery[firstIdx];
-                      const extra = mg.indices.length - 1;
-                      const isActive = mg.indices.includes(currentIndex);
-
-                      return (
-                        <button
-                          key={firstIdx}
-                          ref={(el) => { thumbnailRefs.current[firstIdx] = el; }}
-                          type="button"
-                          onClick={() => setCurrentIndex(firstIdx)}
-                          className={clsx(
-                            "relative aspect-[4/3] w-full overflow-hidden rounded-lg transition-all",
-                            isActive
-                              ? "ring-2 ring-white ring-offset-1 ring-offset-black/50"
-                              : "opacity-70 hover:opacity-100",
-                          )}
-
-                        >
-                          <SafeImage
-                            src={firstImg.url}
-                            alt={firstImg.alt ?? `Ảnh ${firstIdx + 1}`}
-                            className="h-full w-full object-cover"
-                            draggable={false}
-                            fallback={
-                              <div className="flex h-full w-full items-center justify-center bg-white/10 text-white/40">
-                                <span className="text-xs">Anh</span>
-                              </div>
-                            }
-                          />
-
-                          {/* +N badge overlay */}
-                          {extra > 0 && (
-                            <div className="absolute inset-0 flex items-end justify-end bg-black/30 p-1.5">
-                              <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white">
-                                +{extra}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Sender name overlay (bottom-left) */}
-                          {firstImg.senderName && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3">
-                              <span className="block truncate text-[10px] font-medium text-white/90">
-                                @{firstImg.senderName.split(" ").pop()}
-                              </span>
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* ── Prev/next chevrons — vertical stack near the filmstrip ─ */}
+      {showNav && (
+        <div
+          className={clsx(
+            "absolute top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2",
+            showThumbnailPanel ? "right-[132px]" : "right-3",
           )}
-        </div>
-
-        {/* ── Bottom bar: sender info + hint ──────────────────────── */}
-        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4">
-          {/* Left: avatar + sender name + time */}
-          <div className="flex min-w-0 items-center gap-2">
-            {(resolvedSenderName || resolvedSenderAvatar) && (
-              <Avatar
-                src={resolvedSenderAvatar}
-                alt={resolvedSenderName}
-                size="sm"
-              />
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            disabled={!hasPrev}
+            aria-label="Ảnh trước"
+            className={clsx(
+              "flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition-all hover:bg-black/70",
+              !hasPrev && "pointer-events-none opacity-30",
             )}
-            <div className="min-w-0">
-              {resolvedSenderName && (
-                <p className="truncate text-xs font-semibold text-white leading-tight">
-                  {resolvedSenderName}
-                </p>
-              )}
-              {resolvedSentAt && (
-                <p className="truncate text-[11px] text-white/50 leading-tight">
-                  {resolvedSentAt}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Right: hint text */}
-          <span className="shrink-0 text-[11px] text-white/30">
-            {showNav
-              ? t("profile:imagePreview.instructionsGallery", {
-                  defaultValue: "↑ ↓ chuyển ảnh · ESC đóng · Scroll zoom",
-                })
-              : t("profile:imagePreview.instructions", {
-                  defaultValue: "ESC / click ngoài đóng · Scroll zoom · 0 reset",
-                })}
-          </span>
+          >
+            <ChevronUpIcon className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            disabled={!hasNext}
+            aria-label="Ảnh tiếp theo"
+            className={clsx(
+              "flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition-all hover:bg-black/70",
+              !hasNext && "pointer-events-none opacity-30",
+            )}
+          >
+            <ChevronDownIcon className="h-6 w-6" />
+          </button>
         </div>
+      )}
+
+        {/* ── Vertical filmstrip (day-grouped, recent 30) ─────────── */}
+        {showThumbnailPanel && (
+          <div className="flex w-[120px] shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-[#161616] px-2 pb-3 pt-3">
+            {hasMoreThanStrip && onViewAll && (
+              <button
+                type="button"
+                onClick={onViewAll}
+                className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/10 text-xs font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+              >
+                +{filmstripStart} {t("profile:imagePreview.viewAll", { defaultValue: "Xem tất cả" })}
+              </button>
+            )}
+            {dayGroups.map((group) => (
+              <div key={group.label} className="flex flex-col gap-1.5">
+                <p className="px-0.5 text-[11px] font-medium text-white/50">{group.label}</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {group.indices.map((idx) => {
+                    const img = gallery[idx];
+                    const isActive = idx === currentIndex;
+                    return (
+                      <button
+                        key={idx}
+                        ref={(el) => { thumbnailRefs.current[idx] = el; }}
+                        type="button"
+                        onClick={() => setCurrentIndex(idx)}
+                        aria-label={img.alt ?? `Ảnh ${idx + 1}`}
+                        className={clsx(
+                          "relative aspect-square overflow-hidden rounded-md transition-all",
+                          isActive
+                            ? "ring-2 ring-white"
+                            : "opacity-60 hover:opacity-100",
+                        )}
+                      >
+                        <SafeImage
+                          src={img.url}
+                          alt={img.alt ?? `Ảnh ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                          fallback={
+                            <div className="flex h-full w-full items-center justify-center bg-white/10 text-[9px] text-white/40">
+                              Ảnh
+                            </div>
+                          }
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Bottom toolbar (solid): sender left · zoom center ────── */}
+      <div
+        className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 bg-[#2a2a2a] px-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Left: avatar + sender + time */}
+        <div className="flex w-1/3 min-w-0 items-center gap-2.5">
+          {(resolvedSenderName || resolvedSenderAvatar) && (
+            <Avatar src={resolvedSenderAvatar} alt={resolvedSenderName} size="sm" />
+          )}
+          <div className="min-w-0">
+            {resolvedSenderName && (
+              <p className="truncate text-sm font-medium leading-tight text-white/90">
+                {resolvedSenderName}
+              </p>
+            )}
+            {resolvedSentAt && (
+              <p className="truncate text-xs leading-tight text-white/50">{resolvedSentAt}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Center: zoom / rotate / download */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            aria-label={t("profile:imagePreview.zoomOut", { defaultValue: "Thu nhỏ" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <MagnifyingGlassMinusIcon className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleResetZoom}
+            className="min-w-[52px] rounded-full px-2 py-1 text-xs font-semibold tabular-nums text-white/90 hover:bg-white/15 hover:text-white"
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            aria-label={t("profile:imagePreview.zoomIn", { defaultValue: "Phóng to" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <MagnifyingGlassPlusIcon className="h-4 w-4" />
+          </button>
+          <div className="mx-1 h-5 w-px bg-white/20" />
+          <button
+            type="button"
+            onClick={handleRotate}
+            aria-label={t("profile:imagePreview.rotate", { defaultValue: "Xoay" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <ArrowPathIcon className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            aria-label={t("profile:imagePreview.download", { defaultValue: "Tải về" })}
+            className={clsx(VIEWER_BTN, "h-8 w-8")}
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Right: spacer to keep the center cluster centered */}
+        <div className="w-1/3" />
+      </div>
       </div>
     </div>
   );
