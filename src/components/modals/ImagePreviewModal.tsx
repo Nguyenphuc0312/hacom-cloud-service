@@ -48,6 +48,16 @@ const FILMSTRIP_MAX = 30;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 
+/** Resizable card bounds (px). Card stays centered; corner drag grows/shrinks it symmetrically. */
+const CARD_MIN = { w: 480, h: 360 };
+type CardSize = { w: number; h: number };
+type Corner = "nw" | "ne" | "sw" | "se";
+/** Default card = 92% of viewport (matches the old max-w/max-h behaviour). */
+const defaultCardSize = (): CardSize => ({
+  w: Math.round(window.innerWidth * 0.92),
+  h: Math.round(window.innerHeight * 0.92),
+});
+
 type ZoomState = { scale: number; x: number; y: number; rotation: number };
 const DEFAULT_ZOOM: ZoomState = { scale: 0.7, x: 0, y: 0, rotation: 0 };
 
@@ -112,6 +122,8 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [mounted, setMounted] = useState(false);
+  const [cardSize, setCardSize] = useState<CardSize | null>(null);
+  const isResizingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -140,11 +152,28 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   // Mount animation
   useEffect(() => {
     if (isOpen) {
+      setCardSize((s) => s ?? defaultCardSize());
       const id = requestAnimationFrame(() => setMounted(true));
       return () => cancelAnimationFrame(id);
     } else {
       setMounted(false);
     }
+  }, [isOpen]);
+
+  // Keep the card within the viewport when the window shrinks
+  useEffect(() => {
+    if (!isOpen) return;
+    const onResize = () =>
+      setCardSize((s) =>
+        s
+          ? {
+              w: Math.min(s.w, window.innerWidth),
+              h: Math.min(s.h, window.innerHeight),
+            }
+          : s,
+      );
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [isOpen]);
 
   // Sync index when caller changes initialIndex or reopens
@@ -256,6 +285,34 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     return () => stage.removeEventListener("wheel", onWheel);
   }, [isOpen]);
 
+  // Corner resize (Zalo-style). Card is centered, so its size = 2× the distance
+  // from viewport center to the pointer. One math for all four corners.
+  const startCornerResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizingRef.current = true;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const onMove = (ev: MouseEvent) => {
+      setCardSize({
+        w: Math.round(
+          Math.min(window.innerWidth, Math.max(CARD_MIN.w, Math.abs(ev.clientX - cx) * 2)),
+        ),
+        h: Math.round(
+          Math.min(window.innerHeight, Math.max(CARD_MIN.h, Math.abs(ev.clientY - cy) * 2)),
+        ),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      // Clear after the backdrop's click event has fired, so it isn't treated as an outside-click.
+      setTimeout(() => { isResizingRef.current = false; }, 0);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (zoom.scale <= 1) return;
@@ -298,16 +355,31 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
         "bg-black/80",
       )}
       style={{ zIndex: "var(--hc-z-overlay)" }}
-      onClick={onClose}
+      onClick={() => { if (!isResizingRef.current) onClose(); }}
     >
-      {/* ── Card frame (bounded, rounded, bordered) ──────────────── */}
+      {/* ── Card frame (resizable from corners, rounded, bordered) ── */}
       <div
         className={clsx(
-          "relative flex h-full max-h-[92vh] w-full max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl transition-transform duration-150 ease-out",
+          "relative flex max-h-full max-w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl transition-transform duration-150 ease-out",
           mounted ? "scale-100" : "scale-95",
         )}
+        style={cardSize ? { width: cardSize.w, height: cardSize.h } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Corner resize handles — drag to grow/shrink (card stays centered) */}
+        {(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => (
+          <div
+            key={corner}
+            onMouseDown={startCornerResize}
+            className={clsx(
+              "absolute z-40 h-6 w-6",
+              corner === "nw" && "left-0 top-0 cursor-nwse-resize",
+              corner === "ne" && "right-0 top-0 cursor-nesw-resize",
+              corner === "sw" && "bottom-0 left-0 cursor-nesw-resize",
+              corner === "se" && "bottom-0 right-0 cursor-nwse-resize",
+            )}
+          />
+        ))}
       {/* ── Title bar (solid dark, centered filename) — Zalo-style ─ */}
       <div className="relative z-30 flex h-11 shrink-0 items-center justify-between gap-3 bg-[#2a2a2a] px-4">
         {/* Left: counter */}
@@ -352,8 +424,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             key={current.url}
             src={current.url}
             alt={resolvedAlt}
+            objectFit="contain"
             className={clsx(
-              "h-full w-full select-none object-contain",
+              "h-full w-full select-none",
               !isDragging && "transition-[transform,opacity,scale] duration-[180ms] ease-out",
               mounted ? "opacity-100 scale-100" : "opacity-0 scale-95",
             )}
