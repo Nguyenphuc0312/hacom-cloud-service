@@ -452,9 +452,9 @@ export const PersonalChatInput = forwardRef<
           </div>
         </div>
 
-        <p className="mt-1.5 text-center text-[10px] text-text-disabled">
-          AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng thông tin
-          quan trọng.
+        <p className="mt-1.5 text-center text-[11px] text-text-muted">
+          AI có thể đưa ra thông tin không chính xác. Hãy kiểm chứng các thông
+          tin quan trọng.
         </p>
       </div>
     );
