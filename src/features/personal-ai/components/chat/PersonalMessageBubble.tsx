@@ -13,7 +13,11 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { resolveWeeklyReportFileAction } from "../../../ai-assistant/utils/weeklyReportFileLink";
-import { openWeeklyReportFile } from "../../api/personalAiApi";
+import {
+  openWeeklyReportFile,
+  parseLevelReportExportHref,
+  downloadLevelReportExport,
+} from "../../api/personalAiApi";
 import {
   downloadWorkReportFile,
   fetchWorkReportFileBlob,
@@ -161,6 +165,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const [loadingWorkFileId, setLoadingWorkFileId] = useState<number | null>(null);
+  const [loadingExportHref, setLoadingExportHref] = useState<string | null>(null);
   const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
   const patchMessage = usePersonalAiStore((s) => s.patchMessage);
   const isUser = message.role === "user";
@@ -241,6 +246,40 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         const label = (React.Children.toArray(children) as React.ReactNode[])
           .map((c) => (typeof c === "string" ? c : ""))
           .join("");
+
+        // Link xuất Excel bảng gộp báo cáo cấp (#LDDV_baocao / #TCT_tonghop):
+        // /api/level-reports/export?week_start=... — tải kèm auth (GET cần Bearer).
+        const exportUrl = parseLevelReportExportHref(href);
+        if (exportUrl) {
+          const isExportLoading = loadingExportHref === exportUrl;
+          const handleExportClick = (e: React.MouseEvent) => {
+            e.preventDefault();
+            if (isExportLoading) return;
+            setLoadingExportHref(exportUrl);
+            downloadLevelReportExport(exportUrl)
+              .then(() => toast.success("Đã tải bảng tổng hợp."))
+              .catch((err) =>
+                toast.error(err instanceof Error ? err.message : "Không thể tải file."),
+              )
+              .finally(() => setLoadingExportHref(null));
+          };
+          return (
+            <button
+              type="button"
+              onClick={handleExportClick}
+              disabled={isExportLoading}
+              className="inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 disabled:opacity-60"
+              title={label || "Tải bảng tổng hợp (.xlsx)"}
+            >
+              {isExportLoading ? (
+                <Loader2Icon size={12} strokeWidth={2} className="shrink-0 animate-spin" />
+              ) : (
+                <DownloadIcon size={12} strokeWidth={2} className="shrink-0" />
+              )}
+              <span className="truncate">{children}</span>
+            </button>
+          );
+        }
 
         // File đính kèm báo cáo NGÀY (owner + quản lý) — tải kèm auth header.
         const workFileId = parseWorkReportFileHref(href);
@@ -359,6 +398,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     [
       loadingFileId,
       loadingWorkFileId,
+      loadingExportHref,
       message.content,
       tableBlocks,
       perTableSnapshot,

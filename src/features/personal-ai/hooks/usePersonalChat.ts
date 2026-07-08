@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamPersonalChat, PersonalAiError } from "../api/personalAiApi";
+import {
+  streamPersonalChat,
+  PersonalAiError,
+  uploadLevelReport,
+} from "../api/personalAiApi";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
@@ -457,6 +461,83 @@ export function usePersonalChat() {
     ],
   );
 
+  /**
+   * Nộp file bản báo cáo CẤP (#TBP_baocao / #LDDV_baocao kèm .xlsx) qua
+   * endpoint riêng /api/level-reports/upload. Khác #congviectuan: BE tự suy
+   * quyền/phạm vi từ JWT và tự thay bản cũ nếu nộp lại cùng tuần — FE chỉ hiện
+   * `message` trả về.
+   */
+  const sendLevelReportWithFile = useCallback(
+    async (question: string, file: File) => {
+      const trimmed = question.trim();
+      if (!trimmed || isStreaming) return;
+
+      let conversationId = activeConversationId;
+      if (!conversationId) {
+        conversationId = createConversation();
+      }
+
+      addMessage(conversationId, {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `[Tệp đính kèm: ${file.name}]\n\n${trimmed}`,
+        timestamp: new Date(),
+      });
+
+      const assistantId = crypto.randomUUID();
+      addMessage(conversationId, {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        isStreaming: true,
+        thinkingPhase: "searching",
+      });
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setIsStreaming(true);
+      const convIdSnapshot = conversationId;
+
+      try {
+        const response = await uploadLevelReport(
+          file,
+          { question: trimmed },
+          { signal: controller.signal },
+        );
+        finalizeMessage(convIdSnapshot, response.message);
+      } catch (err) {
+        const content =
+          err instanceof PersonalAiError
+            ? err.kind === "timeout"
+              ? "Yêu cầu quá thời gian. Vui lòng thử lại."
+              : err.kind === "network"
+                ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
+                : err.status === 413
+                  ? "Tệp vượt quá dung lượng cho phép (tối đa 25MB)."
+                  : err.status === 403
+                    ? "Bạn không có quyền nộp báo cáo cấp này."
+                    : err.status === 400
+                      ? err.message || "File không hợp lệ hoặc thiếu tag báo cáo."
+                      : err.message || "Đã xảy ra lỗi. Vui lòng thử lại."
+            : "Đã xảy ra lỗi không xác định.";
+        finalizeMessage(convIdSnapshot, content);
+        markMessageError(convIdSnapshot);
+      } finally {
+        setIsStreaming(false);
+        abortRef.current = null;
+      }
+    },
+    [
+      isStreaming,
+      activeConversationId,
+      createConversation,
+      addMessage,
+      finalizeMessage,
+      markMessageError,
+    ],
+  );
+
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -469,6 +550,7 @@ export function usePersonalChat() {
     isLoadingHistory,
     sendMessage,
     sendWithFile,
+    sendLevelReportWithFile,
     stopStreaming,
   };
 }
