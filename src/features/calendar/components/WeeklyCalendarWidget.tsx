@@ -287,21 +287,28 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     setEventTypeChooserOpen(true);
   };
 
-  // Lưu lịch họp: có id → sửa, không có id → tạo mới. Nghiệp vụ (đính kèm, quyền
-  // xem, qua store…) nằm trong useCalendarEventMutations — dùng chung /calendar.
+  // Lưu lịch họp. Phân biệt SỬA vs TẠO bằng state `editingMeeting` (KHÔNG dùng
+  // data.id — form luôn tự sinh id giả `meeting-<ts>` khi tạo mới). Nghiệp vụ
+  // (đính kèm, quyền xem, qua store…) nằm trong useCalendarEventMutations.
   const handleSaveMeeting = async (data: MeetingFormData) => {
-    const ok = data.id
+    const ok = editingMeeting
       ? await mutations.updateMeeting(data)
       : await mutations.createMeeting(data);
-    if (ok) setEditingMeeting(null);
+    if (ok) {
+      setEditingMeeting(null);
+      setModalOpen(false);
+    }
   };
 
   // Lịch cá nhân: chỉ mình bạn, không người tham gia/chủ trì.
   const handleSavePersonalEvent = async (data: PersonalEventFormData) => {
-    const ok = data.id
+    const ok = editingPersonalEvent
       ? await mutations.updatePersonal(data)
       : await mutations.createPersonal(data);
-    if (ok) setEditingPersonalEvent(null);
+    if (ok) {
+      setEditingPersonalEvent(null);
+      setPersonalModalOpen(false);
+    }
   };
 
   // Chỉnh sửa event đang mở → mở form phù hợp (họp / cá nhân), điền sẵn dữ liệu.

@@ -133,8 +133,8 @@ export const useCalendarEventMutations = (
           attachmentFileIds,
         });
         if (result) {
+          // Toast thành công do calendarStore.createEvent phát — không lặp ở đây.
           await persistMockAttachmentMapping(result.id, attachmentFileIds);
-          toast.success("Đã thêm lịch họp");
           onSuccess?.();
           return true;
         }
@@ -170,8 +170,8 @@ export const useCalendarEventMutations = (
           attachmentFileIds,
         });
         if (success) {
+          // Toast thành công do calendarStore.updateEvent phát.
           await persistMockAttachmentMapping(data.id, attachmentFileIds);
-          toast.success("Đã cập nhật lịch họp");
           onSuccess?.();
           return true;
         }
@@ -202,8 +202,8 @@ export const useCalendarEventMutations = (
           attachmentFileIds,
         });
         if (result) {
+          // Toast thành công do calendarStore.createEvent phát.
           await persistMockAttachmentMapping(result.id, attachmentFileIds);
-          toast.success("Đã thêm lịch cá nhân");
           onSuccess?.();
           return true;
         }
@@ -231,8 +231,8 @@ export const useCalendarEventMutations = (
           attachmentFileIds,
         });
         if (success) {
+          // Toast thành công do calendarStore.updateEvent phát.
           await persistMockAttachmentMapping(data.id, attachmentFileIds);
-          toast.success("Đã cập nhật lịch cá nhân");
           onSuccess?.();
           return true;
         }
@@ -251,7 +251,7 @@ export const useCalendarEventMutations = (
       try {
         const success = await useCalendarStore.getState().deleteEvent(eventId);
         if (success) {
-          toast.success("Đã xóa lịch");
+          // Toast thành công do calendarStore.deleteEvent phát.
           onSuccess?.();
           return true;
         }
