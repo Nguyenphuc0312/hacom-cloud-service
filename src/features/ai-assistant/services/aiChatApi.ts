@@ -955,6 +955,8 @@ export interface WorkReportTaskSubmit {
   requirements?: string;
   completed?: string;
   difficulties?: string;
+  /** "Đề xuất" — không bắt buộc; rỗng/thiếu BE lưu trống, không chặn lưu. */
+  proposals?: string;
   notes?: string;
 }
 

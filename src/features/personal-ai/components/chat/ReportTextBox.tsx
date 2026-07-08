@@ -14,6 +14,7 @@ interface ReportTask {
   requirements?: string;
   completed?: string;
   difficulties?: string;
+  proposals?: string;
   notes?: string;
 }
 
@@ -27,7 +28,7 @@ interface ParsedReport {
   days: ReportDay[];
 }
 
-type TaskField = "requirements" | "completed" | "difficulties" | "notes";
+type TaskField = "requirements" | "completed" | "difficulties" | "proposals" | "notes";
 
 /**
  * Parse một dòng công việc do BE trả. Định dạng (các trường nối nhau bằng " - "):
@@ -36,11 +37,16 @@ type TaskField = "requirements" | "completed" | "difficulties" | "notes";
  * Nhãn "Công việc:" ở đầu (nếu có) cũng được bỏ.
  */
 function parseTaskLine(line: string): ReportTask {
+  // Nhãn cũ (trước redesign 08/07) + nhãn mới cùng map về một key — parse được
+  // cả báo cáo cũ đã lưu lẫn báo cáo mới BE gửi.
   const labelToKey: Record<string, TaskField | "skip"> = {
     "yêu cầu": "requirements",
+    "mục tiêu": "requirements",
     "đã làm được": "completed",
     "đã làm": "completed",
+    "kết quả đạt được": "completed",
     "khó khăn": "difficulties",
+    "đề xuất": "proposals",
     "ghi chú": "notes",
     date: "skip",
   };
@@ -48,7 +54,7 @@ function parseTaskLine(line: string): ReportTask {
   // Delimiter: " - <Nhãn>:" — yêu cầu dấu gạch + nhãn đã biết, nên dấu "-" nằm
   // trong tên công việc sẽ không bị nhầm là delimiter.
   const re =
-    /\s*-\s*(Yêu cầu|Đã làm được|Đã làm|Khó khăn|Ghi chú|Date)\s*:\s*/gi;
+    /\s*-\s*(Yêu cầu|Mục tiêu|Đã làm được|Đã làm|Kết quả đạt được|Khó khăn|Đề xuất|Ghi chú|Date)\s*:\s*/gi;
 
   const marks: Array<{ start: number; end: number; key: TaskField | "skip" }> = [];
   let m: RegExpExecArray | null;
@@ -77,17 +83,21 @@ const POSITIONAL_FIELDS: TaskField[] = ["requirements", "completed", "difficulti
 
 // Định dạng A: cả công việc trên một dòng, các trường nối bằng " - <Nhãn>:".
 const INLINE_LABELED_RE =
-  /\s-\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:/i;
+  /\s-\s*(yêu cầu|mục tiêu|đã làm được|đã làm|kết quả đạt được|khó khăn|đề xuất|ghi chú|date)\s*:/i;
 
-// Định dạng C: mỗi trường một dòng, có nhãn, thường có tiền tố "- " (vd "- Yêu cầu: ...").
+// Định dạng C: mỗi trường một dòng, có nhãn, thường có tiền tố "- " (vd "- Mục tiêu: ...").
 const FIELD_LINE_RE =
-  /^[-*•]?\s*(yêu cầu|đã làm được|đã làm|khó khăn|ghi chú|date)\s*:\s*(.*)$/i;
+  /^[-*•]?\s*(yêu cầu|mục tiêu|đã làm được|đã làm|kết quả đạt được|khó khăn|đề xuất|ghi chú|date)\s*:\s*(.*)$/i;
 
+// Nhãn cũ + mới (xem parseTaskLine) — parse cả báo cáo cũ lẫn mới.
 const FIELD_LABEL_TO_KEY: Record<string, TaskField | "skip"> = {
   "yêu cầu": "requirements",
+  "mục tiêu": "requirements",
   "đã làm được": "completed",
   "đã làm": "completed",
+  "kết quả đạt được": "completed",
   "khó khăn": "difficulties",
+  "đề xuất": "proposals",
   "ghi chú": "notes",
   date: "skip",
 };
@@ -243,15 +253,16 @@ const Field: React.FC<{ label: string; value?: string }> = ({ label, value }) =>
   );
 };
 
-/** Cột bảng — khớp với header của form #baocaocongviec (WorkReportForm). */
+/** Cột bảng — khớp header form #baocaocongviec (WorkReportForm), redesign 08/07. */
 const TASK_COLUMNS: Array<{ label: string; key: keyof ReportTask }> = [
   { label: "Tên công việc", key: "taskName" },
-  { label: "Yêu cầu", key: "requirements" },
-  { label: "Đã làm được", key: "completed" },
+  { label: "Mục tiêu", key: "requirements" },
+  { label: "Kết quả đạt được", key: "completed" },
   { label: "Khó khăn", key: "difficulties" },
+  { label: "Đề xuất", key: "proposals" },
 ];
 
-const COL_TEMPLATE = "1fr 1fr 1fr 1fr";
+const COL_TEMPLATE = "1fr 1fr 1fr 1fr 1fr";
 
 const Cell: React.FC<{ value?: string }> = ({ value }) => (
   <div className="whitespace-pre-wrap break-words px-3 py-2 text-sm text-text-primary">
@@ -261,7 +272,7 @@ const Cell: React.FC<{ value?: string }> = ({ value }) => (
 
 /**
  * Render báo cáo theo bảng cột giống form #baocaocongviec (read-only):
- * header ngày → cột Tên công việc / Yêu cầu / Đã làm được / Khó khăn → dòng Ghi chú.
+ * header ngày → cột Tên công việc / Mục tiêu / Kết quả đạt được / Khó khăn / Đề xuất → dòng Ghi chú.
  */
 const DayCard: React.FC<{ day: ReportDay }> = ({ day }) => (
   <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -331,9 +342,10 @@ const DayCard: React.FC<{ day: ReportDay }> = ({ day }) => (
             )}
             {task.taskName || <span className="italic text-text-muted">—</span>}
           </div>
-          <Field label="Yêu cầu" value={task.requirements} />
-          <Field label="Đã làm được" value={task.completed} />
+          <Field label="Mục tiêu" value={task.requirements} />
+          <Field label="Kết quả đạt được" value={task.completed} />
           <Field label="Khó khăn" value={task.difficulties} />
+          <Field label="Đề xuất" value={task.proposals} />
           <Field label="Ghi chú" value={task.notes} />
         </div>
       ))}
