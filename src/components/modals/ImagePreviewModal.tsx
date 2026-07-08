@@ -58,6 +58,28 @@ const defaultCardSize = (): CardSize => ({
   h: Math.round(window.innerHeight * 0.92),
 });
 
+/** Persist the user's chosen card size across sessions (Zalo-style). */
+const CARD_SIZE_KEY = "hc.imagePreview.cardSize";
+const clampToViewport = (s: CardSize): CardSize => ({
+  w: Math.min(Math.max(CARD_MIN.w, s.w), window.innerWidth),
+  h: Math.min(Math.max(CARD_MIN.h, s.h), window.innerHeight),
+});
+const loadCardSize = (): CardSize => {
+  try {
+    const raw = localStorage.getItem(CARD_SIZE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<CardSize>;
+      if (typeof p.w === "number" && typeof p.h === "number") {
+        return clampToViewport({ w: p.w, h: p.h });
+      }
+    }
+  } catch { /* ignore corrupt/blocked storage */ }
+  return defaultCardSize();
+};
+const saveCardSize = (s: CardSize): void => {
+  try { localStorage.setItem(CARD_SIZE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+};
+
 type ZoomState = { scale: number; x: number; y: number; rotation: number };
 const DEFAULT_ZOOM: ZoomState = { scale: 0.7, x: 0, y: 0, rotation: 0 };
 
@@ -152,7 +174,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   // Mount animation
   useEffect(() => {
     if (isOpen) {
-      setCardSize((s) => s ?? defaultCardSize());
+      setCardSize((s) => s ?? loadCardSize());
       const id = requestAnimationFrame(() => setMounted(true));
       return () => cancelAnimationFrame(id);
     } else {
@@ -293,19 +315,22 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     isResizingRef.current = true;
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
+    let latest: CardSize | null = null;
     const onMove = (ev: MouseEvent) => {
-      setCardSize({
+      latest = {
         w: Math.round(
           Math.min(window.innerWidth, Math.max(CARD_MIN.w, Math.abs(ev.clientX - cx) * 2)),
         ),
         h: Math.round(
           Math.min(window.innerHeight, Math.max(CARD_MIN.h, Math.abs(ev.clientY - cy) * 2)),
         ),
-      });
+      };
+      setCardSize(latest);
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      if (latest) saveCardSize(latest); // remember across sessions
       // Clear after the backdrop's click event has fired, so it isn't treated as an outside-click.
       setTimeout(() => { isResizingRef.current = false; }, 0);
     };
