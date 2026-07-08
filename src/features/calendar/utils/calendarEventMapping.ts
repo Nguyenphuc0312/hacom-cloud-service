@@ -103,8 +103,8 @@ export const mapHrmEventToCalendarEvent = (event: HRCalendarEvent): ExtendedCale
 
 /**
  * Avatar stack = owner (người tạo) + participants (người được mời), dedup.
- * BE không tự thêm owner vào participants[] (xem CalendarPage buildParticipantPayload),
- * nên FE ghép owner lên đầu để đồng bộ 2 chiều: cả người tạo lẫn người nhận đều
+ * BE không tự thêm owner vào participants[] (xem buildParticipantPayload trong
+ * useCalendarEventMutations), nên FE ghép owner lên đầu để đồng bộ 2 chiều: cả người tạo lẫn người nhận đều
  * thấy đủ mặt. avatarUrl của owner đợi BE (HRCalendarOwner chưa có) → fallback initials.
  */
 const buildAttendeeAvatars = (

@@ -22,19 +22,16 @@ import {
   type EventType,
 } from "../data/calendarEvents";
 import { EventDetailModal } from "../components/EventDetailModal";
+import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import {
   hrApi,
   type AttendanceCalendarDay,
 } from "../../api/hrApi";
 import {
-  hrCalendarApi,
   type HRCalendarEvent,
+  type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
-import {
-  apiVisibilityToForm,
-  meetingVisibilityToApi,
-  personalVisibilityToApi,
-} from "../utils/calendarVisibility";
+import { apiVisibilityToForm } from "../utils/calendarVisibility";
 import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { PersonalEventFormModal, type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
@@ -57,49 +54,9 @@ import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
 import {
   resolvePublicResourceUrl,
-  CALENDAR_ATTACHMENTS_ENABLED,
   CALENDAR_ATTACHMENTS_USE_MOCK,
 } from "../../../config";
-import {
-  type CalendarLocalAttachment,
-} from "../../../components/ui/CalendarAttachmentZone";
-import {
-  uploadCalendarAttachments,
-  splitCalendarAttachments,
-  CalendarAttachmentUploadError,
-} from "../utils/uploadCalendarAttachment";
-import {
-  mockSetEventAttachments,
-  mockGetAttachmentsForEvents,
-} from "../utils/calendarAttachmentMockStore";
-import type { CalendarAttachmentDto } from "../../../features/api/hrCalendarApi";
-
-/**
- * Từ attachments trong form: upload file mới, gộp với fileId cũ (remote) →
- * `attachmentFileIds` (full desired set BE reconcile). Trả về undefined khi
- * feature-flag off HOẶC không có attachment nào (bỏ field → BE không đụng tới).
- */
-const resolveAttachmentFileIds = async (
-  attachments: CalendarLocalAttachment[] | undefined,
-): Promise<string[] | undefined> => {
-  if (!CALENDAR_ATTACHMENTS_ENABLED) return undefined;
-  if (!attachments || attachments.length === 0) return [];
-  const { filesToUpload, existingFileIds } = splitCalendarAttachments(attachments);
-  const uploaded = await uploadCalendarAttachments(filesToUpload);
-  return [...existingFileIds, ...uploaded.map((u) => u.fileId)];
-};
-
-/**
- * MOCK: sau khi create/update, lưu mapping eventId → fileIds vào IndexedDB để
- * lần sau list/detail hiển thị lại. No-op khi không dùng mock (BE tự lưu).
- */
-const persistMockAttachmentMapping = async (
-  eventId: string | undefined,
-  fileIds: string[] | undefined,
-): Promise<void> => {
-  if (!CALENDAR_ATTACHMENTS_USE_MOCK || !eventId || fileIds === undefined) return;
-  await mockSetEventAttachments(eventId, fileIds);
-};
+import { mockGetAttachmentsForEvents } from "../utils/calendarAttachmentMockStore";
 
 /**
  * Calendar view types.
@@ -183,32 +140,6 @@ const formatTime = (time: string | null | undefined): string => {
   return time;
 };
 
-
-/**
- * Build the participant payload for hr-api-service from the meeting form.
- * - refs: identifiers the backend can resolve to an employee
- *   (employee cuid / employeeCode / chat authUserId)
- * - freeTextNames: typed names without identity → stored in metadata.attendees
- * The chairman tagged from friends is invited as a participant too, so the
- * meeting shows up on their calendar; the backend never adds the owner.
- */
-const buildParticipantPayload = (
-  data: MeetingFormData,
-): { refs: string[]; freeTextNames: string[] } => {
-  const refs = new Set<string>();
-  const freeTextNames: string[] = [];
-  for (const p of data.participants ?? []) {
-    const ref = p.employeeId || p.employeeCode || p.userId;
-    if (ref) {
-      refs.add(ref);
-    } else if (p.name.trim()) {
-      freeTextNames.push(p.name.trim());
-    }
-  }
-  const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
-  if (chairmanRef) refs.add(chairmanRef);
-  return { refs: Array.from(refs), freeTextNames };
-};
 
 /**
  * Mini calendar component for the sidebar.
@@ -578,7 +509,6 @@ export const CalendarPage: React.FC = () => {
     setFilters,
     setViewingUser,
     fetchEvents,
-    deleteEvent,
     isLoading: storeLoading,
   } = storeState;
 
@@ -686,113 +616,30 @@ export const CalendarPage: React.FC = () => {
     void fetchEvents(from, to);
   }, [currentYear, currentMonth, fetchEvents]);
 
-  // Handle create event from MeetingFormModal
+  // Nghiệp vụ ghi lịch dùng CHUNG hook với WeeklyCalendarWidget (tạo/sửa/xóa/
+  // phản hồi) — một nguồn logic duy nhất, không nhân đôi.
+  const mutations = useCalendarEventMutations({ onSuccess: refetchCurrentMonth });
+
+  // Tạo lịch họp — nghiệp vụ nằm trong useCalendarEventMutations (dùng chung
+  // widget); ở đây chỉ quản lý cờ loading của trang.
   const handleCreateEvent = useCallback(async (data: MeetingFormData) => {
+    setIsCreatingEvent(true);
     try {
-      setIsCreatingEvent(true);
-
-      // Map MeetingFormData to hr-api-service CreateCalendarEventInput
-      // Interpret the picked date+time as LOCAL wall-clock, then convert to an
-      // absolute instant (UTC ISO). Appending "Z" directly would wrongly treat
-      // local time as UTC (a 7h shift in Vietnam).
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      // Người được tag phải nhận được lịch → gửi mọi ref backend resolve được
-      // (employee cuid / employeeCode / authUserId). Tên free-text (không có
-      // identity) lưu vào metadata.attendees để hiển thị.
-      const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
-
-      // Upload file đính kèm (nếu bật flag) TRƯỚC khi tạo event → lấy fileIds.
-      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
-
-      const input = {
-        title: data.title,
-        description: data.notes || undefined,
-        startAt,
-        endAt,
-        eventType: "MEETING" as const,
-        // Quyền xem theo lựa chọn trên form (mặc định riêng tư → BUSY_ONLY).
-        visibility: meetingVisibilityToApi(data.visibility),
-        isAllDay: false,
-        location: data.location || undefined,
-        timezone,
-        participantIds,
-        attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
-        meetingChairman: data.chairman || undefined,
-        meetingFormat: data.format,
-        attachmentFileIds,
-      };
-
-      // Use store's createEvent which handles API call + state update (+ toast)
-      const result = await useCalendarStore.getState().createEvent(input);
-
-      if (result) {
-        // MOCK: lưu mapping eventId → fileIds để list/detail hiển thị lại.
-        await persistMockAttachmentMapping(result.id, attachmentFileIds);
-        // Store chỉ chèn event nếu khớp range nội bộ của store (có thể lệch
-        // với tháng đang xem của trang) → refetch theo range của trang.
-        refetchCurrentMonth();
-      }
-    } catch (error) {
-      console.error("Failed to create event:", error);
-      toast.error(
-        error instanceof CalendarAttachmentUploadError
-          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
-          : "Không thể thêm lịch. Vui lòng thử lại.",
-      );
+      await mutations.createMeeting(data);
     } finally {
       setIsCreatingEvent(false);
     }
-  }, [refetchCurrentMonth]);
+  }, [mutations]);
 
-  // Handle create personal event from PersonalEventFormModal.
-  // Lịch cá nhân: eventType PERSONAL, không có người tham gia/chủ trì.
+  // Tạo lịch cá nhân (eventType PERSONAL, không người tham gia/chủ trì).
   const handleCreatePersonalEvent = useCallback(async (data: PersonalEventFormData) => {
+    setIsCreatingEvent(true);
     try {
-      setIsCreatingEvent(true);
-      // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
-      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
-
-      const input = {
-        title: data.title,
-        description: data.notes || undefined,
-        startAt,
-        endAt,
-        // Lịch cá nhân: eventType PERSONAL, không có participants (backend tự chặn).
-        // Quyền xem theo lựa chọn trên form: riêng tư → PRIVATE (chỉ owner),
-        // công khai → PUBLIC.
-        eventType: "PERSONAL" as const,
-        visibility: personalVisibilityToApi(data.visibility),
-        isAllDay: false,
-        timezone,
-        attachmentFileIds,
-      };
-
-      const result = await useCalendarStore.getState().createEvent(input);
-      if (result) {
-        await persistMockAttachmentMapping(result.id, attachmentFileIds);
-        refetchCurrentMonth();
-      }
-    } catch (error) {
-      console.error("Failed to create personal event:", error);
-      toast.error(
-        error instanceof CalendarAttachmentUploadError
-          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
-          : "Không thể thêm lịch. Vui lòng thử lại.",
-      );
+      await mutations.createPersonal(data);
     } finally {
       setIsCreatingEvent(false);
     }
-  }, [refetchCurrentMonth]);
+  }, [mutations]);
 
   // Mở bộ chọn loại lịch (họp / cá nhân) với ngày + giờ điền sẵn.
   const openEventTypeChooser = useCallback(
@@ -1221,140 +1068,38 @@ export const CalendarPage: React.FC = () => {
     setEditingEvent(data);
   }, [selectedEvent, selectedHrEvent, mode, apiEventsMap]);
 
-  // Invitee accepts/declines a meeting → persist via HR API, then refetch.
+  // Người được mời phản hồi (Tham gia / Từ chối) — nghiệp vụ trong hook dùng chung.
   const handleRespond = useCallback(
     async (response: "ACCEPTED" | "DECLINED") => {
       if (!selectedEvent) return;
-      try {
-        await hrCalendarApi.updateMyResponse(selectedEvent.id, response);
-        toast.success(
-          response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
-        );
-        refetchCurrentMonth();
-      } catch (error) {
-        console.error("Failed to update participant response:", error);
-        toast.error("Không thể cập nhật phản hồi");
-      }
+      await mutations.respond(selectedEvent.id, response);
     },
-    [selectedEvent, refetchCurrentMonth],
+    [selectedEvent, mutations],
   );
 
-  // Handle delete event
+  // Xóa event đang mở (nghiệp vụ trong hook dùng chung).
   const handleDeleteEvent = useCallback(async () => {
     if (!selectedEvent) return;
+    const ok = await mutations.remove(selectedEvent.id);
+    if (ok) setSelectedEvent(null);
+    setShowDeleteConfirm(false);
+  }, [selectedEvent, mutations]);
 
-    try {
-      const success = await deleteEvent(selectedEvent.id);
-      if (success) {
-        setSelectedEvent(null);
-        setShowDeleteConfirm(false);
-      }
-    } catch (error) {
-      console.error("Failed to delete event:", error);
-      setShowDeleteConfirm(false);
-    }
-  }, [selectedEvent, deleteEvent]);
-
-// Handle successful edit — close modal, refresh events
-  const handleEditSuccess = useCallback(() => {
+  // Sửa lịch họp — throw khi thất bại để form giữ nguyên (modal đang mở).
+  const handleUpdateEvent = useCallback(async (data: MeetingFormData) => {
+    const ok = await mutations.updateMeeting(data);
+    if (!ok) throw new Error("update meeting failed");
     setEditingEvent(null);
     setSelectedEvent(null);
-    refetchCurrentMonth();
-  }, [refetchCurrentMonth]);
+  }, [mutations]);
 
-  // Handle update event from edit form
-  const handleUpdateEvent = useCallback(async (data: MeetingFormData) => {
-    try {
-      // Interpret the picked date+time as LOCAL wall-clock, then convert to an
-      // absolute instant (UTC ISO). Appending "Z" directly would wrongly treat
-      // local time as UTC (a 7h shift in Vietnam).
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      // Gửi đủ participant refs + meeting fields để server reconcile danh sách
-      // người tham gia (thêm người mới được tag, gỡ người bị bỏ tag).
-      const { refs: participantIds, freeTextNames } = buildParticipantPayload(data);
-
-      // Upload file mới + gộp fileId cũ (remote) = full desired set → BE reconcile
-      // (giữ file cũ khi sửa, thêm file mới, gỡ file đã xóa khỏi form).
-      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
-
-      // Gửi cả chuỗi rỗng (khác create): backend chỉ bỏ qua khi undefined,
-      // nên "" mới xóa được ghi chú/địa điểm cũ.
-      const input = {
-        title: data.title,
-        description: data.notes,
-        startAt,
-        endAt,
-        location: data.location,
-        timezone,
-        visibility: meetingVisibilityToApi(data.visibility),
-        participantIds,
-        attendees: freeTextNames,
-        meetingChairman: data.chairman || undefined,
-        meetingFormat: data.format,
-        attachmentFileIds,
-      };
-
-      const success = await useCalendarStore.getState().updateEvent(data.id, input);
-      if (success) {
-        await persistMockAttachmentMapping(data.id, attachmentFileIds);
-        void handleEditSuccess();
-      }
-    } catch (error) {
-      console.error("Failed to update event:", error);
-      toast.error(
-        error instanceof CalendarAttachmentUploadError
-          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
-          : "Không thể cập nhật sự kiện",
-      );
-      throw error;
-    }
-  }, [handleEditSuccess]);
-
-  // Handle update personal event from edit form (lịch cá nhân — không có người
-  // tham gia/chủ trì/địa điểm). Giữ nguyên eventType OTHER ở backend.
+  // Sửa lịch cá nhân — throw khi thất bại để form giữ nguyên.
   const handleUpdatePersonalEvent = useCallback(async (data: PersonalEventFormData) => {
-    try {
-      // Picked date+time là LOCAL wall-clock → convert sang UTC ISO.
-      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      const attachmentFileIds = await resolveAttachmentFileIds(data.attachments);
-
-      // Gửi cả chuỗi rỗng để xóa được ghi chú cũ (backend bỏ qua undefined).
-      const input = {
-        title: data.title,
-        description: data.notes,
-        startAt,
-        endAt,
-        timezone,
-        visibility: personalVisibilityToApi(data.visibility),
-        attachmentFileIds,
-      };
-
-      const success = await useCalendarStore.getState().updateEvent(data.id, input);
-      if (success) {
-        await persistMockAttachmentMapping(data.id, attachmentFileIds);
-        setEditingPersonalEvent(null);
-        setSelectedEvent(null);
-        refetchCurrentMonth();
-      }
-    } catch (error) {
-      console.error("Failed to update personal event:", error);
-      toast.error(
-        error instanceof CalendarAttachmentUploadError
-          ? `Không tải được đính kèm${error.filename ? ` "${error.filename}"` : ""}. Vui lòng thử lại.`
-          : "Không thể cập nhật sự kiện",
-      );
-      throw error;
-    }
-  }, [refetchCurrentMonth]);
+    const ok = await mutations.updatePersonal(data);
+    if (!ok) throw new Error("update personal event failed");
+    setEditingPersonalEvent(null);
+    setSelectedEvent(null);
+  }, [mutations]);
 
   // Check if attendance filter is active
   const isAttendanceFilterActive = localFilters.find(f => f.type === "attendance")?.checked ?? true;
