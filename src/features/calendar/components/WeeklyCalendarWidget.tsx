@@ -3,34 +3,26 @@
  * ở màn "chưa chọn hội thoại" (NoChatSelected). Dùng chung calendar store với
  * /calendar; mapping/màu/giờ khớp CalendarPage. Tách ra từ EmptyState.tsx để giữ
  * EmptyState là primitive UI thuần.
+ *
+ * Chi tiết sự kiện dùng CHUNG component EventDetailModal với /calendar → click
+ * event ở đây mở popup đầy đủ ngay tại chỗ (quyền xem, đính kèm, roster người
+ * tham gia + phản hồi, Xóa/Chỉnh sửa). Nút "Xem lịch đầy đủ →" mới chuyển sang
+ * trang /calendar (view Tháng).
  */
 
 import React from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
 import {
-  XMarkIcon,
-  ClockIcon,
   UserIcon,
   UsersIcon,
-  VideoCameraIcon,
-  MapPinIcon,
-  DocumentTextIcon,
   CalendarDaysIcon,
-  BuildingOfficeIcon,
   ExclamationTriangleIcon,
-  EyeIcon,
-  CheckCircleIcon,
-  CheckIcon,
-  TrashIcon,
-  PencilSquareIcon,
   PlusIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
-import { CheckCircleIcon as CheckCircleSolidIcon } from "@heroicons/react/24/solid";
-import { Button } from "../../../components/ui/Button";
-import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
+import { Modal } from "../../../components/ui/Modal";
 import {
   MeetingFormModal,
   type MeetingFormData,
@@ -39,7 +31,6 @@ import {
   PersonalEventFormModal,
   type PersonalEventFormData,
 } from "../../../components/ui/PersonalEventFormModal";
-import { useAuthStore } from "../../../stores";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { toast } from "../../../utils/toast";
 import { getEventColor, type CalendarEvent, type ExtendedCalendarEvent } from "../data/calendarEvents";
@@ -55,14 +46,18 @@ import {
 import {
   meetingVisibilityToApi,
   personalVisibilityToApi,
+  apiVisibilityToForm,
 } from "../utils/calendarVisibility";
-import { mapHrmEventToCalendarEvent } from "../utils/calendarEventMapping";
-
-// Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
-// có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
-const MarkdownContent = React.lazy(
-  () => import("../../../components/message/MarkdownContent"),
-);
+import {
+  mapHrmEventToCalendarEvent,
+  buildExtendedEventMap,
+  getMeetingMetadata,
+  remoteAttachmentsToForm,
+  toLocalDateString,
+  toLocalTimeString,
+} from "../utils/calendarEventMapping";
+import { EventDetailModal } from "./EventDetailModal";
+import { hrCalendarApi, type HRCalendarEvent } from "../../api/hrCalendarApi";
 
 const formatDateStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -99,548 +94,6 @@ const getWeekDays = (base: Date): Date[] => {
 
 const MAX_VISIBLE_EVENTS = 3;
 
-/**
- * Event BUSY_ONLY khi xem lịch người khác bị backend che tiêu đề thành "Busy".
- * Chuẩn hóa sang tiếng Việt "Bận".
- */
-const localizeEventTitle = (title: string | null | undefined): string => {
-  const t = (title ?? "").trim();
-  return t.toLowerCase() === "busy" ? "Bận" : t;
-};
-
-interface SelectedEventDetail {
-  kind: "meeting" | "personal";
-  id: string;
-  title: string;
-  date: string;
-  time?: string;
-  /** Có giá trị khi click vào lịch local (đã tạo qua MeetingFormModal) */
-  meeting?: MeetingFormData;
-  /** Có giá trị khi click vào sự kiện API (HR calendar hoặc chat calendar) */
-  apiEvent?: Partial<{
-    id: string;
-    title: string;
-    startAt: string;
-    endAt: string;
-    description: string | null;
-    meetingChairman: string | null;
-    meetingFormat: string | null;
-    meetingLocation: string | null;
-    attendees: string[];
-    visibility: string;
-    status: string;
-    ownerUserId: string;
-    ownerEmployeeId: string | null;
-  }>;
-  /** CalendarEvent gốc (đã chuẩn hóa) của item được click. */
-  source?: CalendarEvent;
-}
-
-interface EventDetailPopupProps {
-  detail: SelectedEventDetail;
-  currentUserId: string | undefined;
-  currentUserName: string;
-  onClose: () => void;
-  onEdit?: (meeting: MeetingFormData) => void;
-  onDelete?: (meetingId: string) => void;
-  onDeleteApiEvent?: (eventId: string) => Promise<void>;
-  onToggleRead?: (meetingId: string) => void;
-  /** Mở trang lịch đầy đủ để xem chi tiết. */
-  onViewFull?: () => void;
-}
-
-const formatReadAt = (iso: string): string => {
-  try {
-    return new Date(iso).toLocaleString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      day: "2-digit",
-      month: "2-digit",
-    });
-  } catch {
-    return "";
-  }
-};
-
-const isParticipantMatch = (
-  participants: { name: string }[],
-  chairman: string,
-  currentName: string,
-): boolean => {
-  const lower = currentName.trim().toLowerCase();
-  if (!lower) return false;
-  if (chairman.trim().toLowerCase() === lower) return true;
-  return participants.some((p) => p.name.trim().toLowerCase() === lower);
-};
-
-const EventDetailPopup: React.FC<EventDetailPopupProps> = ({
-  detail,
-  currentUserId,
-  currentUserName,
-  onClose,
-  onEdit,
-  onDelete,
-  onDeleteApiEvent,
-  onToggleRead,
-  onViewFull,
-}) => {
-  const isLocalMeeting = !!detail.meeting;
-  const isApiEvent = !!detail.apiEvent;
-  const m = detail.meeting;
-  const apiEvent = detail.apiEvent;
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
-  const [showApiDeleteConfirm, setShowApiDeleteConfirm] = React.useState(false);
-
-  const isCreator = !!(m && currentUserId && m.createdById === currentUserId);
-  const isApiOwner = !!(apiEvent && currentUserId && apiEvent.ownerUserId === currentUserId);
-  const isTaggedParticipant = !!(
-    m && !isCreator && isParticipantMatch(m.participants, m.chairman, currentUserName)
-  );
-  const hasMarkedRead = !!(
-    m?.readBy?.some((r) => r.userId === currentUserId)
-  );
-  const readCount = m?.readBy?.length ?? 0;
-  const totalAudience = m
-    ? m.participants.length + (m.chairman ? 1 : 0)
-    : 0;
-  const accent = detail.kind === "meeting"
-    ? { dot: "bg-[#1976D2]", chip: "bg-[#1976D2]/10 text-[#1565C0] dark:text-[#6BA8F0]", label: "Lịch họp" }
-    : { dot: "bg-amber-500", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300", label: "Cá nhân" };
-
-  const formatDate = (d: string) => {
-    try {
-      return new Date(`${d}T00:00:00`).toLocaleDateString("vi-VN", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    } catch {
-      return d;
-    }
-  };
-
-  // Sự kiện API nhiều ngày (công tác dài hạn / qua đêm): bắt đầu & kết thúc khác
-  // ngày → hiện rõ cả hai mốc kèm ngày, tránh chỉ 1 ngày + giờ "08:00 — 10:00"
-  // (vốn nằm ở 2 ngày khác nhau) gây hiểu nhầm.
-  const apiStart = apiEvent?.startAt ? new Date(apiEvent.startAt) : null;
-  const apiEnd = apiEvent?.endAt ? new Date(apiEvent.endAt) : null;
-  const validStart = apiStart && !Number.isNaN(apiStart.getTime()) ? apiStart : null;
-  const validEnd = apiEnd && !Number.isNaN(apiEnd.getTime()) ? apiEnd : null;
-  const isApiMultiDay = !!(
-    validStart && validEnd && validStart.toDateString() !== validEnd.toDateString()
-  );
-  const fmtDateTime = (d: Date): string =>
-    d.toLocaleString("vi-VN", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
-        <button
-          type="button"
-          onClick={onClose}
-          title="Đóng"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-
-        <div className="pr-8 max-h-[calc(100dvh-6rem)] overflow-y-auto">
-          <div className={clsx("mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium", accent.chip)}>
-            <span className={clsx("h-2 w-2 rounded-full", accent.dot)} />
-            {accent.label}
-          </div>
-
-          <h3 className="text-xl font-semibold text-text-primary">{detail.title}</h3>
-          {/* Nhiều ngày → mốc Bắt đầu/Kết thúc hiện ở khối thời gian bên dưới. */}
-          {!isApiMultiDay && (
-            <p className="mt-1 text-sm font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
-              {formatDate(detail.date)}
-            </p>
-          )}
-
-          {isLocalMeeting && m!.createdByName && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
-              <span>Người tạo:</span>
-              <span className="font-medium text-text-primary">
-                {m!.createdByName}
-                {isCreator && <span className="ml-1 text-[#1565C0]">(bạn)</span>}
-              </span>
-            </div>
-          )}
-
-          <div className="mt-4 space-y-3 text-sm">
-            {/* Giờ: sự kiện API hiển thị khoảng giờ ở block riêng bên dưới → tránh lặp. */}
-            {(isLocalMeeting ? (m!.startTime || m!.endTime) : (!isApiEvent && detail.time)) && (
-              <div className="flex items-center gap-3">
-                <ClockIcon className="h-5 w-5 text-text-muted" />
-                <span className="text-text-primary">
-                  {isLocalMeeting
-                    ? `${m!.startTime || "--:--"} — ${m!.endTime || "--:--"}`
-                    : detail.time}
-                </span>
-              </div>
-            )}
-
-            {isLocalMeeting && m!.chairman && (
-              <div className="flex items-center gap-3">
-                <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                <span className="text-text-primary">
-                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
-                  {m!.chairman}
-                </span>
-              </div>
-            )}
-
-            {isLocalMeeting && m!.participants.length > 0 && (
-              <div className="flex items-start gap-3">
-                <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                <div className="flex-1">
-                  <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
-                    Thành viên ({m!.participants.length}):
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {m!.participants.map((p, idx) => (
-                      <span
-                        key={`${p.name}-${idx}`}
-                        className={clsx(
-                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs",
-                          p.hasConflict
-                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                            : "bg-surface-hover text-text-primary",
-                        )}
-                      >
-                        {p.hasConflict && <ExclamationTriangleIcon className="h-3 w-3" />}
-                        {p.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {isLocalMeeting && (
-              <div className="flex items-center gap-3">
-                {m!.format === "online" ? (
-                  <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                ) : (
-                  <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                )}
-                <span className="text-text-primary">
-                  <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
-                    {m!.format === "online" ? "Hình thức: " : "Địa điểm: "}
-                  </span>
-                  {m!.format === "online" ? "Trực tuyến" : (m!.location || "Chưa cập nhật")}
-                </span>
-              </div>
-            )}
-
-            {isLocalMeeting && m!.notes && (
-              <div className="flex items-start gap-3">
-                <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
-                <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
-                  <React.Suspense
-                    fallback={<p className="whitespace-pre-wrap">{m!.notes}</p>}
-                  >
-                    <MarkdownContent content={m!.notes} isOwn={false} />
-                  </React.Suspense>
-                </div>
-              </div>
-            )}
-
-            {/* API Event rich display */}
-            {isApiEvent && apiEvent && (
-              <>
-                {/* Thời gian: nhiều ngày → Bắt đầu/Kết thúc kèm ngày; trong ngày → khoảng giờ. */}
-                {isApiMultiDay && validStart && validEnd ? (
-                  <div className="flex items-start gap-3">
-                    <CalendarDaysIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    <div className="space-y-0.5">
-                      <p className="text-text-primary">
-                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Bắt đầu: </span>
-                        {fmtDateTime(validStart)}
-                      </p>
-                      <p className="text-text-primary">
-                        <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Kết thúc: </span>
-                        {fmtDateTime(validEnd)}
-                      </p>
-                    </div>
-                  </div>
-                ) : apiEvent.startAt && apiEvent.endAt ? (
-                  <div className="flex items-center gap-3">
-                    <ClockIcon className="h-5 w-5 text-text-muted" />
-                    <span className="text-text-primary">
-                      {new Date(apiEvent.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} — {new Date(apiEvent.endAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}
-                    </span>
-                  </div>
-                ) : null}
-
-                {/* Chairman */}
-                {apiEvent.meetingChairman && (
-                  <div className="flex items-center gap-3">
-                    <UserIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    <span className="text-text-primary">
-                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Chủ trì: </span>
-                      {apiEvent.meetingChairman}
-                    </span>
-                  </div>
-                )}
-
-                {/* Attendees */}
-                {apiEvent.attendees && apiEvent.attendees.length > 0 && (
-                  <div className="flex items-start gap-3">
-                    <UsersIcon className="mt-0.5 h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    <div className="flex-1">
-                      <div className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">
-                        Thành viên ({apiEvent.attendees.length})
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {apiEvent.attendees.slice(0, 10).map((name, idx) => (
-                          <span
-                            key={`${name}-${idx}`}
-                            className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-primary"
-                          >
-                            {name}
-                          </span>
-                        ))}
-                        {apiEvent.attendees.length > 10 && (
-                          <span className="inline-flex items-center rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text-muted">
-                            +{apiEvent.attendees.length - 10} người khác
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hình thức (online/offline) */}
-                {apiEvent.meetingFormat && (
-                  <div className="flex items-center gap-3">
-                    {apiEvent.meetingFormat === "online" ? (
-                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    ) : (
-                      <BuildingOfficeIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    )}
-                    <span className="text-text-primary">
-                      <span className="font-semibold text-[#1565C0] dark:text-[#6BA8F0]">Hình thức: </span>
-                      {apiEvent.meetingFormat === "online" ? "Trực tuyến (Online)" : "Trực tiếp (Offline)"}
-                    </span>
-                  </div>
-                )}
-
-                {/* Location / Meeting Link */}
-                {apiEvent.meetingLocation && (
-                  <div className="flex items-center gap-3">
-                    {apiEvent.meetingFormat === "online" ? (
-                      <VideoCameraIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    ) : (
-                      <MapPinIcon className="h-5 w-5 text-[#1565C0] dark:text-[#6BA8F0]" />
-                    )}
-                    <span className="text-text-primary break-all">
-                      {apiEvent.meetingFormat === "online" ? "Trực tuyến: " : "Địa điểm: "}
-                      {apiEvent.meetingLocation}
-                    </span>
-                  </div>
-                )}
-
-                {/* Description (ghi chú) — render markdown để bảng/danh sách đẹp */}
-                {apiEvent.description && (
-                  <div className="flex items-start gap-3">
-                    <DocumentTextIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
-                    <div className="min-w-0 flex-1 rounded-lg bg-surface-overlay/60 p-2.5 leading-relaxed text-text-primary">
-                      <React.Suspense
-                        fallback={<p className="whitespace-pre-wrap">{apiEvent.description}</p>}
-                      >
-                        <MarkdownContent content={apiEvent.description} isOwn={false} />
-                      </React.Suspense>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {!isLocalMeeting && !isApiEvent && detail.source?.description && (
-              <p className="text-text-secondary">{detail.source.description}</p>
-            )}
-          </div>
-
-          {/* Đã xem / đã nhận */}
-          {isLocalMeeting && (
-            <div className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 dark:bg-emerald-500/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <EyeIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                    Đã xem
-                  </span>
-                  <span
-                    className={clsx(
-                      "rounded-full px-2 py-0.5 text-xs font-bold",
-                      readCount > 0
-                        ? "bg-emerald-500 text-white"
-                        : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-                    )}
-                  >
-                    {readCount}/{totalAudience}
-                  </span>
-                </div>
-                {isTaggedParticipant && (
-                  <button
-                    type="button"
-                    onClick={() => m && onToggleRead?.(m.id)}
-                    className={clsx(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-micro",
-                      hasMarkedRead
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
-                        : "bg-[#1976D2]/10 text-[#1565C0] hover:bg-[#1976D2]/12",
-                    )}
-                  >
-                    {hasMarkedRead ? (
-                      <>
-                        <CheckCircleSolidIcon className="h-3.5 w-3.5" />
-                        Đã xem
-                      </>
-                    ) : (
-                      <>
-                        <CheckIcon className="h-3.5 w-3.5" />
-                        Đánh dấu đã xem
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {readCount > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {m!.readBy!.map((r) => (
-                    <li
-                      key={r.userId}
-                      className="flex items-center justify-between gap-2 text-xs"
-                    >
-                      <span className="flex items-center gap-1.5 text-text-primary">
-                        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500" />
-                        {r.name}
-                      </span>
-                      <span className="text-text-muted">{formatReadAt(r.readAt)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {readCount === 0 && (
-                <p className="mt-2 text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                  Chưa có ai đánh dấu đã xem.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Action footer for API events */}
-          {isApiEvent && isApiOwner && (
-            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<TrashIcon className="h-4 w-4" />}
-                className="text-danger hover:bg-danger/10"
-                onClick={() => setShowApiDeleteConfirm(true)}
-              >
-                Xóa
-              </Button>
-            </div>
-          )}
-
-          <ConfirmDialog
-            isOpen={showApiDeleteConfirm}
-            onClose={() => setShowApiDeleteConfirm(false)}
-            onConfirm={async () => {
-              setShowApiDeleteConfirm(false);
-              await onDeleteApiEvent?.(detail.id);
-            }}
-            title="Xóa sự kiện"
-            message="Bạn có chắc muốn xóa sự kiện này? Hành động không thể hoàn tác."
-            confirmText="Xóa"
-            variant="danger"
-          />
-
-          {/* Action footer: chỉ người tạo mới có Sửa/Xóa */}
-          {isLocalMeeting && isCreator && (
-            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-3">
-              {!confirmDelete ? (
-                <>
-                  <Button
-                    variant="brand-outline"
-                    size="sm"
-                    leftIcon={<PencilSquareIcon className="h-4 w-4" />}
-                    onClick={() => m && onEdit?.(m)}
-                  >
-                    Sửa
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<TrashIcon className="h-4 w-4" />}
-                    className="text-danger hover:bg-danger/10"
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    Xóa
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <span className="mr-auto text-xs text-danger">
-                    Xác nhận xóa lịch họp này?
-                  </span>
-                  <Button
-                    variant="brand-outline"
-                    size="sm"
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="bg-danger hover:bg-danger/90"
-                    onClick={() => m && onDelete?.(m.id)}
-                  >
-                    Xóa
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Mở trang lịch đầy đủ để xem chi tiết lịch */}
-          {onViewFull && (
-            <div className="mt-5 border-t border-border pt-3 text-center">
-              <button
-                type="button"
-                onClick={onViewFull}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-[#1565C0] transition-micro hover:underline dark:text-[#6BA8F0]"
-              >
-                Xem chi tiết lịch →
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 class WidgetErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean }
@@ -676,8 +129,12 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   // "Thêm lịch" type chooser — họp vs cá nhân (đồng bộ với CalendarPage).
   const [eventTypeChooserOpen, setEventTypeChooserOpen] = React.useState(false);
   const [personalModalOpen, setPersonalModalOpen] = React.useState(false);
-  const [selectedDetail, setSelectedDetail] = React.useState<SelectedEventDetail | null>(null);
+  // Chi tiết sự kiện đang mở (ExtendedCalendarEvent như CalendarPage truyền vào modal).
+  const [selectedEvent, setSelectedEvent] = React.useState<ExtendedCalendarEvent | null>(null);
+  // Form sửa: lịch họp và lịch cá nhân dùng 2 form khác nhau (giống CalendarPage).
   const [editingMeeting, setEditingMeeting] = React.useState<MeetingFormData | null>(null);
+  const [editingPersonalEvent, setEditingPersonalEvent] =
+    React.useState<PersonalEventFormData | null>(null);
 
   // Calendar store - shared source of truth
   const storeEvents = useCalendarStore((s) => s.events);
@@ -688,64 +145,23 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   const createEvent = useCalendarStore((s) => s.createEvent);
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
 
-  // Store full API events for detail view
   const safeStoreEvents = React.useMemo(
     () => (Array.isArray(storeEvents) ? storeEvents : []),
     [storeEvents],
   );
-  const apiEventsMap = React.useMemo(() => {
-    const map: Record<string, NonNullable<SelectedEventDetail["apiEvent"]>> = {};
-    safeStoreEvents.forEach((event) => {
-      // Map HRCalendarEvent fields to the shape expected by SelectedEventDetail.
-      // Tên người tham gia: ưu tiên fullName của participant, fallback employee.fullName.
-      const participantNames = event.participants
-        ? event.participants
-            .map((p) => p.fullName ?? p.employee?.fullName ?? "")
-            .filter(Boolean)
-        : [];
-      // Chủ trì / hình thức / khách mời free-text nằm trong metadata (giống CalendarPage).
-      const meta =
-        event.metadata && typeof event.metadata === "object"
-          ? (event.metadata as Record<string, unknown>)
-          : {};
-      const meetingChairman =
-        typeof meta.meetingChairman === "string" ? meta.meetingChairman : null;
-      const meetingFormat =
-        meta.meetingFormat === "online" || meta.meetingFormat === "offline"
-          ? meta.meetingFormat
-          : null;
-      const freeTextNames = Array.isArray(meta.attendees)
-        ? meta.attendees.filter((a): a is string => typeof a === "string")
-        : [];
-      map[event.id] = {
-        id: event.id,
-        title: localizeEventTitle(event.title),
-        startAt: event.startAt,
-        endAt: event.endAt,
-        description: event.description,
-        meetingChairman,
-        meetingFormat,
-        meetingLocation: event.location ?? null,
-        attendees: [...participantNames, ...freeTextNames],
-        visibility: event.visibility,
-        ownerUserId: event.ownerId,
-      };
-    });
-    return map;
-  }, [safeStoreEvents]);
 
-  const currentUser = useAuthStore((s) => s.user);
-  const currentUserId = currentUser?.id;
-  const currentUserName = React.useMemo(
-    () =>
-      currentUser?.effectiveDisplayName ||
-      currentUser?.displayName ||
-      currentUser?.fullName ||
-      currentUser?.fullNameFromHR ||
-      currentUser?.username ||
-      "",
-    [currentUser],
+  // Extended detail cho từng event (chairman/format/location/visibility/quyền) —
+  // DÙNG CHUNG mapping với CalendarPage để popup chi tiết giống hệt /calendar.
+  const apiEventsMap = React.useMemo(
+    () => buildExtendedEventMap(safeStoreEvents),
+    [safeStoreEvents],
   );
+
+  // Raw HR event của item đang chọn — mang roster người tham gia + phản hồi + đính kèm.
+  const selectedHrEvent = React.useMemo<HRCalendarEvent | undefined>(() => {
+    if (!selectedEvent) return undefined;
+    return safeStoreEvents.find((e) => e.id === selectedEvent.id);
+  }, [selectedEvent, safeStoreEvents]);
 
   const weekDays = React.useMemo(() => {
     const base = new Date(today);
@@ -850,6 +266,14 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
     (a.time ?? "").localeCompare(b.time ?? "");
 
+  // Click event ở widget → mở popup chi tiết ĐẦY ĐỦ ngay tại chỗ (dùng chung
+  // EventDetailModal với /calendar). Ưu tiên extended detail đã map; fallback
+  // event của lưới nếu store chưa có.
+  const handleEventClick = (event: CalendarEvent) => {
+    const extended = apiEventsMap[event.id];
+    setSelectedEvent(extended ?? (event as ExtendedCalendarEvent));
+  };
+
   // Mở bộ chọn loại lịch (họp / cá nhân) với ngày điền sẵn.
   const openEventTypeChooser = (day: Date) => {
     setEditingMeeting(null);
@@ -880,6 +304,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
       if (chairmanRef) refs.add(chairmanRef);
 
+      // Sửa lịch có id → update; không có id → tạo mới.
       const input = {
         title: data.title,
         description: data.notes || undefined,
@@ -896,18 +321,20 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
         meetingFormat: data.format,
       };
 
-      const result = await createEvent(input);
+      const result = data.id
+        ? await hrCalendarApi.updateEvent(data.id, input)
+        : await createEvent(input);
 
       if (result) {
-        toast.success("Đã thêm lịch họp");
-        // Refetch to update the calendar
+        toast.success(data.id ? "Đã cập nhật lịch họp" : "Đã thêm lịch họp");
+        setEditingMeeting(null);
         if (weekRange.start && weekRange.end) {
           await fetchEvents(weekRange.start, weekRange.end);
         }
       }
     } catch (error) {
-      console.error("Failed to create event:", error);
-      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+      console.error("Failed to save meeting:", error);
+      toast.error("Không thể lưu lịch. Vui lòng thử lại.");
     }
   };
 
@@ -931,34 +358,98 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
         timezone,
       };
 
-      const result = await createEvent(input);
+      const result = data.id
+        ? await hrCalendarApi.updateEvent(data.id, input)
+        : await createEvent(input);
       if (result) {
-        toast.success("Đã thêm lịch cá nhân");
+        toast.success(data.id ? "Đã cập nhật lịch cá nhân" : "Đã thêm lịch cá nhân");
+        setEditingPersonalEvent(null);
         if (weekRange.start && weekRange.end) {
           await fetchEvents(weekRange.start, weekRange.end);
         }
       }
     } catch (error) {
-      console.error("Failed to create personal event:", error);
-      toast.error("Không thể thêm lịch. Vui lòng thử lại.");
+      console.error("Failed to save personal event:", error);
+      toast.error("Không thể lưu lịch. Vui lòng thử lại.");
     }
   };
 
-  const handleEditMeeting = (meeting: MeetingFormData) => {
-    setSelectedDetail(null);
-    setEditingMeeting(meeting);
-    setModalDefaultDate(meeting.date);
+  // Chỉnh sửa event đang mở → mở form phù hợp (họp / cá nhân), điền sẵn dữ liệu.
+  // Logic đồng bộ với CalendarPage.handleEditEvent.
+  const handleEditEvent = () => {
+    const ev = selectedEvent;
+    if (!ev) return;
+    if (ev.canEdit === false) {
+      toast.warning("Bạn không có quyền chỉnh sửa sự kiện này.");
+      return;
+    }
+    if (!ev.startAt) {
+      toast.warning("Chỉ có thể chỉnh sửa lịch tạo từ hệ thống");
+      return;
+    }
+
+    const startDate = toLocalDateString(ev.startAt);
+
+    if (ev.type === "personal") {
+      const personalData: PersonalEventFormData = {
+        id: ev.id,
+        title: ev.title,
+        date: startDate,
+        endDate: ev.endAt ? toLocalDateString(ev.endAt) : startDate,
+        startTime: ev.startAt ? toLocalTimeString(ev.startAt) : "08:00",
+        endTime: ev.endAt ? toLocalTimeString(ev.endAt) : "09:00",
+        notes: ev.description || "",
+        visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? ev.visibility),
+        attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
+      };
+      setSelectedEvent(null);
+      setEditingPersonalEvent(personalData);
+      return;
+    }
+
+    const meta = getMeetingMetadata(selectedHrEvent);
+    const participants: MeetingFormData["participants"] = selectedHrEvent
+      ? [
+          ...selectedHrEvent.participants.map((p) => ({
+            name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "N/A",
+            employeeId: p.employeeId,
+            employeeCode: p.employeeCode ?? p.employee?.employeeCode ?? undefined,
+            userId: p.authUserId ?? undefined,
+          })),
+          ...(meta.attendees ?? []).map((name) => ({ name })),
+        ]
+      : (ev.attendees || []).map((name) => ({ name }));
+
+    const data: MeetingFormData = {
+      id: ev.id,
+      title: ev.title,
+      date: startDate,
+      startTime: ev.startAt ? toLocalTimeString(ev.startAt) : "08:00",
+      endTime: ev.endAt ? toLocalTimeString(ev.endAt) : "09:00",
+      chairman: meta.meetingChairman ?? "",
+      participants,
+      format: meta.meetingFormat === "online" ? "online" : "offline",
+      visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? ev.visibility),
+      location: ev.meetingLocation || "",
+      notes: ev.description || "",
+      attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
+      createdById: ev.ownerId,
+    };
+    setSelectedEvent(null);
+    setEditingMeeting(data);
     setModalOpen(true);
   };
 
-  const handleDeleteMeeting = async (meetingId: string) => {
+  const handleDeleteEvent = async () => {
+    if (!selectedEvent) return;
     try {
-      await deleteEvent(meetingId);
-      toast.success("Đã xóa lịch");
-      setSelectedDetail(null);
-      // Refetch to update the calendar
-      if (weekRange.start && weekRange.end) {
-        await fetchEvents(weekRange.start, weekRange.end);
+      const success = await deleteEvent(selectedEvent.id);
+      if (success) {
+        toast.success("Đã xóa lịch");
+        setSelectedEvent(null);
+        if (weekRange.start && weekRange.end) {
+          await fetchEvents(weekRange.start, weekRange.end);
+        }
       }
     } catch (error) {
       console.error("Failed to delete event:", error);
@@ -966,15 +457,21 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     }
   };
 
-  // Handler for deleting API events
-  const handleDeleteApiEvent = async (eventId: string) => {
-    await handleDeleteMeeting(eventId);
-  };
-
-  // Note: handleToggleRead is not supported by API yet - disabled for API-based events
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleToggleRead = (_meetingId: string) => {
-    // Read receipts not yet supported by backend
+  // Người được mời phản hồi (Tham gia / Từ chối) → lưu qua HR API rồi refetch.
+  const handleRespond = async (response: "ACCEPTED" | "DECLINED") => {
+    if (!selectedEvent) return;
+    try {
+      await hrCalendarApi.updateMyResponse(selectedEvent.id, response);
+      toast.success(
+        response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
+      );
+      if (weekRange.start && weekRange.end) {
+        await fetchEvents(weekRange.start, weekRange.end);
+      }
+    } catch (error) {
+      console.error("Failed to update participant response:", error);
+      toast.error("Không thể cập nhật phản hồi");
+    }
   };
 
   const isToday = (d: Date) =>
@@ -1102,7 +599,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       </Modal>
 
       <MeetingFormModal
-        isOpen={modalOpen}
+        isOpen={modalOpen || !!editingMeeting}
         onClose={() => {
           setModalOpen(false);
           setEditingMeeting(null);
@@ -1122,35 +619,34 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       />
 
       <PersonalEventFormModal
-        isOpen={personalModalOpen}
-        onClose={() => setPersonalModalOpen(false)}
-        onBack={() => {
+        isOpen={personalModalOpen || !!editingPersonalEvent}
+        onClose={() => {
           setPersonalModalOpen(false);
-          setEventTypeChooserOpen(true);
+          setEditingPersonalEvent(null);
         }}
+        onBack={
+          editingPersonalEvent
+            ? undefined
+            : () => {
+                setPersonalModalOpen(false);
+                setEventTypeChooserOpen(true);
+              }
+        }
         onSave={handleSavePersonalEvent}
         defaultDate={modalDefaultDate}
+        initialData={editingPersonalEvent}
       />
 
-      {selectedDetail && (
-        <EventDetailPopup
-          detail={selectedDetail}
-          currentUserId={currentUserId}
-          currentUserName={currentUserName}
-          onClose={() => setSelectedDetail(null)}
-          onEdit={handleEditMeeting}
-          onDelete={handleDeleteMeeting}
-          onDeleteApiEvent={handleDeleteApiEvent}
-          onToggleRead={handleToggleRead}
-          onViewFull={() =>
-            navigate("/calendar", {
-              state: {
-                openEventId: selectedDetail.apiEvent?.id ?? selectedDetail.source?.id,
-                openEventSource: selectedDetail.source,
-                view: "week",
-              },
-            })
-          }
+      {/* Chi tiết sự kiện — dùng CHUNG EventDetailModal với /calendar (đầy đủ:
+          quyền xem, đính kèm, roster người tham gia + phản hồi, Xóa/Chỉnh sửa). */}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          hrEvent={selectedHrEvent}
+          onClose={() => setSelectedEvent(null)}
+          onEdit={handleEditEvent}
+          onDelete={handleDeleteEvent}
+          onRespond={handleRespond}
         />
       )}
 
@@ -1217,7 +713,6 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
           // trải đủ các ngày từ startAt→endAt, không chỉ ngày bắt đầu.
           const dayEvents = events.filter((e) => eventOccursOnDay(e, day));
           const isWeekend = i >= 5;
-          const dayStr = formatDateStr(day);
 
           // Chỉ họp & cá nhân; sắp theo giờ. Lịch dài hạn (nhiều ngày) render
           // dạng thanh trải ngang (bắt đầu → dây nối → kết thúc đỏ).
@@ -1227,32 +722,18 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
             title: string;
             type: CalendarEvent["type"];
             isMultiDay: boolean;
-            kind: "meeting" | "personal";
-            detail: SelectedEventDetail;
+            source: CalendarEvent;
           }> = dayEvents
             .slice()
             .sort(sortByTime)
-            .map((e) => {
-              const kind: "meeting" | "personal" =
-                e.type === "meeting" ? "meeting" : "personal";
-              return {
-                id: e.id,
-                time: e.time,
-                title: e.title,
-                type: e.type,
-                isMultiDay: isMultiDayEvent(e),
-                kind,
-                detail: {
-                  kind,
-                  id: e.id,
-                  title: e.title,
-                  date: dayStr,
-                  time: e.time,
-                  source: e,
-                  apiEvent: apiEventsMap[e.id],
-                },
-              };
-            })
+            .map((e) => ({
+              id: e.id,
+              time: e.time,
+              title: e.title,
+              type: e.type,
+              isMultiDay: isMultiDayEvent(e),
+              source: e,
+            }))
             // Ghim lịch dài ngày lên đầu để thanh trải nằm cùng hàng giữa các
             // ngày → nối liền thành "dây nối" liên tục; còn lại sắp theo giờ.
             .sort((a, b) => {
@@ -1326,7 +807,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                   // Lịch dài ngày → thanh TRẢI NGANG: ngày bắt đầu hiện tiêu đề,
                   // ngày giữa chỉ là dây nối, ngày kết thúc tô đỏ (#DC2626).
                   // Margin âm để bar lấn vào padding ô, nối liền qua các ngày.
-                  const span = ev.isMultiDay && ev.detail.source ? getMultiDayPosition(ev.detail.source, day) : null;
+                  const span = ev.isMultiDay ? getMultiDayPosition(ev.source, day) : null;
                   if (span) {
                     const isEnd = span === "end";
                     const isStart = span === "start";
@@ -1337,7 +818,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                         <button
                           key={ev.id}
                           type="button"
-                          onClick={() => setSelectedDetail(ev.detail)}
+                          onClick={() => handleEventClick(ev.source)}
                           title={ev.title}
                           className="-mx-2 flex h-5 items-center sm:-mx-2.5"
                         >
@@ -1349,7 +830,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       <button
                         key={ev.id}
                         type="button"
-                        onClick={() => setSelectedDetail(ev.detail)}
+                        onClick={() => handleEventClick(ev.source)}
                         title={isEnd ? `${ev.title} · Kết thúc` : ev.title}
                         className={clsx(
                           "relative flex h-5 min-w-0 items-center px-1.5 text-left text-[10px] font-semibold leading-none transition-micro hover:brightness-95 dark:hover:brightness-110 sm:text-[11px]",
@@ -1379,7 +860,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                     <button
                       key={ev.id}
                       type="button"
-                      onClick={() => setSelectedDetail(ev.detail)}
+                      onClick={() => handleEventClick(ev.source)}
                       className={clsx(
                         "flex min-w-0 w-full flex-col rounded border px-1.5 py-1 text-left text-[10px] leading-snug sm:text-[11px]",
                         "hover:brightness-95 dark:hover:brightness-110 transition-micro",
@@ -1390,9 +871,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       title={ev.title}
                     >
                       {(() => {
-                        const range = ev.detail.source
-                          ? formatEventTimeRange(ev.detail.source)
-                          : null;
+                        const range = formatEventTimeRange(ev.source);
                         const display = range ?? ev.time;
                         return display ? (
                           <span className="font-bold opacity-80">{display}</span>
@@ -1400,7 +879,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       })()}
                       <span className="truncate">{ev.title}</span>
                       {(() => {
-                        const ext = ev.detail.source as ExtendedCalendarEvent | undefined;
+                        const ext = ev.source as ExtendedCalendarEvent | undefined;
                         const people: Attendee[] = ext?.attendeeAvatars?.length
                           ? ext.attendeeAvatars
                           : (ext?.attendees ?? []).map((name) => ({ name }));
@@ -1437,7 +916,7 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
         </span>
         <button
           type="button"
-          onClick={() => navigate("/calendar")}
+          onClick={() => navigate("/calendar", { state: { view: "month" } })}
           className="text-xs font-semibold text-[#1565C0] transition-micro hover:text-[#1976D2] active:scale-95"
         >
           Xem lịch đầy đủ →

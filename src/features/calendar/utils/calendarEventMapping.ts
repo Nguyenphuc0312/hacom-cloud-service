@@ -1,5 +1,26 @@
-import type { HRCalendarEvent } from "../../api/hrCalendarApi";
+import type { HRCalendarEvent, CalendarAttachmentDto } from "../../api/hrCalendarApi";
 import type { CalendarEvent, ExtendedCalendarEvent, EventType } from "../data/calendarEvents";
+import type { CalendarLocalAttachment } from "../../../components/ui/CalendarAttachmentZone";
+
+const isImageMime = (mime: string | null | undefined) => (mime ?? "").startsWith("image/");
+
+/**
+ * Map attachment đã lưu ở BE (HRCalendarEvent.attachments) → dạng form REMOTE,
+ * để pre-fill khi mở form sửa → không mất file cũ. Dùng chung cho CalendarPage
+ * và WeeklyCalendarWidget.
+ */
+export const remoteAttachmentsToForm = (
+  attachments: CalendarAttachmentDto[] | null | undefined,
+): CalendarLocalAttachment[] =>
+  (attachments ?? []).map((a) => ({
+    id: a.fileId,
+    previewUrl: isImageMime(a.mimeType) ? (a.thumbnailUrl ?? a.url) : null,
+    name: a.filename ?? a.fileId,
+    sizeBytes: a.sizeBytes ?? 0,
+    mimeType: a.mimeType ?? "application/octet-stream",
+    remoteFileId: a.fileId,
+    downloadUrl: a.url ?? undefined,
+  }));
 
 const VISIBLE_FALLBACK_TYPE: EventType = "personal";
 
