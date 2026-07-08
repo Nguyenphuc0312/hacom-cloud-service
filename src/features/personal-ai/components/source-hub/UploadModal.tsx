@@ -209,11 +209,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     animate={{ opacity: 1 }}
                     className="flex flex-col items-center gap-4 py-10"
                   >
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#C41E3A]/10">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1565C0]/10">
                       <Loader2Icon
                         size={28}
                         strokeWidth={1.8}
-                        className="animate-spin text-[#C41E3A]"
+                        className="animate-spin text-[#1565C0]"
                       />
                     </div>
                     <div className="w-full">
@@ -221,13 +221,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         <span className="truncate max-w-[200px]">
                           {state.file.name}
                         </span>
-                        <span className="shrink-0 font-medium text-[#C41E3A]">
+                        <span className="shrink-0 font-medium text-[#1565C0]">
                           {state.progress}%
                         </span>
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
                         <motion.div
-                          className="h-full rounded-full bg-gradient-to-r from-[#C41E3A] to-[#FFC857]"
+                          className="h-full rounded-full bg-gradient-to-r from-[#1565C0] to-[#1976D2]"
                           initial={{ width: 0 }}
                           animate={{ width: `${state.progress}%` }}
                           transition={{ ease: "linear" }}
@@ -251,10 +251,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     className={clsx(
                       "flex cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all duration-150",
                       state.phase === "dragging"
-                        ? "border-[#C41E3A]/60 bg-[#C41E3A]/5 scale-[1.01]"
+                        ? "border-[#1565C0]/60 bg-[#1565C0]/5 scale-[1.01]"
                         : state.phase === "error"
                           ? "border-danger/40 bg-danger/5"
-                          : "border-border hover:border-[#FFC857]/50 hover:bg-[#FFC857]/4",
+                          : "border-border hover:border-[#1976D2]/50 hover:bg-[#1976D2]/4",
                     )}
                   >
                     <motion.div
@@ -267,7 +267,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       className={clsx(
                         "flex h-14 w-14 items-center justify-center rounded-2xl",
                         state.phase === "dragging"
-                          ? "bg-[#C41E3A]/15 text-[#C41E3A]"
+                          ? "bg-[#1565C0]/15 text-[#1565C0]"
                           : state.phase === "error"
                             ? "bg-danger/10 text-danger"
                             : "bg-surface-hover text-text-muted",
@@ -301,7 +301,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           </p>
                           <p className="mt-1 text-xs text-text-muted">
                             hoặc{" "}
-                            <span className="font-medium text-[#C41E3A]">
+                            <span className="font-medium text-[#1565C0]">
                               nhấn để chọn tệp
                             </span>
                           </p>

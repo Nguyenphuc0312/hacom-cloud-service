@@ -119,11 +119,11 @@ const CitationChips: React.FC<{ citations: PersonalCitation[] }> = ({
       {unique.map((c, idx) => (
         <div
           key={`${c.document_id}-${idx}`}
-          className="flex items-center gap-1 rounded-lg border border-[#FFC857]/25 bg-[#FFC857]/8 px-2 py-1"
+          className="flex items-center gap-1 rounded-lg border border-[#1976D2]/25 bg-[#1976D2]/8 px-2 py-1"
           title={c.excerpt}
         >
-          <FileTextIcon size={11} strokeWidth={2} className="text-[#C41E3A] shrink-0" />
-          <span className="max-w-[150px] truncate text-[11px] font-medium text-[#C41E3A]">
+          <FileTextIcon size={11} strokeWidth={2} className="text-[#1565C0] shrink-0" />
+          <span className="max-w-[150px] truncate text-[11px] font-medium text-[#1565C0]">
             {c.document_name.replace(/\.pdf$/i, "")}
           </span>
           {c.page != null && (
@@ -161,7 +161,6 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
   const [copied, setCopied] = useState(false);
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const [loadingWorkFileId, setLoadingWorkFileId] = useState<number | null>(null);
-  const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
   const patchMessage = usePersonalAiStore((s) => s.patchMessage);
   const isUser = message.role === "user";
@@ -386,8 +385,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     >
       <div
         className={clsx(
-          "mx-auto w-full px-4 py-5 transition-[max-width] duration-300 ease-out",
-          isSourcePanelOpen ? "max-w-[640px]" : "max-w-[960px]",
+          "mx-auto w-full max-w-[1600px] px-6 py-5 lg:px-10 xl:px-16",
         )}
       >
         <div
@@ -405,11 +403,11 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               isAssistant && !message.isError
                 ? {
                     background:
-                      "linear-gradient(135deg, #C41E3A 0%, #D32F2F 60%, #FFC857 100%)",
+                      "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
                   }
                 : isAssistant && message.isError
                   ? undefined
-                  : { background: "rgba(196,30,58,0.7)" }
+                  : { background: "rgba(21,101,192,0.85)" }
             }
           >
             {isAssistant ? (

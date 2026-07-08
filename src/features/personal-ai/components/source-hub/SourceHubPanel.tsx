@@ -55,7 +55,7 @@ export const SourceHubPanel: React.FC = () => {
         <div className="flex-shrink-0 px-4 pt-4 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#C41E3A] to-[#D32F2F]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#1565C0] to-[#1976D2]">
                 <BookMarkedIcon size={14} strokeWidth={2} className="text-white" />
               </div>
               <div>
@@ -73,10 +73,10 @@ export const SourceHubPanel: React.FC = () => {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  className="flex items-center gap-1 rounded-full bg-[#C41E3A]/10 px-2 py-1"
+                  className="flex items-center gap-1 rounded-full bg-[#1565C0]/10 px-2 py-1"
                 >
-                  <ZapIcon size={10} strokeWidth={2.5} className="text-[#C41E3A]" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#C41E3A]">
+                  <ZapIcon size={10} strokeWidth={2.5} className="text-[#1565C0]" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#1565C0]">
                     RAG
                   </span>
                 </motion.div>
@@ -88,7 +88,7 @@ export const SourceHubPanel: React.FC = () => {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#C41E3A]/30 bg-[#C41E3A]/4 px-3 py-2.5 text-sm font-medium text-[#C41E3A] transition-all hover:border-[#C41E3A]/50 hover:bg-[#C41E3A]/8 active:scale-[0.98]"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#1565C0]/30 bg-[#1565C0]/4 px-3 py-2.5 text-sm font-medium text-[#1565C0] transition-all hover:border-[#1565C0]/50 hover:bg-[#1565C0]/8 active:scale-[0.98]"
           >
             <PlusIcon size={16} strokeWidth={2.5} />
             Thêm tài liệu
@@ -107,7 +107,7 @@ export const SourceHubPanel: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Tìm tài liệu…"
-                className="w-full rounded-xl border border-border bg-surface py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-[#C41E3A]/40 focus:outline-none focus:ring-1 focus:ring-[#C41E3A]/20 transition-colors"
+                className="w-full rounded-xl border border-border bg-surface py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-[#1565C0]/40 focus:outline-none focus:ring-1 focus:ring-[#1565C0]/20 transition-colors"
               />
               {searchQuery && (
                 <button
@@ -144,8 +144,8 @@ export const SourceHubPanel: React.FC = () => {
             >
               {allSelected ? (
                 <>
-                  <CheckSquare2Icon size={12} strokeWidth={2} className="text-[#C41E3A]" />
-                  <span className="text-[#C41E3A]">Bỏ tất cả</span>
+                  <CheckSquare2Icon size={12} strokeWidth={2} className="text-[#1565C0]" />
+                  <span className="text-[#1565C0]">Bỏ tất cả</span>
                 </>
               ) : (
                 <>
@@ -211,7 +211,7 @@ export const SourceHubPanel: React.FC = () => {
           className={clsx(
             "flex-shrink-0 mx-3 mb-3 rounded-2xl p-3 transition-all duration-300",
             isRagMode
-              ? "bg-gradient-to-br from-[#C41E3A]/8 to-[#FFC857]/6 border border-[#FFC857]/20"
+              ? "bg-gradient-to-br from-[#1565C0]/8 to-[#1976D2]/6 border border-[#1976D2]/20"
               : "bg-surface-hover",
           )}
         >
@@ -220,7 +220,7 @@ export const SourceHubPanel: React.FC = () => {
               className={clsx(
                 "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md",
                 isRagMode
-                  ? "bg-[#C41E3A]/15 text-[#C41E3A]"
+                  ? "bg-[#1565C0]/15 text-[#1565C0]"
                   : "bg-surface-active text-text-muted",
               )}
             >

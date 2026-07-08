@@ -111,7 +111,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
             message.role === "user" ? "bg-surface" : "bg-surface-overlay/50",
           )}
         >
-          <div className="max-w-[768px] mx-auto px-4 py-6">
+          <div className="max-w-[1600px] mx-auto px-6 py-6 lg:px-10 xl:px-16">
             <div
               className={clsx(
                 "flex gap-4",
@@ -266,7 +266,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
         messages.length > 0 &&
         messages[messages.length - 1].role === "user" && (
           <div className="w-full bg-surface-overlay/50">
-            <div className="max-w-[768px] mx-auto px-4 py-6">
+            <div className="max-w-[1600px] mx-auto px-6 py-6 lg:px-10 xl:px-16">
               <div className="flex gap-4">
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white mt-0.5"

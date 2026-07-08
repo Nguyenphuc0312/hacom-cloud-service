@@ -69,11 +69,11 @@ export const SourceCard: React.FC<SourceCardProps> = ({
         if (e.key === " " || e.key === "Enter") handleToggle();
       }}
       className={clsx(
-        "group relative flex cursor-pointer select-none items-start gap-3 rounded-2xl border p-3.5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC857]/40",
+        "group relative flex cursor-pointer select-none items-start gap-3 rounded-2xl border p-3.5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40",
         isUploading && "cursor-default opacity-60",
         isError && "cursor-default border-danger/30 bg-danger/5",
         isSelected && !isError && !isUploading
-          ? "border-[#FFC857]/40 bg-[#FFC857]/6 shadow-sm shadow-[#FFC857]/8"
+          ? "border-[#1976D2]/40 bg-[#1976D2]/6 shadow-sm shadow-[#1976D2]/8"
           : !isError && !isUploading
             ? "border-border bg-surface hover:border-border-strong hover:shadow-sm"
             : "",
@@ -84,7 +84,7 @@ export const SourceCard: React.FC<SourceCardProps> = ({
         className={clsx(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
           isSelected
-            ? "bg-[#C41E3A]/10 text-[#C41E3A]"
+            ? "bg-[#1565C0]/10 text-[#1565C0]"
             : isError
               ? "bg-danger/10 text-danger"
               : "bg-surface-hover text-text-muted group-hover:bg-surface-active",
@@ -133,8 +133,8 @@ export const SourceCard: React.FC<SourceCardProps> = ({
 
         {/* "Used in conversation" tag */}
         {isSelected && !isUploading && !isError && (
-          <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[#C41E3A]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#C41E3A]" />
+          <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[#1565C0]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#1565C0]" />
             Đang sử dụng
           </div>
         )}
@@ -148,7 +148,7 @@ export const SourceCard: React.FC<SourceCardProps> = ({
             className={clsx(
               "flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-150",
               isSelected
-                ? "border-[#C41E3A] bg-gradient-to-br from-[#C41E3A] to-[#D32F2F]"
+                ? "border-[#1565C0] bg-gradient-to-br from-[#1565C0] to-[#1976D2]"
                 : "border-border group-hover:border-border-strong",
             )}
           >
