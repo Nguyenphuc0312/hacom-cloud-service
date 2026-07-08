@@ -464,6 +464,7 @@ export const FriendsPage: React.FC = () => {
         : "friends",
   );
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
+  const [friendFilter, setFriendFilter] = useState("");
   const [query, setQuery] = useState(initialQuery);
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -863,6 +864,18 @@ export const FriendsPage: React.FC = () => {
     [friends, enrichedNameMap, enrichedHrMap],
   );
 
+  // ponytail: lọc client-side trong số bạn ĐÃ tải. Nếu cần tìm bạn ở trang chưa
+  // tải (list rất dài), nâng lên gọi API /friends?q= khi backend hỗ trợ.
+  const visibleFriendItems = useMemo(() => {
+    const q = friendFilter.trim().toLowerCase();
+    if (!q) return friendItems;
+    return friendItems.filter((friend) => {
+      const name = toDisplayName(friend).toLowerCase();
+      const username = (friend.username ?? "").toLowerCase();
+      return name.includes(q) || username.includes(q);
+    });
+  }, [friendItems, friendFilter]);
+
   const handleListScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
@@ -872,14 +885,7 @@ export const FriendsPage: React.FC = () => {
         return;
       }
 
-      if (activeTab === "friends") {
-        if (isFriendsLoading || isFriendsLoadingMore || !friendsHasNext) {
-          return;
-        }
-        void loadMoreFriends();
-        return;
-      }
-
+      // Bạn bè: KHÔNG auto-load — dùng nút "Xem thêm" thủ công (nhẹ tải hơn).
       if (activeTab === "discover" && debouncedQuery.trim().length < 2) {
         if (
           isSuggestionsLoading ||
@@ -894,12 +900,8 @@ export const FriendsPage: React.FC = () => {
     [
       activeTab,
       debouncedQuery,
-      friendsHasNext,
-      isFriendsLoading,
-      isFriendsLoadingMore,
       isSuggestionsLoading,
       isSuggestionsLoadingMore,
-      loadMoreFriends,
       loadMoreSuggestions,
       suggestionsHasNext,
     ],
@@ -935,30 +937,55 @@ export const FriendsPage: React.FC = () => {
       );
     }
 
+    const isFiltering = friendFilter.trim().length > 0;
+
     return (
-      <div className="space-y-1">
-        {friendItems.map((friend) => (
-          <ContactRow
-            key={friend.id}
-            user={friend}
-            selected={previewTarget?.userId === friend.id}
-            onClick={() => setPreviewTarget(profileFromSummary(friend))}
-            action={renderRelationshipAction(friend)}
+      <div className="space-y-2">
+        <Input
+          type="text"
+          value={friendFilter}
+          onChange={(event) => setFriendFilter(event.target.value)}
+          placeholder={t("friends:filterPlaceholder")}
+          leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
+        />
+
+        {isFiltering && visibleFriendItems.length === 0 ? (
+          <StateBlock
+            variant="search-empty"
+            icon={<MagnifyingGlassIcon className="h-6 w-6" />}
+            title={t("friends:noSearchResult")}
+            description={t("friends:filterHintBody")}
+            className="border-dashed shadow-none"
           />
-        ))}
-        {isFriendsLoadingMore ? <DirectorySkeleton count={2} /> : null}
-        {friendsLoadMoreError ? (
-          <div className="px-2 py-2 text-center">
-            <Button
-              type="button"
-              size="sm"
-              variant="brand-outline"
-              onClick={() => void loadMoreFriends()}
-            >
-              {t("common:actions.retry")}
-            </Button>
+        ) : (
+          <div className="space-y-1">
+            {visibleFriendItems.map((friend) => (
+              <ContactRow
+                key={friend.id}
+                user={friend}
+                selected={previewTarget?.userId === friend.id}
+                onClick={() => setPreviewTarget(profileFromSummary(friend))}
+                action={renderRelationshipAction(friend)}
+              />
+            ))}
+            {isFriendsLoadingMore ? <DirectorySkeleton count={2} /> : null}
+            {/* Nút "Xem thêm" ẩn khi đang lọc — loadMore không giúp cho filter cục bộ. */}
+            {!isFiltering && !isFriendsLoadingMore && friendsHasNext ? (
+              <div className="px-2 py-2 text-center">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="brand-outline"
+                  onClick={() => void loadMoreFriends()}
+                >
+                  {friendsLoadMoreError
+                    ? t("common:actions.retry")
+                    : `${t("common:actions.loadMore")} (${friendItems.length}/${friendsTotal})`}
+                </Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        )}
       </div>
     );
   };

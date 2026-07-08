@@ -16,6 +16,8 @@
     "sent": "Đã gửi"
   },
   "searchPlaceholder": "Tìm theo username, tên, email hoặc số điện thoại",
+  "filterPlaceholder": "Tìm trong danh sách bạn bè",
+  "filterHintBody": "Không có bạn bè nào khớp. Thử từ khóa khác.",
   "searchHint": "Nhập ít nhất 2 ký tự",
   "noSearchResult": "Không tìm thấy người dùng",
   "discoverHintTitle": "Tìm người phù hợp mà không rời khỏi ngữ cảnh",

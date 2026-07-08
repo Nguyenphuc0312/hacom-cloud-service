@@ -16,6 +16,8 @@
     "sent": "Sent"
   },
   "searchPlaceholder": "Search by username/email/phone",
+  "filterPlaceholder": "Filter your friends",
+  "filterHintBody": "No friends match. Try another keyword.",
   "searchHint": "Enter at least 2 characters",
   "noSearchResult": "No users found",
   "discoverHintTitle": "Find people without breaking your flow",
