@@ -169,6 +169,11 @@ interface FriendshipStoreState {
     page?: number;
     limit?: number;
     append?: boolean;
+    /**
+     * Refresh tải gộp N trang (limit lớn) nhưng phải GIỮ friendsLimit = page size
+     * gốc để loadMore kế tiếp không nhảy cóc. Xem refreshDirectory.
+     */
+    keepPageSize?: boolean;
   }) => Promise<void>;
   loadMoreFriends: () => Promise<void>;
   fetchIncomingRequests: () => Promise<void>;
@@ -919,12 +924,17 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
           friends: mergedFriends,
         });
 
+        const pageSize = state.friendsLimit || FRIENDS_PAGE_SIZE;
         return {
           ...next,
           ...toIndexedFields(next),
           friendsTotal: relationPage.total ?? next.friends.length,
-          friendsPage: relationPage.page,
-          friendsLimit: relationPage.limit,
+          // Refresh gộp N trang: giữ page size gốc + tính lại trang cuối đã tải
+          // (theo số bạn thực có) để loadMore kế tiếp lấy đúng trang tiếp theo.
+          friendsPage: options?.keepPageSize
+            ? Math.max(1, Math.ceil(next.friends.length / pageSize))
+            : relationPage.page,
+          friendsLimit: options?.keepPageSize ? pageSize : relationPage.limit,
           friendsHasNext: relationPage.hasNext,
           friendsError: null,
           friendsLoadMoreError: null,
@@ -1088,7 +1098,18 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
       ];
 
       if (includeFullSnapshot) {
-        tasks.push(get().fetchFriends());
+        // Giữ nguyên số trang user đã cuộn tới: refresh tải gộp page 1..N trong 1
+        // request (limit = N × pageSize), tránh cắt danh sách về 20 người ("bị đá ra").
+        const s = get();
+        const pageSize = s.friendsLimit || FRIENDS_PAGE_SIZE;
+        const pagesLoaded = Math.max(1, s.friendsPage || 1);
+        tasks.push(
+          get().fetchFriends({
+            page: 1,
+            limit: pagesLoaded * pageSize,
+            keepPageSize: true,
+          }),
+        );
       }
 
       await Promise.all(tasks);
