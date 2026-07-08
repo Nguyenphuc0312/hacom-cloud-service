@@ -94,6 +94,11 @@ const ImagePreviewModal = React.lazy(
 const FilePreviewModal = React.lazy(
   () => import("../components/modals/FilePreviewModal"),
 );
+const SharedContentModal = React.lazy(() =>
+  import("../components/info/shared-resources/SharedContentModal").then((m) => ({
+    default: m.SharedContentModal,
+  })),
+);
 
 type GalleryImageWithAttachment = GalleryImage & {
   attachmentId?: string;
@@ -298,6 +303,24 @@ const ImagePreviewModalGallery: React.FC<{
     };
   }, [convId, preloadAttachmentKey, preloadAttachmentIds, previewUrls]);
 
+  const [showArchive, setShowArchive] = React.useState(false);
+
+  if (showArchive && convId) {
+    // "Xem tất cả" → hand off to the full Kho lưu trữ (media tab). Closing it
+    // returns to the timeline, not the lightbox — same as tapping "xem chi tiết".
+    return (
+      <SharedContentModal
+        isOpen
+        conversationId={convId}
+        defaultTab="media"
+        onClose={() => {
+          setShowArchive(false);
+          onClose();
+        }}
+      />
+    );
+  }
+
   return (
     <ImagePreviewModal
       isOpen
@@ -305,6 +328,7 @@ const ImagePreviewModalGallery: React.FC<{
       images={images}
       initialIndex={initialIndex}
       onIndexChange={setCurrentIndex}
+      onViewAll={convId ? () => setShowArchive(true) : undefined}
     />
   );
 };
