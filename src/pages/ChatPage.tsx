@@ -82,6 +82,7 @@ import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
 import { getCachedUserProfile } from "../services/userProfileCache";
 import { fileApi } from "../services/api";
+import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -112,11 +113,16 @@ const isImageAttachment = (attachment: Attachment): boolean =>
   attachment.mimeType?.startsWith("image/") === true ||
   /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(attachment.fileName ?? "");
 
+/** Filmstrip shows the most-recent images; must stay in sync with FILMSTRIP_MAX in the modal. */
+const LIGHTBOX_FILMSTRIP_MAX = 15;
+
 const getLightboxPreloadIds = (
   images: readonly GalleryImageWithAttachment[],
   currentIndex: number,
 ): string[] => {
   if (images.length === 0) return [];
+  // Full-res preview URLs for the current image and its neighbors (arrow nav).
+  // Filmstrip thumbnails are handled separately via the shared thumbnail cache.
   const start = Math.max(0, currentIndex - LIGHTBOX_PRELOAD_RADIUS);
   const end = Math.min(images.length - 1, currentIndex + LIGHTBOX_PRELOAD_RADIUS);
   const ids = new Set<string>();
@@ -168,11 +174,15 @@ const ImagePreviewModalGallery: React.FC<{
 
   // Track attachment IDs that need preview URLs
   const [previewUrls, setPreviewUrls] = React.useState<Record<string, string>>({});
+  // Non-expiring thumbnail URLs for the filmstrip — same source the "Kho lưu trữ"
+  // library uses, so the strip renders identically instead of showing "Ảnh".
+  const [thumbUrls, setThumbUrls] = React.useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = React.useState(imagePreview.initialIndex ?? 0);
   const inFlightPreviewIdsRef = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     setPreviewUrls({});
+    setThumbUrls({});
     setCurrentIndex(imagePreview.initialIndex ?? 0);
     inFlightPreviewIdsRef.current.clear();
   }, [convId, imagePreview.groupKey, imagePreview.url, imagePreview.initialIndex]);
@@ -195,7 +205,10 @@ const ImagePreviewModalGallery: React.FC<{
         // For other images, use preview URL if available, otherwise use stored URL
         const url = isCurrentImage
           ? imagePreview.url
-          : (previewUrls[att.id] ?? resolvePublicResourceUrl(att.thumbnailUrl ?? att.url) ?? "");
+          : (previewUrls[att.id] ??
+             thumbUrls[att.id] ??
+             resolvePublicResourceUrl(att.thumbnailUrl ?? att.url) ??
+             "");
 
         if (isCurrentImage) found = gallery.length;
         gallery.push({
@@ -223,11 +236,47 @@ const ImagePreviewModalGallery: React.FC<{
       };
     }
     return { images: gallery, initialIndex: found };
-  }, [data, imagePreview, previewUrls]);
+  }, [data, imagePreview, previewUrls, thumbUrls]);
 
   React.useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [initialIndex]);
+
+  // Filmstrip thumbnails: batch-fetch non-expiring thumbnail URLs for the whole
+  // visible strip from the SAME shared cache as "Kho lưu trữ". This is why the
+  // library shows every image but the strip used to show "Ảnh" — the strip was
+  // falling back to expired signed URLs from the message cache.
+  const filmstripIds = useMemo(() => {
+    const start = Math.max(0, images.length - LIGHTBOX_FILMSTRIP_MAX);
+    return images
+      .slice(start)
+      .map((img) => img.attachmentId)
+      .filter((id): id is string => Boolean(id));
+  }, [images]);
+  const filmstripIdsKey = filmstripIds.join("|");
+
+  React.useEffect(() => {
+    const ids = filmstripIdsKey ? filmstripIdsKey.split("|") : [];
+    if (!convId || ids.length === 0) return;
+    let cancelled = false;
+    void fetchThumbnailUrlsShared(convId, ids)
+      .then((resolved) => {
+        if (cancelled) return;
+        setThumbUrls((prev) => {
+          let changed = false;
+          const merged = { ...prev };
+          for (const [id, item] of Object.entries(resolved)) {
+            if (item.url && merged[id] !== item.url) {
+              merged[id] = item.url;
+              changed = true;
+            }
+          }
+          return changed ? merged : prev; // no-op if nothing new — avoids re-render loop
+        });
+      })
+      .catch(() => { /* keep fallback; strip cell shows "Ảnh" until retry */ });
+    return () => { cancelled = true; };
+  }, [convId, filmstripIdsKey]);
 
   const preloadAttachmentIds = useMemo(
     () => getLightboxPreloadIds(images, currentIndex),
@@ -301,7 +350,11 @@ const ImagePreviewModalGallery: React.FC<{
     return () => {
       abortController.abort();
     };
-  }, [convId, preloadAttachmentKey, preloadAttachmentIds, previewUrls]);
+    // Depend ONLY on the stable id set (preloadAttachmentKey). Including the array
+    // ref or previewUrls made this re-run on every thumbUrls update, whose cleanup
+    // aborted in-flight preview requests (the 0 B "cancelled" rows in Network).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convId, preloadAttachmentKey]);
 
   const [showArchive, setShowArchive] = React.useState(false);
 

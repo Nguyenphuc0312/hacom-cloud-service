@@ -43,7 +43,7 @@ export interface ImagePreviewModalProps {
 }
 
 /** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
-const FILMSTRIP_MAX = 30;
+const FILMSTRIP_MAX = 15;
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
