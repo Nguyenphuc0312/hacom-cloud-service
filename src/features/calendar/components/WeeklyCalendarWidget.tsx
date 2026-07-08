@@ -43,11 +43,7 @@ import {
   getMultiDayPosition,
   formatEventTimeRange,
 } from "../utils/timeline";
-import {
-  meetingVisibilityToApi,
-  personalVisibilityToApi,
-  apiVisibilityToForm,
-} from "../utils/calendarVisibility";
+import { apiVisibilityToForm } from "../utils/calendarVisibility";
 import {
   mapHrmEventToCalendarEvent,
   buildExtendedEventMap,
@@ -57,7 +53,8 @@ import {
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
 import { EventDetailModal } from "./EventDetailModal";
-import { hrCalendarApi, type HRCalendarEvent } from "../../api/hrCalendarApi";
+import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
+import { type HRCalendarEvent } from "../../api/hrCalendarApi";
 
 const formatDateStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -142,8 +139,6 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   const storeError = useCalendarStore((s) => s.error);
   const storeErrorCode = useCalendarStore((s) => s.errorCode);
   const fetchEvents = useCalendarStore((s) => s.fetchEvents);
-  const createEvent = useCalendarStore((s) => s.createEvent);
-  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
 
   const safeStoreEvents = React.useMemo(
     () => (Array.isArray(storeEvents) ? storeEvents : []),
@@ -186,6 +181,17 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       end: end.toISOString(),
     };
   }, [weekDays]);
+
+  // Refetch theo đúng range của tuần đang xem (store có thể giữ range khác).
+  const refetchWeek = React.useCallback(() => {
+    if (weekRange.start && weekRange.end) {
+      void fetchEvents(weekRange.start, weekRange.end);
+    }
+  }, [weekRange.start, weekRange.end, fetchEvents]);
+
+  // Nghiệp vụ ghi lịch dùng CHUNG hook với CalendarPage (tạo/sửa/xóa/phản hồi) →
+  // widget hành xử giống hệt /calendar, không nhân đôi logic.
+  const mutations = useCalendarEventMutations({ onSuccess: refetchWeek });
 
   // Fetch events khi đổi tuần; đồng thời tự cập nhật khi quay lại tab và theo
   // chu kỳ 60s — không có WS cho lịch nên đây là cách giữ đồng bộ với thay đổi
@@ -281,96 +287,27 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     setEventTypeChooserOpen(true);
   };
 
+  // Lưu lịch họp. Phân biệt SỬA vs TẠO bằng state `editingMeeting` (KHÔNG dùng
+  // data.id — form luôn tự sinh id giả `meeting-<ts>` khi tạo mới). Nghiệp vụ
+  // (đính kèm, quyền xem, qua store…) nằm trong useCalendarEventMutations.
   const handleSaveMeeting = async (data: MeetingFormData) => {
-    try {
-      // Diễn giải ngày+giờ đã chọn là giờ LOCAL rồi quy về mốc tuyệt đối (UTC
-      // ISO). Nối "Z" trực tiếp sẽ coi giờ local là UTC (lệch 7h ở VN).
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.date}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      // Người được tag phải nhận được lịch → gửi mọi ref backend resolve được
-      // (employee cuid / employeeCode / authUserId). Tên free-text (không có
-      // identity) lưu vào metadata.attendees để hiển thị. Chủ trì tag từ bạn bè
-      // cũng được mời để lịch hiện trên lịch của họ.
-      const refs = new Set<string>();
-      const freeTextNames: string[] = [];
-      for (const p of data.participants ?? []) {
-        const ref = p.employeeId || p.employeeCode || p.userId;
-        if (ref) refs.add(ref);
-        else if (p.name.trim()) freeTextNames.push(p.name.trim());
-      }
-      const chairmanRef = data.chairmanEmployeeCode || data.chairmanUserId;
-      if (chairmanRef) refs.add(chairmanRef);
-
-      // Sửa lịch có id → update; không có id → tạo mới.
-      const input = {
-        title: data.title,
-        description: data.notes || undefined,
-        startAt,
-        endAt,
-        eventType: "MEETING" as const,
-        visibility: meetingVisibilityToApi(data.visibility),
-        isAllDay: false,
-        location: data.location || undefined,
-        timezone,
-        participantIds: Array.from(refs),
-        attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
-        meetingChairman: data.chairman || undefined,
-        meetingFormat: data.format,
-      };
-
-      const result = data.id
-        ? await hrCalendarApi.updateEvent(data.id, input)
-        : await createEvent(input);
-
-      if (result) {
-        toast.success(data.id ? "Đã cập nhật lịch họp" : "Đã thêm lịch họp");
-        setEditingMeeting(null);
-        if (weekRange.start && weekRange.end) {
-          await fetchEvents(weekRange.start, weekRange.end);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to save meeting:", error);
-      toast.error("Không thể lưu lịch. Vui lòng thử lại.");
+    const ok = editingMeeting
+      ? await mutations.updateMeeting(data)
+      : await mutations.createMeeting(data);
+    if (ok) {
+      setEditingMeeting(null);
+      setModalOpen(false);
     }
   };
 
   // Lịch cá nhân: chỉ mình bạn, không người tham gia/chủ trì.
   const handleSavePersonalEvent = async (data: PersonalEventFormData) => {
-    try {
-      // endDate độc lập với date → hỗ trợ sự kiện qua đêm / nhiều ngày.
-      const startAt = new Date(`${data.date}T${data.startTime}:00`).toISOString();
-      const endAt = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
-
-      const input = {
-        title: data.title,
-        description: data.notes || undefined,
-        startAt,
-        endAt,
-        eventType: "PERSONAL" as const,
-        visibility: personalVisibilityToApi(data.visibility),
-        isAllDay: false,
-        timezone,
-      };
-
-      const result = data.id
-        ? await hrCalendarApi.updateEvent(data.id, input)
-        : await createEvent(input);
-      if (result) {
-        toast.success(data.id ? "Đã cập nhật lịch cá nhân" : "Đã thêm lịch cá nhân");
-        setEditingPersonalEvent(null);
-        if (weekRange.start && weekRange.end) {
-          await fetchEvents(weekRange.start, weekRange.end);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to save personal event:", error);
-      toast.error("Không thể lưu lịch. Vui lòng thử lại.");
+    const ok = editingPersonalEvent
+      ? await mutations.updatePersonal(data)
+      : await mutations.createPersonal(data);
+    if (ok) {
+      setEditingPersonalEvent(null);
+      setPersonalModalOpen(false);
     }
   };
 
@@ -442,36 +379,14 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
 
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
-    try {
-      const success = await deleteEvent(selectedEvent.id);
-      if (success) {
-        toast.success("Đã xóa lịch");
-        setSelectedEvent(null);
-        if (weekRange.start && weekRange.end) {
-          await fetchEvents(weekRange.start, weekRange.end);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to delete event:", error);
-      toast.error("Không thể xóa lịch");
-    }
+    const ok = await mutations.remove(selectedEvent.id);
+    if (ok) setSelectedEvent(null);
   };
 
-  // Người được mời phản hồi (Tham gia / Từ chối) → lưu qua HR API rồi refetch.
+  // Người được mời phản hồi (Tham gia / Từ chối).
   const handleRespond = async (response: "ACCEPTED" | "DECLINED") => {
     if (!selectedEvent) return;
-    try {
-      await hrCalendarApi.updateMyResponse(selectedEvent.id, response);
-      toast.success(
-        response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
-      );
-      if (weekRange.start && weekRange.end) {
-        await fetchEvents(weekRange.start, weekRange.end);
-      }
-    } catch (error) {
-      console.error("Failed to update participant response:", error);
-      toast.error("Không thể cập nhật phản hồi");
-    }
+    await mutations.respond(selectedEvent.id, response);
   };
 
   const isToday = (d: Date) =>
