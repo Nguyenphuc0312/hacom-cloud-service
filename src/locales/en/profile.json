@@ -206,8 +206,10 @@
     "defaultAlt": "Image preview",
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
+    "rotate": "Rotate",
     "download": "Download",
     "close": "Close",
+    "viewAll": "View all",
     "instructions": "Scroll to zoom • Double-click to reset • ESC to close"
   },
   "toast": {

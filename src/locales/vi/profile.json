@@ -206,8 +206,10 @@
     "defaultAlt": "Xem trước ảnh",
     "zoomOut": "Thu nhỏ",
     "zoomIn": "Phóng to",
+    "rotate": "Xoay",
     "download": "Tải xuống",
     "close": "Đóng",
+    "viewAll": "Xem tất cả",
     "instructions": "Cuộn để zoom • Nhấn đúp để đặt lại • ESC để đóng"
   },
   "toast": {
