@@ -50,6 +50,7 @@ import {
 import {
   filterFriendSuggestions,
   getFriendshipAction,
+  isAcceptedFriendshipStatus,
 } from "../features/friends/friendshipAction";
 import { useFriendSuggestions } from "../features/friends/useFriendSuggestions";
 import { loadUserProfiles } from "../services/userBatchLoader";
@@ -1076,10 +1077,18 @@ export const FriendsPage: React.FC = () => {
     </div>
   );
 
-  const sortedSearchResults = useMemo(
-    () => sortByProximity(searchResults, currentUser),
-    [searchResults, currentUser],
-  );
+  const sortedSearchResults = useMemo(() => {
+    // Khám phá = tìm người LẠ để kết bạn. Ẩn bạn cũ + chính mình (tìm bạn cũ
+    // đã có ô lọc riêng ở tab Bạn bè). Vẫn giữ pending/incoming để user thao tác.
+    const strangers = searchResults.filter((user) => {
+      if (currentUserId && user.id === currentUserId) return false;
+      if (friendIdSet.has(user.id)) return false;
+      if (user.isFriend === true) return false;
+      if (isAcceptedFriendshipStatus(user.friendshipStatus)) return false;
+      return true;
+    });
+    return sortByProximity(strangers, currentUser);
+  }, [searchResults, currentUser, currentUserId, friendIdSet]);
 
   const filteredSuggestions = useMemo(
     () =>
