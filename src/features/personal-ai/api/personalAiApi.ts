@@ -4,6 +4,7 @@ import type {
   PersonalChatResponse,
   UploadDocumentResponse,
   PersonalCitation,
+  LevelReportUploadResponse,
 } from "../types";
 import type {
   WorkReportFormRequest,
@@ -19,8 +20,23 @@ const BASE_URL =
 const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
 const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;
 const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
+/** Báo cáo theo CẤP (TBP / LĐĐV / TCT) — nộp file + xuất Excel bảng gộp. */
+const LEVEL_REPORT_UPLOAD_URL = `${BASE_URL}/api/level-reports/upload`;
 const TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * Ba tag báo cáo theo CẤP (thay #tongcvtuan/#tongcvthang cũ). Gõ không kèm file
+ * → stream markdown như tag thường; gõ KÈM file Excel → nộp qua endpoint riêng
+ * `/api/level-reports/upload`. Quyền + phạm vi BE tự suy từ JWT.
+ */
+export const LEVEL_REPORT_TAGS = ["#TBP_baocao", "#LDDV_baocao", "#TCT_tonghop"] as const;
+
+/** Câu hỏi có chứa đúng MỘT tag báo cáo cấp không (dùng để định tuyến upload). */
+export function containsLevelReportTag(question: string): boolean {
+  const lower = question.toLowerCase();
+  return LEVEL_REPORT_TAGS.some((tag) => lower.includes(tag.toLowerCase()));
+}
 
 function buildAuthHeaders(): Record<string, string> {
   const token = getAccessToken();
@@ -337,6 +353,99 @@ export function uploadPersonalDocument(
   });
 }
 
+/**
+ * POST /api/level-reports/upload — nộp file bản cấp (TBP / LĐĐV).
+ *
+ * multipart/form-data: `question` (đúng một tag #TBP_baocao|#LDDV_baocao),
+ * `file` (.xlsx ≤ 25MB), tùy chọn `week_start`/`week_end` (nộp muộn). Quyền +
+ * phạm vi BE tự suy từ JWT — FE KHÔNG gửi. Nộp lại cùng tuần = thay bản cũ (BE
+ * tự xử lý). Lỗi: 400 (file/tag hỏng), 403 (sai vai), 413 (>25MB).
+ */
+export function uploadLevelReport(
+  file: File,
+  params: { question: string; weekStart?: string; weekEnd?: string },
+  options?: { signal?: AbortSignal },
+): Promise<LevelReportUploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new PersonalAiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new PersonalAiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    form.append("question", params.question);
+    form.append("file", file, file.name);
+    if (params.weekStart) form.append("week_start", params.weekStart);
+    if (params.weekEnd) form.append("week_end", params.weekEnd);
+
+    xhr.open("POST", LEVEL_REPORT_UPLOAD_URL, true);
+    xhr.responseType = "text";
+    const authHeaders = buildAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      xhr.setRequestHeader(key, value);
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      const status = xhr.status;
+      if (status >= 200 && status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText) as Record<string, unknown>;
+          resolve({
+            ok: data.ok !== false,
+            message:
+              typeof data.message === "string" && data.message.trim()
+                ? data.message.trim()
+                : "Đã nhận báo cáo.",
+            report: asRecord(data.report) ?? undefined,
+          });
+        } catch {
+          reject(new PersonalAiError(status, "http", "Phản hồi máy chủ không hợp lệ."));
+        }
+      } else {
+        reject(
+          new PersonalAiError(
+            status,
+            "http",
+            parseHttpErrorMessage(xhr.responseText) ??
+              formatHttpErrorMessage(xhr.responseText, status),
+          ),
+        );
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "network"));
+    });
+    xhr.addEventListener("abort", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    });
+
+    xhr.send(form);
+  });
+}
+
 /** POST /api/chat/personal/documents/source — set active sources */
 export async function selectPersonalSources(
   documentIds: string[],
@@ -463,6 +572,52 @@ export async function openWeeklyReportFile(
     a.click();
     document.body.removeChild(a);
   }
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+/**
+ * Nhận diện link xuất Excel bảng gộp báo cáo cấp trong markdown BE trả
+ * (#LDDV_baocao / #TCT_tonghop): `/api/level-reports/export?week_start=...`.
+ * Trả về URL đầy đủ (đã ghép BASE_URL nếu là path tương đối) để tải kèm auth.
+ */
+export function parseLevelReportExportHref(href: string | undefined): string | null {
+  if (!href) return null;
+  const trimmed = href.trim();
+  try {
+    const url = trimmed.startsWith("http")
+      ? new URL(trimmed)
+      : new URL(trimmed, BASE_URL);
+    if (/\/api\/level-reports\/export\/?$/i.test(url.pathname)) {
+      return url.toString();
+    }
+  } catch {
+    /* href không hợp lệ */
+  }
+  return null;
+}
+
+/**
+ * GET /api/level-reports/export?week_start=... → tải .xlsx bảng gộp.
+ *
+ * Cần auth Bearer như mọi API (anchor thường không gửi token → 403), nên phải
+ * fetch blob rồi trigger download thủ công.
+ */
+export async function downloadLevelReportExport(url: string): Promise<void> {
+  const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = "bao-cao-tong-hop.xlsx";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 

@@ -84,3 +84,13 @@ export interface UploadDocumentResponse {
 export interface SelectSourcesRequest {
   document_ids: string[];
 }
+
+/**
+ * Response của POST /api/level-reports/upload (nộp file bản cấp TBP/LĐĐV).
+ * FE chỉ hiển thị `message`; các field khác để dành cho log/nghiệm thu.
+ */
+export interface LevelReportUploadResponse {
+  ok: boolean;
+  message: string;
+  report?: Record<string, unknown>;
+}
