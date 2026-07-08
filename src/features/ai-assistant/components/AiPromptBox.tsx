@@ -29,6 +29,9 @@ interface HashCommand {
   prompt: string;
 }
 
+// #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Ba tag theo
+// cấp bên dưới gửi NGUYÊN VĂN tag (BE định tuyến theo tag, không theo prose) và
+// hiện cho mọi người — BE tự kiểm quyền theo JWT.
 const HASH_COMMANDS: HashCommand[] = [
   {
     id: "congviectuan",
@@ -37,22 +40,28 @@ const HASH_COMMANDS: HashCommand[] = [
     prompt: "Gửi báo cáo công việc tuần",
   },
   {
-    id: "tongcvtuan",
-    label: "#tongcvtuan",
-    description: "Tổng hợp báo cáo tuần",
-    prompt: "Tổng hợp báo cáo công việc tuần",
-  },
-  {
     id: "baocaocongviec",
     label: "#baocaocongviec",
     description: "Gửi báo cáo công việc hằng ngày",
     prompt: "Gửi báo cáo công việc hằng ngày",
   },
   {
-    id: "baocaocv",
-    label: "#baocaocv",
-    description: "Tổng hợp báo cáo công việc ngày",
-    prompt: "Tổng hợp báo cáo công việc ngày",
+    id: "TBP_baocao",
+    label: "#TBP_baocao",
+    description: "Báo cáo bộ phận (TBP) — xem/nộp",
+    prompt: "#TBP_baocao",
+  },
+  {
+    id: "LDDV_baocao",
+    label: "#LDDV_baocao",
+    description: "Báo cáo đơn vị (Giám đốc) — xem/nộp",
+    prompt: "#LDDV_baocao",
+  },
+  {
+    id: "TCT_tonghop",
+    label: "#TCT_tonghop",
+    description: "Tổng hợp toàn tập đoàn (superadmin)",
+    prompt: "#TCT_tonghop",
   },
 ];
 

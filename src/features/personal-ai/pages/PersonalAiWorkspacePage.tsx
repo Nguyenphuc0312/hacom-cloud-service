@@ -6,6 +6,7 @@ import { PersonalChatArea } from "../components/chat/PersonalChatArea";
 import { PersonalChatInput } from "../components/chat/PersonalChatInput";
 import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceHeader";
 import { usePersonalChat } from "../hooks/usePersonalChat";
+import { containsLevelReportTag } from "../api/personalAiApi";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
@@ -23,7 +24,15 @@ const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
  * └──────────────┴──────────────────────────────┴──────────────┘
  */
 export const PersonalAiWorkspacePage: React.FC = () => {
-  const { messages, isStreaming, isLoadingHistory, sendMessage, sendWithFile, stopStreaming } = usePersonalChat();
+  const {
+    messages,
+    isStreaming,
+    isLoadingHistory,
+    sendMessage,
+    sendWithFile,
+    sendLevelReportWithFile,
+    stopStreaming,
+  } = usePersonalChat();
   const { isRagMode } = usePersonalDocuments();
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
@@ -78,7 +87,19 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const handleSubmit = useCallback(
     async (text: string) => {
       if (pendingFile) {
-        // Upload báo cáo tuần là GHI ĐÈ (mỗi tuần chỉ giữ 1 file) — xác nhận trước.
+        // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) → endpoint
+        // riêng /api/level-reports/upload. BE tự thay bản cũ nếu nộp lại cùng
+        // tuần — KHÔNG hỏi confirm gì thêm (spec §2).
+        if (containsLevelReportTag(text)) {
+          setInputValue("");
+          setPendingFile(null);
+          setIsUploading(true);
+          await sendLevelReportWithFile(text, pendingFile);
+          setIsUploading(false);
+          setTimeout(() => textareaRef.current?.focus(), 0);
+          return;
+        }
+        // #congviectuan (báo cáo tuần cá nhân) là GHI ĐÈ (mỗi tuần 1 file) — xác nhận trước.
         const confirmed = window.confirm(
           `Tải lên báo cáo tuần sẽ THAY THẾ file của tuần này (mỗi tuần chỉ giữ 1 file).\n\nTiếp tục với "${pendingFile.name}"?`,
         );
@@ -94,7 +115,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
       }
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [sendMessage, sendWithFile, pendingFile],
+    [sendMessage, sendWithFile, sendLevelReportWithFile, pendingFile],
   );
 
   const handleSuggestionSelect = useCallback((value: string) => {
