@@ -56,6 +56,8 @@ export interface WorkReportTaskItem {
   requirements: string;
   completed: string;
   difficulties: string;
+  /** "Đề xuất" — không bắt buộc (redesign 08/07). */
+  proposals?: string;
   notes?: string;
   /** File đính kèm thuộc riêng công việc này (chế độ attach_level="task"). */
   attachments?: WorkReportAttachment[];

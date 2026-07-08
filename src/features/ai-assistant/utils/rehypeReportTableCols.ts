@@ -16,8 +16,8 @@ const register = (cls: string, labels: string[]) =>
 
 register("col--date", ["Ngày", "Ngày hoàn thành", "Mã NV"]);
 register("col--org", ["Công ty", "Phòng ban", "Nhân viên"]);
-register("col--mid", ["Yêu cầu", "Khó khăn", "Ghi chú", "Tài liệu"]);
-register("col--wide", ["Công việc", "Đã làm được", "Đánh giá"]);
+register("col--mid", ["Mục tiêu", "Khó khăn", "Đề xuất", "Ghi chú", "Tài liệu"]);
+register("col--wide", ["Công việc", "Kết quả đạt được", "Đánh giá"]);
 
 function normalize(s: string): string {
   return s.trim().toLowerCase();

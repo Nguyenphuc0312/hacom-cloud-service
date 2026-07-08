@@ -32,27 +32,30 @@ interface WorkReportFormProps {
   onCancel: () => void;
 }
 
-const TASK_KEYS = ["task_name", "requirements", "completed", "difficulties"] as const;
+const TASK_KEYS = ["task_name", "requirements", "completed", "difficulties", "proposals"] as const;
 type TaskKey = typeof TASK_KEYS[number];
 
-// Thứ tự cột desktop: "Ngày hoàn thành" chèn ngay sau "Tên công việc" (đúng
-// thứ tự `fields` từ BE). Một grid template dùng chung cho header + input để
+// Thứ tự cột desktop (redesign 08/07): "Mục tiêu" (requirements) ngay sau "Tên
+// công việc", "Ngày hoàn thành" kế đó, "Đề xuất" (proposals) sau "Khó khăn".
+// Đúng thứ tự `fields` từ BE. Một grid template dùng chung cho header + input để
 // mọi cột thẳng hàng — độ rộng: tên việc rộng nhất, ngày cố định hẹp.
 const ORDERED_COLS = [
   "task_name",
-  "completion_date",
   "requirements",
+  "completion_date",
   "completed",
   "difficulties",
+  "proposals",
 ] as const;
-const DESKTOP_GRID_COLS = "1.3fr 150px 1.1fr 1.1fr 1.1fr 2rem";
+const DESKTOP_GRID_COLS = "1.3fr 1.1fr 150px 1.1fr 1.1fr 1.1fr 2rem";
 
 const FIELD_LABELS_VN: Record<string, string> = {
   task_name: "Tên công việc",
   completion_date: "Ngày hoàn thành",
-  requirements: "Yêu cầu",
-  completed: "Đã làm",
+  requirements: "Mục tiêu",
+  completed: "Kết quả đạt được",
   difficulties: "Khó khăn",
+  proposals: "Đề xuất",
 };
 
 const DEFAULT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp";
@@ -80,6 +83,8 @@ interface TaskRow {
   requirements: string;
   completed: string;
   difficulties: string;
+  /** "Đề xuất" — không bắt buộc (redesign 08/07). */
+  proposals: string;
   notes?: string;
   attachments: WorkReportAttachment[];
 }
@@ -92,6 +97,7 @@ function makeEmptyTask(): TaskRow {
     requirements: "",
     completed: "",
     difficulties: "",
+    proposals: "",
     notes: "",
     attachments: [],
   };
@@ -213,6 +219,7 @@ function toTaskRow(t: Partial<WorkReportTaskItem>): TaskRow {
     requirements: t.requirements ?? "",
     completed: t.completed ?? "",
     difficulties: t.difficulties ?? "",
+    proposals: t.proposals ?? "",
     notes: t.notes ?? "",
     attachments: t.attachments ?? [],
   };
@@ -377,6 +384,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         requirements: t.requirements,
         completed: t.completed,
         difficulties: t.difficulties,
+        proposals: t.proposals,
         notes: t.notes,
       });
     });
