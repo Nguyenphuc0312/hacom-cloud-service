@@ -624,7 +624,7 @@ export const AiAssistantPage: React.FC = () => {
 
             {/* Input sticky bottom */}
             <div className="flex-shrink-0 border-t border-border bg-surface px-4 py-4">
-              <div className="mx-auto max-w-[768px]">
+              <div className="mx-auto max-w-[820px]">
                 <AiPromptBox
                   ref={textareaRef}
                   value={inputValue}

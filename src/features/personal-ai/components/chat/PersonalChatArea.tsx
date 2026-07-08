@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import clsx from "clsx";
 import { SparklesIcon, BookOpenIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PersonalMessageBubble } from "./PersonalMessageBubble";
@@ -31,12 +30,12 @@ const EmptyState: React.FC<{
           className="flex h-16 w-16 items-center justify-center rounded-3xl shadow-lg"
           style={{
             background:
-              "linear-gradient(135deg, #C41E3A 0%, #D32F2F 50%, #FFC857 100%)",
+              "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
           }}
         >
           <SparklesIcon size={30} strokeWidth={2} className="text-white" />
         </div>
-        <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-gradient-to-br from-[#C41E3A] to-[#FFC857]">
+        <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-gradient-to-br from-[#1565C0] to-[#1976D2]">
           <BookOpenIcon size={11} strokeWidth={2.5} className="text-white" />
         </div>
       </div>
@@ -65,7 +64,7 @@ const EmptyState: React.FC<{
               type="button"
               key={s}
               onClick={() => onSuggestionSelect?.(s)}
-              className="rounded-full border border-[#FFC857]/25 bg-[#FFC857]/6 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-[#FFC857]/40 hover:bg-[#FFC857]/12"
+              className="rounded-full border border-[#1976D2]/25 bg-[#1976D2]/6 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-[#1976D2]/40 hover:bg-[#1976D2]/12"
             >
               {s}
             </button>
@@ -87,7 +86,7 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const prevLengthRef = useRef(messages.length);
-  const { activeConversationId, isSourcePanelOpen } = usePersonalAiStore();
+  const { activeConversationId } = usePersonalAiStore();
 
   const hasMessages = messages.length > 0;
 
@@ -165,16 +164,13 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
           messages.length > 0 &&
           messages[messages.length - 1].role === "user" && (
             <div className="w-full bg-surface-overlay/40">
-              <div className={clsx(
-                    "mx-auto w-full px-4 py-5 transition-[max-width] duration-300 ease-out",
-                    isSourcePanelOpen ? "max-w-[640px]" : "max-w-[960px]",
-                  )}>
+              <div className="mx-auto w-full max-w-[1600px] px-6 py-5 lg:px-10 xl:px-16">
                 <div className="flex gap-3.5">
                   <div
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
                     style={{
                       background:
-                        "linear-gradient(135deg, #C41E3A 0%, #D32F2F 60%, #FFC857 100%)",
+                        "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
                     }}
                   >
                     <SparklesIcon

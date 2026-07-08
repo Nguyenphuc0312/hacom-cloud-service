@@ -313,7 +313,7 @@ export const PersonalChatInput = forwardRef<
           className={clsx(
             "relative flex flex-col rounded-2xl border bg-surface shadow-sm transition-all duration-150",
             isRagMode
-              ? "border-[#FFC857]/30 focus-within:border-[#FFC857]/60 focus-within:ring-2 focus-within:ring-[#FFC857]/15 focus-within:shadow-md"
+              ? "border-[#1976D2]/30 focus-within:border-[#1976D2]/60 focus-within:ring-2 focus-within:ring-[#1976D2]/15 focus-within:shadow-md"
               : "border-border focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border/20 focus-within:shadow-md",
           )}
         >
@@ -401,8 +401,8 @@ export const PersonalChatInput = forwardRef<
                   className="flex h-9 w-9 items-center justify-center rounded-full text-white transition-all hover:brightness-110 active:scale-95"
                   style={{
                     background:
-                      "linear-gradient(135deg, #C41E3A 0%, #D32F2F 100%)",
-                    boxShadow: "0 2px 8px rgba(196,30,58,0.35)",
+                      "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
+                    boxShadow: "0 2px 8px rgba(21,101,192,0.35)",
                   }}
                   aria-label="Dừng"
                 >
@@ -431,10 +431,10 @@ export const PersonalChatInput = forwardRef<
                     canSend
                       ? {
                           background: isRagMode
-                            ? "linear-gradient(135deg, #C41E3A 0%, #D32F2F 60%, #FFC857 100%)"
+                            ? "linear-gradient(135deg, #1565C0 0%, #1976D2 60%, #1976D2 100%)"
                             : "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
                           boxShadow: isRagMode
-                            ? "0 2px 8px rgba(196,30,58,0.3)"
+                            ? "0 2px 8px rgba(21,101,192,0.3)"
                             : "0 2px 8px rgba(21,101,192,0.25)",
                         }
                       : undefined
