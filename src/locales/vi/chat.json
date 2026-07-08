@@ -144,7 +144,7 @@
     "filePreviewAlt": "Xem trước tệp",
     "fileSizeLimit": "Giới hạn {{size}}",
     "attachBlocked": "Tính năng đính kèm hiện không khả dụng",
-    "shortcutHint": "Enter để gửi, Shift+Enter hoặc Alt+Enter để xuống dòng",
+    "shortcutHint": "Enter để gửi, Shift+Enter hoặc Alt+Enter để xuống dòng, Ctrl + K để mở tìm kiếm nhanh",
     "shortcutHintManual": "Dùng nút Gửi để gửi tin nhắn",
     "formatLabel": "Định dạng tin nhắn",
     "formatHint": "Định dạng tin nhắn (Cmd+Shift+X)",
