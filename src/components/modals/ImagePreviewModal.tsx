@@ -49,7 +49,7 @@ const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 
 type ZoomState = { scale: number; x: number; y: number; rotation: number };
-const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0, rotation: 0 };
+const DEFAULT_ZOOM: ZoomState = { scale: 0.7, x: 0, y: 0, rotation: 0 };
 
 // Floating control in the bottom toolbar — Zalo-style pill button on the dark backdrop.
 const VIEWER_BTN =
