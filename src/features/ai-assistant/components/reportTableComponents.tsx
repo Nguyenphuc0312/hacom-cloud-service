@@ -48,6 +48,18 @@ export const reportTableComponents = {
         </td>
       );
     }
+    // Ô bộ phận: tách "(khoảng ngày)" ở cuối xuống dòng riêng, nhỏ + mờ hơn.
+    if (isOrg && typeof children === "string") {
+      const m = children.match(/^(.*?)\s*(\([^()]*\))\s*$/);
+      if (m) {
+        return (
+          <td className={clsx("px-4 py-2.5 align-top text-text-primary", className)}>
+            <div className="font-medium text-text-secondary break-words">{m[1]}</div>
+            <div className="mt-0.5 text-[11px] text-text-muted">{m[2]}</div>
+          </td>
+        );
+      }
+    }
     return (
       <td
         className={clsx(

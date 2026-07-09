@@ -153,6 +153,9 @@
   table-layout: auto;
   margin: 0; /* container .my-4 lo khoảng cách; tránh full-border generic ở trên */
   font-size: inherit;
+  /* Đủ rộng cho mọi cột giãn tự nhiên → tràn khung thì container cuộn ngang,
+     KHÔNG ép dồn cột (gây vỡ chữ dọc). Container .overflow-x-auto lo cuộn. */
+  min-width: max-content;
 }
 /* Report table dùng style Tailwind của component (divider ngang, header gradient,
    bo góc). Vô hiệu full-border + padding generic .prose-chatgpt td/th ở trên để
@@ -162,12 +165,12 @@
   border: 0;
   vertical-align: top;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word; /* chỉ xuống dòng ở ranh giới TỪ, không cắt giữa từ */
 }
 .chat-report-table .col--date { min-width: 96px;  white-space: nowrap; }
-.chat-report-table .col--org  { min-width: 132px; max-width: 190px; }
-.chat-report-table .col--mid  { min-width: 148px; max-width: 240px; }
-.chat-report-table .col--wide { min-width: 220px; } /* Công việc / Đã làm được / Đánh giá */
+.chat-report-table .col--org  { min-width: 116px; max-width: 150px; }
+.chat-report-table .col--mid  { min-width: 150px; max-width: 260px; }
+.chat-report-table .col--wide { min-width: 240px; max-width: 380px; } /* Công việc / Đã làm được / Đánh giá */
 
 .prose-chatgpt a {
   color: hsl(var(--color-primary));
