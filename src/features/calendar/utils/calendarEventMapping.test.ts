@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HRCalendarEvent } from "../../api/hrCalendarApi";
 import type { CalendarEvent, EventType } from "../data/calendarEvents";
 import {
+  buildCalendarEventForm,
   buildExtendedEventMap,
   filterCalendarEventsByType,
   getMeetingMetadata,
@@ -182,5 +183,73 @@ describe("mapHrmEventToExtendedDetail + buildExtendedEventMap", () => {
     const map = buildExtendedEventMap([meetingEv]);
     expect(Object.keys(map)).toEqual(["m1"]);
     expect(map.m1.title).toBe("Họp tuần");
+  });
+});
+
+describe("buildCalendarEventForm (prefill Sửa từ chat)", () => {
+  it("maps a MEETING event to meeting form data with participants + metadata", () => {
+    const ev = makeHrmEvent({
+      id: "m1",
+      title: "Họp tuần",
+      startAt: "2026-06-04T01:00:00.000Z", // 08:00 giờ VN
+      endAt: "2026-06-04T02:30:00.000Z", // 09:30 giờ VN
+      eventType: "MEETING",
+      visibility: "PUBLIC",
+    });
+    ev.location = "Phòng 301";
+    ev.description = "abc";
+    ev.metadata = {
+      meetingChairman: "Nam",
+      meetingFormat: "online",
+      attendees: ["Khách A"],
+    } as unknown as HRCalendarEvent["metadata"];
+    ev.participants = [
+      { id: "p1", employeeId: "e1", authUserId: "u1", employeeCode: "EMP1", fullName: "Lan", avatarUrl: null, departmentName: null, employee: { id: "e1", fullName: "Lan Nguyen", employeeCode: "EMP1" }, response: "ACCEPTED", respondedAt: null, createdAt: "2026-06-01T00:00:00.000Z" },
+    ];
+
+    const form = buildCalendarEventForm(ev);
+    expect(form?.kind).toBe("meeting");
+    if (form?.kind !== "meeting") throw new Error("expected meeting");
+    expect(form.data).toMatchObject({
+      id: "m1",
+      title: "Họp tuần",
+      date: "2026-06-04",
+      startTime: "08:00",
+      endTime: "09:30",
+      chairman: "Nam",
+      format: "online",
+      visibility: "public",
+      location: "Phòng 301",
+      notes: "abc",
+      createdById: "owner-1",
+    });
+    // Participant HR (giữ employeeId) + khách free-text từ metadata.
+    expect(form.data.participants).toEqual([
+      { name: "Lan", employeeId: "e1", employeeCode: "EMP1", userId: "u1" },
+      { name: "Khách A" },
+    ]);
+  });
+
+  it("maps a PERSONAL event to personal form data (private default)", () => {
+    const ev = makeHrmEvent({
+      id: "p9",
+      title: "Việc riêng",
+      startAt: "2026-06-16T01:00:00.000Z",
+      endAt: "2026-06-16T02:00:00.000Z",
+      eventType: "PERSONAL",
+      visibility: "PRIVATE",
+    });
+    const form = buildCalendarEventForm(ev);
+    expect(form?.kind).toBe("personal");
+    if (form?.kind !== "personal") throw new Error("expected personal");
+    expect(form.data).toMatchObject({
+      id: "p9",
+      title: "Việc riêng",
+      date: "2026-06-16",
+      endDate: "2026-06-16",
+      startTime: "08:00",
+      endTime: "09:00",
+      visibility: "private",
+    });
   });
 });

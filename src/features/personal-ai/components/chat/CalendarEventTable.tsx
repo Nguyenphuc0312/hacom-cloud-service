@@ -4,32 +4,52 @@
  * nút "Xem chi tiết" mỗi dòng — thay cho markdown thuần. Bấm nút → fetch sự
  * kiện HR theo `event_id` rồi mở EventDetailModal dùng chung với /calendar.
  *
- * `event_id` do AI backend trả: KHÔNG chắc là UUID sự kiện HR (service AI ở
- * repo khác). Nên fetch có thể 404 → nuốt lỗi bằng toast thay vì vỡ UI. Đây là
- * nhánh fallback spec cho phép ("màn chi tiết có thể chỉ hiện thông tin được
- * phép xem" / chưa mở được thì báo nhẹ).
+ * Toàn bộ thao tác (xem / sửa / xóa / phản hồi) làm NGAY TRÊN MÀN CHAT, không
+ * rời trang. Nghiệp vụ đi qua `useCalendarEventMutations` — LUỒNG DUY NHẤT của
+ * lịch (calendarStore + hr-api) — nên tự đồng bộ với /calendar và widget lịch.
+ * Modal tự ẩn/hiện Sửa/Xóa/Phản hồi theo quyền BE trả (canEdit/canDelete/
+ * isParticipant) — không hardcode isViewingOthers.
  *
- * Xóa + Phản hồi (Tham gia/Từ chối) đi qua `useCalendarEventMutations` — LUỒNG
- * DUY NHẤT của lịch (calendarStore + hr-api), nên thao tác ở đây tự đồng bộ với
- * trang /calendar và WeeklyCalendarWidget. Modal tự ẩn/hiện Sửa/Xóa/Phản hồi
- * theo quyền (canEdit/canDelete/isParticipant) — không hardcode isViewingOthers.
- * "Sửa" cần cây form của trang Lịch → điều hướng sang /calendar mở đúng event
- * (không nhân đôi form-stack vào chat).
+ * Sửa: mở đúng form họp/cá nhân (MeetingFormModal/PersonalEventFormModal) ngay
+ * trong chat, prefill bằng `buildCalendarEventForm(hrEvent)` (hàm thuần dùng
+ * chung với logic của CalendarPage).
+ *
+ * Xóa: sau khi xóa thành công, GẠCH luôn dòng khỏi bảng trong chat bằng cách
+ * patch `message.calendarEvents` (bảng render từ snapshot này, không tự biết
+ * event đã mất) → không còn "xóa xong bảng vẫn hiện dòng cũ".
+ *
+ * `event_id` do AI backend trả: thực tế là UUID sự kiện HR (mở modal + participants
+ * đầy đủ chứng minh). Nếu 404 (event đã bị xóa / id lạ) → toast + log chẩn đoán
+ * `event_id`, KHÔNG vỡ UI.
  */
 
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader2Icon } from "lucide-react";
 import type { CalendarEventRow } from "../../types";
 import { hrCalendarApi, type HRCalendarEvent } from "../../../api/hrCalendarApi";
-import { mapHrmEventToExtendedDetail } from "../../../calendar/utils/calendarEventMapping";
+import {
+  mapHrmEventToExtendedDetail,
+  buildCalendarEventForm,
+} from "../../../calendar/utils/calendarEventMapping";
 import { useCalendarEventMutations } from "../../../calendar/hooks/useCalendarEventMutations";
 import { EventDetailModal } from "../../../calendar/components/EventDetailModal";
-import { ROUTE_PATHS } from "../../../../router/paths";
+import {
+  MeetingFormModal,
+  type MeetingFormData,
+} from "../../../../components/ui/MeetingFormModal";
+import {
+  PersonalEventFormModal,
+  type PersonalEventFormData,
+} from "../../../../components/ui/PersonalEventFormModal";
+import { usePersonalAiStore } from "../../stores/personalAiStore";
+import { logger } from "../../../../utils/logger";
 import { toast } from "../../../../utils/toast";
 
 interface CalendarEventTableProps {
   events: CalendarEventRow[];
+  /** Để patch lại danh sách event của message (gạch dòng sau khi xóa). */
+  conversationId: string | null;
+  messageId: string;
 }
 
 const HEADERS = ["Ngày", "Giờ", "Sự kiện", "Địa điểm", "Chủ trì"] as const;
@@ -42,44 +62,76 @@ function formatEventCell(row: CalendarEventRow): string {
   return type ? `${title} (${type})` : title;
 }
 
+/** event_id dùng để mở/sửa/xóa: ưu tiên trong detail_action, fallback field gốc. */
+const rowEventId = (row: CalendarEventRow): string =>
+  row.detail_action?.event_id ?? row.event_id;
+
 export const CalendarEventTable: React.FC<CalendarEventTableProps> = ({
   events,
+  conversationId,
+  messageId,
 }) => {
-  const navigate = useNavigate();
+  const patchMessage = usePersonalAiStore((s) => s.patchMessage);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [hrEvent, setHrEvent] = useState<HRCalendarEvent | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<MeetingFormData | null>(null);
+  const [editingPersonal, setEditingPersonal] =
+    useState<PersonalEventFormData | null>(null);
 
-  // Xóa/phản hồi đi qua calendarStore (deleteEvent xóa thẳng khỏi events[],
-  // respond gọi hr-api) → các view lịch đang mở tự đồng bộ. Không cần onSuccess
-  // refetch: chat không sở hữu range lịch nào để refetch.
+  // Xóa/phản hồi/sửa đi qua calendarStore + hr-api → các view lịch đang mở tự
+  // đồng bộ. Không cần onSuccess refetch: chat không sở hữu range lịch nào.
   const mutations = useCalendarEventMutations();
 
+  /** Gạch dòng vừa xóa khỏi bảng trong chat (patch snapshot của message). */
+  const removeRowFromTable = (eventId: string) => {
+    if (!conversationId) return;
+    const remaining = events.filter((r) => rowEventId(r) !== eventId);
+    patchMessage(conversationId, messageId, { calendarEvents: remaining });
+  };
+
+  // ponytail: KHÔNG patch lại dòng sau khi Sửa. Bảng là snapshot markdown của BE
+  // (day = "Thứ Hai 06/07", time = "16:00-17:30"), còn form trả date/time thô
+  // (YYYY-MM-DD, HH:mm) — ghép vào sẽ lệch định dạng, hại hơn. Nguồn thật (lịch)
+  // đã cập nhật qua mutations; muốn xem lại theo dữ liệu mới thì hỏi lại lịch.
+
   const handleOpenDetail = (row: CalendarEventRow) => {
-    const eventId = row.detail_action?.event_id ?? row.event_id;
+    const eventId = rowEventId(row);
     if (!eventId || openingId) return;
     setOpeningId(eventId);
     hrCalendarApi
       .getEvent(eventId)
       .then((event) => setHrEvent(event))
-      .catch(() =>
-        toast.error("Không mở được chi tiết sự kiện này."),
-      )
+      .catch((err) => {
+        // Chẩn đoán: event_id là gì mà không mở được (UUID HR đã xóa? id lạ?).
+        logger.warn("CalendarEventTable", "open-detail-failed", {
+          eventId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        toast.error("Không mở được chi tiết sự kiện này.");
+      })
       .finally(() => setOpeningId(null));
   };
 
-  // Sửa cần form họp/cá nhân của trang Lịch → điều hướng sang đó mở đúng event
-  // (CalendarPage đọc location.state.openEventId). Không nhồi form-stack vào chat.
   const handleEdit = () => {
     if (!hrEvent) return;
-    const id = hrEvent.id;
-    setHrEvent(null);
-    navigate(ROUTE_PATHS.CALENDAR, { state: { openEventId: id, view: "week" } });
+    const form = buildCalendarEventForm(hrEvent);
+    if (!form) {
+      toast.info("Sự kiện này không sửa được ở đây.");
+      return;
+    }
+    setHrEvent(null); // đóng modal chi tiết, mở form
+    if (form.kind === "personal") setEditingPersonal(form.data);
+    else setEditingMeeting(form.data);
   };
 
   const handleDelete = async () => {
     if (!hrEvent) return;
-    const ok = await mutations.remove(hrEvent.id);
-    if (ok) setHrEvent(null);
+    const id = hrEvent.id;
+    const ok = await mutations.remove(id);
+    if (ok) {
+      setHrEvent(null);
+      removeRowFromTable(id);
+    }
   };
 
   const handleRespond = async (response: "ACCEPTED" | "DECLINED") => {
@@ -87,6 +139,18 @@ export const CalendarEventTable: React.FC<CalendarEventTableProps> = ({
     await mutations.respond(hrEvent.id, response);
     // Cập nhật lại trạng thái phản hồi trong modal đang mở.
     setHrEvent(await hrCalendarApi.getEvent(hrEvent.id).catch(() => hrEvent));
+  };
+
+  // Lưu form sửa — throw khi thất bại để form giữ nguyên (giống CalendarPage).
+  const handleSaveMeeting = async (data: MeetingFormData) => {
+    const ok = await mutations.updateMeeting(data);
+    if (!ok) throw new Error("update meeting failed");
+    setEditingMeeting(null);
+  };
+  const handleSavePersonal = async (data: PersonalEventFormData) => {
+    const ok = await mutations.updatePersonal(data);
+    if (!ok) throw new Error("update personal event failed");
+    setEditingPersonal(null);
   };
 
   return (
@@ -100,14 +164,25 @@ export const CalendarEventTable: React.FC<CalendarEventTableProps> = ({
                   {h}
                 </th>
               ))}
-              <th className="px-3 py-2" />
+              <th className="px-3 py-2">
+                <span className="sr-only">Hành động</span>
+              </th>
             </tr>
           </thead>
           <tbody>
+            {events.length === 0 && (
+              <tr className="border-t border-border">
+                <td
+                  colSpan={HEADERS.length + 1}
+                  className="px-3 py-4 text-center text-text-muted"
+                >
+                  Đã xóa hết sự kiện trong danh sách này.
+                </td>
+              </tr>
+            )}
             {events.map((row, idx) => {
               const canOpen = !!row.detail_action;
-              const isOpening =
-                openingId === (row.detail_action?.event_id ?? row.event_id);
+              const isOpening = openingId === rowEventId(row);
               return (
                 <tr
                   key={`${row.event_id}-${idx}`}
@@ -166,6 +241,19 @@ export const CalendarEventTable: React.FC<CalendarEventTableProps> = ({
           onRespond={handleRespond}
         />
       )}
+
+      <MeetingFormModal
+        isOpen={!!editingMeeting}
+        onClose={() => setEditingMeeting(null)}
+        onSave={handleSaveMeeting}
+        initialData={editingMeeting}
+      />
+      <PersonalEventFormModal
+        isOpen={!!editingPersonal}
+        onClose={() => setEditingPersonal(null)}
+        onSave={handleSavePersonal}
+        initialData={editingPersonal}
+      />
     </>
   );
 };
