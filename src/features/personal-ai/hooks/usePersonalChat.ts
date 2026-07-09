@@ -3,6 +3,7 @@ import {
   streamPersonalChat,
   PersonalAiError,
   uploadLevelReport,
+  normalizeCalendarEvents,
 } from "../api/personalAiApi";
 import {
   uploadPersonalWeeklyReport,
@@ -105,6 +106,10 @@ export function usePersonalChat() {
             m.metadata?.exportable_table !== true &&
             prev?.role === "user" &&
             BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
+          // Render lại bảng lịch + nút "Xem chi tiết" sau khi F5 (tải lịch sử).
+          // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
+          // metadata — markdown text không chứa event_id nên không parse ngược được.
+          const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
           return {
             id: m.id || crypto.randomUUID(),
             role: m.role as "user" | "assistant",
@@ -116,6 +121,8 @@ export function usePersonalChat() {
             ...(m.metadata?.exportable_table === true && { exportableTable: true }),
             // Render lại hộp báo cáo công việc của #baocaocv.
             ...(isReportRequest && { reportRequest: true as const }),
+            // Render lại bảng lịch (khi BE trả metadata.calendar_events).
+            ...(calendarEvents && { calendarEvents }),
           };
         });
         if (normalized.length === 0) return;

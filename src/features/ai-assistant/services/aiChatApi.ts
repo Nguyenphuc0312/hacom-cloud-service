@@ -1336,8 +1336,17 @@ export interface PersonalSessionMessage {
   role: "user" | "assistant" | "assistant_tool_call" | "tool" | (string & {});
   content: string;
   timestamp: string;
-  /** BE đính kèm cờ exportable_table ở metadata để render lại nút "In" sau khi tải lịch sử. */
-  metadata?: { exportable_table?: boolean } | null;
+  /**
+   * BE đính kèm ở metadata để render lại đúng UI sau khi tải lịch sử:
+   * - `exportable_table`: nút "In" cho bảng báo cáo.
+   * - `calendar_events`: mảng sự kiện lịch (kèm event_id) để render lại bảng
+   *   lịch + nút "Xem chi tiết". Không có → bảng lịch về markdown, mất nút.
+   *   (Xem contract: FE__calendar-chat-history-events__contract__09-07-26.md)
+   */
+  metadata?: {
+    exportable_table?: boolean;
+    calendar_events?: unknown;
+  } | null;
 }
 
 /**
