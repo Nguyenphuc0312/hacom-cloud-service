@@ -101,6 +101,15 @@ const ViContent: React.FC = () => (
       <SubSection title="4.5. Thông tin do quản trị viên cung cấp">
         <p>Tổ chức có thể cung cấp hoặc cập nhật thông tin tài khoản, quyền hạn, nhóm làm việc hoặc quyền truy cập của bạn nhằm phục vụ công tác quản trị và bảo mật hệ thống.</p>
       </SubSection>
+
+      <SubSection title="4.6. Quyền truy cập thiết bị (chỉ khi bạn cho phép)">
+        <p>Một số tính năng yêu cầu quyền truy cập phần cứng của thiết bị. Ứng dụng chỉ yêu cầu các quyền này khi cần và chỉ sử dụng đúng cho tính năng tương ứng:</p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li><span className="font-medium">Micrô:</span> chỉ được sử dụng khi bạn ghi và gửi tin nhắn thoại. Micrô không hoạt động ở chế độ nền và không ghi âm khi bạn không chủ động ghi.</li>
+          <li><span className="font-medium">Vị trí:</span> chỉ được sử dụng khi bạn chủ động chia sẻ vị trí trong một cuộc trò chuyện. Ứng dụng không theo dõi vị trí của bạn ở chế độ nền hay theo thời gian thực.</li>
+        </ul>
+        <p className="mt-2">Bạn có thể thu hồi các quyền này bất kỳ lúc nào trong phần cài đặt hệ điều hành của thiết bị.</p>
+      </SubSection>
     </Section>
 
     <Section title="5. Thông tin chúng tôi KHÔNG thu thập">
@@ -406,6 +415,15 @@ const EnContent: React.FC = () => (
       <SubSection title="4.5 Information Provided by Administrators">
         <p>The organization may provide or update your account information, permissions, groups, or access rights for administration and security purposes.</p>
       </SubSection>
+
+      <SubSection title="4.6 Device Permissions (only with your consent)">
+        <p>Some features require access to your device hardware. The application requests these permissions only when needed and uses them solely for the corresponding feature:</p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li><span className="font-medium">Microphone:</span> used only when you record and send a voice message. The microphone does not run in the background and does not record when you are not actively recording.</li>
+          <li><span className="font-medium">Location:</span> used only when you actively share your location in a conversation. The application does not track your location in the background or in real time.</li>
+        </ul>
+        <p className="mt-2">You can revoke these permissions at any time in your device's operating system settings.</p>
+      </SubSection>
     </Section>
 
     <Section title="5. Information We Do NOT Collect">
@@ -418,7 +436,7 @@ const EnContent: React.FC = () => (
           <span className="font-medium">Health and medical information:</span> medical records, diagnoses, prescriptions, health insurance information, or any medical data. HACOM Chat does not provide healthcare or medical services.
         </li>
         <li>
-          <span className="font-medium">Real-time GPS location:</span> we do not track users' physical locations in real time.
+          <span className="font-medium">Background or real-time location tracking:</span> we do not track users' physical locations in the background or continuously; location is only accessed when you actively share it (see 4.6).
         </li>
         <li>
           <span className="font-medium">Personal device contacts:</span> we do not access the personal contact list on your device.
