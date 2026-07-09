@@ -1,4 +1,5 @@
 import React from "react";
+import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
@@ -6,6 +7,7 @@ import type { AiSource } from "../types";
 import { isSafeSourceUrl, preprocessCitations } from "../utils/sourceUtils";
 import { resolveWeeklyReportFileAction } from "../utils/weeklyReportFileLink";
 import { rehypeReportTableCols } from "../utils/rehypeReportTableCols";
+import { reportTableComponents } from "./reportTableComponents";
 import { useWeeklyReportFileActions } from "../hooks/useWeeklyReportFileActions";
 import { AiWeeklyReportFilePreviewModal } from "./AiWeeklyReportFilePreviewModal";
 
@@ -69,6 +71,16 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeReportTableCols, [rehypeSanitize, sanitizeSchema]]}
           components={{
+            ...reportTableComponents,
+            // Bảng báo cáo bọc khung bo góc + cuộn ngang trong bảng (không phải cả
+            // message). Màn này không có TableExportMenu → wrapper gọn hơn Cá nhân.
+            table: ({ children, className }: React.ComponentPropsWithoutRef<"table">) => (
+              <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
+                <table className={clsx("w-full border-collapse text-[13px]", className)}>
+                  {children}
+                </table>
+              </div>
+            ),
             a: ({
               href,
               title,
