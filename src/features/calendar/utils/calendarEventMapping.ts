@@ -1,6 +1,9 @@
 import type { HRCalendarEvent, CalendarAttachmentDto } from "../../api/hrCalendarApi";
 import type { CalendarEvent, ExtendedCalendarEvent, EventType } from "../data/calendarEvents";
 import type { CalendarLocalAttachment } from "../../../components/ui/CalendarAttachmentZone";
+import type { MeetingFormData } from "../../../components/ui/MeetingFormModal";
+import type { PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
+import { apiVisibilityToForm } from "./calendarVisibility";
 
 const isImageMime = (mime: string | null | undefined) => (mime ?? "").startsWith("image/");
 
@@ -221,6 +224,83 @@ export const buildExtendedEventMap = (
     map[event.id] = mapHrmEventToExtendedDetail(event);
   }
   return map;
+};
+
+/**
+ * Map một HR event → dữ liệu prefill cho form Sửa (họp hoặc cá nhân).
+ *
+ * Hàm THUẦN, tách từ logic prefill của CalendarPage.handleEditEvent để dùng lại
+ * ở màn chat AI (sửa lịch tại chỗ, không rời trang). Khác handleEditEvent: nhận
+ * thẳng HRCalendarEvent (chat đã fetch được qua getEvent) thay vì tra
+ * ExtendedCalendarEvent + apiEventsMap của trang Lịch.
+ *
+ * Trả `null` nếu event không phải loại sửa được bằng 2 form này (vd ATTENDANCE
+ * — không có form) → caller không mở form.
+ *
+ * ponytail: cùng ý nghĩa với nhánh prefill trong CalendarPage.handleEditEvent.
+ * Chưa gộp CalendarPage vào đây để tránh rủi ro hồi quy trang Lịch; nếu sau này
+ * sửa quy tắc prefill, đồng bộ cả 2 chỗ (hoặc refactor CalendarPage dùng hàm này).
+ */
+export const buildCalendarEventForm = (
+  event: HRCalendarEvent,
+):
+  | { kind: "meeting"; data: MeetingFormData }
+  | { kind: "personal"; data: PersonalEventFormData }
+  | null => {
+  const type = mapEventTypeForDisplay(event);
+  const startDate = event.startAt
+    ? toLocalDateString(event.startAt)
+    : formatDateString(new Date());
+
+  if (type === "personal") {
+    return {
+      kind: "personal",
+      data: {
+        id: event.id,
+        title: localizeEventTitle(event.title),
+        date: startDate,
+        // endAt có thể sang ngày khác (qua đêm / nhiều ngày) → lấy ngày local của endAt.
+        endDate: event.endAt ? toLocalDateString(event.endAt) : startDate,
+        startTime: event.startAt ? toLocalTimeString(event.startAt) : "08:00",
+        endTime: event.endAt ? toLocalTimeString(event.endAt) : "09:00",
+        notes: event.description ?? "",
+        visibility: apiVisibilityToForm(event.visibility),
+        attachments: remoteAttachmentsToForm(event.attachments),
+      },
+    };
+  }
+
+  // Meeting (và các loại khác dùng form họp — TASK/OTHER…). ATTENDANCE không sửa
+  // được: BE không tạo qua form này, nhưng cũng không có nút Sửa (canEdit=false).
+  const meta = getMeetingMetadata(event);
+  const participants: MeetingFormData["participants"] = [
+    ...(event.participants ?? []).map((p) => ({
+      name: p.fullName ?? p.employee?.fullName ?? p.employeeCode ?? "N/A",
+      employeeId: p.employeeId,
+      employeeCode: p.employeeCode ?? p.employee?.employeeCode ?? undefined,
+      userId: p.authUserId ?? undefined,
+    })),
+    ...(meta.attendees ?? []).map((name) => ({ name })),
+  ];
+
+  return {
+    kind: "meeting",
+    data: {
+      id: event.id,
+      title: localizeEventTitle(event.title),
+      date: startDate,
+      startTime: event.startAt ? toLocalTimeString(event.startAt) : "08:00",
+      endTime: event.endAt ? toLocalTimeString(event.endAt) : "09:00",
+      chairman: meta.meetingChairman ?? "",
+      participants,
+      format: meta.meetingFormat === "online" ? "online" : "offline",
+      visibility: apiVisibilityToForm(event.visibility),
+      location: event.location ?? "",
+      notes: event.description ?? "",
+      attachments: remoteAttachmentsToForm(event.attachments),
+      createdById: event.ownerId,
+    },
+  };
 };
 
 export const mergeCalendarEventSources = (

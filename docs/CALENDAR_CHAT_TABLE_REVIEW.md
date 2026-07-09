@@ -88,12 +88,14 @@ hrCalendarApi.getEvent(event_id) ──▶ HRCalendarEvent ──▶ EventDetail
 **➡️ VIỆC BẠN CẦN LÀM:** xác nhận với team BE-AI `event_id` là UUID sự kiện HR hay mã nội bộ.
 - Nếu **mã nội bộ** → nút sẽ luôn rơi vào toast. Khi đó đổi hành vi sang gửi follow-up `Chi tiết sự kiện này` (spec §78) — cần thêm việc nối `sendMessage` xuống bubble.
 
-### 2.4. Sửa / Xóa / Phản hồi — đi qua LUỒNG DUY NHẤT
+### 2.4. Sửa / Xóa / Phản hồi — IN-PLACE trên màn chat, LUỒNG DUY NHẤT
 
-**Viết thế nào:** `CalendarEventTable` dùng `useCalendarEventMutations()`:
-- Xóa → `mutations.remove(id)` (qua `calendarStore.deleteEvent` → hr-api).
-- Phản hồi → `mutations.respond(id, "ACCEPTED"|"DECLINED")` (qua `hrCalendarApi.updateMyResponse`).
-- Sửa → **điều hướng** `navigate("/calendar", { state:{ openEventId, view:"week" }})`.
+**Viết thế nào:** `CalendarEventTable` dùng `useCalendarEventMutations()`, làm mọi thao tác NGAY TRÊN MÀN CHAT (không rời trang):
+- Xóa → `mutations.remove(id)` (qua `calendarStore.deleteEvent` → hr-api) → **gạch luôn dòng khỏi bảng** (`patchMessage(message.calendarEvents = còn lại)`).
+- Phản hồi → `mutations.respond(id, …)` → refetch event để modal cập nhật trạng thái.
+- Sửa → mở đúng `MeetingFormModal`/`PersonalEventFormModal` **ngay trong chat**, prefill bằng hàm thuần `buildCalendarEventForm(hrEvent)` (mục 2.5) → lưu qua `mutations.updateMeeting/updatePersonal`.
+
+> **Lịch sử:** bản đầu tôi cho "Sửa" điều hướng sang `/calendar`. Bạn phản hồi phải thao tác ngay trên màn AI → đổi sang mở form in-place. Bản đầu Xóa cũng chưa gạch dòng ("xóa xong bảng vẫn hiện dòng cũ") → đã fix.
 
 **Tại sao đây là câu trả lời cho câu hỏi "các nơi lịch khác có đồng bộ không":**
 `useCalendarEventMutations` là **nguồn ghi DUY NHẤT** của lịch (comment đầu file hook: "dùng chung cho CalendarPage và WeeklyCalendarWidget để hai màn hình hành xử GIỐNG HỆT"). Mọi mutation đi qua `calendarStore` + hr-api. Vì vậy:
@@ -109,10 +111,25 @@ Không phải FE tự quyết. `HRCalendarEvent` do BE trả **có sẵn** `canE
 
 **Bug đã sửa (phiên trước):** ban đầu tôi hardcode `isViewingOthers` + không truyền handler → **lịch của chính user cũng bị khóa Sửa/Xóa** như lịch người khác. Đã bỏ hardcode → modal tự tính quyền từ `canEdit/canDelete`. Lịch của bạn: hiện đủ; lịch người khác: ẩn (vì BE trả `canEdit=false`).
 
-**Đánh đổi "Sửa" điều hướng sang /calendar thay vì mở form tại chỗ:**
-- *Được:* không nhân đôi cây form họp/cá nhân (`MeetingFormModal` + `PersonalEventFormModal` + ~80 dòng map HR→FormData của `CalendarPage.handleEditEvent`). Một chỗ sửa form → mọi nơi đúng.
-- *Mất:* user rời khỏi chat để sửa. Và deep-link chỉ mở được event nếu nó nằm trong **tháng CalendarPage load mặc định** (giới hạn CÓ SẴN của cơ chế `openEventId`, giống hệt `WeeklyCalendarWidget` đang dùng — không phải bug mới).
-- *Muốn full-form-in-chat?* Được, nhưng nặng: lắp 2 form modal + state upload đính kèm + rủi ro lệch với trang Lịch. Chưa làm vì spec không yêu cầu.
+### 2.5. Tách hàm thuần `buildCalendarEventForm(hrEvent)` — tránh copy-paste
+
+**Vấn đề:** logic prefill form Sửa (map HR event → MeetingFormData/PersonalEventFormData, phân nhánh personal vs meeting, metadata, participants, attachments, visibility) vốn nằm **trong** `CalendarPage.handleEditEvent` (~80 dòng, dùng nhiều helper cục bộ của trang). Chat cần đúng logic đó.
+
+**Cách làm (craft):** trích thành **hàm THUẦN** `buildCalendarEventForm(event: HRCalendarEvent)` trong `calendarEventMapping.ts` (nơi đã có các map lịch khác). Nhận thẳng HR event (chat đã fetch qua `getEvent`), trả `{ kind:'meeting'|'personal', data } | null`. Có test riêng.
+
+**Đánh đổi có chủ đích:** hiện **CHƯA gộp** `CalendarPage.handleEditEvent` để dùng hàm mới này — giữ nguyên để **tránh rủi ro hồi quy trang Lịch** (trang Lịch đang chạy ổn, refactor nó ngoài phạm vi task). Hệ quả: **tạm thời có 2 nơi cùng ý nghĩa prefill**. Đã đánh dấu bằng `ponytail:` trong code + JSDoc: nếu sau này đổi quy tắc prefill, đồng bộ cả 2 (hoặc refactor CalendarPage dùng hàm chung — việc riêng, làm sau).
+
+### 2.6. Xóa → gạch dòng khỏi bảng (fix "xóa xong bảng vẫn hiện dòng cũ")
+
+**Gốc lỗi:** bảng render từ `message.calendarEvents` — một **snapshot tĩnh** của tin nhắn. Xóa event trên hr-api không tự đụng snapshot này → dòng cũ vẫn hiện.
+
+**Fix:** sau khi `remove` thành công, `patchMessage(message.calendarEvents = danh sách còn lại)`. Bảng re-render, dòng biến mất.
+
+**Bẫy đã xử lý:** khi xóa **hết** → mảng `[]`. Điều kiện render cũ `calendarEvents.length > 0` sẽ false → **rơi về markdown** = hiện lại TẤT CẢ dòng gốc (tệ hơn). Đã đổi điều kiện thành **`!!message.calendarEvents`** (có tồn tại, kể cả rỗng) → luôn render bảng; mảng rỗng hiện dòng "Đã xóa hết sự kiện...". Chỉ `undefined` (câu trả lời không phải lịch) mới về markdown.
+
+**KHÔNG làm cho Sửa:** không patch lại dòng sau khi sửa. Lý do: bảng là snapshot markdown BE (`day="Thứ Hai 06/07"`, `time="16:00-17:30"`), form trả date/time thô (`YYYY-MM-DD`, `HH:mm`) — ghép vào lệch định dạng, hại hơn. Nguồn thật (lịch) đã cập nhật; muốn xem lại theo dữ liệu mới thì hỏi lại lịch. Đánh dấu `ponytail:` trong code.
+
+**Đánh đổi form-in-chat:** phải lắp 2 form modal + tái tạo prefill (mục 2.5). Nặng hơn điều hướng, nhưng đúng yêu cầu "thao tác trên màn AI". Rủi ro lệch với trang Lịch được giảm bằng cách **dùng chung form modal + mutations** (chỉ prefill là tạm tách).
 
 ---
 
@@ -122,36 +139,55 @@ Không phải FE tự quyết. `HRCalendarEvent` do BE trả **có sẵn** `canE
 |---|---|---|
 | Thêm cột (vd Trạng thái) | Dễ | Thêm vào `HEADERS` + 1 `<td>`; type `CalendarEventRow` thêm field; `normalizeCalendarEvents` thêm `pickString`. |
 | Đổi hành vi nút sang follow-up chat | Trung bình | Nối `sendMessage` từ `usePersonalChat` xuống `PersonalMessageBubble` → `CalendarEventTable`; thay `getEvent` bằng gửi câu hỏi. |
-| Sửa form ngay trong chat | Khó/nặng | Tái dùng `MeetingFormModal`/`PersonalEventFormModal` + copy logic map HR→FormData. Cân nhắc tách `handleEditEvent` của CalendarPage thành hook dùng chung trước. |
-| Dùng bảng lịch ở màn khác | Dễ | `CalendarEventTable` chỉ phụ thuộc `CalendarEventRow[]` + hạ tầng lịch — bê nguyên sang chỗ khác được. |
+| Sửa form ngay trong chat | ✅ Đã làm | Dùng `MeetingFormModal`/`PersonalEventFormModal` + `buildCalendarEventForm` (hàm thuần). |
+| Dùng bảng lịch ở màn khác | Dễ | `CalendarEventTable` phụ thuộc `CalendarEventRow[]` + hạ tầng lịch + `conversationId/messageId` (để patch bảng) — tách 2 prop này ra là bê được. |
 
-**Điểm nghẽn mở rộng đã biết:** logic "map HR event → MeetingFormData/PersonalEventFormData" hiện **chỉ nằm trong `CalendarPage.handleEditEvent`**, chưa tách hook. Nếu sau này cần sửa form ở nhiều nơi, nên tách nó ra `useEditCalendarEvent` trước — hiện chưa cần nên chưa làm (YAGNI).
+**Điểm nghẽn mở rộng đã biết:** prefill form Sửa giờ có ở **2 nơi** — `CalendarPage.handleEditEvent` (cũ) và `buildCalendarEventForm` (mới, chat dùng). Đánh dấu `ponytail:`. Muốn 1 nguồn: refactor `CalendarPage.handleEditEvent` gọi `buildCalendarEventForm` — việc riêng, có rủi ro hồi quy trang Lịch nên tách khỏi task này.
 
 ---
 
-## 4. Đã test gì
+## 4. Ma trận test — từng trường hợp
+
+### 4.1. Tự động (đã chạy, xanh)
 
 | Kiểm chứng | Lệnh | Kết quả |
 |---|---|---|
-| Type an toàn toàn dự án | `npm run typecheck` | ✅ sạch |
+| Type toàn dự án | `npm run typecheck` | ✅ sạch |
 | Build production (bắt lỗi casing import Win↔CI) | `npm run build` | ✅ built |
-| Parse `calendar_events` qua SSE thật (mock stream) | `vitest run …/personalAiApi.test.ts` | ✅ 5/5 |
-| Lint 3 file mới/sửa nhiều | `eslint CalendarEventTable/personalAiApi/types` | ✅ exit 0 |
+| Parse `calendar_events` qua SSE (mock stream) | `vitest …/personalAiApi.test.ts` | ✅ 5/5 |
+| `buildCalendarEventForm` map HR→form (meeting + personal) | `vitest …/calendarEventMapping.test.ts` | ✅ 10/10 |
+| Lint file mới (`CalendarEventTable`, `calendarEventMapping`) | `eslint …` | ✅ exit 0 |
 
-**3 test mới (trong `personalAiApi.test.ts`):**
-1. Parse đúng `calendar_events`, giữ `detail_action` hợp lệ, **loại dòng thiếu `event_id`**.
-2. `detail_action` sai type → **bỏ action nhưng giữ dòng** (dòng vẫn hiện, chỉ không có nút).
-3. Câu trả lời không phải lịch → `calendar_events` = `undefined` (không ép bảng).
+**5 test mới:**
+- (SSE) parse đúng + **loại dòng thiếu `event_id`**; `detail_action` sai type → bỏ action giữ dòng; câu trả lời không phải lịch → `undefined`.
+- (form) MEETING → meeting form đủ chairman/format/participants(HR+free-text)/visibility/location; PERSONAL → personal form, `visibility=private`.
 
-**Chưa test (giới hạn tự nhận):**
-- Hành vi click mở modal / Sửa / Xóa / Phản hồi **chưa có test tương tác** (cần render React + mock hr-api). Đã kiểm bằng type + đối chiếu đúng cách `CalendarPage` gọi cùng `mutations`. Nếu bạn muốn, thêm test component với `@testing-library/react`.
-- **Chưa chạy thật với BE** vì phụ thuộc `event_id` (mục 2.3) — cần môi trường có service AI + hr-api thật.
+### 4.2. Cần bạn kiểm thủ công (trace logic đã đúng, nhưng chưa có test tương tác)
+
+| # | Trường hợp | Kỳ vọng | Đường code |
+|---|---|---|---|
+| 1 | Hỏi "lịch tuần này" có sự kiện | Bảng 5 cột, mỗi dòng có nút "Xem chi tiết" | `PersonalMessageBubble` → `CalendarEventTable` |
+| 2 | Không có lịch (`calendar_events` rỗng lúc đầu) | Text thường, KHÔNG bảng | `calendarEvents=undefined` → markdown |
+| 3 | Bấm "Xem chi tiết" (event_id là UUID HR) | Mở modal đầy đủ | `getEvent` OK → `EventDetailModal` |
+| 4 | Bấm "Xem chi tiết" (event 404) | Toast "Không mở được…" + **log `event_id`** ở console | `getEvent` catch |
+| 5 | Lịch của MÌNH → modal | Hiện **Sửa + Xóa** | `canEdit/canDelete=true` từ BE |
+| 6 | Lịch NGƯỜI KHÁC → modal | Ẩn Sửa/Xóa, có thể có Phản hồi | `canEdit=false` từ BE |
+| 7 | Bấm **Sửa** (lịch họp) | Mở `MeetingFormModal` **trong chat**, prefill đúng | `buildCalendarEventForm` kind=meeting |
+| 8 | Bấm **Sửa** (lịch cá nhân) | Mở `PersonalEventFormModal` trong chat | kind=personal |
+| 9 | Lưu form sửa | Cập nhật hr-api, đóng form; /calendar đồng bộ | `updateMeeting/updatePersonal` |
+| 10 | Bấm **Xóa** → xác nhận | Event xóa, **dòng biến mất khỏi bảng** | `remove` + `removeRowFromTable` |
+| 11 | Xóa **hết** dòng | Bảng hiện "Đã xóa hết sự kiện…" (KHÔNG hiện lại dòng cũ) | điều kiện `!!calendarEvents` |
+| 12 | **Phản hồi** Tham gia/Từ chối (là participant) | Cập nhật, trạng thái đổi trong modal | `respond` + refetch |
+| 13 | Mobile: bảng tràn ngang | Cuộn ngang, nút vẫn đúng dòng | `overflow-x-auto` + nút ở cell riêng |
+| 14 | Tải lại trang (reload lịch sử) | Bảng về markdown (snapshot không lưu server) | `calendarEvents` không có trong history |
+
+> #4 quan trọng: mở **Console** khi bấm nút lỗi → xem log `open-detail-failed` kèm `event_id`. Đây là cách xác định `event_id` là UUID HR (đã xóa) hay chuỗi lạ.
 
 ---
 
 ## 5. Việc còn treo cho bạn quyết
 
-1. **Xác nhận `event_id`** là UUID HR hay mã nội bộ (mục 2.3). Đây là điều **quyết định nút chi tiết chạy hay luôn toast**.
-2. **"Sửa" — điều hướng sang /calendar** có chấp nhận không, hay cần mở form ngay trong chat (mục 2.4 đánh đổi).
-3. **Test tương tác** cho modal/sửa/xóa — có cần bổ sung không.
-4. Lỗi lint `react-hooks/set-state-in-effect` ở `usePersonalChat.ts:81` là **code cũ** (không thuộc thay đổi này) — có muốn gộp sửa luôn không hay để riêng.
+1. **Xác nhận `event_id`** (mục 2.3): dùng log ở case #4 để soi. Từ ảnh bạn gửi, event mở được modal chứng minh **ÍT NHẤT một số event_id LÀ UUID HR thật**; event toast lỗi có thể đã bị xóa hoặc id lạ.
+2. **Test tương tác** (case #1-14) cho modal/sửa/xóa/phản hồi — có cần viết `@testing-library/react` không, hay bạn tự QA thủ công.
+3. **Prefill 2 nơi** (mục 2.5): có muốn tôi refactor `CalendarPage` dùng chung `buildCalendarEventForm` luôn không (rủi ro hồi quy trang Lịch, nên làm riêng).
+4. Lỗi lint `react-hooks/*` ở `usePersonalChat.ts:81` + `PersonalMessageBubble.tsx:546` là **code cũ** (không thuộc thay đổi này) — gộp sửa hay để riêng.

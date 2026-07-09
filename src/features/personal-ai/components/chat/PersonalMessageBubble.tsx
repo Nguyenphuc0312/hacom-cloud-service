@@ -532,10 +532,15 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     })
                   }
                 />
-              ) : isAssistant &&
-                message.calendarEvents &&
-                message.calendarEvents.length > 0 ? (
-                <CalendarEventTable events={message.calendarEvents} />
+              ) : isAssistant && message.calendarEvents ? (
+                // `calendarEvents` tồn tại (kể cả mảng rỗng sau khi xóa hết) →
+                // luôn render bảng, KHÔNG rơi về markdown (markdown còn giữ mọi
+                // dòng gốc → "xóa xong lại hiện dòng cũ"). undefined mới về markdown.
+                <CalendarEventTable
+                  events={message.calendarEvents}
+                  conversationId={activeConversationId}
+                  messageId={message.id}
+                />
               ) : isAssistant ? (
                 <div className="prose-chatgpt">
                   {((tableIndexRef.current = 0), null)}
