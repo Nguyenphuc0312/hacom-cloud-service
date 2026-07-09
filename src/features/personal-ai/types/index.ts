@@ -39,6 +39,30 @@ export interface PersonalChatMessage {
   exportId?: string;
   /** session_id gắn với `exportId` (dùng cho endpoint export-table). */
   exportSessionId?: string;
+  /**
+   * SSE `done.calendar_events` — khi câu trả lời là lịch, BE trả mảng sự kiện
+   * (cùng thứ tự các dòng bảng markdown). Có thì FE render bảng lịch 5 cột +
+   * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
+   */
+  calendarEvents?: CalendarEventRow[];
+}
+
+/** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */
+export interface CalendarEventAction {
+  type: "calendar_event_detail";
+  event_id: string;
+}
+
+/** Một dòng sự kiện lịch BE trả ở SSE `done.calendar_events`. */
+export interface CalendarEventRow {
+  event_id: string;
+  title?: string;
+  time?: string;
+  day?: string;
+  event_type?: string;
+  location?: string;
+  chair?: string;
+  detail_action?: CalendarEventAction;
 }
 
 export interface PersonalCitation {
@@ -68,6 +92,8 @@ export interface PersonalChatResponse {
   exportable_table?: boolean;
   /** SSE `done` — token snapshot dữ liệu gốc để BE xuất Excel đủ cột đã bị ẩn khỏi bảng chat. */
   export_id?: string;
+  /** SSE `done` — mảng sự kiện lịch khi câu trả lời là bảng lịch (xem CalendarEventRow). */
+  calendar_events?: CalendarEventRow[];
 }
 
 export interface UploadDocumentResponse {
