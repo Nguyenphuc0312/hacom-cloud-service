@@ -5,6 +5,7 @@ import type {
   UploadDocumentResponse,
   PersonalCitation,
   LevelReportUploadResponse,
+  CalendarEventRow,
 } from "../types";
 import type {
   WorkReportFormRequest,
@@ -715,6 +716,41 @@ function normalizeCitation(raw: unknown): PersonalCitation | null {
   };
 }
 
+/**
+ * Chuẩn hoá `calendar_events` từ SSE `done`. Chỉ giữ dòng có `event_id` (bắt
+ * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì
+ * bỏ, khi đó bubble không hiện nút chi tiết cho dòng đó (theo spec).
+ */
+function normalizeCalendarEvents(raw: unknown): CalendarEventRow[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const rows = raw
+    .map((item): CalendarEventRow | null => {
+      const obj = asRecord(item);
+      const eventId = pickString(obj?.event_id);
+      if (!obj || !eventId) return null;
+
+      const action = asRecord(obj.detail_action);
+      const actionEventId = pickString(action?.event_id, eventId);
+      const detail_action =
+        action?.type === "calendar_event_detail" && actionEventId
+          ? { type: "calendar_event_detail" as const, event_id: actionEventId }
+          : undefined;
+
+      return {
+        event_id: eventId,
+        title: pickString(obj.title),
+        time: pickString(obj.time),
+        day: pickString(obj.day),
+        event_type: pickString(obj.event_type),
+        location: pickString(obj.location),
+        chair: pickString(obj.chair),
+        detail_action,
+      };
+    })
+    .filter((r): r is CalendarEventRow => r !== null);
+  return rows.length > 0 ? rows : undefined;
+}
+
 /** POST /api/chat/personal/stream — SSE streaming chat */
 export async function streamPersonalChat(
   request: PersonalChatRequest,
@@ -823,6 +859,7 @@ export async function streamPersonalChat(
               typeof parsed.export_id === "string" && parsed.export_id
                 ? parsed.export_id
                 : undefined,
+            calendar_events: normalizeCalendarEvents(parsed.calendar_events),
           };
         } catch {
           /* malformed done payload — recover below */
@@ -868,6 +905,7 @@ export async function streamPersonalChat(
               typeof parsed.export_id === "string" && parsed.export_id
                 ? parsed.export_id
                 : undefined,
+            calendar_events: normalizeCalendarEvents(parsed.calendar_events),
           };
         } catch {
           /* unrecoverable */

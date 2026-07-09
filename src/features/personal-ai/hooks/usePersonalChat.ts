@@ -275,6 +275,15 @@ export function usePersonalChat() {
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
 
+        // Câu trả lời lịch: BE trả `calendar_events` ở SSE done → render bảng
+        // lịch 5 cột + nút "Xem chi tiết" thay markdown thuần (xem
+        // PersonalMessageBubble → CalendarEventTable). Rỗng → giữ text thường.
+        if (response.calendar_events && response.calendar_events.length > 0) {
+          patchMessage(convIdSnapshot, assistantMessage.id, {
+            calendarEvents: response.calendar_events,
+          });
+        }
+
         // Lưu export_id + session_id nếu BE trả (SSE done) để Excel xuất từ
         // snapshot dữ liệu gốc (đủ cột + có cột "Mã" cho đồng bộ round-trip).
         // Tách khỏi cờ exportable_table: nút Xuất còn hiện qua fallback bảng
