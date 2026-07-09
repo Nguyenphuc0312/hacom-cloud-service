@@ -86,19 +86,28 @@ td: ({ children, className }) => {
 - **Chỉ áp cho `.chat-report-table`** → bảng AI thường (không phải báo cáo) vẫn giữ style generic cũ, **không ảnh hưởng**.
 - Thêm `margin: 0; font-size: inherit` (dòng 152-155): container `.my-4` của component đã lo khoảng cách; huỷ `margin: 1rem 0` và `font-size: 0.9em` generic để không đá nhau.
 
-### Thay đổi 3 — Độ rộng cột hợp lý hơn (lỗi C)
+### Thay đổi 3 — Độ rộng cột + chống ép dồn/vỡ chữ (lỗi C) — ĐÃ CHỈNH LẠI
 
-**File:** `src/features/ai-assistant/styles/ai-animations.css:167-170`
+**File:** `src/features/ai-assistant/styles/ai-animations.css:152-170`
 
 ```css
+.prose-chatgpt table.chat-report-table {
+  min-width: max-content;   /* bảng giãn theo nội dung; tràn khung → cuộn ngang */
+}
+.chat-report-table th, .chat-report-table td {
+  overflow-wrap: break-word;   /* trước là word-break:break-word → cắt giữa từ */
+}
 .chat-report-table .col--date { min-width: 96px;  white-space: nowrap; }
-.chat-report-table .col--org  { min-width: 132px; max-width: 190px; }   /* +max-width */
-.chat-report-table .col--mid  { min-width: 148px; max-width: 240px; }   /* +max-width */
-.chat-report-table .col--wide { min-width: 220px; }
+.chat-report-table .col--org  { min-width: 150px; }               /* bỏ max-width */
+.chat-report-table .col--mid  { min-width: 150px; max-width: 260px; }
+.chat-report-table .col--wide { min-width: 240px; max-width: 380px; }
 ```
 
-- `col--org` 120→132px + `max-width: 190px`: đủ cho tên phòng dài xuống ~2 dòng thay vì giãn tuỳ ý. `col--mid` thêm `max-width` để "Đề xuất/Khó khăn" không chiếm chỗ của cột nội dung chính.
-- `table-layout: auto` (giữ nguyên) tôn trọng min/max này.
+- **Lỗi mới phát hiện khi test màn to:** bảng ép mọi cột về chiều rộng container → cột "Bộ phận" bị nén tới mức **vỡ chữ dọc** (`Phò ng HC -TH`). Hai nguyên nhân:
+  1. `word-break: break-word` cho phép cắt **giữa từ** → đổi sang `overflow-wrap: break-word` (chỉ xuống dòng ở ranh giới từ).
+  2. `max-width: 190px` trên `col--org` ép cột hẹp lại → **bỏ**.
+- `min-width: max-content` trên bảng: bảng giãn tới chiều rộng **tự nhiên của nội dung**; container `.overflow-x-auto` cho **cuộn ngang** khi tràn (như trước), thay vì dồn cột.
+- `w-full` (Tailwind trong component) + `min-width: max-content` = bảng bằng `max(100% container, nội dung)` → hẹp thì full khung, rộng thì giãn + cuộn. Đúng yêu cầu "đừng dồn quá, thiếu thì kéo sang".
 
 ### Thay đổi 4 — Chỉ bảng cuộn ngang, không phải cả message (lỗi D)
 
