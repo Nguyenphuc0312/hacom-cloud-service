@@ -235,11 +235,31 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
           {children}
         </th>
       ),
-      td: ({ children, className }: React.ComponentPropsWithoutRef<"td">) => (
-        <td className={clsx("px-4 py-2.5 align-top text-text-primary", className)}>
-          <div className="whitespace-pre-wrap break-words">{children}</div>
-        </td>
-      ),
+      td: ({ children, className }: React.ComponentPropsWithoutRef<"td">) => {
+        const isOrg = clsx(className).includes("col--org");
+        const isEmpty = children == null || children === "" ||
+          (Array.isArray(children) && children.every((c) => c == null || c === ""));
+        // Ô bộ phận/công ty trống = dòng công việc tiếp theo của CÙNG bộ phận
+        // (BE gộp). Không để trơ trẽn như bảng lỗi — dấu tiếp-tục mảnh, canh trái.
+        if (isOrg && isEmpty) {
+          return (
+            <td className={clsx("px-4 py-2.5 align-top", className)}>
+              <span className="mt-1 block h-0.5 w-3.5 rounded-full bg-border" aria-hidden />
+            </td>
+          );
+        }
+        return (
+          <td
+            className={clsx(
+              "px-4 py-2.5 align-top text-text-primary",
+              isOrg && "font-medium text-text-secondary",
+              className,
+            )}
+          >
+            <div className="whitespace-pre-wrap break-words">{children}</div>
+          </td>
+        );
+      },
 
       // ── Links ──────────────────────────────────────────────────────────
       a: ({ href, children }: React.ComponentPropsWithoutRef<"a">) => {
