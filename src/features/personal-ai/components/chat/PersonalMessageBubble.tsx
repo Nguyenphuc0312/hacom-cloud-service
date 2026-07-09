@@ -47,6 +47,7 @@ import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm"
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
+import { CalendarEventTable } from "./CalendarEventTable";
 import { TableExportMenu } from "./TableExportMenu";
 import { splitMarkdownTables } from "../../services/tableExport";
 import clsx from "clsx";
@@ -531,6 +532,10 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                     })
                   }
                 />
+              ) : isAssistant &&
+                message.calendarEvents &&
+                message.calendarEvents.length > 0 ? (
+                <CalendarEventTable events={message.calendarEvents} />
               ) : isAssistant ? (
                 <div className="prose-chatgpt">
                   {((tableIndexRef.current = 0), null)}
