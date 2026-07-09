@@ -721,7 +721,7 @@ function normalizeCitation(raw: unknown): PersonalCitation | null {
  * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì
  * bỏ, khi đó bubble không hiện nút chi tiết cho dòng đó (theo spec).
  */
-function normalizeCalendarEvents(raw: unknown): CalendarEventRow[] | undefined {
+export function normalizeCalendarEvents(raw: unknown): CalendarEventRow[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const rows = raw
     .map((item): CalendarEventRow | null => {
