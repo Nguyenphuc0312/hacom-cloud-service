@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from "react";
-import ReactDOM from "react-dom";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -81,6 +80,7 @@ import {
 } from "../../features/chat/components/group-members";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
 import { UserProfile } from "./UserProfile";
+import { DraggableProfileModal } from "./DraggableProfileModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1908,30 +1908,20 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       />
 
       {/* Member profile modal */}
-      {viewingMemberId && ReactDOM.createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setViewingMemberId(null)}
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <UserProfile
-              userId={viewingMemberId}
-              currentUserId={currentUserId}
-              conversationContext="group"
-              initialUser={(() => {
-                const m = members.find((mem) => mem.id === viewingMemberId);
-                return m ? { id: m.id, username: m.username, displayName: m.displayName, avatar: m.avatar, status: m.status } : null;
-              })()}
-              onClose={() => setViewingMemberId(null)}
-              onStartConversation={onStartConversation}
-            />
-          </div>
-        </div>,
-        document.body,
+      {viewingMemberId && (
+        <DraggableProfileModal onClose={() => setViewingMemberId(null)}>
+          <UserProfile
+            userId={viewingMemberId}
+            currentUserId={currentUserId}
+            conversationContext="group"
+            initialUser={(() => {
+              const m = members.find((mem) => mem.id === viewingMemberId);
+              return m ? { id: m.id, username: m.username, displayName: m.displayName, avatar: m.avatar, status: m.status } : null;
+            })()}
+            onClose={() => setViewingMemberId(null)}
+            onStartConversation={onStartConversation}
+          />
+        </DraggableProfileModal>
       )}
     </div>
   );
