@@ -10,7 +10,6 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import ReactDOM from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -81,6 +80,7 @@ import { isUuid } from "../utils/isUuid";
 import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
 import { getCachedUserProfile } from "../services/userProfileCache";
+import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
 import { fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
 
@@ -1499,49 +1499,39 @@ export const ChatPage: React.FC = () => {
       )}
 
       {/* Mention profile modal */}
-      {mentionProfile && currentUserSummary && ReactDOM.createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setMentionProfile(null)}
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <React.Suspense fallback={null}>
-              <UserProfile
-                userId={mentionProfile.userId}
-                currentUserId={currentUserSummary.id}
-                conversationContext="group"
-                initialUser={(() => {
-                  const cached = getCachedUserProfile(mentionProfile.userId) as
-                    | { avatar?: string | null; avatarUrl?: string | null; displayName?: string }
-                    | undefined;
-                  // Avatar URLs are short-lived presigned S3 links (~15 min).
-                  // Prefer the mention's URL — it is captured at click time from
-                  // the freshly fetched message, so it is the least likely to be
-                  // expired. The cached profile copy can hold a stale (expired)
-                  // signature that would 403 and fall back to initials.
-                  const avatarUrl = resolvePublicResourceUrl(
-                    mentionProfile.avatarUrl || cached?.avatar || cached?.avatarUrl || undefined,
-                  );
-                  return {
-                    id: mentionProfile.userId,
-                    displayName: cached?.displayName || mentionProfile.displayName,
-                    avatar: avatarUrl,
-                  };
-                })()}
-                onClose={() => setMentionProfile(null)}
-                onStartConversation={async (uid) => {
-                  setMentionProfile(null);
-                  await handleStartChat(uid);
-                }}
-              />
-            </React.Suspense>
-          </div>
-        </div>,
-        document.body,
+      {mentionProfile && currentUserSummary && (
+        <DraggableProfileModal onClose={() => setMentionProfile(null)}>
+          <React.Suspense fallback={null}>
+            <UserProfile
+              userId={mentionProfile.userId}
+              currentUserId={currentUserSummary.id}
+              conversationContext="group"
+              initialUser={(() => {
+                const cached = getCachedUserProfile(mentionProfile.userId) as
+                  | { avatar?: string | null; avatarUrl?: string | null; displayName?: string }
+                  | undefined;
+                // Avatar URLs are short-lived presigned S3 links (~15 min).
+                // Prefer the mention's URL — it is captured at click time from
+                // the freshly fetched message, so it is the least likely to be
+                // expired. The cached profile copy can hold a stale (expired)
+                // signature that would 403 and fall back to initials.
+                const avatarUrl = resolvePublicResourceUrl(
+                  mentionProfile.avatarUrl || cached?.avatar || cached?.avatarUrl || undefined,
+                );
+                return {
+                  id: mentionProfile.userId,
+                  displayName: cached?.displayName || mentionProfile.displayName,
+                  avatar: avatarUrl,
+                };
+              })()}
+              onClose={() => setMentionProfile(null)}
+              onStartConversation={async (uid) => {
+                setMentionProfile(null);
+                await handleStartChat(uid);
+              }}
+            />
+          </React.Suspense>
+        </DraggableProfileModal>
       )}
 
       {/* Image Preview Modal */}

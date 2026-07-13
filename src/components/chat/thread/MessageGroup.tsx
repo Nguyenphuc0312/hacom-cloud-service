@@ -39,6 +39,7 @@ import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { splitFileName } from "../../../utils/truncateFilename";
 import { UserProfile } from "../../info/UserProfile";
+import { DraggableProfileModal } from "../../info/DraggableProfileModal";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type {
   ConversationThreadGroupRow,
@@ -1033,30 +1034,20 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
         </div>
       )}
 
-      {viewingUserId && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setViewingUserId(null)}
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <UserProfile
-              userId={viewingUserId}
-              currentUserId={currentUserId ?? ""}
-              conversationContext="group"
-              initialUser={{ id: leadMessage.senderId, username: leadMessage.senderId, displayName: leadMessage.senderName ?? undefined, avatar: leadMessage.senderAvatar ?? undefined }}
-              onClose={() => setViewingUserId(null)}
-              onStartConversation={(uid) => {
-                setViewingUserId(null);
-                dispatchStartDirectMessage({ userId: uid });
-              }}
-            />
-          </div>
-        </div>,
-        document.body,
+      {viewingUserId && (
+        <DraggableProfileModal onClose={() => setViewingUserId(null)}>
+          <UserProfile
+            userId={viewingUserId}
+            currentUserId={currentUserId ?? ""}
+            conversationContext="group"
+            initialUser={{ id: leadMessage.senderId, username: leadMessage.senderId, displayName: leadMessage.senderName ?? undefined, avatar: leadMessage.senderAvatar ?? undefined }}
+            onClose={() => setViewingUserId(null)}
+            onStartConversation={(uid) => {
+              setViewingUserId(null);
+              dispatchStartDirectMessage({ userId: uid });
+            }}
+          />
+        </DraggableProfileModal>
       )}
 
       <div
