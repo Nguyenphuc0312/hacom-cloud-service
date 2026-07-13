@@ -1,5 +1,4 @@
 import React from "react";
-import ReactDOM from "react-dom";
 import {
   CheckIcon,
   LockClosedIcon,
@@ -13,6 +12,7 @@ import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { chatApi, fetchConversationTail } from "../../features/api/chatApi";
 import { UserProfile } from "../info/UserProfile";
+import { DraggableProfileModal } from "../info/DraggableProfileModal";
 import { Avatar } from "../common/Avatar";
 import {
   loadUserProfiles,
@@ -423,36 +423,28 @@ export const PollMessage: React.FC<PollMessageProps> = ({
         }}
       />
 
-      {/* Profile modal — same portal pattern as MessageCluster */}
-      {viewingUserId &&
-        ReactDOM.createPortal(
-          <div
-            className="fixed inset-0 z-[210] flex items-center justify-center p-4"
-            onClick={() => setViewingUserId(null)}
-          >
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div
-              className="relative z-10 flex max-h-[88vh] w-full max-w-[340px] flex-col overflow-y-auto rounded-2xl shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <UserProfile
-                userId={viewingUserId}
-                currentUserId={currentUserId ?? ""}
-                conversationContext="standalone"
-                initialUser={(() => {
-                  const p = resolvedProfiles[viewingUserId];
-                  return p ? { id: viewingUserId, username: viewingUserId, displayName: p.name, avatar: p.avatar ?? undefined } : null;
-                })()}
-                onClose={() => setViewingUserId(null)}
-                onStartConversation={(uid) => {
-                  setViewingUserId(null);
-                  dispatchStartDirectMessage({ userId: uid });
-                }}
-              />
-            </div>
-          </div>,
-          document.body,
-        )}
+      {/* Profile modal — same shell as MessageCluster */}
+      {viewingUserId && (
+        <DraggableProfileModal
+          onClose={() => setViewingUserId(null)}
+          zClassName="z-[210]"
+        >
+          <UserProfile
+            userId={viewingUserId}
+            currentUserId={currentUserId ?? ""}
+            conversationContext="standalone"
+            initialUser={(() => {
+              const p = resolvedProfiles[viewingUserId];
+              return p ? { id: viewingUserId, username: viewingUserId, displayName: p.name, avatar: p.avatar ?? undefined } : null;
+            })()}
+            onClose={() => setViewingUserId(null)}
+            onStartConversation={(uid) => {
+              setViewingUserId(null);
+              dispatchStartDirectMessage({ userId: uid });
+            }}
+          />
+        </DraggableProfileModal>
+      )}
     </div>
   );
 };
