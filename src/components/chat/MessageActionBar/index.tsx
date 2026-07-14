@@ -1,14 +1,17 @@
 ﻿import React, { useCallback } from "react";
 import { clsx } from "clsx";
 import { HeartIcon } from "@heroicons/react/24/outline";
-import { Pin } from "lucide-react";
+import { Check, Copy, MoreHorizontal, Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface MessageActionBarProps {
-  onReplyClick: () => void;
+  onReplyClick?: () => void;
   onForwardClick?: () => void;
   onReactClick?: () => void;
+  onCopyClick?: () => void;
   onPinClick?: () => void;
+  onMoreClick?: () => void;
+  copied?: boolean;
   /** Node rendered anchored above the react button (e.g. QuickReactBar) */
   reactionPickerNode?: React.ReactNode;
   className?: string;
@@ -25,7 +28,10 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
   onReplyClick,
   onForwardClick,
   onReactClick,
+  onCopyClick,
   onPinClick,
+  onMoreClick,
+  copied = false,
   reactionPickerNode,
   className,
 }) => {
@@ -69,19 +75,42 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       )}
 
       {/* Reply button */}
-      <button
-        type="button"
-        onClick={stop(onReplyClick)}
-        title={t("chat:message.reply", "Trả lời")}
-        aria-label={t("chat:message.reply", "Trả lời")}
-        className={actionBtnClass}
-      >
-        {/* Reply — Zalo-style: simple left-curved arrow ↩ */}
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="9 17 4 12 9 7" />
-          <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-        </svg>
-      </button>
+      {onReplyClick && (
+        <button
+          type="button"
+          onClick={stop(onReplyClick)}
+          title={t("chat:message.reply", "Trả lời")}
+          aria-label={t("chat:message.reply", "Trả lời")}
+          className={actionBtnClass}
+        >
+          {/* Reply — Zalo-style: simple left-curved arrow ↩ */}
+          <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+        </button>
+      )}
+
+      {/* Copy button */}
+      {onCopyClick && (
+        <button
+          type="button"
+          onClick={stop(onCopyClick)}
+          title={t("chat:message.actions.copy", "Sao chép")}
+          aria-label={t("chat:message.actions.copyAria", "Sao chép tin nhắn")}
+          className={clsx(
+            actionBtnClass,
+            copied && "text-success hover:text-success",
+          )}
+          data-testid="message-action-copy"
+        >
+          {copied ? (
+            <Check className="h-[18px] w-[18px]" strokeWidth={1.7} />
+          ) : (
+            <Copy className="h-[18px] w-[18px]" strokeWidth={1.7} />
+          )}
+        </button>
+      )}
 
       {/* Forward button */}
       {onForwardClick && (
@@ -113,6 +142,20 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
             className="h-[18px] w-[18px]"
             strokeWidth={1.5}
           />
+        </button>
+      )}
+
+      {/* More button */}
+      {onMoreClick && (
+        <button
+          type="button"
+          onClick={stop(onMoreClick)}
+          title={t("chat:header.moreActions", "Thêm")}
+          aria-label={t("chat:header.moreActions", "Thêm")}
+          className={actionBtnClass}
+          data-testid="message-action-more"
+        >
+          <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={1.7} />
         </button>
       )}
     </div>

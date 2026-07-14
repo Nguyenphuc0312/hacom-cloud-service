@@ -5,6 +5,7 @@ import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import type { Mention } from "../../types";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
 import { toast } from "../ui";
+import { copyTextToClipboard } from "../../utils/clipboard";
 import {
   getCollapsedTextPreview,
   type LongMessageRenderMode,
@@ -314,13 +315,21 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => {
-                void navigator.clipboard.writeText(fullStructuredBlockContent);
-                toast.success(
-                  t("chat:message.copyFullSuccess", {
-                    defaultValue: "Đã sao chép toàn bộ tin nhắn",
-                  }),
-                );
+              onClick={async () => {
+                const copied = await copyTextToClipboard(fullStructuredBlockContent);
+                if (copied) {
+                  toast.success(
+                    t("chat:message.copyFullSuccess", {
+                      defaultValue: "Đã sao chép toàn bộ tin nhắn",
+                    }),
+                  );
+                } else {
+                  toast.error(
+                    t("chat:message.copyFailure", {
+                      defaultValue: "Không thể sao chép tin nhắn",
+                    }),
+                  );
+                }
               }}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted transition-colors hover:text-text-primary"
             >

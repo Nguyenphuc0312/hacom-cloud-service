@@ -73,7 +73,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
       },
       copy: {
         id: "copy",
-        label: t("chat:message.actions.copy"),
+        label: t("chat:message.actions.copy", { defaultValue: "Sao chép" }),
         icon: Copy,
       },
       retry: {

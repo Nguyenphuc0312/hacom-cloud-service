@@ -1,6 +1,7 @@
 import type { Message } from "../types";
 import { MessageType } from "../types";
 import { isFailedMessage, isPendingMessage } from "./messageTimeline";
+import { getCopyableMessageText } from "./messageCopy";
 
 export type MessageActionId =
   | "react"
@@ -39,7 +40,7 @@ export interface MessageActionPolicyResult {
 }
 
 const canCopyMessage = (message: Message): boolean =>
-  Boolean(message.content?.trim());
+  getCopyableMessageText(message) !== null;
 
 const canReactToMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM &&
@@ -59,12 +60,18 @@ const canPinMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
+const canForwardMessage = (message: Message): boolean =>
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
+
 const getActionCandidates = ({
   message,
-  isOwn,
   canRetry = false,
   canPin = false,
   isPinned = false,
+  canForward = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -81,7 +88,7 @@ const getActionCandidates = ({
   if (canReplyToMessage(message)) {
     candidates.push({
       id: "reply",
-      score: isOwn ? 66 : 82,
+      score: 90,
       railEligible: true,
       menuEligible: true,
     });
@@ -90,7 +97,7 @@ const getActionCandidates = ({
   if (canReactToMessage(message) && !failed) {
     candidates.push({
       id: "react",
-      score: isOwn ? 56 : 74,
+      score: 100,
       railEligible: true,
       menuEligible: true,
     });
@@ -99,7 +106,16 @@ const getActionCandidates = ({
   if (canCopyMessage(message)) {
     candidates.push({
       id: "copy",
-      score: failed ? 76 : 72,
+      score: failed ? 76 : 80,
+      railEligible: true,
+      menuEligible: true,
+    });
+  }
+
+  if (canForward && canForwardMessage(message)) {
+    candidates.push({
+      id: "forward",
+      score: 70,
       railEligible: true,
       menuEligible: true,
     });
