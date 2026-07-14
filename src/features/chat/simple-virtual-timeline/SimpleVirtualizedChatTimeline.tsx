@@ -50,7 +50,6 @@ export interface SimpleVirtualizedChatTimelineProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
-  onInspect?: (message: Message) => void;
   viewerCanRecallOthers?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -198,7 +197,6 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   onPin,
   onEdit,
   onDelete,
-  onInspect,
   onImageClick,
   onFilePreview,
   hasMore,
@@ -559,7 +557,6 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onReact={onReact}
                         onForward={onForward}
                         onPin={onPin}
-                        onInspect={onInspect}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         onImageClick={wrappedOnImageClick}
