@@ -86,6 +86,21 @@ const renderCluster = (message: Message, onParentClick = vi.fn()) =>
     </div>,
   );
 
+const renderClusterWithPin = (message: Message) =>
+  render(
+    <MessageCluster
+      message={message}
+      isOwn={false}
+      showAvatar={false}
+      conversationType={RoomType.DIRECT}
+      onReply={vi.fn()}
+      onReact={vi.fn()}
+      onForward={vi.fn()}
+      onPin={vi.fn()}
+      viewerCanPin={true}
+    />,
+  );
+
 const showRail = (container: HTMLElement) => {
   const root = container.firstElementChild?.firstElementChild as HTMLElement;
   fireEvent.mouseEnter(root);
@@ -131,6 +146,19 @@ describe("MessageCluster copy action", () => {
     showRail(container);
 
     expect(screen.queryByTestId("message-action-copy")).not.toBeInTheDocument();
+  });
+
+  it("keeps Copy visible and moves Pin behind More when pin is available", () => {
+    const { container } = renderClusterWithPin(
+      baseMessage({ content: "Can copy this message" }),
+    );
+
+    showRail(container);
+
+    expect(screen.getByTestId("message-action-copy")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chuyển tiếp" })).toBeInTheDocument();
+    expect(screen.getByTestId("message-action-more")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ghim" })).not.toBeInTheDocument();
   });
 
   it("shows an error toast when clipboard write fails", async () => {

@@ -23,6 +23,7 @@ export interface MessageItemProps {
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void;
+  onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -42,6 +43,7 @@ export interface MessageItemProps {
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
 
   // Additional context
   onNavigateToMessage?: (messageId: string) => void;
@@ -68,6 +70,7 @@ export interface MessageItemContentProps {
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void;
+  onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -77,6 +80,8 @@ export interface MessageItemContentProps {
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
   isSelectionMode?: boolean;
+  onToggleSelect?: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   viewerCanRecallOthers?: boolean;

@@ -32,6 +32,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onReact,
   onForward,
   onPin,
+  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -40,6 +41,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
+  onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
@@ -96,12 +98,15 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             onReact={onReact}
             onForward={onForward}
             onPin={onPin}
+            onInspect={onInspect}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}
             onFilePreview={onFilePreview}
             density={density}
             isSelectionMode={isSelectionMode}
+            onToggleSelect={onToggleSelect}
+            onStartSelectionMode={onStartSelectionMode}
             onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
             viewerCanRecallOthers={viewerCanRecallOthers}
@@ -145,11 +150,13 @@ const areEqualMessageItem = (
       prev.onReact === next.onReact &&
       prev.onForward === next.onForward &&
       prev.onPin === next.onPin &&
+      prev.onInspect === next.onInspect &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&
       prev.onFilePreview === next.onFilePreview &&
       prev.onToggleSelect === next.onToggleSelect &&
+      prev.onStartSelectionMode === next.onStartSelectionMode &&
       prev.onNavigateToMessage === next.onNavigateToMessage
     );
   }

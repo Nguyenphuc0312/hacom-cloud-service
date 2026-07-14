@@ -63,6 +63,9 @@ interface MessageClusterProps {
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
   onUnpin?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
+  onStartSelectionMode?: () => void;
+  onToggleSelect?: (messageId: string) => void;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
@@ -101,6 +104,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   onForward,
   onPin,
   onUnpin,
+  onInspect,
+  onStartSelectionMode,
+  onToggleSelect,
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
@@ -122,6 +128,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const [isHovered, setIsHovered] = React.useState(false);
   const [showReactionPicker, setShowReactionPicker] = React.useState(false);
   const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
+  const [savedMessageIds, setSavedMessageIds] = React.useState<Set<string>>(
+    () => new Set<string>(),
+  );
   const [editHistoryMessageId, setEditHistoryMessageId] = React.useState<string | null>(null);
   const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -312,7 +321,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canRetry: isFailedMessage(message),
         canPin: viewerCanPin,
         isPinned: message.isPinned === true,
+        isSaved: savedMessageIds.has(message.id),
         canForward: Boolean(onForward),
+        canSelect: Boolean(onStartSelectionMode && onToggleSelect),
+        canInspect: Boolean(onInspect),
       }),
     [
       coarsePointer,
@@ -320,6 +332,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isSelectionMode,
       message,
       onForward,
+      onInspect,
+      onStartSelectionMode,
+      onToggleSelect,
+      savedMessageIds,
       viewerCanPin,
     ],
   );
@@ -357,7 +373,36 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         case "unpin":
           if (onUnpin) {
             void Promise.resolve(onUnpin(message.id));
+          } else if (onPin) {
+            void Promise.resolve(onPin(message.id));
           }
+          closeActions();
+          break;
+        case "save":
+          setSavedMessageIds((previous) => new Set(previous).add(message.id));
+          toast.success(
+            t("chat:message.saveSuccess", { defaultValue: "Đã lưu tin nhắn" }),
+          );
+          closeActions();
+          break;
+        case "unsave":
+          setSavedMessageIds((previous) => {
+            const next = new Set(previous);
+            next.delete(message.id);
+            return next;
+          });
+          toast.success(
+            t("chat:message.unsaveSuccess", { defaultValue: "Đã bỏ lưu tin nhắn" }),
+          );
+          closeActions();
+          break;
+        case "select":
+          onStartSelectionMode?.();
+          onToggleSelect?.(message.id);
+          closeActions();
+          break;
+        case "inspect":
+          onInspect?.(message);
           closeActions();
           break;
         case "more":
@@ -372,10 +417,14 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isActionsOpen,
       message,
       onForward,
+      onInspect,
       onPin,
+      onStartSelectionMode,
+      onToggleSelect,
       onUnpin,
       onReply,
       openActions,
+      t,
     ],
   );
 
@@ -452,11 +501,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 }
                 onCopyClick={
                   hasRailAction("copy") ? () => { void handleCopy(); } : undefined
-                }
-                onPinClick={
-                  hasRailAction("pin") && onPin
-                    ? () => { void Promise.resolve(onPin(message.id)); hideRail(true); }
-                    : undefined
                 }
                 onMoreClick={
                   hasRailAction("more") ? openActions : undefined

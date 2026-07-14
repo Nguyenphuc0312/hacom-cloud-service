@@ -6,6 +6,10 @@ import {
   Copy,
   CornerUpLeft,
   Forward,
+  Bookmark,
+  BookmarkCheck,
+  Info,
+  ListChecks,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -90,6 +94,26 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         id: "unpin",
         label: t("chat:message.actions.unpin", { defaultValue: "Bỏ ghim" }),
         icon: PinOff,
+      },
+      save: {
+        id: "save",
+        label: t("chat:message.actions.save", { defaultValue: "Lưu tin nhắn" }),
+        icon: Bookmark,
+      },
+      unsave: {
+        id: "unsave",
+        label: t("chat:message.actions.unsave", { defaultValue: "Bỏ lưu" }),
+        icon: BookmarkCheck,
+      },
+      select: {
+        id: "select",
+        label: t("chat:message.actions.select", { defaultValue: "Chọn nhiều tin nhắn" }),
+        icon: ListChecks,
+      },
+      inspect: {
+        id: "inspect",
+        label: t("chat:message.actions.inspect", { defaultValue: "Thông tin tin nhắn" }),
+        icon: Info,
       },
       more: {
         id: "more",
@@ -194,6 +218,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               type="button"
               onClick={() => onAction(action.id)}
               data-testid={`message-action-${action.id}`}
+              title={action.label}
+              aria-label={action.label}
               className={clsx(
                 baseButtonClass,
                 "w-full text-left",

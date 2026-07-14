@@ -24,12 +24,15 @@ export const MessageItemContent: React.FC<MessageItemContentProps> = ({
   onReact,
   onForward,
   onPin,
+  onInspect,
   onEdit,
   onDelete,
   onImageClick,
   onFilePreview,
   density = "comfortable",
   isSelectionMode = false,
+  onToggleSelect,
+  onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
@@ -92,11 +95,14 @@ export const MessageItemContent: React.FC<MessageItemContentProps> = ({
             onReact={onReact}
             onForward={onForward}
             onPin={onPin}
+            onInspect={onInspect}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}
             onFilePreview={onFilePreview}
             isSelectionMode={isSelectionMode}
+            onToggleSelect={onToggleSelect}
+            onStartSelectionMode={onStartSelectionMode}
             density={density}
             onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}

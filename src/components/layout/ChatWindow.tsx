@@ -896,11 +896,13 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   React.useEffect(() => {
     if (!externalJumpToMessageId) return;
 
-    void handleNavigateToMessage(externalJumpToMessageId).finally(() => {
-      setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      void handleNavigateToMessage(externalJumpToMessageId).finally(() => {
         onExternalJumpHandled?.(externalJumpToMessageId);
-      }, 0);
-    });
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [
     externalJumpRequestVersion,
     externalJumpToMessageId,
@@ -1259,6 +1261,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         isSelectionMode={isMessageSelectionMode}
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
+        onStartSelectionMode={enterSelectionMode}
         onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
         composerHeight={composerHeight}

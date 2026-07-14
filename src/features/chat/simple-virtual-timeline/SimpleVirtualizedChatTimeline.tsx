@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- estimateAttachmentHeight is covered by a focused regression test. */
 /**
  * Simple Virtualized Chat Timeline.
  *
@@ -62,6 +63,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   isSelectionMode?: boolean;
   selectedMessageIds?: Set<string>;
   onToggleSelect?: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   unreadMarker?: UnreadTimelineMarker | null;
@@ -207,6 +209,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   isSelectionMode,
   selectedMessageIds,
   onToggleSelect,
+  onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
@@ -342,7 +345,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         initialStickRafRef.current = null;
       }
     };
-  }, [isInitialSettled, conversationId]);
+  }, [conversationId, isInitialSettled, scrollRef]);
 
   // Composer height changes shift the timeline's visible area. When the user is
   // at the bottom, the timeline should stay pinned to the bottom edge.
@@ -565,6 +568,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         isSelectionMode={isSelectionMode}
                         selectedMessageIds={selectedIds}
                         onToggleSelect={onToggleSelect}
+                        onStartSelectionMode={onStartSelectionMode}
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
                         viewerCanRecallOthers={viewerCanRecallOthers}
@@ -592,6 +596,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         isSelectionMode={isSelectionMode}
                         isSelected={false}
                         onToggleSelect={onToggleSelect}
+                        onStartSelectionMode={onStartSelectionMode}
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
                         viewerCanRecallOthers={viewerCanRecallOthers}
