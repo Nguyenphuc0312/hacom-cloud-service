@@ -99,7 +99,6 @@ interface MessageGroupProps {
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void;
-  onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -213,7 +212,6 @@ interface MessageGroupItemProps {
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void;
-  onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -274,7 +272,6 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onReact,
   onForward,
   onPin,
-  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -523,7 +520,6 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           isSaved: savedMessageIds.has(message.id),
           canForward: Boolean(onForward),
           canSelect: Boolean(onStartSelectionMode && onToggleSelect),
-          canInspect: Boolean(onInspect),
         }),
       [
         coarsePointer,
@@ -532,7 +528,6 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         message,
         onForward,
         onPin,
-        onInspect,
         onStartSelectionMode,
         onToggleSelect,
         savedMessageIds,
@@ -659,9 +654,6 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             onStartSelectionMode?.();
             onToggleSelect?.(message.id);
             break;
-          case "inspect":
-            onInspect?.(message);
-            break;
           case "more":
             setIsActionSheetOpen(true);
             return;
@@ -670,7 +662,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [handleCopy, message, onDelete, onEdit, onForward, onInspect, onPin, onReact, onReply, onStartSelectionMode, onToggleSelect, retrySendMessage, isOwn, t],
+      [handleCopy, message, onDelete, onEdit, onForward, onPin, onReact, onReply, onStartSelectionMode, onToggleSelect, retrySendMessage, isOwn, t],
     );
 
     const hasInlineAction = React.useCallback(
@@ -1037,7 +1029,6 @@ const areEqualMessageGroupItemProps = (
     previous.onReact === next.onReact &&
     previous.onForward === next.onForward &&
     previous.onPin === next.onPin &&
-    previous.onInspect === next.onInspect &&
     previous.onEdit === next.onEdit &&
     previous.onDelete === next.onDelete &&
     previous.onImageClick === next.onImageClick &&
@@ -1070,7 +1061,6 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   onReact,
   onForward,
   onPin,
-  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -1179,7 +1169,6 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               onReact={onReact}
               onForward={onForward}
               onPin={onPin}
-              onInspect={onInspect}
               onEdit={onEdit}
               onDelete={onDelete}
               onImageClick={onImageClick}

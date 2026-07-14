@@ -32,7 +32,6 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onReact,
   onForward,
   onPin,
-  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -98,7 +97,6 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             onReact={onReact}
             onForward={onForward}
             onPin={onPin}
-            onInspect={onInspect}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}
@@ -150,7 +148,6 @@ const areEqualMessageItem = (
       prev.onReact === next.onReact &&
       prev.onForward === next.onForward &&
       prev.onPin === next.onPin &&
-      prev.onInspect === next.onInspect &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&

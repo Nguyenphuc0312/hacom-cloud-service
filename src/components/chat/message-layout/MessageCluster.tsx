@@ -63,7 +63,6 @@ interface MessageClusterProps {
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
   onUnpin?: (messageId: string) => void | Promise<void>;
-  onInspect?: (message: Message) => void;
   onStartSelectionMode?: () => void;
   onToggleSelect?: (messageId: string) => void;
   onImageClick?: (payload: ImageClickPayload) => void;
@@ -104,7 +103,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   onForward,
   onPin,
   onUnpin,
-  onInspect,
   onStartSelectionMode,
   onToggleSelect,
   onImageClick,
@@ -324,7 +322,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isSaved: savedMessageIds.has(message.id),
         canForward: Boolean(onForward),
         canSelect: Boolean(onStartSelectionMode && onToggleSelect),
-        canInspect: Boolean(onInspect),
       }),
     [
       coarsePointer,
@@ -332,7 +329,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isSelectionMode,
       message,
       onForward,
-      onInspect,
       onStartSelectionMode,
       onToggleSelect,
       savedMessageIds,
@@ -401,10 +397,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           onToggleSelect?.(message.id);
           closeActions();
           break;
-        case "inspect":
-          onInspect?.(message);
-          closeActions();
-          break;
         case "more":
           openActions();
           break;
@@ -417,7 +409,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isActionsOpen,
       message,
       onForward,
-      onInspect,
       onPin,
       onStartSelectionMode,
       onToggleSelect,

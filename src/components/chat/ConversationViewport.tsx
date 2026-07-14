@@ -20,7 +20,6 @@ interface ConversationViewportProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
-  onInspect?: (message: Message) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
   isConversationReady?: boolean;
@@ -56,7 +55,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       onPin,
       onEdit,
       onDelete,
-      onInspect,
       isConversationReady,
       onImageClick,
       onFilePreview,
@@ -154,7 +152,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onPin={onPin}
           onEdit={onEdit}
           onDelete={onDelete}
-          onInspect={onInspect}
           onImageClick={onImageClick}
           onFilePreview={onFilePreview}
           hasMore={hasMoreOlder}

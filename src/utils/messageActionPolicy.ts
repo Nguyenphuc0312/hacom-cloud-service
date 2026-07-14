@@ -14,7 +14,6 @@ export type MessageActionId =
   | "save"
   | "unsave"
   | "select"
-  | "inspect"
   | "more";
 
 export interface MessageActionPolicyInput {
@@ -28,7 +27,6 @@ export interface MessageActionPolicyInput {
   isSaved?: boolean;
   canForward?: boolean;
   canSelect?: boolean;
-  canInspect?: boolean;
 }
 
 interface ActionCandidate {
@@ -85,7 +83,6 @@ const getActionCandidates = ({
   isSaved = false,
   canForward = false,
   canSelect = false,
-  canInspect = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -159,15 +156,6 @@ const getActionCandidates = ({
     candidates.push({
       id: "select",
       menuOrder: 3,
-      railEligible: false,
-      menuEligible: true,
-    });
-  }
-
-  if (canInspect) {
-    candidates.push({
-      id: "inspect",
-      menuOrder: 4,
       railEligible: false,
       menuEligible: true,
     });
