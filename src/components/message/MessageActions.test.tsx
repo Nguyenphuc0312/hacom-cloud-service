@@ -26,7 +26,7 @@ describe("MessageActions", () => {
     render(
       <MessageActions
         mode="sheet"
-        actions={["pin", "save", "select", "inspect"]}
+        actions={["pin", "save", "select"]}
         isOpen
         onAction={vi.fn()}
         onClose={vi.fn()}
@@ -37,9 +37,6 @@ describe("MessageActions", () => {
     expect(screen.getByRole("button", { name: "Lưu tin nhắn" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Chọn nhiều tin nhắn" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Thông tin tin nhắn" }),
     ).toBeInTheDocument();
   });
 });

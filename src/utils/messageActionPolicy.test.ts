@@ -29,11 +29,10 @@ describe("resolveMessageActions", () => {
         canForward: true,
         canPin: true,
         canSelect: true,
-        canInspect: true,
       }),
     ).toEqual({
       railActions: ["reply", "react", "copy", "forward", "more"],
-      menuActions: ["pin", "save", "select", "inspect"],
+      menuActions: ["pin", "save", "select"],
     });
   });
 
@@ -48,8 +47,7 @@ describe("resolveMessageActions", () => {
         isPinned: true,
         isSaved: true,
         canSelect: true,
-        canInspect: true,
       }).menuActions,
-    ).toEqual(["unpin", "unsave", "select", "inspect"]);
+    ).toEqual(["unpin", "unsave", "select"]);
   });
 });

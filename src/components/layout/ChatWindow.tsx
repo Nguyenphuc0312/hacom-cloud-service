@@ -5,7 +5,6 @@ import { ChatHeader } from "../chat/ChatHeader";
 import { PinnedMessageBar } from "../chat/PinnedMessageBar";
 import { ConversationViewport } from "../chat/ConversationViewport";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
-import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import type { MessageInputHandle } from "../input/MessageInput";
@@ -15,7 +14,6 @@ import { NotificationListSkeleton, toast } from "../ui";
 import {
   useChatStore,
   useGroupStore,
-  useMessageEntity,
   useUIStore,
 } from "../../stores";
 import {
@@ -664,11 +662,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Search & pinned panel state
   const [overlayMode, setOverlayMode] = React.useState<
-    "search" | "pinned" | "inspect" | null
+    "search" | "pinned" | null
   >(null);
-  const [inspectMessageId, setInspectMessageId] = React.useState<string | null>(
-    null,
-  );
   const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
     string | null
   >(null);
@@ -681,7 +676,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
-  const inspectedMessage = useMessageEntity(inspectMessageId);
   const resolvedDensity = "comfortable" as const;
   const layoutProfile = React.useMemo(
     () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
@@ -832,11 +826,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     [conversation.id, togglePin],
   );
 
-  const handleInspectMessage = React.useCallback((message: Message) => {
-    setInspectMessageId(message.id);
-    setOverlayMode("inspect");
-  }, []);
-
   const queueJumpToMessage = React.useCallback(
     (messageId: string) => {
       setOverlayMode(null);
@@ -916,7 +905,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   if (conversation.id !== prevConversationId) {
     setPrevConversationId(conversation.id);
     setOverlayMode(null);
-    setInspectMessageId(null);
     exitSelectionMode();
 
     // Reset composer state
@@ -1218,27 +1206,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         />
       )}
 
-      {/* Inspect remains a floating overlay with a scrim */}
-      {overlayMode === "inspect" && (
-        <div className="pointer-events-none absolute inset-0 z-[45]">
-          <button
-            type="button"
-            className="pointer-events-auto absolute inset-0 bg-text-primary/18 backdrop-blur-[1px]"
-            onClick={() => setOverlayMode(null)}
-            aria-label={t("common:actions.close")}
-          />
-          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[var(--app-inspector-width)] border-l border-border/60 bg-surface shadow-elev3 animate-slide-up-fade">
-            <React.Suspense fallback={<OverlayPanelFallback />}>
-              <MessageInspectDrawer
-                message={inspectedMessage ?? null}
-                onClose={() => setOverlayMode(null)}
-                className="h-full"
-              />
-            </React.Suspense>
-          </div>
-        </div>
-      )}
-
       <FeatureErrorBoundary name="Tin nhắn">
         <ConversationViewport
         layoutState={layoutState}
@@ -1250,7 +1217,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         onPin={handlePin}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onInspect={handleInspectMessage}
         hasMoreMessages={hasMoreMessages}
         isLoadingMessages={isLoadingMessages}
         isConversationReady={isConversationReady}

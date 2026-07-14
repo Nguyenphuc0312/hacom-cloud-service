@@ -12,7 +12,6 @@ export const fallbackMessageActionLabels: Record<MessageActionId, string> = {
   save: "Lưu tin nhắn",
   unsave: "Bỏ lưu",
   select: "Chọn nhiều tin nhắn",
-  inspect: "Thông tin tin nhắn",
   more: "Thêm",
 };
 

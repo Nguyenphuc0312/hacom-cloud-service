@@ -24,7 +24,6 @@ export const MessageItemContent: React.FC<MessageItemContentProps> = ({
   onReact,
   onForward,
   onPin,
-  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -95,7 +94,6 @@ export const MessageItemContent: React.FC<MessageItemContentProps> = ({
             onReact={onReact}
             onForward={onForward}
             onPin={onPin}
-            onInspect={onInspect}
             onEdit={onEdit}
             onDelete={onDelete}
             onImageClick={onImageClick}

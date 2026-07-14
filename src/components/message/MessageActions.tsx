@@ -8,7 +8,6 @@ import {
   Copy,
   CornerUpLeft,
   Forward,
-  Info,
   ListChecks,
   MoreHorizontal,
   Pin,
@@ -120,11 +119,6 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         id: "select",
         label: translateActionLabel("select", "chat:message.actions.select"),
         icon: ListChecks,
-      },
-      inspect: {
-        id: "inspect",
-        label: translateActionLabel("inspect", "chat:message.actions.inspect"),
-        icon: Info,
       },
       more: {
         id: "more",
