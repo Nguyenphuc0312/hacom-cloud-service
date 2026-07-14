@@ -3,9 +3,13 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Bookmark,
+  BookmarkCheck,
   Copy,
   CornerUpLeft,
   Forward,
+  Info,
+  ListChecks,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -14,6 +18,10 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import {
+  fallbackMessageActionLabels,
+  translateWithFallback,
+} from "../../utils/messageActionLabels";
 import type { MessageActionId } from "../../utils/messageActionPolicy";
 
 type MessageActionsMode = "rail" | "inline" | "sheet";
@@ -54,51 +62,79 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   actionLabelOverrides,
 }) => {
   const { t } = useTranslation();
+  const translateActionLabel = React.useCallback(
+    (actionId: MessageActionId, key: string) => {
+      return translateWithFallback(t, key, fallbackMessageActionLabels[actionId]);
+    },
+    [t],
+  );
+
   const actionMap = React.useMemo<Record<MessageActionId, ActionDescriptor>>(
     () => ({
       react: {
         id: "react",
-        label: t("chat:message.actions.react", { defaultValue: "React" }),
+        label: translateActionLabel("react", "chat:message.actions.react"),
         icon: SmilePlus,
       },
       reply: {
         id: "reply",
-        label: t("chat:message.actions.reply"),
+        label: translateActionLabel("reply", "chat:message.actions.reply"),
         icon: CornerUpLeft,
       },
       forward: {
         id: "forward",
-        label: t("chat:message.actions.forward", { defaultValue: "Chuyển tiếp" }),
+        label: translateActionLabel("forward", "chat:message.actions.forward"),
         icon: Forward,
       },
       copy: {
         id: "copy",
-        label: t("chat:message.actions.copy", { defaultValue: "Sao chép" }),
+        label: translateActionLabel("copy", "chat:message.actions.copy"),
         icon: Copy,
       },
       retry: {
         id: "retry",
-        label: t("chat:message.status.retry", { defaultValue: "Retry" }),
+        label: translateActionLabel("retry", "chat:message.status.retry"),
         icon: RefreshCw,
       },
       pin: {
         id: "pin",
-        label: t("chat:message.actions.pin", { defaultValue: "Ghim tin nhắn" }),
+        label: translateActionLabel("pin", "chat:message.actions.pin"),
         icon: Pin,
       },
       unpin: {
         id: "unpin",
-        label: t("chat:message.actions.unpin", { defaultValue: "Bỏ ghim" }),
+        label: translateActionLabel("unpin", "chat:message.actions.unpin"),
         icon: PinOff,
+      },
+      save: {
+        id: "save",
+        label: translateActionLabel("save", "chat:message.actions.save"),
+        icon: Bookmark,
+      },
+      unsave: {
+        id: "unsave",
+        label: translateActionLabel("unsave", "chat:message.actions.unsave"),
+        icon: BookmarkCheck,
+      },
+      select: {
+        id: "select",
+        label: translateActionLabel("select", "chat:message.actions.select"),
+        icon: ListChecks,
+      },
+      inspect: {
+        id: "inspect",
+        label: translateActionLabel("inspect", "chat:message.actions.inspect"),
+        icon: Info,
       },
       more: {
         id: "more",
-        label: t("chat:header.moreActions"),
+        label: translateActionLabel("more", "chat:header.moreActions"),
         icon: MoreHorizontal,
       },
     }),
-    [t],
+    [translateActionLabel],
   );
+
   const descriptors = actions
     .map((actionId) => {
       const base = actionMap[actionId];
@@ -139,7 +175,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
             data-testid={`message-action-${action.id}`}
             className={clsx(
               BTN_CLASS,
-              action.danger && "hover:!bg-red-50 hover:!text-red-500 dark:hover:!bg-red-500/10 dark:hover:!text-red-400",
+              action.danger &&
+                "hover:!bg-red-50 hover:!text-red-500 dark:hover:!bg-red-500/10 dark:hover:!text-red-400",
             )}
             aria-label={action.label}
             title={action.label}
@@ -194,6 +231,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               type="button"
               onClick={() => onAction(action.id)}
               data-testid={`message-action-${action.id}`}
+              title={action.label}
+              aria-label={action.label}
               className={clsx(
                 baseButtonClass,
                 "w-full text-left",

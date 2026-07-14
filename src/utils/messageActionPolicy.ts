@@ -11,6 +11,10 @@ export type MessageActionId =
   | "retry"
   | "pin"
   | "unpin"
+  | "save"
+  | "unsave"
+  | "select"
+  | "inspect"
   | "more";
 
 export interface MessageActionPolicyInput {
@@ -19,17 +23,18 @@ export interface MessageActionPolicyInput {
   isCoarsePointer: boolean;
   isSelectionMode?: boolean;
   canRetry?: boolean;
-  /** Có cho phép ghim tin nhắn hay không (owner/admin). */
   canPin?: boolean;
-  /** Tin nhắn đã được ghim chưa. */
   isPinned?: boolean;
-  /** Có cho phép chuyển tiếp tin nhắn hay không. */
+  isSaved?: boolean;
   canForward?: boolean;
+  canSelect?: boolean;
+  canInspect?: boolean;
 }
 
 interface ActionCandidate {
   id: Exclude<MessageActionId, "more">;
-  score: number;
+  railOrder?: number;
+  menuOrder?: number;
   railEligible: boolean;
   menuEligible: boolean;
 }
@@ -66,12 +71,21 @@ const canForwardMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
+const canShowMessageMenu = (message: Message): boolean =>
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  message.lifecycleStatus !== "recalled" &&
+  message.lifecycleStatus !== "deleted_admin";
+
 const getActionCandidates = ({
   message,
   canRetry = false,
   canPin = false,
   isPinned = false,
+  isSaved = false,
   canForward = false,
+  canSelect = false,
+  canInspect = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -79,68 +93,87 @@ const getActionCandidates = ({
   if (canRetry && failed) {
     candidates.push({
       id: "retry",
-      score: 110,
+      railOrder: 0,
       railEligible: true,
-      menuEligible: true,
+      menuEligible: false,
     });
   }
 
   if (canReplyToMessage(message)) {
     candidates.push({
       id: "reply",
-      score: 90,
+      railOrder: 1,
       railEligible: true,
-      menuEligible: true,
+      menuEligible: false,
     });
   }
 
   if (canReactToMessage(message) && !failed) {
     candidates.push({
       id: "react",
-      score: 100,
+      railOrder: 2,
       railEligible: true,
-      menuEligible: true,
+      menuEligible: false,
     });
   }
 
   if (canCopyMessage(message)) {
     candidates.push({
       id: "copy",
-      score: failed ? 76 : 80,
+      railOrder: 3,
       railEligible: true,
-      menuEligible: true,
+      menuEligible: false,
     });
   }
 
   if (canForward && canForwardMessage(message)) {
     candidates.push({
       id: "forward",
-      score: 70,
+      railOrder: 4,
       railEligible: true,
+      menuEligible: false,
+    });
+  }
+
+  if (!canShowMessageMenu(message)) {
+    return candidates;
+  }
+
+  if (canPin && canPinMessage(message)) {
+    candidates.push({
+      id: isPinned ? "unpin" : "pin",
+      menuOrder: 1,
+      railEligible: false,
       menuEligible: true,
     });
   }
 
-  // Pin/Unpin actions (only for group admins/owners)
-  if (canPin && canPinMessage(message)) {
-    if (isPinned) {
-      candidates.push({
-        id: "unpin",
-        score: 30,
-        railEligible: true,
-        menuEligible: true,
-      });
-    } else {
-      candidates.push({
-        id: "pin",
-        score: 28,
-        railEligible: true,
-        menuEligible: true,
-      });
-    }
+  candidates.push({
+    id: isSaved ? "unsave" : "save",
+    menuOrder: 2,
+    railEligible: false,
+    menuEligible: true,
+  });
+
+  if (canSelect) {
+    candidates.push({
+      id: "select",
+      menuOrder: 3,
+      railEligible: false,
+      menuEligible: true,
+    });
   }
 
-  return candidates.sort((a, b) => b.score - a.score);
+  if (canInspect) {
+    candidates.push({
+      id: "inspect",
+      menuOrder: 4,
+      railEligible: false,
+      menuEligible: true,
+    });
+  }
+
+  return candidates;
 };
 
 export const resolveMessageActions = (
@@ -161,24 +194,25 @@ export const resolveMessageActions = (
     };
   }
 
-  const railSlots = input.isCoarsePointer ? 1 : 3;
-  const railCandidates = candidates
+  const railSlots = input.isCoarsePointer ? 1 : 4;
+  const railActionIds = candidates
     .filter((candidate) => candidate.railEligible)
-    .slice(0, railSlots);
-  const railActionIds = railCandidates.map((candidate) => candidate.id);
+    .sort((a, b) => (a.railOrder ?? 99) - (b.railOrder ?? 99))
+    .slice(0, railSlots)
+    .map((candidate) => candidate.id);
 
-  const menuCandidates = candidates.filter(
-    (candidate) =>
-      candidate.menuEligible && !railActionIds.includes(candidate.id),
-  );
+  const menuActionIds = candidates
+    .filter((candidate) => candidate.menuEligible)
+    .sort((a, b) => (a.menuOrder ?? 99) - (b.menuOrder ?? 99))
+    .map((candidate) => candidate.id);
 
   const railActions: MessageActionId[] = [...railActionIds];
-  if (menuCandidates.length > 0) {
+  if (menuActionIds.length > 0) {
     railActions.push("more");
   }
 
   return {
     railActions,
-    menuActions: menuCandidates.map((candidate) => candidate.id),
+    menuActions: menuActionIds,
   };
 };

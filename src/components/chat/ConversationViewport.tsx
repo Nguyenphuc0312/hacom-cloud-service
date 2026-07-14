@@ -31,6 +31,7 @@ interface ConversationViewportProps {
   isSelectionMode: boolean;
   selectedMessageIds: Set<string>;
   onToggleSelect: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   composerHeight?: number;
@@ -63,6 +64,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       isSelectionMode,
       selectedMessageIds,
       onToggleSelect,
+      onStartSelectionMode,
       onNavigateToMessage,
       currentUsername,
       composerHeight,
@@ -164,6 +166,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           isSelectionMode={isSelectionMode}
           selectedMessageIds={selectedMessageIds}
           onToggleSelect={onToggleSelect}
+          onStartSelectionMode={onStartSelectionMode}
           onNavigateToMessage={onNavigateToMessage}
           currentUsername={currentUsername}
           viewerCanRecallOthers={

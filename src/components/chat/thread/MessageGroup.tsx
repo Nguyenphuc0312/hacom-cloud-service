@@ -53,6 +53,10 @@ import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
+import { copyTextToClipboard } from "../../../utils/clipboard";
+import { translateMessageActionToast } from "../../../utils/messageActionLabels";
+import { getCopyableMessageText } from "../../../utils/messageCopy";
+import { toast } from "../../ui";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
   [MessageType.IMAGE]: "Hình ảnh",
@@ -107,6 +111,7 @@ interface MessageGroupProps {
   isSelectionMode?: boolean;
   selectedMessageIds?: Set<string>;
   onToggleSelect?: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   viewerCanRecallOthers?: boolean;
@@ -208,6 +213,7 @@ interface MessageGroupItemProps {
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void;
+  onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (
     messageId: string,
@@ -218,6 +224,7 @@ interface MessageGroupItemProps {
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelect?: (messageId: string) => void;
+  onStartSelectionMode?: () => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   viewerCanRecallOthers?: boolean;
@@ -267,6 +274,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onReact,
   onForward,
   onPin,
+  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -274,6 +282,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   isSelectionMode,
   isSelected,
   onToggleSelect,
+  onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
   expandedLongMessageIds,
@@ -287,7 +296,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     const [showReactionPicker, setShowReactionPicker] = React.useState(false);
     const [showMobileReact, setShowMobileReact] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
+    const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
+    const [savedMessageIds, setSavedMessageIds] = React.useState<Set<string>>(
+      () => new Set<string>(),
+    );
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
     // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
@@ -504,7 +518,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           isCoarsePointer: coarsePointer,
           isSelectionMode,
           canRetry: isFailedMessage(message),
+          canPin: Boolean(onPin),
+          isPinned: message.isPinned === true,
+          isSaved: savedMessageIds.has(message.id),
           canForward: Boolean(onForward),
+          canSelect: Boolean(onStartSelectionMode && onToggleSelect),
+          canInspect: Boolean(onInspect),
         }),
       [
         coarsePointer,
@@ -512,6 +531,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         isSelectionMode,
         message,
         onForward,
+        onPin,
+        onInspect,
+        onStartSelectionMode,
+        onToggleSelect,
+        savedMessageIds,
       ],
     );
     const threadCount = getThreadCount(message);
@@ -524,7 +548,10 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
       isFailedMessage(message) ||
       isPendingMessage(message);
 
-    const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
+    const inlineActions = React.useMemo(
+      () => (coarsePointer ? [] : actionPolicy.railActions),
+      [actionPolicy.railActions, coarsePointer],
+    );
 
     const handleItemMouseEnter = React.useCallback(() => {
       if (leaveTimerRef.current) {
@@ -546,9 +573,45 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     React.useEffect(
       () => () => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       },
       [],
     );
+
+    const handleCopy = React.useCallback(async () => {
+      const text = getCopyableMessageText(message);
+      if (!text) {
+        toast.error(
+          t("chat:message.copyFailure", {
+            defaultValue: "Không thể sao chép tin nhắn",
+          }),
+        );
+        return;
+      }
+
+      const success = await copyTextToClipboard(text);
+      if (!success) {
+        toast.error(
+          t("chat:message.copyFailure", {
+            defaultValue: "Không thể sao chép tin nhắn",
+          }),
+        );
+        return;
+      }
+
+      toast.success(
+        t("chat:message.copySuccess", {
+          defaultValue: "Đã sao chép tin nhắn",
+        }),
+      );
+      setCopiedMessageId(message.id);
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = setTimeout(() => {
+        setCopiedMessageId((current) => current === message.id ? null : current);
+      }, 1200);
+    }, [message, t]);
 
     const handleAction = React.useCallback(
       (actionId: MessageActionId) => {
@@ -567,12 +630,37 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             }
             break;
           case "copy":
-            void navigator.clipboard.writeText(message.content || "");
+            void handleCopy();
             break;
           case "retry":
             if (message.conversationId) {
               void retrySendMessage(message).catch(() => undefined);
             }
+            break;
+          case "pin":
+          case "unpin":
+            if (onPin) {
+              onPin(message.id);
+            }
+            break;
+          case "save":
+            setSavedMessageIds((previous) => new Set(previous).add(message.id));
+            toast.success(translateMessageActionToast(t, "saveSuccess"));
+            break;
+          case "unsave":
+            setSavedMessageIds((previous) => {
+              const next = new Set(previous);
+              next.delete(message.id);
+              return next;
+            });
+            toast.success(translateMessageActionToast(t, "unsaveSuccess"));
+            break;
+          case "select":
+            onStartSelectionMode?.();
+            onToggleSelect?.(message.id);
+            break;
+          case "inspect":
+            onInspect?.(message);
             break;
           case "more":
             setIsActionSheetOpen(true);
@@ -582,7 +670,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [message, onDelete, onEdit, onForward, onReact, onReply, retrySendMessage, isOwn],
+      [handleCopy, message, onDelete, onEdit, onForward, onInspect, onPin, onReact, onReply, onStartSelectionMode, onToggleSelect, retrySendMessage, isOwn, t],
+    );
+
+    const hasInlineAction = React.useCallback(
+      (actionId: MessageActionId) => inlineActions.includes(actionId),
+      [inlineActions],
     );
 
     const actionRail =
@@ -601,24 +694,35 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           )}
         >
           <MessageActionBar
-            onReplyClick={() => onReply(message)}
+            onReplyClick={
+              hasInlineAction("reply") ? () => onReply(message) : undefined
+            }
             onForwardClick={
-              onForward
+              hasInlineAction("forward") && onForward
                 ? () => {
                     onForward(message);
                     setIsHovered(false);
                   }
                 : undefined
             }
-            onPinClick={
-              onPin
+            onCopyClick={
+              hasInlineAction("copy")
                 ? () => {
-                    onPin(message.id);
-                    setIsHovered(false);
+                    void handleCopy();
                   }
                 : undefined
             }
-            onReactClick={() => setShowReactionPicker((v) => !v)}
+            onMoreClick={
+              hasInlineAction("more")
+                ? () => setIsActionSheetOpen(true)
+                : undefined
+            }
+            copied={copiedMessageId === message.id}
+            onReactClick={
+              hasInlineAction("react")
+                ? () => setShowReactionPicker((v) => !v)
+                : undefined
+            }
             reactionPickerNode={
               showReactionPicker && !isSelectionMode ? (
                 <QuickReactBar
@@ -933,6 +1037,7 @@ const areEqualMessageGroupItemProps = (
     previous.onReact === next.onReact &&
     previous.onForward === next.onForward &&
     previous.onPin === next.onPin &&
+    previous.onInspect === next.onInspect &&
     previous.onEdit === next.onEdit &&
     previous.onDelete === next.onDelete &&
     previous.onImageClick === next.onImageClick &&
@@ -940,6 +1045,7 @@ const areEqualMessageGroupItemProps = (
     previous.isSelectionMode === next.isSelectionMode &&
     previous.isSelected === next.isSelected &&
     previous.onToggleSelect === next.onToggleSelect &&
+    previous.onStartSelectionMode === next.onStartSelectionMode &&
     previous.onNavigateToMessage === next.onNavigateToMessage &&
     previous.currentUsername === next.currentUsername &&
     previous.viewerCanRecallOthers === next.viewerCanRecallOthers &&
@@ -964,6 +1070,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   onReact,
   onForward,
   onPin,
+  onInspect,
   onEdit,
   onDelete,
   onImageClick,
@@ -971,6 +1078,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   isSelectionMode = false,
   selectedMessageIds = new Set<string>(),
   onToggleSelect,
+  onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
@@ -1071,6 +1179,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               onReact={onReact}
               onForward={onForward}
               onPin={onPin}
+              onInspect={onInspect}
               onEdit={onEdit}
               onDelete={onDelete}
               onImageClick={onImageClick}
@@ -1078,6 +1187,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               isSelectionMode={isSelectionMode}
               isSelected={selectedMessageIds.has(item.messageId)}
               onToggleSelect={onToggleSelect}
+              onStartSelectionMode={onStartSelectionMode}
               onNavigateToMessage={onNavigateToMessage}
               currentUsername={currentUsername}
               viewerCanRecallOthers={viewerCanRecallOthers}
