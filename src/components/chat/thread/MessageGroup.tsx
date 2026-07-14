@@ -54,6 +54,7 @@ import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { copyTextToClipboard } from "../../../utils/clipboard";
+import { translateMessageActionToast } from "../../../utils/messageActionLabels";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
 import { toast } from "../../ui";
 
@@ -644,9 +645,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             break;
           case "save":
             setSavedMessageIds((previous) => new Set(previous).add(message.id));
-            toast.success(
-              t("chat:message.saveSuccess", { defaultValue: "Đã lưu tin nhắn" }),
-            );
+            toast.success(translateMessageActionToast(t, "saveSuccess"));
             break;
           case "unsave":
             setSavedMessageIds((previous) => {
@@ -654,9 +653,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
               next.delete(message.id);
               return next;
             });
-            toast.success(
-              t("chat:message.unsaveSuccess", { defaultValue: "Đã bỏ lưu tin nhắn" }),
-            );
+            toast.success(translateMessageActionToast(t, "unsaveSuccess"));
             break;
           case "select":
             onStartSelectionMode?.();
