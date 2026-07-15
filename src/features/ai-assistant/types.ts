@@ -194,4 +194,7 @@ export interface AiConversation {
   serverSessionId?: string | null;
   /** employee_code/id của tài khoản sở hữu conversation này. */
   ownerId?: string | null;
+  /** User đã tự đổi tên → giữ tên local, không để loadServerSessions ghi đè
+   * bằng title cũ của server nếu BE chưa lưu rename. */
+  titleRenamed?: boolean;
 }
