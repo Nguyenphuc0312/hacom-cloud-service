@@ -2,6 +2,12 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import {
+  PhoneIcon,
+  EnvelopeIcon,
+  BuildingOffice2Icon,
+  IdentificationIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { TextMessage } from "../../message/TextMessage";
 import { MessageContentRenderer } from "../../message/MessageContentRenderer";
@@ -29,6 +35,7 @@ import { useAuthStore } from "../../../stores";
 import { useResolvedName } from "../../../stores/enrichedProfileStore";
 import { useFriendship } from "../../../hooks/useFriendship";
 import { conversationApi } from "../../../services/api";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ROUTE_PATHS } from "../../../router/paths";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 
@@ -102,10 +109,9 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
 
 const ContactCard: React.FC<{
   payload: ContactPayloadView;
-  isOwn: boolean;
   messageId: string;
   conversationId?: string;
-}> = ({ payload, isOwn, messageId, conversationId }) => {
+}> = ({ payload, messageId, conversationId }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -186,83 +192,78 @@ const ContactCard: React.FC<{
     }
   };
 
+  // The card is a solid, self-contained surface regardless of isOwn, so its
+  // contrast never depends on the message-bubble color behind it (the sent
+  // bubble is light blue in light theme — translucent-on-bubble washed out).
+
+  // "Xem hồ sơ" — secondary action, present in every state. Quiet so the
+  // primary action (message / add / accept) leads.
   const viewProfileBtn = hasDispatchableContactUserId ? (
     <button
       type="button"
       onClick={handleViewProfile}
-      className={clsx(
-        "text-xs font-medium underline-offset-2 hover:underline",
-        isOwn ? "opacity-75 hover:opacity-100" : "text-text-secondary hover:text-primary",
-      )}
+      className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-overlay hover:text-[#1565C0]"
     >
       {t("chat:contactShare.viewProfile", { defaultValue: "View profile" })}
     </button>
   ) : null;
 
+  // Primary pill: solid brand blue. ~32px tall; row padding clears a 44px target.
+  const primaryButton = (opts: {
+    label: string;
+    loading: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      disabled={opts.loading}
+      onClick={opts.onClick}
+      className="inline-flex h-8 items-center justify-center rounded-lg bg-[#1565C0] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#1976D2] disabled:opacity-60"
+    >
+      {opts.loading ? "…" : opts.label}
+    </button>
+  );
+
   const renderCta = () => {
+    const row = (primary: React.ReactNode) => (
+      <div className="flex items-center gap-1.5">
+        {primary}
+        {viewProfileBtn}
+      </div>
+    );
+
     if (!relationship || relationship.kind === "self") {
       return viewProfileBtn;
     }
 
     if (relationship.kind === "friend" && relationship.capabilities.canMessage) {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "message"}
-            onClick={() => void handleMessage()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {actionLoading === "message"
-              ? "..."
-              : t("friends:message")}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        primaryButton({
+          label: t("friends:message"),
+          loading: actionLoading === "message",
+          onClick: () => void handleMessage(),
+        }),
       );
     }
 
     if (relationship.kind === "incoming_request") {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "accept"}
-            onClick={() => void handleAcceptFriend()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-success/10 text-success hover:bg-success/20",
-            )}
-          >
-            {actionLoading === "accept" ? "..." : t("friends:accept", { defaultValue: "Chấp nhận" })}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        <button
+          type="button"
+          disabled={actionLoading === "accept"}
+          onClick={() => void handleAcceptFriend()}
+          className="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-success/90 disabled:opacity-60"
+        >
+          {actionLoading === "accept" ? "…" : t("friends:accept", { defaultValue: "Chấp nhận" })}
+        </button>,
       );
     }
 
     if (relationship.kind === "outgoing_request") {
-      return (
-        <div className="flex items-center gap-3">
-          <span
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium opacity-55",
-              isOwn
-                ? "bg-black/[0.06] dark:bg-white/10"
-                : "bg-surface-overlay text-text-muted",
-            )}
-          >
-            {t("friends:qr.pending")}
-          </span>
-          {viewProfileBtn}
-        </div>
+      return row(
+        <span className="inline-flex h-8 items-center justify-center rounded-lg bg-surface-overlay px-3.5 text-[13px] font-medium text-text-muted">
+          {t("friends:qr.pending")}
+        </span>,
       );
     }
 
@@ -270,77 +271,88 @@ const ContactCard: React.FC<{
       relationship.kind === "not_friend" &&
       relationship.capabilities.canSendRequest
     ) {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "add"}
-            onClick={() => void handleAddFriend()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {actionLoading === "add" ? "..." : t("friends:addFriend")}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        primaryButton({
+          label: t("friends:addFriend"),
+          loading: actionLoading === "add",
+          onClick: () => void handleAddFriend(),
+        }),
       );
     }
 
     return viewProfileBtn;
   };
 
-  return (
-    <div
-      className={clsx(
-        "min-w-[14rem] space-y-2 rounded-xl border px-3 py-2.5",
-        isOwn
-          ? "border-black/10 bg-black/[0.06] dark:border-white/15 dark:bg-white/10"
-          : "border-border bg-surface-overlay/50",
-      )}
-    >
-      <p
-        className={clsx(
-          "text-[10px] font-medium",
-          isOwn ? "opacity-55" : "text-text-muted",
-        )}
-      >
-        {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
-      </p>
+  const hasDetails = Boolean(
+    payload.phone || payload.email || payload.orgUnit || payload.title,
+  );
+  const cta = renderCta();
 
-      <div className="flex items-center gap-2">
-        <Avatar src={payload.avatarUrl} alt={payload.displayName} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {payload.displayName}
-          </p>
-          {payload.username && (
-            <p className="truncate text-xs opacity-70">@{payload.username}</p>
-          )}
+  return (
+    <div className="w-[17.5rem] max-w-full overflow-hidden rounded-2xl border border-border/70 bg-surface-raised text-text-primary shadow-sm">
+      {/* Header: label chip + identity, on a faint branded band */}
+      <div className="bg-[#1565C0]/[0.06] px-3.5 pb-3 pt-2.5">
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#1565C0]">
+          <IdentificationIcon className="h-3.5 w-3.5" />
+          {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
+        </span>
+
+        <div className="mt-2 flex items-center gap-3">
+          <Avatar
+            src={resolvePublicResourceUrl(payload.avatarUrl)}
+            alt={payload.displayName}
+            size="lg"
+            className="shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold leading-tight">
+              {payload.displayName}
+            </p>
+            {payload.username && (
+              <p className="mt-0.5 truncate text-xs text-text-muted">
+                @{payload.username}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {(payload.phone || payload.email) && (
-        <div className="space-y-0.5 text-xs opacity-75">
-          {payload.phone && <p>{payload.phone}</p>}
-          {payload.email && <p>{payload.email}</p>}
+      {/* Details: each field a scannable icon row */}
+      {hasDetails && (
+        <div className="space-y-1.5 px-3.5 pt-3">
+          {payload.phone && (
+            <ContactDetailRow icon={PhoneIcon}>{payload.phone}</ContactDetailRow>
+          )}
+          {payload.email && (
+            <ContactDetailRow icon={EnvelopeIcon}>
+              <span className="break-all">{payload.email}</span>
+            </ContactDetailRow>
+          )}
+          {(payload.orgUnit || payload.title) && (
+            <ContactDetailRow icon={BuildingOffice2Icon}>
+              {[payload.orgUnit, payload.title].filter(Boolean).join(" · ")}
+            </ContactDetailRow>
+          )}
         </div>
       )}
 
-      {(payload.orgUnit || payload.title) && (
-        <div className="space-y-0.5 text-xs opacity-70">
-          {payload.orgUnit && <p>{payload.orgUnit}</p>}
-          {payload.title && <p>{payload.title}</p>}
-        </div>
+      {/* Action row: divided from content, consistent affordances */}
+      {cta && (
+        <div className="mt-3 border-t border-border/60 px-3.5 py-2.5">{cta}</div>
       )}
-
-      {renderCta()}
     </div>
   );
 };
+
+const ContactDetailRow: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}> = ({ icon: Icon, children }) => (
+  <div className="flex items-start gap-2 text-[13px] leading-snug">
+    <Icon className="mt-[1px] h-4 w-4 shrink-0 text-[#1565C0]/70" />
+    <span className="min-w-0 text-text-secondary">{children}</span>
+  </div>
+);
 
 const renderTextContent = (
   message: Message,
@@ -580,7 +592,6 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
       return contactPayload ? (
         <ContactCard
           payload={contactPayload}
-          isOwn={isOwn}
           messageId={message.id}
           conversationId={message.conversationId}
         />
