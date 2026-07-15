@@ -400,10 +400,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className={clsx(
-        "group w-full",
-        isAssistant ? "bg-surface-overlay/40" : "bg-surface",
-      )}
+      className="group w-full bg-surface"
     >
       <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
         <div

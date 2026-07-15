@@ -108,10 +108,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
         <div
           key={message.id}
           ref={isWidgetMessage ? widgetRef : undefined}
-          className={clsx(
-            "group w-full animate-fade-in-up",
-            message.role === "user" ? "bg-surface" : "bg-surface-overlay/50",
-          )}
+          className="group w-full animate-fade-in-up bg-surface"
         >
           <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
             <div
@@ -243,7 +240,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
       {isLoading &&
         messages.length > 0 &&
         messages[messages.length - 1].role === "user" && (
-          <div className="w-full bg-surface-overlay/50">
+          <div className="w-full bg-surface">
             <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
               <div className="flex gap-3.5">
                 <AiMessageAvatar role="assistant" />
