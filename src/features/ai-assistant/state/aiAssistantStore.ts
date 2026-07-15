@@ -188,7 +188,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       renameConversation: (id, title) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, title, updatedAt: new Date() } : c
+            c.id === id ? { ...c, title, titleRenamed: true, updatedAt: new Date() } : c
           ),
         }));
       },
@@ -239,7 +239,11 @@ export const useAiAssistantStore = create<AiAssistantState>()(
                 ? {
                     ...existing,
                     serverSessionId: s.session_id,
-                    title: s.title || existing.title,
+                    // Giữ tên user tự đặt (titleRenamed) kể cả khi BE trả tên cũ
+                    // — tránh reload là mất rename khi BE chưa lưu.
+                    title: existing.titleRenamed
+                      ? existing.title
+                      : s.title || existing.title,
                     updatedAt: s.updated_at ? new Date(s.updated_at) : existing.updatedAt,
                     ownerId,
                   }

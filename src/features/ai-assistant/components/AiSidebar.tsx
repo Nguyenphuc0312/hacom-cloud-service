@@ -14,7 +14,12 @@ import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useReminderStore } from "../../../stores/reminderStore";
 import { useAuthStore } from "../../../stores/authStore";
-import { deleteCompanySession } from "../services/aiChatApi";
+import {
+  deleteCompanySession,
+  deletePersonalSession,
+  renameCompanySession,
+  renamePersonalSession,
+} from "../services/aiChatApi";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -105,10 +110,19 @@ export const AiSidebar: React.FC = () => {
     setEditValue(title);
   };
 
-  /** Lưu tên mới */
+  /** Lưu tên mới — cập nhật local ngay + đồng bộ BE best-effort. */
   const handleSaveRename = (id: string) => {
-    if (editValue.trim()) {
-      renameConversation(id, editValue.trim());
+    const title = editValue.trim();
+    if (title) {
+      const conv = conversations.find((c) => c.id === id);
+      renameConversation(id, title);
+      if (conv?.serverSessionId) {
+        const sync =
+          conv.endpoint === "personal"
+            ? renamePersonalSession
+            : renameCompanySession;
+        sync(conv.serverSessionId, title).catch(() => {});
+      }
     }
     setEditingId(null);
   };
@@ -256,7 +270,11 @@ export const AiSidebar: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (conv.serverSessionId) {
-                            deleteCompanySession(conv.serverSessionId).catch(() => {});
+                            const del =
+                              conv.endpoint === "personal"
+                                ? deletePersonalSession
+                                : deleteCompanySession;
+                            del(conv.serverSessionId).catch(() => {});
                           }
                           deleteConversation(conv.id);
                         }}

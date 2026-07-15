@@ -1329,6 +1329,53 @@ export async function deletePersonalSession(
   }
 }
 
+/**
+ * PATCH /api/sessions/{session_id} — đổi tên session AI công ty.
+ * 404 coi là thành công mềm (session đã xoá); FE vẫn giữ tên local dù BE chưa
+ * hỗ trợ endpoint — gọi best-effort, không chặn UI.
+ */
+export async function renameCompanySession(
+  sessionId: string,
+  title: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/sessions/${sessionId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new AiApiError(response.status, "http");
+  }
+}
+
+/**
+ * PATCH /api/personal/sessions/{session_id} — đổi tên session AI cá nhân.
+ * Cùng quy ước 404-mềm + best-effort như {@link renameCompanySession}.
+ */
+export async function renamePersonalSession(
+  sessionId: string,
+  title: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/api/personal/sessions/${sessionId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new AiApiError(response.status, "http");
+  }
+}
+
 export interface PersonalSessionMessage {
   id: string;
   // Backend trả cả role nội bộ của tool-calling ("assistant_tool_call",
