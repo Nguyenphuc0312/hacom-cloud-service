@@ -63,4 +63,4 @@ export const AI_MESSAGE_ROW_PADDING = "px-4 py-5 sm:px-8 lg:px-12 xl:px-16";
  * — AI Cá nhân để tự do full-width theo yêu cầu. Bảng có overflow-x riêng nên vẫn
  * rộng được bên trong; chỉ prose bị giới hạn.
  */
-export const AI_ANSWER_MAX_WIDTH = "max-w-[80ch]";
+export const AI_ANSWER_MAX_WIDTH = "max-w-[155ch]";
