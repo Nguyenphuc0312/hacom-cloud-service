@@ -1093,7 +1093,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   }, [conversation.id, conversation.participants, currentUser.id]);
 
   const handleShareContact = React.useCallback(
-    async (contactUserId: string) => {
+    async (contactUserId: string): Promise<boolean> => {
       try {
         await shareContactUseCase({
           conversationId: conversation.id,
@@ -1102,6 +1102,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         toast.success(
           t("chat:contactShare.sent", { defaultValue: "Contact shared" }),
         );
+        return true;
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
@@ -1110,6 +1111,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               defaultValue: "Unable to share contact",
             }),
         );
+        return false;
       }
     },
     [conversation.id, t],

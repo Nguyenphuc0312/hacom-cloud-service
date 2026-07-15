@@ -52,7 +52,7 @@ export interface MessageInputProps {
   disabledReasonTone?: "info" | "warn" | "error";
   composerMode?: ComposerMode;
   currentUserId?: string;
-  onShareContact?: (contactUserId: string) => Promise<void>;
+  onShareContact?: (contactUserId: string) => Promise<boolean>;
   onShareLocation?: (
     location: LocationMessagePayload,
     clientMessageId?: string,
