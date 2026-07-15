@@ -35,6 +35,7 @@ import { useAuthStore } from "../../../stores";
 import { useResolvedName } from "../../../stores/enrichedProfileStore";
 import { useFriendship } from "../../../hooks/useFriendship";
 import { conversationApi } from "../../../services/api";
+import { resolvePublicResourceUrl } from "../../../config";
 import { ROUTE_PATHS } from "../../../router/paths";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 
@@ -108,10 +109,9 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
 
 const ContactCard: React.FC<{
   payload: ContactPayloadView;
-  isOwn: boolean;
   messageId: string;
   conversationId?: string;
-}> = ({ payload, isOwn, messageId, conversationId }) => {
+}> = ({ payload, messageId, conversationId }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -192,26 +192,23 @@ const ContactCard: React.FC<{
     }
   };
 
-  // "Xem hồ sơ" — the secondary action, present in every state. A quiet
-  // outline pill so the primary action (message / add / accept) leads.
+  // The card is a solid, self-contained surface regardless of isOwn, so its
+  // contrast never depends on the message-bubble color behind it (the sent
+  // bubble is light blue in light theme — translucent-on-bubble washed out).
+
+  // "Xem hồ sơ" — secondary action, present in every state. Quiet so the
+  // primary action (message / add / accept) leads.
   const viewProfileBtn = hasDispatchableContactUserId ? (
     <button
       type="button"
       onClick={handleViewProfile}
-      className={clsx(
-        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[13px] font-medium transition-colors",
-        isOwn
-          ? "text-white/80 hover:bg-white/10 hover:text-white"
-          : "text-text-secondary hover:bg-surface-overlay hover:text-[#1565C0]",
-      )}
+      className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-overlay hover:text-[#1565C0]"
     >
       {t("chat:contactShare.viewProfile", { defaultValue: "View profile" })}
     </button>
   ) : null;
 
-  // Primary pill: solid brand blue on other-bubbles, translucent on own-bubbles
-  // (the blue would clash on a blue message bubble). 8px tall → ~32px, with the
-  // row padding the row clears a 44px touch target.
+  // Primary pill: solid brand blue. ~32px tall; row padding clears a 44px target.
   const primaryButton = (opts: {
     label: string;
     loading: boolean;
@@ -221,12 +218,7 @@ const ContactCard: React.FC<{
       type="button"
       disabled={opts.loading}
       onClick={opts.onClick}
-      className={clsx(
-        "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-60",
-        isOwn
-          ? "bg-white/15 text-white hover:bg-white/25"
-          : "bg-[#1565C0] text-white hover:bg-[#1976D2]",
-      )}
+      className="inline-flex h-8 items-center justify-center rounded-lg bg-[#1565C0] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#1976D2] disabled:opacity-60"
     >
       {opts.loading ? "…" : opts.label}
     </button>
@@ -260,12 +252,7 @@ const ContactCard: React.FC<{
           type="button"
           disabled={actionLoading === "accept"}
           onClick={() => void handleAcceptFriend()}
-          className={clsx(
-            "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-60",
-            isOwn
-              ? "bg-white/15 text-white hover:bg-white/25"
-              : "bg-success text-white hover:bg-success/90",
-          )}
+          className="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-success/90 disabled:opacity-60"
         >
           {actionLoading === "accept" ? "…" : t("friends:accept", { defaultValue: "Chấp nhận" })}
         </button>,
@@ -274,14 +261,7 @@ const ContactCard: React.FC<{
 
     if (relationship.kind === "outgoing_request") {
       return row(
-        <span
-          className={clsx(
-            "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-medium",
-            isOwn
-              ? "bg-white/10 text-white/70"
-              : "bg-surface-overlay text-text-muted",
-          )}
-        >
+        <span className="inline-flex h-8 items-center justify-center rounded-lg bg-surface-overlay px-3.5 text-[13px] font-medium text-text-muted">
           {t("friends:qr.pending")}
         </span>,
       );
@@ -309,52 +289,27 @@ const ContactCard: React.FC<{
   const cta = renderCta();
 
   return (
-    <div
-      className={clsx(
-        "w-[17.5rem] max-w-full overflow-hidden rounded-2xl border",
-        isOwn
-          ? "border-white/15 bg-white/10"
-          : "border-border/70 bg-surface-raised",
-      )}
-    >
+    <div className="w-[17.5rem] max-w-full overflow-hidden rounded-2xl border border-border/70 bg-surface-raised text-text-primary shadow-sm">
       {/* Header: label chip + identity, on a faint branded band */}
-      <div
-        className={clsx(
-          "px-3.5 pb-3 pt-2.5",
-          isOwn ? "bg-white/[0.06]" : "bg-[#1565C0]/[0.05]",
-        )}
-      >
-        <span
-          className={clsx(
-            "inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide",
-            isOwn ? "opacity-70" : "text-[#1565C0]",
-          )}
-        >
+      <div className="bg-[#1565C0]/[0.06] px-3.5 pb-3 pt-2.5">
+        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#1565C0]">
           <IdentificationIcon className="h-3.5 w-3.5" />
           {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
         </span>
 
         <div className="mt-2 flex items-center gap-3">
           <Avatar
-            src={payload.avatarUrl}
+            src={resolvePublicResourceUrl(payload.avatarUrl)}
             alt={payload.displayName}
             size="lg"
-            className={clsx(
-              "shrink-0 ring-2",
-              isOwn ? "ring-white/20" : "ring-white dark:ring-surface-raised",
-            )}
+            className="shrink-0"
           />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold leading-tight">
               {payload.displayName}
             </p>
             {payload.username && (
-              <p
-                className={clsx(
-                  "mt-0.5 truncate text-xs",
-                  isOwn ? "opacity-65" : "text-text-muted",
-                )}
-              >
+              <p className="mt-0.5 truncate text-xs text-text-muted">
                 @{payload.username}
               </p>
             )}
@@ -366,17 +321,15 @@ const ContactCard: React.FC<{
       {hasDetails && (
         <div className="space-y-1.5 px-3.5 pt-3">
           {payload.phone && (
-            <ContactDetailRow isOwn={isOwn} icon={PhoneIcon}>
-              {payload.phone}
-            </ContactDetailRow>
+            <ContactDetailRow icon={PhoneIcon}>{payload.phone}</ContactDetailRow>
           )}
           {payload.email && (
-            <ContactDetailRow isOwn={isOwn} icon={EnvelopeIcon}>
+            <ContactDetailRow icon={EnvelopeIcon}>
               <span className="break-all">{payload.email}</span>
             </ContactDetailRow>
           )}
           {(payload.orgUnit || payload.title) && (
-            <ContactDetailRow isOwn={isOwn} icon={BuildingOffice2Icon}>
+            <ContactDetailRow icon={BuildingOffice2Icon}>
               {[payload.orgUnit, payload.title].filter(Boolean).join(" · ")}
             </ContactDetailRow>
           )}
@@ -385,34 +338,19 @@ const ContactCard: React.FC<{
 
       {/* Action row: divided from content, consistent affordances */}
       {cta && (
-        <div
-          className={clsx(
-            "mt-3 border-t px-3.5 py-2.5",
-            isOwn ? "border-white/10" : "border-border/60",
-          )}
-        >
-          {cta}
-        </div>
+        <div className="mt-3 border-t border-border/60 px-3.5 py-2.5">{cta}</div>
       )}
     </div>
   );
 };
 
 const ContactDetailRow: React.FC<{
-  isOwn: boolean;
   icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
-}> = ({ isOwn, icon: Icon, children }) => (
+}> = ({ icon: Icon, children }) => (
   <div className="flex items-start gap-2 text-[13px] leading-snug">
-    <Icon
-      className={clsx(
-        "mt-[1px] h-4 w-4 shrink-0",
-        isOwn ? "opacity-55" : "text-[#1565C0]/70",
-      )}
-    />
-    <span className={clsx("min-w-0", isOwn ? "opacity-85" : "text-text-secondary")}>
-      {children}
-    </span>
+    <Icon className="mt-[1px] h-4 w-4 shrink-0 text-[#1565C0]/70" />
+    <span className="min-w-0 text-text-secondary">{children}</span>
   </div>
 );
 
@@ -654,7 +592,6 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
       return contactPayload ? (
         <ContactCard
           payload={contactPayload}
-          isOwn={isOwn}
           messageId={message.id}
           conversationId={message.conversationId}
         />

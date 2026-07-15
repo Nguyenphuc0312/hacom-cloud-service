@@ -142,6 +142,11 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   // like a date/system row), never an own/right bubble — drop avatar/sender-label/
   // bubble-chrome. Same layout treatment for both interactive cards.
   const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
+  // Cards that ship their own surface must render bare (no bubble bg/padding),
+  // else the sent/received bubble frames them in a double border. Poll/reminder
+  // are also centered system cards (isPoll); contact keeps normal left/right
+  // positioning, so it only opts into `bare`, not the centered layout.
+  const bringsOwnSurface = isPoll || message.type === MessageType.CONTACT;
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number"
@@ -570,7 +575,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     mergeLevel={mergeLevel}
                     hasError={isFailedMessage(message)}
                     isPending={isPendingMessage(message)}
-                    bare={isPoll}
+                    bare={bringsOwnSurface}
                   >
                     {isGroupConversation && !isOwn && showSenderName && !isPoll && (
                       <p className={clsx(contract.cluster.senderLabel, "truncate")}>
