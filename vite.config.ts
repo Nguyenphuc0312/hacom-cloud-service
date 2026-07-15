@@ -141,6 +141,7 @@ export default defineConfig(({ mode }) => {
   const authTarget = resolveHttpTarget(env.VITE_DEV_AUTH_PROXY_TARGET, "http://localhost:3101");
   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
   const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
+  const aiTarget   = resolveHttpTarget(env.VITE_DEV_AI_PROXY_TARGET,   "https://ai.hacomholdings.com.vn");
 
   const shouldAnalyzeBundle = mode === "analyze";
 
@@ -319,6 +320,14 @@ export default defineConfig(({ mode }) => {
         "/hr-api": {
           ...httpProxy(hrTarget),
           rewrite: (path: string) => path.replace(/^\/hr-api/, "/api"),
+        },
+        // AI chat proxy — strips /ai-api prefix so /ai-api/api/... → /api/... on
+        // the AI host. Dev-only: the AI backend's CORS rejects http://localhost,
+        // so route through the proxy (changeOrigin + spoofed Origin) like the
+        // other backends instead of hitting https://ai.hacomholdings.com.vn direct.
+        "/ai-api": {
+          ...httpProxy(aiTarget),
+          rewrite: (path: string) => path.replace(/^\/ai-api/, ""),
         },
       },
     },
