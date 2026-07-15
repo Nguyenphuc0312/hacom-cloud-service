@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { BookOpenIcon, ExternalLinkIcon } from "lucide-react";
 import type { AiSource } from "../types";
-import { isSafeSourceUrl, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
+import { getSourceHref, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
+import { useOpenAiSource } from "../hooks/useOpenAiSource";
 import { getFileIconTypeByName } from "../../../utils/formatFileSize";
 import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
 
@@ -19,10 +20,11 @@ const INITIAL_VISIBLE = 3;
 /**
  * Khu vực "Nguồn tham khảo" hiển thị bên dưới câu trả lời AI.
  * Mặc định hiển thị 3 nguồn đầu, có nút xem thêm.
- * Mỗi nguồn có thể click để mở tài liệu gốc nếu có open_url hợp lệ.
+ * Mỗi nguồn click để mở tài liệu gốc (auth-fetch) nếu có link hợp lệ (getSourceHref).
  */
 export const AiSourceList: React.FC<AiSourceListProps> = ({ sources }) => {
   const [expanded, setExpanded] = useState(false);
+  const { open, openingUrl, isOpening } = useOpenAiSource();
 
   if (!sources || sources.length === 0) return null;
 
@@ -48,7 +50,8 @@ export const AiSourceList: React.FC<AiSourceListProps> = ({ sources }) => {
         {visible.map((source) => {
           const label = getSourceLabel(source);
           const meta = getSourceMeta(source);
-          const safe = isSafeSourceUrl(source.open_url);
+          const href = getSourceHref(source);
+          const safe = Boolean(href);
 
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">
@@ -92,15 +95,16 @@ export const AiSourceList: React.FC<AiSourceListProps> = ({ sources }) => {
 
           if (safe) {
             return (
-              <a
+              <button
                 key={source.citation_index}
-                href={source.open_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group block hover:bg-surface-overlay/60 transition-colors"
+                type="button"
+                onClick={() => void open(href)}
+                disabled={isOpening}
+                aria-busy={openingUrl === href}
+                className="group block w-full text-left hover:bg-surface-overlay/60 transition-colors disabled:cursor-wait"
               >
                 {inner}
-              </a>
+              </button>
             );
           }
 

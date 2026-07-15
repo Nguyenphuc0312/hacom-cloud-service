@@ -6,7 +6,13 @@ export interface AiSource {
   source_name?: string;
   document_name?: string;
   source_file?: string;
+  // Link aliases from BE (priority: reader_url → url → source_url → open_url →
+  // download_url). May be relative (e.g. "/api/sources/{id}?page=3").
+  reader_url?: string;
+  url?: string;
+  source_url?: string;
   open_url?: string;
+  download_url?: string;
   page_number?: number;
   page_start?: number;
   page_end?: number;
