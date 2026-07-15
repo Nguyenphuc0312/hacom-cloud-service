@@ -14,7 +14,10 @@ import {
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { useChatUiStore } from "../../../chat/state/chatUiStore";
 import { useAuthStore } from "../../../../stores/authStore";
-import { deletePersonalSession } from "../../../ai-assistant/services/aiChatApi";
+import {
+  deletePersonalSession,
+  renamePersonalSession,
+} from "../../../ai-assistant/services/aiChatApi";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -105,10 +108,19 @@ export const PersonalAiSidebar: React.FC = () => {
     setEditValue(title);
   };
 
-  /** Lưu tên mới */
+  /** Lưu tên mới — cập nhật local ngay + persist lên BE (đổi máy vẫn còn tên). */
   const handleSaveRename = (id: string) => {
-    if (editValue.trim()) {
-      renameConversation(id, editValue.trim());
+    const title = editValue.trim();
+    if (title) {
+      const conv = conversations.find((c) => c.id === id);
+      renameConversation(id, title);
+      // Persist to BE. Server-synced convs have id === session_id, so fall back
+      // to id when serverSessionId isn't set yet (avoids the rename staying local
+      // and reverting to the server's old title on reload / other device).
+      const sessionId = conv?.serverSessionId ?? conv?.id;
+      if (sessionId) {
+        renamePersonalSession(sessionId, title).catch(() => {});
+      }
     }
     setEditingId(null);
   };
