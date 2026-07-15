@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useRef } from "react";
+import clsx from "clsx";
 import { SparklesIcon, BookOpenIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PersonalMessageBubble } from "./PersonalMessageBubble";
+import {
+  AiMessageAvatar,
+  AI_MESSAGE_ROW_PADDING,
+} from "../../../ai-assistant/components/AiMessageAvatar";
 import type { PersonalChatMessage } from "../../types";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 
@@ -164,21 +169,9 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
           messages.length > 0 &&
           messages[messages.length - 1].role === "user" && (
             <div className="w-full bg-surface-overlay/40">
-              <div className="mx-auto w-full max-w-[1600px] px-6 py-5 lg:px-10 xl:px-16">
+              <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
                 <div className="flex gap-3.5">
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
-                    }}
-                  >
-                    <SparklesIcon
-                      size={15}
-                      strokeWidth={2.5}
-                      className="text-white"
-                    />
-                  </div>
+                  <AiMessageAvatar role="assistant" />
                   <div className="flex flex-col gap-1">
                     <span className="mb-1 text-xs font-semibold text-text-muted">
                       Trợ lý ảo cá nhân

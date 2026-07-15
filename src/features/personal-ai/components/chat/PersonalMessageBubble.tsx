@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  SparklesIcon,
-  UserIcon,
-  AlertCircleIcon,
   CopyIcon,
   CheckIcon,
   FileTextIcon,
@@ -58,6 +55,10 @@ import { rehypeReportTableCols } from "../../../ai-assistant/utils/rehypeReportT
 import { reportTableComponents } from "../../../ai-assistant/components/reportTableComponents";
 import type { PersonalChatMessage, PersonalCitation } from "../../types";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
+import {
+  AiMessageAvatar,
+  AI_MESSAGE_ROW_PADDING,
+} from "../../../ai-assistant/components/AiMessageAvatar";
 
 interface PersonalMessageBubbleProps {
   message: PersonalChatMessage;
@@ -404,45 +405,14 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         isAssistant ? "bg-surface-overlay/40" : "bg-surface",
       )}
     >
-      <div
-        className={clsx(
-          "mx-auto w-full max-w-[1600px] px-6 py-5 lg:px-10 xl:px-16",
-        )}
-      >
+      <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
         <div
           className={clsx(
             "flex gap-3.5",
             isUser ? "flex-row-reverse" : "flex-row",
           )}
         >
-          {/* Avatar */}
-          <div
-            className={clsx(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
-            )}
-            style={
-              isAssistant && !message.isError
-                ? {
-                    background:
-                      "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)",
-                  }
-                : isAssistant && message.isError
-                  ? undefined
-                  : { background: "rgba(21,101,192,0.85)" }
-            }
-          >
-            {isAssistant ? (
-              message.isError ? (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-                  <AlertCircleIcon size={16} className="text-danger" />
-                </div>
-              ) : (
-                <SparklesIcon size={15} strokeWidth={2.5} className="text-white" />
-              )
-            ) : (
-              <UserIcon size={15} strokeWidth={2.5} className="text-white" />
-            )}
-          </div>
+          <AiMessageAvatar role={message.role} isError={message.isError} />
 
           {/* Content */}
           <div

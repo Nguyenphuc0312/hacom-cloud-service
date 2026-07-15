@@ -150,8 +150,8 @@ export const PersonalAiWorkspacePage: React.FC = () => {
         />
 
         {/* Sticky input footer */}
-        <div className="flex-shrink-0 border-t border-border bg-surface px-4 py-4">
-          <div className="mx-auto w-full max-w-[820px]">
+        <div className="flex-shrink-0 border-t border-border bg-surface px-4 py-4 sm:px-8 lg:px-12 xl:px-16">
+          <div className="w-full">
             <PersonalChatInput
               ref={textareaRef}
               value={inputValue}
