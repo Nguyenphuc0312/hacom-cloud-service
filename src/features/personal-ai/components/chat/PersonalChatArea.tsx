@@ -168,7 +168,7 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
         {isStreaming &&
           messages.length > 0 &&
           messages[messages.length - 1].role === "user" && (
-            <div className="w-full bg-surface-overlay/40">
+            <div className="w-full bg-surface">
               <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
                 <div className="flex gap-3.5">
                   <AiMessageAvatar role="assistant" />
