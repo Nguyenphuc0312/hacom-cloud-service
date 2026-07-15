@@ -9,6 +9,7 @@ import { resolveWeeklyReportFileAction } from "../utils/weeklyReportFileLink";
 import { rehypeReportTableCols } from "../utils/rehypeReportTableCols";
 import { reportTableComponents } from "./reportTableComponents";
 import { useWeeklyReportFileActions } from "../hooks/useWeeklyReportFileActions";
+import { useOpenAiSource } from "../hooks/useOpenAiSource";
 import { AiWeeklyReportFilePreviewModal } from "./AiWeeklyReportFilePreviewModal";
 
 interface AiAnswerContentProps {
@@ -58,6 +59,7 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
     preview,
     closePreview,
   } = useWeeklyReportFileActions();
+  const { open: openSource, isOpening: isOpeningSource } = useOpenAiSource();
 
   const processedContent =
     sources && sources.length > 0
@@ -125,17 +127,21 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
 
               const isCitation = !!href && isSafeSourceUrl(href);
               if (isCitation) {
+                // Link nguồn cần Bearer → mở qua auth-fetch blob (giống source card),
+                // không phải <a target="_blank"> (sẽ 401 vì thiếu header).
                 return (
-                  <a
-                    {...props}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     title={title}
-                    className="citation-link"
+                    disabled={isOpeningSource}
+                    className="citation-link inline cursor-pointer border-0 bg-transparent p-0 font-inherit disabled:cursor-wait"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void openSource(href);
+                    }}
                   >
                     {children}
-                  </a>
+                  </button>
                 );
               }
               return (

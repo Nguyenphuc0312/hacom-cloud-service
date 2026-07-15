@@ -1277,6 +1277,32 @@ export async function fetchDepartments(
 }
 
 // ---------------------------------------------------------------------------
+// Chat source documents (Nguồn tham khảo)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tải tài liệu nguồn (khối "Nguồn tham khảo") qua auth-fetch rồi trả blob URL.
+ * Link mở tab mới KHÔNG mang Bearer header nên phải fetch có auth ở đây; BE có
+ * thể redirect /api/sources/{id} → /api/source-files/{code}, fetch follow mặc định.
+ * Caller tự mở blobUrl và revoke sau khi dùng.
+ */
+export async function fetchAiSourceBlobUrl(
+  absoluteUrl: string,
+  options?: { signal?: AbortSignal },
+): Promise<string> {
+  const response = await fetchWithAuth(
+    absoluteUrl,
+    { method: "GET" },
+    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+  );
+  if (!response.ok) {
+    throw new AiApiError(response.status, "http");
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+// ---------------------------------------------------------------------------
 // Personal Sessions API
 // ---------------------------------------------------------------------------
 
