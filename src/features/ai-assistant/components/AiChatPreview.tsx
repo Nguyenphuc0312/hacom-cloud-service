@@ -1,14 +1,16 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import {
-  SparklesIcon,
-  AlertCircleIcon,
   CopyIcon,
   CheckIcon,
-  UserIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import type { AiMessage } from "../types";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
+import {
+  AiMessageAvatar,
+  AI_MESSAGE_ROW_PADDING,
+  AI_ANSWER_MAX_WIDTH,
+} from "./AiMessageAvatar";
 import { AiAnswerContent } from "./AiAnswerContent";
 import { AiSourceList } from "./AiSourceList";
 import { WorkReportForm } from "./WorkReportForm";
@@ -111,41 +113,14 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
             message.role === "user" ? "bg-surface" : "bg-surface-overlay/50",
           )}
         >
-          <div className="max-w-[1600px] mx-auto px-6 py-6 lg:px-10 xl:px-16">
+          <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
             <div
               className={clsx(
-                "flex gap-4",
+                "flex gap-3.5",
                 message.role === "user" ? "flex-row-reverse" : "flex-row",
               )}
             >
-              {/* Avatar */}
-              <div
-                className={clsx(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
-                  message.role === "assistant"
-                    ? message.isError
-                      ? "bg-danger/10 text-danger"
-                      : "text-white"
-                    : "text-white",
-                )}
-                style={
-                  message.role === "assistant" && !message.isError
-                    ? { background: "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)" }
-                    : message.role === "user"
-                      ? { background: "rgba(196,30,58,0.75)" }
-                      : undefined
-                }
-              >
-                {message.role === "assistant" ? (
-                  message.isError ? (
-                    <AlertCircleIcon size={16} />
-                  ) : (
-                    <SparklesIcon size={16} strokeWidth={2.5} />
-                  )
-                ) : (
-                  <UserIcon size={16} strokeWidth={2.5} />
-                )}
-              </div>
+              <AiMessageAvatar role={message.role} isError={message.isError} />
 
               {/* Content */}
               <div
@@ -173,7 +148,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   className={clsx(
                     message.role === "user"
                       ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words text-justify"
-                      : "w-full max-w-full",
+                      : clsx("w-full", AI_ANSWER_MAX_WIDTH),
                   )}
                 >
                   {message.role === "assistant" &&
@@ -266,14 +241,9 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
         messages.length > 0 &&
         messages[messages.length - 1].role === "user" && (
           <div className="w-full bg-surface-overlay/50">
-            <div className="max-w-[1600px] mx-auto px-6 py-6 lg:px-10 xl:px-16">
-              <div className="flex gap-4">
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white mt-0.5"
-                  style={{ background: "linear-gradient(135deg, #1565C0 0%, #1976D2 100%)" }}
-                >
-                  <SparklesIcon size={16} strokeWidth={2.5} />
-                </div>
+            <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
+              <div className="flex gap-3.5">
+                <AiMessageAvatar role="assistant" />
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-text-muted mb-1">
                     {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
