@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  BookMarkedIcon,
+  BookOpenIcon,
   PlusIcon,
   Loader2Icon,
   LibraryIcon,
@@ -50,20 +50,24 @@ export const SourceHubPanel: React.FC = () => {
         onUpload={uploadDocument}
       />
 
-      <div className="flex h-full w-[340px] flex-col border-l border-border bg-surface-overlay/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ x: 380, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 380, opacity: 0 }}
+        transition={{ type: "spring", damping: 28, stiffness: 220 }}
+        className="flex h-full w-[380px] flex-col border-l border-border bg-surface"
+      >
         {/* Header */}
-        <div className="flex-shrink-0 px-4 pt-4 pb-3">
+        <div className="flex-shrink-0 px-5 pt-4 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#1565C0] to-[#1976D2]">
-                <BookMarkedIcon size={14} strokeWidth={2} className="text-white" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-text-primary">Sources</h2>
-                <p className="text-[10px] text-text-muted leading-none mt-0.5">
-                  Nguồn kiến thức AI
-                </p>
-              </div>
+              <BookOpenIcon size={18} strokeWidth={2} className="text-text-secondary" />
+              <h2 className="text-sm font-semibold text-text-primary">Tài liệu</h2>
+              {totalCount > 0 && (
+                <span className="bg-surface-hover text-text-secondary text-[11px] px-2 py-0.5 rounded-full font-medium">
+                  {searchQuery ? filteredDocuments.length : totalCount}
+                </span>
+              )}
             </div>
 
             {/* RAG mode indicator */}
@@ -125,7 +129,7 @@ export const SourceHubPanel: React.FC = () => {
 
         {/* Divider + status bar */}
         {totalCount > 0 && (
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-t border-border">
+          <div className="flex-shrink-0 flex items-center justify-between px-5 py-2 border-t border-border">
             <div className="flex items-center gap-1.5 text-xs text-text-muted">
               <LibraryIcon size={12} strokeWidth={2} />
               <span>
@@ -158,7 +162,7 @@ export const SourceHubPanel: React.FC = () => {
         )}
 
         {/* Source list */}
-        <div className="flex-1 overflow-y-auto px-3 pb-4 ai-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 pb-4 ai-scrollbar">
           {!documentsLoaded ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
               <Loader2Icon
@@ -209,7 +213,7 @@ export const SourceHubPanel: React.FC = () => {
         {/* Footer — knowledge mode explanation */}
         <div
           className={clsx(
-            "flex-shrink-0 mx-3 mb-3 rounded-2xl p-3 transition-all duration-300",
+            "flex-shrink-0 mx-4 mb-3 rounded-2xl p-3 transition-all duration-300",
             isRagMode
               ? "bg-gradient-to-br from-[#1565C0]/8 to-[#1976D2]/6 border border-[#1976D2]/20"
               : "bg-surface-hover",
@@ -238,7 +242,7 @@ export const SourceHubPanel: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 };

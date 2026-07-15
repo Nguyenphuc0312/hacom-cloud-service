@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import {
-  FileTextIcon,
   XIcon,
   ExternalLinkIcon,
   BookOpenIcon,
@@ -15,6 +14,13 @@ import { motion } from "framer-motion";
 import type { AiSource } from "../types";
 import { isSafeSourceUrl, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
 import { sendAiChatMessage } from "../services/aiChatApi";
+import { getFileIconTypeByName } from "../../../utils/formatFileSize";
+import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
+
+/** Chuỗi tên/label chứa phần mở rộng file để suy ra loại icon (pdf/word/excel…). */
+function getSourceFileName(source: AiSource): string {
+  return source.source_file || source.document_name || source.source_name || source.display_label || "";
+}
 
 export const AiSourcePanel: React.FC = () => {
   const { conversations, activeConversationId, toggleSourcePanel, setSelectedSources } = useAiAssistantStore();
@@ -150,29 +156,31 @@ export const AiSourcePanel: React.FC = () => {
         </div>
 
         {/* Search input */}
-        <div className="px-4 pb-3 relative">
-          <SearchIcon
-            size={14}
-            strokeWidth={2}
-            className="absolute left-7 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm nguồn tham khảo…"
-            className="w-full rounded-xl border border-border bg-surface-hover py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-primary/40 focus:bg-surface focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-7 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
-              aria-label="Xóa tìm kiếm"
-            >
-              <XIcon size={13} strokeWidth={2.5} />
-            </button>
-          )}
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <SearchIcon
+              size={14}
+              strokeWidth={2}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm nguồn tham khảo…"
+              className="w-full rounded-xl border border-border bg-surface-hover py-2 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-muted focus:border-primary/40 focus:bg-surface focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
+                aria-label="Xóa tìm kiếm"
+              >
+                <XIcon size={13} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -209,9 +217,12 @@ export const AiSourcePanel: React.FC = () => {
           const safe = isSafeSourceUrl(source.open_url);
 
           const card = (
-            <div className="flex items-start gap-3 mb-2">
-              <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-hover flex items-center justify-center text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                <FileTextIcon size={20} strokeWidth={1.8} />
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-hover flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                <FileTypeIcon
+                  type={getFileIconTypeByName(getSourceFileName(source))}
+                  className="h-5 w-5"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <h3
@@ -230,7 +241,7 @@ export const AiSourcePanel: React.FC = () => {
               {safe && (
                 <ExternalLinkIcon
                   size={14}
-                  className="text-text-disabled group-hover:text-primary transition-colors shrink-0 mt-0.5"
+                  className="text-text-disabled group-hover:text-primary transition-colors shrink-0"
                 />
               )}
             </div>
