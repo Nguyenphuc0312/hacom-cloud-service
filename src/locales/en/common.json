@@ -1,7 +1,7 @@
 ﻿{
   "app": {
-    "name": "Hacom Chat",
-    "shortName": "HC"
+    "name": "Hacom Holdings",
+    "shortName": "HH"
   },
   "actions": {
     "title": "Quick actions",
@@ -102,7 +102,7 @@
     "esc": "Esc"
   },
   "emptyState": {
-    "welcomeTitle": "Welcome to <1>Hacom Chat</1>",
+    "welcomeTitle": "Welcome to <1>Hacom Holdings</1>",
     "welcomeSubtitle1": "A secure, high-speed internal chat platform for Hacom Holdings staff.",
     "welcomeSubtitle2": "Connect, collaborate, and coordinate work efficiently.",
     "featureCard": {

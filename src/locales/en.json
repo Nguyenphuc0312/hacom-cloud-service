@@ -510,7 +510,7 @@
   },
   "common": {
     "app": {
-      "name": "Hacom Chat",
+      "name": "Hacom Holdings",
       "shortName": "HC"
     },
     "actions": {
@@ -620,7 +620,7 @@
         "section": "Create account"
       },
       "title": "Create a new account",
-      "subtitle": "Join the Hacom Chat community today",
+      "subtitle": "Join the Hacom Holdings community today",
       "firstName": "First name",
       "lastName": "Last name",
       "username": "Username",
@@ -668,7 +668,7 @@
     "toast": {
       "loginSuccess": "Login successful!",
       "loginFailed": "Login failed",
-      "registerSuccess": "Registration successful! Welcome to Hacom Chat",
+      "registerSuccess": "Registration successful! Welcome to Hacom Holdings",
       "registerFailed": "Registration failed",
       "forgotPasswordSent": "Password reset email has been sent!",
       "forgotPasswordFallback": "If the email exists, you will receive a reset link"

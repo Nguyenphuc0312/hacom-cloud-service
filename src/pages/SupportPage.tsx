@@ -49,7 +49,7 @@ const ViContent: React.FC = () => (
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Trợ Giúp & Hỗ Trợ</h1>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">HACOM Chat — Trung tâm hỗ trợ</p>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">Hacom Holdings — Trung tâm hỗ trợ</p>
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
@@ -63,7 +63,7 @@ const ViContent: React.FC = () => (
 
     {/* contact */}
     <Section title="1. Liên hệ hỗ trợ">
-      <p>Nếu bạn gặp bất kỳ sự cố nào khi sử dụng HACOM Chat, vui lòng liên hệ với đội ngũ hỗ trợ theo các kênh sau:</p>
+      <p>Nếu bạn gặp bất kỳ sự cố nào khi sử dụng Hacom Holdings, vui lòng liên hệ với đội ngũ hỗ trợ theo các kênh sau:</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Email hỗ trợ kỹ thuật</p>
@@ -110,7 +110,7 @@ const ViContent: React.FC = () => (
             <li>— Kiểm tra lại tên đăng nhập và mật khẩu (phân biệt chữ hoa/thường).</li>
             <li>— Thử làm mới trang hoặc xóa bộ nhớ cache trình duyệt (<kbd className="rounded bg-[#eef2f7] px-1.5 py-0.5 text-xs font-mono">Ctrl+Shift+Delete</kbd>).</li>
             <li>— Nếu tài khoản bị khóa, liên hệ quản trị viên hoặc email <a href="mailto:support@hacomholdings.com.vn" className="text-[#1565C0] hover:underline">support@hacomholdings.com.vn</a>.</li>
-            <li>— Tài khoản HACOM Chat do bộ phận IT cấp phát — bạn không thể tự đăng ký.</li>
+            <li>— Tài khoản Hacom Holdings do bộ phận IT cấp phát — bạn không thể tự đăng ký.</li>
           </ul>
         </FaqItem>
         <FaqItem q="Tôi quên mật khẩu, cách lấy lại?">
@@ -123,7 +123,7 @@ const ViContent: React.FC = () => (
           <p>Đây là yêu cầu bảo mật bắt buộc. Quản trị viên đặt mật khẩu tạm thời khi tạo tài khoản — bạn phải đổi sang mật khẩu riêng trước khi sử dụng ứng dụng.</p>
         </FaqItem>
         <FaqItem q="Tôi có thể đăng nhập trên nhiều thiết bị cùng lúc không?">
-          <p>Có. HACOM Chat hỗ trợ đăng nhập đồng thời trên nhiều thiết bị. Thông báo và tin nhắn sẽ được đồng bộ theo thời gian thực.</p>
+          <p>Có. Hacom Holdings hỗ trợ đăng nhập đồng thời trên nhiều thiết bị. Thông báo và tin nhắn sẽ được đồng bộ theo thời gian thực.</p>
         </FaqItem>
       </div>
 
@@ -173,7 +173,7 @@ const ViContent: React.FC = () => (
         <FaqItem q="Tôi không nhận được thông báo trên trình duyệt?">
           <ul className="space-y-1.5 pl-4">
             <li>— Kiểm tra xem trình duyệt đã cấp quyền thông báo cho trang chat chưa (<span className="font-medium">Settings → Privacy → Notifications</span>).</li>
-            <li>— Vào <span className="font-medium">HACOM Chat → Cài đặt → Thông báo</span> và đảm bảo thông báo đẩy đã được bật.</li>
+            <li>— Vào <span className="font-medium">Hacom Holdings → Cài đặt → Thông báo</span> và đảm bảo thông báo đẩy đã được bật.</li>
             <li>— Kiểm tra cài đặt "Không làm phiền" trên hệ điều hành.</li>
           </ul>
         </FaqItem>
@@ -188,7 +188,7 @@ const ViContent: React.FC = () => (
 
     {/* privacy link */}
     <Section title="4. Chính sách bảo mật">
-      <p>HACOM Chat cam kết bảo vệ dữ liệu cá nhân của người dùng theo đúng quy định pháp luật và tiêu chuẩn bảo mật của tổ chức.</p>
+      <p>Hacom Holdings cam kết bảo vệ dữ liệu cá nhân của người dùng theo đúng quy định pháp luật và tiêu chuẩn bảo mật của tổ chức.</p>
       <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4">
         <svg className="shrink-0 text-[#1565C0]" width="20" height="20" viewBox="0 0 20 20" fill="none">
           <path d="M10 2L3 5v5c0 4.418 3.04 8.07 7 9 3.96-.93 7-4.582 7-9V5l-7-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -212,7 +212,7 @@ const EnContent: React.FC = () => (
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Help & Support</h1>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">HACOM Chat — Support Center</p>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">Hacom Holdings — Support Center</p>
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
@@ -226,7 +226,7 @@ const EnContent: React.FC = () => (
 
     {/* contact */}
     <Section title="1. Contact Support">
-      <p>If you encounter any issues while using HACOM Chat, please reach out through the following channels:</p>
+      <p>If you encounter any issues while using Hacom Holdings, please reach out through the following channels:</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Technical support email</p>
@@ -273,7 +273,7 @@ const EnContent: React.FC = () => (
             <li>— Double-check your username and password (case-sensitive).</li>
             <li>— Try refreshing the page or clearing your browser cache (<kbd className="rounded bg-[#eef2f7] px-1.5 py-0.5 text-xs font-mono">Ctrl+Shift+Delete</kbd>).</li>
             <li>— If your account is locked, contact your admin or email <a href="mailto:support@hacomholdings.com.vn" className="text-[#1565C0] hover:underline">support@hacomholdings.com.vn</a>.</li>
-            <li>— HACOM Chat accounts are provisioned by the IT department — you cannot self-register.</li>
+            <li>— Hacom Holdings accounts are provisioned by the IT department — you cannot self-register.</li>
           </ul>
         </FaqItem>
         <FaqItem q="I forgot my password — how do I reset it?">
@@ -286,7 +286,7 @@ const EnContent: React.FC = () => (
           <p>Yes. This is a mandatory security requirement. Administrators set a temporary password when creating your account — you must change it to a personal password before using the app.</p>
         </FaqItem>
         <FaqItem q="Can I log in on multiple devices at the same time?">
-          <p>Yes. HACOM Chat supports simultaneous login across multiple devices. Messages and notifications are synced in real time.</p>
+          <p>Yes. Hacom Holdings supports simultaneous login across multiple devices. Messages and notifications are synced in real time.</p>
         </FaqItem>
       </div>
 
@@ -336,7 +336,7 @@ const EnContent: React.FC = () => (
         <FaqItem q="I'm not receiving browser notifications — how do I fix this?">
           <ul className="space-y-1.5 pl-4">
             <li>— Check that your browser has granted notification permission for the chat site (<span className="font-medium">Settings → Privacy → Notifications</span>).</li>
-            <li>— Go to <span className="font-medium">HACOM Chat → Settings → Notifications</span> and make sure push notifications are enabled.</li>
+            <li>— Go to <span className="font-medium">Hacom Holdings → Settings → Notifications</span> and make sure push notifications are enabled.</li>
             <li>— Check your OS "Do Not Disturb" settings.</li>
           </ul>
         </FaqItem>
@@ -351,7 +351,7 @@ const EnContent: React.FC = () => (
 
     {/* privacy link */}
     <Section title="4. Privacy Policy">
-      <p>HACOM Chat is committed to protecting users' personal data in accordance with applicable law and organizational security standards.</p>
+      <p>Hacom Holdings is committed to protecting users' personal data in accordance with applicable law and organizational security standards.</p>
       <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4">
         <svg className="shrink-0 text-[#1565C0]" width="20" height="20" viewBox="0 0 20 20" fill="none">
           <path d="M10 2L3 5v5c0 4.418 3.04 8.07 7 9 3.96-.93 7-4.582 7-9V5l-7-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
