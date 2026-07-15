@@ -2,6 +2,12 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import {
+  PhoneIcon,
+  EnvelopeIcon,
+  BuildingOffice2Icon,
+  IdentificationIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { TextMessage } from "../../message/TextMessage";
 import { MessageContentRenderer } from "../../message/MessageContentRenderer";
@@ -186,83 +192,98 @@ const ContactCard: React.FC<{
     }
   };
 
+  // "Xem hồ sơ" — the secondary action, present in every state. A quiet
+  // outline pill so the primary action (message / add / accept) leads.
   const viewProfileBtn = hasDispatchableContactUserId ? (
     <button
       type="button"
       onClick={handleViewProfile}
       className={clsx(
-        "text-xs font-medium underline-offset-2 hover:underline",
-        isOwn ? "opacity-75 hover:opacity-100" : "text-text-secondary hover:text-primary",
+        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[13px] font-medium transition-colors",
+        isOwn
+          ? "text-white/80 hover:bg-white/10 hover:text-white"
+          : "text-text-secondary hover:bg-surface-overlay hover:text-[#1565C0]",
       )}
     >
       {t("chat:contactShare.viewProfile", { defaultValue: "View profile" })}
     </button>
   ) : null;
 
+  // Primary pill: solid brand blue on other-bubbles, translucent on own-bubbles
+  // (the blue would clash on a blue message bubble). 8px tall → ~32px, with the
+  // row padding the row clears a 44px touch target.
+  const primaryButton = (opts: {
+    label: string;
+    loading: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      disabled={opts.loading}
+      onClick={opts.onClick}
+      className={clsx(
+        "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-60",
+        isOwn
+          ? "bg-white/15 text-white hover:bg-white/25"
+          : "bg-[#1565C0] text-white hover:bg-[#1976D2]",
+      )}
+    >
+      {opts.loading ? "…" : opts.label}
+    </button>
+  );
+
   const renderCta = () => {
+    const row = (primary: React.ReactNode) => (
+      <div className="flex items-center gap-1.5">
+        {primary}
+        {viewProfileBtn}
+      </div>
+    );
+
     if (!relationship || relationship.kind === "self") {
       return viewProfileBtn;
     }
 
     if (relationship.kind === "friend" && relationship.capabilities.canMessage) {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "message"}
-            onClick={() => void handleMessage()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {actionLoading === "message"
-              ? "..."
-              : t("friends:message")}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        primaryButton({
+          label: t("friends:message"),
+          loading: actionLoading === "message",
+          onClick: () => void handleMessage(),
+        }),
       );
     }
 
     if (relationship.kind === "incoming_request") {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "accept"}
-            onClick={() => void handleAcceptFriend()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-success/10 text-success hover:bg-success/20",
-            )}
-          >
-            {actionLoading === "accept" ? "..." : t("friends:accept", { defaultValue: "Chấp nhận" })}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        <button
+          type="button"
+          disabled={actionLoading === "accept"}
+          onClick={() => void handleAcceptFriend()}
+          className={clsx(
+            "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-60",
+            isOwn
+              ? "bg-white/15 text-white hover:bg-white/25"
+              : "bg-success text-white hover:bg-success/90",
+          )}
+        >
+          {actionLoading === "accept" ? "…" : t("friends:accept", { defaultValue: "Chấp nhận" })}
+        </button>,
       );
     }
 
     if (relationship.kind === "outgoing_request") {
-      return (
-        <div className="flex items-center gap-3">
-          <span
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium opacity-55",
-              isOwn
-                ? "bg-black/[0.06] dark:bg-white/10"
-                : "bg-surface-overlay text-text-muted",
-            )}
-          >
-            {t("friends:qr.pending")}
-          </span>
-          {viewProfileBtn}
-        </div>
+      return row(
+        <span
+          className={clsx(
+            "inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-[13px] font-medium",
+            isOwn
+              ? "bg-white/10 text-white/70"
+              : "bg-surface-overlay text-text-muted",
+          )}
+        >
+          {t("friends:qr.pending")}
+        </span>,
       );
     }
 
@@ -270,77 +291,130 @@ const ContactCard: React.FC<{
       relationship.kind === "not_friend" &&
       relationship.capabilities.canSendRequest
     ) {
-      return (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={actionLoading === "add"}
-            onClick={() => void handleAddFriend()}
-            className={clsx(
-              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-              isOwn
-                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {actionLoading === "add" ? "..." : t("friends:addFriend")}
-          </button>
-          {viewProfileBtn}
-        </div>
+      return row(
+        primaryButton({
+          label: t("friends:addFriend"),
+          loading: actionLoading === "add",
+          onClick: () => void handleAddFriend(),
+        }),
       );
     }
 
     return viewProfileBtn;
   };
 
+  const hasDetails = Boolean(
+    payload.phone || payload.email || payload.orgUnit || payload.title,
+  );
+  const cta = renderCta();
+
   return (
     <div
       className={clsx(
-        "min-w-[14rem] space-y-2 rounded-xl border px-3 py-2.5",
+        "w-[17.5rem] max-w-full overflow-hidden rounded-2xl border",
         isOwn
-          ? "border-black/10 bg-black/[0.06] dark:border-white/15 dark:bg-white/10"
-          : "border-border bg-surface-overlay/50",
+          ? "border-white/15 bg-white/10"
+          : "border-border/70 bg-surface-raised",
       )}
     >
-      <p
+      {/* Header: label chip + identity, on a faint branded band */}
+      <div
         className={clsx(
-          "text-[10px] font-medium",
-          isOwn ? "opacity-55" : "text-text-muted",
+          "px-3.5 pb-3 pt-2.5",
+          isOwn ? "bg-white/[0.06]" : "bg-[#1565C0]/[0.05]",
         )}
       >
-        {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
-      </p>
-
-      <div className="flex items-center gap-2">
-        <Avatar src={payload.avatarUrl} alt={payload.displayName} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {payload.displayName}
-          </p>
-          {payload.username && (
-            <p className="truncate text-xs opacity-70">@{payload.username}</p>
+        <span
+          className={clsx(
+            "inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide",
+            isOwn ? "opacity-70" : "text-[#1565C0]",
           )}
+        >
+          <IdentificationIcon className="h-3.5 w-3.5" />
+          {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
+        </span>
+
+        <div className="mt-2 flex items-center gap-3">
+          <Avatar
+            src={payload.avatarUrl}
+            alt={payload.displayName}
+            size="lg"
+            className={clsx(
+              "shrink-0 ring-2",
+              isOwn ? "ring-white/20" : "ring-white dark:ring-surface-raised",
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold leading-tight">
+              {payload.displayName}
+            </p>
+            {payload.username && (
+              <p
+                className={clsx(
+                  "mt-0.5 truncate text-xs",
+                  isOwn ? "opacity-65" : "text-text-muted",
+                )}
+              >
+                @{payload.username}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {(payload.phone || payload.email) && (
-        <div className="space-y-0.5 text-xs opacity-75">
-          {payload.phone && <p>{payload.phone}</p>}
-          {payload.email && <p>{payload.email}</p>}
+      {/* Details: each field a scannable icon row */}
+      {hasDetails && (
+        <div className="space-y-1.5 px-3.5 pt-3">
+          {payload.phone && (
+            <ContactDetailRow isOwn={isOwn} icon={PhoneIcon}>
+              {payload.phone}
+            </ContactDetailRow>
+          )}
+          {payload.email && (
+            <ContactDetailRow isOwn={isOwn} icon={EnvelopeIcon}>
+              <span className="break-all">{payload.email}</span>
+            </ContactDetailRow>
+          )}
+          {(payload.orgUnit || payload.title) && (
+            <ContactDetailRow isOwn={isOwn} icon={BuildingOffice2Icon}>
+              {[payload.orgUnit, payload.title].filter(Boolean).join(" · ")}
+            </ContactDetailRow>
+          )}
         </div>
       )}
 
-      {(payload.orgUnit || payload.title) && (
-        <div className="space-y-0.5 text-xs opacity-70">
-          {payload.orgUnit && <p>{payload.orgUnit}</p>}
-          {payload.title && <p>{payload.title}</p>}
+      {/* Action row: divided from content, consistent affordances */}
+      {cta && (
+        <div
+          className={clsx(
+            "mt-3 border-t px-3.5 py-2.5",
+            isOwn ? "border-white/10" : "border-border/60",
+          )}
+        >
+          {cta}
         </div>
       )}
-
-      {renderCta()}
     </div>
   );
 };
+
+const ContactDetailRow: React.FC<{
+  isOwn: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}> = ({ isOwn, icon: Icon, children }) => (
+  <div className="flex items-start gap-2 text-[13px] leading-snug">
+    <Icon
+      className={clsx(
+        "mt-[1px] h-4 w-4 shrink-0",
+        isOwn ? "opacity-55" : "text-[#1565C0]/70",
+      )}
+    />
+    <span className={clsx("min-w-0", isOwn ? "opacity-85" : "text-text-secondary")}>
+      {children}
+    </span>
+  </div>
+);
 
 const renderTextContent = (
   message: Message,
