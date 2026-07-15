@@ -1,7 +1,14 @@
 import React, { useState } from "react";
-import { BookOpenIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
+import { BookOpenIcon, ExternalLinkIcon } from "lucide-react";
 import type { AiSource } from "../types";
 import { isSafeSourceUrl, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
+import { getFileIconTypeByName } from "../../../utils/formatFileSize";
+import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
+
+/** Chuỗi tên/label chứa phần mở rộng file để suy ra loại icon (pdf/word/excel…). */
+function getSourceFileName(source: AiSource): string {
+  return source.source_file || source.document_name || source.source_name || source.display_label || "";
+}
 
 interface AiSourceListProps {
   sources: AiSource[];
@@ -45,8 +52,11 @@ export const AiSourceList: React.FC<AiSourceListProps> = ({ sources }) => {
 
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">
-              <div className="shrink-0 flex items-center justify-center w-5 h-5 rounded bg-surface-hover text-text-muted mt-0.5">
-                <FileTextIcon size={11} strokeWidth={2} />
+              <div className="shrink-0 flex items-center justify-center w-5 h-5 rounded bg-surface-hover mt-0.5">
+                <FileTypeIcon
+                  type={getFileIconTypeByName(getSourceFileName(source))}
+                  className="h-3 w-3"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">

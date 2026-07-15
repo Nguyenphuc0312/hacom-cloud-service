@@ -41,6 +41,7 @@ export {
   isFileTooLargeForTextPreview,
   getPreviewTypeDisplayName,
   getIconTypeFromPreviewType,
+  getFileIconTypeByName,
   MAX_PREVIEW_SIZE,
   MAX_TEXT_PREVIEW_SIZE,
   MAX_TEXT_PREVIEW_LINES,
