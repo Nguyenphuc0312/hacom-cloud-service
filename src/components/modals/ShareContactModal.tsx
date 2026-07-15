@@ -10,14 +10,24 @@ import type { PublicUserSummary } from "@hacom/chat-shared-types/auth";
 import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
 import { useAuthStore } from "../../stores";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 
 type TabKey = "my" | "choose";
+
+/** One row in the "choose" list — same shape whether it comes from search or the friends list. */
+interface ContactListItem {
+  id: string;
+  displayName: string;
+  username?: string | null;
+  avatarUrl?: string | null;
+}
 
 interface ShareContactModalProps {
   isOpen: boolean;
   currentUserId: string;
   onClose: () => void;
-  onShare: (contactUserId: string) => Promise<void>;
+  onShare: (contactUserId: string) => Promise<boolean>;
   className?: string;
 }
 
@@ -50,13 +60,15 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
   const { t } = useTranslation();
   const currentUser = useAuthStore((s) => s.user);
   const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  const friends = useFriendshipStore((s) => s.friends);
+  const isFriendsLoading = useFriendshipStore((s) => s.isFriendsLoading);
+  const fetchFriends = useFriendshipStore((s) => s.fetchFriends);
+  // Same rule as the "choose" tab and the rest of the app: enriched alias/name
+  // wins, else the canonical resolver (displayName → HR full name → full name →
+  // username), never the raw employee code alone.
   const displayName =
-    currentUser
-      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
-        currentUser.username ||
-        currentUser.email ||
-        ""
-      : "";
+    (currentUser && nameByUserId[currentUser.id]) ||
+    (currentUser ? resolveUserDisplayName(currentUser) : "");
 
   const [activeTab, setActiveTab] = useState<TabKey>("my");
   const [query, setQuery] = useState("");
@@ -151,6 +163,29 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
     void runSearch(debouncedQuery);
   }, [abortSearch, activeTab, debouncedQuery, isOpen, runSearch]);
 
+  // Default (empty search) shows the user's friends. Load once when the tab opens.
+  useEffect(() => {
+    if (isOpen && activeTab === "choose" && friends.length === 0) {
+      void fetchFriends();
+    }
+  }, [activeTab, fetchFriends, friends.length, isOpen]);
+
+  const isSearching = debouncedQuery.trim().length >= 2;
+
+  // When searching, show search results; otherwise fall back to the friends list.
+  const listItems: ContactListItem[] = isSearching
+    ? results
+    : friends
+        .filter((friend) => friend.id !== currentUserId)
+        .map((friend) => ({
+          id: friend.id,
+          displayName: resolveUserDisplayName(friend),
+          username: friend.username,
+          avatarUrl: friend.avatar ?? null,
+        }));
+
+  const listLoading = isSearching ? isLoading : isFriendsLoading;
+
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 
   if (isOpen !== prevIsOpen) {
@@ -182,8 +217,11 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
       if (!contactUserId) return;
       setSendingUserId(contactUserId);
       try {
-        await onShare(contactUserId);
-        onClose();
+        // Only close when the share actually succeeded; on failure the error
+        // toast shows and the modal stays open so the user can retry.
+        if (await onShare(contactUserId)) {
+          onClose();
+        }
       } finally {
         setSendingUserId(null);
       }
@@ -235,10 +273,7 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-text-primary">
-                    {displayName ||
-                      t("friends:qr.unknownUser", {
-                        defaultValue: "Unknown user",
-                      })}
+                    {displayName}
                   </p>
                   {currentUser?.username ? (
                     <p className="truncate text-xs text-text-muted">
@@ -277,24 +312,23 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
               leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
             />
 
-            {isLoading ? (
+            {listLoading ? (
               <DirectorySkeleton count={4} />
-            ) : errorText ? (
+            ) : errorText && isSearching ? (
               <p className="text-sm text-danger">{errorText}</p>
-            ) : results.length === 0 ? (
+            ) : listItems.length === 0 ? (
               <p className="py-4 text-center text-sm text-text-muted">
-                {debouncedQuery.trim().length < 2
-                  ? t("chat:contactShare.searchHint", {
-                      min: 2,
-                      defaultValue: "Enter at least 2 characters",
-                    })
-                  : t("chat:contactShare.noResults", {
+                {isSearching
+                  ? t("chat:contactShare.noResults", {
                       defaultValue: "No matching users",
+                    })
+                  : t("chat:contactShare.noFriends", {
+                      defaultValue: "You have no friends to share yet",
                     })}
               </p>
             ) : (
               <ul className="max-h-64 space-y-1 overflow-y-auto">
-                {results.map((item) => {
+                {listItems.map((item) => {
                   const label =
                     nameByUserId[item.id] || item.displayName;
                   return (

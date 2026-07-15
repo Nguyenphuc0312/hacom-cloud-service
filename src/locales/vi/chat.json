@@ -206,6 +206,7 @@
     "searchPlaceholder": "Tìm theo tên hoặc username",
     "searchHint": "Nhập ít nhất {{min}} ký tự",
     "noResults": "Không tìm thấy liên hệ",
+    "noFriends": "Bạn chưa có bạn bè nào để chia sẻ",
     "shareAction": "Chia sẻ",
     "cardLabel": "Danh thiếp",
     "viewProfile": "Xem hồ sơ",

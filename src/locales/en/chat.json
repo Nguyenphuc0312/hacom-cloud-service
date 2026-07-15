@@ -206,6 +206,7 @@
     "searchPlaceholder": "Search by name or username",
     "searchHint": "Type at least {{min}} characters",
     "noResults": "No contacts found",
+    "noFriends": "You have no friends to share yet",
     "shareAction": "Share",
     "cardLabel": "Contact card",
     "viewProfile": "View profile",
