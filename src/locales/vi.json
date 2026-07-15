@@ -510,7 +510,7 @@
   },
   "common": {
     "app": {
-      "name": "Hacom Chat",
+      "name": "Hacom Holdings",
       "shortName": "HC"
     },
     "actions": {
@@ -622,7 +622,7 @@
         "section": "Đăng ký tài khoản"
       },
       "title": "Tạo tài khoản mới",
-      "subtitle": "Tham gia cộng đồng Hacom Chat ngay hôm nay",
+      "subtitle": "Tham gia cộng đồng Hacom Holdings ngay hôm nay",
       "firstName": "Họ",
       "lastName": "Tên",
       "username": "Tên người dùng",
@@ -670,7 +670,7 @@
     "toast": {
       "loginSuccess": "Đăng nhập thành công!",
       "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
-      "registerSuccess": "Đăng ký thành công! Chào mừng bạn đến với Hacom Chat",
+      "registerSuccess": "Đăng ký thành công! Chào mừng bạn đến với Hacom Holdings",
       "registerFailed": "Đăng ký thất bại",
       "forgotPasswordSent": "Email đặt lại mật khẩu đã được gửi!",
       "forgotPasswordFallback": "Nếu email tồn tại, bạn sẽ nhận được link đặt lại mật khẩu"

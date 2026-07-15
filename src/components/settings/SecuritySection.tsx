@@ -90,7 +90,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
       <SettingsCard
         title={t("security.changePassword")}
         description={t("security.changePasswordDesc", {
-          defaultValue: "Cập nhật mật khẩu đăng nhập Hacom Chat.",
+          defaultValue: "Cập nhật mật khẩu đăng nhập Hacom Holdings.",
         })}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="max-w-[480px] space-y-4">

@@ -19,7 +19,7 @@ const faqs = [
   },
   {
     question: "Ứng dụng có hỗ trợ gửi tệp dung lượng lớn không?",
-    answer: "Hacom Chat hỗ trợ gửi tệp lên đến 100MB. Đối với các tệp lớn hơn, chúng tôi khuyến khích bạn sử dụng liên kết chia sẻ từ Hacom Cloud."
+    answer: "Hacom Holdings hỗ trợ gửi tệp lên đến 100MB. Đối với các tệp lớn hơn, chúng tôi khuyến khích bạn sử dụng liên kết chia sẻ từ Hacom Cloud."
   }
 ];
 

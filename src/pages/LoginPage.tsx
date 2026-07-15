@@ -147,7 +147,7 @@ export const LoginPage: React.FC = () => {
           >
             Chào mừng trở lại với{" "}
             <span className="text-[#C41E3A]">
-              Hacom Chat
+              Hacom Holdings
             </span>
           </h1>
           <p className="text-sm font-medium text-text-muted">

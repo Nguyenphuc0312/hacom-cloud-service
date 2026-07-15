@@ -260,7 +260,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
           <h2 className="text-[clamp(22px,2.8vw,32px)] font-extrabold leading-tight text-text-primary">
             Chào mừng đến với{" "}
             <span className="text-[#1565C0]">
-              Hacom Chat
+              Hacom Holdings
             </span>
           </h2>
           <div className="mt-3 flex justify-center">
