@@ -23,7 +23,7 @@ export const HelpSection: React.FC<HelpSectionProps> = ({ id }) => {
         <SettingsRow
           label={t("help.center", { defaultValue: "Trung tâm trợ giúp" })}
           description={t("help.centerDesc", {
-            defaultValue: "Xem hướng dẫn sử dụng Hacom Chat.",
+            defaultValue: "Xem hướng dẫn sử dụng Hacom Holdings.",
           })}
         />
         <SettingsRow

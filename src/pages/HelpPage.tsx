@@ -31,7 +31,7 @@ const HelpPage: React.FC = () => {
             Thông tin liên hệ hỗ trợ
           </h1>
           <p className="mx-auto max-w-2xl text-text-secondary">
-            Cần trợ giúp với hệ thống Hacom Chat? Đội ngũ hỗ trợ kỹ thuật của
+            Cần trợ giúp với hệ thống Hacom Holdings? Đội ngũ hỗ trợ kỹ thuật của
             chúng tôi luôn sẵn sàng giải đáp các thắc mắc và xử lý sự cố của bạn.
           </p>
         </div>
