@@ -585,11 +585,13 @@ export function parseLevelReportExportHref(href: string | undefined): string | n
   if (!href) return null;
   const trimmed = href.trim();
   try {
-    const url = trimmed.startsWith("http")
-      ? new URL(trimmed)
-      : new URL(trimmed, BASE_URL);
+    // Parse against current origin (BASE_URL may be relative in dev — the
+    // /ai-api proxy — which new URL() can't use as a base). Then rebuild the
+    // fetch URL through BASE_URL so the download honours the same proxy/host as
+    // every other AI call instead of hitting the AI host cross-origin.
+    const url = new URL(trimmed, window.location.origin);
     if (/\/api\/level-reports\/export\/?$/i.test(url.pathname)) {
-      return url.toString();
+      return `${BASE_URL}${url.pathname}${url.search}`;
     }
   } catch {
     /* href không hợp lệ */
