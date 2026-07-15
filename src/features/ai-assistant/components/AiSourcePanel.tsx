@@ -12,8 +12,9 @@ import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { motion } from "framer-motion";
 import type { AiSource } from "../types";
-import { isSafeSourceUrl, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
+import { getSourceHref, getSourceLabel, getSourceMeta } from "../utils/sourceUtils";
 import { sendAiChatMessage } from "../services/aiChatApi";
+import { useOpenAiSource } from "../hooks/useOpenAiSource";
 import { getFileIconTypeByName } from "../../../utils/formatFileSize";
 import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
 
@@ -30,6 +31,7 @@ export const AiSourcePanel: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const { open, openingUrl, isOpening } = useOpenAiSource();
 
   // Lấy sources từ tin nhắn assistant cuối cùng của cuộc hội thoại hiện tại
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
@@ -50,6 +52,12 @@ export const AiSourcePanel: React.FC = () => {
       : null;
 
   const sources: AiSource[] = lastAssistantWithSources?.sources ?? [];
+
+  // ponytail: temp debug — remove after confirming source URL fields from BE.
+  if (sources.length > 0) {
+    console.log("[ai-source] first source object:", sources[0]);
+    console.log("[ai-source] resolved href:", getSourceHref(sources[0]));
+  }
 
   const filteredSources = searchQuery.trim()
     ? sources.filter((s) =>
@@ -214,7 +222,8 @@ export const AiSourcePanel: React.FC = () => {
         {filteredSources.map((source, index) => {
           const label = getSourceLabel(source);
           const meta = getSourceMeta(source);
-          const safe = isSafeSourceUrl(source.open_url);
+          const href = getSourceHref(source);
+          const safe = Boolean(href);
 
           const card = (
             <div className="flex items-center gap-3 mb-2">
@@ -249,15 +258,16 @@ export const AiSourcePanel: React.FC = () => {
 
           if (safe) {
             return (
-              <a
+              <button
                 key={`${source.citation_index ?? index}-${index}`}
-                href={source.open_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group block p-4 rounded-xl border border-border bg-surface hover:border-border-strong hover:shadow-sm transition-all"
+                type="button"
+                onClick={() => void open(href)}
+                disabled={isOpening}
+                aria-busy={openingUrl === href}
+                className="group block w-full text-left p-4 rounded-xl border border-border bg-surface hover:border-border-strong hover:shadow-sm transition-all disabled:cursor-wait"
               >
                 {card}
-              </a>
+              </button>
             );
           }
 
