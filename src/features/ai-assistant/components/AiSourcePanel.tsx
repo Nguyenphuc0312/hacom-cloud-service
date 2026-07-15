@@ -53,12 +53,6 @@ export const AiSourcePanel: React.FC = () => {
 
   const sources: AiSource[] = lastAssistantWithSources?.sources ?? [];
 
-  // ponytail: temp debug — remove after confirming source URL fields from BE.
-  if (sources.length > 0) {
-    console.log("[ai-source] first source object:", sources[0]);
-    console.log("[ai-source] resolved href:", getSourceHref(sources[0]));
-  }
-
   const filteredSources = searchQuery.trim()
     ? sources.filter((s) =>
         getSourceLabel(s).toLowerCase().includes(searchQuery.toLowerCase()),
