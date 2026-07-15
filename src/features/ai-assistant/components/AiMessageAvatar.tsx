@@ -22,12 +22,13 @@ export const AiMessageAvatar: React.FC<AiMessageAvatarProps> = ({ role, isError 
   const currentUser = useAuthStore((s) => s.user);
 
   if (role === "user") {
+    // Không margin-top: dòng user căn giữa (items-center) nên avatar tự canh
+    // giữa bong bóng.
     return (
       <Avatar
         src={currentUser?.avatar}
         alt={currentUser?.displayName ?? currentUser?.username ?? "Bạn"}
         size="sm"
-        className="mt-0.5"
       />
     );
   }

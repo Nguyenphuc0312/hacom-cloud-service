@@ -409,7 +409,9 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         <div
           className={clsx(
             "flex gap-3.5",
-            isUser ? "flex-row-reverse" : "flex-row",
+            // User: avatar căn GIỮA bong bóng (không cao lêu nghêu, không thấp
+            // quá). Assistant: căn đỉnh vì câu trả lời dài.
+            isUser ? "flex-row-reverse items-center" : "flex-row items-start",
           )}
         >
           <AiMessageAvatar role={message.role} isError={message.isError} />
@@ -421,10 +423,13 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               isUser ? "items-end" : "items-start",
             )}
           >
-            {/* Role label */}
-            <span className="mb-1 text-xs font-semibold text-text-muted">
-              {isUser ? "Bạn" : "Trợ lý ảo cá nhân"}
-            </span>
+            {/* Role label — chỉ hiện cho assistant. User bỏ nhãn "Bạn" để bong
+                bóng + avatar căn đáy gọn như bên chat (nhãn đẩy avatar lên cao). */}
+            {isAssistant && (
+              <span className="mb-1 text-xs font-semibold text-text-muted">
+                Trợ lý ảo cá nhân
+              </span>
+            )}
 
             {/* Thinking phase indicator */}
             {isAssistant && message.thinkingPhase && (
