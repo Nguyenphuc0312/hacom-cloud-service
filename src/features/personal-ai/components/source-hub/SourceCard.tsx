@@ -1,7 +1,6 @@
 import React, { useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  FileTextIcon,
   Trash2Icon,
   Loader2Icon,
   CheckIcon,
@@ -10,6 +9,8 @@ import clsx from "clsx";
 import type { PersonalDocument } from "../../types";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import { getFileIconTypeByName } from "../../../../utils/formatFileSize";
+import { FileTypeIcon } from "../../../../components/message/FileTypeIcon";
 
 interface SourceCardProps {
   document: PersonalDocument;
@@ -69,7 +70,7 @@ export const SourceCard: React.FC<SourceCardProps> = ({
         if (e.key === " " || e.key === "Enter") handleToggle();
       }}
       className={clsx(
-        "group relative flex cursor-pointer select-none items-start gap-3 rounded-2xl border p-3.5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40",
+        "group relative flex cursor-pointer select-none items-start gap-3 rounded-xl border p-4 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40",
         isUploading && "cursor-default opacity-60",
         isError && "cursor-default border-danger/30 bg-danger/5",
         isSelected && !isError && !isUploading
@@ -82,18 +83,20 @@ export const SourceCard: React.FC<SourceCardProps> = ({
       {/* File icon */}
       <div
         className={clsx(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
           isSelected
-            ? "bg-[#1565C0]/10 text-[#1565C0]"
+            ? "bg-[#1565C0]/10"
             : isError
               ? "bg-danger/10 text-danger"
-              : "bg-surface-hover text-text-muted group-hover:bg-surface-active",
+              : "bg-surface-hover group-hover:bg-surface-active",
         )}
       >
         {isUploading ? (
-          <Loader2Icon size={18} strokeWidth={2} className="animate-spin" />
+          <Loader2Icon size={18} strokeWidth={2} className="animate-spin text-text-muted" />
+        ) : isError ? (
+          <FileTypeIcon type={getFileIconTypeByName(document.name)} className="h-[18px] w-[18px] text-danger" />
         ) : (
-          <FileTextIcon size={18} strokeWidth={1.8} />
+          <FileTypeIcon type={getFileIconTypeByName(document.name)} className="h-[18px] w-[18px]" />
         )}
       </div>
 

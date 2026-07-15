@@ -85,6 +85,37 @@ export function getIconTypeFromPreviewType(previewType: PreviewType): FileIconTy
   }
 }
 
+/** Extension → icon type. Keys are lowercase, no leading dot. */
+const EXT_TO_ICON: Record<string, FileIconType> = {
+  jpg: "image", jpeg: "image", png: "image", gif: "image", webp: "image", bmp: "image", svg: "image", heic: "image",
+  mp4: "video", webm: "video", mov: "video", avi: "video", mkv: "video",
+  mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio",
+  pdf: "pdf",
+  xls: "spreadsheet", xlsx: "spreadsheet", csv: "spreadsheet",
+  ppt: "presentation", pptx: "presentation",
+  doc: "document", docx: "document", txt: "document", rtf: "document", md: "document",
+  zip: "archive", rar: "archive", "7z": "archive", tar: "archive", gz: "archive",
+  js: "code", ts: "code", tsx: "code", jsx: "code", json: "code", html: "code", css: "code", py: "code", java: "code", xml: "code",
+};
+
+/**
+ * Resolve a {@link FileIconType} from a display name / filename alone.
+ * Tolerant of trailing noise (e.g. "report.pdf – Trang 1"): it scans for the
+ * last known extension token rather than blindly splitting on ".".
+ * Use when no MIME type is available (AI sources, uploaded doc names).
+ */
+export function getFileIconTypeByName(name: string | undefined): FileIconType {
+  if (!name) return "generic";
+  const match = name.toLowerCase().match(/\.([a-z0-9]+)(?=\W|$)/g);
+  if (match) {
+    for (let i = match.length - 1; i >= 0; i--) {
+      const ext = match[i].slice(1);
+      if (EXT_TO_ICON[ext]) return EXT_TO_ICON[ext];
+    }
+  }
+  return "generic";
+}
+
 // ── File Extension Helpers ───────────────────────────────────────────────
 
 /**
