@@ -6,6 +6,7 @@ import {
   PhoneIcon,
   EnvelopeIcon,
   BuildingOffice2Icon,
+  BriefcaseIcon,
   IdentificationIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
@@ -317,9 +318,9 @@ const ContactCard: React.FC<{
         </div>
       </div>
 
-      {/* Details: each field a scannable icon row */}
+      {/* Details: one field per row, each with its own icon */}
       {hasDetails && (
-        <div className="space-y-1.5 px-3.5 pt-3">
+        <div className="space-y-2 px-3.5 pt-3">
           {payload.phone && (
             <ContactDetailRow icon={PhoneIcon}>{payload.phone}</ContactDetailRow>
           )}
@@ -328,9 +329,14 @@ const ContactCard: React.FC<{
               <span className="break-all">{payload.email}</span>
             </ContactDetailRow>
           )}
-          {(payload.orgUnit || payload.title) && (
+          {payload.orgUnit && (
             <ContactDetailRow icon={BuildingOffice2Icon}>
-              {[payload.orgUnit, payload.title].filter(Boolean).join(" · ")}
+              {payload.orgUnit}
+            </ContactDetailRow>
+          )}
+          {payload.title && (
+            <ContactDetailRow icon={BriefcaseIcon}>
+              {payload.title}
             </ContactDetailRow>
           )}
         </div>
