@@ -117,7 +117,11 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
             <div
               className={clsx(
                 "flex gap-3.5",
-                message.role === "user" ? "flex-row-reverse" : "flex-row",
+                // User: avatar căn GIỮA bong bóng (không cao lêu nghêu, không
+                // thấp quá). Assistant: căn đỉnh vì câu trả lời dài.
+                message.role === "user"
+                  ? "flex-row-reverse items-center"
+                  : "flex-row items-start",
               )}
             >
               <AiMessageAvatar role={message.role} isError={message.isError} />
@@ -129,14 +133,13 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                   message.role === "user" ? "items-end" : "items-start",
                 )}
               >
-                {/* Label */}
-                <span className="text-xs font-semibold text-text-muted mb-1">
-                  {message.role === "user"
-                    ? "Bạn"
-                    : selectedEndpoint === "company"
-                      ? "Hacom AI"
-                      : "Trợ lý ảo cá nhân"}
-                </span>
+                {/* Label — chỉ hiện cho assistant. User bỏ nhãn "Bạn" để bong
+                    bóng + avatar căn đáy gọn như bên chat. */}
+                {message.role === "assistant" && (
+                  <span className="text-xs font-semibold text-text-muted mb-1">
+                    {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
+                  </span>
+                )}
 
                 {/* Thinking */}
                 {message.thinking && message.role === "assistant" && (
