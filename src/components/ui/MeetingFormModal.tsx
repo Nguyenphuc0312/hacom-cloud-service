@@ -10,6 +10,10 @@ import { Button } from "./Button";
 import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useAuthStore } from "../../stores/authStore";
+import {
+  useChatUserSearch,
+  type ChatSearchUser,
+} from "../../features/chat/hooks/useChatUserSearch";
 import { Avatar } from "../common/Avatar";
 import { resolvePublicResourceUrl } from "../../config";
 
@@ -129,6 +133,17 @@ const formatDuration = (start: string, end: string): string => {
   if (m === 0) return `${h} giờ`;
   return `${h} giờ ${m} phút`;
 };
+
+/** Map kết quả tìm user toàn công ty → shape option của picker (giống friendOptions). */
+const searchUserToOption = (u: ChatSearchUser) => ({
+  id: u.id,
+  name: u.displayName,
+  avatar: u.avatarUrl ?? "",
+  employeeCode: u.employeeCode ?? "",
+  department: u.departmentName ?? "",
+  title: u.title ?? "",
+  isSelf: false as const,
+});
 
 const timeRangesOverlap = (
   s1: string, e1: string,
@@ -262,6 +277,11 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       isSelf: true as const,
     };
   }, [currentUser, looksLikeCode]);
+  // Người tạo ≠ chủ trì: tạo mới → chính bạn; sửa → owner của event (không đổi được).
+  const creator = isEditMode
+    ? { name: initialData?.createdByName || "Không rõ", avatar: "", isSelf: false }
+    : { name: selfOption?.name ?? "", avatar: selfOption?.avatar ?? "", isSelf: true };
+
   const [showFriendPicker, setShowFriendPicker] = React.useState(false);
   const mentionQuery = participantInput.startsWith("@")
     ? participantInput.slice(1).trim().toLowerCase()
@@ -316,6 +336,32 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     }
     return friendsFiltered;
   }, [friendOptions, selfOption, mentionQuery, isMentioning, participantInput]);
+
+  // Tìm TOÀN CÔNG TY (không giới hạn bạn bè) — BE resolve participant qua
+  // employeeId/employeeCode/authUserId nên người chưa kết bạn vẫn nhận được lịch.
+  const chairmanQuery = isChairmanMentioning ? chairmanMentionQuery : chairmanInput.trim();
+  const participantQuery = isMentioning ? mentionQuery : participantInput.trim();
+  const chairmanSearch = useChatUserSearch(chairmanQuery, {
+    enabled: isOpen && chairmanPickerOpen,
+  });
+  const participantSearch = useChatUserSearch(participantQuery, {
+    enabled: isOpen && pickerOpen,
+  });
+  const knownIds = React.useMemo(() => {
+    const ids = new Set(friendOptions.map((f) => f.id));
+    if (selfOption) ids.add(selfOption.id);
+    return ids;
+  }, [friendOptions, selfOption]);
+  const chairmanDirectoryOptions = React.useMemo(
+    () => chairmanSearch.results.filter((u) => !knownIds.has(u.id)).map(searchUserToOption),
+    [chairmanSearch.results, knownIds],
+  );
+  const participantDirectoryOptions = React.useMemo(
+    () => participantSearch.results.filter((u) => !knownIds.has(u.id)).map(searchUserToOption),
+    [participantSearch.results, knownIds],
+  );
+  const chairmanList = [...filteredChairmanOptions, ...chairmanDirectoryOptions];
+  const participantList = [...filteredFriendOptions, ...participantDirectoryOptions];
 
   // Reset / pre-fill form khi mở modal
   React.useEffect(() => {
@@ -661,6 +707,30 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           )}
         </div>
 
+        {/* 2b. Người tạo — chỉ hiển thị, có thể khác chủ trì */}
+        {creator.name && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-primary">Người tạo</label>
+            <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-overlay px-3 py-2">
+              <Avatar
+                src={creator.avatar ? resolvePublicResourceUrl(creator.avatar) : undefined}
+                alt={creator.name}
+                size="sm"
+                className="shrink-0"
+              />
+              <span className="truncate text-sm font-medium text-text-primary">{creator.name}</span>
+              {creator.isSelf && (
+                <span className="shrink-0 rounded-full bg-[#1976D2]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1565C0]">
+                  Bạn
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] text-text-muted">
+              Người tạo lịch có thể khác với người chủ trì cuộc họp.
+            </p>
+          </div>
+        )}
+
         {/* 3. Chủ trì */}
         <div className="relative">
           <div className="mb-1 flex items-center justify-between">
@@ -677,7 +747,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                   : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
               )}
             >
-              @ Chọn từ bạn bè
+              @ Chọn người
             </button>
           </div>
           <input
@@ -697,7 +767,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 setChairmanInput(chairman);
               }
             }}
-            placeholder="Họ và tên người chủ trì (gõ @ để tag từ bạn bè)"
+            placeholder="Họ và tên người chủ trì (gõ @ để tìm trong công ty)"
             className={clsx(
               "w-full rounded-lg border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
               "focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15",
@@ -710,15 +780,17 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 <p className="px-2 py-3 text-center text-xs text-text-muted">
                   Đang tải danh sách bạn bè…
                 </p>
-              ) : filteredChairmanOptions.length === 0 ? (
+              ) : chairmanList.length === 0 ? (
                 <p className="px-2 py-3 text-center text-xs text-text-muted">
-                  {friendOptions.length === 0
-                    ? "Bạn chưa có bạn bè nào để tag."
-                    : "Không tìm thấy bạn bè phù hợp."}
+                  {chairmanSearch.isLoading
+                    ? "Đang tìm…"
+                    : chairmanQuery.length >= 2
+                      ? "Không tìm thấy người phù hợp."
+                      : "Gõ tên (từ 2 ký tự) để tìm bất kỳ ai trong công ty."}
                 </p>
               ) : (
                 <ul className="space-y-0.5">
-                  {filteredChairmanOptions.map((f) => {
+                  {chairmanList.map((f) => {
                     const selected = chairman.toLowerCase() === f.name.toLowerCase();
                     return (
                       <li key={f.id}>
@@ -794,7 +866,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                   : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
               )}
             >
-              @ Chọn từ bạn bè
+              @ Chọn người
             </button>
           </div>
           <div
@@ -835,7 +907,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
               }}
               placeholder={
                 participants.length === 0
-                  ? "Nhập tên, gõ @ để tag từ bạn bè, Enter/dấu phẩy để thêm"
+                  ? "Nhập tên, gõ @ để tìm trong công ty, Enter/dấu phẩy để thêm"
                   : ""
               }
               className="min-w-[180px] flex-1 bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
@@ -849,15 +921,17 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 <p className="px-2 py-3 text-center text-xs text-text-muted">
                   Đang tải danh sách bạn bè…
                 </p>
-              ) : filteredFriendOptions.length === 0 ? (
+              ) : participantList.length === 0 ? (
                 <p className="px-2 py-3 text-center text-xs text-text-muted">
-                  {friendOptions.length === 0
-                    ? "Bạn chưa có bạn bè nào để tag."
-                    : "Không tìm thấy bạn bè phù hợp."}
+                  {participantSearch.isLoading
+                    ? "Đang tìm…"
+                    : participantQuery.length >= 2
+                      ? "Không tìm thấy người phù hợp."
+                      : "Gõ tên (từ 2 ký tự) để tìm bất kỳ ai trong công ty."}
                 </p>
               ) : (
                 <ul className="space-y-0.5">
-                  {filteredFriendOptions.map((f) => {
+                  {participantList.map((f) => {
                     const checked = participants.some(
                       (p) => p.name.toLowerCase() === f.name.toLowerCase(),
                     );
@@ -865,12 +939,15 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                       <li key={f.id}>
                         <button
                           type="button"
+                          // Chặn blur của ô nhập: blur sẽ add chuỗi đang gõ thành
+                          // free-text VÀ re-render list làm rớt cú click này.
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             toggleParticipant(f.name, {
                               employeeCode: f.employeeCode,
                               userId: f.id,
                             });
-                            if (isMentioning) setParticipantInput("");
+                            setParticipantInput("");
                           }}
                           className={clsx(
                             "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors",
@@ -933,7 +1010,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           )}
 
           <p className="mt-1 text-[11px] text-text-muted">
-            Gõ <span className="font-mono text-teal-600 dark:text-teal-400">@</span> để tag từ bạn bè · Tag đỏ = có lịch trùng giờ, vẫn có thể thêm.
+            Gõ <span className="font-mono text-teal-600 dark:text-teal-400">@</span> để tìm bất kỳ ai trong công ty (không cần là bạn bè) · Tag đỏ = có lịch trùng giờ, vẫn có thể thêm.
           </p>
         </div>
 
