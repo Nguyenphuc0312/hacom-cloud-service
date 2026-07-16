@@ -54,3 +54,22 @@ export const decodeMessageDrag = (
  *  type list is. */
 export const isMessageDrag = (dataTransfer: DataTransfer): boolean =>
   Array.from(dataTransfer.types).includes(MESSAGE_DRAG_MIME);
+
+/**
+ * Which message kinds can be quick-forwarded by dragging onto a room, and the
+ * drag-ghost label to use. Returns null for kinds that are NOT draggable (plain
+ * text, poll, reminder, sticker, voice…). The caller supplies already-derived
+ * facts so this stays free of Message-type parsing. Currently: file/image/video
+ * (has attachment), shared contacts, and links.
+ */
+export const resolveQuickForwardLabel = (facts: {
+  hasAttachment: boolean;
+  attachmentName?: string;
+  isContact: boolean;
+  hasLink: boolean;
+}): string | null => {
+  if (facts.hasAttachment) return facts.attachmentName || "[Tệp đính kèm]";
+  if (facts.isContact) return "[Danh thiếp]";
+  if (facts.hasLink) return "[Liên kết]";
+  return null;
+};

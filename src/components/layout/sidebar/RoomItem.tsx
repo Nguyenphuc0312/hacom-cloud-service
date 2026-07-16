@@ -508,59 +508,6 @@ export const RoomItemContainer = React.memo(
       [],
     );
 
-    const handleDrop = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
-        const payload = decodeMessageDrag(event.dataTransfer);
-        if (!payload) return;
-        event.preventDefault();
-        setIsDropTarget(false);
-
-        // Dropping on the source conversation is a no-op (nothing to forward to).
-        if (payload.sourceConversationId === conversationId) return;
-
-        void (async () => {
-          try {
-            const result = await forwardMessages({
-              items: [
-                {
-                  sourceMessageId: payload.messageId,
-                  targetConversationId: conversationId,
-                },
-              ],
-            }).unwrap();
-
-            const targetName =
-              getConversationDisplayName(conversation!, currentUser.id) ||
-              i18n.t("common:labels.conversation");
-            const forwarded = result.messages ?? [];
-            toast.action(
-              i18n.t("chat:message.forward.quickSent", {
-                name: targetName,
-                defaultValue: `Đã gửi tới ${targetName}`,
-              }),
-              i18n.t("common:actions.undo", { defaultValue: "Hoàn tác" }),
-              () => {
-                for (const msg of forwarded) {
-                  void deleteMessage({
-                    conversationId,
-                    messageId: msg.id,
-                    mode: "FOR_EVERYONE",
-                  });
-                }
-              },
-            );
-          } catch {
-            toast.error(
-              i18n.t("chat:message.forward.error", {
-                defaultValue: "Không thể chuyển tiếp tin nhắn",
-              }),
-            );
-          }
-        })();
-      },
-      [conversation, conversationId, currentUser.id, forwardMessages, deleteMessage],
-    );
-
     const directPartnerId = useMemo(
       () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
       [conversation, currentUser.id],
@@ -603,6 +550,71 @@ export const RoomItemContainer = React.memo(
     useEffect(() => {
       if (directPartnerId) enrichUserProfile(directPartnerId);
     }, [directPartnerId]);
+
+    const handleDrop = React.useCallback(
+      (event: React.DragEvent<HTMLButtonElement>) => {
+        const payload = decodeMessageDrag(event.dataTransfer);
+        if (!payload) return;
+        event.preventDefault();
+        setIsDropTarget(false);
+
+        // Dropping on the source conversation is a no-op (nothing to forward to).
+        if (payload.sourceConversationId === conversationId) return;
+
+        void (async () => {
+          try {
+            const result = await forwardMessages({
+              items: [
+                {
+                  sourceMessageId: payload.messageId,
+                  targetConversationId: conversationId,
+                },
+              ],
+            }).unwrap();
+
+            // Same name the sidebar shows: alias ("tên gợi nhớ") wins over the
+            // enriched/HR name, which wins over the raw conversation name.
+            const targetName =
+              alias ||
+              enrichedName ||
+              getConversationDisplayName(conversation!, currentUser.id) ||
+              i18n.t("common:labels.conversation");
+            const forwarded = result.messages ?? [];
+            toast.action(
+              i18n.t("chat:message.forward.quickSent", {
+                name: targetName,
+                defaultValue: `Đã gửi tới ${targetName}`,
+              }),
+              i18n.t("common:actions.undo", { defaultValue: "Hoàn tác" }),
+              () => {
+                for (const msg of forwarded) {
+                  void deleteMessage({
+                    conversationId,
+                    messageId: msg.id,
+                    mode: "FOR_EVERYONE",
+                  });
+                }
+              },
+            );
+          } catch {
+            toast.error(
+              i18n.t("chat:message.forward.error", {
+                defaultValue: "Không thể chuyển tiếp tin nhắn",
+              }),
+            );
+          }
+        })();
+      },
+      [
+        conversation,
+        conversationId,
+        currentUser.id,
+        alias,
+        enrichedName,
+        forwardMessages,
+        deleteMessage,
+      ],
+    );
 
     const viewModel = useMemo(() => {
       if (!conversation) {
