@@ -1348,6 +1348,22 @@ a:focus-visible {
     transform: scale(0.98);
   }
 
+  /* Chat navigation chrome is not content: dragging across the timeline (or a
+     stray Ctrl+A) used to paint the rail and room list blue and copy their
+     labels along with the messages. Inputs opt back in so the search box and
+     any editable field keep normal text selection. */
+  .hc-side-rail,
+  .hc-room-list {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .hc-side-rail :where(input, textarea, [contenteditable="true"]),
+  .hc-room-list :where(input, textarea, [contenteditable="true"]) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   /* Message row hover highlight */
   .msg-row-hover {
     transition:

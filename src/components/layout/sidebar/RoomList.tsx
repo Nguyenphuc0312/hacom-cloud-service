@@ -375,7 +375,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col pb-2">
+    <div className="hc-room-list flex h-full min-h-0 w-full flex-1 flex-col pb-2">
       <div
         ref={containerRef}
         className="min-h-0 flex-1"
