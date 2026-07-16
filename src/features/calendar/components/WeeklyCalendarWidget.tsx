@@ -371,6 +371,8 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       notes: ev.description || "",
       attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
       createdById: ev.ownerId,
+      createdByName:
+        selectedHrEvent?.owner?.fullName ?? selectedHrEvent?.ownerName ?? undefined,
     };
     setSelectedEvent(null);
     setEditingMeeting(data);
