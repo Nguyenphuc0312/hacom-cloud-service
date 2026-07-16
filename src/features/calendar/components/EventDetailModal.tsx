@@ -7,12 +7,15 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useNavigate } from "react-router-dom";
 import {
   XMarkIcon,
   UserIcon,
+  UserPlusIcon,
   UsersIcon,
   BuildingOfficeIcon,
   CalendarIcon,
+  ChatBubbleLeftRightIcon,
   ClockIcon,
   MapPinIcon,
   VideoCameraIcon,
@@ -44,6 +47,12 @@ import { CalendarAttachmentList } from "../../../components/ui/CalendarAttachmen
 import { Avatar } from "../../../components/common/Avatar";
 import { loadUserProfiles, type UserProfileSummary } from "../../../services/userBatchLoader";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useFriendship } from "../../../hooks/useFriendship";
+import { useAuthStore } from "../../../stores/authStore";
+import { conversationApi } from "../../../services/api";
+import { unwrapApiSuccess, extractApiError } from "../../../lib/apiContract";
+import { ROUTE_PATHS } from "../../../router/paths";
+import { toast } from "../../../utils/toast";
 
 // Lazy: react-markdown (~100kB) tách chunk riêng, chỉ tải khi mở chi tiết lịch
 // có ghi chú. Render ghi chú dạng markdown (bảng, danh sách…) cho đẹp.
@@ -270,25 +279,121 @@ export const EventDetailModal: React.FC<{
       ? hrParticipants.find((p) => p.authUserId === hrEvent.ownerAuthUserId)
       : undefined) ?? findByName(creatorName);
   const chairmanRow = findByName(chairman);
+  const creatorUserId = hrEvent?.ownerAuthUserId ?? creatorRow?.authUserId ?? null;
+  const chairmanUserId = chairmanRow?.authUserId ?? null;
+
+  // Hành động nhanh trên dòng Người tạo / Chủ trì: đã là bạn → Nhắn tin (mở DM);
+  // chưa là bạn → Kết bạn (có lời mời đến từ họ thì "Kết bạn" = chấp nhận luôn).
+  const navigate = useNavigate();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const { getRelationshipState, sendFriendRequest, acceptFriendRequest } = useFriendship();
+  const [personActionLoading, setPersonActionLoading] = React.useState<string | null>(null);
+
+  const handleMessagePerson = async (userId: string) => {
+    setPersonActionLoading(`msg:${userId}`);
+    try {
+      const response = await conversationApi.createPrivateConversation(userId);
+      const room = unwrapApiSuccess(response) as { id?: string };
+      if (room.id) {
+        onClose();
+        navigate(`${ROUTE_PATHS.CHAT}/${room.id}`);
+      }
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setPersonActionLoading(null);
+    }
+  };
+
+  const handleAddFriendPerson = async (userId: string) => {
+    setPersonActionLoading(`add:${userId}`);
+    try {
+      const rel = getRelationshipState(userId, currentUserId);
+      const ok =
+        rel.kind === "incoming_request"
+          ? await acceptFriendRequest(rel.requestId)
+          : await sendFriendRequest(userId);
+      if (ok) {
+        toast.success(
+          rel.kind === "incoming_request"
+            ? "Hai bạn đã trở thành bạn bè"
+            : "Đã gửi lời mời kết bạn",
+        );
+      } else {
+        toast.error("Không thể gửi lời mời kết bạn. Vui lòng thử lại.");
+      }
+    } finally {
+      setPersonActionLoading(null);
+    }
+  };
+
+  const renderPersonAction = (userId: string | null) => {
+    if (!userId || userId === currentUserId) return null;
+    const rel = getRelationshipState(userId, currentUserId);
+    if (rel.kind === "self") return null;
+    const btnBase =
+      "ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-micro";
+    if (rel.kind === "friend") {
+      const loading = personActionLoading === `msg:${userId}`;
+      return (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void handleMessagePerson(userId)}
+          className={clsx(
+            btnBase,
+            "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0] hover:bg-[#1976D2]/20 disabled:opacity-60",
+          )}
+        >
+          <ChatBubbleLeftRightIcon className="h-3.5 w-3.5" />
+          {loading ? "Đang mở..." : "Nhắn tin"}
+        </button>
+      );
+    }
+    if (rel.kind === "outgoing_request") {
+      return (
+        <span className={clsx(btnBase, "cursor-default border-border bg-surface-overlay text-text-muted")}>
+          Đã gửi lời mời
+        </span>
+      );
+    }
+    const loading = personActionLoading === `add:${userId}`;
+    return (
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => void handleAddFriendPerson(userId)}
+        className={clsx(
+          btnBase,
+          "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0] hover:bg-[#1976D2]/20 disabled:opacity-60",
+        )}
+      >
+        <UserPlusIcon className="h-3.5 w-3.5" />
+        {loading ? "Đang gửi..." : "Kết bạn"}
+      </button>
+    );
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-lg animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
+      {/* flex-col + body cuộn + footer ghim — cùng pattern với ui/Modal, để các
+          nút hành động luôn thấy được, không bị trôi theo nội dung dài. */}
+      <div className="relative z-10 flex max-h-[min(90vh,48rem)] w-full max-w-lg animate-scale-in flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
         <button
           type="button"
           onClick={onClose}
           title="Đóng"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+          className="absolute right-4 top-4 z-10 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="scrollbar-hide max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto p-6">
           {/* Header: Type badge + Status badge + Read-only badge */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {isViewingOthers && (
@@ -416,11 +521,12 @@ export const EventDetailModal: React.FC<{
             {creatorName && (
               <div className="flex items-start gap-3">
                 <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-text-muted">Người tạo</p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <Avatar src={avatarForRow(creatorRow)} alt={creatorName} size="sm" />
-                    <p className="text-sm text-text-primary">{creatorName}</p>
+                    <p className="truncate text-sm text-text-primary">{creatorName}</p>
+                    {renderPersonAction(creatorUserId)}
                   </div>
                 </div>
               </div>
@@ -430,13 +536,14 @@ export const EventDetailModal: React.FC<{
             {chairman && (
               <div className="flex items-start gap-3">
                 <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
                     Chủ trì
                   </p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <Avatar src={avatarForRow(chairmanRow)} alt={chairman} size="sm" />
-                    <p className="text-sm text-text-primary">{chairman}</p>
+                    <p className="truncate text-sm text-text-primary">{chairman}</p>
+                    {renderPersonAction(chairmanUserId)}
                   </div>
                 </div>
               </div>
@@ -599,62 +706,68 @@ export const EventDetailModal: React.FC<{
             </div>
           )}
 
-          {/* Invitee response actions */}
-          {canRespond && (
-            <div className="mt-4 rounded-lg border border-border bg-surface-overlay p-3">
-              <p className="mb-2 text-sm font-medium text-text-primary">
-                Bạn được mời tham gia lịch họp này
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={responding !== null}
-                  onClick={() => handleRespondClick("ACCEPTED")}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
-                </button>
-                <button
-                  type="button"
-                  disabled={responding !== null}
-                  onClick={() => handleRespondClick("DECLINED")}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
-                >
-                  {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
-              tách xa nhau để tránh bấm nhầm. */}
-          {(canEdit || canDelete) && (
-            <div className="mt-6 flex items-center justify-between gap-2 border-t border-border pt-4">
-              {canDelete ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                  Xóa
-                </button>
-              ) : (
-                <span />
-              )}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setShowEditConfirm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
-                >
-                  <PencilSquareIcon className="h-4 w-4" />
-                  Chỉnh sửa
-                </button>
-              )}
-            </div>
-          )}
         </div>
+
+        {/* Footer ghim — luôn thấy được, nội dung phía trên tự cuộn. */}
+        {(canRespond || canEdit || canDelete) && (
+          <div className="flex-shrink-0 border-t border-border px-6 py-4">
+            {/* Invitee response actions */}
+            {canRespond && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-text-primary">
+                  Bạn được mời tham gia lịch họp này
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={responding !== null}
+                    onClick={() => handleRespondClick("ACCEPTED")}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={responding !== null}
+                    onClick={() => handleRespondClick("DECLINED")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                  >
+                    {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
+                tách xa nhau để tránh bấm nhầm. */}
+            {(canEdit || canDelete) && (
+              <div className={clsx("flex items-center justify-between gap-2", canRespond && "mt-3")}>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Xóa
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditConfirm(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
+                  >
+                    <PencilSquareIcon className="h-4 w-4" />
+                    Chỉnh sửa
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
