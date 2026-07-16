@@ -248,6 +248,29 @@ export const EventDetailModal: React.FC<{
   const attendees = "attendees" in event ? event.attendees : null;
   const visibility = "visibility" in event ? event.visibility : null;
 
+  // Người tạo (owner) — có thể khác chủ trì. Avatar tra theo roster (đã ghép owner
+  // lên đầu hrParticipants) + profile batch-load.
+  const creatorName = hrEvent?.owner?.fullName ?? hrEvent?.ownerName ?? null;
+  const avatarForRow = (p: HRCalendarParticipant | undefined): string | undefined =>
+    resolvePublicResourceUrl(
+      (p?.authUserId ? participantProfiles[p.authUserId]?.avatarUrl : undefined) ??
+        p?.avatarUrl ??
+        undefined,
+    );
+  const findByName = (name: string | null | undefined) => {
+    const key = name?.trim().toLowerCase();
+    if (!key) return undefined;
+    return hrParticipants.find(
+      (p) =>
+        (p.fullName ?? p.employee?.fullName ?? "").trim().toLowerCase() === key,
+    );
+  };
+  const creatorRow =
+    (hrEvent?.ownerAuthUserId
+      ? hrParticipants.find((p) => p.authUserId === hrEvent.ownerAuthUserId)
+      : undefined) ?? findByName(creatorName);
+  const chairmanRow = findByName(chairman);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -389,6 +412,20 @@ export const EventDetailModal: React.FC<{
               </div>
             )}
 
+            {/* Người tạo — trên Chủ trì, vì hai người có thể khác nhau */}
+            {creatorName && (
+              <div className="flex items-start gap-3">
+                <UserIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
+                <div>
+                  <p className="text-xs font-medium text-text-muted">Người tạo</p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <Avatar src={avatarForRow(creatorRow)} alt={creatorName} size="sm" />
+                    <p className="text-sm text-text-primary">{creatorName}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Chairman */}
             {chairman && (
               <div className="flex items-start gap-3">
@@ -397,9 +434,10 @@ export const EventDetailModal: React.FC<{
                   <p className="text-xs font-medium text-[#1565C0] dark:text-[#6BA8F0]">
                     Chủ trì
                   </p>
-                  <p className="text-sm text-text-primary">
-                    {chairman}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <Avatar src={avatarForRow(chairmanRow)} alt={chairman} size="sm" />
+                    <p className="text-sm text-text-primary">{chairman}</p>
+                  </div>
                 </div>
               </div>
             )}

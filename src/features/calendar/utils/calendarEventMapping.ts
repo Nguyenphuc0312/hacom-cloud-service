@@ -299,6 +299,7 @@ export const buildCalendarEventForm = (
       notes: event.description ?? "",
       attachments: remoteAttachmentsToForm(event.attachments),
       createdById: event.ownerId,
+      createdByName: event.owner?.fullName ?? event.ownerName ?? undefined,
     },
   };
 };

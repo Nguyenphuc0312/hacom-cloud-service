@@ -1063,6 +1063,8 @@ export const CalendarPage: React.FC = () => {
       notes: extEvent.description || "",
       attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
       createdById: extEvent.ownerId,
+      createdByName:
+        selectedHrEvent?.owner?.fullName ?? selectedHrEvent?.ownerName ?? undefined,
     };
 
     setEditingEvent(data);
