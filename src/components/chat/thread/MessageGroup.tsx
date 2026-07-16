@@ -56,6 +56,7 @@ import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignatu
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import { translateMessageActionToast } from "../../../utils/messageActionLabels";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
+import { encodeMessageDrag } from "../../../features/chat/quickForward";
 import { toast } from "../../ui";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
@@ -303,6 +304,26 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
     const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
+
+    // Quick-forward drag: only messages carrying a real file/image/video are
+    // draggable, and never during selection mode (would fight the checkbox).
+    // The DataTransfer carries only ids — the sidebar drop target forwards.
+    const dragAttachment = message.attachments?.[0];
+    const canQuickForward =
+      !isSelectionMode &&
+      Boolean(dragAttachment) &&
+      Boolean(message.conversationId);
+    const handleDragStart = React.useCallback(
+      (event: React.DragEvent<HTMLDivElement>) => {
+        if (!message.conversationId) return;
+        encodeMessageDrag(event.dataTransfer, {
+          messageId: message.id,
+          sourceConversationId: message.conversationId,
+          label: dragAttachment?.fileName || "[Tệp đính kèm]",
+        });
+      },
+      [message.id, message.conversationId, dragAttachment?.fileName],
+    );
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
@@ -738,10 +759,13 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         className={clsx(
           "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
           isPoll ? "self-center" : isOwn ? "self-end" : "self-start",
+          canQuickForward && "msg-quick-drag",
           insertedMessageKeys.has(getMessageStableKey(message)) &&
           isPendingMessage(message) &&
           "motion-message-insert",
         )}
+        draggable={canQuickForward}
+        onDragStart={canQuickForward ? handleDragStart : undefined}
         onMouseEnter={handleItemMouseEnter}
         onMouseLeave={handleItemMouseLeave}
         onFocusCapture={handleItemMouseEnter}

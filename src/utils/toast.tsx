@@ -111,6 +111,36 @@ export const toast = {
     }
   },
 
+  /** Success toast with a single action button (e.g. Undo). The button
+   *  dismisses the toast and runs `onAction`. Lives longer than a plain success
+   *  so the user has time to react. */
+  action: (
+    message: string,
+    actionLabel: string,
+    onAction: () => void,
+    duration = SUCCESS_TOAST_DURATION_MS,
+  ) => {
+    const id = toastLib.custom(
+      (tst) => (
+        <div className="toast-library flex items-center gap-3">
+          <span className="text-sm">{message}</span>
+          <button
+            type="button"
+            onClick={() => {
+              toastLib.dismiss(tst.id);
+              onAction();
+            }}
+            className="shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-[#1565C0] transition-colors hover:bg-[#1565C0]/10"
+          >
+            {actionLabel}
+          </button>
+        </div>
+      ),
+      { duration },
+    );
+    return id;
+  },
+
   loading: (message: string) => {
     return toastLib.loading(message, {
       ...baseOptions,

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
@@ -28,6 +28,15 @@ import { formatRelativeTime } from "../../../utils/formatTime";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import i18n from "../../../i18n";
 import type { ChatLayoutState } from "../../../utils/densityPolicy";
+import {
+  decodeMessageDrag,
+  isMessageDrag,
+} from "../../../features/chat/quickForward";
+import {
+  useForwardMessagesMutation,
+  useDeleteMessageMutation,
+} from "../../../features/api/chatApi";
+import { toast } from "../../ui";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -55,7 +64,11 @@ interface RoomItemViewProps {
   isActive: boolean;
   isKeyboardActive: boolean;
   isPinned: boolean;
+  isDropTarget: boolean;
   onSelect: (conversationId: string) => void;
+  onDragOver: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragLeave: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLButtonElement>) => void;
 }
 
 type RoomItemVisualState =
@@ -226,7 +239,11 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   isActive,
   isKeyboardActive,
   isPinned,
+  isDropTarget,
   onSelect,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }) => {
   const { t } = useTranslation();
   const isDense = layoutState !== "normal";
@@ -253,6 +270,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
     <button
       type="button"
       onClick={() => onSelect(conversation.id)}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       role="option"
       aria-selected={isActive}
       data-room-state={visualState}
@@ -264,6 +284,8 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
         isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
         hoverStyles?.container,
+        isDropTarget &&
+          "bg-[#1565C0]/15 ring-2 ring-inset ring-[#1565C0]/70",
       )}
       aria-label={displayName}
     >
@@ -424,7 +446,11 @@ const RoomItemView = React.memo(
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
     prev.isPinned === next.isPinned &&
-    prev.onSelect === next.onSelect,
+    prev.isDropTarget === next.isDropTarget &&
+    prev.onSelect === next.onSelect &&
+    prev.onDragOver === next.onDragOver &&
+    prev.onDragLeave === next.onDragLeave &&
+    prev.onDrop === next.onDrop,
 );
 
 export const RoomItemContainer = React.memo(
@@ -454,6 +480,87 @@ export const RoomItemContainer = React.memo(
         [conversationId, isActive],
       ),
     );
+
+    // Quick-forward: drag a message with an attachment onto this room to forward
+    // it here immediately, with an undo toast.
+    const [isDropTarget, setIsDropTarget] = useState(false);
+    const [forwardMessages] = useForwardMessagesMutation();
+    const [deleteMessage] = useDeleteMessageMutation();
+
+    const handleDragOver = React.useCallback(
+      (event: React.DragEvent<HTMLButtonElement>) => {
+        if (!isMessageDrag(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setIsDropTarget(true);
+      },
+      [],
+    );
+
+    const handleDragLeave = React.useCallback(
+      (event: React.DragEvent<HTMLButtonElement>) => {
+        // Ignore leaves into child elements — only clear when truly leaving.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return;
+        }
+        setIsDropTarget(false);
+      },
+      [],
+    );
+
+    const handleDrop = React.useCallback(
+      (event: React.DragEvent<HTMLButtonElement>) => {
+        const payload = decodeMessageDrag(event.dataTransfer);
+        if (!payload) return;
+        event.preventDefault();
+        setIsDropTarget(false);
+
+        // Dropping on the source conversation is a no-op (nothing to forward to).
+        if (payload.sourceConversationId === conversationId) return;
+
+        void (async () => {
+          try {
+            const result = await forwardMessages({
+              items: [
+                {
+                  sourceMessageId: payload.messageId,
+                  targetConversationId: conversationId,
+                },
+              ],
+            }).unwrap();
+
+            const targetName =
+              getConversationDisplayName(conversation!, currentUser.id) ||
+              i18n.t("common:labels.conversation");
+            const forwarded = result.messages ?? [];
+            toast.action(
+              i18n.t("chat:message.forward.quickSent", {
+                name: targetName,
+                defaultValue: `Đã gửi tới ${targetName}`,
+              }),
+              i18n.t("common:actions.undo", { defaultValue: "Hoàn tác" }),
+              () => {
+                for (const msg of forwarded) {
+                  void deleteMessage({
+                    conversationId,
+                    messageId: msg.id,
+                    mode: "FOR_EVERYONE",
+                  });
+                }
+              },
+            );
+          } catch {
+            toast.error(
+              i18n.t("chat:message.forward.error", {
+                defaultValue: "Không thể chuyển tiếp tin nhắn",
+              }),
+            );
+          }
+        })();
+      },
+      [conversation, conversationId, currentUser.id, forwardMessages, deleteMessage],
+    );
+
     const directPartnerId = useMemo(
       () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
       [conversation, currentUser.id],
@@ -560,7 +667,11 @@ export const RoomItemContainer = React.memo(
         isActive={isActive}
         isKeyboardActive={isKeyboardActive}
         isPinned={isPinned}
+        isDropTarget={isDropTarget}
         onSelect={onSelect}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       />
     );
   },
