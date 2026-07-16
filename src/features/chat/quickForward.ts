@@ -56,6 +56,50 @@ export const isMessageDrag = (dataTransfer: DataTransfer): boolean =>
   Array.from(dataTransfer.types).includes(MESSAGE_DRAG_MIME);
 
 /**
+ * Build a small, crisp drag ghost (a "⇢ Chuyển tiếp: {label}" pill) and use it
+ * as the drag image, instead of snapshotting the live bubble — which the browser
+ * renders translucent and muddy, and which drags along sibling chrome (the action
+ * rail). Returns a cleanup that removes the detached node once the drag has taken
+ * its snapshot. No-op (returns a noop cleanup) outside the browser.
+ */
+export const applyQuickForwardDragGhost = (
+  dataTransfer: DataTransfer,
+  label: string,
+): (() => void) => {
+  if (typeof document === "undefined") return () => {};
+
+  const chip = document.createElement("div");
+  chip.textContent = `⇢ Chuyển tiếp: ${label}`;
+  // Inline styles so the ghost never depends on the app stylesheet being applied
+  // to a detached node (Tailwind classes wouldn't resolve here).
+  Object.assign(chip.style, {
+    position: "fixed",
+    top: "-1000px",
+    left: "-1000px",
+    padding: "8px 14px",
+    borderRadius: "9999px",
+    background: "#1565C0",
+    color: "#fff",
+    fontSize: "13px",
+    fontWeight: "600",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    boxShadow: "0 6px 16px rgba(21,101,192,0.35)",
+    whiteSpace: "nowrap",
+    pointerEvents: "none",
+    maxWidth: "260px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies Partial<CSSStyleDeclaration>);
+  document.body.appendChild(chip);
+  dataTransfer.setDragImage(chip, 16, 16);
+
+  // The browser snapshots synchronously on dragstart; remove on the next frame.
+  const cleanup = () => chip.remove();
+  requestAnimationFrame(cleanup);
+  return cleanup;
+};
+
+/**
  * Which message kinds can be quick-forwarded by dragging onto a room, and the
  * drag-ghost label to use. Returns null for kinds that are NOT draggable (plain
  * text, poll, reminder, sticker, voice…). The caller supplies already-derived
