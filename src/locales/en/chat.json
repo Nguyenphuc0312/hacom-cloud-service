@@ -44,6 +44,7 @@
       "noConversations": "No matching people or groups",
       "emptyTab": "No conversations yet",
       "success": "Message forwarded",
+      "quickSent": "Sent to {{name}}",
       "error": "Unable to forward message"
     },
     "bubbleAria": "{{name}} at {{time}}",

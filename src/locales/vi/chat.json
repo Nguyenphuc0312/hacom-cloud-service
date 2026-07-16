@@ -44,6 +44,7 @@
       "noConversations": "Không tìm thấy người hoặc nhóm phù hợp",
       "emptyTab": "Chưa có cuộc trò chuyện nào",
       "success": "Đã chuyển tiếp tin nhắn",
+      "quickSent": "Đã gửi tới {{name}}",
       "error": "Không thể chuyển tiếp tin nhắn"
     },
     "bubbleAria": "{{name}} lúc {{time}}",
