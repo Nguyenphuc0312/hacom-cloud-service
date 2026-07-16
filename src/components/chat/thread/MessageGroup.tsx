@@ -56,7 +56,12 @@ import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignatu
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import { translateMessageActionToast } from "../../../utils/messageActionLabels";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
-import { encodeMessageDrag } from "../../../features/chat/quickForward";
+import {
+  encodeMessageDrag,
+  resolveQuickForwardLabel,
+} from "../../../features/chat/quickForward";
+import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
+import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 import { toast } from "../../ui";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
@@ -305,24 +310,49 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
     const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
 
-    // Quick-forward drag: only messages carrying a real file/image/video are
-    // draggable, and never during selection mode (would fight the checkbox).
-    // The DataTransfer carries only ids — the sidebar drop target forwards.
+    // Quick-forward drag: file/image/video, shared contacts, and links can be
+    // dragged onto a room to forward. Never during selection mode (would fight
+    // the checkbox). The DataTransfer carries only ids — the drop target forwards.
     const dragAttachment = message.attachments?.[0];
+    const dragLabel = React.useMemo(() => {
+      const hasLink =
+        message.type === MessageType.TEXT &&
+        Boolean(
+          extractFirstUrlFromContent(
+            message.content,
+            shouldTreatMessageContentAsRichText({
+              contentFormat: message.contentFormat,
+              content: message.content,
+            }),
+          ),
+        );
+      return resolveQuickForwardLabel({
+        hasAttachment: Boolean(dragAttachment),
+        attachmentName: dragAttachment?.fileName,
+        isContact: message.type === MessageType.CONTACT,
+        hasLink,
+      });
+    }, [message.type, message.content, message.contentFormat, dragAttachment?.fileName]);
     const canQuickForward =
-      !isSelectionMode &&
-      Boolean(dragAttachment) &&
-      Boolean(message.conversationId);
+      !isSelectionMode && dragLabel !== null && Boolean(message.conversationId);
+    const bubbleWrapRef = React.useRef<HTMLDivElement>(null);
     const handleDragStart = React.useCallback(
       (event: React.DragEvent<HTMLDivElement>) => {
-        if (!message.conversationId) return;
+        if (!message.conversationId || !dragLabel) return;
         encodeMessageDrag(event.dataTransfer, {
           messageId: message.id,
           sourceConversationId: message.conversationId,
-          label: dragAttachment?.fileName || "[Tệp đính kèm]",
+          label: dragLabel,
         });
+        // Drag ghost = just the bubble, not the whole row (which also holds the
+        // absolutely-positioned action rail — otherwise those icons get dragged
+        // along and flicker out).
+        const bubble = bubbleWrapRef.current;
+        if (bubble) {
+          event.dataTransfer.setDragImage(bubble, 12, 12);
+        }
       },
-      [message.id, message.conversationId, dragAttachment?.fileName],
+      [message.id, message.conversationId, dragLabel],
     );
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
@@ -806,7 +836,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             <div className="relative">
               {actionRail}
               {/* Wrapper inline để pill absolute neo đúng vào bubble */}
-              <div className={clsx("relative inline-block", (message.reactions?.length ?? 0) > 0 && "mb-2")}>
+              <div ref={bubbleWrapRef} className={clsx("relative inline-block", (message.reactions?.length ?? 0) > 0 && "mb-2")}>
             <MessageBubble
               isOwn={isOwn}
               position={bubblePosition}
