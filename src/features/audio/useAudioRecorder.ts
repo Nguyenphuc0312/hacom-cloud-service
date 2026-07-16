@@ -51,6 +51,11 @@ interface UseAudioRecorderReturn {
   startRecording: () => void;
   stopRecording: () => Promise<RecordedClip>;
   cancelRecording: () => void;
+  beginUpload: () => boolean;
+  beginFinalizingUpload: () => boolean;
+  beginSending: () => boolean;
+  markSent: () => boolean;
+  markFailed: (error: AudioRecorderError) => void;
   reset: () => void;
 }
 
@@ -521,6 +526,24 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         const url = URL.createObjectURL(blob);
         const durationMs = Date.now() - startTimeRef.current;
 
+        // A preview must retain only the Blob URL, never the microphone.
+        // Releasing the input here turns off the browser mic indicator before
+        // upload/send and avoids retaining a live stream while previewing.
+        streamRef.current?.getTracks().forEach((track) => {
+          track.onended = null;
+          if (track.readyState !== "ended") track.stop();
+        });
+        streamRef.current = null;
+        sourceNodeRef.current?.disconnect();
+        sourceNodeRef.current = null;
+        analyserRef.current?.disconnect();
+        analyserRef.current = null;
+        if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+          void audioCtxRef.current.close().catch(() => undefined);
+        }
+        audioCtxRef.current = null;
+        mediaRecorderRef.current = null;
+
         const recordedClip: RecordedClip = {
           blob,
           mimeType: actualMime,
@@ -544,7 +567,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
         setClip(recordedClip);
         setElapsedMs(durationMs);
-        setState("STOPPING"); // stays in STOPPING until upload begins
+        stateRef.current = "PREVIEW";
+        setState("PREVIEW");
         resolve(recordedClip);
       };
 
@@ -580,6 +604,19 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     setSelectedMime("");
   }, [fullCleanup]);
 
+  const beginUpload = useCallback(() => transition("UPLOADING"), [transition]);
+  const beginFinalizingUpload = useCallback(
+    () => transition("FINALIZING_UPLOAD"),
+    [transition],
+  );
+  const beginSending = useCallback(() => transition("CREATING_MESSAGE"), [transition]);
+  const markSent = useCallback(() => transition("SENT"), [transition]);
+  const markFailed = useCallback((nextError: AudioRecorderError) => {
+    setError(nextError);
+    stateRef.current = "FAILED";
+    setState("FAILED");
+  }, []);
+
   return {
     state,
     error,
@@ -593,6 +630,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     startRecording,
     stopRecording,
     cancelRecording,
+    beginUpload,
+    beginFinalizingUpload,
+    beginSending,
+    markSent,
+    markFailed,
     reset,
   };
 }
