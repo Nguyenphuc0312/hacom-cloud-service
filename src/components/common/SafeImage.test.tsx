@@ -74,4 +74,22 @@ describe("SafeImage", () => {
     fireEvent.load(screen.getByRole("img", { name: "loaded" }));
     expect(screen.queryByTestId("loading")).not.toBeInTheDocument();
   });
+
+  it("keeps painting the loaded image while a new src decodes (no blank frame)", () => {
+    const { rerender } = render(
+      <SafeImage src="https://cdn.example/a.jpg" alt="a" fallback={<div>Fallback</div>} />,
+    );
+    fireEvent.load(screen.getByRole("img", { name: "a" }));
+
+    // Switch to a new src: the <img> must not blank — it should still point at
+    // the previously-loaded image until the incoming one is ready.
+    rerender(
+      <SafeImage src="https://cdn.example/b.jpg" alt="b" fallback={<div>Fallback</div>} />,
+    );
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://cdn.example/a.jpg",
+    );
+  });
 });

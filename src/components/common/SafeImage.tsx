@@ -58,6 +58,9 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     () => new Set(),
   );
   const [loadedSource, setLoadedSource] = React.useState<string | null>(null);
+  // Keep painting the last successfully-loaded image until the next one is
+  // ready, so switching src never blanks the <img> for a frame (gray flash).
+  const [displaySource, setDisplaySource] = React.useState<string | null>(null);
   const status: SafeImageStatus = !safeSrc
     ? "empty"
     : failedSources.has(safeSrc)
@@ -65,6 +68,66 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       : loadedSource === safeSrc
         ? "loaded"
         : "loading";
+
+  const markFailed = React.useCallback(
+    (
+      failedSrc: string,
+      event?: React.SyntheticEvent<HTMLImageElement>,
+    ) => {
+      setFailedSources((previous) => {
+        if (previous.has(failedSrc)) return previous;
+        const next = new Set(previous);
+        next.add(failedSrc);
+        return next;
+      });
+      if (retryOnSignedUrlExpired && !retriedSources.has(failedSrc)) {
+        setRetriedSources((previous) => {
+          if (previous.has(failedSrc)) return previous;
+          const next = new Set(previous);
+          next.add(failedSrc);
+          return next;
+        });
+        onRetrySource?.(failedSrc);
+      }
+      if (event) onError?.(event, failedSrc);
+    },
+    [onError, onRetrySource, retriedSources, retryOnSignedUrlExpired],
+  );
+
+  // Preload the incoming src off-screen; only promote it to the visible <img>
+  // once it has decoded, so the on-screen avatar never blanks mid-swap.
+  React.useEffect(() => {
+    if (!safeSrc || failedSources.has(safeSrc)) return undefined;
+    if (safeSrc === displaySource) return undefined;
+
+    let cancelled = false;
+    const preloader = new Image();
+    const commit = () => {
+      if (cancelled) return;
+      setLoadedSource(safeSrc);
+      setDisplaySource(safeSrc);
+    };
+    const fail = () => {
+      if (!cancelled) markFailed(safeSrc);
+    };
+    preloader.onload = commit;
+    preloader.onerror = fail;
+    preloader.src = safeSrc;
+    // Prefer decode() when available (resolves only once pixels are ready, so
+    // the swap is truly flash-free). Not in every environment (e.g. jsdom) —
+    // there the onload/onerror handlers above carry the load.
+    if (typeof preloader.decode === "function") {
+      preloader.decode().then(commit).catch(() => {
+        if (preloader.complete && preloader.naturalWidth === 0) fail();
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      preloader.onload = null;
+      preloader.onerror = null;
+    };
+  }, [safeSrc, displaySource, failedSources, markFailed]);
 
   const handleLoad = React.useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
@@ -76,6 +139,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         return next;
       });
       setLoadedSource(safeSrc);
+      setDisplaySource(safeSrc);
       onLoad?.(event, safeSrc);
     },
     [onLoad, safeSrc],
@@ -84,39 +148,25 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   const handleError = React.useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
       if (!safeSrc) return;
-      setFailedSources((previous) => {
-        if (previous.has(safeSrc)) return previous;
-        const next = new Set(previous);
-        next.add(safeSrc);
-        return next;
-      });
-      if (
-        retryOnSignedUrlExpired &&
-        !retriedSources.has(safeSrc)
-      ) {
-        setRetriedSources((previous) => {
-          if (previous.has(safeSrc)) return previous;
-          const next = new Set(previous);
-          next.add(safeSrc);
-          return next;
-        });
-        onRetrySource?.(safeSrc);
-      }
-      onError?.(event, safeSrc);
+      markFailed(safeSrc, event);
     },
-    [onError, onRetrySource, retriedSources, retryOnSignedUrlExpired, safeSrc],
+    [markFailed, safeSrc],
   );
 
   if (!safeSrc || status === "empty" || status === "error") {
     return <>{fallback}</>;
   }
 
+  // Paint the already-decoded image if we have one; only show the loading
+  // fallback on the very first load, when there's nothing to keep on screen.
+  const renderedSrc = displaySource ?? safeSrc;
+
   return (
     <>
-      {status === "loading" && loadingFallback}
+      {status === "loading" && !displaySource && loadingFallback}
       <img
         {...imgProps}
-        src={safeSrc}
+        src={renderedSrc}
         alt={alt}
         loading={loading}
         decoding={decoding}
