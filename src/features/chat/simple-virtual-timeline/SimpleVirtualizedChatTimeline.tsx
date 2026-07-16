@@ -91,6 +91,31 @@ const MEDIA_DISPLAY_FALLBACK_WIDTH = 280;
 const MEDIA_FALLBACK_RATIO = 4 / 3;
 const AUDIO_ATTACHMENT_HEIGHT = 56;
 
+/**
+ * True when a keydown is a Ctrl/Cmd+A that should select only the timeline.
+ *
+ * Ctrl+A anywhere in the chat otherwise hits the browser default and selects
+ * the entire document — rail, room list, composer hint — instead of just the
+ * messages the way Zalo does. Typing in an input or the composer keeps the
+ * native behavior: there, "select all" means the field, not the transcript.
+ */
+export const shouldScopeSelectAll = (event: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  target: EventTarget | null;
+}): boolean => {
+  // `key` is "A" under Shift/Caps Lock, so compare case-insensitively.
+  if (event.key.toLowerCase() !== "a") return false;
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return false;
+  const target = event.target as HTMLElement | null;
+  if (!target || typeof target.closest !== "function") return true;
+  return !(
+    target.isContentEditable || target.closest("input, textarea, [contenteditable='true']")
+  );
+};
+
 /** Reserved render height for one attachment, matching ImageMessage's box. */
 export const estimateAttachmentHeight = (attachment: Attachment): number => {
   if (attachment.type === FileType.IMAGE || attachment.type === FileType.VIDEO) {
@@ -246,6 +271,21 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     loadOlder: onLoadMore,
     onBottomVisible,
   });
+
+  const handleSelectAll = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!shouldScopeSelectAll(event)) return;
+      const container = scrollRef.current;
+      if (!container) return;
+      event.preventDefault();
+      const range = document.createRange();
+      range.selectNodeContents(container);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    },
+    [scrollRef],
+  );
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
@@ -515,8 +555,10 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        onKeyDown={handleSelectAll}
+        tabIndex={-1}
         data-testid="simple-timeline-scroll"
-        className="chat-scroll-container h-full min-h-0 overflow-y-auto overscroll-contain"
+        className="chat-scroll-container h-full min-h-0 overflow-y-auto overscroll-contain focus:outline-none"
         role="log"
         aria-label={t("chat:message.inConversationAria")}
         aria-live="polite"

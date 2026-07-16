@@ -1658,7 +1658,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           />
         </div>
 
-        <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
+        <p className="mt-1 select-none px-1 text-[11px] leading-4 text-text-muted">
           {t("chat:composer.shortcutHint")}
         </p>
 
