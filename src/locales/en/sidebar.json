@@ -85,6 +85,7 @@
       "group": "Group"
     },
     "mentioned": "Mentioned",
+    "draftLabel": "Draft",
     "noMessagesYet": "No messages yet",
     "emptyBySearch": "No room matches your search.",
     "empty": "No conversations available.",
