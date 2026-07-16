@@ -246,15 +246,22 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     error: audioError,
     elapsedMs: audioElapsedMs,
     amplitude: audioAmplitude,
+    clip: audioClip,
     permissionState: audioPermissionState,
     requestPermission: audioRequestPermission,
     startRecording: audioStartRecording,
     stopRecording: audioStopRecording,
     cancelRecording: audioCancelRecording,
+    beginUpload: audioBeginUpload,
+    beginFinalizingUpload: audioBeginFinalizingUpload,
+    beginSending: audioBeginSending,
+    markSent: audioMarkSent,
+    markFailed: audioMarkFailed,
     reset: audioReset,
   } = useAudioRecorder();
   const audioUpload = useAudioUpload();
   const [sendVoiceMessage] = useSendMessageMutation();
+  const audioSendLockedRef = React.useRef(false);
   const audioFlowActive = audioState !== "IDLE" && audioState !== "CANCELLED" && audioState !== "SENT";
 
   const handleAudioCancel = React.useCallback(() => {
@@ -262,18 +269,31 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     audioReset();
   }, [audioCancelRecording, audioReset]);
 
-  const handleAudioSend = React.useCallback(async () => {
-    if (!conversationId) return;
+  const handleAudioStop = React.useCallback(async () => {
     try {
-      const clip = await audioStopRecording();
-      if (!clip || clip.blob.size === 0) {
+      await audioStopRecording();
+    } catch (err) {
+      audioMarkFailed({
+        code: "RECORDING_INTERRUPTED",
+        message: err instanceof Error ? err.message : "Unable to complete recording.",
+        retryable: true,
+      });
+    }
+  }, [audioMarkFailed, audioStopRecording]);
+
+  const handleAudioSend = React.useCallback(async () => {
+    if (!conversationId || !audioClip || audioSendLockedRef.current) return;
+    audioSendLockedRef.current = true;
+    try {
+      const clip = audioClip;
+      if (clip.blob.size === 0) {
         toast.warning(t("chat:audio.tooShort", { defaultValue: "Recording too short" }));
-        audioReset();
         return;
       }
       const clientMessageId = (typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`) || `voice-${Date.now()}`;
+      audioBeginUpload();
       const uploadResult = await audioUpload.uploadAudio({
         clip,
         conversationId,
@@ -287,6 +307,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             ? "m4a"
             : "ogg"
       }`;
+      audioBeginFinalizingUpload();
+      audioBeginSending();
       await sendVoiceMessage({
         conversationId,
         clientMessageId,
@@ -313,15 +335,21 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           originalFileName,
         },
       }).unwrap();
+      audioMarkSent();
       toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(getAudioSendErrorMessage(err, t));
       console.error("[AudioSend]", msg);
+      audioMarkFailed({
+        code: err instanceof AudioUploadError ? err.code : "MESSAGE_CREATE_FAILURE",
+        message: getAudioSendErrorMessage(err, t),
+        retryable: true,
+      });
     } finally {
-      audioReset();
+      audioSendLockedRef.current = false;
     }
-  }, [audioStopRecording, audioUpload, conversationId, audioReset, sendVoiceMessage, currentUserId, t]);
+  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();
@@ -1323,7 +1351,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             amplitude={audioAmplitude}
             error={audioError}
             permissionState={audioPermissionState}
+            clip={audioClip}
             onCancel={handleAudioCancel}
+            onStop={() => void handleAudioStop()}
             onSend={() => void handleAudioSend()}
             onRequestPermission={() => void audioRequestPermission()}
           />

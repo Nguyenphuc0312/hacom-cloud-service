@@ -12,6 +12,7 @@ import {
   AUDIO_DURATION_LIMITS,
   type AudioRecorderError,
   type AudioRecorderState,
+  type RecordedClip,
 } from "./AudioRecorderState";
 
 // ---------------------------------------------------------------------------
@@ -25,9 +26,11 @@ interface RecordingBarProps {
   error: AudioRecorderError | null;
   permissionState: PermissionState | null;
   onCancel: () => void;
+  onStop: () => void;
   onSend: () => void;
   onRequestPermission: () => void;
   disabled?: boolean;
+  clip?: RecordedClip | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,9 +60,11 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
   amplitude,
   error,
   onCancel,
+  onStop,
   onSend,
   onRequestPermission,
   disabled = false,
+  clip,
 }) => {
   const { t } = useTranslation();
 
@@ -165,7 +170,7 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
         </button>
         {error.retryable && (
           <button
-            onClick={onRequestPermission}
+            onClick={clip ? onSend : onRequestPermission}
             className="px-3 py-1 text-sm text-primary"
           >
             {t("common:retry")}
@@ -236,11 +241,26 @@ export const RecordingBar: React.FC<RecordingBarProps> = ({
         </div>
 
         <button
-          onClick={onSend}
+          onClick={onStop}
           className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
           aria-label={t("chat:audio.send", { defaultValue: "Send voice message" })}
         >
           {t("chat:audio.send", { defaultValue: "Gửi" })}
+        </button>
+      </div>
+    );
+  }
+
+  if (state === "PREVIEW" && clip) {
+    return (
+      <div className="mb-2 flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 shadow-sm">
+        <button onClick={onCancel} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-error/10 text-error" aria-label={t("chat:audio.delete", { defaultValue: "Delete recording" })}>
+          <TrashIcon className="h-4 w-4" />
+        </button>
+        <audio className="min-w-0 flex-1" controls preload="metadata" src={clip.url} aria-label={t("chat:audio.preview", { defaultValue: "Audio preview" })} />
+        <span className="shrink-0 font-mono text-xs tabular-nums text-text-muted">{formatTimeVerbose(clip.durationMs)}</span>
+        <button onClick={onSend} disabled={disabled} className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50" aria-label={t("chat:audio.send", { defaultValue: "Send voice message" })}>
+          {t("chat:audio.send", { defaultValue: "Send" })}
         </button>
       </div>
     );

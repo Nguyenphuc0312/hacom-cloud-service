@@ -15,6 +15,7 @@ export type AudioRecorderState =
   | "READY"
   | "RECORDING"
   | "STOPPING"
+  | "PREVIEW"
   | "UPLOADING"
   | "FINALIZING_UPLOAD"
   | "CREATING_MESSAGE"
@@ -98,7 +99,8 @@ export const ALLOWED_TRANSITIONS: ReadonlyMap<AudioRecorderState, ReadonlySet<Au
   ["REQUESTING_PERMISSION", new Set(["READY", "FAILED", "CANCELLED"])],
   ["READY", new Set(["RECORDING", "CANCELLED"])],
   ["RECORDING", new Set(["STOPPING", "CANCELLED"])],
-  ["STOPPING", new Set(["UPLOADING", "CANCELLED"])],
+  ["STOPPING", new Set(["PREVIEW", "FAILED", "CANCELLED"])],
+  ["PREVIEW", new Set(["UPLOADING", "CANCELLED", "IDLE"])],
   ["UPLOADING", new Set(["FINALIZING_UPLOAD", "FAILED"])],
   ["FINALIZING_UPLOAD", new Set(["CREATING_MESSAGE", "FAILED"])],
   ["CREATING_MESSAGE", new Set(["SENT", "FAILED"])],

@@ -144,6 +144,33 @@ describe("useAudioRecorder", () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the Blob preview but releases microphone tracks after stop", async () => {
+    const { stream, track } = makeStream();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn(() => Promise.resolve(stream)) },
+    });
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:preview"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(Date, "now").mockReturnValueOnce(1_000).mockReturnValueOnce(2_000);
+    const { result } = renderHook(() => useAudioRecorder());
+
+    await act(async () => {
+      await result.current.requestPermission();
+      result.current.startRecording();
+      mediaRecorderInstances[0].ondataavailable?.({
+        data: new Blob(["recorded"], { type: "audio/webm" }),
+      } as BlobEvent);
+      await result.current.stopRecording();
+    });
+
+    expect(result.current.state).toBe("PREVIEW");
+    expect(result.current.clip?.url).toBe("blob:preview");
+    expect(track.stop).toHaveBeenCalledTimes(1);
+  });
+
   it("maps denied microphone permission to an error state", async () => {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
