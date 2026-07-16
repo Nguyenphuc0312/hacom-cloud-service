@@ -9,6 +9,7 @@ import {
   resolveLivePresenceStatus,
 } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
+import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../../stores/friendshipStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
@@ -43,6 +44,7 @@ interface RoomItemViewProps {
   currentUserId: string;
   displayName: string;
   previewText: string;
+  draftText: string;
   previewState: ReturnType<typeof getMessagePreviewState>;
   timeLabel: string;
   unreadCount: number;
@@ -213,6 +215,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   currentUserId,
   displayName,
   previewText,
+  draftText,
   previewState,
   timeLabel,
   unreadCount,
@@ -323,25 +326,44 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             </p>
           </div>
 
-          <p
-            className={clsx(
-              "mt-0.5 truncate pr-1 text-left",
-              isDense
-                ? "text-[11px] leading-[0.95rem]"
-                : "text-[12px] leading-[1rem]",
-              hoverStyles?.preview,
-              previewToneClass,
-            )}
-            title={previewText || t("sidebar:room.noMessagesYet")}
-            style={{
-              fontWeight:
-                previewState === "failed" || shouldEmphasizeUnreadPreview
-                  ? "var(--chat-unread-preview-weight)"
-                  : "400",
-            }}
-          >
-            {previewText || t("sidebar:room.noMessagesYet")}
-          </p>
+          {draftText ? (
+            <p
+              className={clsx(
+                "mt-0.5 truncate pr-1 text-left",
+                isDense
+                  ? "text-[11px] leading-[0.95rem]"
+                  : "text-[12px] leading-[1rem]",
+                hoverStyles?.preview,
+                "text-text-muted",
+              )}
+              title={draftText}
+            >
+              <span className="font-medium text-danger">
+                {t("sidebar:room.draftLabel")}:
+              </span>{" "}
+              {truncateTextWithEllipsis(draftText, 48)}
+            </p>
+          ) : (
+            <p
+              className={clsx(
+                "mt-0.5 truncate pr-1 text-left",
+                isDense
+                  ? "text-[11px] leading-[0.95rem]"
+                  : "text-[12px] leading-[1rem]",
+                hoverStyles?.preview,
+                previewToneClass,
+              )}
+              title={previewText || t("sidebar:room.noMessagesYet")}
+              style={{
+                fontWeight:
+                  previewState === "failed" || shouldEmphasizeUnreadPreview
+                    ? "var(--chat-unread-preview-weight)"
+                    : "400",
+              }}
+            >
+              {previewText || t("sidebar:room.noMessagesYet")}
+            </p>
+          )}
         </div>
 
         <div
@@ -391,6 +413,7 @@ const RoomItemView = React.memo(
     prev.currentUserId === next.currentUserId &&
     prev.displayName === next.displayName &&
     prev.previewText === next.previewText &&
+    prev.draftText === next.draftText &&
     prev.previewState === next.previewState &&
     prev.timeLabel === next.timeLabel &&
     prev.unreadCount === next.unreadCount &&
@@ -421,6 +444,15 @@ export const RoomItemContainer = React.memo(
     );
     const isPinned = useUIStore(
       useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
+    );
+    // Unsent draft preview ("Chưa gửi") — hidden on the active room since its
+    // composer is already visible. Draft lives in chatUiStore (sessionStorage).
+    const draftText = useChatUiStore(
+      useMemo(
+        () => (s) =>
+          isActive ? "" : s.composerDraftByConversation[conversationId] ?? "",
+        [conversationId, isActive],
+      ),
     );
     const directPartnerId = useMemo(
       () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
@@ -517,6 +549,7 @@ export const RoomItemContainer = React.memo(
         currentUserId={currentUser.id}
         displayName={viewModel.displayName}
         previewText={viewModel.previewText}
+        draftText={draftText}
         previewState={viewModel.previewState}
         timeLabel={viewModel.timeLabel}
         unreadCount={viewModel.unreadCount}
