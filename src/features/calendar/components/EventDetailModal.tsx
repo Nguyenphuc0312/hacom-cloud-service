@@ -272,23 +272,25 @@ export const EventDetailModal: React.FC<{
   const chairmanRow = findByName(chairman);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative z-10 w-full max-w-lg animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
+      {/* flex-col + body cuộn + footer ghim — cùng pattern với ui/Modal, để các
+          nút hành động luôn thấy được, không bị trôi theo nội dung dài. */}
+      <div className="relative z-10 flex max-h-[min(90vh,48rem)] w-full max-w-lg animate-scale-in flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
         <button
           type="button"
           onClick={onClose}
           title="Đóng"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+          className="absolute right-4 top-4 z-10 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
 
-        <div className="scrollbar-hide max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto p-6">
           {/* Header: Type badge + Status badge + Read-only badge */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {isViewingOthers && (
@@ -599,62 +601,68 @@ export const EventDetailModal: React.FC<{
             </div>
           )}
 
-          {/* Invitee response actions */}
-          {canRespond && (
-            <div className="mt-4 rounded-lg border border-border bg-surface-overlay p-3">
-              <p className="mb-2 text-sm font-medium text-text-primary">
-                Bạn được mời tham gia lịch họp này
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={responding !== null}
-                  onClick={() => handleRespondClick("ACCEPTED")}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
-                </button>
-                <button
-                  type="button"
-                  disabled={responding !== null}
-                  onClick={() => handleRespondClick("DECLINED")}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
-                >
-                  {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
-              tách xa nhau để tránh bấm nhầm. */}
-          {(canEdit || canDelete) && (
-            <div className="mt-6 flex items-center justify-between gap-2 border-t border-border pt-4">
-              {canDelete ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                  Xóa
-                </button>
-              ) : (
-                <span />
-              )}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setShowEditConfirm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
-                >
-                  <PencilSquareIcon className="h-4 w-4" />
-                  Chỉnh sửa
-                </button>
-              )}
-            </div>
-          )}
         </div>
+
+        {/* Footer ghim — luôn thấy được, nội dung phía trên tự cuộn. */}
+        {(canRespond || canEdit || canDelete) && (
+          <div className="flex-shrink-0 border-t border-border px-6 py-4">
+            {/* Invitee response actions */}
+            {canRespond && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-text-primary">
+                  Bạn được mời tham gia lịch họp này
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={responding !== null}
+                    onClick={() => handleRespondClick("ACCEPTED")}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={responding !== null}
+                    onClick={() => handleRespondClick("DECLINED")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                  >
+                    {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
+                tách xa nhau để tránh bấm nhầm. */}
+            {(canEdit || canDelete) && (
+              <div className={clsx("flex items-center justify-between gap-2", canRespond && "mt-3")}>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-micro hover:bg-danger/20"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Xóa
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditConfirm(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-primary/90"
+                  >
+                    <PencilSquareIcon className="h-4 w-4" />
+                    Chỉnh sửa
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
