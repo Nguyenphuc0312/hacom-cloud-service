@@ -56,6 +56,13 @@ import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignatu
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import { translateMessageActionToast } from "../../../utils/messageActionLabels";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
+import {
+  encodeMessageDrag,
+  resolveQuickForwardLabel,
+  applyQuickForwardDragGhost,
+} from "../../../features/chat/quickForward";
+import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
+import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 import { toast } from "../../ui";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
@@ -303,6 +310,46 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
     const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
+
+    // Quick-forward drag: file/image/video, shared contacts, and links can be
+    // dragged onto a room to forward. Never during selection mode (would fight
+    // the checkbox). The DataTransfer carries only ids — the drop target forwards.
+    const dragAttachment = message.attachments?.[0];
+    const dragLabel = React.useMemo(() => {
+      const hasLink =
+        message.type === MessageType.TEXT &&
+        Boolean(
+          extractFirstUrlFromContent(
+            message.content,
+            shouldTreatMessageContentAsRichText({
+              contentFormat: message.contentFormat,
+              content: message.content,
+            }),
+          ),
+        );
+      return resolveQuickForwardLabel({
+        hasAttachment: Boolean(dragAttachment),
+        attachmentName: dragAttachment?.fileName,
+        isContact: message.type === MessageType.CONTACT,
+        hasLink,
+      });
+    }, [message.type, message.content, message.contentFormat, dragAttachment?.fileName]);
+    const canQuickForward =
+      !isSelectionMode && dragLabel !== null && Boolean(message.conversationId);
+    const handleDragStart = React.useCallback(
+      (event: React.DragEvent<HTMLDivElement>) => {
+        if (!message.conversationId || !dragLabel) return;
+        encodeMessageDrag(event.dataTransfer, {
+          messageId: message.id,
+          sourceConversationId: message.conversationId,
+          label: dragLabel,
+        });
+        // Clean pill ghost instead of the translucent bubble (which also dragged
+        // the sibling action rail along).
+        applyQuickForwardDragGhost(event.dataTransfer, dragLabel);
+      },
+      [message.id, message.conversationId, dragLabel],
+    );
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
@@ -738,10 +785,13 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         className={clsx(
           "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
           isPoll ? "self-center" : isOwn ? "self-end" : "self-start",
+          canQuickForward && "msg-quick-drag",
           insertedMessageKeys.has(getMessageStableKey(message)) &&
           isPendingMessage(message) &&
           "motion-message-insert",
         )}
+        draggable={canQuickForward}
+        onDragStart={canQuickForward ? handleDragStart : undefined}
         onMouseEnter={handleItemMouseEnter}
         onMouseLeave={handleItemMouseLeave}
         onFocusCapture={handleItemMouseEnter}

@@ -1362,6 +1362,17 @@ a:focus-visible {
     }
   }
 
+  /* Quick-forward drag: the message row is the drag source. Native-draggable
+     descendants (img, video, a) would otherwise start their OWN drag when
+     grabbed, preempting the row's dragstart and dropping image/link data
+     instead of our message payload. Disabling their native drag makes the row
+     the sole source so onDragStart fires with the message payload. */
+  .msg-quick-drag :where(img, video, a) {
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   .toast-base {
     border: 1px solid hsl(var(--color-border));
     border-radius: var(--radius-lg);

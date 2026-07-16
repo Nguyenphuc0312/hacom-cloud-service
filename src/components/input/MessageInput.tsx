@@ -481,8 +481,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     setDraftValue(externalValue);
     clearMentionState();
     setShowLongPasteNotice(false);
+    // Sync the TipTap document to the seed. Empty → clear; non-empty (a restored
+    // draft) → write it in, otherwise returning to a conversation shows an empty
+    // composer even though the draft is persisted.
     if (!externalValue) {
       tipTapRef.current?.clearContent();
+    } else if (tipTapRef.current?.getText() !== externalValue) {
+      tipTapRef.current?.setContent(externalValue);
     }
   }, [clearMentionState, externalValue, valueResetKey]);
 
@@ -1562,6 +1567,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               <TipTapEditor
                 ref={tipTapRef}
                 data-testid="chat-composer-input"
+                initialContent={externalValue}
                 placeholder={
                   conversationName
                     ? t("chat:composer.dynamicPlaceholder", {

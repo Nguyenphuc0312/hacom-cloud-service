@@ -12,6 +12,8 @@ export interface TipTapEditorHandle {
   getText: () => string;
   isEmpty: () => boolean;
   clearContent: () => void;
+  /** Replace the whole document without stealing focus (used to seed drafts). */
+  setContent: (text: string) => void;
   focus: (options?: { scrollIntoView?: boolean }) => void;
   insertAtCursor: (text: string) => void;
   getEditor: () => Editor | null;
@@ -197,6 +199,11 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       isEmpty: () => editor?.isEmpty ?? true,
       clearContent: () => {
         editor?.commands.clearContent(true);
+      },
+      setContent: (text: string) => {
+        // emitUpdate:false — seeding a draft must not re-fire onContentChange
+        // (which would re-persist and loop). Plain text preserves newlines.
+        editor?.commands.setContent(text, { emitUpdate: false });
       },
       focus: (options?: { scrollIntoView?: boolean }) => {
         // scrollIntoView:false stops ProseMirror scrolling the caret into view,
