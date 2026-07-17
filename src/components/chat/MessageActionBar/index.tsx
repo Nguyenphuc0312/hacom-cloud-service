@@ -60,7 +60,7 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       openTimerRef.current = setTimeout(() => {
         openTimerRef.current = null;
         setPickerOpen(true);
-      }, 250);
+      }, 150);
     }
   }, []);
 
@@ -69,10 +69,11 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       clearTimeout(openTimerRef.current);
       openTimerRef.current = null;
     }
+    // Ân hạn dài để lỡ trượt chuột ra ngoài một nhịp vẫn không mất thanh emoji.
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null;
       setPickerOpen(false);
-    }, 150);
+    }, 400);
   }, []);
 
   const handlePick = useCallback(
