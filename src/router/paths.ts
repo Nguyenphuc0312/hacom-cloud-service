@@ -24,6 +24,7 @@ export const ROUTE_PATHS = {
   NOTIFICATIONS: "/notifications",
   HELP: "/help",
   FAQ: "/faq",
+  TIPS: "/tips",
   REPORT_ISSUE: "/report-issue",
   PRIVACY_POLICY: "/privacy-policy",
   DATA_DELETION: "/data-deletion",
