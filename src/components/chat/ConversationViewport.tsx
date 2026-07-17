@@ -1,5 +1,7 @@
 import React from "react";
 import type { Attachment, Conversation, ImageClickPayload, Message } from "../../types";
+import { RoomType } from "../../types";
+import { normalizeRoomType } from "../../lib/conversationAdapter";
 import { SimpleVirtualizedChatTimeline } from "../../features/chat/simple-virtual-timeline";
 import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import { getMessageSeq } from "../../features/chat/domain/messageMerge";
@@ -167,12 +169,21 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onStartSelectionMode={onStartSelectionMode}
           onNavigateToMessage={onNavigateToMessage}
           currentUsername={currentUsername}
-          viewerCanRecallOthers={
-            Boolean(
+          viewerCanRecallOthers={(() => {
+            // "Xóa ở mọi người" trên tin người khác: chỉ trong NHÓM và viewer là
+            // owner/admin — chat 1-1 không bao giờ (BE cũng chặn, role DM = member).
+            const normalizedType = normalizeRoomType(conversation.type);
+            const isGroup =
+              normalizedType !== RoomType.PRIVATE &&
+              normalizedType !== RoomType.DIRECT;
+            if (!isGroup) return false;
+            const role = conversation.currentUserRole;
+            if (role) return role === "owner" || role === "admin";
+            return Boolean(
               conversation.createdBy &&
                 conversation.createdBy === currentUserId,
-            )
-          }
+            );
+          })()}
           unreadMarker={unreadMarker}
           composerHeight={composerHeight}
           className={className}
