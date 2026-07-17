@@ -4,21 +4,31 @@ import {
   DocumentTextIcon,
   EnvelopeIcon,
   ExclamationTriangleIcon,
+  LightBulbIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 import { Link } from "react-router-dom";
 import { Avatar } from "../components/common/Avatar";
 import { ROUTE_PATHS } from "../router/paths";
 
-const contacts = [
+const contacts: {
+  name: string;
+  role: string;
+  email: string;
+  /** Ảnh đại diện thật — để trống thì Avatar hiển thị icon người mặc định. */
+  avatarUrl?: string;
+}[] = [
   {
     name: "Đậu Cao Minh Nhật",
     role: "Support Manager",
     email: "admin@hacomholdings.vn",
+    // avatarUrl: "https://…", // thêm dòng này là tự động hiện ảnh
   },
   {
     name: "Vũ Minh Quốc",
     role: "Support Manager",
     email: "admin@hacomholdings.vn",
+    // avatarUrl: "https://…", // thêm dòng này là tự động hiện ảnh
   },
 ];
 
@@ -43,11 +53,21 @@ const HelpPage: React.FC = () => {
               className="flex flex-col rounded-3xl border border-border/60 bg-surface p-8 shadow-sm transition-all hover:shadow-md"
             >
               <div className="mb-6 flex items-center gap-4">
-                <Avatar
-                  alt={contact.name}
-                  size="xl"
-                  className="shadow-sm grayscale transition-all hover:grayscale-0"
-                />
+                {contact.avatarUrl ? (
+                  <Avatar
+                    src={contact.avatarUrl}
+                    alt={contact.name}
+                    size="xl"
+                    className="grayscale transition-all hover:grayscale-0"
+                  />
+                ) : (
+                  <div
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-background text-text-muted ring-1 ring-border/60"
+                    aria-hidden="true"
+                  >
+                    <UserIcon className="h-8 w-8" />
+                  </div>
+                )}
                 <div>
                   <h2 className="text-xl font-bold text-text-primary">
                     {contact.name}
@@ -80,6 +100,26 @@ const HelpPage: React.FC = () => {
         </div>
 
         <div className="mt-8 space-y-3">
+          <Link
+            to={ROUTE_PATHS.TIPS}
+            className="flex w-full items-center justify-between rounded-2xl border border-border/60 bg-surface p-5 transition-all hover:bg-surface-hover hover:shadow-sm"
+          >
+            <div className="flex items-center gap-4 text-left">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1976D2]/10 text-[#1565C0]">
+                <LightBulbIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-text-primary">
+                  Tính năng tiện ích
+                </h3>
+                <p className="text-xs text-text-muted">
+                  Phím tắt Ctrl+K, chuyển tiếp bằng kéo thả, mẹo dùng nhanh
+                </p>
+              </div>
+            </div>
+            <ChevronRightIcon className="h-5 w-5 text-text-muted" />
+          </Link>
+
           <Link
             to={ROUTE_PATHS.FAQ}
             className="flex w-full items-center justify-between rounded-2xl border border-border/60 bg-surface p-5 transition-all hover:bg-surface-hover hover:shadow-sm"

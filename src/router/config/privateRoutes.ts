@@ -12,6 +12,7 @@ const MaintenancePage = lazy(() => import("../../pages/errors/MaintenancePage"))
 const TasksPage = lazy(() => import("../../features/tasks/pages/TasksComingSoon"));
 const HelpPage = lazy(() => import("../../pages/HelpPage"));
 const FAQPage = lazy(() => import("../../pages/FAQPage"));
+const TipsPage = lazy(() => import("../../pages/TipsPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
@@ -34,6 +35,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
   { path: ROUTE_PATHS.HELP, component: HelpPage },
   { path: ROUTE_PATHS.FAQ, component: FAQPage },
+  { path: ROUTE_PATHS.TIPS, component: TipsPage },
   { path: ROUTE_PATHS.REPORT_ISSUE, component: ReportIssuePage },
   // Example for future admin route:
   // { path: "/admin", component: AdminDashboardPage, roles: ["admin"] },
