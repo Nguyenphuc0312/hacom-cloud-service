@@ -106,6 +106,12 @@ const showRail = (container: HTMLElement) => {
   fireEvent.mouseEnter(root);
 };
 
+/** Copy now lives behind the Zalo-style "…" dropdown. */
+const openMoreMenu = (container: HTMLElement) => {
+  showRail(container);
+  fireEvent.click(screen.getByTestId("message-action-more"));
+};
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -124,10 +130,8 @@ describe("MessageCluster copy action", () => {
       parentClick,
     );
 
-    showRail(container);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sao chép tin nhắn" }),
-    );
+    openMoreMenu(container);
+    fireEvent.click(screen.getByTestId("message-action-copy"));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
@@ -148,17 +152,22 @@ describe("MessageCluster copy action", () => {
     expect(screen.queryByTestId("message-action-copy")).not.toBeInTheDocument();
   });
 
-  it("keeps Copy visible and moves Pin behind More when pin is available", () => {
+  it("moves Copy and Pin behind the More dropdown", () => {
     const { container } = renderClusterWithPin(
       baseMessage({ content: "Can copy this message" }),
     );
 
     showRail(container);
 
-    expect(screen.getByTestId("message-action-copy")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Chuyển tiếp" })).toBeInTheDocument();
-    expect(screen.getByTestId("message-action-more")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ghim" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("message-action-copy")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("message-action-more"));
+
+    expect(screen.getByTestId("message-action-copy")).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Ghim tin nhắn" }),
+    ).toBeInTheDocument();
   });
 
   it("shows an error toast when clipboard write fails", async () => {
@@ -170,10 +179,8 @@ describe("MessageCluster copy action", () => {
     });
     const { container } = renderCluster(baseMessage({ content: "Không copy được" }));
 
-    showRail(container);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sao chép tin nhắn" }),
-    );
+    openMoreMenu(container);
+    fireEvent.click(screen.getByTestId("message-action-copy"));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Không thể sao chép tin nhắn");
