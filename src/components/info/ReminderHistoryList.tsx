@@ -16,13 +16,47 @@ interface ReminderHistoryListProps {
  * Reminder history for the info panel — shared by GroupInfo (groups) and
  * UserProfile (1-1 DMs). In-chat reminders live as REMINDER messages, so the
  * list is just those messages' metadata.reminder, mirroring the polls section.
+ *
+ * Mỗi lần nhắc hẹn đến giờ, BE phát thêm 1 card REMINDER ở cuối hội thoại (thông
+ * báo "đã đến giờ") mang cùng `reminder.id`. Nếu render thẳng, 1 nhắc hẹn lặp
+ * hằng ngày sẽ đẻ ra 1 dòng mỗi ngày. Zalo hiển thị 1 nhắc hẹn = 1 dòng, nên gộp
+ * theo `reminder.id` và chỉ giữ card GỐC (không phải fire notice) — đó cũng là
+ * card mang truth hủy/sửa, nên bấm vào là nhảy đúng chỗ.
  */
+export const dedupeByReminderId = (messages: Message[]): Message[] => {
+  const byId = new Map<string, Message>();
+  for (const msg of messages) {
+    const reminder = (msg.metadata as { reminder?: ReminderInfo } | null | undefined)?.reminder;
+    if (!reminder) continue;
+    const existing = byId.get(reminder.id);
+    if (!existing) {
+      byId.set(reminder.id, msg);
+      continue;
+    }
+    // Card gốc thắng fire notice. Dữ liệu cũ (trước khi có isFireNotice) không có
+    // cờ này ⇒ fallback: giữ card cũ nhất, vì bản gốc luôn được tạo trước.
+    const existingReminder = (existing.metadata as { reminder?: ReminderInfo }).reminder!;
+    const existingIsNotice = existingReminder.isFireNotice ?? false;
+    const currentIsNotice = reminder.isFireNotice ?? false;
+    if (existingIsNotice && !currentIsNotice) {
+      byId.set(reminder.id, msg);
+    } else if (existingIsNotice === currentIsNotice) {
+      // messageSeq là thứ tự chuẩn duy nhất — bản gốc luôn có seq nhỏ nhất.
+      const older = (msg.messageSeq ?? Infinity) < (existing.messageSeq ?? Infinity) ? msg : existing;
+      byId.set(reminder.id, older);
+    }
+  }
+  return [...byId.values()];
+};
+
 export const ReminderHistoryList: React.FC<ReminderHistoryListProps> = ({
-  reminders,
+  reminders: allReminders,
   loading,
   onJumpToMessage,
   onOpenCalendar,
 }) => {
+  const reminders = React.useMemo(() => dedupeByReminderId(allReminders), [allReminders]);
+
   if (loading) {
     return (
       <div className="space-y-2 p-3">
