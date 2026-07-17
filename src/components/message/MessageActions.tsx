@@ -3,8 +3,6 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Bookmark,
-  BookmarkCheck,
   Copy,
   CornerUpLeft,
   Forward,
@@ -14,6 +12,8 @@ import {
   PinOff,
   RefreshCw,
   SmilePlus,
+  Trash2,
+  Undo2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -23,7 +23,7 @@ import {
 } from "../../utils/messageActionLabels";
 import type { MessageActionId } from "../../utils/messageActionPolicy";
 
-type MessageActionsMode = "rail" | "inline" | "sheet";
+type MessageActionsMode = "rail" | "inline" | "sheet" | "dropdown";
 
 interface MessageActionsProps {
   mode: MessageActionsMode;
@@ -33,6 +33,8 @@ interface MessageActionsProps {
   onClose?: () => void;
   className?: string;
   actionLabelOverrides?: Partial<Record<MessageActionId, string>>;
+  /** Required for mode="dropdown": viewport rect of the trigger button. */
+  anchorRect?: { left: number; top: number; bottom: number };
 }
 
 interface ActionDescriptor {
@@ -59,6 +61,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   onClose,
   className,
   actionLabelOverrides,
+  anchorRect,
 }) => {
   const { t } = useTranslation();
   const translateActionLabel = React.useCallback(
@@ -105,15 +108,23 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         label: translateActionLabel("unpin", "chat:message.actions.unpin"),
         icon: PinOff,
       },
-      save: {
-        id: "save",
-        label: translateActionLabel("save", "chat:message.actions.save"),
-        icon: Bookmark,
+      recall: {
+        id: "recall",
+        label: translateActionLabel(
+          "recall",
+          "chat:message.actions.deleteForEveryone",
+        ),
+        icon: Undo2,
+        danger: true,
       },
-      unsave: {
-        id: "unsave",
-        label: translateActionLabel("unsave", "chat:message.actions.unsave"),
-        icon: BookmarkCheck,
+      deleteForMe: {
+        id: "deleteForMe",
+        label: translateActionLabel(
+          "deleteForMe",
+          "chat:message.actions.deleteForMe",
+        ),
+        icon: Trash2,
+        danger: true,
       },
       select: {
         id: "select",
@@ -128,6 +139,39 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     }),
     [translateActionLabel],
   );
+
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!isOpen || !onClose) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey, true);
+    return () => document.removeEventListener("keydown", handleKey, true);
+  }, [isOpen, onClose]);
+
+  // Position the dropdown against the viewport after it renders (flip up when
+  // it would overflow the bottom). Mutates the DOM node directly — the menu
+  // mounts hidden and becomes visible once placed.
+  React.useLayoutEffect(() => {
+    if (mode !== "dropdown" || !isOpen || !anchorRect) return;
+    const el = menuRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.max(
+      margin,
+      Math.min(anchorRect.left, window.innerWidth - width - margin),
+    );
+    let top = anchorRect.bottom + 6;
+    if (top + height > window.innerHeight - margin) {
+      top = Math.max(margin, anchorRect.top - height - 6);
+    }
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.visibility = "visible";
+  }, [mode, isOpen, anchorRect]);
 
   const descriptors = actions
     .map((actionId) => {
@@ -186,6 +230,68 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     return null;
   }
 
+  if (mode === "dropdown") {
+    return createPortal(
+      <div className="fixed inset-0 z-[70]">
+        <button
+          type="button"
+          className="absolute inset-0 cursor-default"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose?.();
+          }}
+          aria-label={t("common:actions.close")}
+          tabIndex={-1}
+        />
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label={t("chat:header.moreActions")}
+          className={clsx(
+            "fixed w-56 rounded-xl border border-border bg-surface p-1.5 shadow-elev3",
+            "animate-slide-up-fade",
+            className,
+          )}
+          style={{
+            left: anchorRect?.left ?? 0,
+            top: anchorRect?.bottom ?? 0,
+            visibility: "hidden",
+          }}
+        >
+          {descriptors.map((action, index) => (
+            <React.Fragment key={action.id}>
+              {action.danger && !descriptors[index - 1]?.danger && (
+                <div role="separator" className="mx-2 my-1 h-px bg-border" />
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAction(action.id);
+                }}
+                data-testid={`message-action-${action.id}`}
+                title={action.label}
+                aria-label={action.label}
+                className={clsx(
+                  baseButtonClass,
+                  "w-full text-left",
+                  action.danger
+                    ? "text-danger hover:bg-danger/8"
+                    : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+                )}
+              >
+                <action.icon size={17} strokeWidth={1.9} className="shrink-0" />
+                <span>{action.label}</span>
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-3 md:items-center">
       <button
@@ -219,25 +325,29 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         </div>
 
         <div className="space-y-1">
-          {descriptors.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              onClick={() => onAction(action.id)}
-              data-testid={`message-action-${action.id}`}
-              title={action.label}
-              aria-label={action.label}
-              className={clsx(
-                baseButtonClass,
-                "w-full text-left",
-                action.danger
-                  ? "text-danger hover:bg-danger/8"
-                  : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+          {descriptors.map((action, index) => (
+            <React.Fragment key={action.id}>
+              {action.danger && !descriptors[index - 1]?.danger && (
+                <div role="separator" className="mx-2 my-1 h-px bg-border" />
               )}
-            >
-              <action.icon size={18} strokeWidth={1.9} className="shrink-0" />
-              <span>{action.label}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onAction(action.id)}
+                data-testid={`message-action-${action.id}`}
+                title={action.label}
+                aria-label={action.label}
+                className={clsx(
+                  baseButtonClass,
+                  "w-full text-left",
+                  action.danger
+                    ? "text-danger hover:bg-danger/8"
+                    : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+                )}
+              >
+                <action.icon size={18} strokeWidth={1.9} className="shrink-0" />
+                <span>{action.label}</span>
+              </button>
+            </React.Fragment>
           ))}
         </div>
       </div>

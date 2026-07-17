@@ -53,6 +53,9 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
   }, [visible, onClose]);
 
   return (
+    // Outer div dùng padding-bottom (không phải margin) làm cầu hover liền mạch
+    // giữa nút mở và thanh emoji — margin tạo khe chết khiến bar tự tắt khi
+    // chuột đi lên để chọn icon.
     <div
       ref={barRef}
       role="toolbar"
@@ -61,15 +64,19 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
       onMouseLeave={onMouseLeave}
       onClick={(e) => e.stopPropagation()}
       className={clsx(
-        "absolute bottom-full z-30 mb-2",
-        "flex items-center gap-0.5 rounded-full",
-        "bg-surface border border-border shadow-elev3",
-        "px-1.5 py-1",
+        "absolute bottom-full z-30 pb-2",
         "transition-all duration-150 ease-out",
         visible
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
           : "pointer-events-none translate-y-1 scale-95 opacity-0",
         alignClass,
+      )}
+    >
+    <div
+      className={clsx(
+        "flex items-center gap-0.5 rounded-full",
+        "bg-surface border border-border shadow-elev3",
+        "px-1.5 py-1",
       )}
     >
       {QUICK_EMOJIS.map((emoji) => {
@@ -96,6 +103,7 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
           </button>
         );
       })}
+    </div>
     </div>
   );
 };

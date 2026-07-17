@@ -9,18 +9,11 @@ export const fallbackMessageActionLabels: Record<MessageActionId, string> = {
   retry: "Gửi lại",
   pin: "Ghim tin nhắn",
   unpin: "Bỏ ghim",
-  save: "Lưu tin nhắn",
-  unsave: "Bỏ lưu",
   select: "Chọn nhiều tin nhắn",
+  deleteForMe: "Xóa chỉ ở phía tôi",
+  recall: "Thu hồi",
   more: "Thêm",
 };
-
-export const fallbackMessageActionToasts = {
-  saveSuccess: "Đã lưu tin nhắn",
-  unsaveSuccess: "Đã bỏ lưu tin nhắn",
-} as const;
-
-export type MessageActionToastId = keyof typeof fallbackMessageActionToasts;
 
 export const translateWithFallback = (
   t: TFunction,
@@ -32,13 +25,3 @@ export const translateWithFallback = (
     ? resolved
     : fallback;
 };
-
-export const translateMessageActionToast = (
-  t: TFunction,
-  toastId: MessageActionToastId,
-): string =>
-  translateWithFallback(
-    t,
-    `chat:message.${toastId}`,
-    fallbackMessageActionToasts[toastId],
-  );
