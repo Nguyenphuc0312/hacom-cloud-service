@@ -108,6 +108,7 @@ interface MessageGroupProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -221,6 +222,7 @@ interface MessageGroupItemProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -287,6 +289,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onStartSelectionMode,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,
@@ -562,6 +565,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canForward: Boolean(onForward),
           canSelect: Boolean(onStartSelectionMode && onToggleSelect),
           canDelete: Boolean(onDelete),
+          canRecallOthers: viewerCanRecallOthers,
         }),
       [
         coarsePointer,
@@ -573,6 +577,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         onPin,
         onStartSelectionMode,
         onToggleSelect,
+        viewerCanRecallOthers,
       ],
     );
     const threadCount = getThreadCount(message);
@@ -677,6 +682,13 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           case "recall":
             if (onDelete) {
               void Promise.resolve(onDelete(message.id, "FOR_EVERYONE"));
+            }
+            break;
+          case "adminDelete":
+            if (onDelete) {
+              void Promise.resolve(
+                onDelete(message.id, "FOR_EVERYONE", "ADMIN_DELETE"),
+              );
             }
             break;
           case "select":

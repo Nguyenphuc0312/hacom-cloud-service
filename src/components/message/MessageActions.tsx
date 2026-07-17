@@ -11,6 +11,7 @@ import {
   Pin,
   PinOff,
   RefreshCw,
+  ShieldAlert,
   SmilePlus,
   Trash2,
   Undo2,
@@ -115,6 +116,15 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           "chat:message.actions.deleteForEveryone",
         ),
         icon: Undo2,
+        danger: true,
+      },
+      adminDelete: {
+        id: "adminDelete",
+        label: translateActionLabel(
+          "adminDelete",
+          "chat:message.actions.deleteForEveryoneAdmin",
+        ),
+        icon: ShieldAlert,
         danger: true,
       },
       deleteForMe: {

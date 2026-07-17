@@ -49,6 +49,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   viewerCanRecallOthers?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
