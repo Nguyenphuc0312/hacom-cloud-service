@@ -823,6 +823,7 @@ export const ChatPage: React.FC = () => {
         conversationId: selectedConversationId,
         messageId: pendingDeleteMessage.messageId,
         mode: pendingDeleteMessage.mode,
+        context: pendingDeleteMessage.isAdminDeletion ? "ADMIN_DELETE" : undefined,
       }).unwrap();
       toast.success(
         pendingDeleteMessage.mode === "FOR_EVERYONE"
