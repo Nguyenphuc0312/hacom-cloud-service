@@ -64,10 +64,10 @@ const FAQPage: React.FC = () => {
         </div>
 
         <div className="mt-12 rounded-2xl bg-primary/5 p-8 text-center border border-primary/10">
-          <p className="mb-4 text-text-secondary">Bạn vẫn chưa tìm thấy câu trả lời?</p>
-          <a href="mailto:admin@hacomholdings.vn" className="font-bold text-primary hover:underline">
-            Gửi câu hỏi cho chúng tôi →
-          </a>
+          <p className="mb-4 text-text-secondary">Bạn vẫn chưa tìm thấy câu trả lời hoặc đang gặp sự cố?</p>
+          <Link to={ROUTE_PATHS.REPORT_ISSUE} className="font-bold text-primary hover:underline">
+            Báo cáo sự cố hệ thống →
+          </Link>
         </div>
 
       </div>
