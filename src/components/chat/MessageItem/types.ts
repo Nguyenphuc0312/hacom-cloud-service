@@ -27,6 +27,7 @@ export interface MessageItemProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
 
   // UI action callbacks
@@ -73,6 +74,7 @@ export interface MessageItemContentProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;

@@ -14,6 +14,7 @@ export type MessageActionId =
   | "select"
   | "deleteForMe"
   | "recall"
+  | "adminDelete"
   | "more";
 
 export interface MessageActionPolicyInput {
@@ -27,6 +28,8 @@ export interface MessageActionPolicyInput {
   canForward?: boolean;
   canSelect?: boolean;
   canDelete?: boolean;
+  /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
+  canRecallOthers?: boolean;
 }
 
 interface ActionCandidate {
@@ -98,6 +101,7 @@ const getActionCandidates = ({
   canForward = false,
   canSelect = false,
   canDelete = false,
+  canRecallOthers = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -174,6 +178,14 @@ const getActionCandidates = ({
     if (isOwn && isWithinRecallWindow(message)) {
       candidates.push({
         id: "recall",
+        menuOrder: 3,
+        railEligible: false,
+        menuEligible: true,
+      });
+    }
+    if (!isOwn && canRecallOthers) {
+      candidates.push({
+        id: "adminDelete",
         menuOrder: 3,
         railEligible: false,
         menuEligible: true,

@@ -856,7 +856,16 @@ export const ChatPage: React.FC = () => {
       setPendingDeleteMessage(null);
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || t("chat:toast.deleteFailed"));
+      const isRecallExpired =
+        typeof apiError.message === "string" &&
+        apiError.message.includes("RECALL_WINDOW_EXPIRED");
+      toast.error(
+        isRecallExpired
+          ? t("chat:toast.recallWindowExpired", {
+            defaultValue: "Đã quá 24 giờ, không thể thu hồi tin nhắn này",
+          })
+          : apiError.message || t("chat:toast.deleteFailed"),
+      );
     } finally {
       setIsDeletingMessage(false);
     }

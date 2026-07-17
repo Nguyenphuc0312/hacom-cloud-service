@@ -400,6 +400,7 @@
     "messageDeleted": "Đã xóa tin nhắn",
     "messageRecalled": "Đã thu hồi tin nhắn",
     "messageDeletedGlobal": "Đã xóa tin nhắn ở mọi người",
+    "recallWindowExpired": "Đã quá 24 giờ, không thể thu hồi tin nhắn này",
     "deleteFailed": "Không thể xóa tin nhắn",
     "resendSuccess": "Gửi lại thành công",
     "resendFailed": "Gửi lại không thành công",

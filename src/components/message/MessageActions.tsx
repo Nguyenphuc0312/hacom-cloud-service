@@ -11,9 +11,10 @@ import {
   Pin,
   PinOff,
   RefreshCw,
+  RotateCcw,
+  ShieldAlert,
   SmilePlus,
   Trash2,
-  Undo2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -114,7 +115,16 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           "recall",
           "chat:message.actions.deleteForEveryone",
         ),
-        icon: Undo2,
+        icon: RotateCcw,
+        danger: true,
+      },
+      adminDelete: {
+        id: "adminDelete",
+        label: translateActionLabel(
+          "adminDelete",
+          "chat:message.actions.deleteForEveryoneAdmin",
+        ),
+        icon: ShieldAlert,
         danger: true,
       },
       deleteForMe: {
