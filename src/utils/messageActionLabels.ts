@@ -12,6 +12,7 @@ export const fallbackMessageActionLabels: Record<MessageActionId, string> = {
   select: "Chọn nhiều tin nhắn",
   deleteForMe: "Xóa chỉ ở phía tôi",
   recall: "Thu hồi",
+  adminDelete: "Xóa ở mọi người",
   more: "Thêm",
 };
 

@@ -58,6 +58,7 @@ interface MessageClusterProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   onForward?: (message: Message) => void;
   onPin?: (messageId: string) => void | Promise<void>;
@@ -111,6 +112,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   density,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   viewerCanPin,
   textRenderMode = "expanded",
   isCollapsibleText = false,
@@ -322,6 +324,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canForward: Boolean(onForward),
         canSelect: Boolean(onStartSelectionMode && onToggleSelect),
         canDelete: Boolean(onDelete),
+        canRecallOthers: viewerCanRecallOthers,
       }),
     [
       coarsePointer,
@@ -333,6 +336,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       onStartSelectionMode,
       onToggleSelect,
       viewerCanPin,
+      viewerCanRecallOthers,
     ],
   );
 
@@ -379,6 +383,14 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         case "recall":
           if (onDelete) {
             void Promise.resolve(onDelete(message.id, "FOR_EVERYONE"));
+          }
+          closeActions();
+          break;
+        case "adminDelete":
+          if (onDelete) {
+            void Promise.resolve(
+              onDelete(message.id, "FOR_EVERYONE", "ADMIN_DELETE"),
+            );
           }
           closeActions();
           break;

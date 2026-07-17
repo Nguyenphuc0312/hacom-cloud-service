@@ -67,6 +67,20 @@ describe("resolveMessageActions", () => {
     ).toEqual(["copy", "select", "deleteForMe"]);
   });
 
+  it("offers admin delete-for-everyone on others' messages for owners", () => {
+    expect(
+      resolveMessageActions({
+        message: message(),
+        isOwn: false,
+        isCoarsePointer: false,
+        canForward: true,
+        canSelect: true,
+        canDelete: true,
+        canRecallOthers: true,
+      }).menuActions,
+    ).toEqual(["copy", "select", "adminDelete", "deleteForMe"]);
+  });
+
   it("uses the inverse label for pinned messages and hides delete without permission", () => {
     expect(
       resolveMessageActions({

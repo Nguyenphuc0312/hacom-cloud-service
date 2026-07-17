@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import { clsx } from "clsx";
-import { MoreHorizontal, Quote } from "lucide-react";
+import { MoreHorizontal, Quote, ThumbsUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { QuickReactBar } from "../QuickReactBar";
 
@@ -120,14 +120,18 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
             aria-pressed={isLiked}
             data-testid="message-action-like"
             className={clsx(
-              actionBtnClass,
-              "text-[15px]",
-              isLiked && "bg-[#1976D2]/10",
+              "flex h-8 w-8 items-center justify-center rounded-full",
+              "transition-[opacity,transform,background-color] duration-100",
+              "active:scale-90",
+              isLiked
+                ? "bg-[#1976D2]/10 text-brand-solid"
+                : "text-text-secondary hover:bg-surface-hover hover:text-brand-solid",
             )}
           >
-            <span aria-hidden="true" className={clsx(!isLiked && "grayscale")}>
-              👍
-            </span>
+            <ThumbsUp
+              className={clsx("h-[17px] w-[17px]", isLiked && "fill-current")}
+              strokeWidth={1.8}
+            />
           </button>
           <QuickReactBar
             visible={pickerOpen}

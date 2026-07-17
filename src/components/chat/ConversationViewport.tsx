@@ -19,6 +19,7 @@ interface ConversationViewportProps {
   onDelete?: (
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
+    context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;

@@ -400,6 +400,7 @@
     "messageDeleted": "Message deleted",
     "messageRecalled": "Message unsent",
     "messageDeletedGlobal": "Message removed for everyone",
+    "recallWindowExpired": "The 24-hour window has passed — this message can no longer be unsent",
     "deleteFailed": "Unable to delete message",
     "resendSuccess": "Resent successfully",
     "resendFailed": "Resend failed",
