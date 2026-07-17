@@ -49,12 +49,10 @@ import { resolveThreadMessageRenderState } from "../messageListShared";
 import { recordChatRenderCount } from "../../../utils/chatPerformance";
 import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
 import { MessageActionBar } from "../MessageActionBar";
-import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { copyTextToClipboard } from "../../../utils/clipboard";
-import { translateMessageActionToast } from "../../../utils/messageActionLabels";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
 import {
   encodeMessageDrag,
@@ -297,15 +295,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
-    const [showReactionPicker, setShowReactionPicker] = React.useState(false);
+    const [menuAnchorRect, setMenuAnchorRect] = React.useState<
+      { left: number; top: number; bottom: number } | null
+    >(null);
     const [showMobileReact, setShowMobileReact] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
-    const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
-    const [savedMessageIds, setSavedMessageIds] = React.useState<Set<string>>(
-      () => new Set<string>(),
-    );
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
     // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
@@ -564,20 +559,20 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canRetry: isFailedMessage(message),
           canPin: Boolean(onPin),
           isPinned: message.isPinned === true,
-          isSaved: savedMessageIds.has(message.id),
           canForward: Boolean(onForward),
           canSelect: Boolean(onStartSelectionMode && onToggleSelect),
+          canDelete: Boolean(onDelete),
         }),
       [
         coarsePointer,
         isOwn,
         isSelectionMode,
         message,
+        onDelete,
         onForward,
         onPin,
         onStartSelectionMode,
         onToggleSelect,
-        savedMessageIds,
       ],
     );
     const threadCount = getThreadCount(message);
@@ -606,16 +601,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     const handleItemMouseLeave = React.useCallback(() => {
       leaveTimerRef.current = setTimeout(() => {
         setIsHovered(false);
-        // Never close showReactionPicker on mouseleave — it self-closes via
-        // click-outside (document mousedown) or ESC. Closing here would make
-        // it impossible to drag the mouse from the action bar into the picker.
       }, 180);
     }, []);
 
     React.useEffect(
       () => () => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
-        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       },
       [],
     );
@@ -646,13 +637,6 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           defaultValue: "Đã sao chép tin nhắn",
         }),
       );
-      setCopiedMessageId(message.id);
-      if (copiedTimerRef.current) {
-        clearTimeout(copiedTimerRef.current);
-      }
-      copiedTimerRef.current = setTimeout(() => {
-        setCopiedMessageId((current) => current === message.id ? null : current);
-      }, 1200);
     }, [message, t]);
 
     const handleAction = React.useCallback(
@@ -685,17 +669,15 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
               onPin(message.id);
             }
             break;
-          case "save":
-            setSavedMessageIds((previous) => new Set(previous).add(message.id));
-            toast.success(translateMessageActionToast(t, "saveSuccess"));
+          case "deleteForMe":
+            if (onDelete) {
+              void Promise.resolve(onDelete(message.id, "FOR_ME"));
+            }
             break;
-          case "unsave":
-            setSavedMessageIds((previous) => {
-              const next = new Set(previous);
-              next.delete(message.id);
-              return next;
-            });
-            toast.success(translateMessageActionToast(t, "unsaveSuccess"));
+          case "recall":
+            if (onDelete) {
+              void Promise.resolve(onDelete(message.id, "FOR_EVERYONE"));
+            }
             break;
           case "select":
             onStartSelectionMode?.();
@@ -727,12 +709,19 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             // Tin của mình: thanh công cụ ở trên-trái bubble (giữ nguyên).
             // Tin người khác: hạ xuống phải-dưới bubble, gần giờ (17:23).
             isOwn ? "top-1 right-full mr-2" : "bottom-0 left-full ml-2",
-            (isHovered || showReactionPicker)
+            (isHovered || isActionSheetOpen)
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
           <MessageActionBar
+            onReact={
+              hasInlineAction("react") && !isSelectionMode
+                ? handleReactionSelect
+                : undefined
+            }
+            currentUserReaction={myReactionEmoji}
+            isOwn={isOwn}
             onReplyClick={
               hasInlineAction("reply") ? () => onReply(message) : undefined
             }
@@ -744,37 +733,18 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                   }
                 : undefined
             }
-            onCopyClick={
-              hasInlineAction("copy")
-                ? () => {
-                    void handleCopy();
-                  }
-                : undefined
-            }
             onMoreClick={
               hasInlineAction("more")
-                ? () => setIsActionSheetOpen(true)
+                ? (event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setMenuAnchorRect({
+                      left: rect.left,
+                      top: rect.top,
+                      bottom: rect.bottom,
+                    });
+                    setIsActionSheetOpen(true);
+                  }
                 : undefined
-            }
-            copied={copiedMessageId === message.id}
-            onReactClick={
-              hasInlineAction("react")
-                ? () => setShowReactionPicker((v) => !v)
-                : undefined
-            }
-            reactionPickerNode={
-              showReactionPicker && !isSelectionMode ? (
-                <QuickReactBar
-                  visible={true}
-                  align="center"
-                  currentUserReaction={myReactionEmoji}
-                  onReact={(emoji) => {
-                    handleReactionSelect(emoji);
-                    setShowReactionPicker(false);
-                  }}
-                  onClose={() => setShowReactionPicker(false)}
-                />
-              ) : undefined
             }
           />
         </div>
@@ -1041,9 +1011,10 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         </div>
 
         <MessageActions
-          mode="sheet"
+          mode={coarsePointer ? "sheet" : "dropdown"}
           actions={actionPolicy.menuActions}
           isOpen={isActionSheetOpen}
+          anchorRect={menuAnchorRect ?? undefined}
           onAction={handleAction}
           onClose={() => setIsActionSheetOpen(false)}
         />

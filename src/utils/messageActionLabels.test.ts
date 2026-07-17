@@ -1,24 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  translateMessageActionToast,
-  translateWithFallback,
-} from "./messageActionLabels";
+import { translateWithFallback } from "./messageActionLabels";
 
 describe("message action labels", () => {
-  it("falls back when i18n returns an empty toast message", () => {
+  it("falls back when i18n returns an empty string", () => {
     const t = vi.fn(() => "");
 
-    expect(translateMessageActionToast(t, "saveSuccess")).toBe("Đã lưu tin nhắn");
-    expect(translateMessageActionToast(t, "unsaveSuccess")).toBe(
-      "Đã bỏ lưu tin nhắn",
+    expect(translateWithFallback(t, "chat:message.actions.copy", "Sao chép")).toBe(
+      "Sao chép",
     );
   });
 
   it("falls back when i18n returns the untranslated key", () => {
     const t = vi.fn((key: string) => key);
 
-    expect(translateWithFallback(t, "chat:message.saveSuccess", "Đã lưu")).toBe(
-      "Đã lưu",
-    );
+    expect(
+      translateWithFallback(t, "chat:message.actions.deleteForMe", "Xóa chỉ ở phía tôi"),
+    ).toBe("Xóa chỉ ở phía tôi");
   });
 });

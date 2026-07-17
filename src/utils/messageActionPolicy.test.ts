@@ -20,7 +20,7 @@ const message = (overrides: Partial<Message> = {}): Message =>
   }) as Message;
 
 describe("resolveMessageActions", () => {
-  it("orders the desktop rail as reply, react, copy, forward, more", () => {
+  it("orders the desktop rail and the Zalo-style More menu", () => {
     expect(
       resolveMessageActions({
         message: message(),
@@ -29,14 +29,45 @@ describe("resolveMessageActions", () => {
         canForward: true,
         canPin: true,
         canSelect: true,
+        canDelete: true,
       }),
     ).toEqual({
       railActions: ["reply", "react", "copy", "forward", "more"],
-      menuActions: ["pin", "save", "select"],
+      menuActions: ["copy", "pin", "select", "deleteForMe"],
     });
   });
 
-  it("uses the inverse labels for pinned and saved messages in More", () => {
+  it("offers recall before delete-for-me on own messages", () => {
+    expect(
+      resolveMessageActions({
+        message: message(),
+        isOwn: true,
+        isCoarsePointer: false,
+        canForward: true,
+        canSelect: true,
+        canDelete: true,
+      }).menuActions,
+    ).toEqual(["copy", "select", "recall", "deleteForMe"]);
+  });
+
+  it("drops recall after the 24h window, keeping delete-for-me", () => {
+    const twentyFiveHoursAgo = new Date(
+      Date.now() - 25 * 60 * 60 * 1000,
+    ).toISOString() as unknown as Date;
+
+    expect(
+      resolveMessageActions({
+        message: message({ createdAt: twentyFiveHoursAgo }),
+        isOwn: true,
+        isCoarsePointer: false,
+        canForward: true,
+        canSelect: true,
+        canDelete: true,
+      }).menuActions,
+    ).toEqual(["copy", "select", "deleteForMe"]);
+  });
+
+  it("uses the inverse label for pinned messages and hides delete without permission", () => {
     expect(
       resolveMessageActions({
         message: message({ isPinned: true }),
@@ -45,9 +76,8 @@ describe("resolveMessageActions", () => {
         canForward: true,
         canPin: true,
         isPinned: true,
-        isSaved: true,
         canSelect: true,
       }).menuActions,
-    ).toEqual(["unpin", "unsave", "select"]);
+    ).toEqual(["copy", "unpin", "select"]);
   });
 });

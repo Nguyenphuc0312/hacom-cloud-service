@@ -11,9 +11,9 @@ export type MessageActionId =
   | "retry"
   | "pin"
   | "unpin"
-  | "save"
-  | "unsave"
   | "select"
+  | "deleteForMe"
+  | "recall"
   | "more";
 
 export interface MessageActionPolicyInput {
@@ -24,9 +24,9 @@ export interface MessageActionPolicyInput {
   canRetry?: boolean;
   canPin?: boolean;
   isPinned?: boolean;
-  isSaved?: boolean;
   canForward?: boolean;
   canSelect?: boolean;
+  canDelete?: boolean;
 }
 
 interface ActionCandidate {
@@ -75,14 +75,29 @@ const canShowMessageMenu = (message: Message): boolean =>
   message.lifecycleStatus !== "recalled" &&
   message.lifecycleStatus !== "deleted_admin";
 
+const canDeleteMessage = (message: Message): boolean =>
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
+
+// Zalo rule: thu hồi chỉ trong 24h sau khi gửi; quá hạn chỉ còn "Xóa chỉ ở phía tôi".
+const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const isWithinRecallWindow = (message: Message): boolean => {
+  const createdAt = new Date(message.createdAt).getTime();
+  return Number.isFinite(createdAt) && Date.now() - createdAt < RECALL_WINDOW_MS;
+};
+
 const getActionCandidates = ({
   message,
+  isOwn,
   canRetry = false,
   canPin = false,
   isPinned = false,
-  isSaved = false,
   canForward = false,
   canSelect = false,
+  canDelete = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -118,8 +133,9 @@ const getActionCandidates = ({
     candidates.push({
       id: "copy",
       railOrder: 3,
+      menuOrder: 0,
       railEligible: true,
-      menuEligible: false,
+      menuEligible: true,
     });
   }
 
@@ -145,17 +161,27 @@ const getActionCandidates = ({
     });
   }
 
-  candidates.push({
-    id: isSaved ? "unsave" : "save",
-    menuOrder: 2,
-    railEligible: false,
-    menuEligible: true,
-  });
-
   if (canSelect) {
     candidates.push({
       id: "select",
-      menuOrder: 3,
+      menuOrder: 2,
+      railEligible: false,
+      menuEligible: true,
+    });
+  }
+
+  if (canDelete && canDeleteMessage(message)) {
+    if (isOwn && isWithinRecallWindow(message)) {
+      candidates.push({
+        id: "recall",
+        menuOrder: 3,
+        railEligible: false,
+        menuEligible: true,
+      });
+    }
+    candidates.push({
+      id: "deleteForMe",
+      menuOrder: 4,
       railEligible: false,
       menuEligible: true,
     });

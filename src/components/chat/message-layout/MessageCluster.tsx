@@ -34,7 +34,6 @@ import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { MessageActionBar } from "../MessageActionBar";
-import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { copyTextToClipboard } from "../../../utils/clipboard";
@@ -100,6 +99,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   conversationType,
   onReply,
   onReact,
+  onDelete,
   onForward,
   onPin,
   onUnpin,
@@ -123,16 +123,13 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const retrySendMessage = useRetrySendMessage();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
+  const [menuAnchorRect, setMenuAnchorRect] = React.useState<
+    { left: number; top: number; bottom: number } | null
+  >(null);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [showReactionPicker, setShowReactionPicker] = React.useState(false);
-  const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
-  const [savedMessageIds, setSavedMessageIds] = React.useState<Set<string>>(
-    () => new Set<string>(),
-  );
   const [editHistoryMessageId, setEditHistoryMessageId] = React.useState<string | null>(null);
   const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
   const longPressTimerRef = React.useRef<number | null>(null);
-  const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
     normalizedConversationType !== RoomType.PRIVATE &&
@@ -220,7 +217,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (force = false) => {
       if (force || !isActionsOpen) {
         setIsHovered(false);
-        setShowReactionPicker(false);
       }
     },
     [isActionsOpen],
@@ -251,7 +247,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     () => () => {
       clearLongPressTimer();
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     },
     [clearLongPressTimer],
   );
@@ -261,9 +256,18 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     void retrySendMessage(message).catch(() => undefined);
   }, [message, retrySendMessage]);
 
-  const openActions = React.useCallback(() => {
-    setIsActionsOpen(true);
-  }, []);
+  const openActions = React.useCallback(
+    (event?: React.MouseEvent<HTMLButtonElement>) => {
+      if (event) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setMenuAnchorRect({ left: rect.left, top: rect.top, bottom: rect.bottom });
+      } else {
+        setMenuAnchorRect(null);
+      }
+      setIsActionsOpen(true);
+    },
+    [],
+  );
 
   const closeActions = React.useCallback(() => {
     setIsActionsOpen(false);
@@ -289,15 +293,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           defaultValue: "Đã sao chép tin nhắn",
         }),
       );
-      setCopiedMessageId(message.id);
-      if (copiedTimerRef.current) {
-        clearTimeout(copiedTimerRef.current);
-      }
-      copiedTimerRef.current = setTimeout(() => {
-        setCopiedMessageId((current) =>
-          current === message.id ? null : current,
-        );
-      }, 1200);
     } else {
       logger.debug(
         "message_copy",
@@ -324,19 +319,19 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canRetry: isFailedMessage(message),
         canPin: viewerCanPin,
         isPinned: message.isPinned === true,
-        isSaved: savedMessageIds.has(message.id),
         canForward: Boolean(onForward),
         canSelect: Boolean(onStartSelectionMode && onToggleSelect),
+        canDelete: Boolean(onDelete),
       }),
     [
       coarsePointer,
       isOwn,
       isSelectionMode,
       message,
+      onDelete,
       onForward,
       onStartSelectionMode,
       onToggleSelect,
-      savedMessageIds,
       viewerCanPin,
     ],
   );
@@ -344,10 +339,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const handleAction = React.useCallback(
     (actionId: MessageActionId) => {
       switch (actionId) {
-        case "react":
-          if (isActionsOpen) closeActions();
-          setIsHovered(true);
-          break;
         case "reply":
           onReply(message);
           if (isActionsOpen) closeActions();
@@ -379,22 +370,16 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           }
           closeActions();
           break;
-        case "save":
-          setSavedMessageIds((previous) => new Set(previous).add(message.id));
-          toast.success(
-            t("chat:message.saveSuccess", { defaultValue: "Đã lưu tin nhắn" }),
-          );
+        case "deleteForMe":
+          if (onDelete) {
+            void Promise.resolve(onDelete(message.id, "FOR_ME"));
+          }
           closeActions();
           break;
-        case "unsave":
-          setSavedMessageIds((previous) => {
-            const next = new Set(previous);
-            next.delete(message.id);
-            return next;
-          });
-          toast.success(
-            t("chat:message.unsaveSuccess", { defaultValue: "Đã bỏ lưu tin nhắn" }),
-          );
+        case "recall":
+          if (onDelete) {
+            void Promise.resolve(onDelete(message.id, "FOR_EVERYONE"));
+          }
           closeActions();
           break;
         case "select":
@@ -413,6 +398,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       handleRetry,
       isActionsOpen,
       message,
+      onDelete,
       onForward,
       onPin,
       onStartSelectionMode,
@@ -420,7 +406,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       onUnpin,
       onReply,
       openActions,
-      t,
     ],
   );
 
@@ -481,12 +466,19 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       <MessageRow
         isOwn={isPoll ? false : isOwn}
         actionRail={
-          (isHovered || showReactionPicker) && railActions.length > 0 ? (
+          (isHovered || isActionsOpen) && railActions.length > 0 ? (
             <div
               className="transition-fast pointer-events-auto opacity-100"
               onMouseEnter={handleClusterMouseEnter}
             >
               <MessageActionBar
+                onReact={
+                  hasRailAction("react") && !isSelectionMode
+                    ? handleReactionSelect
+                    : undefined
+                }
+                currentUserReaction={myReactionEmoji}
+                isOwn={isOwn}
                 onReplyClick={
                   hasRailAction("reply") ? () => onReply(message) : undefined
                 }
@@ -495,31 +487,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     ? () => { onForward(message); hideRail(true); }
                     : undefined
                 }
-                onCopyClick={
-                  hasRailAction("copy") ? () => { void handleCopy(); } : undefined
-                }
                 onMoreClick={
                   hasRailAction("more") ? openActions : undefined
-                }
-                copied={copiedMessageId === message.id}
-                onReactClick={
-                  hasRailAction("react")
-                    ? () => setShowReactionPicker((v) => !v)
-                    : undefined
-                }
-                reactionPickerNode={
-                  showReactionPicker && !isSelectionMode ? (
-                    <QuickReactBar
-                      visible={true}
-                      align="center"
-                      currentUserReaction={myReactionEmoji}
-                      onReact={(emoji) => {
-                        handleReactionSelect(emoji);
-                        setShowReactionPicker(false);
-                      }}
-                      onClose={() => setShowReactionPicker(false)}
-                    />
-                  ) : undefined
                 }
               />
             </div>
@@ -662,9 +631,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       </MessageRow>
 
       <MessageActions
-        mode="sheet"
+        mode={coarsePointer ? "sheet" : "dropdown"}
         actions={actionPolicy.menuActions}
         isOpen={isActionsOpen}
+        anchorRect={menuAnchorRect ?? undefined}
         onAction={handleAction}
         onClose={closeActions}
       />

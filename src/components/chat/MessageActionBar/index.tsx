@@ -1,18 +1,19 @@
 import React, { useCallback } from "react";
 import { clsx } from "clsx";
-import { HeartIcon } from "@heroicons/react/24/outline";
-import { Check, Copy, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Quote } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { QuickReactBar } from "../QuickReactBar";
 
 interface MessageActionBarProps {
+  /** Renders the Zalo-style 👍 as the first button: click = thumbs-up, hover = emoji bar. */
+  onReact?: (emoji: string) => void;
+  currentUserReaction?: string | null;
+  /** Controls which side the hover emoji bar grows toward. */
+  isOwn?: boolean;
   onReplyClick?: () => void;
-  onReactClick?: () => void;
-  onCopyClick?: () => void;
   onForwardClick?: () => void;
-  onMoreClick?: () => void;
-  copied?: boolean;
-  /** Node rendered anchored above the react button (e.g. QuickReactBar) */
-  reactionPickerNode?: React.ReactNode;
+  /** Receives the click event so the caller can anchor a dropdown to the button. */
+  onMoreClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }
 
@@ -24,25 +25,72 @@ const actionBtnClass = clsx(
 );
 
 export const MessageActionBar: React.FC<MessageActionBarProps> = ({
+  onReact,
+  currentUserReaction,
+  isOwn = false,
   onReplyClick,
-  onReactClick,
-  onCopyClick,
   onForwardClick,
   onMoreClick,
-  copied = false,
-  reactionPickerNode,
   className,
 }) => {
   const { t } = useTranslation();
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const openTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimers = useCallback(() => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => clearTimers, [clearTimers]);
+
+  const handleReactEnter = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (!openTimerRef.current) {
+      openTimerRef.current = setTimeout(() => {
+        openTimerRef.current = null;
+        setPickerOpen(true);
+      }, 150);
+    }
+  }, []);
+
+  const handleReactLeave = useCallback(() => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    // Ân hạn dài để lỡ trượt chuột ra ngoài một nhịp vẫn không mất thanh emoji.
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setPickerOpen(false);
+    }, 400);
+  }, []);
+
+  const handlePick = useCallback(
+    (emoji: string) => {
+      clearTimers();
+      setPickerOpen(false);
+      onReact?.(emoji);
+    },
+    [clearTimers, onReact],
+  );
 
   const stop = useCallback((fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
     fn();
   }, []);
 
-  const copyLabel = copied
-    ? t("chat:message.copied", "Đã sao chép")
-    : t("chat:message.actions.copy", "Sao chép");
+  const isLiked = currentUserReaction === "👍";
 
   return (
     <div
@@ -55,6 +103,43 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       )}
       onClick={(e) => e.stopPropagation()}
     >
+      {onReact && (
+        <div
+          className="relative"
+          onMouseEnter={handleReactEnter}
+          onMouseLeave={handleReactLeave}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePick("👍");
+            }}
+            title={t("chat:message.actions.react", "Thả cảm xúc")}
+            aria-label={t("chat:message.actions.react", "Thả cảm xúc")}
+            aria-pressed={isLiked}
+            data-testid="message-action-like"
+            className={clsx(
+              actionBtnClass,
+              "text-[15px]",
+              isLiked && "bg-[#1976D2]/10",
+            )}
+          >
+            <span aria-hidden="true" className={clsx(!isLiked && "grayscale")}>
+              👍
+            </span>
+          </button>
+          <QuickReactBar
+            visible={pickerOpen}
+            align={isOwn ? "right" : "left"}
+            currentUserReaction={currentUserReaction ?? null}
+            onReact={handlePick}
+            onMouseEnter={handleReactEnter}
+            onMouseLeave={handleReactLeave}
+          />
+        </div>
+      )}
+
       {onReplyClick && (
         <button
           type="button"
@@ -63,53 +148,7 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
           aria-label={t("chat:message.actions.reply", "Trả lời")}
           className={actionBtnClass}
         >
-          <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="9 17 4 12 9 7" />
-            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-          </svg>
-        </button>
-      )}
-
-      {onReactClick && (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={stop(onReactClick)}
-            title={t("chat:message.actions.react", "Cảm xúc")}
-            aria-label={t("chat:message.actions.react", "Cảm xúc")}
-            className={actionBtnClass}
-          >
-            <HeartIcon className="h-[18px] w-[18px]" />
-          </button>
-          {reactionPickerNode && (
-            <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
-              {reactionPickerNode}
-            </div>
-          )}
-        </div>
-      )}
-
-      {onCopyClick && (
-        <button
-          type="button"
-          onClick={stop(onCopyClick)}
-          title={copyLabel}
-          aria-label={
-            copied
-              ? copyLabel
-              : t("chat:message.actions.copyAria", "Sao chép tin nhắn")
-          }
-          className={clsx(
-            actionBtnClass,
-            copied && "text-success hover:text-success",
-          )}
-          data-testid="message-action-copy"
-        >
-          {copied ? (
-            <Check className="h-[18px] w-[18px]" strokeWidth={1.7} />
-          ) : (
-            <Copy className="h-[18px] w-[18px]" strokeWidth={1.7} />
-          )}
+          <Quote className="h-[16px] w-[16px]" strokeWidth={1.8} />
         </button>
       )}
 
@@ -131,7 +170,10 @@ export const MessageActionBar: React.FC<MessageActionBarProps> = ({
       {onMoreClick && (
         <button
           type="button"
-          onClick={stop(onMoreClick)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMoreClick(e);
+          }}
           title={t("chat:header.moreActions", "Thêm")}
           aria-label={t("chat:header.moreActions", "Thêm")}
           className={actionBtnClass}
