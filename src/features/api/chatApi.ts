@@ -136,6 +136,8 @@ export interface DeleteMessageInput {
   conversationId: string;
   messageId: string;
   mode: DeleteMessageMode;
+  /** Admin/owner xóa tin của người khác — optimistic patch gắn nhãn deleted_admin thay vì recalled. */
+  context?: "ADMIN_DELETE";
 }
 
 export interface ReactToMessageInput {
@@ -780,9 +782,12 @@ export const chatApi = createApi({
               if (input.mode === "FOR_ME") {
                 removeMessageFromCache(draft, input.messageId);
               } else {
+                const now = new Date().toISOString() as unknown as Date;
                 patchMessageInCache(draft, input.messageId, {
                   isDeleted: true,
-                  lifecycleStatus: "recalled",
+                  ...(input.context === "ADMIN_DELETE"
+                    ? { lifecycleStatus: "deleted_admin" as const, deletedAt: now }
+                    : { lifecycleStatus: "recalled" as const, recalledAt: now }),
                   content: "",
                   attachments: [],
                   sendState: "sent",
