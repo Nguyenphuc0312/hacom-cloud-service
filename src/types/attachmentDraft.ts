@@ -10,7 +10,8 @@ export type FileUploadPurpose =
   | "message_attachment"
   | "user_avatar"
   | "group_avatar"
-  | "calendar_attachment";
+  | "calendar_attachment"
+  | "support_attachment";
 
 export type AttachmentDraftStatus =
   | "idle"

@@ -36,6 +36,11 @@ import type {
   UploadSignedUrlRequest,
   UploadSignedUrlResponse,
 } from "@hacom/chat-shared-types/chat";
+import type {
+  CreateSupportIssueRequest,
+  CreateSupportIssueResponse,
+  SupportIssueListResponse,
+} from "@hacom/chat-shared-types/chat";
 import type { User } from "../stores/authStore";
 import type { Attachment, Conversation, LocationMessagePayload, Message } from "../types";
 import { RoomMemberRole } from "../types";
@@ -122,7 +127,8 @@ export type FileUploadPurpose =
   | "message_attachment"
   | "user_avatar"
   | "group_avatar"
-  | "calendar_attachment";
+  | "calendar_attachment"
+  | "support_attachment";
 
 export interface ReserveFileUploadPayload { 
   uploadId?: string;
@@ -2144,6 +2150,25 @@ export const linkPreviewApi = {
   },
 };
 
+export const supportApi = {
+  /** Gửi báo cáo sự cố. Người báo cáo do BE lấy từ JWT — không gửi từ client. */
+  createIssue: async (payload: CreateSupportIssueRequest) => {
+    const response = await apiClient.post<ApiResponse<CreateSupportIssueResponse>>(
+      "/support/issues",
+      payload,
+    );
+    return response.data;
+  },
+
+  getMyIssues: async (params?: { limit?: number; offset?: number }) => {
+    const response = await apiClient.get<ApiResponse<SupportIssueListResponse>>(
+      "/support/issues/mine",
+      { params },
+    );
+    return response.data;
+  },
+};
+
 export default {
   auth: authApi,
   user: userApi,
@@ -2155,4 +2180,5 @@ export default {
   friendQr: friendQrApi,
   group: groupApi,
   conversationResources: conversationResourcesApi,
+  support: supportApi,
 };
