@@ -10,6 +10,10 @@ import { Link } from "react-router-dom";
 import { ROUTE_PATHS } from "../router/paths";
 import { toast } from "react-hot-toast";
 import ImagePreviewModal from "../components/modals/ImagePreviewModal";
+import { supportApi } from "../services/api";
+import uploadClient from "../services/uploadClient";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { SupportIssuePriority } from "@hacom/chat-shared-types/chat";
 import {
   UPLOAD_INPUT_ACCEPT,
   resolveUploadCategoryForMimeType,
@@ -17,11 +21,6 @@ import {
   resolveUploadMimeTypeForFile,
   validateUploadFileType,
 } from "../utils/uploadPolicy";
-
-// ponytail: gửi thật đang chờ API POST /api/v1/support/issues
-// (chat-api-service/docs/requests/FE__report-issue-ticket__contract__17-07-26.md).
-// Tới lúc đó submit phải chặn — thà nói thật là chưa gửi được còn hơn toast "đã gửi" giả.
-const SUBMIT_ENABLED = false;
 
 const MAX_FILES = 5;
 
@@ -100,6 +99,9 @@ const ReportIssuePage: React.FC = () => {
   const [isDragging, setIsDragging] = React.useState(false);
   const [justPasted, setJustPasted] = React.useState(false);
   const [previewIndex, setPreviewIndex] = React.useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [uploadingCount, setUploadingCount] = React.useState(0);
+  const [submittedTicket, setSubmittedTicket] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const imageFiles = React.useMemo(() => files.filter(isImageFile), [files]);
@@ -191,13 +193,84 @@ const ReportIssuePage: React.FC = () => {
     return () => window.removeEventListener("paste", onPaste);
   }, [addFiles]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /** Upload 1 tệp qua luồng 2 phase có sẵn (reserve → PUT signed URL → complete). */
+  const uploadOne = async (file: File): Promise<string> => {
+    const validated = uploadClient.validateUpload(file, "support_attachment");
+    const signed = await uploadClient.reserveUpload({
+      purpose: "support_attachment",
+      filename: file.name,
+      mimeType: validated.mimeType,
+      sizeBytes: file.size,
+    });
+
+    await uploadClient.uploadToSignedUrl({
+      signedUrl: signed.uploadUrl,
+      method: signed.uploadMethod || "PUT",
+      headers: { ...(signed.uploadHeaders || {}), "Content-Type": validated.mimeType },
+      file,
+    });
+
+    const completed = await uploadClient.completeUpload({
+      uploadId: signed.uploadId,
+      objectKey: signed.objectKey,
+    });
+
+    const fileId = completed.attachment?.id;
+    if (!fileId) {
+      throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
+    }
+    return fileId;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // ponytail: xoá nhánh này khi API ship — xem contract FE__report-issue-ticket.
-    toast.error(
-      "Chức năng gửi báo cáo đang được kết nối với hệ thống ticket. Trong lúc chờ, vui lòng liên hệ đội ngũ IT ở trang Hỗ trợ.",
-      { duration: 6000 },
-    );
+    if (isSubmitting) return;
+
+    const form = e.currentTarget as HTMLFormElement;
+    const data = new FormData(form);
+    const priority =
+      (data.get("priority") as SupportIssuePriority | null) ?? SupportIssuePriority.MEDIUM;
+
+    setIsSubmitting(true);
+    try {
+      // Upload trước, lấy fileId; nếu tệp lỗi thì dừng luôn, không tạo ticket thiếu bằng chứng.
+      setUploadingCount(files.length);
+      const attachmentFileIds: string[] = [];
+      for (const file of files) {
+        attachmentFileIds.push(await uploadOne(file));
+        setUploadingCount((current) => current - 1);
+      }
+
+      const created = unwrapApiSuccess(
+        await supportApi.createIssue({
+          title: String(data.get("title") ?? "").trim(),
+          stepsToReproduce: String(data.get("stepsToReproduce") ?? "").trim(),
+          expectedResult: String(data.get("expectedResult") ?? "").trim() || null,
+          actualResult: String(data.get("actualResult") ?? "").trim() || null,
+          priority,
+          attachmentFileIds,
+          environment: collectEnvironment(),
+        }),
+      );
+
+      const ticketCode = created.ticketCode;
+      setSubmittedTicket(ticketCode ?? null);
+      form.reset();
+      setFiles([]);
+      toast.success(
+        ticketCode
+          ? `Đã gửi báo cáo. Mã tra cứu: ${ticketCode}`
+          : "Đã gửi báo cáo tới đội ngũ IT.",
+      );
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(
+        apiError.message || "Không gửi được báo cáo. Vui lòng thử lại hoặc liên hệ đội ngũ IT.",
+      );
+    } finally {
+      setIsSubmitting(false);
+      setUploadingCount(0);
+    }
   };
 
   return (
@@ -229,6 +302,7 @@ const ReportIssuePage: React.FC = () => {
             </label>
             <input
               id="issue-title"
+              name="title"
               required
               maxLength={200}
               type="text"
@@ -249,6 +323,7 @@ const ReportIssuePage: React.FC = () => {
             </p>
             <textarea
               id="issue-steps"
+              name="stepsToReproduce"
               required
               rows={5}
               maxLength={5000}
@@ -267,6 +342,7 @@ const ReportIssuePage: React.FC = () => {
               </label>
               <textarea
                 id="issue-expected"
+                name="expectedResult"
                 rows={3}
                 maxLength={2000}
                 placeholder="Ảnh được gửi và hiển thị trong khung chat."
@@ -282,6 +358,7 @@ const ReportIssuePage: React.FC = () => {
               </label>
               <textarea
                 id="issue-actual"
+                name="actualResult"
                 rows={3}
                 maxLength={2000}
                 placeholder="Ảnh quay vòng mãi rồi hiện chữ đỏ 'Gửi thất bại'."
@@ -436,24 +513,35 @@ const ReportIssuePage: React.FC = () => {
 
           <button
             type="submit"
-            disabled={!SUBMIT_ENABLED}
+            disabled={isSubmitting}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1565C0] py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-[#1976D2] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
           >
-            <PaperAirplaneIcon className="h-5 w-5" />
-            Gửi báo cáo sự cố
+            {isSubmitting ? (
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+            ) : (
+              <PaperAirplaneIcon className="h-5 w-5" />
+            )}
+            {isSubmitting
+              ? uploadingCount > 0
+                ? `Đang tải lên ${uploadingCount} tệp...`
+                : "Đang gửi báo cáo..."
+              : "Gửi báo cáo sự cố"}
           </button>
-
-          {!SUBMIT_ENABLED && (
-            <p className="text-center text-xs text-text-muted">
-              Chức năng gửi đang được kết nối với hệ thống ticket. Trong lúc chờ,
-              vui lòng liên hệ đội ngũ IT ở{" "}
-              <Link to={ROUTE_PATHS.HELP} className="font-medium text-[#1565C0] hover:underline">
-                trang Hỗ trợ
-              </Link>
-              .
-            </p>
-          )}
         </form>
+
+        {submittedTicket && (
+          <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-center">
+            <p className="text-sm text-text-secondary">
+              Báo cáo đã được gửi tới đội ngũ IT. Mã tra cứu của bạn:
+            </p>
+            <p className="mt-2 text-2xl font-bold tracking-wide text-emerald-600">
+              {submittedTicket}
+            </p>
+            <p className="mt-2 text-xs text-text-muted">
+              Lưu lại mã này để hỏi tình trạng xử lý khi cần.
+            </p>
+          </div>
+        )}
       </div>
 
       <ImagePreviewModal
