@@ -85,6 +85,13 @@ export const chatApiBaseUrl = resolveChatApiBaseUrl();
  * Use this in API clients to catch duplicate prefix bugs early.
  */
 export function assertAdminApiPath(path: string): void {
+  if (path === '/admin' || path.startsWith('/admin/')) {
+    throw new Error(
+      `Do not include admin path segment in path: ${path}. ` +
+        `adminAxiosInstance already has baseURL '/api/v1/admin'.`,
+    );
+  }
+
   if (path.startsWith('/api/v1/admin')) {
     throw new Error(
       `Do not include admin API prefix in path: ${path}. ` +

@@ -21,6 +21,21 @@ export default defineConfig(({ mode }) => {
     env.VITE_DEV_AUTH_PROXY_TARGET,
     'http://localhost:3101',
   );
+  // chat-api (ticket "Báo cáo sự cố") — origin khác admin/auth, phải proxy riêng.
+  const chatApiProxyTarget = resolveHttpProxyTarget(
+    env.VITE_DEV_CHAT_API_PROXY_TARGET,
+    'https://chat.hacomholdings.com.vn',
+  );
+
+  // Backend chặn theo Origin (403 nếu origin lạ). changeOrigin chỉ đổi Host, không đổi Origin,
+  // nên khi proxy sang backend thật ta phải viết lại Origin = origin của chính target đó.
+  const rewriteOriginToTarget = (target: string) => (proxy: import('http-proxy').Server) => {
+    proxy.on('proxyReq', (proxyReq) => {
+      const origin = new URL(target).origin;
+      proxyReq.setHeader('origin', origin);
+      proxyReq.setHeader('referer', `${origin}/`);
+    });
+  };
 
   return {
     plugins: [react()],
@@ -44,11 +59,19 @@ export default defineConfig(({ mode }) => {
           target: adminProxyTarget,
           changeOrigin: true,
           secure: false,
+          configure: rewriteOriginToTarget(adminProxyTarget),
         },
         '/api/v1/auth': {
           target: authProxyTarget,
           changeOrigin: true,
           secure: false,
+          configure: rewriteOriginToTarget(authProxyTarget),
+        },
+        '/api/v1/support': {
+          target: chatApiProxyTarget,
+          changeOrigin: true,
+          secure: false,
+          configure: rewriteOriginToTarget(chatApiProxyTarget),
         },
       },
     },
