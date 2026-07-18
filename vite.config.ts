@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -29,13 +29,15 @@ export default defineConfig(({ mode }) => {
 
   // Backend chặn theo Origin (403 nếu origin lạ). changeOrigin chỉ đổi Host, không đổi Origin,
   // nên khi proxy sang backend thật ta phải viết lại Origin = origin của chính target đó.
-  const rewriteOriginToTarget = (target: string) => (proxy: import('http-proxy').Server) => {
-    proxy.on('proxyReq', (proxyReq) => {
-      const origin = new URL(target).origin;
-      proxyReq.setHeader('origin', origin);
-      proxyReq.setHeader('referer', `${origin}/`);
-    });
-  };
+  const rewriteOriginToTarget =
+    (target: string): NonNullable<ProxyOptions['configure']> =>
+    (proxy) => {
+      proxy.on('proxyReq', (proxyReq) => {
+        const origin = new URL(target).origin;
+        proxyReq.setHeader('origin', origin);
+        proxyReq.setHeader('referer', `${origin}/`);
+      });
+    };
 
   return {
     plugins: [react()],
