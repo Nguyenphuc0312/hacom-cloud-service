@@ -12,6 +12,7 @@ vi.mock('@/api/axios/axios', () => ({
 import { alertsClient } from './alertsClient/alertsClient';
 import { incidentsClient } from './incidentsClient/incidentsClient';
 import { realtimeClient } from './realtimeClient/realtimeClient';
+import { assertAdminApiPath } from '../routes/routes';
 
 describe('admin API client paths', () => {
   beforeEach(() => {
@@ -37,5 +38,11 @@ describe('admin API client paths', () => {
 
     expect(get).toHaveBeenCalledWith('/incidents/status');
     expect(post).toHaveBeenCalledWith('/incidents/export', { reason: 'investigate' }, { headers: undefined });
+  });
+
+  it('rejects every duplicate form before Axios receives it', () => {
+    expect(() => assertAdminApiPath('/admin/realtime/overview')).toThrow(/admin path segment/);
+    expect(() => assertAdminApiPath('/api/v1/admin/realtime/overview')).toThrow(/admin API prefix/);
+    expect(() => assertAdminApiPath('/api/v1/admin/admin/realtime/overview')).toThrow(/admin API prefix/);
   });
 });
