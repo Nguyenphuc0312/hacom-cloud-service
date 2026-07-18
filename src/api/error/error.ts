@@ -50,6 +50,8 @@ const STATUS_MESSAGE_MAP: Record<number, string> = {
 };
 
 const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
+  ADMIN_CANONICAL_PERMISSIONS_MISSING:
+    'Hệ thống chưa tải được thông tin phân quyền quản trị. Vui lòng liên hệ quản trị viên.',
   ACCESS_IP_PENDING:
     'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.',
   ACCESS_IP_REJECTED: 'IP của bạn đã bị từ chối truy cập admin panel.',

@@ -193,6 +193,22 @@ describe('LoginPage admin preflight', () => {
     expect(message.error).toHaveBeenCalledWith(expectedMessage);
   });
 
+  it('clears token and shows an authorization-configuration message for malformed canonical claims', async () => {
+    loginMock.mockResolvedValue({ accessToken: 'malformed-admin-token' });
+    getCurrentAdminMock.mockRejectedValue(
+      buildAxiosError(403, 'ADMIN_CANONICAL_PERMISSIONS_MISSING'),
+    );
+
+    const { container } = renderLoginPage();
+    await submitLogin(container);
+
+    const expectedMessage =
+      'Hệ thống chưa tải được thông tin phân quyền quản trị. Vui lòng liên hệ quản trị viên.';
+    expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(message.error).toHaveBeenCalledWith(expectedMessage);
+  });
+
   it('keeps admin token and sends pending IP admins to the access screen', async () => {
     loginMock.mockResolvedValue({ accessToken: 'pending-ip-token' });
     getCurrentAdminMock.mockRejectedValue(
