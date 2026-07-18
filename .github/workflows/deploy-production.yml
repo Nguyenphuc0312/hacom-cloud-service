@@ -89,6 +89,7 @@ jobs:
           VITE_ADMIN_API_ROOT: ${{ vars.VITE_ADMIN_API_ROOT }}
           VITE_ADMIN_API_BASE_URL: ${{ vars.VITE_ADMIN_API_BASE_URL }}
           VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
+          VITE_CHAT_API_BASE_URL: ${{ vars.VITE_CHAT_API_BASE_URL }}
           VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
           VITE_DASHBOARD_REFETCH_INTERVAL_MS: ${{ vars.VITE_DASHBOARD_REFETCH_INTERVAL_MS }}
           VITE_ADMIN_WRITE_ACTIONS_ENABLED: ${{ vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED }}
@@ -171,6 +172,7 @@ jobs:
           VITE_ADMIN_API_ROOT_CLEAN="$(trim_single_line "${VITE_ADMIN_API_ROOT}")"
           VITE_ADMIN_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_ADMIN_API_BASE_URL}")"
           VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL}")"
+          VITE_CHAT_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_CHAT_API_BASE_URL}")"
           VITE_APP_ENV_CLEAN="$(trim_single_line "${VITE_APP_ENV}")"
           VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN="$(trim_single_line "${VITE_DASHBOARD_REFETCH_INTERVAL_MS}")"
           VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN="$(trim_single_line "${VITE_ADMIN_WRITE_ACTIONS_ENABLED}")"
@@ -190,6 +192,9 @@ jobs:
           fi
           if [[ -z "${VITE_AUTH_BASE_URL_CLEAN}" ]]; then
             VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
+          fi
+          if [[ -z "${VITE_CHAT_API_BASE_URL_CLEAN}" ]]; then
+            VITE_CHAT_API_BASE_URL_CLEAN="/api/v1"
           fi
           if [[ -z "${VITE_APP_ENV_CLEAN}" ]]; then
             VITE_APP_ENV_CLEAN="PRODUCTION"
@@ -260,6 +265,7 @@ jobs:
             printf 'VITE_ADMIN_API_ROOT_CLEAN=%s\n' "${VITE_ADMIN_API_ROOT_CLEAN}"
             printf 'VITE_ADMIN_API_BASE_URL_CLEAN=%s\n' "${VITE_ADMIN_API_BASE_URL_CLEAN}"
             printf 'VITE_AUTH_BASE_URL_CLEAN=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf 'VITE_CHAT_API_BASE_URL_CLEAN=%s\n' "${VITE_CHAT_API_BASE_URL_CLEAN}"
             printf 'VITE_APP_ENV_CLEAN=%s\n' "${VITE_APP_ENV_CLEAN}"
             printf 'VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN=%s\n' "${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}"
             printf 'VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN=%s\n' "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}"
@@ -303,6 +309,7 @@ jobs:
             --build-arg VITE_ADMIN_API_ROOT="${VITE_ADMIN_API_ROOT_CLEAN}" \
             --build-arg VITE_ADMIN_API_BASE_URL="${VITE_ADMIN_API_BASE_URL_CLEAN}" \
             --build-arg VITE_AUTH_BASE_URL="${VITE_AUTH_BASE_URL_CLEAN}" \
+            --build-arg VITE_CHAT_API_BASE_URL="${VITE_CHAT_API_BASE_URL_CLEAN}" \
             --build-arg VITE_APP_ENV="${VITE_APP_ENV_CLEAN}" \
             --build-arg VITE_DASHBOARD_REFETCH_INTERVAL_MS="${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}" \
             --build-arg VITE_ADMIN_WRITE_ACTIONS_ENABLED="${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" \
