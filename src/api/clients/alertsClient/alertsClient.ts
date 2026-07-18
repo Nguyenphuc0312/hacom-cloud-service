@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { adminAxiosInstance } from '@/api/axios/axios';
 import { unwrapApiEnvelope } from '@/api/envelope/envelope';
+import { assertAdminApiPath } from '@/api/routes/routes';
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 export type AlertStatus = 'active' | 'acknowledged' | 'resolved';
@@ -48,17 +49,23 @@ export const alertsClient = {
     if (filters?.service) params.service = filters.service;
     if (filters?.range) params.range = filters.range;
 
-    const response = await adminAxiosInstance.get('/admin/alerts', { params });
+    const path = '/alerts';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<AlertsResponse>(response);
   },
 
   async acknowledgeAlert(alertId: string): Promise<void> {
-    const response = await adminAxiosInstance.post(`/admin/alerts/${alertId}/acknowledge`);
+    const path = `/alerts/${alertId}/acknowledge`;
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.post(path);
     return unwrapApiEnvelope<void>(response);
   },
 
   async resolveAlert(alertId: string): Promise<void> {
-    const response = await adminAxiosInstance.post(`/admin/alerts/${alertId}/resolve`);
+    const path = `/alerts/${alertId}/resolve`;
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.post(path);
     return unwrapApiEnvelope<void>(response);
   },
 };

@@ -2,6 +2,7 @@
  * API client for incident export and system status
  */
 import { adminAxiosInstance } from '@/api/axios/axios';
+import { assertAdminApiPath } from '@/api/routes/routes';
 import type { IncidentExport, SystemStatus } from '@/api/types/incidents/incidents';
 
 export const incidentsClient = {
@@ -17,11 +18,13 @@ export const incidentsClient = {
     },
     headers?: Record<string, string>,
   ): Promise<IncidentExport> {
+    const path = '/incidents/export';
+    assertAdminApiPath(path);
     const response = await adminAxiosInstance.post<{
       success: boolean;
       data?: IncidentExport;
       error?: { code?: string; message?: string };
-    }>('/admin/incidents/export', request, { headers });
+    }>(path, request, { headers });
 
     const payload = response.data;
 
@@ -37,11 +40,13 @@ export const incidentsClient = {
    * Quick status check without full export
    */
   async getSystemStatus(): Promise<SystemStatus> {
+    const path = '/incidents/status';
+    assertAdminApiPath(path);
     const response = await adminAxiosInstance.get<{
       success: boolean;
       data?: SystemStatus;
       error?: { code?: string; message?: string };
-    }>('/admin/incidents/status');
+    }>(path);
 
     const payload = response.data;
 
@@ -71,6 +76,8 @@ export const incidentsClient = {
       requestId?: string;
     }>;
   }> {
+    const path = '/incidents/export/service/' + encodeURIComponent(service);
+    assertAdminApiPath(path);
     const response = await adminAxiosInstance.get<{
       success: boolean;
       data?: {
@@ -87,7 +94,7 @@ export const incidentsClient = {
         }>;
       };
       error?: { code?: string; message?: string };
-    }>('/admin/incidents/export/service/' + encodeURIComponent(service), {
+    }>(path, {
       params: { range },
     });
 

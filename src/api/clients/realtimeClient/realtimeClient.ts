@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { adminAxiosInstance } from '@/api/axios/axios';
+import { assertAdminApiPath } from '@/api/routes/routes';
 import { unwrapApiEnvelope } from '@/api/envelope/envelope';
 
 export interface OnlineUser {
@@ -94,7 +95,9 @@ export interface ApiTrafficResponse {
 
 export const realtimeClient = {
   async getOverview(): Promise<RealtimeOverview> {
-    const response = await adminAxiosInstance.get('/admin/realtime/overview');
+    const path = '/realtime/overview';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path);
     return unwrapApiEnvelope<RealtimeOverview>(response);
   },
 
@@ -108,7 +111,9 @@ export const realtimeClient = {
     if (search) params.q = search;
     if (departmentId) params.departmentId = departmentId;
 
-    const response = await adminAxiosInstance.get('/admin/realtime/online-users', { params });
+    const path = '/realtime/online-users';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<OnlineUsersResponse>(response);
   },
 
@@ -122,7 +127,9 @@ export const realtimeClient = {
     if (roomId) params.roomId = roomId;
     if (userId) params.userId = userId;
 
-    const response = await adminAxiosInstance.get('/admin/realtime/typing-users', { params });
+    const path = '/realtime/typing-users';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<TypingUsersResponse>(response);
   },
 
@@ -133,7 +140,9 @@ export const realtimeClient = {
     order: 'asc' | 'desc' = 'desc',
   ): Promise<ActiveRoomsResponse> {
     const params: Record<string, string | number> = { page, pageSize, sortBy, order };
-    const response = await adminAxiosInstance.get('/admin/realtime/active-rooms', { params });
+    const path = '/realtime/active-rooms';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<ActiveRoomsResponse>(response);
   },
 
@@ -142,7 +151,9 @@ export const realtimeClient = {
     bucket: '1m' | '5m' | '15m' = '1m',
   ): Promise<MessageTrafficResponse> {
     const params = { range, bucket };
-    const response = await adminAxiosInstance.get('/admin/traffic/messages', { params });
+    const path = '/traffic/messages';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<MessageTrafficResponse>(response);
   },
 
@@ -151,7 +162,9 @@ export const realtimeClient = {
     service: string = 'chat-api-service',
   ): Promise<ApiTrafficResponse> {
     const params = { range, service };
-    const response = await adminAxiosInstance.get('/admin/traffic/api', { params });
+    const path = '/traffic/api';
+    assertAdminApiPath(path);
+    const response = await adminAxiosInstance.get(path, { params });
     return unwrapApiEnvelope<ApiTrafficResponse>(response);
   },
 };
