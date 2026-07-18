@@ -28,6 +28,45 @@ interface DisplayNameOptions {
 const GROUP_NAME_FALLBACK_MEMBER_COUNT = 2;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Tin nhắn media không có caption thường mang `content` = tên file thô do backend
+// set — có thể là UUID ("52377552-0C41-47FE-....jpg") hoặc tên mặc định khi paste
+// ảnh từ clipboard ("image.png"). Đó không phải caption người dùng nhập, nên không
+// được hiển thị trong preview sidebar/notification lẫn caption dưới ảnh.
+const MEDIA_FILENAME_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[a-z0-9]{1,5})?$/i;
+
+// Tên mặc định trình duyệt sinh ra khi paste/kéo-thả ảnh không có tên thật.
+const GENERIC_MEDIA_FILENAME_RE =
+  /^(image|photo|picture|screenshot|video|clip|audio|voice|file|document|untitled)[-_ ]?\d*\.[a-z0-9]{1,5}$/i;
+
+// content = đúng tên một attachment của message ⇒ chắc chắn là tên file, không caption.
+const matchesAttachmentFileName = (
+  message: Message | MessageSummary,
+  content: string,
+): boolean => {
+  const attachments = (message as { attachments?: Array<{ fileName?: string }> })
+    .attachments;
+  if (!Array.isArray(attachments)) return false;
+  return attachments.some(
+    (att) => asTrimmedString(att?.fileName).toLowerCase() === content.toLowerCase(),
+  );
+};
+
+export const looksLikeRawFileName = (value: string): boolean => {
+  const trimmed = value.trim();
+  return MEDIA_FILENAME_RE.test(trimmed) || GENERIC_MEDIA_FILENAME_RE.test(trimmed);
+};
+
+// content chỉ được coi là caption thật khi có, không trùng tên attachment và không
+// phải tên file thô/generic.
+const mediaCaption = (message: Message | MessageSummary): string => {
+  const trimmed = message.content?.trim() ?? "";
+  if (!trimmed) return "";
+  if (matchesAttachmentFileName(message, trimmed)) return "";
+  if (looksLikeRawFileName(trimmed)) return "";
+  return trimmed;
+};
+
 export type MessagePreviewState =
   | "queued"
   | "sending"
@@ -75,16 +114,13 @@ export function getMessagePreview(
       break;
     }
     case MessageType.IMAGE:
-      preview =
-        message.content?.trim() || i18n.t("chat:preview.photo");
+      preview = mediaCaption(message) || i18n.t("chat:preview.photo");
       break;
     case MessageType.VIDEO:
-      preview =
-        message.content?.trim() || i18n.t("chat:preview.video");
+      preview = mediaCaption(message) || i18n.t("chat:preview.video");
       break;
     case MessageType.FILE:
-      preview =
-        message.content?.trim() || i18n.t("chat:preview.file");
+      preview = mediaCaption(message) || i18n.t("chat:preview.file");
       break;
     case MessageType.VOICE:
       preview = i18n.t("chat:preview.voice");
