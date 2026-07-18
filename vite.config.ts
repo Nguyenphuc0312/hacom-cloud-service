@@ -22,6 +22,16 @@ export default defineConfig(({ mode }) => {
     'http://localhost:3101',
   );
 
+  // Backend chặn theo Origin (403 nếu origin lạ). changeOrigin chỉ đổi Host, không đổi Origin,
+  // nên khi proxy sang backend thật ta phải viết lại Origin = origin của chính target đó.
+  const rewriteOriginToTarget = (target: string) => (proxy: import('http-proxy').Server) => {
+    proxy.on('proxyReq', (proxyReq) => {
+      const origin = new URL(target).origin;
+      proxyReq.setHeader('origin', origin);
+      proxyReq.setHeader('referer', `${origin}/`);
+    });
+  };
+
   return {
     plugins: [react()],
     // Keep the production bundle rooted at the host root so one build can be deployed everywhere.
@@ -44,11 +54,13 @@ export default defineConfig(({ mode }) => {
           target: adminProxyTarget,
           changeOrigin: true,
           secure: false,
+          configure: rewriteOriginToTarget(adminProxyTarget),
         },
         '/api/v1/auth': {
           target: authProxyTarget,
           changeOrigin: true,
           secure: false,
+          configure: rewriteOriginToTarget(authProxyTarget),
         },
       },
     },
