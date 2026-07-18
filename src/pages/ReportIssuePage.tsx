@@ -12,7 +12,7 @@ import { toast } from "react-hot-toast";
 import ImagePreviewModal from "../components/modals/ImagePreviewModal";
 import { supportApi } from "../services/api";
 import uploadClient from "../services/uploadClient";
-import { extractApiError } from "../lib/apiContract";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { SupportIssuePriority } from "@hacom/chat-shared-types/chat";
 import {
   UPLOAD_INPUT_ACCEPT,
