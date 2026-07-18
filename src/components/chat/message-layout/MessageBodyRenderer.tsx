@@ -31,6 +31,7 @@ import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
+import { looksLikeRawFileName } from "../../../utils/messageHelpers";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { useAuthStore } from "../../../stores";
 import { useResolvedName } from "../../../stores/enrichedProfileStore";
@@ -452,7 +453,18 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
       ? extractContactPayload(message)
       : null;
 
-  const hasContent = Boolean(message.content && message.content.trim());
+  // content của tin media không caption thường là tên file thô do backend set
+  // (UUID, "image.png", hoặc trùng đúng tên attachment) — không phải caption người
+  // dùng nhập, nên không render dưới ảnh/file.
+  const trimmedContent = message.content?.trim() ?? "";
+  const contentIsAttachmentName = attachments.some(
+    (att) => (att.fileName?.trim().toLowerCase() ?? "") === trimmedContent.toLowerCase(),
+  );
+  const hasContent = Boolean(
+    trimmedContent
+    && !contentIsAttachmentName
+    && !looksLikeRawFileName(trimmedContent),
+  );
 
   // Voice bị server ack trả về type=FILE nhưng attachment vẫn là audio →
   // render như voice bubble thay vì file card.

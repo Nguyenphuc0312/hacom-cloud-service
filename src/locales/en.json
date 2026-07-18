@@ -263,7 +263,7 @@
       "count": "{{count}} pinned"
     },
     "preview": {
-      "photo": "Photo",
+      "photo": "Image",
       "video": "Video",
       "file": "File",
       "voice": "Voice message",
