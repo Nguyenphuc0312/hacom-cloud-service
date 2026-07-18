@@ -34,6 +34,11 @@ const AuditLogPage = lazy(() =>
     default: module.AuditLogPage,
   })),
 );
+const SupportIssuesPage = lazy(() =>
+  import('@/features/support/pages/SupportIssuesPage/SupportIssuesPage').then((module) => ({
+    default: module.SupportIssuesPage,
+  })),
+);
 const SystemLogsPage = lazy(() =>
   import('@/features/system-logs/pages/SystemLogsPage/SystemLogsPage').then((module) => ({
     default: module.SystemLogsPage,
@@ -199,6 +204,10 @@ const routes = [
       {
         path: 'conversations',
         element: withSuspense(<ConversationsPage />),
+      },
+      {
+        path: 'support-issues',
+        element: withSuspense(<SupportIssuesPage />),
       },
       {
         path: 'logs',

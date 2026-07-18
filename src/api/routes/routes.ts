@@ -70,6 +70,17 @@ export const adminApiBaseUrl = resolveAdminApiBaseUrl();
 export const authApiBaseUrl = resolveAuthApiBaseUrl(adminApiBaseUrl);
 
 /**
+ * Base URL cho chat-api-service (`/api/v1`). Ticket báo cáo sự cố sống ở chat-api,
+ * KHÔNG phải auth-service, nên admin panel gọi thẳng qua đây (đã chốt với user).
+ */
+const resolveChatApiBaseUrl = (): string => {
+  const raw = import.meta.env.VITE_CHAT_API_BASE_URL?.trim() ?? '';
+  return raw ? normalizeBaseUrl(raw) : '/api/v1';
+};
+
+export const chatApiBaseUrl = resolveChatApiBaseUrl();
+
+/**
  * Asserts that the path does not include admin API prefix.
  * Use this in API clients to catch duplicate prefix bugs early.
  */

@@ -101,6 +101,13 @@ export const navItems: NavItem[] = [
     section: 'chat-system',
     route: '/conversations',
   },
+  {
+    key: 'support-issues',
+    label: 'Báo cáo sự cố',
+    iconKey: 'inbox',
+    section: 'chat-system',
+    route: '/support-issues',
+  },
   // Operations Section
   {
     key: 'services',
@@ -200,6 +207,7 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/hr-employees': 'Nhân sự HR',
   // Chat System
   '/conversations': 'Hội thoại',
+  '/support-issues': 'Báo cáo sự cố',
   // Operations
   '/services': 'Dịch vụ',
   '/services/health': 'Dịch vụ',
@@ -291,6 +299,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
   // Chat System
   if (pathname.startsWith('/conversations')) return 'conversations';
+  if (pathname.startsWith('/support-issues')) return 'support-issues';
   // Operations
   if (pathname.startsWith('/logs')) return 'logs';
   if (pathname.startsWith('/audit')) return 'audit';
@@ -398,6 +407,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     iconKey: 'messages',
     keywords: ['chat', 'conversation', 'messages', 'support'],
     route: '/conversations',
+  },
+  {
+    id: 'go-support-issues',
+    label: 'Báo cáo sự cố',
+    description: 'Ticket người dùng gửi: xem chi tiết, tệp đính kèm và cập nhật trạng thái.',
+    category: 'Điều hướng',
+    iconKey: 'inbox',
+    keywords: ['support', 'issue', 'ticket', 'bug', 'báo cáo', 'sự cố'],
+    route: '/support-issues',
   },
   // Operations
   {
