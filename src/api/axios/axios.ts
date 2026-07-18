@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
-import { adminApiBaseUrl, authApiBaseUrl } from '@/api/routes/routes';
+import { adminApiBaseUrl, authApiBaseUrl, chatApiBaseUrl } from '@/api/routes/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore/authStore';
 
 /**
@@ -66,6 +66,8 @@ const createJsonClient = (baseURL: string): AxiosInstance =>
 
 export const adminAxiosInstance = createJsonClient(adminApiBaseUrl);
 export const authAxiosInstance = createJsonClient(authApiBaseUrl);
+// Ticket báo cáo sự cố nằm ở chat-api-service, cùng cơ chế Bearer token với admin.
+export const chatApiAxiosInstance = createJsonClient(chatApiBaseUrl);
 
 const buildRequestId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -184,7 +186,7 @@ const attachRetryLogic = (client: AxiosInstance) => {
   );
 };
 
-[adminAxiosInstance, authAxiosInstance].forEach((client) => {
+[adminAxiosInstance, authAxiosInstance, chatApiAxiosInstance].forEach((client) => {
   attachRequestId(client);
   attachAuthHeader(client);
   attachUnauthorizedRedirect(client);
