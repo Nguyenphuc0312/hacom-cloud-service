@@ -124,6 +124,9 @@ export const LoginPage = () => {
       return;
     }
 
+    // A new credential submission must never inherit a remembered token from
+    // a previous account while the admin preflight is in progress.
+    clearAuth();
     loginMutation.mutate(parsed.data);
   };
 
