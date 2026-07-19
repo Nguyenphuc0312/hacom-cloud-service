@@ -13,9 +13,17 @@ export interface PersonalDocument {
   status: PersonalDocumentStatus;
   /** Tên file gốc do BE trả — dùng đặt tên khi tải về (contract §F). */
   original_filename?: string;
-  /** Link file gốc BE trả (`/api/source-files/<id>`) — ưu tiên để tải. */
+  /**
+   * Link tải file gốc BE trả (`/api/chat/personal/documents/<id>/download`) —
+   * ưu tiên số 1 để tải: trả đúng file upload gốc + `Content-Disposition: attachment`.
+   */
+  download_url?: string;
+  /** Link file gốc BE trả (`/api/source-files/<id>`) — fallback khi thiếu download_url. */
   open_url?: string;
-  /** Link trình đọc BE trả (`/api/sources/<id>`) — fallback. */
+  /**
+   * Link trình đọc BE trả (`/api/sources/<id>`) — CHỈ dùng cho "Xem/Đọc nguồn",
+   * KHÔNG dùng để tải: response reader có thể là HTML/nội dung index, không phải file gốc.
+   */
   reader_url?: string;
 }
 
@@ -112,6 +120,7 @@ export interface UploadDocumentResponse {
   uploaded_at: string;
   status: PersonalDocumentStatus;
   original_filename?: string;
+  download_url?: string;
   open_url?: string;
   reader_url?: string;
 }
