@@ -528,6 +528,29 @@ export async function downloadPersonalDocument(doc: {
   if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
 
   const blob = await response.blob();
+
+  // Cho user chọn nơi lưu qua File System Access API (Chromium). Trình duyệt
+  // không hỗ trợ (Firefox/Safari) → fallback tải thẳng vào thư mục Downloads.
+  // ponytail: dùng API sẵn của trình duyệt thay vì tự dựng dialog.
+  const picker = (window as unknown as {
+    showSaveFilePicker?: (opts?: unknown) => Promise<{
+      createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+    }>;
+  }).showSaveFilePicker;
+  if (picker) {
+    try {
+      const handle = await picker({ suggestedName: filename });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err) {
+      // User bấm Cancel trong dialog chọn nơi lưu → không phải lỗi, dừng im lặng.
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      // Lỗi khác (quyền ghi…) → rơi xuống fallback tải thẳng bên dưới.
+    }
+  }
+
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = objectUrl;
