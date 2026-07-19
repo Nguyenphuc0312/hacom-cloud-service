@@ -3,6 +3,7 @@ import {
   listPersonalDocuments,
   uploadPersonalDocument,
   deletePersonalDocument,
+  downloadPersonalDocument,
   selectPersonalSources,
   PersonalAiError,
 } from "../api/personalAiApi";
@@ -222,6 +223,19 @@ export function usePersonalDocuments() {
     [documents, employeeCode, removeDocument, addDocument],
   );
 
+  /** Tải file gốc của một tài liệu (contract §F). Lỗi → thông báo chung. */
+  const downloadDocument = useCallback(async (documentId: string) => {
+    const doc = usePersonalAiStore
+      .getState()
+      .documents.find((d) => d.id === documentId || d.document_id === documentId);
+    if (!doc) return;
+    try {
+      await downloadPersonalDocument(doc);
+    } catch {
+      toast.error("Không tải được tài liệu. Vui lòng thử lại.");
+    }
+  }, []);
+
   /** Toggle source selection and sync with backend */
   const handleToggleSource = useCallback(
     async (documentId: string) => {
@@ -287,6 +301,7 @@ export function usePersonalDocuments() {
     loadDocuments,
     uploadDocument,
     deleteDocument,
+    downloadDocument,
     handleToggleSource,
     syncSelectedSources,
     selectAllDocuments,

@@ -11,6 +11,10 @@ export interface PersonalDocument {
   size_bytes?: number;
   uploaded_at: string;
   status: PersonalDocumentStatus;
+  /** Tên file gốc do BE trả — dùng đặt tên khi tải về (contract §F). */
+  original_filename?: string;
+  /** Path tải file gốc BE trả (`/api/chat/personal/documents/<id>/download`). */
+  download_url?: string;
 }
 
 export interface PersonalChatMessage {
@@ -105,6 +109,8 @@ export interface UploadDocumentResponse {
   size_bytes?: number;
   uploaded_at: string;
   status: PersonalDocumentStatus;
+  original_filename?: string;
+  download_url?: string;
 }
 
 export interface SelectSourcesRequest {

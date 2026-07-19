@@ -25,6 +25,7 @@ export const SourceHubPanel: React.FC = () => {
     documentsLoaded,
     uploadDocument,
     deleteDocument,
+    downloadDocument,
     handleToggleSource,
     syncSelectedSources,
   } = usePersonalDocuments();
@@ -203,6 +204,7 @@ export const SourceHubPanel: React.FC = () => {
                     isSelected={selectedDocumentIds.includes(doc.id)}
                     onToggle={handleToggleSource}
                     onDelete={deleteDocument}
+                    onDownload={downloadDocument}
                   />
                 ))}
               </AnimatePresence>
