@@ -1,11 +1,13 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Trash2Icon,
   Loader2Icon,
   CheckIcon,
+  DownloadIcon,
 } from "lucide-react";
 import clsx from "clsx";
+import { ConfirmDialog } from "../../../../components/ui";
 import type { PersonalDocument } from "../../types";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -17,6 +19,7 @@ interface SourceCardProps {
   isSelected: boolean;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onDownload: (id: string) => void;
 }
 
 function formatBytes(bytes?: number): string {
@@ -39,20 +42,37 @@ export const SourceCard: React.FC<SourceCardProps> = ({
   isSelected,
   onToggle,
   onDelete,
+  onDownload,
 }) => {
   const isUploading = document.status === "uploading";
   const isError = document.status === "error";
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleToggle = useCallback(() => {
     if (!isUploading && !isError) onToggle(document.id);
   }, [document.id, isUploading, isError, onToggle]);
 
-  const handleDelete = useCallback(
+  // Mở hộp xác nhận thay vì xoá ngay — tránh xoá nhầm.
+  const handleDeleteClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!isUploading) onDelete(document.id);
+      if (!isUploading) setConfirmOpen(true);
     },
-    [document.id, isUploading, onDelete],
+    [isUploading],
+  );
+
+  const confirmDelete = useCallback(() => {
+    setConfirmOpen(false);
+    onDelete(document.id);
+  }, [document.id, onDelete]);
+
+  // stopPropagation: nút tải KHÔNG được đổi trạng thái tick nguồn (contract §F).
+  const handleDownload = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!isUploading && !isError) onDownload(document.id);
+    },
+    [document.id, isUploading, isError, onDownload],
   );
 
   return (
@@ -143,10 +163,10 @@ export const SourceCard: React.FC<SourceCardProps> = ({
         )}
       </div>
 
-      {/* Right side: checkbox + delete */}
-      <div className="flex shrink-0 flex-col items-end gap-1">
+      {/* Right side: checkbox trên, hàng nút tải/xóa dưới */}
+      <div className="flex shrink-0 flex-col items-end justify-between self-stretch">
         {/* Checkbox */}
-        {!isUploading && !isError && (
+        {!isUploading && !isError ? (
           <div
             className={clsx(
               "flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-150",
@@ -159,22 +179,51 @@ export const SourceCard: React.FC<SourceCardProps> = ({
               <CheckIcon size={12} strokeWidth={3} className="text-white" />
             )}
           </div>
+        ) : (
+          <span />
         )}
 
-        {/* Delete button */}
+        {/* Hàng nút: tải + xóa. Luôn hiện, cùng hàng, cách xa nhau (gap-3 +
+            divider) để không bấm nhầm. Nút xóa tô đỏ. */}
         {!isUploading && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="mt-1 flex h-6 w-6 items-center justify-center rounded-lg text-text-disabled opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100 focus:opacity-100"
-            aria-label={`Xóa ${document.name}`}
-            title="Xóa tài liệu"
-            tabIndex={-1}
-          >
-            <Trash2Icon size={13} strokeWidth={2} />
-          </button>
+          <div className="flex items-center gap-3">
+            {!isError && (
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-[#1565C0]/10 hover:text-[#1565C0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/40"
+                aria-label={`Tải xuống ${document.name}`}
+                title="Tải file gốc"
+              >
+                <DownloadIcon size={15} strokeWidth={2} />
+              </button>
+            )}
+
+            <span className="h-4 w-px bg-border" aria-hidden />
+
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-danger transition-colors hover:bg-danger/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+              aria-label={`Xóa ${document.name}`}
+              title="Xóa tài liệu"
+            >
+              <Trash2Icon size={15} strokeWidth={2} />
+            </button>
+          </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        title="Xóa tài liệu?"
+        message={`Bạn có chắc muốn xóa "${document.name}"? Hành động này không thể hoàn tác.`}
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
+      />
     </motion.div>
   );
 };
