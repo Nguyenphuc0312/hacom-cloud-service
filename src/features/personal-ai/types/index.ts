@@ -13,8 +13,10 @@ export interface PersonalDocument {
   status: PersonalDocumentStatus;
   /** Tên file gốc do BE trả — dùng đặt tên khi tải về (contract §F). */
   original_filename?: string;
-  /** Path tải file gốc BE trả (`/api/chat/personal/documents/<id>/download`). */
-  download_url?: string;
+  /** Link file gốc BE trả (`/api/source-files/<id>`) — ưu tiên để tải. */
+  open_url?: string;
+  /** Link trình đọc BE trả (`/api/sources/<id>`) — fallback. */
+  reader_url?: string;
 }
 
 export interface PersonalChatMessage {
@@ -110,7 +112,8 @@ export interface UploadDocumentResponse {
   uploaded_at: string;
   status: PersonalDocumentStatus;
   original_filename?: string;
-  download_url?: string;
+  open_url?: string;
+  reader_url?: string;
 }
 
 export interface SelectSourcesRequest {
