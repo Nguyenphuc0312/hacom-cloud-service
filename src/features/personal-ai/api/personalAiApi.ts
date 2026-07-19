@@ -201,6 +201,13 @@ function normalizeDocument(raw: unknown): PersonalDocument | null {
     )
       ? documentSource.status ?? obj.status
       : "indexed") as PersonalDocument["status"],
+    original_filename: pickString(
+      documentSource.original_filename,
+      documentSource.filename,
+      obj.original_filename,
+      obj.filename,
+    ),
+    download_url: pickString(documentSource.download_url, obj.download_url),
   };
 }
 
@@ -494,6 +501,42 @@ export async function deletePersonalDocument(
     method: "DELETE",
     signal: options?.signal,
   });
+}
+
+/**
+ * Tải file gốc của tài liệu cá nhân (contract §F).
+ *
+ * `download_url` BE trả là path tương đối (`/api/chat/personal/documents/<id>/download`);
+ * ghép với BASE_URL rồi fetch qua `aiRequest` để request mang Bearer token — KHÔNG
+ * dùng window.open (anchor không gửi Authorization header). Lấy blob → object URL →
+ * bấm <a download> tạm. 404 = file không tồn tại hoặc không thuộc user → ném lỗi để
+ * caller hiện thông báo chung (không suy đoán tài liệu người khác).
+ */
+export async function downloadPersonalDocument(doc: {
+  download_url?: string;
+  document_id: string;
+  original_filename?: string;
+  name?: string;
+}): Promise<void> {
+  const path = doc.download_url ?? `/api/chat/personal/documents/${doc.document_id}/download`;
+  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+
+  const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = doc.original_filename || doc.name || "tai-lieu";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 /**

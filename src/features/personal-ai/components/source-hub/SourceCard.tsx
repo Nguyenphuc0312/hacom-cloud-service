@@ -4,6 +4,7 @@ import {
   Trash2Icon,
   Loader2Icon,
   CheckIcon,
+  DownloadIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import type { PersonalDocument } from "../../types";
@@ -17,6 +18,7 @@ interface SourceCardProps {
   isSelected: boolean;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onDownload: (id: string) => void;
 }
 
 function formatBytes(bytes?: number): string {
@@ -39,6 +41,7 @@ export const SourceCard: React.FC<SourceCardProps> = ({
   isSelected,
   onToggle,
   onDelete,
+  onDownload,
 }) => {
   const isUploading = document.status === "uploading";
   const isError = document.status === "error";
@@ -53,6 +56,15 @@ export const SourceCard: React.FC<SourceCardProps> = ({
       if (!isUploading) onDelete(document.id);
     },
     [document.id, isUploading, onDelete],
+  );
+
+  // stopPropagation: nút tải KHÔNG được đổi trạng thái tick nguồn (contract §F).
+  const handleDownload = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!isUploading && !isError) onDownload(document.id);
+    },
+    [document.id, isUploading, isError, onDownload],
   );
 
   return (
@@ -159,6 +171,20 @@ export const SourceCard: React.FC<SourceCardProps> = ({
               <CheckIcon size={12} strokeWidth={3} className="text-white" />
             )}
           </div>
+        )}
+
+        {/* Download original file (contract §F) */}
+        {!isUploading && !isError && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="mt-1 flex h-6 w-6 items-center justify-center rounded-lg text-text-disabled opacity-0 transition-all hover:bg-[#1565C0]/10 hover:text-[#1565C0] group-hover:opacity-100 focus:opacity-100"
+            aria-label={`Tải xuống ${document.name}`}
+            title="Tải file gốc"
+            tabIndex={-1}
+          >
+            <DownloadIcon size={13} strokeWidth={2} />
+          </button>
         )}
 
         {/* Delete button */}
