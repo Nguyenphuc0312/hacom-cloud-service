@@ -525,10 +525,14 @@ export async function downloadPersonalDocument(doc: {
   original_filename?: string;
   name?: string;
 }): Promise<void> {
-  const url = resolveSourceUrl(doc.open_url) ?? resolveSourceUrl(doc.reader_url);
-  if (!url) {
-    throw new PersonalAiError(0, "http", "Tài liệu chưa có link tải từ máy chủ.");
-  }
+  // Tự nối với cả 2 phương án BE (xem contract §3):
+  //  (A) open_url/reader_url nhận Bearer → resolveSourceUrl chọn link file gốc.
+  //  (B) BE ship endpoint /documents/<id>/download → không có 2 link trên thì
+  //      fallback sang path này. Bên nào BE bật thì FE chạy, không sửa thêm.
+  const url =
+    resolveSourceUrl(doc.open_url) ??
+    resolveSourceUrl(doc.reader_url) ??
+    `${BASE_URL}/api/chat/personal/documents/${encodeURIComponent(doc.document_id)}/download`;
 
   const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
   const disposition = response.headers.get("content-disposition") ?? "";

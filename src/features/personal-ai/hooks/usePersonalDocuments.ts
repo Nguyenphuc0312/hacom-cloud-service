@@ -179,6 +179,9 @@ export function usePersonalDocuments() {
           );
           toast.error("Đã tải lên nhưng chưa kích hoạt được nguồn. Vui lòng bật lại thủ công.");
         }
+        // Refetch để card nhận open_url/reader_url thật từ BE (upload response
+        // có thể chưa kèm link tải cho file vừa ingest) → nút "Tải file gốc" chạy ngay.
+        void loadDocuments(true);
         return true;
       } catch (err) {
         removeDocument(tempId);
@@ -204,6 +207,7 @@ export function usePersonalDocuments() {
       addDocument,
       removeDocument,
       setSelectedDocumentIds,
+      loadDocuments,
     ],
   );
 
