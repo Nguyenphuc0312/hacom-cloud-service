@@ -518,13 +518,14 @@ export async function deletePersonalDocument(
  * chọn nơi lưu / tải xuống. Thiếu cả 2 link hoặc 401/403/404 → ném lỗi để caller
  * hiện thông báo chung (không suy đoán tài liệu người khác).
  */
+/** `"saved"` = file đã ghi; `"cancelled"` = user hủy hộp thoại chọn nơi lưu. */
 export async function downloadPersonalDocument(doc: {
   open_url?: string;
   reader_url?: string;
   document_id: string;
   original_filename?: string;
   name?: string;
-}): Promise<void> {
+}): Promise<"saved" | "cancelled"> {
   // Tự nối với cả 2 phương án BE (xem contract §3):
   //  (A) open_url/reader_url nhận Bearer → resolveSourceUrl chọn link file gốc.
   //  (B) BE ship endpoint /documents/<id>/download → không có 2 link trên thì
@@ -556,10 +557,10 @@ export async function downloadPersonalDocument(doc: {
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return;
+      return "saved";
     } catch (err) {
-      // User bấm Cancel trong dialog chọn nơi lưu → không phải lỗi, dừng im lặng.
-      if (err instanceof DOMException && err.name === "AbortError") return;
+      // User bấm Cancel trong dialog chọn nơi lưu → không phải lỗi, không toast.
+      if (err instanceof DOMException && err.name === "AbortError") return "cancelled";
       // Lỗi khác (quyền ghi…) → rơi xuống fallback tải thẳng bên dưới.
     }
   }
@@ -573,6 +574,7 @@ export async function downloadPersonalDocument(doc: {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  return "saved";
 }
 
 /**

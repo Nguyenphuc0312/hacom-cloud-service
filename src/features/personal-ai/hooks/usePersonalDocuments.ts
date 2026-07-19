@@ -234,7 +234,8 @@ export function usePersonalDocuments() {
       .documents.find((d) => d.id === documentId || d.document_id === documentId);
     if (!doc) return;
     try {
-      await downloadPersonalDocument(doc);
+      const result = await downloadPersonalDocument(doc);
+      if (result === "saved") toast.success("Đã tải xuống tài liệu.");
     } catch {
       toast.error("Không tải được tài liệu. Vui lòng thử lại.");
     }
