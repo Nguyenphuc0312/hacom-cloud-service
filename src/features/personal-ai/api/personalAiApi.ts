@@ -13,6 +13,7 @@ import type {
 } from "../../ai-assistant/types";
 import type { WeeklyReportFileItem } from "../../ai-assistant/services/aiChatApi";
 import { getAccessToken } from "../../../services/tokenService";
+import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -207,7 +208,10 @@ function normalizeDocument(raw: unknown): PersonalDocument | null {
       obj.original_filename,
       obj.filename,
     ),
-    download_url: pickString(documentSource.download_url, obj.download_url),
+    // BE trả link file gốc qua open_url (/api/source-files/) và trình đọc qua
+    // reader_url (/api/sources/) — KHÔNG có endpoint /documents/<id>/download.
+    open_url: pickString(documentSource.open_url, obj.open_url),
+    reader_url: pickString(documentSource.reader_url, obj.reader_url),
   };
 }
 
@@ -504,22 +508,27 @@ export async function deletePersonalDocument(
 }
 
 /**
- * Tải file gốc của tài liệu cá nhân (contract §F).
+ * Tải file gốc của tài liệu cá nhân.
  *
- * `download_url` BE trả là path tương đối (`/api/chat/personal/documents/<id>/download`);
- * ghép với BASE_URL rồi fetch qua `aiRequest` để request mang Bearer token — KHÔNG
- * dùng window.open (anchor không gửi Authorization header). Lấy blob → object URL →
- * bấm <a download> tạm. 404 = file không tồn tại hoặc không thuộc user → ném lỗi để
- * caller hiện thông báo chung (không suy đoán tài liệu người khác).
+ * BE KHÔNG có endpoint `/documents/<id>/download` (trả 404). Link file gốc thật
+ * nằm ở `open_url` (`/api/source-files/<id>`), trình đọc ở `reader_url`
+ * (`/api/sources/<id>`) — dùng chung resolver an toàn với tab Công ty
+ * (resolveSourceUrl: chỉ cho phép path /api/sources|source-files, chặn origin lạ).
+ * Fetch qua `aiRequest` để mang Bearer token (anchor thô sẽ 401), rồi blob →
+ * chọn nơi lưu / tải xuống. Thiếu cả 2 link hoặc 401/403/404 → ném lỗi để caller
+ * hiện thông báo chung (không suy đoán tài liệu người khác).
  */
 export async function downloadPersonalDocument(doc: {
-  download_url?: string;
+  open_url?: string;
+  reader_url?: string;
   document_id: string;
   original_filename?: string;
   name?: string;
 }): Promise<void> {
-  const path = doc.download_url ?? `/api/chat/personal/documents/${doc.document_id}/download`;
-  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+  const url = resolveSourceUrl(doc.open_url) ?? resolveSourceUrl(doc.reader_url);
+  if (!url) {
+    throw new PersonalAiError(0, "http", "Tài liệu chưa có link tải từ máy chủ.");
+  }
 
   const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
   const disposition = response.headers.get("content-disposition") ?? "";
