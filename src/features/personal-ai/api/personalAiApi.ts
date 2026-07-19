@@ -208,8 +208,10 @@ function normalizeDocument(raw: unknown): PersonalDocument | null {
       obj.original_filename,
       obj.filename,
     ),
-    // BE trả link file gốc qua open_url (/api/source-files/) và trình đọc qua
-    // reader_url (/api/sources/) — KHÔNG có endpoint /documents/<id>/download.
+    // Ưu tiên tải: download_url (/api/chat/personal/documents/<id>/download) trả
+    // đúng file gốc + Content-Disposition: attachment. open_url (/api/source-files/)
+    // là fallback tương thích record cũ. reader_url (/api/sources/) CHỈ để xem, không tải.
+    download_url: pickString(documentSource.download_url, obj.download_url),
     open_url: pickString(documentSource.open_url, obj.open_url),
     reader_url: pickString(documentSource.reader_url, obj.reader_url),
   };
@@ -508,32 +510,64 @@ export async function deletePersonalDocument(
 }
 
 /**
+ * Chuẩn hoá `download_url` BE trả về URL tải trên host AI, chỉ cho phép đúng path
+ * `/api/chat/personal/documents/<id>/download` cùng origin AI (chặn origin lạ).
+ * Trả undefined nếu path không khớp hoặc origin khác → caller bỏ qua link này.
+ */
+function resolvePersonalDownloadUrl(raw?: string): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  const isAllowedPath = (pathname: string) =>
+    /^\/api\/chat\/personal\/documents\/[^/]+\/download\/?$/.test(pathname);
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      // URL tuyệt đối: chỉ nhận khi cùng origin với host AI + đúng path.
+      const aiOrigin = new URL(BASE_URL).origin;
+      const parsed = new URL(value);
+      if (parsed.origin !== aiOrigin) return undefined;
+      return isAllowedPath(parsed.pathname) ? parsed.href : undefined;
+    }
+    // URL tương đối: kiểm path rồi gắn BASE_URL để đi qua cùng proxy/host AI.
+    const probe = new URL(value, "http://x");
+    if (!isAllowedPath(probe.pathname)) return undefined;
+    return `${BASE_URL}${probe.pathname}${probe.search}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Tải file gốc của tài liệu cá nhân.
  *
- * BE KHÔNG có endpoint `/documents/<id>/download` (trả 404). Link file gốc thật
- * nằm ở `open_url` (`/api/source-files/<id>`), trình đọc ở `reader_url`
- * (`/api/sources/<id>`) — dùng chung resolver an toàn với tab Công ty
- * (resolveSourceUrl: chỉ cho phép path /api/sources|source-files, chặn origin lạ).
- * Fetch qua `aiRequest` để mang Bearer token (anchor thô sẽ 401), rồi blob →
- * chọn nơi lưu / tải xuống. Thiếu cả 2 link hoặc 401/403/404 → ném lỗi để caller
- * hiện thông báo chung (không suy đoán tài liệu người khác).
+ * Thứ tự URL bắt buộc (contract §2): `download_url → open_url → báo lỗi`.
+ *  - `download_url` (`/api/chat/personal/documents/<id>/download`): ưu tiên chính,
+ *    trả đúng file upload gốc + `Content-Disposition: attachment`.
+ *  - `open_url` (`/api/source-files/<id>`): fallback tương thích record/backend cũ.
+ *  - KHÔNG dùng `reader_url` (`/api/sources/<id>`) — response reader phục vụ
+ *    trình đọc/citation (có thể là HTML/nội dung index), tải xuống sẽ ra file sai
+ *    định dạng.
+ *
+ * Fetch qua `aiRequest` để mang Bearer token (anchor thô sẽ 401), rồi blob → chọn
+ * nơi lưu / tải xuống. Thiếu cả `download_url` lẫn `open_url`, hoặc 401/403/404 →
+ * ném lỗi để caller hiện thông báo chung (không suy đoán tài liệu người khác), và
+ * KHÔNG fallback sang reader_url sau khi lỗi.
  */
 /** `"saved"` = file đã ghi; `"cancelled"` = user hủy hộp thoại chọn nơi lưu. */
 export async function downloadPersonalDocument(doc: {
+  download_url?: string;
   open_url?: string;
   reader_url?: string;
   document_id: string;
   original_filename?: string;
   name?: string;
 }): Promise<"saved" | "cancelled"> {
-  // Tự nối với cả 2 phương án BE (xem contract §3):
-  //  (A) open_url/reader_url nhận Bearer → resolveSourceUrl chọn link file gốc.
-  //  (B) BE ship endpoint /documents/<id>/download → không có 2 link trên thì
-  //      fallback sang path này. Bên nào BE bật thì FE chạy, không sửa thêm.
+  // download_url là nguồn chính (file gốc + attachment); open_url là fallback cho
+  // record cũ. resolvePersonalDownloadUrl/resolveSourceUrl chặn origin lạ. reader_url
+  // KHÔNG nằm trong chuỗi này — chỉ dùng cho hành động "Xem nguồn".
   const url =
-    resolveSourceUrl(doc.open_url) ??
-    resolveSourceUrl(doc.reader_url) ??
-    `${BASE_URL}/api/chat/personal/documents/${encodeURIComponent(doc.document_id)}/download`;
+    resolvePersonalDownloadUrl(doc.download_url) ??
+    resolveSourceUrl(doc.open_url);
+  if (!url) throw new PersonalAiError(0, "http", "PERSONAL_DOCUMENT_DOWNLOAD_URL_MISSING");
 
   const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
   const disposition = response.headers.get("content-disposition") ?? "";
