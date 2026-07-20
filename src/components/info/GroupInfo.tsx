@@ -1023,15 +1023,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
 
-      {/* ── Sticky Header ── */}
-      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
-        <h3 className="text-sm font-bold text-text-primary">
+      {/* ── Sticky Header ── (matches UserProfile so the divider lines up with the chat header) */}
+      <div className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
+        <h3 className="text-title-sm text-text-primary">
           {t("profile:groupInfo.title")}
         </h3>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="icon-button-surface h-9 w-9"
           aria-label={t("common:actions.close")}
         >
           <XMarkIcon className="h-5 w-5" />
