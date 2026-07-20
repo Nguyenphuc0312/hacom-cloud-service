@@ -443,10 +443,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   }, [isSelf, onStartConversation, t, userId]);
 
   const startEditAlias = React.useCallback(() => {
-    setAliasInput(currentAlias ?? "");
+    setAliasInput(currentAlias ?? displayName);
     setIsEditingAlias(true);
     setTimeout(() => aliasInputRef.current?.focus(), 0);
-  }, [currentAlias]);
+  }, [currentAlias, displayName]);
 
   const saveAlias = React.useCallback(async () => {
     const friendshipId =
