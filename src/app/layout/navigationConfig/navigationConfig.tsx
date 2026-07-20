@@ -87,7 +87,7 @@ export const navItems: NavItem[] = [
   },
   {
     key: 'authority',
-    label: 'Vai trò',
+    label: 'Vai trò (Auth canonical)',
     iconKey: 'shield',
     section: 'identity',
     route: '/authority',
@@ -390,8 +390,8 @@ export const commandRouteItems: CommandRouteItem[] = [
   },
   {
     id: 'go-authority',
-    label: 'Vai trò',
-    description: 'Rà soát vai trò admin và quyền được ghi đè.',
+    label: 'Vai trò (Auth canonical)',
+    description: 'Rà soát vai trò và quyền canonical từ chat-auth-service.',
     category: 'Điều hướng',
     iconKey: 'shield',
     keywords: ['authority', 'admin', 'permissions', 'roles'],
