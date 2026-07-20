@@ -170,7 +170,9 @@ export const IconButton: React.FC<IconButtonProps> = ({
       className={clsx("!p-0", iconButtonSizes[size], className)}
       {...props}
     >
-      <span className={iconSizeClasses[size]}>{icon}</span>
+      <span className={clsx("inline-flex items-center justify-center", iconSizeClasses[size])}>
+        {icon}
+      </span>
     </Button>
   );
 };
