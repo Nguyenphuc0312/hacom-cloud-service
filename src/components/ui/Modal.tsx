@@ -227,8 +227,8 @@ export const Modal: React.FC<ModalProps> = ({
         aria-describedby={description ? descriptionId : undefined}
       >
         {(title || showCloseButton) && (
-          <div className="flex items-start justify-between border-b border-border px-5 py-4 sm:px-6">
-            <div>
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
+            <div className="min-w-0">
               {title && (
                 <h2 id={titleId} className="text-lg font-semibold text-text-primary">
                   {title}
@@ -247,6 +247,7 @@ export const Modal: React.FC<ModalProps> = ({
                 onClick={onClose}
                 variant="ghost"
                 size="sm"
+                className="-mr-1.5 shrink-0"
               />
             )}
           </div>
