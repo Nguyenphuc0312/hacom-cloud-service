@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import { hrCalendarApi, type HRCalendarEvent } from "../features/api/hrCalendarApi";
 import { toast } from "../utils/toast";
+import { registerStoreResetter } from "./storeResetRegistry";
 
 export type CalendarMode = "my" | "other" | "unit";
 export type CalendarView = "day" | "week" | "month";
@@ -63,6 +64,7 @@ interface CalendarState {
   setFilters: (types: CalendarEventFilterType[]) => void;
   setViewingUser: (userId: string | null, userName: string | null) => void;
   setViewingUnit: (unitId: string | null, unitName: string | null) => void;
+  resetCalendarData: () => void;
 
   // Data operations
   fetchEvents: (start?: string, end?: string) => Promise<void>;
@@ -84,6 +86,8 @@ const formatDate = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+let calendarRequestSequence = 0;
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
   // Initial state
@@ -107,7 +111,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   // Setters
   setMode: (mode) => {
-    set({ mode, viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null, error: null, errorCode: null, calendarUnavailable: false });
+    set({ mode, events: [], viewingUserId: null, viewingUserName: null, viewingUnitId: null, viewingUnitName: null, error: null, errorCode: null, calendarUnavailable: false });
     get().fetchEvents();
   },
 
@@ -125,6 +129,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   setViewingUser: (userId, userName) => {
     set({
       mode: "other",
+      events: [],
       viewingUserId: userId,
       viewingUserName: userName,
       viewingUnitId: null,
@@ -137,6 +142,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   setViewingUnit: (unitId, unitName) => {
     set({
       mode: "unit",
+      events: [],
       viewingUserId: null,
       viewingUserName: null,
       viewingUnitId: unitId,
@@ -144,9 +150,26 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     });
   },
 
+  resetCalendarData: () => {
+    ++calendarRequestSequence;
+    set({
+      mode: "my",
+      events: [],
+      isLoading: false,
+      error: null,
+      errorCode: null,
+      calendarUnavailable: false,
+      viewingUserId: null,
+      viewingUserName: null,
+      viewingUnitId: null,
+      viewingUnitName: null,
+    });
+  },
+
   // Data operations
   // Uses hr-api-service for all calendar events (supports viewing others' calendars)
   fetchEvents: async (start?: string, end?: string) => {
+    const requestSequence = ++calendarRequestSequence;
     const state = get();
     const { mode, viewingUserId } = state;
 
@@ -162,12 +185,14 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       switch (mode) {
         case "my": {
           const myResponse = await hrCalendarApi.listEvents({
+            scope: 'mine',
             from: startDate,
             to: endDate,
           });
           // Backend returns mode:'NO_HR_PROFILE' (200) when the auth user has no HR employee record.
           // Show a soft notice instead of a hard error — the grid stays visible and empty.
           if (myResponse.mode === 'NO_HR_PROFILE') {
+            if (requestSequence !== calendarRequestSequence) return;
             set({
               events: [],
               isLoading: false,
@@ -186,6 +211,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             // Use ownerAuthUserId (auth-domain UUID) — backend resolves to correct employee/HR user.
             // DO NOT use ownerId here: it is ambiguous (backend expects employeeId, not authUserId).
             const otherResponse = await hrCalendarApi.listEvents({
+              scope: 'person',
               ownerAuthUserId: viewingUserId,
               from: startDate,
               to: endDate,
@@ -203,6 +229,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         }
       }
 
+      if (requestSequence !== calendarRequestSequence) return;
       set({
         events,
         isLoading: false,
@@ -211,6 +238,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         calendarUnavailable: false,
       });
     } catch (error) {
+      if (requestSequence !== calendarRequestSequence) return;
       // The calendar is an OPTIONAL feature served by the HR API. Any failure
       // here — auth (401/403), business (422), server (5xx), or network — must
       // degrade gracefully WITHOUT logging the user out or claiming the chat
@@ -226,7 +254,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
       if (
         status === 422 &&
-        (serverErrorCode === "EMPLOYEE_LINK_REQUIRED" || !serverErrorCode)
+        (serverErrorCode === "EMPLOYEE_LINK_REQUIRED" || serverErrorCode === "EMPLOYEE_CONTEXT_NOT_FOUND" || !serverErrorCode)
       ) {
         // Account not linked to an HR employee record — config issue, not a
         // transient error and definitely not a session problem.
@@ -380,3 +408,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 }));
 
 export default useCalendarStore;
+
+registerStoreResetter("calendar", () => {
+  useCalendarStore.getState().resetCalendarData();
+});

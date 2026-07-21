@@ -153,6 +153,8 @@ export interface HRCalendarPermission {
  * DO NOT pass `ownerId` equal to the auth user's UUID — use `ownerAuthUserId` instead.
  */
 export interface ListHREventsParams {
+  /** Explicit server-enforced data scope. Omit only for legacy callers; new callers must send it. */
+  scope?: 'mine' | 'person' | 'unit';
   /** @deprecated Use ownerAuthUserId for explicit auth-domain filtering */
   ownerId?: string;
   /** Filter by auth user ID (externalAuthUserId / UUID from JWT) — preferred over ownerId */
@@ -178,6 +180,7 @@ export const hrCalendarApi = {
    */
   listEvents: async (params: ListHREventsParams = {}): Promise<HRCalendarEventsResponse> => {
     const searchParams = new URLSearchParams();
+    if (params.scope) searchParams.append('scope', params.scope);
     if (params.ownerAuthUserId) searchParams.append("ownerAuthUserId", params.ownerAuthUserId);
     // Only append ownerId if ownerAuthUserId is not provided (backward compat)
     if (params.ownerId && !params.ownerAuthUserId) searchParams.append("ownerId", params.ownerId);
