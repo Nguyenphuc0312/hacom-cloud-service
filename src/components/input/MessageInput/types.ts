@@ -15,6 +15,13 @@ export interface MentionCandidate {
   companyName?: string;
   /** Resolved display name for insert (fullName > displayName > username) */
   resolvedName?: string;
+  /**
+   * "Tên gợi nhớ" (alias) the viewer set for this user — LOCAL ONLY.
+   * Used to label the suggestion row so the viewer can search by the name they
+   * know. Never inserted into the composer and never sent to the server: the
+   * alias is private to the viewer, so everyone else must see the real name.
+   */
+  aliasLabel?: string;
 }
 
 /** Imperative handle for MessageInput — allows parent to programmatically control the composer */

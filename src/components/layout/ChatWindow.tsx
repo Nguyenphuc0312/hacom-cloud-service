@@ -1005,12 +1005,15 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             participantRecord.fullName.trim()) ||
           "";
 
-        // Prefer enriched name fetched from /users/{id} over API participant data
-        const enrichedName = enrichedNameByUserId[participant.id];
+        // `nameByUserId` holds the viewer's "tên gợi nhớ" (alias) when one is set
+        // — a LOCAL-ONLY label. It must never reach resolvedName/displayName,
+        // which are what we insert into the message text and send as mention
+        // metadata; otherwise the viewer's private alias leaks to every other
+        // participant, who would see it instead of the real name.
+        const aliasLabel = enrichedNameByUserId[participant.id];
 
-        // Resolve primary display name: enriched > fullNameFromHR > displayName > username
+        // Resolve primary display name: fullNameFromHR > displayName > username
         const resolvedName =
-          enrichedName ||
           fullNameFromHR ||
           resolveUserDisplayName(participant, {
             allowLegacyFallback: false,
@@ -1023,11 +1026,12 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           id: participant.id,
           username:
             participant.username?.trim() || employeeCode || participant.id,
-          displayName: enrichedName ||
+          displayName:
             resolveUserDisplayName(participant, {
               allowLegacyFallback: false,
             }) || undefined,
-          fullName: enrichedName || fullNameFromHR || undefined,
+          fullName: fullNameFromHR || undefined,
+          aliasLabel: aliasLabel || undefined,
           employeeCode: employeeCode || undefined,
           departmentName: mentionHrByUserId[participant.id]?.departmentName,
           companyName: mentionHrByUserId[participant.id]?.companyName,
