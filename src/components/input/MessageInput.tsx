@@ -460,11 +460,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         const displayName = candidate.displayName?.toLowerCase() || "";
         const fullName = candidate.fullName?.toLowerCase() || "";
         const employeeCode = candidate.employeeCode?.toLowerCase() || "";
+        // Match the viewer's alias too — they search by the name they know.
+        const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
         return (
           username.includes(query) ||
           displayName.includes(query) ||
           fullName.includes(query) ||
-          employeeCode.includes(query)
+          employeeCode.includes(query) ||
+          aliasLabel.includes(query)
         );
       })
       .slice(0, 8);

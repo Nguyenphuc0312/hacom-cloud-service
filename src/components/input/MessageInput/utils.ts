@@ -76,6 +76,11 @@ export const normalizeMentionCandidates = (
       displayName: candidate.displayName?.trim() || undefined,
       fullName: candidate.fullName?.trim() || undefined,
       employeeCode: candidate.employeeCode?.trim() || undefined,
+      departmentName: candidate.departmentName,
+      companyName: candidate.companyName,
+      // Local-only alias label — carried through so the suggestion row can show
+      // it and the filter can match it. Never feeds resolvedName (what we insert).
+      aliasLabel: candidate.aliasLabel?.trim() || undefined,
       resolvedName,
     });
   });

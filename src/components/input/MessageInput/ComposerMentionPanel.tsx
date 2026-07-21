@@ -38,17 +38,27 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
           const isActive = index === activeMentionIndex;
           const isMentionAll = candidate.id === "all";
 
-          // Primary: resolved full name / display name
+          const realName =
+            candidate.resolvedName ||
+            candidate.displayName ||
+            candidate.fullName ||
+            candidate.username;
+          // Primary: the viewer's alias when set, so they can pick the person by
+          // the name they know. The inserted text is still the real name.
           const primaryLabel = isMentionAll
             ? t("chat:composer.mentionAllLabel")
-            : (candidate.resolvedName ||
-              candidate.displayName ||
-              candidate.fullName ||
-              candidate.username);
-          // Secondary: phòng ban · công ty
+            : candidate.aliasLabel || realName;
+          // Secondary: real name (when an alias took the primary slot, so it stays
+          // clear who is actually being tagged) · phòng ban · công ty
           const secondaryLabel = isMentionAll
             ? t("chat:composer.mentionAllDescription")
-            : ([candidate.departmentName, candidate.companyName]
+            : ([
+                candidate.aliasLabel && candidate.aliasLabel !== realName
+                  ? realName
+                  : null,
+                candidate.departmentName,
+                candidate.companyName,
+              ]
                 .filter(Boolean)
                 .join(" · ") || null);
           return (
