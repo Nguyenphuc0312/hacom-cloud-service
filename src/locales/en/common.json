@@ -96,6 +96,7 @@
     "newConversation": "Start a new direct or group conversation",
     "openDirectConversation": "Open existing direct conversation",
     "searchInFriends": "Search this user in Friends",
+    "openInFriends": "View in your friends list",
     "searchPlaceholder": "Search chats, people, or actions",
     "searchAria": "Search command palette"
   },

@@ -672,20 +672,20 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
               )}
               style={todayDay && !isWeekend ? { backgroundColor: "rgba(255, 200, 87, 0.08)" } : undefined}
             >
-              {/* Day header */}
-              <div className="mb-2 flex flex-col items-center gap-1">
-                {/* Hàng 1: tên thứ, căn giữa */}
-                <span
-                  className={clsx(
-                    "text-[11px] font-semibold sm:text-xs",
-                    isWeekend ? "text-rose-500" : "text-text-muted",
-                  )}
-                  style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
-                >
-                  {WEEKDAY_LABELS[i]}
-                </span>
-                {/* Hàng 2: số ngày (trái) + nút Thêm lịch (phải) */}
-                <div className="flex w-full items-center justify-between">
+              {/* Day header — hàng 1: "T3 21" cùng dòng; hàng 2: nút Thêm lịch
+                  căn giữa. Trước đây số ngày nằm dưới tên thứ và nút đẩy sang
+                  phải, làm header cao gấp đôi và lấn chỗ của sự kiện. */}
+              <div className="mb-1.5 flex flex-col items-center gap-1">
+                <div className="flex items-center justify-center gap-1.5">
+                  <span
+                    className={clsx(
+                      "text-[11px] font-semibold sm:text-xs",
+                      isWeekend ? "text-rose-500" : "text-text-muted",
+                    )}
+                    style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
+                  >
+                    {WEEKDAY_LABELS[i]}
+                  </span>
                   <div className="relative">
                     <span
                       className={clsx(
@@ -706,16 +706,16 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    title={`Thêm lịch ngày ${day.getDate()}`}
-                    onClick={() => openEventTypeChooser(day)}
-                    className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
-                  >
-                    <PlusIcon className="h-3 w-3" />
-                    <span className="hidden sm:inline">Thêm lịch</span>
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  title={`Thêm lịch ngày ${day.getDate()}`}
+                  onClick={() => openEventTypeChooser(day)}
+                  className="flex items-center justify-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
+                >
+                  <PlusIcon className="h-3 w-3" />
+                  <span className="hidden sm:inline">Thêm lịch</span>
+                </button>
               </div>
 
               {/* Events */}
@@ -785,17 +785,30 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                         colors.border,
                         colors.text,
                       )}
-                      title={ev.title}
+                      title={[formatEventTimeRange(ev.source), ev.title]
+                        .filter(Boolean)
+                        .join(" · ")}
                     >
                       {(() => {
+                        // Start time only. The full "08:00 — 09:00" range wraps
+                        // onto two lines in a narrow day column, making every
+                        // card 3 lines tall and overflowing the widget; the range
+                        // is still in the tooltip and the detail modal.
                         const range = formatEventTimeRange(ev.source);
-                        const display = range ?? ev.time;
+                        const display = (range ?? ev.time)?.split(" — ")[0];
                         return display ? (
-                          <span className="font-bold opacity-80">{display}</span>
+                          <span className="truncate font-bold opacity-80">
+                            {display}
+                          </span>
                         ) : null;
                       })()}
                       <span className="truncate">{ev.title}</span>
                       {(() => {
+                        // Attendee avatars only when the day holds a SINGLE
+                        // event: with 2+ the column can't fit an avatar row per
+                        // card, so rows render at uneven heights and the week
+                        // grid stops reading as a grid. One event has the room.
+                        if (totalCount > 1) return null;
                         const ext = ev.source as ExtendedCalendarEvent | undefined;
                         const people: Attendee[] = ext?.attendeeAvatars?.length
                           ? ext.attendeeAvatars
