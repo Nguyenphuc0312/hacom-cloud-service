@@ -12,6 +12,7 @@ import { ResponsiveProvider } from "./responsive/responsive";
 import { logger } from "./utils/logger";
 import { installChunkReloadGuard } from "./utils/chunkReload";
 import { installMemoryRuntimeProbe } from "./utils/memoryRuntimeProbe";
+import { AuthBootstrap } from "./components/auth/AuthBootstrap";
 
 // Catch stale-deploy chunk failures that surface as uncaught errors / rejected
 // dynamic imports (outside any React error boundary) and reload once.
@@ -31,7 +32,9 @@ createRoot(document.getElementById("root")!).render(
     <Provider store={store}>
       <ThemeProvider>
         <ResponsiveProvider>
-          <App />
+          <AuthBootstrap>
+            <App />
+          </AuthBootstrap>
         </ResponsiveProvider>
       </ThemeProvider>
     </Provider>

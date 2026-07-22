@@ -14,6 +14,7 @@ import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,
   getRefreshToken,
+  isAuthSessionActive,
   isRefreshTokenCookieMode,
   parseMustChangePasswordFromToken,
   storeTokens,
@@ -187,7 +188,7 @@ interface AuthState {
   ) => Promise<RegisterFlowResult>;
   logout: () => Promise<void>;
   logoutSoft: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
   refreshProfile: () => Promise<User | null>;
   updateUser: (data: Partial<User>) => void;
   updateStatus: (status: User["status"]) => Promise<void>;
@@ -242,15 +243,19 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
-const fetchCurrentUser = async (accessToken: string): Promise<User> => {
-  const response = await apiClient.get<ApiResponse<User>>("/users/profile", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+/** The auth service owns the canonical browser principal. */
+const fetchCurrentUser = async (): Promise<User> => {
+  const response = await authenticatedAuthClient.get<ApiResponse<User>>(
+    AUTH_ENDPOINTS.me,
+  );
+  const accessToken = getAccessToken();
   const user = normalizeAuthResponse({
     user: unwrapApiSuccess(response.data),
-    accessToken,
+    accessToken: accessToken ?? undefined,
   }).user as unknown as User;
-  user.mustChangePassword = parseMustChangePasswordFromToken(accessToken);
+  user.mustChangePassword = accessToken
+    ? parseMustChangePasswordFromToken(accessToken)
+    : false;
   return user;
 };
 
@@ -595,7 +600,8 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
 
-          void get().refreshProfile().catch(() => null);
+          // `login()` validates this credential with canonical /auth/me before
+          // reporting success; do not retain the login payload as authority.
         },
 
         setAuthStatus: (status) =>
@@ -636,11 +642,15 @@ export const useAuthStore = create<AuthState>()(
               rememberMe: data.rememberMe,
             });
             get().applyLoginResponse(payload, data.rememberMe);
+            const canonicalUser = await get().refreshUser();
             if (get().authStatus === "pending_hr_link") {
               return {
                 status: "pending_hr_link",
                 message: payload.message,
               };
+            }
+            if (!canonicalUser || get().authStatus !== "authenticated") {
+              throw new Error(i18n.t("error:auth.loginFailed"));
             }
             return {
               status: "authenticated",
@@ -861,7 +871,7 @@ export const useAuthStore = create<AuthState>()(
           });
         },
 
-        refreshUser: async () => {
+        refreshUser: async (): Promise<User | null> => {
           const token = getAccessToken();
 
           if (!token) {
@@ -879,16 +889,13 @@ export const useAuthStore = create<AuthState>()(
               isInitialized: true,
               registrationStatus: "idle",
             });
-            return;
+            return null;
           }
 
           set({ isLoading: true, authStatus: "loading" });
 
           try {
-            const response = await authenticatedAuthClient.get<ApiResponse<User>>(
-              AUTH_ENDPOINTS.me,
-            );
-            const user = unwrapApiSuccess(response.data);
+            const user = await fetchCurrentUser();
             const blockedStatus = resolveBlockedStatusFromUser(user);
 
             if (blockedStatus) {
@@ -913,7 +920,7 @@ export const useAuthStore = create<AuthState>()(
                 registrationStatus: "idle",
                 error: blockedMessage,
               });
-              return;
+              return null;
             }
 
             if (isPendingHrLinkUser(user)) {
@@ -933,7 +940,7 @@ export const useAuthStore = create<AuthState>()(
                 error: null,
               });
               resetAuthFailureState();
-              return;
+              return user;
             }
 
             set({
@@ -951,6 +958,7 @@ export const useAuthStore = create<AuthState>()(
               registrationStatus: "idle",
             });
             resetAuthFailureState();
+            return user;
           } catch (refreshUserErr: unknown) {
             const apiErr = extractApiError(refreshUserErr);
             if (apiErr.statusCode === 401 || apiErr.statusCode === 403) {
@@ -974,16 +982,16 @@ export const useAuthStore = create<AuthState>()(
               // Network / server error — keep session, just stop the loading state.
               set({ isLoading: false, isBootstrappingAuth: false });
             }
+            return null;
           }
         },
 
         refreshProfile: async () => {
-          const token = getAccessToken();
-          if (!token) {
+          if (!getAccessToken()) {
             return null;
           }
 
-          const user = await fetchCurrentUser(token);
+          const user = await fetchCurrentUser();
           if (isPendingHrLinkUser(user)) {
             set({
               user,
@@ -1089,7 +1097,7 @@ export const useAuthStore = create<AuthState>()(
             const accessToken = getAccessToken();
             if (accessToken) {
               try {
-                const user = await fetchCurrentUser(accessToken);
+                const user = await fetchCurrentUser();
                 const blockedStatus = resolveBlockedStatusFromUser(user);
 
                 if (blockedStatus) {
@@ -1179,7 +1187,10 @@ export const useAuthStore = create<AuthState>()(
               }
             }
 
-            if (isRefreshTokenCookieMode() || getRefreshToken()) {
+            if (
+              getRefreshToken() ||
+              (isRefreshTokenCookieMode() && isAuthSessionActive())
+            ) {
               // Split refresh and profile-fetch into separate try-catch blocks so
               // that a network/server error on the profile endpoint doesn't cause
               // the session to be cleared when we just successfully refreshed.
@@ -1194,7 +1205,7 @@ export const useAuthStore = create<AuthState>()(
 
               if (bootstrapToken) {
                 try {
-                  const user = await fetchCurrentUser(bootstrapToken);
+                  const user = await fetchCurrentUser();
                   const blockedStatus = resolveBlockedStatusFromUser(user);
 
                   if (blockedStatus) {
@@ -1388,7 +1399,8 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // ponytail: strip avatar — presigned S3 URL (15-min TTL) expires before next session; bootstrap always re-fetches /users/profile
+        // Strip avatar: presigned S3 URLs expire before the next session;
+        // bootstrap always revalidates the canonical auth principal via /auth/me.
         user: state.user ? { ...state.user, avatar: undefined } : state.user,
         authStatus: state.authStatus,
         activationContext: state.activationContext,

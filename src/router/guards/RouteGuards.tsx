@@ -2,7 +2,7 @@
  * Route guards are kept in router layer so route config stays declarative.
  */
 
-import React, { useEffect } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
@@ -32,17 +32,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     isAuthenticated,
     isInitialized,
     isBootstrappingAuth,
-    initialize,
     user,
     authStatus,
     activationContext,
   } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) {
-      void initialize();
-    }
-  }, [isInitialized, initialize]);
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
@@ -115,17 +108,10 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     isAuthenticated,
     isInitialized,
     isBootstrappingAuth,
-    initialize,
     authStatus,
     activationContext,
     user,
   } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) {
-      void initialize();
-    }
-  }, [isInitialized, initialize]);
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.default")} />;
@@ -171,17 +157,10 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   const {
     isInitialized,
     isBootstrappingAuth,
-    initialize,
     isAuthenticated,
     authStatus,
     activationContext,
   } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) {
-      void initialize();
-    }
-  }, [isInitialized, initialize]);
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
@@ -217,16 +196,9 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
     isAuthenticated,
     isInitialized,
     isBootstrappingAuth,
-    initialize,
     user,
     authStatus,
   } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) {
-      void initialize();
-    }
-  }, [isInitialized, initialize]);
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
@@ -251,16 +223,9 @@ export const PendingHrLinkRoute: React.FC<GuardProps> = ({ children }) => {
   const {
     isInitialized,
     isBootstrappingAuth,
-    initialize,
     authStatus,
     user,
   } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) {
-      void initialize();
-    }
-  }, [isInitialized, initialize]);
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
