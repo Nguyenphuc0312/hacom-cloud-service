@@ -346,15 +346,15 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       role="presentation"
     >
       <div
-        className="flex max-h-[min(90vh,40rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
+        className="flex max-h-full w-full max-w-[400px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-2.5">
-          <h2 className="text-[17px] font-semibold text-text-primary">
+        <div className="flex shrink-0 items-center justify-between px-4 pt-3 pb-2">
+          <h2 className="text-base font-semibold text-text-primary">
             {t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
           </h2>
           <button
@@ -368,8 +368,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-5 pb-1">
-          <div className="flex items-center gap-2 rounded-full border border-border bg-surface-hover px-3.5 py-2.5 transition-colors focus-within:border-[#1976D2]/60">
+        <div className="shrink-0 px-4 pb-1">
+          <div className="flex items-center gap-2 rounded-full border border-border bg-surface-hover px-3 py-1.5 transition-colors focus-within:border-[#1976D2]/60">
             <MagnifyingGlassIcon className="h-4 w-4 shrink-0 text-text-muted" />
             <input
               type="text"
@@ -388,7 +388,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         <div
           role="tablist"
           aria-label={t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
-          className="flex shrink-0 items-center gap-[22px] border-b border-border px-5 pt-2.5"
+          className="flex shrink-0 items-center gap-5 border-b border-border px-4 pt-2"
         >
           {tabs.map((item) => {
             const active = item.id === tab;
@@ -400,7 +400,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 aria-selected={active}
                 onClick={() => setTab(item.id)}
                 className={clsx(
-                  "relative -mb-px border-b-2 pb-2.5 text-sm transition-colors",
+                  "relative -mb-px border-b-2 pb-2 text-[13px] transition-colors",
                   active
                     ? "border-[#1565C0] font-semibold text-[#1565C0]"
                     : "border-transparent font-medium text-text-muted hover:text-text-primary",
@@ -412,11 +412,17 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
           })}
         </div>
 
-        {/* Conversation list */}
-        <div className="min-h-[270px] flex-1 overflow-y-auto py-1.5">
+        {/* Conversation list — height comes from its own content (auto basis), so
+            the dialog hugs a short list instead of padding it out. `max-h` caps a
+            long one into a scroll area; `min-h-0` + `shrink` keep this the row
+            that gives way first when OS scaling 125/150% shortens the viewport,
+            so the preview + note + footer never get clipped by `overflow-hidden`.
+            Do NOT use flex-1/basis-0 here: the parent is sized by max-h, so there
+            is no free space to distribute and the list collapses to 0px. */}
+        <div className="min-h-0 max-h-[264px] shrink overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-14 text-sm text-text-muted">
-              <MagnifyingGlassIcon className="h-8 w-8 opacity-30" />
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-sm text-text-muted">
+              <MagnifyingGlassIcon className="h-7 w-7 opacity-30" />
               <span>
                 {query.trim()
                   ? t("chat:message.forward.noConversations", {
@@ -431,7 +437,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             sections.map((section) => (
               <div key={section.letter || "recent"}>
                 {section.letter && (
-                  <div className="sticky top-0 z-[1] bg-surface px-5 pt-1.5 pb-0.5 text-xs font-bold text-text-muted">
+                  <div className="sticky top-0 z-[1] bg-surface px-4 pt-1.5 pb-0.5 text-xs font-bold text-text-muted">
                     {section.letter}
                   </div>
                 )}
@@ -444,11 +450,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                       key={conv.id}
                       type="button"
                       onClick={() => toggleSelect(conv.id)}
-                      className="flex w-full items-center gap-3 px-5 py-2 text-left transition-colors hover:bg-surface-hover"
+                      className="flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition-colors hover:bg-surface-hover"
                     >
                       <span
                         className={clsx(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                           isSelected
                             ? "border-[#1565C0] bg-[#1565C0]"
                             : "border-border bg-transparent",
@@ -472,10 +478,10 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                         )}
                       </span>
                       <div className="relative shrink-0">
-                        <Avatar src={conv.avatar} alt={name} size="md" />
+                        <Avatar src={conv.avatar} alt={name} size="sm" />
                         {isGroup && (
-                          <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface ring-1 ring-border">
-                            <Users className="h-2.5 w-2.5 text-text-muted" />
+                          <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-surface ring-1 ring-border">
+                            <Users className="h-2 w-2 text-text-muted" />
                           </div>
                         )}
                       </div>
@@ -491,8 +497,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         </div>
 
         {/* Forwarded-message preview + optional note */}
-        <div className="shrink-0 border-t border-border px-5 py-3">
-          <div className="rounded-[10px] border border-border bg-surface-hover px-3 py-2.5">
+        <div className="shrink-0 border-t border-border px-4 py-2.5">
+          <div className="rounded-[10px] border border-border bg-surface-hover px-2.5 py-2">
             <p className="text-xs font-semibold text-text-secondary">
               {previewLabel}
             </p>
@@ -531,16 +537,16 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             placeholder={t("chat:message.forward.notePlaceholder", {
               defaultValue: "Nhập tin nhắn...",
             })}
-            className="mt-2 w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-[#1565C0]/60 focus:ring-2 focus:ring-[#1565C0]/20"
+            className="mt-1.5 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-[#1565C0]/60 focus:ring-2 focus:ring-[#1565C0]/20"
           />
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-surface-subtle px-5 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-hover"
+            className="rounded-lg bg-surface-subtle px-4 py-1.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-hover"
           >
             {t("common:actions.cancel", { defaultValue: "Hủy" })}
           </button>
@@ -549,7 +555,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             disabled={selected.size === 0 || isLoading}
             onClick={() => void handleConfirm()}
             className={clsx(
-              "rounded-lg px-5 py-2 text-sm font-semibold text-white transition-colors",
+              "rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition-colors",
               selected.size > 0 && !isLoading
                 ? "bg-[#1565C0] hover:bg-[#1976D2]"
                 : "cursor-not-allowed bg-[#1565C0]/40",

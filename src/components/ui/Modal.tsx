@@ -215,7 +215,10 @@ export const Modal: React.FC<ModalProps> = ({
 
       <div
         className={clsx(
-          "relative flex w-full max-h-[min(90vh,48rem)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-elev3",
+          // max-h 100% (not 90vh): the flex parent already subtracts its own
+          // p-4/sm:p-6, so the dialog fits the real viewport at OS scaling
+          // 125/150% where vh-based caps overflow into `overflow-hidden`.
+          "relative flex w-full max-h-[min(100%,48rem)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-elev3",
           "animate-modal-in will-change-transform",
           sizeClasses[size],
           contentClassName,
