@@ -244,7 +244,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     <div className="flex flex-col gap-2">
       {selectedUsers.length === 0 && (
         <p className="text-center text-xs text-text-secondary">
-          {t("profile:newChatModal.selectMembersHint", { defaultValue: "Chọn ít nhất 1 thành viên để tạo nhóm" })}
+          {t("profile:newChatModal.selectMembersHint")}
         </p>
       )}
       <Button
@@ -257,7 +257,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       >
         {selectedUsers.length > 0
           ? t("profile:newChatModal.createGroupButton", { count: selectedUsers.length })
-          : t("profile:newChatModal.createGroupButtonEmpty", { defaultValue: "Tạo nhóm" })}
+          : t("profile:newChatModal.createGroupButtonEmpty")}
       </Button>
     </div>
   ) : undefined;
@@ -268,12 +268,12 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       onClose={onClose}
       title={t("profile:newChatModal.title")}
       size="lg"
-      contentClassName="sm:w-[36rem]"
+      contentClassName="sm:w-[30rem]"
       bodyClassName="p-0 flex flex-col"
       footer={modalFooter}
     >
       {/* ── Controls cố định phía trên ── */}
-      <div className="flex-shrink-0 space-y-3 px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+      <div className="flex-shrink-0 space-y-3 px-4 pb-2 pt-3 sm:px-5 sm:pt-3">
         {/* Mode toggle */}
         <div className="flex rounded-[var(--chat-control-radius)] border border-border p-1 gap-1">
           <button
@@ -308,24 +308,20 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
         {/* Group name input */}
         {isGroupMode && (
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-text-secondary">
-              {t("profile:newChatModal.groupNameLabel", { defaultValue: "Tên nhóm" })}
-            </span>
-            <Input
-              type="text"
-              placeholder={t("profile:newChatModal.groupNamePlaceholder")}
-              value={groupName}
-              onChange={(e) => { setGroupName(e.target.value); }}
-              onBlur={() => setGroupNameTouched(true)}
-              disabled={isBusy}
-              error={
-                groupNameTouched && !groupName.trim()
-                  ? t("profile:toast.groupNameRequired", { defaultValue: "Vui lòng nhập tên nhóm" })
-                  : undefined
-              }
-            />
-          </div>
+          <Input
+            type="text"
+            label={t("profile:newChatModal.groupNameLabel")}
+            placeholder={t("profile:newChatModal.groupNamePlaceholder")}
+            value={groupName}
+            onChange={(e) => { setGroupName(e.target.value); }}
+            onBlur={() => setGroupNameTouched(true)}
+            disabled={isBusy}
+            error={
+              groupNameTouched && !groupName.trim()
+                ? t("profile:toast.groupNameRequired")
+                : undefined
+            }
+          />
         )}
 
         {/* Search */}
@@ -362,15 +358,19 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         )}
 
         {/* Section label */}
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        <p className="text-xs font-semibold text-text-secondary">
           {isSearchActive
-            ? t("profile:newChatModal.searchResults", { defaultValue: "Kết quả tìm kiếm" })
-            : t("profile:newChatModal.friendsSectionLabel", { defaultValue: "Bạn bè" })}
+            ? t("profile:newChatModal.searchResults")
+            : t("profile:newChatModal.friendsSectionLabel")}
         </p>
       </div>
 
-      {/* ── Danh sách scrollable ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
+      {/* ── Danh sách scrollable ──
+           `max-h` (not flex-1 alone): the Modal shell is sized by max-h, so there
+           is no free height for flex to distribute and the list would end mid-row
+           — worse at OS scaling 125/150%. Capping it here makes the dialog hug a
+           short list and scroll a long one, with the footer always visible. */}
+      <div className="min-h-0 max-h-[min(22rem,45vh)] shrink overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
         {isLoading ? (
           <DirectorySkeleton count={5} />
         ) : errorMessage && isSearchActive ? (
@@ -379,7 +379,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           <EmptySearchResults query={debouncedQuery} />
         ) : users.length === 0 ? (
           <p className="py-10 text-center text-sm text-text-muted">
-            {t("profile:newChatModal.noFriendsYet", { defaultValue: "Bạn chưa có bạn bè nào." })}
+            {t("profile:newChatModal.noFriendsYet")}
           </p>
         ) : (
           <div className="space-y-0.5">

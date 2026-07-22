@@ -219,8 +219,12 @@ const SlideshowFigure: React.FC = React.memo(() => {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // Figure scales with the pane instead of a fixed 380px: the heading below is
+  // fluid (clamp 22→32px), so a fixed-width figure looks undersized next to it
+  // on a wide window and cramped on a narrow one. Capped at 520px so it stays a
+  // banner, not a hero, on ultrawide.
   return (
-    <figure className="w-full max-w-[380px] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(21,101,192,0.15)] ring-1 ring-border/50">
+    <figure className="w-full max-w-[clamp(280px,34vw,520px)] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(21,101,192,0.15)] ring-1 ring-border/50">
       <div className="relative aspect-[16/8.7] w-full overflow-hidden bg-slate-100">
         {WELCOME_SLIDES.map((slide, index) => (
           <img
@@ -253,7 +257,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
 
   return (
     <section className="chat-background flex flex-1 overflow-y-auto px-[clamp(12px,2.5vw,40px)] py-[clamp(12px,2.5vw,32px)] text-text-secondary">
-      <div className="mx-auto flex w-full max-w-[1800px] flex-col items-center">
+      {/* h-fit: as a flex child of a scrolling column this box would otherwise be
+          stretched/squashed to the section height, clipping the calendar's
+          tallest day mid-event instead of letting the section scroll. */}
+      <div className="mx-auto flex h-fit w-full max-w-[1800px] flex-col items-center">
         <SlideshowFigure />
 
         <div className="mt-4 animate-fade-in text-center">
