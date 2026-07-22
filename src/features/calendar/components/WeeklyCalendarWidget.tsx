@@ -672,20 +672,20 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
               )}
               style={todayDay && !isWeekend ? { backgroundColor: "rgba(255, 200, 87, 0.08)" } : undefined}
             >
-              {/* Day header */}
-              <div className="mb-2 flex flex-col items-center gap-1">
-                {/* Hàng 1: tên thứ, căn giữa */}
-                <span
-                  className={clsx(
-                    "text-[11px] font-semibold sm:text-xs",
-                    isWeekend ? "text-rose-500" : "text-text-muted",
-                  )}
-                  style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
-                >
-                  {WEEKDAY_LABELS[i]}
-                </span>
-                {/* Hàng 2: số ngày (trái) + nút Thêm lịch (phải) */}
-                <div className="flex w-full items-center justify-between">
+              {/* Day header — hàng 1: "T3 21" cùng dòng; hàng 2: nút Thêm lịch
+                  căn giữa. Trước đây số ngày nằm dưới tên thứ và nút đẩy sang
+                  phải, làm header cao gấp đôi và lấn chỗ của sự kiện. */}
+              <div className="mb-1.5 flex flex-col items-center gap-1">
+                <div className="flex items-center justify-center gap-1.5">
+                  <span
+                    className={clsx(
+                      "text-[11px] font-semibold sm:text-xs",
+                      isWeekend ? "text-rose-500" : "text-text-muted",
+                    )}
+                    style={todayDay && !isWeekend ? { color: "#1565C0" } : undefined}
+                  >
+                    {WEEKDAY_LABELS[i]}
+                  </span>
                   <div className="relative">
                     <span
                       className={clsx(
@@ -706,16 +706,16 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    title={`Thêm lịch ngày ${day.getDate()}`}
-                    onClick={() => openEventTypeChooser(day)}
-                    className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
-                  >
-                    <PlusIcon className="h-3 w-3" />
-                    <span className="hidden sm:inline">Thêm lịch</span>
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  title={`Thêm lịch ngày ${day.getDate()}`}
+                  onClick={() => openEventTypeChooser(day)}
+                  className="flex items-center justify-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-700 hover:ring-amber-400 transition-micro sm:text-[11px]"
+                >
+                  <PlusIcon className="h-3 w-3" />
+                  <span className="hidden sm:inline">Thêm lịch</span>
+                </button>
               </div>
 
               {/* Events */}
