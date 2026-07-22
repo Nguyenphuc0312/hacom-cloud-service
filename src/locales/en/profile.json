@@ -117,6 +117,12 @@
       "groupNamePlaceholder": "Enter group name...",
       "searchMinChars": "Type at least {{count}} characters to search",
       "createGroupButton": "Create group ({{count}} users)",
+      "createGroupButtonEmpty": "Create group",
+      "selectMembersHint": "Select at least 1 member to create a group",
+      "groupNameLabel": "Group name",
+      "friendsSectionLabel": "Friends",
+      "searchResults": "Search results",
+      "noFriendsYet": "You don't have any friends yet.",
       "selectMember": "Select contact",
       "unselectMember": "Remove contact"
     },

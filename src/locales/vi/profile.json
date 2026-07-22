@@ -117,6 +117,12 @@
     "groupNamePlaceholder": "Nhập tên nhóm...",
     "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
     "createGroupButton": "Tạo nhóm ({{count}} người)",
+    "createGroupButtonEmpty": "Tạo nhóm",
+    "selectMembersHint": "Chọn ít nhất 1 thành viên để tạo nhóm",
+    "groupNameLabel": "Tên nhóm",
+    "friendsSectionLabel": "Bạn bè",
+    "searchResults": "Kết quả tìm kiếm",
+    "noFriendsYet": "Bạn chưa có bạn bè nào.",
     "selectMember": "Chọn liên hệ",
     "unselectMember": "Bỏ chọn liên hệ"
   },
