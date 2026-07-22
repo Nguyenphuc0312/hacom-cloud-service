@@ -566,6 +566,13 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         style={{
           paddingBottom: 8,
           scrollBehavior: "auto",
+          // A chat timeline scrolls vertically only. The hover QuickReactBar is a
+          // fixed 228px popover anchored to a bubble; on a narrowed window it is
+          // the ONLY element wider than the pane, and it grew scrollWidth so the
+          // whole conversation slid sideways. `clip` contains it WITHOUT making a
+          // scroll container, so vertical scrolling is untouched. Set here (not a
+          // Tailwind class) because the `overflow-y-auto` shorthand would win.
+          overflowX: "clip",
         }}
       >
         <div

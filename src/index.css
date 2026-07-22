@@ -1549,10 +1549,15 @@ a:focus-visible {
   }
 
   .hc-app-shell> :first-child {
-    flex: 0 0 auto;
+    /* `flex: 0 1 auto` + the 55% cap: the sidebar's width floor is 320px, so on a
+       narrowed desktop window it kept all 320px and squeezed the chat pane down
+       to ~71px — message bubbles are ~338px and cannot shrink, so the timeline
+       grew a horizontal scrollbar and the conversation slid sideways. The
+       sidebar now yields first and the chat pane keeps a readable width. */
+    flex: 0 1 auto;
     width: var(--hc-sidebar-width);
     min-width: 0;
-    max-width: min(100%, var(--hc-sidebar-width));
+    max-width: min(55%, var(--hc-sidebar-width));
   }
 
   .hc-app-shell__main {
