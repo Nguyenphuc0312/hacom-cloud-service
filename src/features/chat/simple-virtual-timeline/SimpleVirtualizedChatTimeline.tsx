@@ -559,7 +559,13 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         onKeyDown={handleSelectAll}
         tabIndex={-1}
         data-testid="simple-timeline-scroll"
-        className="chat-scroll-container h-full min-h-0 overflow-y-auto overscroll-contain focus:outline-none"
+        // overflow-x-hidden: a chat timeline scrolls vertically only. Hover
+        // popovers anchored to a bubble (QuickReactBar, 228px wide) stick out
+        // past the content lane on short messages, and with the browser's
+        // default overflow-x:auto that painted a horizontal scrollbar under the
+        // whole conversation. The popovers are `absolute`, so clipping the X
+        // axis costs nothing — they still paint via the z-30 stacking context.
+        className="chat-scroll-container h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain focus:outline-none"
         role="log"
         aria-label={t("chat:message.inConversationAria")}
         aria-live="polite"
