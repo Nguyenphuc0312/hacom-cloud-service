@@ -790,14 +790,16 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                         .join(" · ")}
                     >
                       {(() => {
-                        // Start time only. The full "08:00 — 09:00" range wraps
-                        // onto two lines in a narrow day column, making every
-                        // card 3 lines tall and overflowing the widget; the range
-                        // is still in the tooltip and the detail modal.
-                        const range = formatEventTimeRange(ev.source);
-                        const display = (range ?? ev.time)?.split(" — ")[0];
+                        // Full range, rendered as "08:00–09:00": measured at 58px
+                        // inside a 91px card, so it fits. The old "08:00 — 09:00"
+                        // was the same width class but its SPACES gave the browser
+                        // break points, so it wrapped to two lines and made every
+                        // card 3 lines tall. whitespace-nowrap keeps it one line
+                        // even in the narrowest column.
+                        const display = (formatEventTimeRange(ev.source) ?? ev.time)
+                          ?.replace(" — ", "–");
                         return display ? (
-                          <span className="truncate font-bold opacity-80">
+                          <span className="truncate whitespace-nowrap font-bold opacity-80">
                             {display}
                           </span>
                         ) : null;
