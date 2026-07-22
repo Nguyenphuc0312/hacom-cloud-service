@@ -346,7 +346,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       role="presentation"
     >
       <div
-        className="flex max-h-[min(100%,34rem)] w-full max-w-[400px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
+        className="flex max-h-full w-full max-w-[400px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -412,16 +412,17 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
           })}
         </div>
 
-        {/* Conversation list — the only flexible row: it absorbs leftover height
-            and is the first thing to shrink. No min-height floor: at OS scaling
-            125/150% the viewport is short, and a floor here would push the
-            preview + note + footer past the modal's max-h into `overflow-hidden`
-            (the send button silently disappears). `basis-0` + `flex-1` also lets
-            the dialog hug its content when only a few conversations match. */}
-        <div className="min-h-0 flex-1 basis-0 overflow-y-auto py-1">
+        {/* Conversation list — height comes from its own content (auto basis), so
+            the dialog hugs a short list instead of padding it out. `max-h` caps a
+            long one into a scroll area; `min-h-0` + `shrink` keep this the row
+            that gives way first when OS scaling 125/150% shortens the viewport,
+            so the preview + note + footer never get clipped by `overflow-hidden`.
+            Do NOT use flex-1/basis-0 here: the parent is sized by max-h, so there
+            is no free space to distribute and the list collapses to 0px. */}
+        <div className="min-h-0 max-h-[264px] shrink overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-14 text-sm text-text-muted">
-              <MagnifyingGlassIcon className="h-8 w-8 opacity-30" />
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-sm text-text-muted">
+              <MagnifyingGlassIcon className="h-7 w-7 opacity-30" />
               <span>
                 {query.trim()
                   ? t("chat:message.forward.noConversations", {
