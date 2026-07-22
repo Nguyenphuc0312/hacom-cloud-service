@@ -257,7 +257,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
 
   return (
     <section className="chat-background flex flex-1 overflow-y-auto px-[clamp(12px,2.5vw,40px)] py-[clamp(12px,2.5vw,32px)] text-text-secondary">
-      <div className="mx-auto flex w-full max-w-[1800px] flex-col items-center">
+      {/* h-fit: as a flex child of a scrolling column this box would otherwise be
+          stretched/squashed to the section height, clipping the calendar's
+          tallest day mid-event instead of letting the section scroll. */}
+      <div className="mx-auto flex h-fit w-full max-w-[1800px] flex-col items-center">
         <SlideshowFigure />
 
         <div className="mt-4 animate-fade-in text-center">

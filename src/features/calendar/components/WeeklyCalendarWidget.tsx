@@ -785,13 +785,21 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                         colors.border,
                         colors.text,
                       )}
-                      title={ev.title}
+                      title={[formatEventTimeRange(ev.source), ev.title]
+                        .filter(Boolean)
+                        .join(" · ")}
                     >
                       {(() => {
+                        // Start time only. The full "08:00 — 09:00" range wraps
+                        // onto two lines in a narrow day column, making every
+                        // card 3 lines tall and overflowing the widget; the range
+                        // is still in the tooltip and the detail modal.
                         const range = formatEventTimeRange(ev.source);
-                        const display = range ?? ev.time;
+                        const display = (range ?? ev.time)?.split(" — ")[0];
                         return display ? (
-                          <span className="font-bold opacity-80">{display}</span>
+                          <span className="truncate font-bold opacity-80">
+                            {display}
+                          </span>
                         ) : null;
                       })()}
                       <span className="truncate">{ev.title}</span>

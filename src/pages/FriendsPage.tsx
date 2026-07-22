@@ -1242,7 +1242,12 @@ export const FriendsPage: React.FC = () => {
       />
 
       <AppPageBody>
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(22rem,27rem),minmax(0,1fr)]">
+        {/* grid-rows-[minmax(0,1fr)]: without an explicit 0-min row the grid
+            items size to their CONTENT, so a long friend list grows past
+            .app-page-body (flex:1; overflow:hidden) and is clipped mid-row with
+            no scrollbar — friends below the cut become unreachable. Worst at OS
+            scaling 125/150%, where the viewport is short. */}
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(22rem,27rem),minmax(0,1fr)]">
           <section className="app-page-panel flex min-h-0 flex-col overflow-hidden">
             <div className="border-b border-border/60 p-4">
               <SegmentedControl
