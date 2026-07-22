@@ -160,7 +160,8 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
   const corporateEmail = profile.corporateEmail || "";
   const displayLabel =
     draft.displayName.trim() || profile.displayName || t("common:labels.user");
-  const effectiveAvatar = avatarPreview || user?.avatar;
+  // profile.avatar (chat-api signed URL) — /auth/me carries no avatar.
+  const effectiveAvatar = avatarPreview || profile.avatar || user?.avatar;
 
   React.useEffect(() => {
     if (!isOpen) {
