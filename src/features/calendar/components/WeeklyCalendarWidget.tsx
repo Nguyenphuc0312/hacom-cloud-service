@@ -796,6 +796,11 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
                       })()}
                       <span className="truncate">{ev.title}</span>
                       {(() => {
+                        // Attendee avatars only when the day holds a SINGLE
+                        // event: with 2+ the column can't fit an avatar row per
+                        // card, so rows render at uneven heights and the week
+                        // grid stops reading as a grid. One event has the room.
+                        if (totalCount > 1) return null;
                         const ext = ev.source as ExtendedCalendarEvent | undefined;
                         const people: Attendee[] = ext?.attendeeAvatars?.length
                           ? ext.attendeeAvatars

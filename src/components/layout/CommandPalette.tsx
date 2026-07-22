@@ -414,14 +414,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         const directConversationId = directConversationByUserId.get(
           candidate.id,
         );
+        // Only the palette knows whether this person is already a friend, so it
+        // picks the destination tab. `?q=` alone always lands on Khám phá, which
+        // deliberately hides existing friends → "Không tìm thấy người dùng".
+        const isFriend = Boolean(friendByUserId[candidate.id]);
+        const displayName = resolveAliasName(candidate.id, candidate.label);
 
         return {
           id: `user:${candidate.id}`,
           group: "users",
-          label: resolveAliasName(candidate.id, candidate.label),
+          label: displayName,
           description: directConversationId
             ? t("common:commandPalette.openDirectConversation")
-            : t("common:commandPalette.searchInFriends"),
+            : isFriend
+              ? t("common:commandPalette.openInFriends")
+              : t("common:commandPalette.searchInFriends"),
           keywords: [candidate.username ?? "", "user", "person", "friend"],
           icon: UserCircleIcon,
           showAvatar: true,
@@ -434,6 +441,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               return;
             }
 
+            if (isFriend) {
+              // Filter the Bạn bè tab by NAME, not the raw @HC000123 code — the
+              // code is an identifier, not something a user recognises on screen.
+              navigate(
+                `${ROUTE_PATHS.FRIENDS}?tab=friends&q=${encodeURIComponent(displayName)}`,
+              );
+              return;
+            }
+
             const searchTerm = candidate.username || candidate.label;
             navigate(
               `${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(searchTerm)}`,
@@ -443,6 +459,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       }),
     [
       directConversationByUserId,
+      friendByUserId,
       navigate,
       resolveAliasName,
       selectConversation,

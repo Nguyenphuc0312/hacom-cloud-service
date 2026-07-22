@@ -457,16 +457,24 @@ export const FriendsPage: React.FC = () => {
 
   const initialQuery = searchParams.get("q") || "";
   const initialQrCode = shareCode || searchParams.get("code") || "";
+  // `?tab=friends` means the caller already knows this person IS a friend (the
+  // command palette), so `q` filters the Bạn bè list instead of searching Khám
+  // phá — which hides existing friends and would show "không tìm thấy".
+  const wantsFriendsTab = searchParams.get("tab") === "friends";
   const [activeTab, setActiveTab] = useState<TabKey>(
     initialQrCode.trim().length > 0
       ? "qr"
-      : initialQuery.trim().length >= 2
-        ? "discover"
-        : "friends",
+      : wantsFriendsTab
+        ? "friends"
+        : initialQuery.trim().length >= 2
+          ? "discover"
+          : "friends",
   );
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
-  const [friendFilter, setFriendFilter] = useState("");
-  const [query, setQuery] = useState(initialQuery);
+  const [friendFilter, setFriendFilter] = useState(
+    wantsFriendsTab ? initialQuery : "",
+  );
+  const [query, setQuery] = useState(wantsFriendsTab ? "" : initialQuery);
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -525,13 +533,19 @@ export const FriendsPage: React.FC = () => {
 
     const nextQuery = searchParams.get("q") || "";
     const nextQrCode = shareCode || searchParams.get("code") || "";
+    const nextWantsFriendsTab = searchParams.get("tab") === "friends";
 
-    if (query !== nextQuery) {
+    if (nextWantsFriendsTab) {
+      if (friendFilter !== nextQuery) setFriendFilter(nextQuery);
+      if (query !== "") setQuery("");
+    } else if (query !== nextQuery) {
       setQuery(nextQuery);
     }
 
     if (nextQrCode.trim().length > 0) {
       if (activeTab !== "qr") setActiveTab("qr");
+    } else if (nextWantsFriendsTab) {
+      if (activeTab !== "friends") setActiveTab("friends");
     } else if (nextQuery.trim().length >= 2) {
       if (activeTab !== "discover") setActiveTab("discover");
     }

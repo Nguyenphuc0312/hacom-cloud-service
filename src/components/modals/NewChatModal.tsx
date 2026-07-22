@@ -362,15 +362,19 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         )}
 
         {/* Section label */}
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        <p className="text-xs font-semibold text-text-secondary">
           {isSearchActive
             ? t("profile:newChatModal.searchResults", { defaultValue: "Kết quả tìm kiếm" })
             : t("profile:newChatModal.friendsSectionLabel", { defaultValue: "Bạn bè" })}
         </p>
       </div>
 
-      {/* ── Danh sách scrollable ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
+      {/* ── Danh sách scrollable ──
+           `max-h` (not flex-1 alone): the Modal shell is sized by max-h, so there
+           is no free height for flex to distribute and the list would end mid-row
+           — worse at OS scaling 125/150%. Capping it here makes the dialog hug a
+           short list and scroll a long one, with the footer always visible. */}
+      <div className="min-h-0 max-h-[min(22rem,45vh)] shrink overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
         {isLoading ? (
           <DirectorySkeleton count={5} />
         ) : errorMessage && isSearchActive ? (
