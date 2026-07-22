@@ -346,7 +346,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       role="presentation"
     >
       <div
-        className="flex max-h-[min(90vh,40rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
+        className="flex max-h-[min(100%,40rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -413,7 +413,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         </div>
 
         {/* Conversation list */}
-        <div className="min-h-[270px] flex-1 overflow-y-auto py-1.5">
+        {/* basis (not min-h): the list must be the part that shrinks on short
+            viewports — OS scaling 125/150% cuts the layout viewport height, and a
+            min-height floor here pushes the preview+composer+footer past the
+            modal's max-h into `overflow-hidden` (invisible send button). */}
+        <div className="min-h-0 flex-1 basis-[270px] overflow-y-auto py-1.5">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-14 text-sm text-text-muted">
               <MagnifyingGlassIcon className="h-8 w-8 opacity-30" />
