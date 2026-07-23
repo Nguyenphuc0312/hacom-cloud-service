@@ -53,6 +53,7 @@ import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
 import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
+import { useGroupRename } from "./useGroupRename";
 import { createSingleFlight } from "../../utils/singleFlight";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
@@ -258,8 +259,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     Record<string, { departmentName?: string; companyName?: string }>
   >({});
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
-  const [isRenamingGroup, setIsRenamingGroup] = useState(false);
-  const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
   const [isLeaveGroupConfirmOpen, setIsLeaveGroupConfirmOpen] = useState(false);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
@@ -536,10 +535,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const groupAvatar = useGroupAvatarUpload(conversation.id, refreshGroupState);
   const resetGroupAvatar = groupAvatar.reset;
+  const groupRename = useGroupRename(
+    conversation.id,
+    conversation.name || "",
+    refreshGroupState,
+    setIsSubmitting,
+  );
 
+  // Đổi nhóm → trả panel về trạng thái sạch. Phần đổi tên và ảnh đại diện tự
+  // reset bên trong hook của chúng.
   React.useEffect(() => {
-    setGroupNameDraft(conversation.name || "");
-    setIsRenamingGroup(false);
     setShowAddMember(false);
     resetGroupAvatar();
     setMemberSearch("");
@@ -627,23 +632,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     },
     [conversation.id, refreshGroupState, t],
   );
-
-  const handleRenameGroup = useCallback(async () => {
-    const nextName = groupNameDraft.trim();
-    if (!nextName) { toast.error(t("profile:toast.groupNameRequired")); return; }
-    if (nextName === (conversation.name || "").trim()) { setIsRenamingGroup(false); return; }
-    setIsSubmitting(true);
-    try {
-      await chatApi.group.updateSettings(conversation.id, { title: nextName });
-      await refreshGroupState();
-      setIsRenamingGroup(false);
-      toast.success(t("profile:toast.groupRenamed"));
-    } catch (error) {
-      toast.error(extractApiError(error).message || t("profile:toast.groupRenameFailed"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [conversation.id, conversation.name, groupNameDraft, refreshGroupState, t]);
 
   const handleToggleMemberRole = useCallback(
     async (member: GroupMember) => {
@@ -861,7 +849,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 </div>
               )}
             </div>
-            {isAdmin && !isRenamingGroup && (
+            {isAdmin && !groupRename.isEditing && (
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
@@ -875,15 +863,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
 
           {/* Group Name */}
-          {isRenamingGroup ? (
+          {groupRename.isEditing ? (
             <div className="w-full max-w-[240px] space-y-2">
               <Input
                 type="text"
-                value={groupNameDraft}
-                onChange={(e) => setGroupNameDraft(e.target.value)}
+                value={groupRename.draft}
+                onChange={(e) => groupRename.setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); void handleRenameGroup(); }
-                  if (e.key === "Escape") { setIsRenamingGroup(false); setGroupNameDraft(conversation.name || ""); }
+                  if (e.key === "Enter") { e.preventDefault(); void groupRename.submit(); }
+                  if (e.key === "Escape") groupRename.cancel();
                 }}
                 placeholder={t("profile:groupInfo.renamePlaceholder")}
                 disabled={isSubmitting}
@@ -891,7 +879,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => { setIsRenamingGroup(false); setGroupNameDraft(conversation.name || ""); }}
+                  onClick={groupRename.cancel}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted hover:bg-surface-hover"
                 >
                   {t("common:actions.cancel")}
@@ -899,7 +887,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 <button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => void handleRenameGroup()}
+                  onClick={() => void groupRename.submit()}
                   className="inline-flex items-center gap-1 rounded-lg bg-[#1565C0] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
                 >
                   <CheckIcon className="h-3.5 w-3.5" />
@@ -915,7 +903,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               {isAdmin && (
                 <button
                   type="button"
-                  onClick={() => setIsRenamingGroup(true)}
+                  onClick={groupRename.start}
                   disabled={isSubmitting}
                   className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label={t("profile:groupInfo.renameGroup")}

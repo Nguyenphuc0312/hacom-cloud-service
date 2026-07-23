@@ -114,11 +114,15 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 | Upload ảnh đại diện | ✅ | [`useGroupAvatarUpload.ts`](../src/components/info/useGroupAvatarUpload.ts) — 192 dòng, mang theo cả `revokeBlobUrl` + `resolveGroupAvatarStageLabel` + `ALLOWED_GROUP_AVATAR_TYPES` + type `GroupAvatarUploadStage` |
 | Link mời | ✅ | [`useGroupInviteLinks.ts`](../src/components/info/useGroupInviteLinks.ts) — 171 dòng, gom 4 state + 4 handler (create/copy/revoke/delete) |
 | Modal xác nhận | ✅ | **Phát hiện + sửa bug thật — xem F-05 bên dưới** |
+| Đổi tên nhóm | ✅ | [`useGroupRename.ts`](../src/components/info/useGroupRename.ts) — 84 dòng; gộp 2 state thành 1 (`draft: string \| null`), bỏ luôn effect đồng bộ |
 | Danh sách thành viên | ⬜ | lớn nhất, dính `singleFlight` + `memberListVersion` |
-| Đổi tên nhóm | ⬜ | 2 state, nhỏ |
-| Đóng/mở khu vực | ⬜ | 2 state, nhỏ |
+| Đóng/mở khu vực | ⛔ | **cố ý không tách** — xem ghi chú bên dưới |
 
-**Đo được:** `GroupInfo.tsx` **1807 → 1733 dòng**, `useState` **35 → 28**.
+**Đo được:** `GroupInfo.tsx` **1807 → 1721 dòng**, `useState` **35 → 26**.
+
+**Về `isSubmitting`** — trước đó tưởng là nút thắt phải gỡ. Đọc kỹ thì nó là **thiết kế đúng**: một cờ "đang có thao tác nặng cấp nhóm" dùng chung cho 4 luồng (thêm thành viên / đổi tên / rời nhóm / xoá nhóm), khoá chéo cả panel là chủ ý. Nên `useGroupRename` **nhận `setIsSubmitting` từ ngoài** thay vì tự giữ — giữ một nguồn duy nhất, không nhân đôi.
+
+**Về nhóm "đóng/mở khu vực" (`securityExpanded`, `membersShowAll`, `pollsShowAll`)** — cố ý **không** tách. Ba cờ boolean thuần, mỗi cái dùng đúng một chỗ, không có logic đi kèm. Bọc vào hook chỉ thêm một lớp gián tiếp mà không giảm phức tạp — đó là abstraction thừa, đúng thứ audit này muốn loại bỏ.
 
 > Số dòng giảm ít hơn kỳ vọng vì code chuyển đi được **giãn ra cho dễ đọc** trong hook (bản cũ nhồi nhiều lệnh trên một dòng). Giá trị thật không nằm ở số dòng mà ở chỗ: 7 state rời rạc giờ nằm sau 2 API có tên, có invariant riêng, test được độc lập.
 >
