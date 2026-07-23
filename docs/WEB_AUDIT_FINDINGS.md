@@ -272,7 +272,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 10 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 11 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -288,6 +288,7 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 8 | [`sendFailure.ts`](../src/stores/sendFailure.ts) | 129 | phân loại lý do gửi thất bại + trạng thái kết nối |
 | 9 | [`messageAliasIndex.ts`](../src/stores/messageAliasIndex.ts) | 98 | quy mọi bí danh tin nhắn về một id chuẩn |
 | 10 | [`conversationSummaryState.ts`](../src/stores/conversationSummaryState.ts) | 191 | preview tin cuối + mốc hoạt động + tiến độ đọc |
+| 11 | [`messageWindow.ts`](../src/stores/messageWindow.ts) | 141 | phân loại tin đã chốt + cắt tỉa lịch sử — **không bao giờ cắt tin đang gửi dở** |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
@@ -298,10 +299,12 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 
 | File | Trước | Sau |
 |---|---|---|
-| `chatStore.ts` | 5101 | **3891** (−1210, −24%) |
+| `chatStore.ts` | 5101 | **3795** (−1306, −26%) |
 | `useWebSocket.ts` | 3104 | **3016** (−88) |
 
-**+178 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload · 17 merge-records · 18 sender-profiles · 12 send-failure · 14 alias-index · 18 conversation-summary-state.
+**+193 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload · 17 merge-records · 18 sender-profiles · 12 send-failure · 14 alias-index · 18 conversation-summary-state · 15 message-window.
+
+**Lát 11 — bất biến "không mất tin":** `trimInactiveConversationMessages` giải phóng bộ nhớ bằng cách cắt lịch sử hội thoại không mở. Nếu cắt nhầm một tin `sending`/`failed` thì người dùng **mất luôn nội dung vừa soạn**, không cách nào lấy lại. Test khoá lại cả trường hợp cực đoan: khi số tin dở dang vượt ngưỡng thì kết quả **dài hơn ngưỡng** — chủ ý, thà tốn bộ nhớ còn hơn mất tin.
 
 **Lát 10 — bắt được một thay đổi hành vi của chính mình:** khi tách, tôi định gộp logic inline trong `updateConversationActivitySummary` vào `toConversationLastMessageStatus` (trông giống hệt nhau). Kiểm lại thì **khác thật**: bản inline không có nhánh `"pending"` — tin đang gửi được coi là `"sent"` ngay để preview sidebar không nhấp nháy trong lúc chờ ack.
 

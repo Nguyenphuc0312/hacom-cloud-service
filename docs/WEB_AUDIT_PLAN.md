@@ -224,9 +224,9 @@ Ghi rõ để tránh phình phạm vi:
 | 7 | F-07 refresh token tôn trọng "ghi nhớ đăng nhập" | VỪA | ✅ XONG — đổi hành vi, có test |
 | 8 | Dọn lint phần an toàn | THẤP | ✅ XONG — 116→103 problems, 96→87 errors |
 
-**Chốt cuối phiên 23-07-26:** `npm test` **778 pass · 0 fail** · `test:chat-runtime` **118/118** · typecheck sạch · lint file đã đụng sạch · build ✓
+**Chốt cuối phiên 23-07-26:** `npm test` **793 pass · 0 fail** · `test:chat-runtime` **118/118** · typecheck sạch · lint file đã đụng sạch · build ✓
 
-`chatStore.ts` **5101 → 3891 dòng (−1210, −24%)** qua 10 lát cắt, mỗi lát có test đặc tả viết TRƯỚC khi gỡ code cũ.
+`chatStore.ts` **5101 → 3795 dòng (−1306, −26%)** qua 11 lát cắt, mỗi lát có test đặc tả viết TRƯỚC khi gỡ code cũ.
 
 > ⚠️ **Bài học công cụ:** dùng `Set-Content -Encoding utf8` (PowerShell 5.1) để ghi lại file có tiếng Việt đã **làm hỏng một dòng comment** (mojibake). Phát hiện và sửa ngay trong phiên. Từ nay khi cắt khối lớn: dùng `[System.IO.File]::WriteAllLines` với `UTF8Encoding($false)`, hoặc tốt hơn là dùng Edit từng khối.
 

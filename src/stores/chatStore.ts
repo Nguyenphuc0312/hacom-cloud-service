@@ -74,6 +74,12 @@ import {
   updateConversationReadProgress,
 } from "./conversationSummaryState";
 import {
+  buildConversationMessageWindow,
+  isCanonicalConversationMessage,
+  trimInactiveConversationMessages,
+  type ConversationMessageWindow,
+} from "./messageWindow";
+import {
   applySenderProfilesToConversation,
   applySenderProfilesToMessages,
   normalizeSenderProfileSummary,
@@ -335,14 +341,6 @@ interface ConversationHistoryRequest {
   historyScopeKey: string | null;
 }
 
-interface ConversationMessageWindow {
-  oldestLoadedMessageId: string | null;
-  oldestLoadedAt: string | null;
-  oldestLoadedSeq?: number;
-  newestLoadedMessageId: string | null;
-  newestLoadedAt: string | null;
-  newestLoadedSeq?: number;
-}
 
 interface FetchMessagesOptions {
   force?: boolean;
@@ -394,7 +392,6 @@ const initialState = {
 
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_MESSAGE_IDS: string[] = [];
-const MAX_INACTIVE_CONVERSATION_MESSAGES = 120;
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
@@ -984,70 +981,6 @@ const mergeMessagesAfterCursor = (
   return sortMessages(base);
 };
 
-const isCanonicalConversationMessage = (
-  message: Message | null | undefined,
-): boolean => {
-  if (!message) return false;
-
-  if (
-    message.sendState === "queued" ||
-    message.sendState === "sending" ||
-    message.sendState === "retrying" ||
-    message.sendState === "failed" ||
-    message.status === MessageStatus.SENDING ||
-    message.status === MessageStatus.FAILED ||
-    message.status === "uploading"
-  ) {
-    return false;
-  }
-
-  if (
-    message.sendState === "sent" ||
-    message.status === MessageStatus.SENT ||
-    message.status === MessageStatus.DELIVERED ||
-    message.status === MessageStatus.READ
-  ) {
-    return true;
-  }
-
-  return !isTempMessageId(message.id);
-};
-
-const isRetriableOrPendingLocalMessage = (message: Message): boolean =>
-  isTempMessageId(message.id) ||
-  message.transportStatus === "optimistic" ||
-  message.sendState === "queued" ||
-  message.sendState === "sending" ||
-  message.sendState === "retrying" ||
-  message.sendState === "failed" ||
-  message.status === MessageStatus.SENDING ||
-  message.status === MessageStatus.FAILED ||
-  message.status === "uploading";
-
-const trimInactiveConversationMessages = (messages: Message[]): Message[] => {
-  if (messages.length <= MAX_INACTIVE_CONVERSATION_MESSAGES) {
-    return messages;
-  }
-
-  const protectedMessages = messages.filter(isRetriableOrPendingLocalMessage);
-  const protectedKeys = new Set(protectedMessages.map(getStableMessageId));
-  const normalMessages = messages.filter(
-    (message) => !protectedKeys.has(getStableMessageId(message)),
-  );
-  const retainedNormalMessages = normalMessages.slice(
-    Math.max(
-      0,
-      normalMessages.length -
-        Math.max(
-          MAX_INACTIVE_CONVERSATION_MESSAGES - protectedMessages.length,
-          0,
-        ),
-    ),
-  );
-
-  return sortMessages([...protectedMessages, ...retainedNormalMessages]);
-};
-
 const buildInactiveMessageTrimState = (
   state: ChatState,
   activeConversationId: string | null,
@@ -1103,35 +1036,6 @@ const buildInactiveMessageTrimState = (
     messageAliasIndexByConversation: nextMessageAliasIndexByConversation,
     messageWindowByConversation: nextMessageWindowByConversation,
   };
-};
-
-const buildConversationMessageWindow = (
-  messages: Message[],
-): ConversationMessageWindow => {
-  const canonicalMessages = messages.filter((message) =>
-    isCanonicalConversationMessage(message),
-  );
-  const oldestLoadedMessage = canonicalMessages[0] ?? null;
-  const newestLoadedMessage =
-    canonicalMessages[canonicalMessages.length - 1] ?? null;
-
-  const window: ConversationMessageWindow = {
-    oldestLoadedMessageId: oldestLoadedMessage?.id ?? null,
-    oldestLoadedAt: oldestLoadedMessage?.createdAt
-      ? new Date(oldestLoadedMessage.createdAt).toISOString()
-      : null,
-    newestLoadedMessageId: newestLoadedMessage?.id ?? null,
-    newestLoadedAt: newestLoadedMessage?.createdAt
-      ? new Date(newestLoadedMessage.createdAt).toISOString()
-      : null,
-  };
-  if (typeof oldestLoadedMessage?.serverSeq === "number") {
-    window.oldestLoadedSeq = oldestLoadedMessage.serverSeq;
-  }
-  if (typeof newestLoadedMessage?.serverSeq === "number") {
-    window.newestLoadedSeq = newestLoadedMessage.serverSeq;
-  }
-  return window;
 };
 
 const attachReplySnapshots = (messages: Message[]): Message[] => {
