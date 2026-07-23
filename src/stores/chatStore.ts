@@ -67,6 +67,13 @@ import {
   resolveCanonicalMessageIdentity,
 } from "./messageAliasIndex";
 import {
+  applyConversationReadState,
+  toConversationLastMessageStatus,
+  toMessageSummary,
+  updateConversationActivitySummary,
+  updateConversationReadProgress,
+} from "./conversationSummaryState";
+import {
   applySenderProfilesToConversation,
   applySenderProfilesToMessages,
   normalizeSenderProfileSummary,
@@ -849,121 +856,6 @@ const mergeConversationPageIntoState = (
   };
 };
 
-const updateConversationActivitySummary = (
-  conversation: Conversation,
-  message: Message,
-  unreadCount: number,
-): Conversation => {
-  const messageIsDeleted =
-    message.isDeleted ||
-    message.lifecycleStatus === "recalled" ||
-    message.lifecycleStatus === "deleted_admin";
-
-  const nextLastMessageStatus: Conversation["lastMessageStatus"] =
-    messageIsDeleted
-      ? null
-      : message.sendState === "failed" || message.status === MessageStatus.FAILED
-        ? "failed"
-        : "sent";
-
-  return (normalizeConversation({
-    ...conversation,
-    unreadCount,
-    lastMessage: toMessageSummary(message),
-    updatedAt: message.createdAt,
-    lastMessageAt: message.createdAt,
-    lastMessageSortAt: message.createdAt,
-    lastMessageId: message.id,
-    lastMessageStatus: nextLastMessageStatus,
-    lastActivityAt: message.createdAt,
-  }) ?? {
-    ...conversation,
-    unreadCount,
-    lastMessage: toMessageSummary(message),
-    updatedAt: new Date(message.createdAt),
-  }) as Conversation;
-};
-
-const updateConversationReadProgress = (
-  conversation: Conversation,
-  lastReadMessageId?: string | null,
-  readAt?: Date | string | null,
-  lastReadSeq?: number | null,
-): Conversation => {
-  const nextLastReadSeq =
-    typeof lastReadSeq === "number" && Number.isFinite(lastReadSeq)
-      ? Math.max(conversation.lastReadSeq ?? 0, lastReadSeq)
-      : conversation.lastReadSeq;
-  const updates = {
-    ...conversation,
-    unreadCount: 0,
-    ...(lastReadMessageId ? { lastReadMessageId } : {}),
-    ...(typeof nextLastReadSeq === "number"
-      ? { lastReadSeq: nextLastReadSeq }
-      : {}),
-    lastReadAt: readAt ?? new Date().toISOString(),
-    firstUnreadMessageId: null,
-    firstUnreadMessageAt: null,
-  };
-
-  return (normalizeConversation(updates) ?? updates) as Conversation;
-};
-
-const applyConversationReadState = (
-  conversation: Conversation,
-  readState: {
-    unreadCount: number;
-    lastReadSeq?: number;
-    lastReadMessageId: string | null;
-    lastReadAt: string | null;
-    firstUnreadMessageId?: string | null;
-    firstUnreadMessageAt?: string | null;
-  },
-): Conversation =>
-  (normalizeConversation({
-    ...conversation,
-    unreadCount: Math.max(
-      0,
-      readState.unreadCount ?? conversation.unreadCount ?? 0,
-    ),
-    lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
-    lastReadMessageId:
-      readState.lastReadMessageId ??
-      conversation.lastReadMessageId ??
-      undefined,
-    lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? undefined,
-    firstUnreadMessageId:
-      readState.firstUnreadMessageId ??
-      (readState.unreadCount > 0
-        ? (conversation.firstUnreadMessageId ?? undefined)
-        : null),
-    firstUnreadMessageAt:
-      readState.firstUnreadMessageAt ??
-      (readState.unreadCount > 0
-        ? (conversation.firstUnreadMessageAt ?? undefined)
-        : null),
-  }) ?? {
-    ...conversation,
-    unreadCount: Math.max(
-      0,
-      readState.unreadCount ?? conversation.unreadCount ?? 0,
-    ),
-    lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
-    lastReadMessageId:
-      readState.lastReadMessageId ?? conversation.lastReadMessageId ?? null,
-    lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? null,
-    firstUnreadMessageId:
-      readState.firstUnreadMessageId ??
-      (readState.unreadCount > 0
-        ? (conversation.firstUnreadMessageId ?? null)
-        : null),
-    firstUnreadMessageAt:
-      readState.firstUnreadMessageAt ??
-      (readState.unreadCount > 0
-        ? (conversation.firstUnreadMessageAt ?? null)
-        : null),
-  }) as Conversation;
-
 const replaceMessages = (
   current: Message[],
   incoming: Message[],
@@ -1090,48 +982,6 @@ const mergeMessagesAfterCursor = (
     }
   }
   return sortMessages(base);
-};
-
-const toMessageSummary = (message: Message): Conversation["lastMessage"] =>
-  ({
-    id: message.id,
-    senderId: message.senderId,
-    senderName: message.senderName,
-    content: message.content,
-    type: message.type,
-    isDeleted: message.isDeleted,
-    createdAt: message.createdAt,
-    ...(message.sendState ? { sendState: message.sendState } : {}),
-    ...(message.status ? { status: message.status } : {}),
-  }) as Conversation["lastMessage"];
-
-const toConversationLastMessageStatus = (
-  message: Message | null | undefined,
-): Conversation["lastMessageStatus"] => {
-  if (!message) return null;
-
-  if (message.isDeleted || message.lifecycleStatus === "recalled" || message.lifecycleStatus === "deleted_admin") {
-    return null;
-  }
-
-  if (
-    message.sendState === "failed" ||
-    message.status === MessageStatus.FAILED
-  ) {
-    return "failed";
-  }
-
-  if (
-    message.sendState === "queued" ||
-    message.sendState === "sending" ||
-    message.sendState === "retrying" ||
-    message.status === MessageStatus.SENDING ||
-    message.status === "uploading"
-  ) {
-    return "pending";
-  }
-
-  return "sent";
 };
 
 const isCanonicalConversationMessage = (
