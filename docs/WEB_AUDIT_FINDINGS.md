@@ -107,7 +107,7 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 
 **Đây là refactor hành vi-giữ-nguyên** → phải viết test đặc tả trước, theo mục 2.5 của kế hoạch.
 
-### 🟡 Tiến độ (23-07-26) — đã tách 2/6 nhóm
+### ✅ Hoàn thành (23-07-26) — 5/6 nhóm tách, 1 nhóm cố ý giữ nguyên
 
 | Nhóm | Trạng thái | Kết quả |
 |---|---|---|
@@ -115,10 +115,10 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 | Link mời | ✅ | [`useGroupInviteLinks.ts`](../src/components/info/useGroupInviteLinks.ts) — 171 dòng, gom 4 state + 4 handler (create/copy/revoke/delete) |
 | Modal xác nhận | ✅ | **Phát hiện + sửa bug thật — xem F-05 bên dưới** |
 | Đổi tên nhóm | ✅ | [`useGroupRename.ts`](../src/components/info/useGroupRename.ts) — 84 dòng; gộp 2 state thành 1 (`draft: string \| null`), bỏ luôn effect đồng bộ |
-| Danh sách thành viên | ⬜ | lớn nhất, dính `singleFlight` + `memberListVersion` |
+| Danh sách thành viên | ✅ | [`useGroupMembers.ts`](../src/components/info/useGroupMembers.ts) — 295 dòng; gom fetch + `singleFlight` + chuẩn hoá + enrich HR + merge participants |
 | Đóng/mở khu vực | ⛔ | **cố ý không tách** — xem ghi chú bên dưới |
 
-**Đo được:** `GroupInfo.tsx` **1807 → 1721 dòng**, `useState` **35 → 26**.
+**Đo được:** `GroupInfo.tsx` **1807 → 1527 dòng (−280, −15%)**, `useState` **35 → 23 (−12)**.
 
 **Về `isSubmitting`** — trước đó tưởng là nút thắt phải gỡ. Đọc kỹ thì nó là **thiết kế đúng**: một cờ "đang có thao tác nặng cấp nhóm" dùng chung cho 4 luồng (thêm thành viên / đổi tên / rời nhóm / xoá nhóm), khoá chéo cả panel là chủ ý. Nên `useGroupRename` **nhận `setIsSubmitting` từ ngoài** thay vì tự giữ — giữ một nguồn duy nhất, không nhân đôi.
 
@@ -128,7 +128,9 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 >
 > **Bề mặt tiếp xúc thu hẹp:** `GroupInfo` không còn import `uploadClient`, `createGroupInviteLinkUseCase`, `revokeGroupInviteLinkUseCase`, `upsertInviteLink`, `removeInviteLink` — 5 phụ thuộc biến mất khỏi component.
 >
-> **Lint:** 2 hook mới **sạch tuyệt đối**. `GroupInfo.tsx` còn **4 lỗi `set-state-in-effect`** — đã đối chứng với bản gốc từ git: **y hệt 4 lỗi**, nợ có sẵn, nằm ở nhóm `fetchMembers` (chưa tách).
+> **Lint:** cả 4 hook mới **sạch tuyệt đối**. `GroupInfo.tsx` từ **4 → 3 lỗi** `set-state-in-effect` (nợ có sẵn, đã đối chứng với bản gốc từ git).
+>
+> Lỗi thứ 4 theo `fetchMembers` sang `useGroupMembers`. Ở đó nó là **cảnh báo giả**: `refetch` là hàm async gọi API nên `setState` chỉ chạy *sau khi* request xong, không phải cascading render đồng bộ mà rule nhắm tới — đồng bộ với dữ liệu ngoài đúng là việc của effect. Đã `eslint-disable` **kèm lý do viết rõ tại chỗ**, thay vì để lỗi trôi nổi.
 
 ---
 
