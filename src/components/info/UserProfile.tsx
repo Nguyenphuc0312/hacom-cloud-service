@@ -284,8 +284,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       lastName: authUser.lastName,
       // HR-aware name so the self view matches Settings.
       displayName: myProfile.displayName,
-      // From the resolver (chat-api signed URL) — /auth/me carries no avatar.
-      avatar: myProfile.avatar,
+      avatar: authUser.avatar,
       bio: authUser.bio,
       // HR fields override the chat copy when an HR profile is linked.
       phone: myProfile.phone ?? undefined,
