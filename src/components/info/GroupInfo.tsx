@@ -33,8 +33,8 @@ import {
   Input,
   toast,
 } from "../ui";
-import type { Conversation, Message, UserSummary } from "../../types";
-import { MessageType, RoomMemberRole, UserStatus } from "../../types";
+import type { Conversation, Message } from "../../types";
+import { MessageType, RoomMemberRole } from "../../types";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import { ReminderHistoryList } from "./ReminderHistoryList";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -53,7 +53,12 @@ import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
 import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
-import { createSingleFlight } from "../../utils/singleFlight";
+import { useGroupRename } from "./useGroupRename";
+import {
+  useGroupMembers,
+  resolveMemberName,
+  type GroupMember,
+} from "./useGroupMembers";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   canAddGroupMembers,
@@ -66,7 +71,6 @@ import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/res
 import { transferOwnershipUseCase } from "../../features/chat/usecases/transferOwnership";
 import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
 import { banMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
-import { getUserDisplayName } from "../../utils/messageHelpers";
 import { APP_BASE_PATH } from "../../config";
 
 import {
@@ -93,46 +97,13 @@ interface GroupInfoProps {
   className?: string;
 }
 
-type GroupMemberRole =
-  | RoomMemberRole.OWNER
-  | RoomMemberRole.ADMIN
-  | RoomMemberRole.MEMBER;
-
 const EMPTY_INVITE_LINKS: InviteLinkItem[] = [];
 const EMPTY_JOIN_REQUESTS: JoinRequestItem[] = [];
 
-interface GroupMember {
-  id: string;
-  username: string;
-  displayName?: string;
-  fullNameFromHR?: string;
-  full_name_from_hr?: string;
-  employeeCode?: string;
-  employee_code?: string;
-  departmentName?: string;
-  companyName?: string;
-  avatar?: string;
-  status?: UserSummary["status"];
-  role: GroupMemberRole;
-}
-
 type ModalMemberTarget = { memberId: string; memberName: string } | null;
-
-const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
-  [RoomMemberRole.OWNER]: 0,
-  [RoomMemberRole.ADMIN]: 1,
-  [RoomMemberRole.MEMBER]: 2,
-};
 
 const MEMBER_PREVIEW_COUNT = 8;
 const POLL_PREVIEW_COUNT = 3;
-
-const VALID_ROLES = new Set<string>([
-  RoomMemberRole.OWNER,
-  RoomMemberRole.ADMIN,
-  RoomMemberRole.MEMBER,
-]);
-const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -141,89 +112,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const asString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
-
-const asStatus = (value: unknown): UserSummary["status"] | undefined => {
-  const status = asString(value);
-  if (!status) return undefined;
-  return VALID_STATUSES.has(status)
-    ? (status as UserSummary["status"])
-    : undefined;
-};
-
-// Dedupe concurrent member fetches for the same conversation (overlapping
-// refreshGroupState / memberListVersion bumps / remounts share one request).
-const groupMembersSingleFlight = createSingleFlight<
-  Awaited<ReturnType<typeof chatApi.group.getMembers>>
->();
-
-const extractMemberRows = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) return payload;
-  if (isRecord(payload)) {
-    if (Array.isArray(payload.data)) return payload.data;
-    if (Array.isArray(payload.members)) return payload.members;
-    if (isRecord(payload.data)) {
-      const nested = payload.data;
-      if (Array.isArray(nested.data)) return nested.data;
-      if (Array.isArray(nested.members)) return nested.members;
-    }
-  }
-  return [];
-};
-
-const normalizeMember = (raw: unknown): GroupMember | null => {
-  if (!isRecord(raw)) return null;
-  const user = isRecord(raw.user) ? raw.user : null;
-  const id =
-    asString(raw.userId) ??
-    asString(raw.user_id) ??
-    asString(user?.id) ??
-    asString(raw.id);
-  if (!id) return null;
-  const roleRaw = asString(raw.role);
-  const role = VALID_ROLES.has(roleRaw ?? "")
-    ? (roleRaw as GroupMemberRole)
-    : RoomMemberRole.MEMBER;
-  const username =
-    asString(raw.username) ??
-    asString(user?.username) ??
-    asString(raw.nickname) ??
-    id;
-  return {
-    id,
-    username,
-    displayName: asString(raw.displayName) ?? asString(user?.displayName) ?? asString(raw.nickname),
-    fullNameFromHR: asString(raw.fullNameFromHR) ?? asString(raw.full_name_from_hr) ?? asString(user?.fullNameFromHR) ?? asString(user?.full_name_from_hr),
-    full_name_from_hr: asString(raw.full_name_from_hr) ?? asString(user?.full_name_from_hr) ?? asString(raw.fullNameFromHR) ?? asString(user?.fullNameFromHR),
-    employeeCode: asString(raw.employeeCode) ?? asString(raw.employee_code) ?? asString(user?.employeeCode) ?? asString(user?.employee_code),
-    employee_code: asString(raw.employee_code) ?? asString(user?.employee_code) ?? asString(raw.employeeCode) ?? asString(user?.employeeCode),
-    departmentName: asString(raw.departmentName) ?? asString(raw.department_name) ?? asString(user?.departmentName) ?? asString(user?.department_name) ?? asString(user?.department),
-    companyName: asString(raw.companyName) ?? asString(raw.company_name) ?? asString(user?.companyName) ?? asString(user?.company_name) ?? asString(user?.company) ?? asString(user?.orgUnit) ?? asString(user?.org_unit),
-    avatar: asString(raw.avatar) ?? asString(user?.avatar),
-    status: asStatus(raw.status) ?? asStatus(user?.status),
-    role,
-  };
-};
-
-const resolveMemberName = (member: Partial<UserSummary> | null | undefined): string =>
-  getUserDisplayName(member, { allowTechnicalFallback: true }) || "";
-
-const areMemberMapsEqual = (
-  previous: Record<string, GroupMember>,
-  next: Record<string, GroupMember>,
-): boolean => {
-  const previousKeys = Object.keys(previous);
-  const nextKeys = Object.keys(next);
-  if (previousKeys.length !== nextKeys.length) return false;
-  for (const key of previousKeys) {
-    const prev = previous[key];
-    const nextMember = next[key];
-    if (!nextMember) return false;
-    if (prev.id !== nextMember.id || prev.username !== nextMember.username ||
-        prev.displayName !== nextMember.displayName || prev.avatar !== nextMember.avatar ||
-        prev.status !== nextMember.status || prev.role !== nextMember.role) return false;
-  }
-  return true;
-};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -250,16 +138,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [securityExpanded, setSecurityExpanded] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-  const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>({});
-  // Phòng ban/công ty không nằm trong member payload → enrich từ /users/batch
-  // (giống FriendsPage), để dòng phụ hiện "phòng ban · công ty".
-  const [membersHrByUserId, setMembersHrByUserId] = useState<
-    Record<string, { departmentName?: string; companyName?: string }>
-  >({});
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
-  const [isRenamingGroup, setIsRenamingGroup] = useState(false);
-  const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
   const [isLeaveGroupConfirmOpen, setIsLeaveGroupConfirmOpen] = useState(false);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
@@ -366,7 +245,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
-  const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
 
   const handleTogglePin = useCallback(() => {
     togglePinnedConversation(conversation.id);
@@ -389,70 +267,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const createdBy = React.useMemo(() => conversation.createdBy, [conversation]);
 
-  const members = React.useMemo<GroupMember[]>(() => {
-    const merged = new Map<string, GroupMember>();
-    participants.forEach((participant) => {
-      const existingMember = membersByUserId[participant.id];
-      merged.set(participant.id, {
-        id: participant.id,
-        username: participant.username,
-        displayName: participant.displayName,
-        avatar: participant.avatar,
-        status: participant.status,
-        role: existingMember?.role || (participant.id === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER),
-      });
-    });
-    Object.values(membersByUserId).forEach((member) => {
-      if (!merged.has(member.id)) merged.set(member.id, member);
-    });
-    return Array.from(merged.values())
-      .map((member) => {
-        const hr = membersHrByUserId[member.id];
-        return {
-          ...member,
-          departmentName: member.departmentName ?? hr?.departmentName,
-          companyName: member.companyName ?? hr?.companyName,
-        };
-      })
-      .sort((a, b) => {
-        const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
-        if (roleDiff !== 0) return roleDiff;
-        return resolveMemberName(a).toLowerCase().localeCompare(resolveMemberName(b).toLowerCase());
-      });
-  }, [createdBy, membersByUserId, membersHrByUserId, participants]);
-
-  const memberIdsKey = React.useMemo(
-    () =>
-      Array.from(
-        new Set([...Object.keys(membersByUserId), ...participants.map((p) => p.id)]),
-      )
-        .sort()
-        .join(","),
-    [membersByUserId, participants],
+  const {
+    members,
+    byUserId: membersByUserId,
+    isLoading: isLoadingMembers,
+    refetch: fetchMembers,
+  } = useGroupMembers(
+    conversation.id,
+    participants,
+    createdBy,
+    memberListVersion,
   );
-  React.useEffect(() => {
-    const ids = memberIdsKey ? memberIdsKey.split(",") : [];
-    if (ids.length === 0) return;
-    let cancelled = false;
-    void loadUserProfiles(ids).then((profileMap) => {
-      if (cancelled) return;
-      const resolved: Record<string, { departmentName?: string; companyName?: string }> = {};
-      for (const [id, profile] of Object.entries(profileMap)) {
-        if (!profile) continue;
-        const p = profile as { department?: string | null; company?: string | null };
-        if (p.department || p.company) {
-          resolved[id] = {
-            departmentName: p.department ?? undefined,
-            companyName: p.company ?? undefined,
-          };
-        }
-      }
-      if (Object.keys(resolved).length > 0) {
-        setMembersHrByUserId((prev) => ({ ...prev, ...resolved }));
-      }
-    });
-    return () => { cancelled = true; };
-  }, [memberIdsKey]);
 
   const filteredMembers = React.useMemo(() => {
     let result = members;
@@ -506,25 +331,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     [currentUserId, currentUserRole, groupCapabilities],
   );
 
-  const fetchMembers = useCallback(async () => {
-    setIsLoadingMembers(true);
-    try {
-      const response = await groupMembersSingleFlight(conversation.id, () =>
-        chatApi.group.getMembers(conversation.id, 1, 200),
-      );
-      const payload = unwrapApiSuccess(response);
-      const rows = extractMemberRows(payload);
-      const nextMembers = rows.map((row) => normalizeMember(row)).filter((m): m is GroupMember => m !== null);
-      const nextById: Record<string, GroupMember> = {};
-      nextMembers.forEach((m) => { nextById[m.id] = m; });
-      setMembersByUserId((prev) => areMemberMapsEqual(prev, nextById) ? prev : nextById);
-    } catch (error) {
-      toast.error(extractApiError(error).message || loadMembersFailedMessage);
-    } finally {
-      setIsLoadingMembers(false);
-    }
-  }, [conversation.id, loadMembersFailedMessage]);
-
   const refreshConversation = useCallback(async () => {
     const response = await getConversationByIdUseCase(conversation.id);
     updateConversation(conversation.id, unwrapApiSuccess(response));
@@ -536,10 +342,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const groupAvatar = useGroupAvatarUpload(conversation.id, refreshGroupState);
   const resetGroupAvatar = groupAvatar.reset;
+  const groupRename = useGroupRename(
+    conversation.id,
+    conversation.name || "",
+    refreshGroupState,
+    setIsSubmitting,
+  );
 
+  // Đổi nhóm → trả panel về trạng thái sạch. Phần đổi tên và ảnh đại diện tự
+  // reset bên trong hook của chúng.
   React.useEffect(() => {
-    setGroupNameDraft(conversation.name || "");
-    setIsRenamingGroup(false);
     setShowAddMember(false);
     resetGroupAvatar();
     setMemberSearch("");
@@ -547,7 +359,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     setMembersShowAll(false);
   }, [conversation.id, conversation.name, resetGroupAvatar]);
 
-  React.useEffect(() => { void fetchMembers(); }, [fetchMembers, memberListVersion]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -627,23 +438,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     },
     [conversation.id, refreshGroupState, t],
   );
-
-  const handleRenameGroup = useCallback(async () => {
-    const nextName = groupNameDraft.trim();
-    if (!nextName) { toast.error(t("profile:toast.groupNameRequired")); return; }
-    if (nextName === (conversation.name || "").trim()) { setIsRenamingGroup(false); return; }
-    setIsSubmitting(true);
-    try {
-      await chatApi.group.updateSettings(conversation.id, { title: nextName });
-      await refreshGroupState();
-      setIsRenamingGroup(false);
-      toast.success(t("profile:toast.groupRenamed"));
-    } catch (error) {
-      toast.error(extractApiError(error).message || t("profile:toast.groupRenameFailed"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [conversation.id, conversation.name, groupNameDraft, refreshGroupState, t]);
 
   const handleToggleMemberRole = useCallback(
     async (member: GroupMember) => {
@@ -861,7 +655,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 </div>
               )}
             </div>
-            {isAdmin && !isRenamingGroup && (
+            {isAdmin && !groupRename.isEditing && (
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
@@ -875,15 +669,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
 
           {/* Group Name */}
-          {isRenamingGroup ? (
+          {groupRename.isEditing ? (
             <div className="w-full max-w-[240px] space-y-2">
               <Input
                 type="text"
-                value={groupNameDraft}
-                onChange={(e) => setGroupNameDraft(e.target.value)}
+                value={groupRename.draft}
+                onChange={(e) => groupRename.setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); void handleRenameGroup(); }
-                  if (e.key === "Escape") { setIsRenamingGroup(false); setGroupNameDraft(conversation.name || ""); }
+                  if (e.key === "Enter") { e.preventDefault(); void groupRename.submit(); }
+                  if (e.key === "Escape") groupRename.cancel();
                 }}
                 placeholder={t("profile:groupInfo.renamePlaceholder")}
                 disabled={isSubmitting}
@@ -891,7 +685,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => { setIsRenamingGroup(false); setGroupNameDraft(conversation.name || ""); }}
+                  onClick={groupRename.cancel}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted hover:bg-surface-hover"
                 >
                   {t("common:actions.cancel")}
@@ -899,7 +693,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 <button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => void handleRenameGroup()}
+                  onClick={() => void groupRename.submit()}
                   className="inline-flex items-center gap-1 rounded-lg bg-[#1565C0] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
                 >
                   <CheckIcon className="h-3.5 w-3.5" />
@@ -915,7 +709,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               {isAdmin && (
                 <button
                   type="button"
-                  onClick={() => setIsRenamingGroup(true)}
+                  onClick={groupRename.start}
                   disabled={isSubmitting}
                   className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label={t("profile:groupInfo.renameGroup")}
