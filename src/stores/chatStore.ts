@@ -46,10 +46,15 @@ import {
 import {
   compareMessages,
   matchesMessage,
-  resolveMessageMatchIndex,
   sortMessages,
   toMessageIdentityKeys,
 } from "./messageOrdering";
+import {
+  allocateLocalMessageOrder,
+  dedupeAndSortMessages,
+  mergeMessageRecords,
+  mergeMessages,
+} from "./messageMergeRecords";
 import {
   buildConversationIndexState,
   computeCanonicalTotalUnreadCount,
@@ -371,13 +376,6 @@ const initialFetchSeqByConversation = new Map<string, number>();
 const messageFetchGenerationByConversation = new Map<string, number>();
 let activeAuthoritativeHistoryAbortController: AbortController | null = null;
 let conversationsFetchPromise: Promise<void> | null = null;
-let nextLocalMessageOrder = 1;
-
-const allocateLocalMessageOrder = (): number => {
-  const allocated = nextLocalMessageOrder;
-  nextLocalMessageOrder += 1;
-  return allocated;
-};
 
 const buildLoadingStateFromInFlightMap = (): {
   isLoadingMessages: boolean;
@@ -1118,167 +1116,6 @@ const resolveSendFailureDescriptor = (
     }),
   };
 };
-
-const mergeDefinedMessageFields = (
-  current: Message,
-  incoming: Message,
-): Message => {
-  const merged = { ...current } as unknown as Record<string, unknown>;
-  Object.entries(incoming as unknown as Record<string, unknown>).forEach(
-    ([key, value]) => {
-      if (value !== undefined) {
-        merged[key] = value;
-      }
-    },
-  );
-  return merged as unknown as Message;
-};
-
-const resolveMergedSendState = (
-  current: Message,
-  incoming: Message,
-): Message["sendState"] => {
-  const currentState = current.sendState;
-  const incomingState = incoming.sendState;
-  const incomingHasServerAck =
-    incoming.status === MessageStatus.SENT ||
-    incoming.status === MessageStatus.DELIVERED ||
-    incoming.status === MessageStatus.READ ||
-    !isTempMessageId(incoming.id);
-
-  if (incomingHasServerAck && incomingState !== "failed") {
-    return "sent";
-  }
-  if (incomingState === "failed") {
-    return "failed";
-  }
-  if (incomingState) {
-    return incomingState;
-  }
-  if (
-    current.status === MessageStatus.SENT ||
-    current.status === MessageStatus.DELIVERED ||
-    current.status === MessageStatus.READ
-  ) {
-    return "sent";
-  }
-  return currentState;
-};
-
-const mergeMessageRecords = (current: Message, incoming: Message): Message => {
-  const currentVersion = toFiniteNumber(current.version);
-  const incomingVersion = toFiniteNumber(incoming.version);
-  const currentUpdatedAt = Math.max(
-    toDateValue(current.updatedAt),
-    toDateValue(current.editedAt),
-    toDateValue(current.readAt),
-    toDateValue(current.deliveredAt),
-  );
-  const incomingUpdatedAt = Math.max(
-    toDateValue(incoming.updatedAt),
-    toDateValue(incoming.editedAt),
-    toDateValue(incoming.readAt),
-    toDateValue(incoming.deliveredAt),
-  );
-  const preferCurrent =
-    currentVersion !== null &&
-    incomingVersion !== null &&
-    incomingVersion < currentVersion
-      ? true
-      : currentVersion === incomingVersion &&
-        incomingUpdatedAt > 0 &&
-        incomingUpdatedAt < currentUpdatedAt;
-
-  const merged = preferCurrent
-    ? mergeDefinedMessageFields(incoming, current)
-    : mergeDefinedMessageFields(current, incoming);
-
-  if (isTempMessageId(current.id) && !isTempMessageId(incoming.id)) {
-    merged.id = incoming.id;
-  } else if (!isTempMessageId(current.id) && isTempMessageId(incoming.id)) {
-    merged.id = current.id;
-  }
-
-  merged.localId =
-    incoming.localId ||
-    current.localId ||
-    (isTempMessageId(current.id)
-      ? current.id
-      : isTempMessageId(incoming.id)
-        ? incoming.id
-        : undefined);
-  merged.clientMessageId =
-    incoming.clientMessageId || current.clientMessageId || merged.localId;
-  merged.version =
-    Math.max(
-      toFiniteNumber(current.version) ?? 0,
-      toFiniteNumber(incoming.version) ?? 0,
-    ) || undefined;
-  merged.stableId =
-    current.stableId ||
-    incoming.stableId ||
-    merged.clientMessageId ||
-    merged.localId ||
-    merged.id;
-  merged.localOrder =
-    incoming.localOrder ?? current.localOrder ?? allocateLocalMessageOrder();
-
-  const currentTransport = current.transportStatus;
-  const incomingTransport = incoming.transportStatus;
-  merged.transportStatus =
-    incomingTransport === "synced_stream" ||
-    currentTransport === "synced_stream"
-      ? "synced_stream"
-      : incomingTransport === "acked_transport" ||
-          currentTransport === "acked_transport"
-        ? "acked_transport"
-        : incomingTransport || currentTransport;
-  merged.sendState = resolveMergedSendState(current, incoming);
-  if (merged.sendState === "sent") {
-    merged.queuedReason = undefined;
-    merged.failureReason = undefined;
-    merged.errorCode = undefined;
-    merged.errorMessage = undefined;
-  }
-
-  return merged;
-};
-
-const dedupeAndSortMessages = (messages: Message[]): Message[] => {
-  const deduped: Message[] = [];
-  const keyToIndex = new Map<string, number>();
-
-  for (const message of messages) {
-    const existingIndex = resolveMessageMatchIndex(
-      deduped,
-      keyToIndex,
-      message,
-    );
-    if (existingIndex < 0) {
-      const nextIndex = deduped.push(message) - 1;
-      toMessageIdentityKeys(message).forEach((key) => {
-        keyToIndex.set(key, nextIndex);
-      });
-      continue;
-    }
-
-    deduped[existingIndex] = mergeMessageRecords(
-      deduped[existingIndex],
-      message,
-    );
-    toMessageIdentityKeys(deduped[existingIndex]).forEach((key) => {
-      keyToIndex.set(key, existingIndex);
-    });
-  }
-
-  return sortMessages(deduped);
-};
-
-const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
-  dedupeAndSortMessages([
-    ...(Array.isArray(current) ? current : []),
-    ...(Array.isArray(incoming) ? incoming : []),
-  ]);
 
 const replaceMessages = (
   current: Message[],
