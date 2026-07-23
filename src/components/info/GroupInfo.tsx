@@ -116,14 +116,6 @@ interface GroupMember {
   role: GroupMemberRole;
 }
 
-type PendingGroupConfirm =
-  | { type: "remove-member"; member: GroupMember }
-  | { type: "leave-group" }
-  | { type: "transfer-ownership"; member: GroupMember }
-  | { type: "delete-group" }
-  | { type: "ban-member"; member: GroupMember }
-  | null;
-
 type ModalMemberTarget = { memberId: string; memberName: string } | null;
 
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
@@ -269,7 +261,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
-  const [pendingConfirm, setPendingConfirm] = useState<PendingGroupConfirm>(null);
+  const [isLeaveGroupConfirmOpen, setIsLeaveGroupConfirmOpen] = useState(false);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -674,7 +666,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleRemoveMember = useCallback(
     (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
-      setPendingConfirm({ type: "remove-member", member });
       setRemoveMemberTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [canRemoveMember],
@@ -687,7 +678,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await chatApi.group.removeMember(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setRemoveMemberTarget(null);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
@@ -705,7 +695,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       toast.error(t("profile:groupInfo.leaveBlockedOwner", { defaultValue: "Hãy chuyển quyền trưởng nhóm trước khi rời nhóm." }));
       return;
     }
-    setPendingConfirm({ type: "leave-group" });
+    setIsLeaveGroupConfirmOpen(true);
   }, [canLeaveCurrentGroup, t]);
 
   const confirmLeaveGroup = useCallback(async () => {
@@ -714,7 +704,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     try {
       await chatApi.group.leaveGroup(conversation.id);
       removeConversation(conversation.id);
-      setPendingConfirm(null);
+      setIsLeaveGroupConfirmOpen(false);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
@@ -729,7 +719,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleTransferOwnership = useCallback(
     (member: GroupMember) => {
       if (currentUserRole !== RoomMemberRole.OWNER || member.role === RoomMemberRole.OWNER) return;
-      setPendingConfirm({ type: "transfer-ownership", member });
       setTransferOwnershipTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [currentUserRole],
@@ -742,7 +731,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await transferOwnershipUseCase(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setTransferOwnershipTarget(null);
         toast.success(t("profile:toast.ownershipTransferred", { name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }) }));
       } catch (error) {
@@ -766,7 +754,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     try {
       await deleteGroupUseCase(conversation.id);
       removeConversation(conversation.id);
-      setPendingConfirm(null);
       setDeleteGroupTarget(false);
       toast.success(t("profile:toast.groupDeleted"));
       onClose();
@@ -783,7 +770,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (member: GroupMember) => {
       if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
       if (member.role === RoomMemberRole.OWNER) return;
-      setPendingConfirm({ type: "ban-member", member });
       setBanMemberTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [currentUserRole],
@@ -796,7 +782,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await banMemberUseCase(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setBanMemberTarget(null);
         toast.success(t("profile:toast.memberBanned", { name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }) }));
       } catch (error) {
@@ -830,31 +815,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // ─── Derived values ───────────────────────────────────────────────────────────
 
-  const pendingConfirmMember =
-    pendingConfirm?.type === "remove-member" || pendingConfirm?.type === "transfer-ownership"
-      ? pendingConfirm.member : null;
-  const pendingConfirmMemberName = pendingConfirmMember
-    ? resolveMemberName(pendingConfirmMember) || pendingConfirmMember.id : "";
   const pendingJoinRequestsCount = joinRequests.filter((r) => r.status === "pending").length;
-
-  const confirmTitle =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveGroup")
-    : pendingConfirm?.type === "transfer-ownership" ? t("profile:groupInfo.transferOwnership")
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroup")
-    : pendingConfirm?.type === "ban-member" ? t("profile:groupInfo.banMember")
-    : t("profile:groupInfo.actions.removeMember", { defaultValue: "Xoá thành viên" });
-
-  const confirmMessage =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveConfirm")
-    : pendingConfirm?.type === "transfer-ownership" ? t("profile:groupInfo.transferOwnershipConfirm", { name: pendingConfirmMemberName })
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroupConfirm")
-    : pendingConfirm?.type === "ban-member" ? t("profile:groupInfo.banMemberConfirm", { name: pendingConfirmMemberName })
-    : t("profile:groupInfo.removeMemberConfirm", { name: pendingConfirmMemberName });
-
-  const confirmText =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveGroup")
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroup")
-    : t("common:actions.remove", { defaultValue: "Xoá" });
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
@@ -1675,19 +1636,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       />
 
       {/* Confirmation modals */}
+      {/* Rời nhóm là luồng duy nhất chưa có modal chuyên dụng — 4 luồng còn lại
+          (xoá/cấm thành viên, chuyển quyền, xoá nhóm) dùng *Modal bên dưới. */}
       <ConfirmDialog
-        isOpen={pendingConfirm !== null}
-        onClose={() => { if (!isConfirmActionPending) setPendingConfirm(null); }}
-        onConfirm={() => {
-          if (pendingConfirm?.type === "remove-member") { void confirmRemoveMember(pendingConfirm.member); return; }
-          if (pendingConfirm?.type === "leave-group") { void confirmLeaveGroup(); return; }
-          if (pendingConfirm?.type === "transfer-ownership") { void confirmTransferOwnership(pendingConfirm.member); return; }
-          if (pendingConfirm?.type === "delete-group") { void confirmDeleteGroup(); return; }
-          if (pendingConfirm?.type === "ban-member") { void confirmBanMember(pendingConfirm.member); }
-        }}
-        title={confirmTitle}
-        message={confirmMessage}
-        confirmText={confirmText}
+        isOpen={isLeaveGroupConfirmOpen}
+        onClose={() => { if (!isConfirmActionPending) setIsLeaveGroupConfirmOpen(false); }}
+        onConfirm={() => void confirmLeaveGroup()}
+        title={t("profile:groupInfo.leaveGroup")}
+        message={t("profile:groupInfo.leaveConfirm")}
+        confirmText={t("profile:groupInfo.leaveGroup")}
         isLoading={isConfirmActionPending}
         variant="danger"
       />

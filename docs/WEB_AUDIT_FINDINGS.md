@@ -19,6 +19,7 @@ Việc thật nằm ở **4 finding**, xếp theo giá trị ÷ rủi ro:
 | **F-02** | `useMemo` phụ thuộc object `currentUser` thay vì `currentUser.id` → tính lại thừa ở hot path | giải thuật | **THẤP** | VỪA |
 | **F-03** | `GroupInfo.tsx`: **35 `useState`** trong 1 component, 1807 dòng | SRP | VỪA | VỪA |
 | **F-04** | Hai file cùng tên `messageIdentity.ts` khác vai trò → dễ import nhầm | đặt tên | **THẤP** | THẤP |
+| **F-05** | 🔴 **BUG:** hai hộp thoại xác nhận mở chồng nhau (xoá/cấm thành viên, chuyển quyền) | correctness | **THẤP** | **CAO** |
 
 Ngoài ra: **97 lỗi lint** tồn đọng (mục 6) và ghi chú vì sao `chatStore` **chưa nên** cắt vội (mục 5).
 
@@ -112,12 +113,12 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 |---|---|---|
 | Upload ảnh đại diện | ✅ | [`useGroupAvatarUpload.ts`](../src/components/info/useGroupAvatarUpload.ts) — 192 dòng, mang theo cả `revokeBlobUrl` + `resolveGroupAvatarStageLabel` + `ALLOWED_GROUP_AVATAR_TYPES` + type `GroupAvatarUploadStage` |
 | Link mời | ✅ | [`useGroupInviteLinks.ts`](../src/components/info/useGroupInviteLinks.ts) — 171 dòng, gom 4 state + 4 handler (create/copy/revoke/delete) |
+| Modal xác nhận | ✅ | **Phát hiện + sửa bug thật — xem F-05 bên dưới** |
 | Danh sách thành viên | ⬜ | lớn nhất, dính `singleFlight` + `memberListVersion` |
-| Modal xác nhận | ⬜ | 6 state, nên gom thành 1 máy trạng thái thay vì 6 cờ rời |
 | Đổi tên nhóm | ⬜ | 2 state, nhỏ |
 | Đóng/mở khu vực | ⬜ | 2 state, nhỏ |
 
-**Đo được:** `GroupInfo.tsx` **1807 → 1776 dòng**, `useState` **35 → 28**.
+**Đo được:** `GroupInfo.tsx` **1807 → 1733 dòng**, `useState` **35 → 28**.
 
 > Số dòng giảm ít hơn kỳ vọng vì code chuyển đi được **giãn ra cho dễ đọc** trong hook (bản cũ nhồi nhiều lệnh trên một dòng). Giá trị thật không nằm ở số dòng mà ở chỗ: 7 state rời rạc giờ nằm sau 2 API có tên, có invariant riêng, test được độc lập.
 >
@@ -144,6 +145,44 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 **Đề xuất:** đổi tên theo vai trò: `utils/messageIdentity.ts` → **`messageIdFactory.ts`**; `domain/messageIdentity.ts` → **`messageIdentityMatching.ts`**. Chỉ đổi tên + cập nhật import, không đụng logic.
 
 > Ghi chú: `isTempMessageId` có ở **cả hai** file với cùng logic (`startsWith("temp-")`) — và một bản thứ ba ở [`chatStore.ts:1538`](../src/stores/chatStore.ts#L1538). Gộp về một nguồn khi làm F-04.
+
+---
+
+## F-05 · Hai hộp thoại xác nhận mở chồng nhau 🔴 BUG THẬT — ĐÃ SỬA
+
+- **Vị trí:** [`components/info/GroupInfo.tsx`](../src/components/info/GroupInfo.tsx)
+- **Loại:** correctness (một sự thật, hai nguồn) · **Đã sửa 23-07-26**
+- **Không có trong audit ban đầu** — lộ ra khi tách nhóm "Modal xác nhận" của F-03.
+
+**Triệu chứng:** bấm **Xoá thành viên** / **Cấm thành viên** / **Chuyển quyền trưởng nhóm** → **hai hộp thoại mở chồng lên nhau**.
+
+**Nguyên nhân gốc:** hai state cùng mô tả một sự việc, và handler set **cả hai**:
+
+```ts
+const handleRemoveMember = useCallback((member) => {
+  setPendingConfirm({ type: "remove-member", member });   // → mở ConfirmDialog
+  setRemoveMemberTarget({ memberId, memberName });        // → mở RemoveMemberModal
+}, ...);
+```
+
+`ConfirmDialog` mở khi `pendingConfirm !== null`, `RemoveMemberModal` mở khi `removeMemberTarget !== null`. Cả hai cùng khác null → cùng hiển thị. Y hệt với `ban-member` và `transfer-ownership`.
+
+**Bug thứ hai, ngược chiều:** `handleDeleteGroup` chỉ set `deleteGroupTarget`, **không** set `pendingConfirm` → nhánh `"delete-group"` bên trong `ConfirmDialog` (title/message/confirmText) là **code chết**, không bao giờ chạy.
+
+**Cách sửa (theo lựa chọn của user — giữ modal chuyên dụng):**
+
+| Luồng | Sau khi sửa |
+|---|---|
+| Xoá / cấm thành viên, chuyển quyền, xoá nhóm | dùng `*Modal` chuyên dụng (nền `TypedConfirmationModal`) |
+| **Rời nhóm** | giữ `ConfirmDialog` — **luồng duy nhất chưa có modal chuyên dụng** |
+
+- Bỏ `pendingConfirm` + type `PendingGroupConfirm` + 3 khối `confirmTitle`/`confirmMessage`/`confirmText` (~24 dòng logic ba ngôi lồng nhau).
+- Thay bằng một cờ đúng nghĩa: `isLeaveGroupConfirmOpen`.
+- **Giữ nguyên** `DeleteGroupModal` vì nó bắt gõ đúng tên nhóm (`requiredConfirmationText`) — mức an toàn cao hơn `ConfirmDialog` cho thao tác không hoàn tác được.
+
+**Kiểm chứng:** cả 5 handler giờ set **đúng một** state; `pendingConfirm` còn **0** lần xuất hiện trong file.
+
+> **Bài học:** bug này không phải lỗi cẩu thả mà là hệ quả trực tiếp của nợ SRP. Trong một component 1807 dòng với 35 `useState`, việc hai state cùng mô tả một sự việc là gần như không thể phát hiện bằng mắt. Nó chỉ lộ ra khi gom state theo nhóm trách nhiệm.
 
 ---
 
