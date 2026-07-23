@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { asString } from "../utils/payloadGuards";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -6,9 +7,6 @@ const warnedMessages = new Set<string>();
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   value !== null && typeof value === "object";
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const warnOnce = (key: string, message: string, extra?: unknown): void => {
   if (!import.meta.env.DEV || warnedMessages.has(key)) {

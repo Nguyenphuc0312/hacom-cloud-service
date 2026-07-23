@@ -46,7 +46,6 @@ export const ComposerLinkPreview: React.FC<ComposerLinkPreviewProps> = ({
     } else if (!isLoading && meta) {
       onMetaChange(meta);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, isDismissed, isLoading, meta, onMetaChange]);
 
   if (!url || isDismissed) return null;

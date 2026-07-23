@@ -155,10 +155,21 @@ export const storeTokens = (
     return;
   }
 
-  // Always persist refresh token to localStorage so the session survives
-  // browser close/reopen. Product requirement: stay logged in until explicit logout.
-  localStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
-  sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  // Tôn trọng lựa chọn của người dùng:
+  // - Có tick "ghi nhớ đăng nhập" → localStorage, phiên sống qua đóng/mở trình duyệt.
+  // - Không tick → sessionStorage, đóng tab là mất phiên.
+  //
+  // Trước đây luôn ghi vào localStorage bất kể cờ rememberMe, khiến ô "ghi nhớ"
+  // chỉ còn ý nghĩa hiển thị và token của máy dùng chung vẫn sống sau khi đóng
+  // trình duyệt. `getRefreshToken()` đọc cả hai storage nên cả hai nhánh đều
+  // hoạt động bình thường.
+  if (rememberMe) {
+    localStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+    sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  }
 };
 
 export const clearTokens = (): void => {

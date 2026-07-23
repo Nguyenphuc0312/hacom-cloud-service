@@ -6,14 +6,13 @@ import type {
   UserSummary,
 } from "../types";
 import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
+import { asStringValue as asString } from "../utils/payloadGuards";
 
 type UnknownRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   value !== null && typeof value === "object";
 
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
 const asNullableString = (value: unknown): string | null | undefined => {
   if (value === null) {

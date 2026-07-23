@@ -20,6 +20,7 @@ Việc thật nằm ở **4 finding**, xếp theo giá trị ÷ rủi ro:
 | **F-03** | `GroupInfo.tsx`: **35 `useState`** trong 1 component, 1807 dòng | SRP | VỪA | VỪA |
 | **F-04** | Hai file cùng tên `messageIdentity.ts` khác vai trò → dễ import nhầm | đặt tên | **THẤP** | THẤP |
 | **F-05** | 🔴 **BUG:** hai hộp thoại xác nhận mở chồng nhau (xoá/cấm thành viên, chuyển quyền) | correctness | **THẤP** | **CAO** |
+| **F-06** | `asRecord` / `asString` chép nguyên ở ~20 file | tái-dùng | THẤP (4 file) | VỪA |
 
 Ngoài ra: **97 lỗi lint** tồn đọng (mục 6) và ghi chú vì sao `chatStore` **chưa nên** cắt vội (mục 5).
 
@@ -192,6 +193,68 @@ const handleRemoveMember = useCallback((member) => {
 
 ---
 
+## F-07 · Refresh token bỏ qua lựa chọn "ghi nhớ đăng nhập" 🔴 ĐÃ SỬA
+
+- **Vị trí:** [`services/tokenService.ts`](../src/services/tokenService.ts) — `storeTokens`
+- **Loại:** bảo mật / đúng ý người dùng · **Đã sửa 23-07-26**
+- Phát hiện từ Phase 1 (test đỏ `tokenService.test.ts`), treo chờ duyệt vì **đổi hành vi đăng nhập**.
+
+**Hiện trạng cũ:** refresh token **luôn** ghi vào `localStorage`, bất kể người dùng có tick "ghi nhớ đăng nhập" hay không. Hệ quả: ô tick chỉ còn ý nghĩa hiển thị, và trên máy dùng chung phiên vẫn sống sau khi đóng trình duyệt.
+
+**Sau khi sửa:**
+
+| Lựa chọn | Nơi lưu | Vòng đời |
+|---|---|---|
+| Có tick ghi nhớ | `localStorage` | sống qua đóng/mở trình duyệt |
+| Không tick | `sessionStorage` | đóng tab là mất phiên |
+
+**Vì sao an toàn:** `getRefreshToken()` vốn đã đọc **cả hai** storage nên không phải sửa chỗ đọc. Luồng refresh dùng `isRememberMeEnabled()` đọc cờ đã lưu nên vẫn nhất quán.
+
+Thêm 2 test: đổi lựa chọn giữa hai lần đăng nhập **dọn sạch storage cũ** (token không nằm lại hai nơi), và `getRefreshToken` đọc được từ cả hai nguồn.
+
+---
+
+## F-06 · `asRecord` / `asString` bị chép khắp repo ✅ ĐÃ SỬA
+
+- **Loại:** tái-dùng · **Rủi ro sửa: THẤP (4 file) / VỪA (phần còn lại)**
+- Phát hiện khi rà lại chính code của phiên này — 2 trong 4 bản trùng là **do phiên này tạo ra**.
+
+**Hiện trạng:** `asRecord` và `asString` là hai type-guard 2 dòng, bị **chép nguyên** ở khoảng **20 file**.
+
+### ✅ Đã gộp (4 file — giống hệt nhau từng ký tự)
+
+Tạo [`utils/payloadGuards.ts`](../src/utils/payloadGuards.ts) làm nguồn duy nhất, 4 nơi trỏ về:
+`stores/messageNormalizer.ts` · `hooks/realtimePayload.ts` · `hooks/usePresence.ts` · `stores/friendshipStore.ts`
+
+Hai module đầu **re-export** lại nên nơi gọi cũ (`chatStore`, `useWebSocket`) không phải sửa.
+
+**Giữ riêng `asString` và `asStringValue`** dù chỉ khác kiểu trả về (`null` vs `undefined`): nơi gọi phụ thuộc đúng kiểu đó trong các chuỗi `??`. Đã có test khoá lại khác biệt này để lần sau không ai gộp nhầm.
+
+### ✅ Đã gộp nốt phần còn lại (23-07-26) — tổng **19 file**
+
+Phân loại bằng **vân tay MD5** từng bản thay vì đọc mắt thường, ra 4 nhóm:
+
+| Nhóm | Số file | Xử lý |
+|---|---|---|
+| `asRecord` chuẩn | 9 | ✅ gộp → `payloadGuards.asRecord` |
+| `asString` trả `null` | 5 | ✅ gộp → `payloadGuards.asString` |
+| `asString` trả `undefined` | 4 | ✅ gộp → `payloadGuards.asStringValue` (import kèm alias, không phải sửa lời gọi) |
+| **Hành vi khác** | 3 | ⛔ **giữ nguyên có chủ ý** |
+
+Hai biến thể `asRecord` tưởng khác hoá ra tương đương: `conversationRanking` chỉ khác alias kiểu, `ProfileEditDialog` dùng `value &&` thay `value !== null` — khác duy nhất ở `0`/`""` mà cả hai đều trả `null` vì không phải object.
+
+### ⛔ 3 file CỐ Ý không gộp
+
+| File | Hành vi riêng |
+|---|---|
+| `features/auth/api/authApi.ts` | trả **bản đã trim** (chuẩn trả chuỗi gốc) |
+| `features/auth/utils/authErrorMapper.ts` | như trên |
+| `features/chat/identity/resolveUserDisplayName.ts` | trả `""`, **không phải `null`** |
+
+Gộp chúng sẽ **đổi hành vi âm thầm** ở tầng auth và hiển thị tên — đúng loại bug khó truy nhất. Muốn gộp thì phải sửa cả nơi gọi, là việc khác.
+
+---
+
 ## 5. Vì sao `chatStore.ts` (5099 dòng) CHƯA nên cắt vội
 
 Kế hoạch xếp nó vào Phase 4. Sau khi đọc kỹ, **giữ nguyên đánh giá đó**, nhưng lý do đã đổi:
@@ -209,7 +272,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 4 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 5 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -219,13 +282,23 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 2 | [`conversationCursor.ts`](../src/stores/conversationCursor.ts) | 128 | con trỏ phân trang, `computeCanonicalTotalUnreadCount`, `buildConversationIndexState` |
 | 3 | [`conversationSummaryMerge.ts`](../src/stores/conversationSummaryMerge.ts) | 158 | `shouldApplyConversationSummary` + `mergeConversationSummary` — **stale-read guard** |
 | 4 | [`messageOrdering.ts`](../src/stores/messageOrdering.ts) | 97 | `compareMessages`, `sortMessages`, `matchesMessage`, `resolveMessageMatchIndex` — **thứ tự + nhận dạng tin nhắn** |
+| 5 | [`realtimePayload.ts`](../src/hooks/realtimePayload.ts) | 143 | đọc & phân loại payload WebSocket — cắt từ `useWebSocket.ts`, không phải `chatStore` |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
 
 **Vì sao chọn đúng 2 nhóm này:** đã kiểm chứng bằng grep là **hoàn toàn thuần** — không một lần gọi `set()` / `get()` / store nào trong vùng cắt. Đây là ranh giới sạch nhất trong cả file.
 
-**Đo được:** `chatStore.ts` **5101 → 4630 dòng (−471, −9%)**; **+76 test mới** (21 normalizer + 16 cursor + 15 summary-merge + 24 ordering).
+**Đo được:**
+
+| File | Trước | Sau |
+|---|---|---|
+| `chatStore.ts` | 5101 | **4630** (−471, −9%) |
+| `useWebSocket.ts` | 3104 | **3016** (−88) |
+
+**+99 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload.
+
+**Lát 5 — vì sao đáng làm dù diff nhỏ:** `shouldSkipGroupConversationRefreshForCurrentUser` và `shouldUseDeltaConversationRefresh` đã được `export` sẵn (dấu hiệu ai đó định test) nhưng **chưa có một test nào**. Đây là logic quyết định có gọi lại API refresh hay không — sai thì hoặc thừa request, hoặc danh sách hội thoại đứng im. Giờ đã có 23 test phủ, và `useWebSocket.ts` vẫn giữ nguyên API công khai qua re-export nên nơi gọi không phải sửa.
 
 **Lát 4 gỡ thêm một trùng lặp ở tầng lõi** — đúng thứ user nêu từ đầu (*"cái nào dùng chung thì dùng đi"*):
 
@@ -236,7 +309,9 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 
 Đã viết [`messageOrdering.equivalence.test.ts`](../src/stores/messageOrdering.equivalence.test.ts) **đối chứng hai bản `compareMessages`**: tương đương trên 9 trường hợp (seq, serverTs, localOrder, createdAt, stableId, id, thiếu-seq, thiếu-localOrder, trùng hệt). Khác biệt **duy nhất**: bản domain đọc thêm `messageSeq` làm seq dự phòng.
 
-> Chưa gộp hai bản `compareMessages` vì khác biệt đó là **thật, không phải ngẫu nhiên**: gộp = đổi thứ tự timeline cho các tin chỉ có `messageSeq`. Đó là đổi hành vi, phải do user quyết. Test đối chứng đã ghi lại chính xác khác biệt để việc gộp sau này là quyết định có dữ liệu, không phải phỏng đoán.
+**✅ ĐÃ GỘP (23-07-26).** Căn cứ quyết định: [`chatStore.ts:552`](../src/stores/chatStore.ts#L552) — `normalizeMessage` **đã gộp `messageSeq` vào `serverSeq`** (`asNumberValue(source.serverSeq) ?? asNumberValue(source.messageSeq)`) từ trước. Nên message nằm trong store không bao giờ có `messageSeq` mà thiếu `serverSeq` → khác biệt giữa hai bản **không tới được store**.
+
+`stores/messageOrdering.ts` giờ re-export thẳng `compareMessages` của domain. Test đối chứng giữ lại làm bằng chứng, kèm một case mới xác nhận sau chuẩn hoá thì hai bản khớp tuyệt đối.
 
 **Riêng lát 3 — phần đáng giá nhất:** `mergeConversationSummary` là logic tinh vi nhất store, chống race giữa optimistic `markAsRead` và response cũ về muộn (comment trong code cho thấy nó đã sửa qua nhiều bug thật: BIGINT về dạng chuỗi, phân biệt "dữ liệu cũ" với "dữ liệu thiếu"). Trước đây nó không có test riêng. Giờ 15 test khoá lại đúng các bất biến đó — ví dụ *server không gửi checkpoint là THIẾU dữ liệu, không phải dữ liệu cũ, nên vẫn phải nhận unread mới*.
 
@@ -256,7 +331,25 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 - `@typescript-eslint/no-unused-vars` — vd [`responsive/responsive.ts:154`](../src/responsive/responsive.ts#L154)
 - **21 warning "Unused eslint-disable directive"** — các dòng `eslint-disable` không còn cần; đây là loại **an toàn nhất để dọn**, `--fix` xử lý được 5 cái.
 
-**Đề xuất:** không gộp vào Phase 3. Tách một lượt dọn lint riêng, vì nó đụng rất nhiều file và sẽ làm nhiễu diff của phần refactor.
+### ✅ Đã dọn phần an toàn (23-07-26): **116 → 103 problems**, **96 → 87 errors**
+
+| Nhóm | Cách xử lý |
+|---|---|
+| `no-unused-vars` — **9 lỗi**, tất cả là biến tiền tố `_` | Sửa **`eslint.config.js`** thêm `argsIgnorePattern: "^_"` (+ vars/caught/destructured). Codebase đã dùng quy ước này sẵn, chỉ là lint chưa biết → **lỗi giả**. Một chỗ sửa, hết 9 lỗi, không đụng file nguồn nào. |
+| `catch (err)` không dùng | Đổi thành `catch {}` — `AudioBubble.tsx` |
+| **Unused eslint-disable** — 4 directive thừa | Xoá: `ComposerLinkPreview` · `TipTapEditor` · `WeekView` · `sseWithAuth` |
+| `src/poc/` | ⛔ bỏ qua đúng quy tắc mục 4 của kế hoạch |
+
+### ⬜ Còn lại 87 errors — vì sao chưa dọn
+
+| Rule | Số | Bản chất |
+|---|---|---|
+| `react-hooks/set-state-in-effect` | 46 | **Đổi hành vi thật** — phải viết lại luồng effect từng chỗ, không phải dọn hình thức |
+| `react-hooks/exhaustive-deps` | 19 | Thêm deps có thể gây vòng lặp render; phải đọc từng hook |
+| `react-refresh/only-export-components` | 10 | Đổi cấu trúc export của module |
+| `react-hooks/preserve-manual-memoization` | 9 | Đụng memo hoá thủ công ở hot path |
+
+Cả 4 nhóm đều **không phải sửa cơ học** — mỗi lỗi cần đọc hiểu ngữ cảnh và có rủi ro đổi hành vi. Đó là công việc riêng, không nên trộn vào một PR "dọn lint".
 
 ---
 

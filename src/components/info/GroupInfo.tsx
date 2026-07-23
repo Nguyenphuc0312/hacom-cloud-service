@@ -54,6 +54,7 @@ import { chatApi } from "../../features/chat/api/chatApi";
 import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
 import { useGroupRename } from "./useGroupRename";
+import { asStringValue as asString } from "../../utils/payloadGuards";
 import {
   useGroupMembers,
   resolveMemberName,
@@ -110,8 +111,6 @@ const POLL_PREVIEW_COUNT = 3;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 

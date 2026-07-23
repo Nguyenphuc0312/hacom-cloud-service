@@ -8,50 +8,26 @@
  * `toMessageIdentityKeys` KHÔNG định nghĩa lại ở đây — dùng chung bản trong
  * `domain/messageIdentityMatching` để chỉ có một nguồn sự thật về danh tính.
  */
-import {
-  getStableMessageId,
-  toMessageIdentityKeys,
-} from "../features/chat/domain/messageIdentityMatching";
+import { toMessageIdentityKeys } from "../features/chat/domain/messageIdentityMatching";
+import { compareMessages } from "../features/chat/domain/messageOrdering";
 import type { Message } from "../types";
-import { toDateValue, toFiniteNumber } from "./conversationCursor";
 
 /**
  * Thứ tự canonical của timeline, xét lần lượt:
- * serverSeq → serverTs → localOrder → createdAt → stableId → id.
+ * seq → serverTs → localOrder → createdAt → stableId → id.
  *
- * Tin đã có `serverSeq` luôn đứng trước tin chưa có: tin optimistic chưa được
- * server xác nhận phải nằm cuối, không được chen vào giữa lịch sử.
- * Bậc cuối (stableId/id) đảm bảo thứ tự tất định — không bao giờ trả 0 cho hai
- * tin khác nhau, nên `sort` cho kết quả ổn định qua các lần render.
+ * Tin đã có seq luôn đứng trước tin chưa có: tin optimistic chưa được server
+ * xác nhận phải nằm cuối, không được chen vào giữa lịch sử. Bậc cuối
+ * (stableId/id) đảm bảo thứ tự tất định — không bao giờ trả 0 cho hai tin khác
+ * nhau, nên `sort` cho kết quả ổn định qua các lần render.
+ *
+ * Dùng chung bản của `domain/messageOrdering` thay vì giữ bản sao: hai bản từng
+ * gần y hệt, khác biệt duy nhất là bản domain còn đọc `messageSeq` làm seq dự
+ * phòng — mà `normalizeMessage` của chatStore đã gộp `messageSeq` vào
+ * `serverSeq` từ trước, nên khác biệt đó không tới được store.
+ * Xem `messageOrdering.equivalence.test.ts` để biết căn cứ.
  */
-export const compareMessages = (a: Message, b: Message): number => {
-  const aSeq = toFiniteNumber(a.serverSeq);
-  const bSeq = toFiniteNumber(b.serverSeq);
-  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
-    return aSeq - bSeq;
-  }
-  if (aSeq !== null && bSeq === null) return -1;
-  if (aSeq === null && bSeq !== null) return 1;
-
-  const serverTimeDiff = toDateValue(a.serverTs) - toDateValue(b.serverTs);
-  if (serverTimeDiff !== 0) return serverTimeDiff;
-
-  // Thiếu localOrder → đẩy về cuối thay vì lên đầu.
-  const localOrderDiff =
-    (toFiniteNumber(a.localOrder) ?? Number.MAX_SAFE_INTEGER) -
-    (toFiniteNumber(b.localOrder) ?? Number.MAX_SAFE_INTEGER);
-  if (localOrderDiff !== 0) return localOrderDiff;
-
-  const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
-  if (timeDiff !== 0) return timeDiff;
-
-  const stableDiff = getStableMessageId(a).localeCompare(getStableMessageId(b));
-  if (stableDiff !== 0) return stableDiff;
-
-  const aId = typeof a.id === "string" ? a.id : "";
-  const bId = typeof b.id === "string" ? b.id : "";
-  return aId.localeCompare(bId);
-};
+export { compareMessages };
 
 /** Sắp xếp trên bản sao — không làm biến đổi mảng gốc. */
 export const sortMessages = (messages: Message[]): Message[] =>

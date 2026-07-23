@@ -13,6 +13,7 @@ import {
   type PresenceState,
 } from "../stores/presenceStore";
 import { formatCalendarDate } from "../utils/formatTime";
+import { asRecord, asString } from "../utils/payloadGuards";
 
 // Debounce subscribe calls by 300ms
 const SUBSCRIBE_DEBOUNCE_MS = 300;
@@ -36,14 +37,6 @@ interface UsePresenceReturn {
 }
 
 // ---- Helpers ----
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 /**
  * Format a last seen ISO timestamp to a human-readable string.

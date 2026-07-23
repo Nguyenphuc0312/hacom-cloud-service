@@ -21,6 +21,18 @@ export default defineConfig([
     },
     rules: {
       "react-hooks/incompatible-library": "error",
+      // Tiền tố `_` = "cố ý không dùng" (tham số giữ chỗ cho đúng chữ ký hàm,
+      // biến destructure để loại field, catch không cần error). Codebase đã
+      // dùng quy ước này sẵn nhưng lint chưa biết nên báo lỗi giả.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
   {
