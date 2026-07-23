@@ -272,7 +272,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 9 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 11 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -287,6 +287,8 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 7 | [`senderProfiles.ts`](../src/stores/senderProfiles.ts) | 287 | chuẩn hoá hồ sơ người gửi + áp vào tin nhắn/hội thoại — **giữ tham chiếu khi không đổi** |
 | 8 | [`sendFailure.ts`](../src/stores/sendFailure.ts) | 129 | phân loại lý do gửi thất bại + trạng thái kết nối |
 | 9 | [`messageAliasIndex.ts`](../src/stores/messageAliasIndex.ts) | 98 | quy mọi bí danh tin nhắn về một id chuẩn |
+| 10 | [`conversationSummaryState.ts`](../src/stores/conversationSummaryState.ts) | 191 | preview tin cuối + mốc hoạt động + tiến độ đọc |
+| 11 | [`messageWindow.ts`](../src/stores/messageWindow.ts) | 141 | phân loại tin đã chốt + cắt tỉa lịch sử — **không bao giờ cắt tin đang gửi dở** |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
@@ -297,10 +299,16 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 
 | File | Trước | Sau |
 |---|---|---|
-| `chatStore.ts` | 5101 | **4041** (−1060, −21%) |
+| `chatStore.ts` | 5101 | **3795** (−1306, −26%) |
 | `useWebSocket.ts` | 3104 | **3016** (−88) |
 
-**+160 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload · 17 merge-records · 18 sender-profiles · 12 send-failure · 14 alias-index.
+**+193 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload · 17 merge-records · 18 sender-profiles · 12 send-failure · 14 alias-index · 18 conversation-summary-state · 15 message-window.
+
+**Lát 11 — bất biến "không mất tin":** `trimInactiveConversationMessages` giải phóng bộ nhớ bằng cách cắt lịch sử hội thoại không mở. Nếu cắt nhầm một tin `sending`/`failed` thì người dùng **mất luôn nội dung vừa soạn**, không cách nào lấy lại. Test khoá lại cả trường hợp cực đoan: khi số tin dở dang vượt ngưỡng thì kết quả **dài hơn ngưỡng** — chủ ý, thà tốn bộ nhớ còn hơn mất tin.
+
+**Lát 10 — bắt được một thay đổi hành vi của chính mình:** khi tách, tôi định gộp logic inline trong `updateConversationActivitySummary` vào `toConversationLastMessageStatus` (trông giống hệt nhau). Kiểm lại thì **khác thật**: bản inline không có nhánh `"pending"` — tin đang gửi được coi là `"sent"` ngay để preview sidebar không nhấp nháy trong lúc chờ ack.
+
+Đã **trả về logic gốc** và thêm test khoá lại chính khác biệt đó, để lần sau ai định gộp sẽ thấy ngay. Gộp hai nhánh là đổi hành vi — phải là quyết định riêng, không nhét vào một lát refactor.
 
 **Lát 7 — bất biến dễ vỡ nhất:** `applySenderProfiles*` chạy trên **cả trang tin nhắn mỗi lần có payload mới**. Bất biến sống còn là **giữ nguyên tham chiếu khi không có gì đổi** — tạo object mới vô cớ sẽ khiến toàn bộ timeline re-render. Trước đây không có test nào bảo vệ điều này; giờ có 3 test riêng cho nó (message, mảng message, participant).
 
