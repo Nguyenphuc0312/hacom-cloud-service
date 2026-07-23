@@ -15,11 +15,8 @@
  * consuming component so the data layer has no view concerns.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAuthStore, type User } from "../../stores";
-import { userApi } from "../../services/api";
-import { unwrapApiSuccess } from "../../lib/apiContract";
-import { resolvePublicResourceUrl } from "../../config";
 import { useMyHrProfile } from "../../hooks/useMyHrProfile";
 import type { HrEmployee, HrMeProfile } from "../api/hrProfileApi";
 import { resolveUserDisplayName } from "../chat/identity/resolveUserDisplayName";
@@ -86,32 +83,6 @@ export const useMyProfile = (options?: { enabled?: boolean }): MyProfile => {
     enabled,
   });
 
-  // Avatar comes from chat-api, never from the auth principal: `/auth/me`
-  // carries only `avatarFileId`, and only chat-api owns file storage and can
-  // sign a URL for it. The signature expires in ~15m, so it is fetched per
-  // mount rather than persisted (authStore deliberately strips it).
-  const [chatAvatar, setChatAvatar] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (!enabled || !user?.id) {
-      setChatAvatar(undefined);
-      return;
-    }
-    let cancelled = false;
-    void userApi
-      .getProfile()
-      .then((response) => {
-        if (cancelled) return;
-        const avatar = (unwrapApiSuccess(response) as { avatar?: string | null })
-          ?.avatar;
-        setChatAvatar(resolvePublicResourceUrl(avatar || undefined));
-      })
-      // ponytail: avatar is cosmetic — a failure falls back to the initials avatar
-      .catch(() => null);
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, user?.id]);
-
   return useMemo<MyProfile>(() => {
     const record = (user as Record<string, unknown> | null) ?? null;
     const fullNameFromHr = hr?.fullName || hrProfile?.fullName || null;
@@ -156,12 +127,12 @@ export const useMyProfile = (options?: { enabled?: boolean }): MyProfile => {
         readValue(record, "jobTitle", "job_title", "title", "position"),
       employmentStatus: hr?.employmentStatus || null,
       dateOfJoining: hr?.dateOfJoining || null,
-      avatar: chatAvatar ?? user?.avatar,
+      avatar: user?.avatar,
       bio: user?.bio,
       createdAt: user?.createdAt,
       status: user?.status || "online",
     };
-  }, [user, hrProfile, hr, loading, loaded, refetch, chatAvatar]);
+  }, [user, hrProfile, hr, loading, loaded, refetch]);
 };
 
 export default useMyProfile;
