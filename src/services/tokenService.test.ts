@@ -22,15 +22,25 @@ describe("tokenService remember-me persistence", () => {
     expect(localStorage.getItem("rememberMe")).toBe("true");
   });
 
-  it("keeps non-remembered refresh token in sessionStorage only", async () => {
+  // ĐÁNH ĐỔI CÓ CHỦ Ý (xem tokenService.ts — storeTokens):
+  // Yêu cầu sản phẩm là "giữ đăng nhập tới khi user tự đăng xuất", nên refresh
+  // token LUÔN vào localStorage, kể cả khi không tick rememberMe. Hệ quả: phiên
+  // sống qua đóng/mở trình duyệt dù user không chọn ghi nhớ; cờ rememberMe chỉ
+  // còn ý nghĩa hiển thị. Nếu sau này muốn tôn trọng lựa chọn "không ghi nhớ"
+  // thì đổi ở storeTokens (dùng sessionStorage) rồi cập nhật test này.
+  it("persists refresh token in localStorage even when rememberMe=false", async () => {
     const tokenService = await importTokenService();
 
     tokenService.storeTokens("access-2", "refresh-2", false);
 
     expect(tokenService.getAccessToken()).toBe("access-2");
-    expect(sessionStorage.getItem("refreshToken")).toBe("refresh-2");
-    expect(localStorage.getItem("refreshToken")).toBeNull();
+    expect(localStorage.getItem("refreshToken")).toBe("refresh-2");
+    expect(sessionStorage.getItem("refreshToken")).toBeNull();
+    // Không tick ghi nhớ thì không đánh dấu cờ, dù token vẫn được lưu.
     expect(localStorage.getItem("rememberMe")).toBeNull();
+    // Access token không bao giờ chạm storage — chỉ nằm trong bộ nhớ.
+    expect(localStorage.getItem("accessToken")).toBeNull();
+    expect(sessionStorage.getItem("accessToken")).toBeNull();
   });
 
   it("migrates legacy persisted access tokens into memory and clears browser storage", async () => {
