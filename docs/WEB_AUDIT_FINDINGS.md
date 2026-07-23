@@ -272,7 +272,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 5 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 9 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -283,6 +283,10 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 3 | [`conversationSummaryMerge.ts`](../src/stores/conversationSummaryMerge.ts) | 158 | `shouldApplyConversationSummary` + `mergeConversationSummary` — **stale-read guard** |
 | 4 | [`messageOrdering.ts`](../src/stores/messageOrdering.ts) | 97 | `compareMessages`, `sortMessages`, `matchesMessage`, `resolveMessageMatchIndex` — **thứ tự + nhận dạng tin nhắn** |
 | 5 | [`realtimePayload.ts`](../src/hooks/realtimePayload.ts) | 143 | đọc & phân loại payload WebSocket — cắt từ `useWebSocket.ts`, không phải `chatStore` |
+| 6 | [`messageMergeRecords.ts`](../src/stores/messageMergeRecords.ts) | 224 | trộn hai bản ghi cùng một tin + khử trùng lặp — **version-guard, ack optimistic** |
+| 7 | [`senderProfiles.ts`](../src/stores/senderProfiles.ts) | 287 | chuẩn hoá hồ sơ người gửi + áp vào tin nhắn/hội thoại — **giữ tham chiếu khi không đổi** |
+| 8 | [`sendFailure.ts`](../src/stores/sendFailure.ts) | 129 | phân loại lý do gửi thất bại + trạng thái kết nối |
+| 9 | [`messageAliasIndex.ts`](../src/stores/messageAliasIndex.ts) | 98 | quy mọi bí danh tin nhắn về một id chuẩn |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
@@ -293,10 +297,23 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 
 | File | Trước | Sau |
 |---|---|---|
-| `chatStore.ts` | 5101 | **4630** (−471, −9%) |
+| `chatStore.ts` | 5101 | **4041** (−1060, −21%) |
 | `useWebSocket.ts` | 3104 | **3016** (−88) |
 
-**+99 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload.
+**+160 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload · 17 merge-records · 18 sender-profiles · 12 send-failure · 14 alias-index.
+
+**Lát 7 — bất biến dễ vỡ nhất:** `applySenderProfiles*` chạy trên **cả trang tin nhắn mỗi lần có payload mới**. Bất biến sống còn là **giữ nguyên tham chiếu khi không có gì đổi** — tạo object mới vô cớ sẽ khiến toàn bộ timeline re-render. Trước đây không có test nào bảo vệ điều này; giờ có 3 test riêng cho nó (message, mảng message, participant).
+
+Nhân tiện gom 6 lần lặp `x && x.trim().length > 0` thành helper `hasContent` — cùng logic, đọc rõ hơn.
+
+**Lát 6 — phần dày bất biến nhất:** `mergeMessageRecords` trộn hai bản ghi cùng một tin đến từ 3 nguồn (REST, WebSocket, optimistic cục bộ), mỗi nguồn thiếu/thừa field khác nhau và có thể đến sai thứ tự. 17 test khoá lại các bất biến mà trước đây không có gì bảo vệ:
+
+- Field `undefined` của bản đến **không xoá** dữ liệu đang hiển thị (payload realtime chỉ mang vài field thay đổi)
+- Version thấp hơn **không ghi đè** bản mới; `version` luôn tiến
+- Ack về: id tạm được thay bằng id thật, `localId` **giữ vết** id cũ để lần đối chiếu sau vẫn nhận ra nhau
+- `sendState: "failed"` của bản đến **thắng cả ack** — không nuốt lỗi
+- `transportStatus` chỉ tiến (`synced_stream` > `acked_transport`), không tụt
+- Gửi xong thì **dọn sạch** dấu vết lỗi cũ, tránh UI hiện cảnh báo ma
 
 **Lát 5 — vì sao đáng làm dù diff nhỏ:** `shouldSkipGroupConversationRefreshForCurrentUser` và `shouldUseDeltaConversationRefresh` đã được `export` sẵn (dấu hiệu ai đó định test) nhưng **chưa có một test nào**. Đây là logic quyết định có gọi lại API refresh hay không — sai thì hoặc thừa request, hoặc danh sách hội thoại đứng im. Giờ đã có 23 test phủ, và `useWebSocket.ts` vẫn giữ nguyên API công khai qua re-export nên nơi gọi không phải sửa.
 
