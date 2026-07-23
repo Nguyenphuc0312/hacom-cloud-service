@@ -47,7 +47,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
   const currentImage = HACoM_IMAGES[currentIndex];
 
   return (
-    <div className="flex h-[var(--app-dvh)] w-full bg-white selection:bg-[#1976D2]/20 overflow-hidden">
+    <div className="flex h-[var(--app-dvh)] w-full bg-surface-overlay selection:bg-[#1976D2]/20 overflow-hidden">
       {/* Left side: Premium Image Slider */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden lg:flex">
         {/* Background Layers */}
@@ -130,13 +130,13 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
       </div>
 
       {/* Right side: Form — scrollable, fluid padding via clamp */}
-      <div className="relative w-full bg-surface-hover lg:w-1/2 overflow-y-auto">
+      <div className="relative w-full bg-surface-overlay lg:w-1/2 overflow-y-auto">
         <div
           className="flex min-h-[var(--app-dvh)] items-center justify-center"
           style={{ padding: "clamp(16px, 4dvh, 40px) clamp(12px, 3vw, 40px)" }}
         >
           <div
-            className="w-full rounded-3xl bg-surface shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border"
+            className="w-full rounded-3xl bg-surface-raised border border-border shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgb(0,0,0,0.5)]"
             style={{
               maxWidth: "clamp(320px, 90vw, 500px)",
               padding: "clamp(20px, 3.5dvh, 36px) clamp(16px, 4vw, 36px)",

@@ -134,7 +134,7 @@ export const LoginPage: React.FC = () => {
             <img
               src="/logo-dung.png"
               alt="Hacom Holdings"
-              className="w-auto object-contain mix-blend-multiply"
+              className="w-auto object-contain mix-blend-multiply dark:mix-blend-normal"
               style={{ height: "clamp(48px, 8dvh, 72px)" }}
             />
           </Link>
@@ -146,7 +146,7 @@ export const LoginPage: React.FC = () => {
             style={{ fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)" }}
           >
             Chào mừng trở lại với{" "}
-            <span className="text-[#C41E3A]">
+            <span className="text-[#C41E3A] dark:text-[#FF6B7A]">
               Hacom Holdings
             </span>
           </h1>
@@ -155,7 +155,7 @@ export const LoginPage: React.FC = () => {
           </p>
         </header>
 
-        <div className="mb-[clamp(10px,1.5dvh,16px)] flex rounded-xl bg-surface-overlay p-1" role="tablist" aria-label="Phương thức đăng nhập">
+        <div className="mb-[clamp(10px,1.5dvh,16px)] flex rounded-xl border border-border bg-surface p-1" role="tablist" aria-label="Phương thức đăng nhập">
           <button
             id="login-tab-password"
             type="button"
@@ -164,7 +164,7 @@ export const LoginPage: React.FC = () => {
             aria-controls="login-panel-password"
             onClick={() => setAuthMethod("password")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "password"
-              ? "bg-surface text-[#C41E3A] shadow-sm"
+              ? "bg-surface-raised text-[#C41E3A] shadow-sm dark:text-[#FF6B7A]"
               : "text-text-secondary hover:text-text-primary"
               }`}
           >
@@ -179,7 +179,7 @@ export const LoginPage: React.FC = () => {
             aria-controls="login-panel-qr"
             onClick={() => setAuthMethod("qr")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "qr"
-              ? "bg-surface text-[#C41E3A] shadow-sm"
+              ? "bg-surface-raised text-[#C41E3A] shadow-sm dark:text-[#FF6B7A]"
               : "text-text-secondary hover:text-text-primary"
               }`}
           >
@@ -227,9 +227,9 @@ export const LoginPage: React.FC = () => {
             aria-labelledby="login-tab-qr"
             className="space-y-3"
           >
-            <div className="rounded-lg border border-border bg-surface-overlay px-3 py-2.5 text-center">
+            <div className="rounded-lg border border-border bg-surface px-3 py-2.5 text-center">
               <p className="flex items-center justify-center gap-2 text-sm font-semibold text-text-secondary">
-                <ShieldCheckIcon className="h-4 w-4 text-[#C41E3A]" aria-hidden="true" />
+                <ShieldCheckIcon className="h-4 w-4 text-[#C41E3A] dark:text-[#FF6B7A]" aria-hidden="true" />
                 Sử dụng ứng dụng di động để quét
               </p>
             </div>
