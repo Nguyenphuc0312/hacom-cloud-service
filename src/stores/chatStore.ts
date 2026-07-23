@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Chat store (Zustand)
  */
 
@@ -17,7 +17,6 @@ import {
   buildMessageCorrelationKey,
   generateClientMessageId,
   generateTempMessageId,
-  getMessageIdentityKey,
 } from "../utils/messageIdFactory";
 import { logMessageDebug } from "../utils/messageDebug";
 import { markChatPerformance } from "../utils/chatPerformance";
@@ -59,6 +58,14 @@ import {
   resolveConnectionSendMode,
   resolveSendFailureDescriptor,
 } from "./sendFailure";
+import {
+  getMessageAliasCandidates,
+  getMessageQueueKey,
+  getStableMessageId,
+  matchesMessageIdentityValue,
+  rebuildConversationMessageAliasIndex,
+  resolveCanonicalMessageIdentity,
+} from "./messageAliasIndex";
 import {
   applySenderProfilesToConversation,
   applySenderProfilesToMessages,
@@ -757,7 +764,7 @@ const replaceConversationInActivityOrder = (
   const next = (Array.isArray(conversations) ? conversations : []).filter(
     (conversation) => conversation.id !== nextConversation.id,
   );
-  // Dá»±ng comparator má»™t láº§n: findIndex gá»i nÃ³ láº·p trÃªn máº£ng.
+  // Dựng comparator một lần: findIndex gọi nó lặp trên mảng.
   const compare = createConversationActivityComparator(
     getPinnedConversationIdSet(),
   );
@@ -956,78 +963,6 @@ const applyConversationReadState = (
         ? (conversation.firstUnreadMessageAt ?? null)
         : null),
   }) as Conversation;
-
-const getStableMessageId = (message: Message): string =>
-  getMessageIdentityKey(message);
-
-const getMessageAliasCandidates = (
-  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
-): string[] =>
-  Array.from(
-    new Set(
-      [
-        message.id,
-        message.localId,
-        message.clientMessageId,
-        message.stableId,
-      ].filter(
-        (value): value is string =>
-          typeof value === "string" && value.length > 0,
-      ),
-    ),
-  );
-
-const rebuildConversationMessageAliasIndex = (
-  messages: Message[],
-): Record<string, string> => {
-  const aliasIndex: Record<string, string> = {};
-
-  messages.forEach((message) => {
-    const canonicalId = getStableMessageId(message);
-    getMessageAliasCandidates(message).forEach((alias) => {
-      aliasIndex[alias] = canonicalId;
-    });
-  });
-
-  return aliasIndex;
-};
-
-const resolveCanonicalMessageIdentity = (
-  conversationMessages: Message[],
-  aliasIndex: Record<string, string> | undefined,
-  identity: string,
-): string => {
-  if (!identity) return identity;
-
-  const aliasedIdentity = aliasIndex?.[identity];
-  if (aliasedIdentity) {
-    return aliasedIdentity;
-  }
-
-  const matchedMessage = conversationMessages.find((message) =>
-    matchesMessageIdentityValue(message, identity),
-  );
-  return matchedMessage ? getStableMessageId(matchedMessage) : identity;
-};
-
-const matchesMessageIdentityValue = (
-  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
-  identity: string,
-): boolean => {
-  if (!identity) return false;
-
-  return (
-    message.id === identity ||
-    message.localId === identity ||
-    message.clientMessageId === identity ||
-    message.stableId === identity
-  );
-};
-
-const getMessageQueueKey = (
-  conversationId: string,
-  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
-): string => `${conversationId}:${getStableMessageId(message as Message)}`;
 
 const replaceMessages = (
   current: Message[],
