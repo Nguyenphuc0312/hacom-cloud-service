@@ -66,9 +66,9 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               autoCapitalize="none"
               autoCorrect="off"
               autoComplete="username webauthn"
-              placeholder="name@hacomholdings.vn"
+              placeholder={t("auth:placeholders.loginIdentifier")}
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-medium text-text-primary outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60"
+              className="h-12 w-full rounded-xl border border-border-strong bg-surface px-4 text-sm font-medium text-text-primary placeholder:text-text-muted outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60 dark:focus:border-[#FF6B7A] dark:focus:ring-[#FF6B7A]/20"
               aria-invalid={Boolean(loginIdentifierError)}
             />
           </div>
@@ -91,7 +91,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               placeholder={t("auth:placeholders.password")}
               autoComplete="current-password"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-border bg-surface px-4 pr-12 text-sm font-medium text-text-primary outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60"
+              className="h-12 w-full rounded-xl border border-border-strong bg-surface px-4 pr-12 text-sm font-medium text-text-primary placeholder:text-text-muted outline-none transition-all focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/15 disabled:opacity-60 dark:focus:border-[#FF6B7A] dark:focus:ring-[#FF6B7A]/20"
               aria-invalid={Boolean(passwordError)}
             />
             <button
@@ -124,7 +124,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
           <button
             type="button"
             onClick={() => navigate('/forgot-password')}
-            className="text-sm font-semibold text-[#C41E3A] transition-colors hover:text-[#D32F2F]"
+            className="rounded text-sm font-semibold text-[#C41E3A] transition-colors hover:text-[#D32F2F] dark:text-[#FF6B7A] dark:hover:text-[#FF8A96]"
           >
             {t("auth:login.forgotPassword")}
           </button>
