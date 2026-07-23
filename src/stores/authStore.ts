@@ -36,6 +36,8 @@ import {
   runClientLogoutCleanup,
 } from "../services/authService";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
+// api.ts imports User from here type-only, so this value import is not a cycle.
+import { userApi } from "../services/api";
 import i18n from "../i18n";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 import type {
@@ -243,6 +245,31 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
+/**
+ * Resolve the current user's avatar URL from chat-api.
+ *
+ * `/auth/me` carries only `avatarFileId` — auth-service owns identity, not file
+ * storage, so it cannot sign a storage URL. Only chat-api can (`GET
+ * /users/profile` → `fileService.resolveAvatarUrl`). Fetching it here, in the
+ * one function every session-restore path funnels through, keeps
+ * `authStore.user.avatar` populated for every self-avatar surface (nav rail,
+ * profile panel, edit dialog, own message bubbles) instead of each re-deriving it.
+ *
+ * The signed URL expires in ~15m, which is why it is never persisted (see
+ * `partialize`) — it is re-resolved on each bootstrap/refresh.
+ */
+const fetchOwnAvatarUrl = async (): Promise<string | undefined> => {
+  try {
+    const response = await userApi.getProfile();
+    const avatar = (unwrapApiSuccess(response) as { avatar?: string | null })
+      ?.avatar;
+    return avatar ?? undefined;
+    // ponytail: avatar is cosmetic — on failure the UI falls back to initials
+  } catch {
+    return undefined;
+  }
+};
+
 /** The auth service owns the canonical browser principal. */
 const fetchCurrentUser = async (): Promise<User> => {
   const response = await authenticatedAuthClient.get<ApiResponse<User>>(
@@ -256,6 +283,11 @@ const fetchCurrentUser = async (): Promise<User> => {
   user.mustChangePassword = accessToken
     ? parseMustChangePasswordFromToken(accessToken)
     : false;
+  // /auth/me reports `avatarFileId` but never a URL; skip the extra chat-api
+  // round-trip for accounts that have no avatar set at all.
+  if (!user.avatar && user.avatarFileId) {
+    user.avatar = await fetchOwnAvatarUrl();
+  }
   return user;
 };
 
@@ -602,6 +634,20 @@ export const useAuthStore = create<AuthState>()(
 
           // `login()` validates this credential with canonical /auth/me before
           // reporting success; do not retain the login payload as authority.
+
+          // The login payload has no avatar (same reason /auth/me doesn't —
+          // only chat-api can sign the URL). Hydrate it in the background so
+          // the QR/activation entry points, which call this directly rather
+          // than going through login(), still render the avatar.
+          if (!userWithFlag.avatar && userWithFlag.avatarFileId) {
+            void fetchOwnAvatarUrl().then((avatar) => {
+              if (!avatar) return;
+              const current = get().user;
+              if (current?.id === userWithFlag.id && !current.avatar) {
+                set({ user: { ...current, avatar } });
+              }
+            });
+          }
         },
 
         setAuthStatus: (status) =>
