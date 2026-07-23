@@ -218,7 +218,7 @@ Ghi rõ để tránh phình phạm vi:
 | 2 | Audit → `WEB_AUDIT_FINDINGS.md` | KHÔNG | ✅ XONG — 4 finding (F-01…F-04) |
 | 3 | Sửa F-01 + F-02 + F-04 | THẤP–VỪA | ✅ XONG — 588 pass · 0 fail · build ✓ |
 | 3b | F-03 (`GroupInfo` 35 useState) + F-05 (bug modal chồng) | VỪA | ✅ XONG — 5/6 nhóm tách (1 cố ý giữ) · 1807→1527 dòng · 591 pass · 0 fail · build ✓ |
-| 4 | Cắt `chatStore` / `useWebSocket` | CAO | 🟡 2 lát an toàn xong — 5101→4837 dòng · 628 pass · 0 fail |
+| 4 | Cắt `chatStore` / `useWebSocket` | CAO | 🟡 3 lát an toàn xong — 5101→4704 dòng · 643 pass · 0 fail |
 
 **Ngoài kế hoạch — đã xong:** sửa `SegmentedControl` (bug tab lệch) + test kèm.
 

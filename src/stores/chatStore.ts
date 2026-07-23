@@ -40,6 +40,10 @@ import {
   toDateObject,
 } from "./messageNormalizer";
 import {
+  mergeConversationSummary,
+  shouldApplyConversationSummary,
+} from "./conversationSummaryMerge";
+import {
   buildConversationIndexState,
   computeCanonicalTotalUnreadCount,
   computeConversationCursor,
@@ -751,143 +755,6 @@ const replaceConversationInActivityOrder = (
 
   next.splice(insertIndex, 0, nextConversation);
   return next;
-};
-
-const shouldApplyConversationSummary = (
-  current: Conversation | null | undefined,
-  incoming: Conversation,
-): {
-  apply: boolean;
-  gapDetected: boolean;
-  previousVersion: number;
-  nextVersion: number;
-  reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
-} => {
-  const previousVersion = toConversationVersion(current);
-  const nextVersion = toConversationVersion(incoming);
-
-  if (!current) {
-    return {
-      apply: true,
-      gapDetected: false,
-      previousVersion: 0,
-      nextVersion,
-      reason: "inserted",
-    };
-  }
-
-  if (previousVersion > 0 && nextVersion > 0 && nextVersion < previousVersion) {
-    return {
-      apply: false,
-      gapDetected: false,
-      previousVersion,
-      nextVersion,
-      reason: "stale_version",
-    };
-  }
-
-  const currentTs = getConversationCursorTimestamp(current);
-  const incomingTs = getConversationCursorTimestamp(incoming);
-  if (
-    nextVersion === previousVersion &&
-    incomingTs > 0 &&
-    incomingTs < currentTs
-  ) {
-    return {
-      apply: false,
-      gapDetected: false,
-      previousVersion,
-      nextVersion,
-      reason: "stale_timestamp",
-    };
-  }
-
-  return {
-    apply: true,
-    gapDetected:
-      previousVersion > 0 &&
-      nextVersion > 0 &&
-      nextVersion > previousVersion + 1,
-    previousVersion,
-    nextVersion,
-    reason: "updated",
-  };
-};
-
-const mergeConversationSummary = (
-  current: Conversation | null | undefined,
-  incoming: Conversation,
-): Conversation => {
-  if (!current) {
-    return incoming;
-  }
-
-  // Stale-read guard: nếu local đã đánh dấu đọc xa hơn server response thì
-  // không cho response cũ (lastReadSeq thấp hơn / vắng mặt) đẩy unreadCount
-  // ngược lên. Điều này xử lý race condition: user click conversation →
-  // optimistic markAsRead set unread=0, sau đó stale GET /conversations
-  // response trả về unreadCount=17 cũ.
-  // BIGINT từ BE đến dưới dạng string ("186"). Coerce trước khi so sánh nếu
-  // không stale-read guard luôn xem cả hai là 0 và để stale unread overwrite.
-  const coerceSeq = (value: unknown): number => {
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return value;
-    }
-    if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
-      const parsed = Number(value);
-      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
-    }
-    return 0;
-  };
-  const currentLastReadSeq = coerceSeq(current.lastReadSeq);
-  const incomingLastReadSeq = coerceSeq(incoming.lastReadSeq);
-  // localReadIsAhead chỉ được kích hoạt khi incoming CÓ lastReadSeq hợp lệ (> 0)
-  // và vẫn thấp hơn local. Nếu incoming.lastReadSeq = 0 / null / undefined
-  // (server không gửi checkpoint), không được coi là "stale" — đây là missing
-  // data, không phải data cũ. Tránh false-positive giữ unreadCount=0 khi thực
-  // tế có unread mới.
-  const localReadIsAhead =
-    currentLastReadSeq > 0 &&
-    incomingLastReadSeq > 0 &&
-    currentLastReadSeq > incomingLastReadSeq;
-  const preserveLocalRead =
-    localReadIsAhead ||
-    ((current.unreadCount ?? 0) === 0 &&
-      (incoming.unreadCount ?? 0) > 0 &&
-      incomingLastReadSeq > 0 &&
-      incomingLastReadSeq < currentLastReadSeq);
-
-  return (normalizeConversation({
-    ...current,
-    ...incoming,
-    unreadCount: preserveLocalRead
-      ? (current.unreadCount ?? 0)
-      : incoming.unreadCount,
-    lastReadSeq: Math.max(currentLastReadSeq, incomingLastReadSeq) || undefined,
-    lastReadMessageId: localReadIsAhead
-      ? (current.lastReadMessageId ?? incoming.lastReadMessageId ?? undefined)
-      : (incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined),
-    lastReadAt: localReadIsAhead
-      ? (current.lastReadAt ?? incoming.lastReadAt ?? undefined)
-      : (incoming.lastReadAt ?? current.lastReadAt ?? undefined),
-    firstUnreadMessageId: preserveLocalRead
-      ? undefined
-      : (incoming.firstUnreadMessageId ??
-        current.firstUnreadMessageId ??
-        undefined),
-    firstUnreadMessageAt: preserveLocalRead
-      ? undefined
-      : (incoming.firstUnreadMessageAt ??
-        current.firstUnreadMessageAt ??
-        undefined),
-    summaryVersion:
-      toConversationVersion(incoming) ||
-      toConversationVersion(current) ||
-      undefined,
-  }) ?? {
-    ...current,
-    ...incoming,
-  }) as Conversation;
 };
 
 const mergeConversationCollections = (
