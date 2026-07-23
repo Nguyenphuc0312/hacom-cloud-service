@@ -209,7 +209,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 4 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 5 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -219,13 +219,23 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 2 | [`conversationCursor.ts`](../src/stores/conversationCursor.ts) | 128 | con trỏ phân trang, `computeCanonicalTotalUnreadCount`, `buildConversationIndexState` |
 | 3 | [`conversationSummaryMerge.ts`](../src/stores/conversationSummaryMerge.ts) | 158 | `shouldApplyConversationSummary` + `mergeConversationSummary` — **stale-read guard** |
 | 4 | [`messageOrdering.ts`](../src/stores/messageOrdering.ts) | 97 | `compareMessages`, `sortMessages`, `matchesMessage`, `resolveMessageMatchIndex` — **thứ tự + nhận dạng tin nhắn** |
+| 5 | [`realtimePayload.ts`](../src/hooks/realtimePayload.ts) | 143 | đọc & phân loại payload WebSocket — cắt từ `useWebSocket.ts`, không phải `chatStore` |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
 
 **Vì sao chọn đúng 2 nhóm này:** đã kiểm chứng bằng grep là **hoàn toàn thuần** — không một lần gọi `set()` / `get()` / store nào trong vùng cắt. Đây là ranh giới sạch nhất trong cả file.
 
-**Đo được:** `chatStore.ts` **5101 → 4630 dòng (−471, −9%)**; **+76 test mới** (21 normalizer + 16 cursor + 15 summary-merge + 24 ordering).
+**Đo được:**
+
+| File | Trước | Sau |
+|---|---|---|
+| `chatStore.ts` | 5101 | **4630** (−471, −9%) |
+| `useWebSocket.ts` | 3104 | **3016** (−88) |
+
+**+99 test mới**: 21 normalizer · 16 cursor · 15 summary-merge · 24 ordering · 23 realtime-payload.
+
+**Lát 5 — vì sao đáng làm dù diff nhỏ:** `shouldSkipGroupConversationRefreshForCurrentUser` và `shouldUseDeltaConversationRefresh` đã được `export` sẵn (dấu hiệu ai đó định test) nhưng **chưa có một test nào**. Đây là logic quyết định có gọi lại API refresh hay không — sai thì hoặc thừa request, hoặc danh sách hội thoại đứng im. Giờ đã có 23 test phủ, và `useWebSocket.ts` vẫn giữ nguyên API công khai qua re-export nên nơi gọi không phải sửa.
 
 **Lát 4 gỡ thêm một trùng lặp ở tầng lõi** — đúng thứ user nêu từ đầu (*"cái nào dùng chung thì dùng đi"*):
 
