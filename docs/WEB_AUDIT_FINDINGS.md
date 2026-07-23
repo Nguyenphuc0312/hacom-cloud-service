@@ -107,24 +107,30 @@ Nơi gọi dựng `Set` **một lần** trước khi sort. Độ phức tạp v�
 
 **Đây là refactor hành vi-giữ-nguyên** → phải viết test đặc tả trước, theo mục 2.5 của kế hoạch.
 
-### 🟡 Tiến độ (23-07-26) — đã tách 2/6 nhóm
+### ✅ Hoàn thành (23-07-26) — 5/6 nhóm tách, 1 nhóm cố ý giữ nguyên
 
 | Nhóm | Trạng thái | Kết quả |
 |---|---|---|
 | Upload ảnh đại diện | ✅ | [`useGroupAvatarUpload.ts`](../src/components/info/useGroupAvatarUpload.ts) — 192 dòng, mang theo cả `revokeBlobUrl` + `resolveGroupAvatarStageLabel` + `ALLOWED_GROUP_AVATAR_TYPES` + type `GroupAvatarUploadStage` |
 | Link mời | ✅ | [`useGroupInviteLinks.ts`](../src/components/info/useGroupInviteLinks.ts) — 171 dòng, gom 4 state + 4 handler (create/copy/revoke/delete) |
 | Modal xác nhận | ✅ | **Phát hiện + sửa bug thật — xem F-05 bên dưới** |
-| Danh sách thành viên | ⬜ | lớn nhất, dính `singleFlight` + `memberListVersion` |
-| Đổi tên nhóm | ⬜ | 2 state, nhỏ |
-| Đóng/mở khu vực | ⬜ | 2 state, nhỏ |
+| Đổi tên nhóm | ✅ | [`useGroupRename.ts`](../src/components/info/useGroupRename.ts) — 84 dòng; gộp 2 state thành 1 (`draft: string \| null`), bỏ luôn effect đồng bộ |
+| Danh sách thành viên | ✅ | [`useGroupMembers.ts`](../src/components/info/useGroupMembers.ts) — 295 dòng; gom fetch + `singleFlight` + chuẩn hoá + enrich HR + merge participants |
+| Đóng/mở khu vực | ⛔ | **cố ý không tách** — xem ghi chú bên dưới |
 
-**Đo được:** `GroupInfo.tsx` **1807 → 1733 dòng**, `useState` **35 → 28**.
+**Đo được:** `GroupInfo.tsx` **1807 → 1527 dòng (−280, −15%)**, `useState` **35 → 23 (−12)**.
+
+**Về `isSubmitting`** — trước đó tưởng là nút thắt phải gỡ. Đọc kỹ thì nó là **thiết kế đúng**: một cờ "đang có thao tác nặng cấp nhóm" dùng chung cho 4 luồng (thêm thành viên / đổi tên / rời nhóm / xoá nhóm), khoá chéo cả panel là chủ ý. Nên `useGroupRename` **nhận `setIsSubmitting` từ ngoài** thay vì tự giữ — giữ một nguồn duy nhất, không nhân đôi.
+
+**Về nhóm "đóng/mở khu vực" (`securityExpanded`, `membersShowAll`, `pollsShowAll`)** — cố ý **không** tách. Ba cờ boolean thuần, mỗi cái dùng đúng một chỗ, không có logic đi kèm. Bọc vào hook chỉ thêm một lớp gián tiếp mà không giảm phức tạp — đó là abstraction thừa, đúng thứ audit này muốn loại bỏ.
 
 > Số dòng giảm ít hơn kỳ vọng vì code chuyển đi được **giãn ra cho dễ đọc** trong hook (bản cũ nhồi nhiều lệnh trên một dòng). Giá trị thật không nằm ở số dòng mà ở chỗ: 7 state rời rạc giờ nằm sau 2 API có tên, có invariant riêng, test được độc lập.
 >
 > **Bề mặt tiếp xúc thu hẹp:** `GroupInfo` không còn import `uploadClient`, `createGroupInviteLinkUseCase`, `revokeGroupInviteLinkUseCase`, `upsertInviteLink`, `removeInviteLink` — 5 phụ thuộc biến mất khỏi component.
 >
-> **Lint:** 2 hook mới **sạch tuyệt đối**. `GroupInfo.tsx` còn **4 lỗi `set-state-in-effect`** — đã đối chứng với bản gốc từ git: **y hệt 4 lỗi**, nợ có sẵn, nằm ở nhóm `fetchMembers` (chưa tách).
+> **Lint:** cả 4 hook mới **sạch tuyệt đối**. `GroupInfo.tsx` từ **4 → 3 lỗi** `set-state-in-effect` (nợ có sẵn, đã đối chứng với bản gốc từ git).
+>
+> Lỗi thứ 4 theo `fetchMembers` sang `useGroupMembers`. Ở đó nó là **cảnh báo giả**: `refetch` là hàm async gọi API nên `setState` chỉ chạy *sau khi* request xong, không phải cascading render đồng bộ mà rule nhắm tới — đồng bộ với dữ liệu ngoài đúng là việc của effect. Đã `eslint-disable` **kèm lý do viết rõ tại chỗ**, thay vì để lỗi trôi nổi.
 
 ---
 
@@ -202,6 +208,43 @@ Kế hoạch xếp nó vào Phase 4. Sau khi đọc kỹ, **giữ nguyên đánh
 Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải thuật tệ nào. Vấn đề thuần tuý là **kích thước** (~44 action + 35 field), tức nợ SRP chứ không phải nợ hiệu năng.
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
+
+### 🟡 Phase 4 — 4 lát cắt an toàn đã thực hiện (23-07-26)
+
+Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
+
+| Lát | Module | Dòng | Nội dung |
+|---|---|---|---|
+| 1 | [`messageNormalizer.ts`](../src/stores/messageNormalizer.ts) | 203 | `normalizeAttachments/Reactions/Mentions/LocationPayload`, `toDateObject` + 3 helper cơ sở |
+| 2 | [`conversationCursor.ts`](../src/stores/conversationCursor.ts) | 128 | con trỏ phân trang, `computeCanonicalTotalUnreadCount`, `buildConversationIndexState` |
+| 3 | [`conversationSummaryMerge.ts`](../src/stores/conversationSummaryMerge.ts) | 158 | `shouldApplyConversationSummary` + `mergeConversationSummary` — **stale-read guard** |
+| 4 | [`messageOrdering.ts`](../src/stores/messageOrdering.ts) | 97 | `compareMessages`, `sortMessages`, `matchesMessage`, `resolveMessageMatchIndex` — **thứ tự + nhận dạng tin nhắn** |
+
+**Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
+viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
+
+**Vì sao chọn đúng 2 nhóm này:** đã kiểm chứng bằng grep là **hoàn toàn thuần** — không một lần gọi `set()` / `get()` / store nào trong vùng cắt. Đây là ranh giới sạch nhất trong cả file.
+
+**Đo được:** `chatStore.ts` **5101 → 4630 dòng (−471, −9%)**; **+76 test mới** (21 normalizer + 16 cursor + 15 summary-merge + 24 ordering).
+
+**Lát 4 gỡ thêm một trùng lặp ở tầng lõi** — đúng thứ user nêu từ đầu (*"cái nào dùng chung thì dùng đi"*):
+
+| Hàm | Tình trạng trước | Sau |
+|---|---|---|
+| `toMessageIdentityKeys` | **chép nguyên** ở `chatStore` và `domain/messageIdentityMatching` | dùng chung bản domain, `chatStore` re-export |
+| `compareMessages` | hai bản gần y hệt (`chatStore` vs `domain/messageOrdering`) | **chưa gộp** — xem dưới |
+
+Đã viết [`messageOrdering.equivalence.test.ts`](../src/stores/messageOrdering.equivalence.test.ts) **đối chứng hai bản `compareMessages`**: tương đương trên 9 trường hợp (seq, serverTs, localOrder, createdAt, stableId, id, thiếu-seq, thiếu-localOrder, trùng hệt). Khác biệt **duy nhất**: bản domain đọc thêm `messageSeq` làm seq dự phòng.
+
+> Chưa gộp hai bản `compareMessages` vì khác biệt đó là **thật, không phải ngẫu nhiên**: gộp = đổi thứ tự timeline cho các tin chỉ có `messageSeq`. Đó là đổi hành vi, phải do user quyết. Test đối chứng đã ghi lại chính xác khác biệt để việc gộp sau này là quyết định có dữ liệu, không phải phỏng đoán.
+
+**Riêng lát 3 — phần đáng giá nhất:** `mergeConversationSummary` là logic tinh vi nhất store, chống race giữa optimistic `markAsRead` và response cũ về muộn (comment trong code cho thấy nó đã sửa qua nhiều bug thật: BIGINT về dạng chuỗi, phân biệt "dữ liệu cũ" với "dữ liệu thiếu"). Trước đây nó không có test riêng. Giờ 15 test khoá lại đúng các bất biến đó — ví dụ *server không gửi checkpoint là THIẾU dữ liệu, không phải dữ liệu cũ, nên vẫn phải nhận unread mới*.
+
+`chatStoreUnread.test.ts` (429 dòng, test đúng vùng read-state này) vẫn xanh sau lát 3 — bằng chứng mạnh là hành vi không đổi.
+
+> Ghi chú: `chatStore` từng export `__normalizeMessageForTest` — cửa hậu để test chọc vào hàm private. Sau lát 1, các hàm normalize đã test được trực tiếp, không cần cửa hậu nữa.
+
+**Còn lại của Phase 4 (CHƯA làm, cần duyệt riêng):** phần lõi ~4.8k dòng vẫn là các action đóng/mở trên `set`/`get` — cắt tiếp là đụng vào state machine của timeline/outbox. Đó là lát cắt **rủi ro cao thật sự**, khác hẳn 2 lát thuần vừa rồi, nên phải tách PR và có kế hoạch test riêng.
 
 ---
 

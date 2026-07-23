@@ -29,6 +29,37 @@ import {
   sortConversationsByActivity,
 } from "../utils/conversationRanking";
 import { isTempMessageId } from "../features/chat/domain/messageIdentityMatching";
+import {
+  asNumberValue,
+  asRecord,
+  asStringValue,
+  normalizeAttachments,
+  normalizeLocationPayload,
+  normalizeMentions,
+  normalizeReactions,
+  toDateObject,
+} from "./messageNormalizer";
+import {
+  mergeConversationSummary,
+  shouldApplyConversationSummary,
+} from "./conversationSummaryMerge";
+import {
+  compareMessages,
+  matchesMessage,
+  resolveMessageMatchIndex,
+  sortMessages,
+  toMessageIdentityKeys,
+} from "./messageOrdering";
+import {
+  buildConversationIndexState,
+  computeCanonicalTotalUnreadCount,
+  computeConversationCursor,
+  computeConversationUpdatedAfterCursor,
+  getConversationCursorTimestamp,
+  toConversationVersion,
+  toDateValue,
+  toFiniteNumber,
+} from "./conversationCursor";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { resolveConversationId } from "../lib/conversationIdentity";
 import i18n from "../i18n";
@@ -365,17 +396,6 @@ const buildLoadingStateFromInFlightMap = (): {
   };
 };
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asStringValue = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
-
-const asNumberValue = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isFinite(value) ? value : undefined;
-
 const isCanceledRequestError = (error: unknown): boolean => {
   if (axios.isCancel(error)) {
     return true;
@@ -447,175 +467,6 @@ const getCorrelationKeyForMessage = (
     tempId: message.localId || message.id,
     localId: message.localId,
   });
-
-const toDateObject = (value: unknown, fallback: Date = new Date()): Date => {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  return fallback;
-};
-
-const normalizeAttachments = (value: unknown): Message["attachments"] => {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((attachmentRaw) => {
-      const attachment = asRecord(attachmentRaw);
-      if (!attachment) return null;
-
-      const id =
-        asStringValue(attachment.id) ?? asStringValue(attachment.fileId);
-      const objectKey = asStringValue(attachment.objectKey);
-      const url =
-        asStringValue(attachment.url) ??
-        asStringValue(attachment.downloadUrl) ??
-        asStringValue(attachment.fileUrl);
-      if (!id || (!objectKey && !url)) return null;
-
-      return {
-        id,
-        type: (asStringValue(attachment.type) ?? "other") as Attachment["type"],
-        objectKey,
-        url,
-        downloadUrl: asStringValue(attachment.downloadUrl),
-        expiresAt: asStringValue(attachment.expiresAt),
-        fileName:
-          asStringValue(attachment.fileName) ??
-          asStringValue(attachment.filename) ??
-          asStringValue(attachment.originalName),
-        mimeType:
-          asStringValue(attachment.mimeType) ??
-          asStringValue(attachment.mimetype),
-        fileSize:
-          asNumberValue(attachment.fileSize) ?? asNumberValue(attachment.size),
-        thumbnailUrl: asStringValue(attachment.thumbnailUrl),
-        width: asNumberValue(attachment.width),
-        height: asNumberValue(attachment.height),
-        duration: asNumberValue(attachment.duration),
-      } as Attachment;
-    })
-    .filter((item): item is Attachment => item !== null);
-};
-
-const normalizeReactions = (value: unknown): Message["reactions"] => {
-  if (!Array.isArray(value)) return [];
-  if (value.length === 0) return [];
-
-  const first = asRecord(value[0]);
-  if (first && Array.isArray(first.userIds)) {
-    return value as Message["reactions"];
-  }
-
-  const grouped = new Map<string, Set<string>>();
-
-  for (const reactionRaw of value) {
-    const reaction = asRecord(reactionRaw);
-    if (!reaction) continue;
-
-    const emoji = asStringValue(reaction.emoji);
-    const userId =
-      asStringValue(reaction.userId) ??
-      asStringValue(reaction.senderId) ??
-      asStringValue(reaction.user_id);
-    if (!emoji || !userId) continue;
-
-    if (!grouped.has(emoji)) grouped.set(emoji, new Set());
-    grouped.get(emoji)?.add(userId);
-  }
-
-  return Array.from(grouped.entries()).map(([emoji, userIds]) => ({
-    emoji,
-    userIds: Array.from(userIds),
-    count: userIds.size,
-  }));
-};
-
-/**
- * Normalize mentions into the canonical Mention[] shape.
- * Accepts both legacy `string[]` (raw userIds) and the resolved object form
- * from chat-shared-types v1.4.0+. Legacy strings get a placeholder
- * displayName so FE can still surface a styled token without breaking.
- */
-const normalizeMentions = (value: unknown): Message["mentions"] => {
-  if (!Array.isArray(value)) return [];
-  const result: NonNullable<Message["mentions"]> = [];
-  for (const entry of value) {
-    if (typeof entry === "string") {
-      const userId = entry.trim();
-      if (userId) result.push({ userId, displayName: "" });
-      continue;
-    }
-    const record = asRecord(entry);
-    if (!record) continue;
-    const userId =
-      asStringValue(record.userId) ??
-      asStringValue(record.user_id) ??
-      asStringValue(record.id);
-    if (!userId) continue;
-    const displayName =
-      asStringValue(record.displayName) ??
-      asStringValue(record.display_name) ??
-      asStringValue(record.fullName) ??
-      "";
-    const employeeCode =
-      asStringValue(record.employeeCode) ?? asStringValue(record.employee_code);
-    const avatarUrl =
-      asStringValue(record.avatarUrl) ?? asStringValue(record.avatar_url);
-    result.push({
-      userId,
-      displayName,
-      ...(employeeCode ? { employeeCode } : {}),
-      ...(avatarUrl ? { avatarUrl } : {}),
-    });
-  }
-  return result;
-};
-
-const normalizeLocationPayload = (
-  source: Record<string, unknown>,
-): Message["location"] => {
-  const content = asRecord(source.content);
-  const metadata = asRecord(source.metadata);
-  const location =
-    asRecord(source.location) ??
-    asRecord(content?.location) ??
-    asRecord(metadata?.location) ??
-    asRecord(source.locationData);
-
-  if (!location) return undefined;
-
-  const latitude =
-    asNumberValue(location.latitude) ?? asNumberValue(location.lat);
-  const longitude =
-    asNumberValue(location.longitude) ?? asNumberValue(location.lng);
-  const capturedAt =
-    asStringValue(location.capturedAt) ??
-    asStringValue(location.captured_at);
-
-  if (
-    latitude === undefined ||
-    longitude === undefined ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180 ||
-    !capturedAt
-  ) {
-    return undefined;
-  }
-
-  const accuracyM =
-    asNumberValue(location.accuracyM) ?? asNumberValue(location.accuracy_m);
-
-  return {
-    latitude,
-    longitude,
-    ...(accuracyM !== undefined ? { accuracyM } : {}),
-    capturedAt,
-  };
-};
 
 const normalizeMessage = (
   input: unknown,
@@ -853,110 +704,6 @@ const normalizeMessage = (
 
 export const __normalizeMessageForTest = normalizeMessage;
 
-const toDateValue = (value: unknown): number => {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value).getTime();
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-  return 0;
-};
-
-const toFiniteNumber = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
-
-const toConversationVersion = (
-  conversation: Conversation | null | undefined,
-) =>
-  typeof conversation?.summaryVersion === "number" &&
-  Number.isFinite(conversation.summaryVersion)
-    ? conversation.summaryVersion
-    : 0;
-
-const getConversationCursorTimestamp = (
-  conversation: Conversation | null | undefined,
-): number => {
-  if (!conversation) return 0;
-
-  const canonicalTimestamp = Math.max(
-    toDateValue(conversation.lastMessageSortAt),
-    toDateValue(conversation.lastActivityAt),
-    toDateValue(conversation.lastMessageAt),
-    toDateValue(conversation.lastMessage?.createdAt),
-  );
-
-  if (canonicalTimestamp > 0) {
-    return canonicalTimestamp;
-  }
-
-  return toDateValue(conversation.updatedAt);
-};
-
-const getConversationCursorIdentity = (
-  conversation: Conversation | null | undefined,
-): string => {
-  if (!conversation) return "unknown";
-
-  return [
-    String(getConversationCursorTimestamp(conversation)),
-    String(toConversationVersion(conversation)),
-    conversation.id,
-    conversation.lastMessageId ?? conversation.lastMessage?.id ?? "no-message",
-  ].join(":");
-};
-
-const computeConversationCursor = (
-  conversations: Conversation[],
-): string | null => {
-  const leadingConversation = Array.isArray(conversations)
-    ? conversations[0]
-    : null;
-  if (!leadingConversation) {
-    return null;
-  }
-
-  return getConversationCursorIdentity(leadingConversation);
-};
-
-const computeConversationUpdatedAfterCursor = (
-  conversations: Conversation[],
-): string | null => {
-  let latestTimestamp = 0;
-
-  (Array.isArray(conversations) ? conversations : []).forEach(
-    (conversation) => {
-      latestTimestamp = Math.max(
-        latestTimestamp,
-        getConversationCursorTimestamp(conversation),
-      );
-    },
-  );
-
-  return latestTimestamp > 0 ? new Date(latestTimestamp).toISOString() : null;
-};
-
-const computeCanonicalTotalUnreadCount = (
-  conversations: Conversation[],
-): number =>
-  (Array.isArray(conversations) ? conversations : []).reduce(
-    (sum, conversation) => sum + Math.max(0, conversation.unreadCount || 0),
-    0,
-  );
-
-const buildConversationIndexState = (conversations: Conversation[]) => {
-  const ordered = Array.isArray(conversations) ? conversations : [];
-  return {
-    conversationById: ordered.reduce<Record<string, Conversation>>(
-      (accumulator, conversation) => {
-        accumulator[conversation.id] = conversation;
-        return accumulator;
-      },
-      {},
-    ),
-    orderedConversationIds: ordered.map((conversation) => conversation.id),
-  };
-};
-
 const buildConversationCollectionState = (conversations: Conversation[]) => ({
   ...buildConversationIndexState(conversations),
   totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
@@ -1015,143 +762,6 @@ const replaceConversationInActivityOrder = (
 
   next.splice(insertIndex, 0, nextConversation);
   return next;
-};
-
-const shouldApplyConversationSummary = (
-  current: Conversation | null | undefined,
-  incoming: Conversation,
-): {
-  apply: boolean;
-  gapDetected: boolean;
-  previousVersion: number;
-  nextVersion: number;
-  reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
-} => {
-  const previousVersion = toConversationVersion(current);
-  const nextVersion = toConversationVersion(incoming);
-
-  if (!current) {
-    return {
-      apply: true,
-      gapDetected: false,
-      previousVersion: 0,
-      nextVersion,
-      reason: "inserted",
-    };
-  }
-
-  if (previousVersion > 0 && nextVersion > 0 && nextVersion < previousVersion) {
-    return {
-      apply: false,
-      gapDetected: false,
-      previousVersion,
-      nextVersion,
-      reason: "stale_version",
-    };
-  }
-
-  const currentTs = getConversationCursorTimestamp(current);
-  const incomingTs = getConversationCursorTimestamp(incoming);
-  if (
-    nextVersion === previousVersion &&
-    incomingTs > 0 &&
-    incomingTs < currentTs
-  ) {
-    return {
-      apply: false,
-      gapDetected: false,
-      previousVersion,
-      nextVersion,
-      reason: "stale_timestamp",
-    };
-  }
-
-  return {
-    apply: true,
-    gapDetected:
-      previousVersion > 0 &&
-      nextVersion > 0 &&
-      nextVersion > previousVersion + 1,
-    previousVersion,
-    nextVersion,
-    reason: "updated",
-  };
-};
-
-const mergeConversationSummary = (
-  current: Conversation | null | undefined,
-  incoming: Conversation,
-): Conversation => {
-  if (!current) {
-    return incoming;
-  }
-
-  // Stale-read guard: nếu local đã đánh dấu đọc xa hơn server response thì
-  // không cho response cũ (lastReadSeq thấp hơn / vắng mặt) đẩy unreadCount
-  // ngược lên. Điều này xử lý race condition: user click conversation →
-  // optimistic markAsRead set unread=0, sau đó stale GET /conversations
-  // response trả về unreadCount=17 cũ.
-  // BIGINT từ BE đến dưới dạng string ("186"). Coerce trước khi so sánh nếu
-  // không stale-read guard luôn xem cả hai là 0 và để stale unread overwrite.
-  const coerceSeq = (value: unknown): number => {
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return value;
-    }
-    if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
-      const parsed = Number(value);
-      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
-    }
-    return 0;
-  };
-  const currentLastReadSeq = coerceSeq(current.lastReadSeq);
-  const incomingLastReadSeq = coerceSeq(incoming.lastReadSeq);
-  // localReadIsAhead chỉ được kích hoạt khi incoming CÓ lastReadSeq hợp lệ (> 0)
-  // và vẫn thấp hơn local. Nếu incoming.lastReadSeq = 0 / null / undefined
-  // (server không gửi checkpoint), không được coi là "stale" — đây là missing
-  // data, không phải data cũ. Tránh false-positive giữ unreadCount=0 khi thực
-  // tế có unread mới.
-  const localReadIsAhead =
-    currentLastReadSeq > 0 &&
-    incomingLastReadSeq > 0 &&
-    currentLastReadSeq > incomingLastReadSeq;
-  const preserveLocalRead =
-    localReadIsAhead ||
-    ((current.unreadCount ?? 0) === 0 &&
-      (incoming.unreadCount ?? 0) > 0 &&
-      incomingLastReadSeq > 0 &&
-      incomingLastReadSeq < currentLastReadSeq);
-
-  return (normalizeConversation({
-    ...current,
-    ...incoming,
-    unreadCount: preserveLocalRead
-      ? (current.unreadCount ?? 0)
-      : incoming.unreadCount,
-    lastReadSeq: Math.max(currentLastReadSeq, incomingLastReadSeq) || undefined,
-    lastReadMessageId: localReadIsAhead
-      ? (current.lastReadMessageId ?? incoming.lastReadMessageId ?? undefined)
-      : (incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined),
-    lastReadAt: localReadIsAhead
-      ? (current.lastReadAt ?? incoming.lastReadAt ?? undefined)
-      : (incoming.lastReadAt ?? current.lastReadAt ?? undefined),
-    firstUnreadMessageId: preserveLocalRead
-      ? undefined
-      : (incoming.firstUnreadMessageId ??
-        current.firstUnreadMessageId ??
-        undefined),
-    firstUnreadMessageAt: preserveLocalRead
-      ? undefined
-      : (incoming.firstUnreadMessageAt ??
-        current.firstUnreadMessageAt ??
-        undefined),
-    summaryVersion:
-      toConversationVersion(incoming) ||
-      toConversationVersion(current) ||
-      undefined,
-  }) ?? {
-    ...current,
-    ...incoming,
-  }) as Conversation;
 };
 
 const mergeConversationCollections = (
@@ -1507,87 +1117,6 @@ const resolveSendFailureDescriptor = (
       defaultValue: "Could not send message.",
     }),
   };
-};
-
-const compareMessages = (a: Message, b: Message): number => {
-  const aSeq = toFiniteNumber(a.serverSeq);
-  const bSeq = toFiniteNumber(b.serverSeq);
-  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
-    return aSeq - bSeq;
-  }
-  if (aSeq !== null && bSeq === null) return -1;
-  if (aSeq === null && bSeq !== null) return 1;
-
-  const serverTimeDiff = toDateValue(a.serverTs) - toDateValue(b.serverTs);
-  if (serverTimeDiff !== 0) return serverTimeDiff;
-
-  const localOrderDiff =
-    (toFiniteNumber(a.localOrder) ?? Number.MAX_SAFE_INTEGER) -
-    (toFiniteNumber(b.localOrder) ?? Number.MAX_SAFE_INTEGER);
-  if (localOrderDiff !== 0) return localOrderDiff;
-
-  const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
-  if (timeDiff !== 0) return timeDiff;
-
-  const stableDiff = getStableMessageId(a).localeCompare(getStableMessageId(b));
-  if (stableDiff !== 0) return stableDiff;
-
-  const aId = typeof a.id === "string" ? a.id : "";
-  const bId = typeof b.id === "string" ? b.id : "";
-  return aId.localeCompare(bId);
-};
-
-const sortMessages = (messages: Message[]): Message[] =>
-  [...messages].sort(compareMessages);
-
-const matchesMessage = (source: Message, target: Message): boolean =>
-  (source.stableId !== undefined && source.stableId === target.stableId) ||
-  (source.clientMessageId !== undefined &&
-    source.clientMessageId === target.clientMessageId) ||
-  source.id === target.id ||
-  (source.localId !== undefined && source.localId === target.id) ||
-  (target.localId !== undefined && target.localId === source.id) ||
-  (source.localId !== undefined &&
-    target.localId !== undefined &&
-    source.localId === target.localId);
-
-const toMessageIdentityKeys = (message: Message): string[] => {
-  const keys = new Set<string>();
-  if (typeof message.stableId === "string" && message.stableId.length > 0) {
-    keys.add(`stable:${message.stableId}`);
-  }
-  if (
-    typeof message.clientMessageId === "string" &&
-    message.clientMessageId.length > 0
-  ) {
-    keys.add(`client:${message.clientMessageId}`);
-    keys.add(`stable:${message.clientMessageId}`);
-  }
-  if (typeof message.id === "string" && message.id.length > 0) {
-    keys.add(`id:${message.id}`);
-    keys.add(`local:${message.id}`);
-  }
-  if (typeof message.localId === "string" && message.localId.length > 0) {
-    keys.add(`id:${message.localId}`);
-    keys.add(`local:${message.localId}`);
-    keys.add(`stable:${message.localId}`);
-  }
-  return Array.from(keys);
-};
-
-const resolveMessageMatchIndex = (
-  _current: Message[],
-  keyToIndex: Map<string, number>,
-  incoming: Message,
-): number => {
-  const identityMatch = toMessageIdentityKeys(incoming)
-    .map((key) => keyToIndex.get(key))
-    .find((index): index is number => typeof index === "number");
-  if (typeof identityMatch === "number") {
-    return identityMatch;
-  }
-
-  return -1;
 };
 
 const mergeDefinedMessageFields = (
