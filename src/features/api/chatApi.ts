@@ -36,6 +36,7 @@ import type {
   MessageMergeMode,
 } from "../chat/domain/messageMerge";
 import { MESSAGE_HARD_LIMIT } from "../../utils/messageLengthPolicy";
+import { asRecord } from "../../utils/payloadGuards";
 
 export interface GetConversationsArgs {
   page?: number;
@@ -211,10 +212,6 @@ const toChatQueryError = (error: unknown): ChatQueryError => {
   };
 };
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
 
 const readBoolean = (
   source: Record<string, unknown> | null,

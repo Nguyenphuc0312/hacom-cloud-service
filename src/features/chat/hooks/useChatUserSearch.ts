@@ -8,14 +8,13 @@ import { ExpiringLruCache } from "../../../utils/expiringLruCache";
 import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshipStore";
 import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
 import { USERS_SEARCH_PAGE_SIZE } from "../../../services/api";
+import { asStringValue as asString } from "../../../utils/payloadGuards";
 
 type UnknownRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   value !== null && typeof value === "object";
 
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
 const asBoolean = (value: unknown): boolean | undefined =>
   typeof value === "boolean" ? value : undefined;

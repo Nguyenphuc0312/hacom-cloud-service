@@ -197,7 +197,7 @@ export const AudioBubble: React.FC<AudioBubbleProps> = ({
     try {
       await audioRef.current.play();
       useGlobalAudioPlayer.getState().resume();
-    } catch (err) {
+    } catch {
       setError("PLAYBACK_URL_EXPIRED");
     }
   }, [

@@ -2,6 +2,7 @@ import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { authClient } from "../../../lib/axios";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../../../lib/authEndpoints";
+import { asRecord } from "../../../utils/payloadGuards";
 
 export interface ActivationOtpRequestPayload {
   activationTicket: string;
@@ -55,10 +56,6 @@ export interface NormalizedAuthResponse {
   };
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
 
 const asString = (value: unknown): string | null => {
   if (typeof value !== "string") {

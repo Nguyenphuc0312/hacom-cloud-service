@@ -1,4 +1,5 @@
 import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
+import { asRecord, asString } from "../../../utils/payloadGuards";
 
 const friendshipRealtimeListeners = new Set<
   (detail: FriendshipRealtimeDetail) => void
@@ -6,14 +7,6 @@ const friendshipRealtimeListeners = new Set<
 const friendshipResyncListeners = new Set<
   (detail: FriendshipResyncDetail) => void
 >();
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const isRelationDto = (value: unknown): value is FriendshipRelationDto => {
   const record = asRecord(value);

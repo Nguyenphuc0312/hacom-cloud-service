@@ -97,6 +97,24 @@ import {
   realtimeReadCursorUpdated,
 } from "../features/realtime/realtimeMiddleware";
 import { realtimeActions } from "../features/realtime/realtimeSlice";
+import {
+  asRecord,
+  asString,
+  REMOTE_TYPING_TTL_MS,
+  getRealtimeMessageContent,
+  getRealtimeSenderName,
+  normalizeDeviceType,
+  parseTypingExpiryMs,
+  shouldSkipGroupConversationRefreshForCurrentUser,
+  shouldUseDeltaConversationRefresh,
+  toRealtimeConnectionStatus,
+} from "./realtimePayload";
+
+// Giữ nguyên API công khai cũ của hook — nơi khác vẫn import từ đây.
+export {
+  shouldSkipGroupConversationRefreshForCurrentUser,
+  shouldUseDeltaConversationRefresh,
+};
 import { store } from "../store";
 import { useAppDispatch } from "../store/hooks";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -150,50 +168,6 @@ interface UseWebSocketReturn {
   sendTyping: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
 }
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
-
-const getSenderProfile = (
-  payload: Record<string, unknown>,
-  messagePayload: Record<string, unknown>,
-): Record<string, unknown> | null =>
-  asRecord(messagePayload.sender) ??
-  asRecord(payload.sender) ??
-  asRecord(messagePayload.from) ??
-  asRecord(payload.from);
-
-const getRealtimeSenderName = (
-  payload: Record<string, unknown>,
-  messagePayload: Record<string, unknown>,
-): string | null => {
-  const senderProfile = getSenderProfile(payload, messagePayload);
-  return (
-    asString(messagePayload.senderName) ??
-    asString(messagePayload.sender_name) ??
-    asString(payload.senderName) ??
-    asString(payload.sender_name) ??
-    asString(senderProfile?.displayName) ??
-    asString(senderProfile?.name) ??
-    asString(senderProfile?.username)
-  );
-};
-
-const getRealtimeMessageContent = (
-  payload: Record<string, unknown>,
-  messagePayload: Record<string, unknown>,
-): string =>
-  asString(messagePayload.content) ??
-  asString(messagePayload.body) ??
-  asString(messagePayload.text) ??
-  asString(payload.content) ??
-  asString(payload.body) ??
-  "";
 
 const getLatestServerSeq = (messages: unknown[]): number | null => {
   let latest: number | null = null;
@@ -290,76 +264,14 @@ const hasMessageIdInRtkCache = (
     clientMessageId: messageId,
   }) >= 0;
 
-const toRealtimeConnectionStatus = (
-  state: ConnectionState,
-): Parameters<typeof realtimeActions.setConnectionStatus>[0] => {
-  switch (state) {
-    case "connected":
-      return "connected";
-    case "connecting":
-    case "authenticating":
-    case "reconnecting":
-      return "connecting";
-    case "auth_failed":
-    case "error":
-      return "error";
-    case "unauthenticated":
-    case "disconnected":
-    default:
-      return "disconnected";
-  }
-};
-
-export const shouldSkipGroupConversationRefreshForCurrentUser = (
-  payload: Record<string, unknown> | null,
-  currentUserId: string | null | undefined,
-): boolean => {
-  if (!payload || !currentUserId) {
-    return false;
-  }
-
-  const targetUserId =
-    asString(payload.userId) ?? asString(payload.targetUserId);
-  return targetUserId === currentUserId;
-};
-
-export const shouldUseDeltaConversationRefresh = ({
-  conversationId,
-  selectedConversationId,
-  joinedConversationIds,
-}: {
-  conversationId: string | null | undefined;
-  selectedConversationId: string | null | undefined;
-  joinedConversationIds: ReadonlySet<string>;
-}): boolean =>
-  Boolean(
-    conversationId &&
-    (selectedConversationId === conversationId ||
-      joinedConversationIds.has(conversationId)),
-  );
-
 export {
   drainPendingConversationSync,
   drainPendingConversationSyncForResyncRequired,
 };
 export type { PendingConversationSyncStrategy };
 
-const REMOTE_TYPING_TTL_MS = 5_000;
 const CONVERSATION_JOIN_ACK_TIMEOUT_MS = 2_000;
 const CONVERSATION_JOIN_RETRY_DELAY_MAX_MS = 8_000;
-
-const parseTypingExpiryMs = (expiresAt: string | null): number => {
-  const parsed = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-  if (Number.isFinite(parsed) && parsed > Date.now()) {
-    return parsed;
-  }
-  return Date.now() + REMOTE_TYPING_TTL_MS;
-};
-
-const normalizeDeviceType = (
-  value: string | null,
-): "web" | "mobile" | "desktop" =>
-  value === "mobile" || value === "desktop" ? value : "web";
 
 const DELIVERY_ACK_DEVICE_ID_STORAGE_KEY = "chat:web:deliveryAckDeviceId";
 

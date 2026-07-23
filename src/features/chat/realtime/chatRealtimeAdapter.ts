@@ -1,4 +1,5 @@
 import { buildMessageCorrelationKey } from "../../../utils/messageIdFactory";
+import { asRecord, asString } from "../../../utils/payloadGuards";
 import {
   buildRealtimeEventKey,
   createRealtimeEventDeduper,
@@ -6,14 +7,6 @@ import {
 import type {
   NormalizedMessageRealtimeEvent,
 } from "./realtimeEventTypes";
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const asFiniteNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;

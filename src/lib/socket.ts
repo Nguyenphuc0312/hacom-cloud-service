@@ -23,6 +23,7 @@ import {
   isTokenExpiringSoon,
   normalizeToken,
 } from "../utils/jwtHelpers";
+import { asRecord, asString } from "../utils/payloadGuards";
 import { logger } from "../utils/logger";
 import { logMessageDebug } from "../utils/messageDebug";
 
@@ -47,13 +48,6 @@ export interface WebSocketEvent {
   [key: string]: unknown;
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const getDebugConversationId = (payload: unknown): string | null => {
   const record = asRecord(payload);

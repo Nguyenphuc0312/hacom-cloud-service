@@ -6,7 +6,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { VALIDATION_CONFIG } from "../../../config"; 
 import { Avatar } from "../../../components/common/Avatar"; 
-import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../components/ui"; 
+import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../components/ui";
+import { asRecord } from "../../../utils/payloadGuards"; 
 import { unwrapApiSuccess } from "../../../lib/apiContract"; 
 import { userApi } from "../../../services/api"; 
 import uploadClient from "../../../services/uploadClient";
@@ -79,8 +80,6 @@ interface ProfileDraft {
   bio: string;
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 
 const createDraft = (user: User | null): ProfileDraft => ({
   displayName: user?.displayName || "",

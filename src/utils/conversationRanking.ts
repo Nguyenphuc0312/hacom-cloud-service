@@ -1,13 +1,8 @@
 import type { Conversation, UserSummary } from "../types";
 import { useUIStore } from "../stores/uiStore";
+import { asRecord, asString } from "./payloadGuards";
 
 type UnknownRecord = Record<string, unknown>;
-
-
-const asRecord = (value: unknown): UnknownRecord | null =>
-  value !== null && typeof value === "object"
-    ? (value as UnknownRecord)
-    : null;
 
 const asNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -15,8 +10,6 @@ const asNumber = (value: unknown): number | null =>
 const asBoolean = (value: unknown): boolean | null =>
   typeof value === "boolean" ? value : null;
 
-const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
 
 const toTimestamp = (value: unknown): number => {
   if (value instanceof Date) return value.getTime();
