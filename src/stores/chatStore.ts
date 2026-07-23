@@ -44,6 +44,13 @@ import {
   shouldApplyConversationSummary,
 } from "./conversationSummaryMerge";
 import {
+  compareMessages,
+  matchesMessage,
+  resolveMessageMatchIndex,
+  sortMessages,
+  toMessageIdentityKeys,
+} from "./messageOrdering";
+import {
   buildConversationIndexState,
   computeCanonicalTotalUnreadCount,
   computeConversationCursor,
@@ -1110,87 +1117,6 @@ const resolveSendFailureDescriptor = (
       defaultValue: "Could not send message.",
     }),
   };
-};
-
-const compareMessages = (a: Message, b: Message): number => {
-  const aSeq = toFiniteNumber(a.serverSeq);
-  const bSeq = toFiniteNumber(b.serverSeq);
-  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
-    return aSeq - bSeq;
-  }
-  if (aSeq !== null && bSeq === null) return -1;
-  if (aSeq === null && bSeq !== null) return 1;
-
-  const serverTimeDiff = toDateValue(a.serverTs) - toDateValue(b.serverTs);
-  if (serverTimeDiff !== 0) return serverTimeDiff;
-
-  const localOrderDiff =
-    (toFiniteNumber(a.localOrder) ?? Number.MAX_SAFE_INTEGER) -
-    (toFiniteNumber(b.localOrder) ?? Number.MAX_SAFE_INTEGER);
-  if (localOrderDiff !== 0) return localOrderDiff;
-
-  const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
-  if (timeDiff !== 0) return timeDiff;
-
-  const stableDiff = getStableMessageId(a).localeCompare(getStableMessageId(b));
-  if (stableDiff !== 0) return stableDiff;
-
-  const aId = typeof a.id === "string" ? a.id : "";
-  const bId = typeof b.id === "string" ? b.id : "";
-  return aId.localeCompare(bId);
-};
-
-const sortMessages = (messages: Message[]): Message[] =>
-  [...messages].sort(compareMessages);
-
-const matchesMessage = (source: Message, target: Message): boolean =>
-  (source.stableId !== undefined && source.stableId === target.stableId) ||
-  (source.clientMessageId !== undefined &&
-    source.clientMessageId === target.clientMessageId) ||
-  source.id === target.id ||
-  (source.localId !== undefined && source.localId === target.id) ||
-  (target.localId !== undefined && target.localId === source.id) ||
-  (source.localId !== undefined &&
-    target.localId !== undefined &&
-    source.localId === target.localId);
-
-const toMessageIdentityKeys = (message: Message): string[] => {
-  const keys = new Set<string>();
-  if (typeof message.stableId === "string" && message.stableId.length > 0) {
-    keys.add(`stable:${message.stableId}`);
-  }
-  if (
-    typeof message.clientMessageId === "string" &&
-    message.clientMessageId.length > 0
-  ) {
-    keys.add(`client:${message.clientMessageId}`);
-    keys.add(`stable:${message.clientMessageId}`);
-  }
-  if (typeof message.id === "string" && message.id.length > 0) {
-    keys.add(`id:${message.id}`);
-    keys.add(`local:${message.id}`);
-  }
-  if (typeof message.localId === "string" && message.localId.length > 0) {
-    keys.add(`id:${message.localId}`);
-    keys.add(`local:${message.localId}`);
-    keys.add(`stable:${message.localId}`);
-  }
-  return Array.from(keys);
-};
-
-const resolveMessageMatchIndex = (
-  _current: Message[],
-  keyToIndex: Map<string, number>,
-  incoming: Message,
-): number => {
-  const identityMatch = toMessageIdentityKeys(incoming)
-    .map((key) => keyToIndex.get(key))
-    .find((index): index is number => typeof index === "number");
-  if (typeof identityMatch === "number") {
-    return identityMatch;
-  }
-
-  return -1;
 };
 
 const mergeDefinedMessageFields = (

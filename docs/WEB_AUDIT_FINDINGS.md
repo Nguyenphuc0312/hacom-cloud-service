@@ -209,7 +209,7 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
-### 🟡 Phase 4 — 3 lát cắt an toàn đã thực hiện (23-07-26)
+### 🟡 Phase 4 — 4 lát cắt an toàn đã thực hiện (23-07-26)
 
 Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
 
@@ -218,13 +218,25 @@ Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnr
 | 1 | [`messageNormalizer.ts`](../src/stores/messageNormalizer.ts) | 203 | `normalizeAttachments/Reactions/Mentions/LocationPayload`, `toDateObject` + 3 helper cơ sở |
 | 2 | [`conversationCursor.ts`](../src/stores/conversationCursor.ts) | 128 | con trỏ phân trang, `computeCanonicalTotalUnreadCount`, `buildConversationIndexState` |
 | 3 | [`conversationSummaryMerge.ts`](../src/stores/conversationSummaryMerge.ts) | 158 | `shouldApplyConversationSummary` + `mergeConversationSummary` — **stale-read guard** |
+| 4 | [`messageOrdering.ts`](../src/stores/messageOrdering.ts) | 97 | `compareMessages`, `sortMessages`, `matchesMessage`, `resolveMessageMatchIndex` — **thứ tự + nhận dạng tin nhắn** |
 
 **Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
 viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
 
 **Vì sao chọn đúng 2 nhóm này:** đã kiểm chứng bằng grep là **hoàn toàn thuần** — không một lần gọi `set()` / `get()` / store nào trong vùng cắt. Đây là ranh giới sạch nhất trong cả file.
 
-**Đo được:** `chatStore.ts` **5101 → 4704 dòng (−397, −8%)**; **+52 test mới** (21 normalizer + 16 cursor + 15 summary-merge).
+**Đo được:** `chatStore.ts` **5101 → 4630 dòng (−471, −9%)**; **+76 test mới** (21 normalizer + 16 cursor + 15 summary-merge + 24 ordering).
+
+**Lát 4 gỡ thêm một trùng lặp ở tầng lõi** — đúng thứ user nêu từ đầu (*"cái nào dùng chung thì dùng đi"*):
+
+| Hàm | Tình trạng trước | Sau |
+|---|---|---|
+| `toMessageIdentityKeys` | **chép nguyên** ở `chatStore` và `domain/messageIdentityMatching` | dùng chung bản domain, `chatStore` re-export |
+| `compareMessages` | hai bản gần y hệt (`chatStore` vs `domain/messageOrdering`) | **chưa gộp** — xem dưới |
+
+Đã viết [`messageOrdering.equivalence.test.ts`](../src/stores/messageOrdering.equivalence.test.ts) **đối chứng hai bản `compareMessages`**: tương đương trên 9 trường hợp (seq, serverTs, localOrder, createdAt, stableId, id, thiếu-seq, thiếu-localOrder, trùng hệt). Khác biệt **duy nhất**: bản domain đọc thêm `messageSeq` làm seq dự phòng.
+
+> Chưa gộp hai bản `compareMessages` vì khác biệt đó là **thật, không phải ngẫu nhiên**: gộp = đổi thứ tự timeline cho các tin chỉ có `messageSeq`. Đó là đổi hành vi, phải do user quyết. Test đối chứng đã ghi lại chính xác khác biệt để việc gộp sau này là quyết định có dữ liệu, không phải phỏng đoán.
 
 **Riêng lát 3 — phần đáng giá nhất:** `mergeConversationSummary` là logic tinh vi nhất store, chống race giữa optimistic `markAsRead` và response cũ về muộn (comment trong code cho thấy nó đã sửa qua nhiều bug thật: BIGINT về dạng chuỗi, phân biệt "dữ liệu cũ" với "dữ liệu thiếu"). Trước đây nó không có test riêng. Giờ 15 test khoá lại đúng các bất biến đó — ví dụ *server không gửi checkpoint là THIẾU dữ liệu, không phải dữ liệu cũ, nên vẫn phải nhận unread mới*.
 
