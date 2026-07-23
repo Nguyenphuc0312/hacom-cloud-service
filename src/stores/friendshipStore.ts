@@ -14,6 +14,7 @@ import type {
   FriendshipResyncReason,
 } from "../features/chat/realtime/friendshipRealtime";
 import { logger } from "../utils/logger";
+import { asRecord } from "../utils/payloadGuards";
 import { useEnrichedProfileStore } from "./enrichedProfileStore";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
@@ -190,10 +191,6 @@ interface FriendshipStoreState {
 const RESYNC_STALE_MS = 60_000;
 let scheduledResyncTimer: ReturnType<typeof setTimeout> | null = null;
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
 
 const asRelationDto = (value: unknown): FriendshipRelationDto | null => {
   const record = asRecord(value);

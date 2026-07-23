@@ -8,16 +8,10 @@
  */
 import type { realtimeActions } from "../features/realtime/realtimeSlice";
 import type { ConnectionState } from "../lib/socket";
+import { asRecord, asString } from "../utils/payloadGuards";
 
-export const asRecord = (
-  value: unknown,
-): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-export const asString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim().length > 0 ? value : null;
+// Re-export để useWebSocket vẫn import được từ đây như trước.
+export { asRecord, asString };
 
 /** Hồ sơ người gửi: ưu tiên bản nằm trong message, rồi mới tới payload ngoài. */
 export const getSenderProfile = (

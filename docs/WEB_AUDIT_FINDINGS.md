@@ -20,6 +20,7 @@ Việc thật nằm ở **4 finding**, xếp theo giá trị ÷ rủi ro:
 | **F-03** | `GroupInfo.tsx`: **35 `useState`** trong 1 component, 1807 dòng | SRP | VỪA | VỪA |
 | **F-04** | Hai file cùng tên `messageIdentity.ts` khác vai trò → dễ import nhầm | đặt tên | **THẤP** | THẤP |
 | **F-05** | 🔴 **BUG:** hai hộp thoại xác nhận mở chồng nhau (xoá/cấm thành viên, chuyển quyền) | correctness | **THẤP** | **CAO** |
+| **F-06** | `asRecord` / `asString` chép nguyên ở ~20 file | tái-dùng | THẤP (4 file) | VỪA |
 
 Ngoài ra: **97 lỗi lint** tồn đọng (mục 6) và ghi chú vì sao `chatStore` **chưa nên** cắt vội (mục 5).
 
@@ -189,6 +190,36 @@ const handleRemoveMember = useCallback((member) => {
 **Kiểm chứng:** cả 5 handler giờ set **đúng một** state; `pendingConfirm` còn **0** lần xuất hiện trong file.
 
 > **Bài học:** bug này không phải lỗi cẩu thả mà là hệ quả trực tiếp của nợ SRP. Trong một component 1807 dòng với 35 `useState`, việc hai state cùng mô tả một sự việc là gần như không thể phát hiện bằng mắt. Nó chỉ lộ ra khi gom state theo nhóm trách nhiệm.
+
+---
+
+## F-06 · `asRecord` / `asString` bị chép khắp repo 🟠 SỬA MỘT PHẦN
+
+- **Loại:** tái-dùng · **Rủi ro sửa: THẤP (4 file) / VỪA (phần còn lại)**
+- Phát hiện khi rà lại chính code của phiên này — 2 trong 4 bản trùng là **do phiên này tạo ra**.
+
+**Hiện trạng:** `asRecord` và `asString` là hai type-guard 2 dòng, bị **chép nguyên** ở khoảng **20 file**.
+
+### ✅ Đã gộp (4 file — giống hệt nhau từng ký tự)
+
+Tạo [`utils/payloadGuards.ts`](../src/utils/payloadGuards.ts) làm nguồn duy nhất, 4 nơi trỏ về:
+`stores/messageNormalizer.ts` · `hooks/realtimePayload.ts` · `hooks/usePresence.ts` · `stores/friendshipStore.ts`
+
+Hai module đầu **re-export** lại nên nơi gọi cũ (`chatStore`, `useWebSocket`) không phải sửa.
+
+**Giữ riêng `asString` và `asStringValue`** dù chỉ khác kiểu trả về (`null` vs `undefined`): nơi gọi phụ thuộc đúng kiểu đó trong các chuỗi `??`. Đã có test khoá lại khác biệt này để lần sau không ai gộp nhầm.
+
+### ⛔ CHƯA gộp (~16 file còn lại) — và vì sao
+
+Đã đọc từng bản: **chúng KHÔNG giống nhau**, có ít nhất 3 hành vi khác biệt:
+
+| Bản | Hành vi |
+|---|---|
+| Chuẩn (đã gộp) | kiểm tra sau trim, trả **chuỗi gốc chưa trim** |
+| `features/auth/api/authApi.ts` | trả **bản đã trim** |
+| `features/chat/identity/resolveUserDisplayName.ts` | trả `string` rỗng, **không phải `null`** |
+
+Gộp mù cả 16 file sẽ **đổi hành vi âm thầm** ở tầng auth và hiển thị tên — đúng loại bug khó truy nhất. Việc đúng là gộp từng nhóm sau khi đối chiếu, và đó xứng đáng một PR riêng.
 
 ---
 

@@ -9,17 +9,14 @@
  * dò nhiều tên. Đừng rút gọn các chuỗi `??` bên dưới nếu chưa kiểm tra thực tế.
  */
 import type { Attachment, Message } from "../types";
+import {
+  asNumberValue,
+  asRecord,
+  asStringValue,
+} from "../utils/payloadGuards";
 
-export const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-
-export const asStringValue = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
-
-export const asNumberValue = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+// Re-export để chatStore và nơi khác vẫn import được từ đây như trước.
+export { asNumberValue, asRecord, asStringValue };
 
 export const toDateObject = (
   value: unknown,

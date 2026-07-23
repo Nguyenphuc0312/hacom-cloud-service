@@ -219,6 +219,7 @@ Ghi rõ để tránh phình phạm vi:
 | 3 | Sửa F-01 + F-02 + F-04 | THẤP–VỪA | ✅ XONG — 588 pass · 0 fail · build ✓ |
 | 3b | F-03 (`GroupInfo` 35 useState) + F-05 (bug modal chồng) | VỪA | ✅ XONG — 5/6 nhóm tách (1 cố ý giữ) · 1807→1527 dòng · 591 pass · 0 fail · build ✓ |
 | 4 | Cắt `chatStore` / `useWebSocket` | CAO | 🟡 5 lát an toàn xong — chatStore 5101→4630, useWebSocket 3104→3016 · 690 pass · 0 fail |
+| 5 | F-06 gộp `asRecord`/`asString` (4/20 file) | THẤP | ✅ XONG — 696 pass · 0 fail · build ✓ |
 
 **Ngoài kế hoạch — đã xong:** sửa `SegmentedControl` (bug tab lệch) + test kèm.
 
