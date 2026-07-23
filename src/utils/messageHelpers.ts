@@ -11,11 +11,8 @@ import { isDirectConversation } from "../lib/conversationAdapter";
 import i18n from "../i18n";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { getPreviewFromMessage } from "./messageContent.utils";
+import { asRecord } from "./payloadGuards";
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
 
 const asTrimmedString = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";

@@ -5,6 +5,7 @@ import type {
   ActivationNextAction,
 } from "../model/authState";
 import { resolveLockedAccountStatus } from "../model/authState";
+import { asRecord } from "../../../utils/payloadGuards";
 
 interface ApiErrorEnvelope {
   statusCode: number;
@@ -33,10 +34,6 @@ export interface AuthFailureResolution {
   retryAfterSeconds?: number;
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
 
 const asString = (value: unknown): string | null => {
   if (typeof value !== "string") {

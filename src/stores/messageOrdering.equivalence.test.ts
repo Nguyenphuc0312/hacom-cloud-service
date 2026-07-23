@@ -57,7 +57,7 @@ describe("compareMessages — chatStore vs domain", () => {
     );
   });
 
-  it("khác biệt DUY NHẤT: bản domain còn đọc `messageSeq` làm seq dự phòng", () => {
+  it("`messageSeq` là khác biệt duy nhất — và nó KHÔNG tới được store", () => {
     // Đặt id sao cho tie-break theo id đi NGƯỢC với thứ tự theo seq, để tách
     // bạch hai nguyên nhân: nếu chỉ tie-break theo id thì "z" phải đứng sau.
     const withMessageSeq = message({ id: "z", messageSeq: 1 } as never);
@@ -65,7 +65,22 @@ describe("compareMessages — chatStore vs domain", () => {
 
     // Bản domain coi messageSeq là seq → tin này đứng TRƯỚC dù id lớn hơn.
     expect(domainCompare(withMessageSeq, plain)).toBeLessThan(0);
-    // Bản store bỏ qua messageSeq → rơi xuống tie-break id → đứng SAU.
-    expect(storeCompare(withMessageSeq, plain)).toBeGreaterThan(0);
+    // Bản gốc của store bỏ qua messageSeq → rơi xuống tie-break id → đứng SAU.
+    //
+    // Khác biệt này VÔ HẠI trên dữ liệu thật: `normalizeMessage` trong chatStore
+    // đã gộp `messageSeq` vào `serverSeq` (chatStore.ts — `asNumberValue(
+    // source.serverSeq) ?? asNumberValue(source.messageSeq)`), nên message nằm
+    // trong store không bao giờ có messageSeq mà thiếu serverSeq.
+    // Đó là căn cứ để gộp hai bản về một.
+    expect(storeCompare(withMessageSeq, plain)).toBeLessThan(0);
+  });
+
+  it("sau chuẩn hoá (messageSeq đã vào serverSeq) thì hai bản khớp tuyệt đối", () => {
+    const normalized = message({ id: "z", serverSeq: 1 });
+    const plain = message({ id: "a" });
+
+    expect(Math.sign(storeCompare(normalized, plain))).toBe(
+      Math.sign(domainCompare(normalized, plain)),
+    );
   });
 });

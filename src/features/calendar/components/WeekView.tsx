@@ -113,7 +113,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = Math.max(0, nowMinutes() * PX_PER_MIN - 160);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDate]);
 
   return (

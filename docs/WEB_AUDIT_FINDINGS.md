@@ -193,7 +193,28 @@ const handleRemoveMember = useCallback((member) => {
 
 ---
 
-## F-06 · `asRecord` / `asString` bị chép khắp repo 🟠 SỬA MỘT PHẦN
+## F-07 · Refresh token bỏ qua lựa chọn "ghi nhớ đăng nhập" 🔴 ĐÃ SỬA
+
+- **Vị trí:** [`services/tokenService.ts`](../src/services/tokenService.ts) — `storeTokens`
+- **Loại:** bảo mật / đúng ý người dùng · **Đã sửa 23-07-26**
+- Phát hiện từ Phase 1 (test đỏ `tokenService.test.ts`), treo chờ duyệt vì **đổi hành vi đăng nhập**.
+
+**Hiện trạng cũ:** refresh token **luôn** ghi vào `localStorage`, bất kể người dùng có tick "ghi nhớ đăng nhập" hay không. Hệ quả: ô tick chỉ còn ý nghĩa hiển thị, và trên máy dùng chung phiên vẫn sống sau khi đóng trình duyệt.
+
+**Sau khi sửa:**
+
+| Lựa chọn | Nơi lưu | Vòng đời |
+|---|---|---|
+| Có tick ghi nhớ | `localStorage` | sống qua đóng/mở trình duyệt |
+| Không tick | `sessionStorage` | đóng tab là mất phiên |
+
+**Vì sao an toàn:** `getRefreshToken()` vốn đã đọc **cả hai** storage nên không phải sửa chỗ đọc. Luồng refresh dùng `isRememberMeEnabled()` đọc cờ đã lưu nên vẫn nhất quán.
+
+Thêm 2 test: đổi lựa chọn giữa hai lần đăng nhập **dọn sạch storage cũ** (token không nằm lại hai nơi), và `getRefreshToken` đọc được từ cả hai nguồn.
+
+---
+
+## F-06 · `asRecord` / `asString` bị chép khắp repo ✅ ĐÃ SỬA
 
 - **Loại:** tái-dùng · **Rủi ro sửa: THẤP (4 file) / VỪA (phần còn lại)**
 - Phát hiện khi rà lại chính code của phiên này — 2 trong 4 bản trùng là **do phiên này tạo ra**.
@@ -209,17 +230,28 @@ Hai module đầu **re-export** lại nên nơi gọi cũ (`chatStore`, `useWebS
 
 **Giữ riêng `asString` và `asStringValue`** dù chỉ khác kiểu trả về (`null` vs `undefined`): nơi gọi phụ thuộc đúng kiểu đó trong các chuỗi `??`. Đã có test khoá lại khác biệt này để lần sau không ai gộp nhầm.
 
-### ⛔ CHƯA gộp (~16 file còn lại) — và vì sao
+### ✅ Đã gộp nốt phần còn lại (23-07-26) — tổng **19 file**
 
-Đã đọc từng bản: **chúng KHÔNG giống nhau**, có ít nhất 3 hành vi khác biệt:
+Phân loại bằng **vân tay MD5** từng bản thay vì đọc mắt thường, ra 4 nhóm:
 
-| Bản | Hành vi |
+| Nhóm | Số file | Xử lý |
+|---|---|---|
+| `asRecord` chuẩn | 9 | ✅ gộp → `payloadGuards.asRecord` |
+| `asString` trả `null` | 5 | ✅ gộp → `payloadGuards.asString` |
+| `asString` trả `undefined` | 4 | ✅ gộp → `payloadGuards.asStringValue` (import kèm alias, không phải sửa lời gọi) |
+| **Hành vi khác** | 3 | ⛔ **giữ nguyên có chủ ý** |
+
+Hai biến thể `asRecord` tưởng khác hoá ra tương đương: `conversationRanking` chỉ khác alias kiểu, `ProfileEditDialog` dùng `value &&` thay `value !== null` — khác duy nhất ở `0`/`""` mà cả hai đều trả `null` vì không phải object.
+
+### ⛔ 3 file CỐ Ý không gộp
+
+| File | Hành vi riêng |
 |---|---|
-| Chuẩn (đã gộp) | kiểm tra sau trim, trả **chuỗi gốc chưa trim** |
-| `features/auth/api/authApi.ts` | trả **bản đã trim** |
-| `features/chat/identity/resolveUserDisplayName.ts` | trả `string` rỗng, **không phải `null`** |
+| `features/auth/api/authApi.ts` | trả **bản đã trim** (chuẩn trả chuỗi gốc) |
+| `features/auth/utils/authErrorMapper.ts` | như trên |
+| `features/chat/identity/resolveUserDisplayName.ts` | trả `""`, **không phải `null`** |
 
-Gộp mù cả 16 file sẽ **đổi hành vi âm thầm** ở tầng auth và hiển thị tên — đúng loại bug khó truy nhất. Việc đúng là gộp từng nhóm sau khi đối chiếu, và đó xứng đáng một PR riêng.
+Gộp chúng sẽ **đổi hành vi âm thầm** ở tầng auth và hiển thị tên — đúng loại bug khó truy nhất. Muốn gộp thì phải sửa cả nơi gọi, là việc khác.
 
 ---
 
@@ -277,7 +309,9 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 
 Đã viết [`messageOrdering.equivalence.test.ts`](../src/stores/messageOrdering.equivalence.test.ts) **đối chứng hai bản `compareMessages`**: tương đương trên 9 trường hợp (seq, serverTs, localOrder, createdAt, stableId, id, thiếu-seq, thiếu-localOrder, trùng hệt). Khác biệt **duy nhất**: bản domain đọc thêm `messageSeq` làm seq dự phòng.
 
-> Chưa gộp hai bản `compareMessages` vì khác biệt đó là **thật, không phải ngẫu nhiên**: gộp = đổi thứ tự timeline cho các tin chỉ có `messageSeq`. Đó là đổi hành vi, phải do user quyết. Test đối chứng đã ghi lại chính xác khác biệt để việc gộp sau này là quyết định có dữ liệu, không phải phỏng đoán.
+**✅ ĐÃ GỘP (23-07-26).** Căn cứ quyết định: [`chatStore.ts:552`](../src/stores/chatStore.ts#L552) — `normalizeMessage` **đã gộp `messageSeq` vào `serverSeq`** (`asNumberValue(source.serverSeq) ?? asNumberValue(source.messageSeq)`) từ trước. Nên message nằm trong store không bao giờ có `messageSeq` mà thiếu `serverSeq` → khác biệt giữa hai bản **không tới được store**.
+
+`stores/messageOrdering.ts` giờ re-export thẳng `compareMessages` của domain. Test đối chứng giữ lại làm bằng chứng, kèm một case mới xác nhận sau chuẩn hoá thì hai bản khớp tuyệt đối.
 
 **Riêng lát 3 — phần đáng giá nhất:** `mergeConversationSummary` là logic tinh vi nhất store, chống race giữa optimistic `markAsRead` và response cũ về muộn (comment trong code cho thấy nó đã sửa qua nhiều bug thật: BIGINT về dạng chuỗi, phân biệt "dữ liệu cũ" với "dữ liệu thiếu"). Trước đây nó không có test riêng. Giờ 15 test khoá lại đúng các bất biến đó — ví dụ *server không gửi checkpoint là THIẾU dữ liệu, không phải dữ liệu cũ, nên vẫn phải nhận unread mới*.
 
@@ -297,7 +331,25 @@ viết test đặc tả **trước** → chạy xanh trên module mới → mớ
 - `@typescript-eslint/no-unused-vars` — vd [`responsive/responsive.ts:154`](../src/responsive/responsive.ts#L154)
 - **21 warning "Unused eslint-disable directive"** — các dòng `eslint-disable` không còn cần; đây là loại **an toàn nhất để dọn**, `--fix` xử lý được 5 cái.
 
-**Đề xuất:** không gộp vào Phase 3. Tách một lượt dọn lint riêng, vì nó đụng rất nhiều file và sẽ làm nhiễu diff của phần refactor.
+### ✅ Đã dọn phần an toàn (23-07-26): **116 → 103 problems**, **96 → 87 errors**
+
+| Nhóm | Cách xử lý |
+|---|---|
+| `no-unused-vars` — **9 lỗi**, tất cả là biến tiền tố `_` | Sửa **`eslint.config.js`** thêm `argsIgnorePattern: "^_"` (+ vars/caught/destructured). Codebase đã dùng quy ước này sẵn, chỉ là lint chưa biết → **lỗi giả**. Một chỗ sửa, hết 9 lỗi, không đụng file nguồn nào. |
+| `catch (err)` không dùng | Đổi thành `catch {}` — `AudioBubble.tsx` |
+| **Unused eslint-disable** — 4 directive thừa | Xoá: `ComposerLinkPreview` · `TipTapEditor` · `WeekView` · `sseWithAuth` |
+| `src/poc/` | ⛔ bỏ qua đúng quy tắc mục 4 của kế hoạch |
+
+### ⬜ Còn lại 87 errors — vì sao chưa dọn
+
+| Rule | Số | Bản chất |
+|---|---|---|
+| `react-hooks/set-state-in-effect` | 46 | **Đổi hành vi thật** — phải viết lại luồng effect từng chỗ, không phải dọn hình thức |
+| `react-hooks/exhaustive-deps` | 19 | Thêm deps có thể gây vòng lặp render; phải đọc từng hook |
+| `react-refresh/only-export-components` | 10 | Đổi cấu trúc export của module |
+| `react-hooks/preserve-manual-memoization` | 9 | Đụng memo hoá thủ công ở hot path |
+
+Cả 4 nhóm đều **không phải sửa cơ học** — mỗi lỗi cần đọc hiểu ngữ cảnh và có rủi ro đổi hành vi. Đó là công việc riêng, không nên trộn vào một PR "dọn lint".
 
 ---
 

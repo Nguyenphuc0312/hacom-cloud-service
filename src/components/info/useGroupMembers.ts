@@ -7,6 +7,7 @@ import { chatApi } from "../../features/chat/api/chatApi";
 import { createSingleFlight } from "../../utils/singleFlight";
 import { loadUserProfiles } from "../../services/userBatchLoader";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+import { asStringValue as asString } from "../../utils/payloadGuards";
 import { RoomMemberRole, UserStatus } from "../../types";
 import type { UserSummary } from "../../types";
 
@@ -45,8 +46,6 @@ const VALID_ROLES = new Set<string>([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
 const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
 

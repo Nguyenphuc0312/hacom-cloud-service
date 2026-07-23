@@ -81,7 +81,6 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           },
           link: false,
         }),
-        // eslint-disable-next-line react-hooks/refs
         Placeholder.configure({
           // Function form reads from ref so decoration always shows current text
           // without needing to recreate the editor instance on each prop change.

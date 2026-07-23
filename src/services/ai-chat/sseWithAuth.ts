@@ -208,7 +208,6 @@ export function openSSEStream(
       // Buffer holds an incomplete SSE event block between chunks.
       let buffer = "";
 
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
 
