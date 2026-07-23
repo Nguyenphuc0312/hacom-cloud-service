@@ -5,7 +5,7 @@ import {
   getStableMessageId,
   isTempMessageId,
   messagesShareIdentity,
-} from "./messageIdentity";
+} from "./messageIdentityMatching";
 import {
   compareMessages,
   findSortedInsertIndex,

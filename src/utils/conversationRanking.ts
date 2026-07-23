@@ -112,35 +112,58 @@ export const getConversationSortIdentity = (
   );
 };
 
+/**
+ * Tạo hàm so sánh THUẦN từ tập id đã ghim.
+ *
+ * Nhận sẵn `Set` thay vì tự đi lấy từ store, vì `Array.sort` gọi hàm so sánh
+ * O(n log n) lần: đọc store + quét mảng ghim trong mỗi lần so sánh biến chi phí
+ * thành O(n log n × p). Dựng Set một lần ở nơi gọi → tra cứu O(1), và hàm so
+ * sánh trở thành thuần nên test được mà không cần dựng store.
+ */
+export const createConversationActivityComparator =
+  (pinnedIds: ReadonlySet<string>) =>
+  (a: Conversation, b: Conversation): number => {
+    const aPinned = pinnedIds.has(a.id);
+    const bPinned = pinnedIds.has(b.id);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
+    const aActivity = getConversationActivityTimestamp(a);
+    const bActivity = getConversationActivityTimestamp(b);
+
+    if (aActivity !== bActivity) {
+      return bActivity - aActivity;
+    }
+
+    const aLastMessageId = getConversationSortIdentity(a);
+    const bLastMessageId = getConversationSortIdentity(b);
+    if (aLastMessageId !== bLastMessageId) {
+      return bLastMessageId.localeCompare(aLastMessageId);
+    }
+
+    return a.id.localeCompare(b.id);
+  };
+
+/** Đọc tập ghim hiện tại từ uiStore (một lần, không gọi trong vòng sort). */
+export const getPinnedConversationIdSet = (): ReadonlySet<string> =>
+  new Set(useUIStore.getState().pinnedConversationIds);
+
 export const sortConversationsByActivity = (
   conversations: Conversation[] | null | undefined,
 ): Conversation[] => {
   if (!Array.isArray(conversations)) return [];
 
-  return [...conversations].sort(compareConversationsByActivity);
+  return [...conversations].sort(
+    createConversationActivityComparator(getPinnedConversationIdSet()),
+  );
 };
 
+/**
+ * Bản tiện dụng cho so sánh LẺ (một cặp), tự lấy tập ghim.
+ * Đừng truyền thẳng hàm này vào `Array.sort` — mỗi lần so sánh sẽ dựng lại Set.
+ * Sort thì dùng `createConversationActivityComparator` với Set dựng sẵn.
+ */
 export const compareConversationsByActivity = (
   a: Conversation,
   b: Conversation,
-): number => {
-  const pinnedIds = useUIStore.getState().pinnedConversationIds;
-  const aPinned = pinnedIds.includes(a.id);
-  const bPinned = pinnedIds.includes(b.id);
-  if (aPinned !== bPinned) return aPinned ? -1 : 1;
-
-  const aActivity = getConversationActivityTimestamp(a);
-  const bActivity = getConversationActivityTimestamp(b);
-
-  if (aActivity !== bActivity) {
-    return bActivity - aActivity;
-  }
-
-  const aLastMessageId = getConversationSortIdentity(a);
-  const bLastMessageId = getConversationSortIdentity(b);
-  if (aLastMessageId !== bLastMessageId) {
-    return bLastMessageId.localeCompare(aLastMessageId);
-  }
-
-  return a.id.localeCompare(b.id);
-};
+): number =>
+  createConversationActivityComparator(getPinnedConversationIdSet())(a, b);

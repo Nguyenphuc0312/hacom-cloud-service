@@ -82,7 +82,7 @@ import {
 import {
   getMessageSeq,
 } from "../features/chat/domain/messageMerge";
-import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
+import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentityMatching";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";

@@ -19,14 +19,16 @@ import {
   generateClientMessageId,
   generateTempMessageId,
   getMessageIdentityKey,
-} from "../utils/messageIdentity";
+} from "../utils/messageIdFactory";
 import { logMessageDebug } from "../utils/messageDebug";
 import { markChatPerformance } from "../utils/chatPerformance";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import {
-  compareConversationsByActivity,
+  createConversationActivityComparator,
+  getPinnedConversationIdSet,
   sortConversationsByActivity,
 } from "../utils/conversationRanking";
+import { isTempMessageId } from "../features/chat/domain/messageIdentityMatching";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { resolveConversationId } from "../lib/conversationIdentity";
 import i18n from "../i18n";
@@ -999,9 +1001,12 @@ const replaceConversationInActivityOrder = (
   const next = (Array.isArray(conversations) ? conversations : []).filter(
     (conversation) => conversation.id !== nextConversation.id,
   );
+  // Dựng comparator một lần: findIndex gọi nó lặp trên mảng.
+  const compare = createConversationActivityComparator(
+    getPinnedConversationIdSet(),
+  );
   const insertIndex = next.findIndex(
-    (conversation) =>
-      compareConversationsByActivity(nextConversation, conversation) < 0,
+    (conversation) => compare(nextConversation, conversation) < 0,
   );
   if (insertIndex < 0) {
     next.push(nextConversation);
@@ -1534,9 +1539,6 @@ const compareMessages = (a: Message, b: Message): number => {
 
 const sortMessages = (messages: Message[]): Message[] =>
   [...messages].sort(compareMessages);
-
-const isTempMessageId = (id: string | undefined): boolean =>
-  typeof id === "string" && id.startsWith("temp-");
 
 const matchesMessage = (source: Message, target: Message): boolean =>
   (source.stableId !== undefined && source.stableId === target.stableId) ||
