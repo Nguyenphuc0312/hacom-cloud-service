@@ -105,7 +105,15 @@ export const useSidebarConversationList = (
       .map((conversation) => conversation.id);
 
     return { conversationIds, counts };
-  }, [counts, currentUser, options.filter, options.query, orderedConversations]);
+    // Chỉ phụ thuộc currentUser.id: dùng cả object sẽ tính lại toàn bộ filter
+    // mỗi khi object đổi identity dù id không đổi.
+  }, [
+    counts,
+    currentUser.id,
+    options.filter,
+    options.query,
+    orderedConversations,
+  ]);
 };
 
 export default useSidebarConversationList;

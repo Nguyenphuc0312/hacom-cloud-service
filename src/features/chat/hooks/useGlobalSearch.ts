@@ -23,7 +23,8 @@ import {
   getConversationDisplayName,
   getUserDisplayName,
 } from "../../../utils/messageHelpers";
-import { compareConversationsByActivity } from "../../../utils/conversationRanking";
+import { createConversationActivityComparator } from "../../../utils/conversationRanking";
+import { useUIStore } from "../../../stores/uiStore";
 import { conversationResourcesApi } from "../../../services/api";
 import type { ConversationResourcesFileItem } from "../../../services/api";
 import { getFileIconType } from "../../../utils/formatFileSize";
@@ -115,9 +116,13 @@ export const useGlobalGroupSearch = (
 ): Conversation[] => {
   const conversationById = useChatStore((s) => s.conversationById);
   const orderedIds = useChatStore((s) => s.orderedConversationIds);
+  const pinnedConversationIds = useUIStore((s) => s.pinnedConversationIds);
 
   return useMemo(() => {
     const q = normalize(query);
+    const comparator = createConversationActivityComparator(
+      new Set(pinnedConversationIds),
+    );
     return orderedIds
       .map((id) => conversationById[id])
       .filter((c): c is Conversation => Boolean(c) && !isDirectConversation(c))
@@ -125,8 +130,8 @@ export const useGlobalGroupSearch = (
         if (!q) return true;
         return normalize(getConversationDisplayName(c, currentUser.id)).includes(q);
       })
-      .sort(compareConversationsByActivity);
-  }, [conversationById, orderedIds, query, currentUser.id]);
+      .sort(comparator);
+  }, [conversationById, orderedIds, query, currentUser.id, pinnedConversationIds]);
 };
 
 // --- Messages (real search endpoint, server-side sender/date filters) --------

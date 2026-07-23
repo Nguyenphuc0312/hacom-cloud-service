@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useChatStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
-import { compareConversationsByActivity } from "../../../utils/conversationRanking";
+import { createConversationActivityComparator } from "../../../utils/conversationRanking";
 import type { Conversation } from "../../../types";
 
 interface SidebarConversationSummariesResult {
@@ -24,12 +24,16 @@ export const useSidebarConversationSummaries =
     const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
 
     return useMemo(() => {
+      // Dựng Set một lần cho cả lần sort, thay vì tra mảng ghim trong mỗi phép so sánh.
+      const comparator = createConversationActivityComparator(
+        new Set(pinnedConversationIds),
+      );
       const orderedConversations = orderedConversationIds
         .map((conversationId) => conversationById[conversationId])
         .filter((conversation): conversation is Conversation =>
           Boolean(conversation),
         )
-        .sort(compareConversationsByActivity);
+        .sort(comparator);
 
       const counts = orderedConversations.reduce(
         (accumulator, conversation) => {

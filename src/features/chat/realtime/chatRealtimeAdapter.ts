@@ -1,4 +1,4 @@
-import { buildMessageCorrelationKey } from "../../../utils/messageIdentity";
+import { buildMessageCorrelationKey } from "../../../utils/messageIdFactory";
 import {
   buildRealtimeEventKey,
   createRealtimeEventDeduper,

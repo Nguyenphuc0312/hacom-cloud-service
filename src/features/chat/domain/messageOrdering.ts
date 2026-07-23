@@ -1,5 +1,5 @@
 import type { Message } from "../../../types";
-import { getStableMessageId } from "./messageIdentity";
+import { getStableMessageId } from "./messageIdentityMatching";
 
 type MessageWithSequence = Message & {
   messageSeq?: number | null;

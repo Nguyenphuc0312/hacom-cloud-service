@@ -84,10 +84,15 @@ describe("useSendMessage", () => {
         fileSize: 12,
       }),
     ]);
+    // Không gửi lại thông tin lưu trữ/chữ ký của tầng upload: BE tự tra từ id.
     expect(payload.attachments?.[0]).not.toHaveProperty("objectKey");
-    expect(payload.attachments?.[0]).not.toHaveProperty("url");
     expect(payload.attachments?.[0]).not.toHaveProperty("downloadUrl");
     expect(payload.attachments?.[0]).not.toHaveProperty("expiresAt");
+    // `url` thì có giữ — nó là field hợp lệ của SendMessageAttachmentInput,
+    // cùng nhóm metadata hiển thị với width/height/duration/thumbnailUrl.
+    expect(payload.attachments?.[0]?.url).toBe(
+      "https://signed.example/private/key",
+    );
   });
 
   it("retries with the existing clientMessageId/localId and suppresses double clicks", async () => {
