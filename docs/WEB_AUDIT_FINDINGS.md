@@ -209,6 +209,26 @@ Cấu trúc dữ liệu **đã được nghĩ kỹ** — không có ổ giải t
 
 **Kết luận:** cắt `chatStore` là việc **giá trị vừa, rủi ro cao** → làm **sau cùng**, và chỉ khi user duyệt riêng. Sửa F-01 và F-02 cho lợi ích hiệu năng thật với rủi ro thấp hơn nhiều.
 
+### 🟡 Phase 4 — 2 lát cắt an toàn đã thực hiện (23-07-26)
+
+Theo đúng khuôn mẫu sẵn có trong repo (`chatStoreOutbox` / `chatStoreUnread` / `chatStoreTyping`): **hàm thuần nhận state, trả state mới** — không class, không giữ state riêng.
+
+| Lát | Module | Dòng | Nội dung |
+|---|---|---|---|
+| 1 | [`messageNormalizer.ts`](../src/stores/messageNormalizer.ts) | 203 | `normalizeAttachments/Reactions/Mentions/LocationPayload`, `toDateObject` + 3 helper cơ sở |
+| 2 | [`conversationCursor.ts`](../src/stores/conversationCursor.ts) | 128 | con trỏ phân trang, `computeCanonicalTotalUnreadCount`, `buildConversationIndexState` |
+
+**Quy trình từng lát (bắt buộc, mục 2.5 của kế hoạch):**
+viết test đặc tả **trước** → chạy xanh trên module mới → mới gỡ code cũ trong `chatStore` → `test:chat-runtime` ngay sau mỗi lát.
+
+**Vì sao chọn đúng 2 nhóm này:** đã kiểm chứng bằng grep là **hoàn toàn thuần** — không một lần gọi `set()` / `get()` / store nào trong vùng cắt. Đây là ranh giới sạch nhất trong cả file.
+
+**Đo được:** `chatStore.ts` **5101 → 4837 dòng (−264)**; **+37 test mới** (21 normalizer + 16 cursor).
+
+> Ghi chú: `chatStore` từng export `__normalizeMessageForTest` — cửa hậu để test chọc vào hàm private. Sau lát 1, các hàm normalize đã test được trực tiếp, không cần cửa hậu nữa.
+
+**Còn lại của Phase 4 (CHƯA làm, cần duyệt riêng):** phần lõi ~4.8k dòng vẫn là các action đóng/mở trên `set`/`get` — cắt tiếp là đụng vào state machine của timeline/outbox. Đó là lát cắt **rủi ro cao thật sự**, khác hẳn 2 lát thuần vừa rồi, nên phải tách PR và có kế hoạch test riêng.
+
 ---
 
 ## 6. Nợ lint tồn đọng (không do phiên này)
