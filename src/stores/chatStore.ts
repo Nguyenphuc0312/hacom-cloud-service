@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Chat store (Zustand)
  */
 
@@ -8,7 +8,6 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
-import { getSocket } from "../lib/socket";
 import {
   normalizeConversation,
   normalizeConversationsPayload,
@@ -55,6 +54,18 @@ import {
   mergeMessageRecords,
   mergeMessages,
 } from "./messageMergeRecords";
+import {
+  getBrowserOnlineState,
+  resolveConnectionSendMode,
+  resolveSendFailureDescriptor,
+} from "./sendFailure";
+import {
+  applySenderProfilesToConversation,
+  applySenderProfilesToMessages,
+  normalizeSenderProfileSummary,
+  normalizeSenderProfiles,
+  type SenderProfileSummary,
+} from "./senderProfiles";
 import {
   buildConversationIndexState,
   computeCanonicalTotalUnreadCount,
@@ -746,7 +757,7 @@ const replaceConversationInActivityOrder = (
   const next = (Array.isArray(conversations) ? conversations : []).filter(
     (conversation) => conversation.id !== nextConversation.id,
   );
-  // Dựng comparator một lần: findIndex gọi nó lặp trên mảng.
+  // Dá»±ng comparator má»™t láº§n: findIndex gá»i nÃ³ láº·p trÃªn máº£ng.
   const compare = createConversationActivityComparator(
     getPinnedConversationIdSet(),
   );
@@ -1017,105 +1028,6 @@ const getMessageQueueKey = (
   conversationId: string,
   message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
 ): string => `${conversationId}:${getStableMessageId(message as Message)}`;
-
-const getBrowserOnlineState = (): boolean | null => {
-  if (
-    typeof navigator === "undefined" ||
-    typeof navigator.onLine !== "boolean"
-  ) {
-    return null;
-  }
-
-  return navigator.onLine;
-};
-
-const resolveConnectionSendMode = (): "online" | "reconnecting" | "offline" => {
-  const connectionState = getSocket()?.getConnectionState() ?? "disconnected";
-  if (connectionState === "connected") {
-    return "online";
-  }
-  if (
-    connectionState === "connecting" ||
-    connectionState === "authenticating" ||
-    connectionState === "reconnecting"
-  ) {
-    return "reconnecting";
-  }
-  return "offline";
-};
-
-const isAxiosTimeoutError = (error: unknown): boolean => {
-  if (!axios.isAxiosError(error)) return false;
-  return (
-    error.code === "ECONNABORTED" ||
-    /timeout/i.test(error.message || "") ||
-    /timeout/i.test(String(error.cause || ""))
-  );
-};
-
-const isNetworkError = (error: unknown): boolean => {
-  if (getBrowserOnlineState() === false) {
-    return true;
-  }
-  return axios.isAxiosError(error) && !error.response;
-};
-
-const resolveSendFailureDescriptor = (
-  error: unknown,
-  apiError: ReturnType<typeof extractApiError>,
-): {
-  failureReason: NonNullable<Message["failureReason"]>;
-  errorCode: string;
-  errorMessage: string;
-} => {
-  if (isAxiosTimeoutError(error)) {
-    return {
-      failureReason: "timeout",
-      errorCode: "REQUEST_TIMEOUT",
-      errorMessage: i18n.t("chat:message.status.timeoutError", {
-        defaultValue: "Message timed out. Please retry.",
-      }),
-    };
-  }
-
-  if (isNetworkError(error)) {
-    return {
-      failureReason: "network",
-      errorCode: "NETWORK_OFFLINE",
-      errorMessage: i18n.t("chat:message.status.networkError", {
-        defaultValue: "No network connection. Please retry.",
-      }),
-    };
-  }
-
-  if (apiError.statusCode >= 500) {
-    return {
-      failureReason: "backend_5xx",
-      errorCode: "BACKEND_5XX",
-      errorMessage: i18n.t("chat:message.status.backend5xxError", {
-        defaultValue: "Server is busy. Please try again.",
-      }),
-    };
-  }
-
-  if (apiError.statusCode >= 400) {
-    return {
-      failureReason: "backend_4xx",
-      errorCode: "BACKEND_4XX",
-      errorMessage: i18n.t("chat:message.status.backend4xxError", {
-        defaultValue: "Message was rejected. Please retry.",
-      }),
-    };
-  }
-
-  return {
-    failureReason: "unknown",
-    errorCode: "UNKNOWN_ERROR",
-    errorMessage: i18n.t("chat:message.status.unknownError", {
-      defaultValue: "Could not send message.",
-    }),
-  };
-};
 
 const replaceMessages = (
   current: Message[],
@@ -2242,279 +2154,6 @@ const ingestConversationMessagesWithMetadata = (
       mergedMessage,
       unreadDelta,
     },
-  };
-};
-
-type SenderProfileSummary = {
-  id: string;
-  username: string;
-  displayName: string;
-  avatar?: string | null;
-  status?: string | null;
-};
-
-const normalizeSenderProfileSummary = (
-  value: unknown,
-  fallbackUserId?: string,
-): SenderProfileSummary | null => {
-  const source = asRecord(value);
-  if (!source) {
-    return null;
-  }
-
-  const id =
-    asStringValue(source.id) ??
-    asStringValue(source.userId) ??
-    asStringValue(source.user_id) ??
-    fallbackUserId;
-  if (!id) {
-    return null;
-  }
-
-  const username =
-    asStringValue(source.username) ??
-    asStringValue(source.employeeCode) ??
-    asStringValue(source.employee_code) ??
-    id;
-  const displayName =
-    resolveUserDisplayName(
-      {
-        ...source,
-        id,
-        username,
-      },
-      { allowLegacyFallback: false },
-    ) ?? username;
-
-  return {
-    id,
-    username,
-    displayName,
-    avatar: asStringValue(source.avatar) ?? null,
-    status: asStringValue(source.status) ?? null,
-  };
-};
-
-const normalizeSenderProfiles = (
-  value: unknown,
-): Record<string, SenderProfileSummary> => {
-  const source = asRecord(value);
-  if (!source) {
-    return {};
-  }
-
-  return Object.entries(source).reduce<Record<string, SenderProfileSummary>>(
-    (accumulator, [userId, rawProfile]) => {
-      const normalized = normalizeSenderProfileSummary(rawProfile, userId);
-      if (!normalized) {
-        return accumulator;
-      }
-
-      accumulator[normalized.id] = normalized;
-      return accumulator;
-    },
-    {},
-  );
-};
-
-const applySenderProfilesToMessage = (
-  message: Message,
-  senderProfiles: Record<string, SenderProfileSummary>,
-): Message => {
-  if (!message || Object.keys(senderProfiles).length === 0) {
-    return message;
-  }
-
-  const senderProfile = senderProfiles[message.senderId];
-  const replySenderProfile = message.replyToMessage
-    ? senderProfiles[message.replyToMessage.senderId]
-    : undefined;
-  const nextSenderName = senderProfile?.displayName ?? message.senderName;
-  const nextSenderAvatar =
-    senderProfile?.avatar && senderProfile.avatar.trim().length > 0
-      ? senderProfile.avatar
-      : message.senderAvatar;
-  const nextReplySenderName =
-    replySenderProfile?.displayName ?? message.replyToMessage?.senderName;
-  const nextReplySenderAvatar =
-    replySenderProfile?.avatar && replySenderProfile.avatar.trim().length > 0
-      ? replySenderProfile.avatar
-      : message.replyToMessage?.senderAvatar;
-
-  const senderUnchanged =
-    nextSenderName === message.senderName &&
-    nextSenderAvatar === message.senderAvatar;
-  const replyUnchanged =
-    !message.replyToMessage ||
-    (nextReplySenderName === message.replyToMessage.senderName &&
-      nextReplySenderAvatar === message.replyToMessage.senderAvatar);
-
-  if (senderUnchanged && replyUnchanged) {
-    return message;
-  }
-
-  return {
-    ...message,
-    senderName: nextSenderName,
-    senderAvatar: nextSenderAvatar,
-    ...(message.replyToMessage
-      ? {
-          replyToMessage: {
-            ...message.replyToMessage,
-            senderName:
-              nextReplySenderName ?? message.replyToMessage.senderName,
-            senderAvatar: nextReplySenderAvatar,
-          },
-        }
-      : {}),
-  };
-};
-
-const applySenderProfilesToMessages = (
-  messages: Message[],
-  senderProfiles: Record<string, SenderProfileSummary>,
-): Message[] => {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return messages;
-  }
-
-  let changed = false;
-  const nextMessages = messages.map((message) => {
-    const nextMessage = applySenderProfilesToMessage(message, senderProfiles);
-    if (nextMessage !== message) {
-      changed = true;
-    }
-    return nextMessage;
-  });
-
-  return changed ? nextMessages : messages;
-};
-
-const applySenderProfilesToConversation = (
-  conversation: Conversation,
-  senderProfiles: Record<string, SenderProfileSummary>,
-): Conversation => {
-  if (!conversation || Object.keys(senderProfiles).length === 0) {
-    return conversation;
-  }
-
-  let changed = false;
-
-  const nextParticipants = Array.isArray(conversation.participants)
-    ? conversation.participants.map((participant) => {
-        const senderProfile = senderProfiles[participant.id];
-        if (!senderProfile) {
-          return participant;
-        }
-
-        const nextDisplayName =
-          senderProfile.displayName || participant.displayName;
-        const nextAvatar =
-          senderProfile.avatar && senderProfile.avatar.trim().length > 0
-            ? senderProfile.avatar
-            : participant.avatar;
-        const nextStatus =
-          senderProfile.status && senderProfile.status.trim().length > 0
-            ? senderProfile.status
-            : participant.status;
-        const nextUsername = senderProfile.username || participant.username;
-
-        if (
-          nextDisplayName === participant.displayName &&
-          nextAvatar === participant.avatar &&
-          nextStatus === participant.status &&
-          nextUsername === participant.username
-        ) {
-          return participant;
-        }
-
-        changed = true;
-        return {
-          ...participant,
-          displayName: nextDisplayName,
-          avatar: nextAvatar,
-          status: nextStatus as typeof participant.status,
-          username: nextUsername,
-        };
-      })
-    : conversation.participants;
-
-  const otherUserProfile =
-    conversation.otherUser?.id && senderProfiles[conversation.otherUser.id]
-      ? senderProfiles[conversation.otherUser.id]
-      : null;
-  const nextOtherUser =
-    otherUserProfile && conversation.otherUser
-      ? {
-          ...conversation.otherUser,
-          displayName:
-            otherUserProfile.displayName || conversation.otherUser.displayName,
-          avatar:
-            otherUserProfile.avatar && otherUserProfile.avatar.trim().length > 0
-              ? otherUserProfile.avatar
-              : conversation.otherUser.avatar,
-          status: (otherUserProfile.status &&
-          otherUserProfile.status.trim().length > 0
-            ? otherUserProfile.status
-            : conversation.otherUser
-                .status) as typeof conversation.otherUser.status,
-          username:
-            otherUserProfile.username || conversation.otherUser.username,
-        }
-      : conversation.otherUser;
-
-  if (nextOtherUser !== conversation.otherUser) {
-    changed = true;
-  }
-
-  const lastMessageProfile =
-    conversation.lastMessage?.senderId &&
-    senderProfiles[conversation.lastMessage.senderId]
-      ? senderProfiles[conversation.lastMessage.senderId]
-      : null;
-  const nextLastMessage =
-    lastMessageProfile && conversation.lastMessage
-      ? {
-          ...conversation.lastMessage,
-          senderName:
-            lastMessageProfile.displayName ||
-            conversation.lastMessage.senderName,
-        }
-      : conversation.lastMessage;
-
-  if (nextLastMessage !== conversation.lastMessage) {
-    changed = true;
-  }
-
-  const nextDisplayName =
-    conversation.type === "direct" || conversation.type === "private"
-      ? (nextOtherUser?.displayName ?? conversation.displayName)
-      : conversation.displayName;
-  const nextDisplayAvatar =
-    conversation.type === "direct" || conversation.type === "private"
-      ? (nextOtherUser?.avatar ?? conversation.displayAvatar)
-      : conversation.displayAvatar;
-
-  if (
-    nextDisplayName !== conversation.displayName ||
-    nextDisplayAvatar !== conversation.displayAvatar
-  ) {
-    changed = true;
-  }
-
-  if (!changed) {
-    return conversation;
-  }
-
-  return {
-    ...conversation,
-    ...(nextParticipants ? { participants: nextParticipants } : {}),
-    ...(nextOtherUser ? { otherUser: nextOtherUser } : {}),
-    ...(nextLastMessage ? { lastMessage: nextLastMessage } : {}),
-    ...(nextDisplayName ? { displayName: nextDisplayName } : {}),
-    ...(nextDisplayAvatar !== undefined
-      ? { displayAvatar: nextDisplayAvatar ?? null }
-      : {}),
   };
 };
 

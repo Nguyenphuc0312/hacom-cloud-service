@@ -224,9 +224,9 @@ Ghi rõ để tránh phình phạm vi:
 | 7 | F-07 refresh token tôn trọng "ghi nhớ đăng nhập" | VỪA | ✅ XONG — đổi hành vi, có test |
 | 8 | Dọn lint phần an toàn | THẤP | ✅ XONG — 116→103 problems, 96→87 errors |
 
-**Chốt cuối phiên 23-07-26:** `npm test` **716 pass · 0 fail** · `test:chat-runtime` **118/118** · typecheck sạch · lint file đã đụng sạch · build ✓
+**Chốt cuối phiên 23-07-26:** `npm test` **746 pass · 0 fail** · `test:chat-runtime` **118/118** · typecheck sạch · lint file đã đụng sạch · build ✓
 
-`chatStore.ts` **5101 → 4467 dòng (−634, −12%)** qua 6 lát cắt, mỗi lát có test đặc tả viết TRƯỚC khi gỡ code cũ.
+`chatStore.ts` **5101 → 4106 dòng (−995, −20%)** qua 8 lát cắt, mỗi lát có test đặc tả viết TRƯỚC khi gỡ code cũ.
 
 **Ngoài kế hoạch — đã xong:** sửa `SegmentedControl` (bug tab lệch) + test kèm.
 
