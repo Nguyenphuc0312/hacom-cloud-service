@@ -32,7 +32,8 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
       role="tablist"
       aria-label={ariaLabel}
       className={clsx(
-        "segmented-control flex w-full items-center gap-1 overflow-x-auto rounded-md border border-border/60 bg-surface p-1",
+        // ponytail: grid auto-cols-fr = mọi tab rộng bằng nhau bất kể độ dài label/badge
+        "segmented-control grid w-full auto-cols-fr grid-flow-col items-center gap-1 rounded-md border border-border/60 bg-surface p-1",
         className,
       )}
     >
@@ -46,7 +47,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
             aria-selected={active}
             onClick={() => onChange(option.id)}
             className={clsx(
-              "segmented-control__option inline-flex min-w-fit flex-[1_0_auto] items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] font-medium transition-micro",
+              "segmented-control__option inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] font-medium transition-micro",
               isCompact
                 ? "min-h-[var(--control-height-sm)] px-3 text-[12px]"
                 : "min-h-[var(--control-height-md)] px-3 text-body-sm",
@@ -60,11 +61,11 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
                 {option.icon}
               </span>
             ) : null}
-            <span>{option.label}</span>
+            <span className="truncate">{option.label}</span>
             {typeof option.count === "number" && option.count > 0 ? (
               <span
                 className={clsx(
-                  "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold transition-fast",
+                  "inline-flex min-w-[1.1rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums transition-fast",
                   active
                     ? "bg-[#1976D2]/10 text-[#1565C0]"
                     : "bg-surface-overlay text-text-muted",

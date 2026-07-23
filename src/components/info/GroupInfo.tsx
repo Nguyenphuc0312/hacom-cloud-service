@@ -51,7 +51,8 @@ import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
 import { chatApi } from "../../features/chat/api/chatApi";
-import uploadClient from "../../services/uploadClient";
+import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
+import { useGroupInviteLinks } from "./useGroupInviteLinks";
 import { createSingleFlight } from "../../utils/singleFlight";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
@@ -61,8 +62,6 @@ import {
   canRenameGroup,
   canToggleAdminRole,
 } from "../../features/chat/permissions/groupPermissions";
-import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
-import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
 import { transferOwnershipUseCase } from "../../features/chat/usecases/transferOwnership";
 import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
@@ -117,24 +116,6 @@ interface GroupMember {
   role: GroupMemberRole;
 }
 
-type PendingGroupConfirm =
-  | { type: "remove-member"; member: GroupMember }
-  | { type: "leave-group" }
-  | { type: "transfer-ownership"; member: GroupMember }
-  | { type: "delete-group" }
-  | { type: "ban-member"; member: GroupMember }
-  | null;
-
-type GroupAvatarUploadStage =
-  | "idle"
-  | "validating"
-  | "reserving"
-  | "uploading"
-  | "completing"
-  | "attaching"
-  | "success"
-  | "error";
-
 type ModalMemberTarget = { memberId: string; memberName: string } | null;
 
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
@@ -152,11 +133,6 @@ const VALID_ROLES = new Set<string>([
   RoomMemberRole.MEMBER,
 ]);
 const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
-const ALLOWED_GROUP_AVATAR_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,26 +148,6 @@ const asStatus = (value: unknown): UserSummary["status"] | undefined => {
   return VALID_STATUSES.has(status)
     ? (status as UserSummary["status"])
     : undefined;
-};
-
-const revokeBlobUrl = (value: string | null) => {
-  if (value?.startsWith("blob:")) URL.revokeObjectURL(value);
-};
-
-const resolveGroupAvatarStageLabel = (
-  stage: GroupAvatarUploadStage,
-  progress: number,
-) => {
-  switch (stage) {
-    case "validating": return "Đang kiểm tra ảnh";
-    case "reserving": return "Đang chuẩn bị tải lên";
-    case "uploading": return progress > 0 ? `Đang tải lên ${progress}%` : "Đang tải lên";
-    case "completing": return "Đang xác minh ảnh";
-    case "attaching": return "Đang áp dụng ảnh";
-    case "success": return "Cập nhật ảnh đại diện thành công";
-    case "error": return "Không thể cập nhật ảnh đại diện";
-    default: return null;
-  }
 };
 
 // Dedupe concurrent member fetches for the same conversation (overlapping
@@ -304,16 +260,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
-  const [showCreateInviteForm, setShowCreateInviteForm] = useState(false);
-  const [inviteNameDraft, setInviteNameDraft] = useState("");
-  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
-  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
-  const [pendingConfirm, setPendingConfirm] = useState<PendingGroupConfirm>(null);
+  const [isLeaveGroupConfirmOpen, setIsLeaveGroupConfirmOpen] = useState(false);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
-  const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(null);
-  const [groupAvatarStage, setGroupAvatarStage] = useState<GroupAvatarUploadStage>("idle");
-  const [groupAvatarProgress, setGroupAvatarProgress] = useState(0);
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // New modal states
@@ -433,9 +382,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const memberListVersion = useGroupStore(
     (state) => state.memberListVersionByConversation[conversation.id] || 0,
   );
-  const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
-  const removeInviteLink = useGroupStore((state) => state.removeInviteLink);
   const setJoinRequests = useGroupStore((state) => state.setJoinRequests);
   const markJoinRequestResolved = useGroupStore((state) => state.markJoinRequestResolved);
   const removeJoinRequest = useGroupStore((state) => state.removeJoinRequest);
@@ -541,6 +488,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (currentUserId === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER);
   const groupCapabilities = conversation.permissions ?? null;
   const isAdmin = canRenameGroup(currentUserRole, groupCapabilities);
+  const inviteLinksControl = useGroupInviteLinks(conversation.id, isAdmin);
   const canAddMembers = canAddGroupMembers(currentUserRole, groupCapabilities);
   const canLeaveCurrentGroup = canLeaveGroup(currentUserRole, activeOwnerCount, groupCapabilities);
   const participantCount =
@@ -586,60 +534,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     await Promise.all([refreshConversation(), fetchMembers()]);
   }, [fetchMembers, refreshConversation]);
 
-  const handleGroupAvatarChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      event.currentTarget.value = "";
-      if (!file) { setGroupAvatarStage("idle"); return; }
-      const mimeType = file.type.trim().toLowerCase();
-      setGroupAvatarStage("validating");
-      if (!mimeType || !ALLOWED_GROUP_AVATAR_TYPES.has(mimeType)) {
-        setGroupAvatarStage("error");
-        toast.error(t("profile:settings.upload.unsupportedType", { defaultValue: "Loại ảnh không được hỗ trợ" }));
-        return;
-      }
-      setGroupAvatarProgress(0);
-      setGroupAvatarPreview((current) => { revokeBlobUrl(current); return URL.createObjectURL(file); });
-      try {
-        uploadClient.validateUpload(file, "group_avatar");
-        setGroupAvatarStage("reserving");
-        const reserved = await uploadClient.reserveUpload({ purpose: "group_avatar", groupId: conversation.id, filename: file.name, mimeType, sizeBytes: file.size });
-        setGroupAvatarStage("uploading");
-        await uploadClient.uploadToSignedUrl({ signedUrl: reserved.uploadUrl, method: reserved.uploadMethod || "PUT", headers: { ...(reserved.uploadHeaders || {}), "Content-Type": mimeType }, file, onProgress: (p) => setGroupAvatarProgress(p) });
-        setGroupAvatarStage("completing");
-        const completed = await uploadClient.completeUpload({ uploadId: reserved.uploadId, conversationId: conversation.id, objectKey: reserved.objectKey });
-        const fileId = completed.attachment?.id;
-        if (!fileId) throw new Error("Group avatar upload completed without fileId");
-        setGroupAvatarStage("attaching");
-        await uploadClient.attachToGroupAvatar({ groupId: conversation.id, fileId, uploadId: completed.uploadId });
-        await refreshGroupState();
-        setGroupAvatarStage("success");
-        setGroupAvatarProgress(100);
-        setGroupAvatarPreview((current) => { revokeBlobUrl(current); return null; });
-        toast.success(t("profile:groupInfo.avatarUpdated", { defaultValue: "Cập nhật ảnh đại diện thành công" }));
-      } catch (error) {
-        setGroupAvatarStage("error");
-        setGroupAvatarPreview((current) => { revokeBlobUrl(current); return null; });
-        toast.error(extractApiError(error).message || t("profile:groupInfo.avatarUpdateFailed", { defaultValue: "Không thể cập nhật ảnh đại diện" }));
-      }
-    },
-    [conversation.id, refreshGroupState, t],
-  );
-
+  const groupAvatar = useGroupAvatarUpload(conversation.id, refreshGroupState);
+  const resetGroupAvatar = groupAvatar.reset;
 
   React.useEffect(() => {
     setGroupNameDraft(conversation.name || "");
     setIsRenamingGroup(false);
     setShowAddMember(false);
-    setGroupAvatarStage("idle");
-    setGroupAvatarProgress(0);
-    setGroupAvatarPreview((current) => { revokeBlobUrl(current); return null; });
+    resetGroupAvatar();
     setMemberSearch("");
     setMemberFilterRole("all");
     setMembersShowAll(false);
-  }, [conversation.id, conversation.name]);
-
-  React.useEffect(() => () => { revokeBlobUrl(groupAvatarPreview); }, [groupAvatarPreview]);
+  }, [conversation.id, conversation.name, resetGroupAvatar]);
 
   React.useEffect(() => { void fetchMembers(); }, [fetchMembers, memberListVersion]);
 
@@ -760,7 +666,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleRemoveMember = useCallback(
     (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
-      setPendingConfirm({ type: "remove-member", member });
       setRemoveMemberTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [canRemoveMember],
@@ -773,7 +678,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await chatApi.group.removeMember(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setRemoveMemberTarget(null);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
@@ -791,7 +695,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       toast.error(t("profile:groupInfo.leaveBlockedOwner", { defaultValue: "Hãy chuyển quyền trưởng nhóm trước khi rời nhóm." }));
       return;
     }
-    setPendingConfirm({ type: "leave-group" });
+    setIsLeaveGroupConfirmOpen(true);
   }, [canLeaveCurrentGroup, t]);
 
   const confirmLeaveGroup = useCallback(async () => {
@@ -800,7 +704,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     try {
       await chatApi.group.leaveGroup(conversation.id);
       removeConversation(conversation.id);
-      setPendingConfirm(null);
+      setIsLeaveGroupConfirmOpen(false);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
@@ -815,7 +719,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleTransferOwnership = useCallback(
     (member: GroupMember) => {
       if (currentUserRole !== RoomMemberRole.OWNER || member.role === RoomMemberRole.OWNER) return;
-      setPendingConfirm({ type: "transfer-ownership", member });
       setTransferOwnershipTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [currentUserRole],
@@ -828,7 +731,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await transferOwnershipUseCase(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setTransferOwnershipTarget(null);
         toast.success(t("profile:toast.ownershipTransferred", { name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }) }));
       } catch (error) {
@@ -852,7 +754,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     try {
       await deleteGroupUseCase(conversation.id);
       removeConversation(conversation.id);
-      setPendingConfirm(null);
       setDeleteGroupTarget(false);
       toast.success(t("profile:toast.groupDeleted"));
       onClose();
@@ -869,7 +770,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (member: GroupMember) => {
       if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
       if (member.role === RoomMemberRole.OWNER) return;
-      setPendingConfirm({ type: "ban-member", member });
       setBanMemberTarget({ memberId: member.id, memberName: resolveMemberName(member) || member.id });
     },
     [currentUserRole],
@@ -882,7 +782,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await banMemberUseCase(conversation.id, member.id);
         await refreshGroupState();
-        setPendingConfirm(null);
         setBanMemberTarget(null);
         toast.success(t("profile:toast.memberBanned", { name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }) }));
       } catch (error) {
@@ -893,77 +792,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       }
     },
     [conversation.id, refreshGroupState, t],
-  );
-
-  const handleCreateInviteLink = useCallback(async () => {
-    if (!isAdmin || isCreatingInvite) return;
-    setIsCreatingInvite(true);
-    try {
-      const response = await createGroupInviteLinkUseCase({ conversationId: conversation.id, name: inviteNameDraft.trim() || undefined });
-      const payload = unwrapApiSuccess(response) as Record<string, unknown>;
-      const id = typeof payload.id === "string" ? payload.id : "";
-      if (!id) throw new Error("Invite link id missing");
-      upsertInviteLink(conversation.id, {
-        id,
-        conversationId: conversation.id,
-        name: typeof payload.name === "string" ? payload.name : undefined,
-        inviteUrl: typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
-        token: typeof payload.token === "string" ? payload.token : undefined,
-        tokenPreview: typeof payload.tokenPreview === "string" ? payload.tokenPreview : undefined,
-        usageCount: typeof payload.usageCount === "number" ? payload.usageCount : 0,
-        usageLimit: typeof payload.usageLimit === "number" ? payload.usageLimit : null,
-        expireAt: typeof payload.expireAt === "string" ? payload.expireAt : null,
-        revokedAt: typeof payload.revokedAt === "string" ? payload.revokedAt : null,
-        createdAt: typeof payload.createdAt === "string" ? payload.createdAt : new Date().toISOString(),
-      });
-      const copyValue = (typeof payload.inviteUrl === "string" && payload.inviteUrl) || (typeof payload.token === "string" && payload.token) || "";
-      if (copyValue && typeof navigator !== "undefined") void navigator.clipboard.writeText(copyValue);
-      setShowCreateInviteForm(false);
-      setInviteNameDraft("");
-      toast.success(t("profile:groupInfo.invite.created"));
-    } catch (error) {
-      toast.error(extractApiError(error).message || t("profile:groupInfo.invite.createFailed"));
-    } finally {
-      setIsCreatingInvite(false);
-    }
-  }, [conversation.id, inviteNameDraft, isAdmin, isCreatingInvite, t, upsertInviteLink]);
-
-  const handleCopyInviteLink = useCallback(async (value?: string) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(t("profile:groupInfo.invite.copied"));
-    } catch {
-      toast.error(t("profile:groupInfo.invite.copyFailed"));
-    }
-  }, [t]);
-
-  const handleRevokeInvite = useCallback(
-    async (linkId: string) => {
-      if (!isAdmin || !linkId) return;
-      setRevokingInviteId(linkId);
-      try {
-        await revokeGroupInviteLinkUseCase(conversation.id, linkId);
-        removeInviteLink(conversation.id, linkId);
-        toast.success(t("profile:groupInfo.invite.revoked"));
-      } catch (error) {
-        toast.error(extractApiError(error).message || t("profile:groupInfo.invite.revokeFailed"));
-      } finally {
-        setRevokingInviteId(null);
-      }
-    },
-    [conversation.id, isAdmin, removeInviteLink, t],
-  );
-
-  const handleDeleteInviteLink = useCallback(
-    async (linkId: string) => {
-      if (!isAdmin || !linkId) return;
-      try {
-        await revokeGroupInviteLinkUseCase(conversation.id, linkId);
-      } catch { /* already removed or unauthorized — remove locally anyway */ }
-      removeInviteLink(conversation.id, linkId);
-    },
-    [conversation.id, isAdmin, removeInviteLink],
   );
 
   const handleResolveJoinRequest = useCallback(
@@ -987,31 +815,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // ─── Derived values ───────────────────────────────────────────────────────────
 
-  const pendingConfirmMember =
-    pendingConfirm?.type === "remove-member" || pendingConfirm?.type === "transfer-ownership"
-      ? pendingConfirm.member : null;
-  const pendingConfirmMemberName = pendingConfirmMember
-    ? resolveMemberName(pendingConfirmMember) || pendingConfirmMember.id : "";
   const pendingJoinRequestsCount = joinRequests.filter((r) => r.status === "pending").length;
-
-  const confirmTitle =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveGroup")
-    : pendingConfirm?.type === "transfer-ownership" ? t("profile:groupInfo.transferOwnership")
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroup")
-    : pendingConfirm?.type === "ban-member" ? t("profile:groupInfo.banMember")
-    : t("profile:groupInfo.actions.removeMember", { defaultValue: "Xoá thành viên" });
-
-  const confirmMessage =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveConfirm")
-    : pendingConfirm?.type === "transfer-ownership" ? t("profile:groupInfo.transferOwnershipConfirm", { name: pendingConfirmMemberName })
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroupConfirm")
-    : pendingConfirm?.type === "ban-member" ? t("profile:groupInfo.banMemberConfirm", { name: pendingConfirmMemberName })
-    : t("profile:groupInfo.removeMemberConfirm", { name: pendingConfirmMemberName });
-
-  const confirmText =
-    pendingConfirm?.type === "leave-group" ? t("profile:groupInfo.leaveGroup")
-    : pendingConfirm?.type === "delete-group" ? t("profile:groupInfo.deleteGroup")
-    : t("common:actions.remove", { defaultValue: "Xoá" });
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
@@ -1045,9 +849,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           {/* Avatar */}
           <div className="relative mb-4">
             <div className="overflow-hidden rounded-full">
-              {groupAvatarPreview || conversation.avatar ? (
+              {groupAvatar.previewUrl || conversation.avatar ? (
                 <Avatar
-                  src={groupAvatarPreview || conversation.avatar}
+                  src={groupAvatar.previewUrl || conversation.avatar}
                   alt={conversation.name}
                   size="xl"
                 />
@@ -1061,7 +865,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
-                disabled={isSubmitting || groupAvatarStage === "uploading"}
+                disabled={isSubmitting || groupAvatar.isUploading}
                 className="absolute bottom-0.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-surface-overlay shadow-xs transition-colors hover:bg-surface-hover disabled:opacity-50"
                 aria-label={t("profile:groupInfo.changeAvatar", { defaultValue: "Đổi ảnh nhóm" })}
               >
@@ -1128,9 +932,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </p>
 
           {/* Avatar upload status */}
-          {groupAvatarStage !== "idle" && (
+          {groupAvatar.stageLabel && (
             <p className="mt-1 text-[11px] text-text-muted">
-              {resolveGroupAvatarStageLabel(groupAvatarStage, groupAvatarProgress)}
+              {groupAvatar.stageLabel}
             </p>
           )}
         </div>
@@ -1606,10 +1410,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
                         {t("profile:groupInfo.tabs.inviteLinks")}
                       </p>
-                      {!showCreateInviteForm && (
+                      {!inviteLinksControl.isFormOpen && (
                         <button
                           type="button"
-                          onClick={() => setShowCreateInviteForm(true)}
+                          onClick={inviteLinksControl.openForm}
                           className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20"
                         >
                           <LinkIcon className="h-3 w-3" />
@@ -1618,31 +1422,31 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       )}
                     </div>
 
-                    {showCreateInviteForm && (
+                    {inviteLinksControl.isFormOpen && (
                       <div className="space-y-2 rounded-xl border border-border p-3">
                         <Input
                           type="text"
-                          value={inviteNameDraft}
-                          onChange={(e) => setInviteNameDraft(e.target.value)}
+                          value={inviteLinksControl.nameDraft}
+                          onChange={(e) => inviteLinksControl.setNameDraft(e.target.value)}
                           placeholder={t("profile:groupInfo.invite.namePlaceholder")}
-                          disabled={isCreatingInvite}
+                          disabled={inviteLinksControl.isCreating}
                         />
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            disabled={isCreatingInvite}
-                            onClick={() => { setShowCreateInviteForm(false); setInviteNameDraft(""); }}
+                            disabled={inviteLinksControl.isCreating}
+                            onClick={inviteLinksControl.reset}
                             className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
                           >
                             {t("common:actions.cancel")}
                           </button>
                           <button
                             type="button"
-                            disabled={isCreatingInvite}
-                            onClick={() => void handleCreateInviteLink()}
+                            disabled={inviteLinksControl.isCreating}
+                            onClick={() => void inviteLinksControl.createLink()}
                             className="rounded-md bg-[#1565C0] px-3 py-1.5 text-sm text-white hover:brightness-105 disabled:opacity-60"
                           >
-                            {isCreatingInvite ? t("common:loading.processing") : t("profile:groupInfo.invite.create")}
+                            {inviteLinksControl.isCreating ? t("common:loading.processing") : t("profile:groupInfo.invite.create")}
                           </button>
                         </div>
                       </div>
@@ -1682,7 +1486,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 <button
                                   type="button"
                                   disabled={!shareValue}
-                                  onClick={() => void handleCopyInviteLink(shareValue)}
+                                  onClick={() => void inviteLinksControl.copyLink(shareValue)}
                                   className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                                 >
                                   <ClipboardDocumentIcon className="h-3.5 w-3.5" />
@@ -1691,17 +1495,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 {!isRevoked && (
                                   <button
                                     type="button"
-                                    disabled={revokingInviteId === link.id}
-                                    onClick={() => void handleRevokeInvite(link.id)}
+                                    disabled={inviteLinksControl.revokingId === link.id}
+                                    onClick={() => void inviteLinksControl.revokeLink(link.id)}
                                     className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
                                   >
                                     <NoSymbolIcon className="h-3.5 w-3.5" />
-                                    {revokingInviteId === link.id ? t("common:loading.processing") : t("profile:groupInfo.invite.revoke")}
+                                    {inviteLinksControl.revokingId === link.id ? t("common:loading.processing") : t("profile:groupInfo.invite.revoke")}
                                   </button>
                                 )}
                                 <button
                                   type="button"
-                                  onClick={() => void handleDeleteInviteLink(link.id)}
+                                  onClick={() => void inviteLinksControl.deleteLink(link.id)}
                                   className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10"
                                   aria-label="Xóa link mời"
                                 >
@@ -1828,23 +1632,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         type="file"
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
-        onChange={(e) => { void handleGroupAvatarChange(e); }}
+        onChange={(e) => { void groupAvatar.handleFileChange(e); }}
       />
 
       {/* Confirmation modals */}
+      {/* Rời nhóm là luồng duy nhất chưa có modal chuyên dụng — 4 luồng còn lại
+          (xoá/cấm thành viên, chuyển quyền, xoá nhóm) dùng *Modal bên dưới. */}
       <ConfirmDialog
-        isOpen={pendingConfirm !== null}
-        onClose={() => { if (!isConfirmActionPending) setPendingConfirm(null); }}
-        onConfirm={() => {
-          if (pendingConfirm?.type === "remove-member") { void confirmRemoveMember(pendingConfirm.member); return; }
-          if (pendingConfirm?.type === "leave-group") { void confirmLeaveGroup(); return; }
-          if (pendingConfirm?.type === "transfer-ownership") { void confirmTransferOwnership(pendingConfirm.member); return; }
-          if (pendingConfirm?.type === "delete-group") { void confirmDeleteGroup(); return; }
-          if (pendingConfirm?.type === "ban-member") { void confirmBanMember(pendingConfirm.member); }
-        }}
-        title={confirmTitle}
-        message={confirmMessage}
-        confirmText={confirmText}
+        isOpen={isLeaveGroupConfirmOpen}
+        onClose={() => { if (!isConfirmActionPending) setIsLeaveGroupConfirmOpen(false); }}
+        onConfirm={() => void confirmLeaveGroup()}
+        title={t("profile:groupInfo.leaveGroup")}
+        message={t("profile:groupInfo.leaveConfirm")}
+        confirmText={t("profile:groupInfo.leaveGroup")}
         isLoading={isConfirmActionPending}
         variant="danger"
       />

@@ -10,7 +10,7 @@ import {
   getMessageSeq,
   upsertMessageInCache,
 } from "../domain/messageMerge";
-import { messagesShareIdentity } from "../domain/messageIdentity";
+import { messagesShareIdentity } from "../domain/messageIdentityMatching";
 import type { RootState } from "../../../store";
 import { useAppDispatch } from "../../../store/hooks";
 import type { Message } from "../../../types";
