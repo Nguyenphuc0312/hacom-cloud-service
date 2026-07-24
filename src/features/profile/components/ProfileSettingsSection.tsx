@@ -116,6 +116,10 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
             {/* "Tên người dùng" ẩn: là username đăng nhập (kỹ thuật), trùng khái niệm
                 với "Mã nhân viên" bên dưới nhưng không phải mã NS thật — theo yêu cầu. */}
             <SummaryItem
+              label={t("profile:settings.employeeCode")}
+              value={employeeCode}
+            />
+            <SummaryItem
               label={t("profile:editProfileModal.phone")}
               value={phone}
             />
@@ -132,10 +136,6 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
                 defaultValue: "Công ty",
               })}
               value={orgUnit}
-            />
-            <SummaryItem
-              label={t("profile:settings.employeeCode")}
-              value={employeeCode}
             />
             {employmentStatus && (
               <SummaryItem
