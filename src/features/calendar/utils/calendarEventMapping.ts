@@ -300,6 +300,7 @@ export const buildCalendarEventForm = (
       attachments: remoteAttachmentsToForm(event.attachments),
       createdById: event.ownerId,
       createdByName: event.owner?.fullName ?? event.ownerName ?? undefined,
+      createdByUserId: event.ownerAuthUserId ?? undefined,
     },
   };
 };

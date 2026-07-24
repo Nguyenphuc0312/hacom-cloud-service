@@ -209,7 +209,18 @@ export const EventDetailModal: React.FC<{
       ),
     ];
     if (ids.length === 0) return;
-    void loadUserProfiles(ids).then(setParticipantProfiles);
+    // Sau khi Cập nhật, roster đổi → effect chạy lại. GỘP kết quả thay vì thay cả
+    // map: replace làm mất avatar đã tra được của những người vẫn còn trong lịch
+    // (avatar "nháy" mất rồi mới hiện lại). `cancelled` chặn response về trễ của
+    // lần fetch cũ ghi đè lần mới.
+    let cancelled = false;
+    void loadUserProfiles(ids).then((profiles) => {
+      if (cancelled) return;
+      setParticipantProfiles((prev) => ({ ...prev, ...profiles }));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [hrParticipants]);
   // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
   // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
@@ -266,13 +277,19 @@ export const EventDetailModal: React.FC<{
         p?.avatarUrl ??
         undefined,
     );
+  // Chủ trì chỉ được lưu dưới dạng TÊN trong metadata (BE chưa có field identity),
+  // nên phải dò ngược về roster để lấy authUserId → mới tra được avatar. Dò theo
+  // mọi tên mà một người có thể mang: fullName, tên trong employee, mã NV, và alias
+  // ("tên gợi nhớ") — chỉ so fullName như trước là hụt ngay khi hai bên lệch nguồn tên.
   const findByName = (name: string | null | undefined) => {
     const key = name?.trim().toLowerCase();
     if (!key) return undefined;
-    return hrParticipants.find(
-      (p) =>
-        (p.fullName ?? p.employee?.fullName ?? "").trim().toLowerCase() === key,
-    );
+    return hrParticipants.find((p) => {
+      const alias = p.authUserId ? aliasByUserId[p.authUserId] : undefined;
+      return [p.fullName, p.employee?.fullName, p.employeeCode, alias].some(
+        (candidate) => (candidate ?? "").trim().toLowerCase() === key,
+      );
+    });
   };
   const creatorRow =
     (hrEvent?.ownerAuthUserId

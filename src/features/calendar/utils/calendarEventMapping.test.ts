@@ -230,6 +230,23 @@ describe("buildCalendarEventForm (prefill Sửa từ chat)", () => {
     ]);
   });
 
+  // Không có createdByUserId thì form Sửa không tra được avatar người tạo → hàng
+  // "Người tạo" mất avatar sau khi cập nhật.
+  it("carries the owner authUserId so the edit form can resolve the creator avatar", () => {
+    const ev = makeHrmEvent({
+      id: "m2",
+      startAt: "2026-06-04T01:00:00.000Z",
+      endAt: "2026-06-04T02:00:00.000Z",
+      eventType: "MEETING",
+      visibility: "PUBLIC",
+    });
+    ev.ownerAuthUserId = "auth-owner-1";
+
+    const form = buildCalendarEventForm(ev);
+    if (form?.kind !== "meeting") throw new Error("expected meeting");
+    expect(form.data.createdByUserId).toBe("auth-owner-1");
+  });
+
   it("maps a PERSONAL event to personal form data (private default)", () => {
     const ev = makeHrmEvent({
       id: "p9",

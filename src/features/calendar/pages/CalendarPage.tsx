@@ -970,6 +970,15 @@ export const CalendarPage: React.FC = () => {
     [apiEventsMap]
   );
 
+  // `selectedEvent` là SNAPSHOT lúc bấm. Sau khi Cập nhật, list refetch và
+  // apiEventsMap dựng lại, nhưng snapshot thì không → modal chi tiết vẫn hiện dữ
+  // liệu cũ (tiêu đề/giờ/địa điểm/chủ trì). Luôn đọc bản mới nhất theo id, chỉ rơi
+  // về snapshot khi event không còn trong map (vd lịch chấm công/ngày lễ tĩnh).
+  const selectedEventLive = useMemo(() => {
+    if (!selectedEvent) return null;
+    return apiEventsMap[selectedEvent.id] ?? selectedEvent;
+  }, [selectedEvent, apiEventsMap]);
+
   // Raw HR event for the selected item — carries participant roster + response.
   const selectedHrEvent = useMemo(() => {
     if (!selectedEvent) return undefined;
@@ -985,7 +994,9 @@ export const CalendarPage: React.FC = () => {
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
-    if (!selectedEvent) return;
+    // Dùng bản live (không phải snapshot) để form Sửa prefill đúng dữ liệu mới nhất
+    // sau lần Cập nhật trước đó.
+    if (!selectedEventLive) return;
 
     // Check if viewing others — don't allow edit
     if (mode === "other") {
@@ -994,14 +1005,14 @@ export const CalendarPage: React.FC = () => {
     }
 
     // Check if current user has edit permission (from API)
-    const extended = apiEventsMap[selectedEvent.id];
+    const extended = apiEventsMap[selectedEventLive.id];
     if (extended && extended.canEdit === false) {
       toast.warning("Bạn không có quyền chỉnh sửa sự kiện này.");
       return;
     }
 
     // Check if it's an extended event with startAt/endAt
-    const isExtended = "startAt" in selectedEvent && selectedEvent.startAt;
+    const isExtended = "startAt" in selectedEventLive && selectedEventLive.startAt;
 
     // Only allow editing API events (with startAt/endAt)
     if (!isExtended) {
@@ -1009,7 +1020,7 @@ export const CalendarPage: React.FC = () => {
       return;
     }
 
-    const extEvent = selectedEvent as ExtendedCalendarEvent;
+    const extEvent = selectedEventLive as ExtendedCalendarEvent;
 
     // Lịch cá nhân (type "personal") → mở form cá nhân, không phải form họp.
     if (extEvent.type === "personal") {
@@ -1065,10 +1076,12 @@ export const CalendarPage: React.FC = () => {
       createdById: extEvent.ownerId,
       createdByName:
         selectedHrEvent?.owner?.fullName ?? selectedHrEvent?.ownerName ?? undefined,
+      // authUserId để form Sửa tra được avatar người tạo (tên thôi là không đủ).
+      createdByUserId: selectedHrEvent?.ownerAuthUserId ?? undefined,
     };
 
     setEditingEvent(data);
-  }, [selectedEvent, selectedHrEvent, mode, apiEventsMap]);
+  }, [selectedEventLive, selectedHrEvent, mode, apiEventsMap]);
 
   // Người được mời phản hồi (Tham gia / Từ chối) — nghiệp vụ trong hook dùng chung.
   const handleRespond = useCallback(
@@ -1421,9 +1434,9 @@ export const CalendarPage: React.FC = () => {
       </div>
 
       {/* Event detail modal */}
-      {selectedEvent && (
+      {selectedEventLive && (
         <EventDetailModal
-          event={selectedEvent}
+          event={selectedEventLive}
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
