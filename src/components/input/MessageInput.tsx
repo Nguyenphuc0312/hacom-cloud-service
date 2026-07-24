@@ -1057,44 +1057,44 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     (candidate: MentionCandidate) => {
       if (!mentionMatch) return;
 
-      // Insert the short "nick" (self-set display name / username), Zalo-style —
-      // NOT the long HR full name. extractMentionDetails registers this token so
-      // it still resolves to the userId. Never the private alias.
+      // Insert the single shared canonical name (Zalo WYSIWYG) — NOT the private
+      // alias. The chip serialises to `@insertName` in getText(), so send /
+      // extractMentionDetails are unchanged. The editor's onUpdate then drives
+      // draftValue/onChange, so no manual value bookkeeping is needed here.
       const insertName =
         candidate.mentionInsertName ||
         candidate.displayName ||
         candidate.resolvedName ||
         candidate.username;
-      const insertion = `@${insertName} `;
-      const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
 
       const editor = tipTapRef.current?.getEditor();
       if (editor) {
+        // The freshly-typed "@query" is plain text right before the caret, so
+        // its ProseMirror length equals its char count.
         const matchLength = mentionMatch.end - mentionMatch.start;
         const to = editor.state.selection.anchor;
         const from = to - matchLength;
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from, to })
-          .insertContent(insertion)
-          .run();
+        if (candidate.id && candidate.id !== "all") {
+          // Real user → atomic blue chip (cursor steps over it, Backspace clears it).
+          tipTapRef.current?.insertMentionChip(
+            { from, to },
+            { id: candidate.id, label: insertName },
+          );
+        } else {
+          // @all (no user id) stays plain text.
+          editor
+            .chain()
+            .focus()
+            .deleteRange({ from, to })
+            .insertContent(`@${insertName} `)
+            .run();
+        }
       }
 
-      setDraftValue(nextValue);
-      onChange(nextValue);
       scheduleComposerResize();
       clearMentionState();
-      recordInputLatency(nextValue);
     },
-    [
-      clearMentionState,
-      draftValue,
-      mentionMatch,
-      onChange,
-      recordInputLatency,
-      scheduleComposerResize,
-    ],
+    [clearMentionState, mentionMatch, scheduleComposerResize],
   );
 
   // Stable refs so TipTap's handleKeyDown closure doesn't go stale.

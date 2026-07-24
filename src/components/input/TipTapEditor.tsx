@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import type { Editor } from "@tiptap/react";
+import { MentionChip } from "./mentionNode";
 
 export interface TipTapEditorHandle {
   getHTML: () => string;
@@ -16,6 +17,15 @@ export interface TipTapEditorHandle {
   setContent: (text: string) => void;
   focus: (options?: { scrollIntoView?: boolean }) => void;
   insertAtCursor: (text: string) => void;
+  /**
+   * Replace the `@query` range (from..to) with a blue mention chip + trailing
+   * space. Chip serialises to `@label` in getText(), so send/drafts are
+   * unaffected.
+   */
+  insertMentionChip: (
+    range: { from: number; to: number },
+    attrs: { id: string; label: string },
+  ) => void;
   getEditor: () => Editor | null;
 }
 
@@ -94,6 +104,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           openOnClick: false,
           protocols: ["http", "https"],
         }),
+        MentionChip,
       ],
       [], // stable — placeholder is read via ref, not captured in closure
     );
@@ -115,9 +126,14 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
         if (onSelectionChangeRef.current) {
           const text = e.getText();
           const anchor = e.state.selection.anchor;
-          // ProseMirror position offset: paragraph node adds 1, so plain text offset = anchor - 1.
-          // Clamp to [0, text.length] to handle edge cases with multi-paragraph docs.
-          const caretOffset = Math.max(0, Math.min(anchor - 1, text.length));
+          // Plain-text caret offset. Can't use `anchor - 1`: a mention chip is
+          // an atom (1 ProseMirror pos) but serialises to `@label` (many chars),
+          // so after a chip the two diverge. textBetween with a leafText that
+          // matches renderText/getText gives the true offset.
+          const before = e.state.doc.textBetween(0, anchor, "\n", (leaf) =>
+            leaf.type.name === MentionChip.name ? `@${leaf.attrs.label}` : "",
+          );
+          const caretOffset = Math.max(0, Math.min(before.length, text.length));
           onSelectionChangeRef.current(text, caretOffset);
         }
       },
@@ -214,6 +230,17 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       },
       insertAtCursor: (text: string) => {
         editor?.chain().focus().insertContent(text).run();
+      },
+      insertMentionChip: (range, attrs) => {
+        editor
+          ?.chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent([
+            { type: MentionChip.name, attrs },
+            { type: "text", text: " " },
+          ])
+          .run();
       },
       getEditor: () => editor ?? null,
     }));

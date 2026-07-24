@@ -1011,20 +1011,20 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         // participant, who would see it instead of the real name.
         const aliasLabel = enrichedNameByUserId[participant.id];
 
-        // Resolve primary display name: fullNameFromHR > displayName > username
-        const resolvedName =
-          fullNameFromHR ||
-          resolveUserDisplayName(participant, {
-            allowLegacyFallback: false,
-          }) ||
-          participant.username?.trim() ||
-          employeeCode ||
-          participant.id;
-
+        // Resolve display name once (called per participant on every recompute —
+        // avoid running it twice for large groups).
         const displayName =
           resolveUserDisplayName(participant, {
             allowLegacyFallback: false,
           }) || undefined;
+
+        // Primary name: fullNameFromHR > displayName > username
+        const resolvedName =
+          fullNameFromHR ||
+          displayName ||
+          participant.username?.trim() ||
+          employeeCode ||
+          participant.id;
 
         // The single shared name inserted into the message (Zalo WYSIWYG model):
         // the same canonical name shown in the member list. Never the private
