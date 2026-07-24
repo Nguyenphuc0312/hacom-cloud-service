@@ -4,6 +4,7 @@
  */
 
 import { hrApiClient } from "./hrApi";
+import { logger } from "../../utils/logger";
 
 /**
  * HR Calendar event types (aligned with hr-api-service Prisma enums)
@@ -125,6 +126,8 @@ export interface HRCalendarEventsResponse {
     hasNextPage: boolean;
     hasPrevPage: boolean;
   };
+  /** true = còn event chưa tải hết (chạm trần gom trang) → dữ liệu KHÔNG đầy đủ. */
+  truncated?: boolean;
   capabilities?: HRCalendarCapabilities;
   warnings?: Array<{ code: string; message: string }>;
 }
@@ -238,6 +241,63 @@ export const hrCalendarApi = {
   },
 
   /**
+   * Lấy TOÀN BỘ event trong khoảng, gom đủ mọi trang.
+   *
+   * `listEvents` chỉ trả 1 trang — BE mặc định `pageSize = 20` (trần 100, xem
+   * PaginationDto của hr-api). Lịch là màn hình theo KHOẢNG THỜI GIAN, không có
+   * UI phân trang: gọi thẳng `listEvents` thì mọi event từ #21 trở đi biến mất
+   * im lặng — API trả về nhưng lưới trống, không lỗi, không cách nào biết.
+   *
+   * Dùng pageSize 100 (trần) để giảm số vòng, rồi lặp tới khi hết `hasNextPage`.
+   * `maxPages` là van an toàn, tránh vòng lặp vô hạn nếu BE trả pagination lỗi.
+   *
+   * Chạm `maxPages` mà BE vẫn báo còn trang → dữ liệu BỊ CẮT. Trường hợp đó phải
+   * KÊU TO (log error + cờ `truncated`) chứ không im lặng: mất event âm thầm là
+   * loại lỗi tốn nhiều giờ nhất để truy — nhìn từ UI y hệt "API không trả về".
+   */
+  listAllEvents: async (
+    params: ListHREventsParams = {},
+    maxPages = 20,
+  ): Promise<HRCalendarEventsResponse> => {
+    const pageSize = params.pageSize ?? 100;
+    const first = await hrCalendarApi.listEvents({ ...params, page: 1, pageSize });
+    // NO_HR_PROFILE (và mọi mode đặc biệt) → trả nguyên, không gom thêm.
+    if (first.mode || !first.pagination.hasNextPage) return first;
+
+    const all = [...first.data];
+    let page = 1;
+    let hasNext: boolean = first.pagination.hasNextPage;
+    while (hasNext && page < maxPages) {
+      page += 1;
+      const next = await hrCalendarApi.listEvents({ ...params, page, pageSize });
+      all.push(...next.data);
+      hasNext = next.pagination.hasNextPage;
+    }
+
+    // Vẫn còn trang sau khi hết maxPages ⇒ đã cắt bớt event.
+    const truncated = hasNext;
+    if (truncated) {
+      logger.error("calendar", "event_list_truncated", {
+        loadedEvents: all.length,
+        pagesFetched: page,
+        maxPages,
+        pageSize,
+        totalReportedByServer: first.pagination.totalItems,
+        from: params.from,
+        to: params.to,
+        scope: params.scope,
+      });
+    }
+
+    return {
+      ...first,
+      data: all,
+      truncated,
+      pagination: { ...first.pagination, page, hasNextPage: hasNext },
+    };
+  },
+
+  /**
    * Get a single calendar event by ID
    */
   getEvent: async (eventId: string): Promise<HRCalendarEvent> => {
@@ -295,6 +355,9 @@ export const hrCalendarApi = {
     /** Tên người tham gia dạng free-text (không resolve được) — lưu vào metadata */
     attendees?: string[];
     meetingChairman?: string;
+    /** Identity chủ trì (employee cuid / employeeCode / authUserId) — BE resolve
+     *  để chủ trì có avatar thật + được cấp quyền sửa. Tên không mang identity. */
+    meetingChairmanRef?: string;
     meetingFormat?: string;
     /** fileId đã upload xong qua chat-api (purpose calendar_attachment). BE lưu + trả lại trong `attachments`. */
     attachmentFileIds?: string[];
@@ -326,6 +389,9 @@ export const hrCalendarApi = {
       /** Tên người tham gia dạng free-text — merge vào metadata */
       attendees?: string[];
       meetingChairman?: string;
+      /** Identity chủ trì (employee cuid / employeeCode / authUserId) — BE resolve
+       *  để chủ trì có avatar thật + được cấp quyền sửa. */
+      meetingChairmanRef?: string;
       meetingFormat?: string;
       /** Full desired set fileId (giống participantIds reconcile): gửi đủ để giữ file cũ + thêm file mới. Bỏ field = không đụng attachments. */
       attachmentFileIds?: string[];

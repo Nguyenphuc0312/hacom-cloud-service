@@ -67,7 +67,13 @@ interface CalendarState {
   resetCalendarData: () => void;
 
   // Data operations
-  fetchEvents: (start?: string, end?: string) => Promise<void>;
+  /** @param opts.background true = refetch nền (poll/focus/sau khi lưu) → KHÔNG
+   *  bật cờ loading, tránh nhấp nháy khi lưới đã có dữ liệu. */
+  fetchEvents: (
+    start?: string,
+    end?: string,
+    opts?: { background?: boolean },
+  ) => Promise<void>;
   createEvent: (input: Parameters<typeof hrCalendarApi.createEvent>[0]) => Promise<HRCalendarEvent | null>;
   updateEvent: (eventId: string, input: Parameters<typeof hrCalendarApi.updateEvent>[1]) => Promise<boolean>;
   deleteEvent: (eventId: string) => Promise<boolean>;
@@ -168,7 +174,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   // Data operations
   // Uses hr-api-service for all calendar events (supports viewing others' calendars)
-  fetchEvents: async (start?: string, end?: string) => {
+  fetchEvents: async (start?: string, end?: string, opts?: { background?: boolean }) => {
     const requestSequence = ++calendarRequestSequence;
     const state = get();
     const { mode, viewingUserId } = state;
@@ -177,14 +183,23 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     const startDate = start || state.getStartOfMonth();
     const endDate = end || state.getEndOfMonth();
 
-    set({ isLoading: true, error: null });
+    // Refetch NỀN (poll 60s, quay lại tab, sau khi lưu) không bật cờ loading:
+    // lưới đang có dữ liệu dùng được, bật spinner chỉ làm nhấp nháy vô cớ.
+    // Chỉ lần tải đầu / đổi tháng mới hiện trạng thái tải.
+    const background = opts?.background === true && state.events.length > 0;
+    set(background ? { error: null } : { isLoading: true, error: null });
 
     try {
       let events: HRCalendarEvent[] = [];
+      // true = chạm trần gom trang, danh sách BỊ CẮT → phải báo cho người dùng
+      // thay vì âm thầm hiện thiếu lịch.
+      let truncated = false;
 
       switch (mode) {
         case "my": {
-          const myResponse = await hrCalendarApi.listEvents({
+          // listAllEvents (không phải listEvents): BE phân trang 20/trang nên
+          // gọi 1 trang là mất sạch event từ #21 — lịch trống mà không báo lỗi.
+          const myResponse = await hrCalendarApi.listAllEvents({
             scope: 'mine',
             from: startDate,
             to: endDate,
@@ -203,6 +218,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             return;
           }
           events = Array.isArray(myResponse.data) ? myResponse.data : [];
+          truncated = myResponse.truncated === true;
           break;
         }
         case "other": {
@@ -210,7 +226,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             // Viewing another user's calendar.
             // Use ownerAuthUserId (auth-domain UUID) — backend resolves to correct employee/HR user.
             // DO NOT use ownerId here: it is ambiguous (backend expects employeeId, not authUserId).
-            const otherResponse = await hrCalendarApi.listEvents({
+            const otherResponse = await hrCalendarApi.listAllEvents({
               scope: 'person',
               ownerAuthUserId: viewingUserId,
               from: startDate,
@@ -218,6 +234,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
               includeParticipantEvents: true,
             });
             events = Array.isArray(otherResponse.data) ? otherResponse.data : [];
+            truncated = otherResponse.truncated === true;
           }
           break;
         }
@@ -230,6 +247,13 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       }
 
       if (requestSequence !== calendarRequestSequence) return;
+      // Danh sách bị cắt: vẫn hiện những gì tải được (còn hơn trắng lịch) nhưng
+      // PHẢI nói rõ là thiếu — mất event âm thầm là loại lỗi khó truy nhất.
+      if (truncated) {
+        toast.warning(
+          "Khoảng thời gian này có quá nhiều lịch nên chưa tải hết. Hãy thu hẹp khoảng xem.",
+        );
+      }
       set({
         events,
         isLoading: false,

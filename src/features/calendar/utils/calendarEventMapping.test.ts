@@ -116,6 +116,105 @@ describe("calendarEventMapping", () => {
     expect(otherEvents.every((event) => event.type === "personal")).toBe(true);
   });
 
+  // Sidebar chỉ có 3 checkbox (meeting/personal/attendance) nhưng API vẫn trả TASK.
+  // Loại không có ô để tick thì phải HIỆN, không được lọc mất.
+  it("renders event types that have no sidebar checkbox instead of dropping them", () => {
+    const taskEvent = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "t1",
+        title: "Việc cần làm",
+        startAt: "2026-06-04T01:00:00.000Z",
+        endAt: "2026-06-04T02:00:00.000Z",
+        eventType: "TASK",
+        visibility: "PUBLIC",
+      }),
+    );
+    expect(taskEvent.type).toBe("task");
+
+    const visible = filterCalendarEventsByType(
+      [taskEvent],
+      ["meeting", "personal"],
+      activeSidebarTypes,
+    );
+    expect(visible.map((e) => e.title)).toEqual(["Việc cần làm"]);
+  });
+
+  // Quy tắc lọc của WeeklyCalendarWidget (EmptyState): chỉ bỏ CHẤM CÔNG, mọi loại
+  // khác API trả về đều phải hiện. Trước đây widget dùng allow-list
+  // (meeting|personal) nên event TASK bị nuốt: API trả về mà lưới tuần trống.
+  it("weekly widget drops only attendance, never other API types", () => {
+    const widgetFilter = (e: CalendarEvent) => e.type !== "attendance";
+    const byApiType = (id: string, eventType: string) =>
+      mapHrmEventToCalendarEvent(
+        makeHrmEvent({
+          id,
+          title: `ev-${id}`,
+          startAt: "2026-06-04T01:00:00.000Z",
+          endAt: "2026-06-04T02:00:00.000Z",
+          eventType: eventType as HRCalendarEvent["eventType"],
+          visibility: "PUBLIC",
+        }),
+      );
+
+    const events = [
+      byApiType("1", "MEETING"),
+      byApiType("2", "PERSONAL"),
+      byApiType("3", "TASK"),
+      byApiType("4", "OTHER"),
+      byApiType("5", "LEAVE"),
+      byApiType("6", "ATTENDANCE"),
+    ];
+
+    const visible = events.filter(widgetFilter).map((e) => e.id);
+    // Chỉ ATTENDANCE (id 6) bị loại; TASK (id 3) PHẢI còn.
+    expect(visible).toEqual(["1", "2", "3", "4", "5"]);
+  });
+
+  it("still hides a type the user actively unticked", () => {
+    const meeting = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "m9",
+        title: "Họp bị ẩn",
+        startAt: "2026-06-04T01:00:00.000Z",
+        endAt: "2026-06-04T02:00:00.000Z",
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+
+    const visible = filterCalendarEventsByType(
+      [meeting],
+      ["personal"],
+      activeSidebarTypes,
+    );
+    expect(visible).toHaveLength(0);
+  });
+
+  // Chuỗi đầu-cuối cho lưới tuần: event CHỦ NHẬT (ngày cuối tuần, sát ranh giới
+  // tháng) từ API phải rơi đúng ô CN — không mất, không lệch sang T7.
+  it("places a Sunday event on Sunday, not the neighbouring days", () => {
+    // 26/07/2026 08:00 giờ VN = 01:00Z cùng ngày.
+    const sunday = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "cn",
+        title: "Họp chủ nhật",
+        startAt: "2026-07-26T01:00:00.000Z",
+        endAt: "2026-07-26T02:00:00.000Z",
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+
+    const onDay = (d: number) =>
+      eventOccursOnDay(sunday, new Date(2026, 6, d));
+
+    expect(onDay(26)).toBe(true);
+    expect(onDay(25)).toBe(false);
+    expect(onDay(27)).toBe(false);
+    // Ngày local phải là 26 chứ không phải 25 (lỗi kinh điển khi slice chuỗi UTC).
+    expect(sunday.date).toBe("2026-07-26");
+  });
+
   it("groups June 2026 fixture events onto the expected local calendar days", () => {
     const normalizedHrmEvents = hrmEvents.map(mapHrmEventToCalendarEvent);
     const visible = filterCalendarEventsByType(normalizedHrmEvents, activeSidebarTypes);
@@ -228,6 +327,23 @@ describe("buildCalendarEventForm (prefill Sửa từ chat)", () => {
       { name: "Lan", employeeId: "e1", employeeCode: "EMP1", userId: "u1" },
       { name: "Khách A" },
     ]);
+  });
+
+  // Không có createdByUserId thì form Sửa không tra được avatar người tạo → hàng
+  // "Người tạo" mất avatar sau khi cập nhật.
+  it("carries the owner authUserId so the edit form can resolve the creator avatar", () => {
+    const ev = makeHrmEvent({
+      id: "m2",
+      startAt: "2026-06-04T01:00:00.000Z",
+      endAt: "2026-06-04T02:00:00.000Z",
+      eventType: "MEETING",
+      visibility: "PUBLIC",
+    });
+    ev.ownerAuthUserId = "auth-owner-1";
+
+    const form = buildCalendarEventForm(ev);
+    if (form?.kind !== "meeting") throw new Error("expected meeting");
+    expect(form.data.createdByUserId).toBe("auth-owner-1");
   });
 
   it("maps a PERSONAL event to personal form data (private default)", () => {

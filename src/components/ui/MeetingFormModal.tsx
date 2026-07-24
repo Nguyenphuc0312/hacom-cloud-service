@@ -15,6 +15,7 @@ import {
   type ChatSearchUser,
 } from "../../features/chat/hooks/useChatUserSearch";
 import { Avatar } from "../common/Avatar";
+import { loadUserProfiles } from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 
 export interface MeetingParticipant {
@@ -62,6 +63,11 @@ export interface MeetingFormData {
   createdById?: string;
   /** Tên hiển thị người tạo lịch */
   createdByName?: string;
+  /** Chat user id (auth UUID) của người tạo — để tra avatar khi mở form Sửa.
+   *  Thiếu field này thì hàng "Người tạo" mất avatar sau khi cập nhật. */
+  createdByUserId?: string;
+  /** Avatar người tạo nếu nguồn dữ liệu đã có sẵn (khỏi tra lại). */
+  createdByAvatarUrl?: string;
   /** Danh sách người đã xem (theo tên/ID) */
   readBy?: MeetingReadReceipt[];
 }
@@ -277,9 +283,39 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       isSelf: true as const,
     };
   }, [currentUser, looksLikeCode]);
+  // Avatar người tạo khi Sửa: event chỉ mang tên + authUserId, không mang ảnh →
+  // tra qua batch loader (cùng nguồn với EventDetailModal / avatar stack), nếu
+  // không thì để Avatar tự fallback initials. Trước đây hard-code "" nên hàng
+  // "Người tạo" mất avatar mỗi lần mở form Sửa.
+  const creatorUserId = initialData?.createdByUserId;
+  const knownCreatorAvatar = initialData?.createdByAvatarUrl;
+  // Chỉ fetch khi nguồn dữ liệu chưa kèm sẵn ảnh; kết quả giữ theo userId để đổi
+  // event là tự hết hiệu lực (không cần reset state).
+  const [fetchedAvatarByUserId, setFetchedAvatarByUserId] = React.useState<
+    Record<string, string>
+  >({});
+  React.useEffect(() => {
+    if (!isOpen || !isEditMode || !creatorUserId || knownCreatorAvatar) return;
+    let cancelled = false;
+    void loadUserProfiles([creatorUserId]).then((profiles) => {
+      const url = profiles[creatorUserId]?.avatarUrl;
+      if (cancelled || !url) return;
+      setFetchedAvatarByUserId((prev) => ({ ...prev, [creatorUserId]: url }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isEditMode, creatorUserId, knownCreatorAvatar]);
+  const creatorAvatar =
+    knownCreatorAvatar ?? (creatorUserId ? fetchedAvatarByUserId[creatorUserId] : "") ?? "";
+
   // Người tạo ≠ chủ trì: tạo mới → chính bạn; sửa → owner của event (không đổi được).
   const creator = isEditMode
-    ? { name: initialData?.createdByName || "Không rõ", avatar: "", isSelf: false }
+    ? {
+        name: initialData?.createdByName || "Không rõ",
+        avatar: creatorAvatar,
+        isSelf: currentUser?.id != null && creatorUserId === currentUser.id,
+      }
     : { name: selfOption?.name ?? "", avatar: selfOption?.avatar ?? "", isSelf: true };
 
   const [showFriendPicker, setShowFriendPicker] = React.useState(false);

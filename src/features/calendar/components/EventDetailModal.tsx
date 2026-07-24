@@ -154,39 +154,19 @@ export const EventDetailModal: React.FC<{
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
-  // Owner (người tạo) không nằm trong participants[] từ BE, nhưng phải xuất hiện
-  // trong danh sách "Người tham gia" để đồng bộ với avatar stack ở Day/Week/Widget
-  // (cả 2 chiều người tạo ↔ người nhận thấy đủ mặt). Ghép owner lên đầu, dedup.
-  const hrParticipants = React.useMemo(() => {
-    const list = hrEvent?.participants ?? [];
-    const owner = hrEvent?.owner;
-    if (!owner) return list;
-    const ownerCode = owner.employeeCode?.toLowerCase();
-    const ownerName = owner.fullName?.trim().toLowerCase();
-    const already = list.some(
-      (p) =>
-        (ownerCode &&
-          (p.employeeCode?.toLowerCase() === ownerCode ||
-            p.employee?.employeeCode?.toLowerCase() === ownerCode)) ||
-        (ownerName &&
-          (p.fullName?.trim().toLowerCase() === ownerName ||
-            p.employee?.fullName?.trim().toLowerCase() === ownerName)),
-    );
-    if (already) return list;
-    // Người tạo mặc định coi như đã tham gia (ACCEPTED).
-    const ownerRow: HRCalendarParticipant = {
-      id: `owner-${owner.id}`,
-      employeeId: owner.id,
-      authUserId: hrEvent?.ownerAuthUserId ?? null,
-      employeeCode: owner.employeeCode,
-      fullName: owner.fullName,
-      avatarUrl: (owner as { avatarUrl?: string | null }).avatarUrl ?? null,
-      employee: { id: owner.id, fullName: owner.fullName, employeeCode: owner.employeeCode },
-      response: "ACCEPTED",
-      createdAt: hrEvent?.createdAt ?? new Date().toISOString(),
-    };
-    return [ownerRow, ...list];
-  }, [hrEvent]);
+  // Người tham gia = ĐÚNG những gì API trả về, không thêm bớt.
+  //
+  // Trước đây FE tự chèn người tạo vào roster với response "ACCEPTED" → đếm sai
+  // ("Người tham gia (4)" / "1 tham gia" trong khi người tạo chưa hề phản hồi).
+  // Người tạo KHÔNG mặc nhiên là người tham gia: muốn dự thì tự thêm mình vào ô
+  // "Người tham gia" lúc tạo/sửa. Người tạo vẫn thấy lịch mình tạo nhờ query BE
+  // khớp theo owner (calendar.service.ts → buildOwnerWhereClause), không phải nhờ
+  // hàng participant bịa ra ở FE.
+  // useMemo để tham chiếu ổn định — effect tra avatar phụ thuộc mảng này.
+  const hrParticipants = React.useMemo(
+    () => hrEvent?.participants ?? [],
+    [hrEvent],
+  );
   const isHrOwner = !!hrEvent?.canEdit;
   const canRespond = !!hrEvent?.isParticipant && !isHrOwner && !!onRespond;
   const respSummary = {
@@ -200,17 +180,35 @@ export const EventDetailModal: React.FC<{
   const [participantProfiles, setParticipantProfiles] = React.useState<
     Record<string, UserProfileSummary | null>
   >({});
+  // Người tạo & chủ trì có thể KHÔNG nằm trong roster (người tạo không bắt buộc
+  // tham gia) → phải nạp thêm authUserId của họ, nếu không hai hàng này mất avatar.
+  const ownerAuthUserId = hrEvent?.ownerAuthUserId ?? null;
+  const chairmanAuthUserId =
+    getMeetingMetadata(hrEvent).meetingChairmanAuthUserId ?? null;
   React.useEffect(() => {
     const ids = [
       ...new Set(
-        hrParticipants
-          .map((p) => p.authUserId)
-          .filter((id): id is string => !!id),
+        [
+          ...hrParticipants.map((p) => p.authUserId),
+          ownerAuthUserId,
+          chairmanAuthUserId,
+        ].filter((id): id is string => !!id),
       ),
     ];
     if (ids.length === 0) return;
-    void loadUserProfiles(ids).then(setParticipantProfiles);
-  }, [hrParticipants]);
+    // Sau khi Cập nhật, roster đổi → effect chạy lại. GỘP kết quả thay vì thay cả
+    // map: replace làm mất avatar đã tra được của những người vẫn còn trong lịch
+    // (avatar "nháy" mất rồi mới hiện lại). `cancelled` chặn response về trễ của
+    // lần fetch cũ ghi đè lần mới.
+    let cancelled = false;
+    void loadUserProfiles(ids).then((profiles) => {
+      if (cancelled) return;
+      setParticipantProfiles((prev) => ({ ...prev, ...profiles }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hrParticipants, ownerAuthUserId, chairmanAuthUserId]);
   // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
   // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
   const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
@@ -260,27 +258,44 @@ export const EventDetailModal: React.FC<{
   // Người tạo (owner) — có thể khác chủ trì. Avatar tra theo roster (đã ghép owner
   // lên đầu hrParticipants) + profile batch-load.
   const creatorName = hrEvent?.owner?.fullName ?? hrEvent?.ownerName ?? null;
-  const avatarForRow = (p: HRCalendarParticipant | undefined): string | undefined =>
-    resolvePublicResourceUrl(
-      (p?.authUserId ? participantProfiles[p.authUserId]?.avatarUrl : undefined) ??
+  const avatarForRow = (
+    p: HRCalendarParticipant | undefined,
+    /** userId dự phòng khi người này không nằm trong roster (người tạo/chủ trì
+     *  không bắt buộc là người tham gia). */
+    fallbackUserId?: string | null,
+  ): string | undefined => {
+    const userId = p?.authUserId ?? fallbackUserId ?? undefined;
+    return resolvePublicResourceUrl(
+      (userId ? participantProfiles[userId]?.avatarUrl : undefined) ??
         p?.avatarUrl ??
         undefined,
     );
+  };
+  // Dò người theo TÊN — chỉ dùng làm phương án chót cho event CŨ (tạo trước khi BE
+  // lưu identity chủ trì). Dò theo mọi tên một người có thể mang: fullName, tên
+  // trong employee, mã NV, và alias ("tên gợi nhớ").
   const findByName = (name: string | null | undefined) => {
     const key = name?.trim().toLowerCase();
     if (!key) return undefined;
-    return hrParticipants.find(
-      (p) =>
-        (p.fullName ?? p.employee?.fullName ?? "").trim().toLowerCase() === key,
-    );
+    return hrParticipants.find((p) => {
+      const alias = p.authUserId ? aliasByUserId[p.authUserId] : undefined;
+      return [p.fullName, p.employee?.fullName, p.employeeCode, alias].some(
+        (candidate) => (candidate ?? "").trim().toLowerCase() === key,
+      );
+    });
   };
-  const creatorRow =
-    (hrEvent?.ownerAuthUserId
-      ? hrParticipants.find((p) => p.authUserId === hrEvent.ownerAuthUserId)
-      : undefined) ?? findByName(creatorName);
-  const chairmanRow = findByName(chairman);
+  const findByAuthUserId = (id: string | null | undefined) =>
+    id ? hrParticipants.find((p) => p.authUserId === id) : undefined;
+
+  // Người tạo & chủ trì KHÔNG nhất thiết nằm trong roster (người tạo không bắt
+  // buộc tham gia). Nên lấy authUserId từ identity của event trước, roster chỉ để
+  // nhặt sẵn avatar nếu tình cờ người đó cũng là người tham gia.
+  const creatorRow = findByAuthUserId(hrEvent?.ownerAuthUserId) ?? findByName(creatorName);
+  const chairmanIdentityUserId = meetingMeta.meetingChairmanAuthUserId ?? null;
+  const chairmanRow =
+    findByAuthUserId(chairmanIdentityUserId) ?? findByName(chairman);
   const creatorUserId = hrEvent?.ownerAuthUserId ?? creatorRow?.authUserId ?? null;
-  const chairmanUserId = chairmanRow?.authUserId ?? null;
+  const chairmanUserId = chairmanIdentityUserId ?? chairmanRow?.authUserId ?? null;
 
   // Hành động nhanh trên dòng Người tạo / Chủ trì: đã là bạn → Nhắn tin (mở DM);
   // chưa là bạn → Kết bạn (có lời mời đến từ họ thì "Kết bạn" = chấp nhận luôn).
@@ -524,7 +539,11 @@ export const EventDetailModal: React.FC<{
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-text-muted">Người tạo</p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <Avatar src={avatarForRow(creatorRow)} alt={creatorName} size="sm" />
+                    <Avatar
+                      src={avatarForRow(creatorRow, creatorUserId)}
+                      alt={creatorName}
+                      size="sm"
+                    />
                     <p className="truncate text-sm text-text-primary">{creatorName}</p>
                     {renderPersonAction(creatorUserId)}
                   </div>
@@ -541,7 +560,11 @@ export const EventDetailModal: React.FC<{
                     Chủ trì
                   </p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <Avatar src={avatarForRow(chairmanRow)} alt={chairman} size="sm" />
+                    <Avatar
+                      src={avatarForRow(chairmanRow, chairmanUserId)}
+                      alt={chairman}
+                      size="sm"
+                    />
                     <p className="truncate text-sm text-text-primary">{chairman}</p>
                     {renderPersonAction(chairmanUserId)}
                   </div>
