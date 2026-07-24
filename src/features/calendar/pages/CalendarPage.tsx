@@ -1070,6 +1070,9 @@ export const CalendarPage: React.FC = () => {
       startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
       endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
       chairman: meta.meetingChairman ?? "",
+      // Giữ identity chủ trì khi Sửa — không có thì lần lưu sau sẽ mất avatar/quyền.
+      chairmanEmployeeCode: meta.meetingChairmanEmployeeCode,
+      chairmanUserId: meta.meetingChairmanAuthUserId,
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",
       visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),

@@ -295,6 +295,9 @@ export const hrCalendarApi = {
     /** Tên người tham gia dạng free-text (không resolve được) — lưu vào metadata */
     attendees?: string[];
     meetingChairman?: string;
+    /** Identity chủ trì (employee cuid / employeeCode / authUserId) — BE resolve
+     *  để chủ trì có avatar thật + được cấp quyền sửa. Tên không mang identity. */
+    meetingChairmanRef?: string;
     meetingFormat?: string;
     /** fileId đã upload xong qua chat-api (purpose calendar_attachment). BE lưu + trả lại trong `attachments`. */
     attachmentFileIds?: string[];
@@ -326,6 +329,9 @@ export const hrCalendarApi = {
       /** Tên người tham gia dạng free-text — merge vào metadata */
       attendees?: string[];
       meetingChairman?: string;
+      /** Identity chủ trì (employee cuid / employeeCode / authUserId) — BE resolve
+       *  để chủ trì có avatar thật + được cấp quyền sửa. */
+      meetingChairmanRef?: string;
       meetingFormat?: string;
       /** Full desired set fileId (giống participantIds reconcile): gửi đủ để giữ file cũ + thêm file mới. Bỏ field = không đụng attachments. */
       attachmentFileIds?: string[];

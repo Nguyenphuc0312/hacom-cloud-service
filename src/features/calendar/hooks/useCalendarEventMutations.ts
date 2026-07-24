@@ -129,6 +129,9 @@ export const useCalendarEventMutations = (
           participantIds,
           attendees: freeTextNames.length > 0 ? freeTextNames : undefined,
           meetingChairman: data.chairman || undefined,
+          // Identity chủ trì → BE lưu để render avatar thật + cấp quyền sửa.
+          meetingChairmanRef:
+            data.chairmanEmployeeCode || data.chairmanUserId || undefined,
           meetingFormat: data.format,
           attachmentFileIds,
         });
@@ -166,6 +169,9 @@ export const useCalendarEventMutations = (
           participantIds,
           attendees: freeTextNames,
           meetingChairman: data.chairman || undefined,
+          // Identity chủ trì → BE lưu để render avatar thật + cấp quyền sửa.
+          meetingChairmanRef:
+            data.chairmanEmployeeCode || data.chairmanUserId || undefined,
           meetingFormat: data.format,
           attachmentFileIds,
         });

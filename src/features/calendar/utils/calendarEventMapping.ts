@@ -143,9 +143,17 @@ const buildAttendeeAvatars = (
 /** Meeting extras stored in HR event metadata JSON. */
 export interface MeetingMetadata {
   meetingChairman?: string;
+  /** authUserId chủ trì — tra avatar qua /users/batch. Chỉ có ở event tạo/sửa
+   *  sau khi BE hỗ trợ `meetingChairmanRef`; event cũ chỉ có tên. */
+  meetingChairmanAuthUserId?: string;
+  meetingChairmanEmployeeId?: string;
+  meetingChairmanEmployeeCode?: string;
   meetingFormat?: string;
   attendees?: string[];
 }
+
+const asString = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() ? v : undefined;
 
 export const getMeetingMetadata = (event: HRCalendarEvent | undefined): MeetingMetadata => {
   const meta = event?.metadata;
@@ -153,6 +161,9 @@ export const getMeetingMetadata = (event: HRCalendarEvent | undefined): MeetingM
   const m = meta as Record<string, unknown>;
   return {
     meetingChairman: typeof m.meetingChairman === "string" ? m.meetingChairman : undefined,
+    meetingChairmanAuthUserId: asString(m.meetingChairmanAuthUserId),
+    meetingChairmanEmployeeId: asString(m.meetingChairmanEmployeeId),
+    meetingChairmanEmployeeCode: asString(m.meetingChairmanEmployeeCode),
     meetingFormat: typeof m.meetingFormat === "string" ? m.meetingFormat : undefined,
     attendees: Array.isArray(m.attendees)
       ? m.attendees.filter((a): a is string => typeof a === "string")
@@ -292,6 +303,8 @@ export const buildCalendarEventForm = (
       startTime: event.startAt ? toLocalTimeString(event.startAt) : "08:00",
       endTime: event.endAt ? toLocalTimeString(event.endAt) : "09:00",
       chairman: meta.meetingChairman ?? "",
+      chairmanEmployeeCode: meta.meetingChairmanEmployeeCode,
+      chairmanUserId: meta.meetingChairmanAuthUserId,
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",
       visibility: apiVisibilityToForm(event.visibility),
