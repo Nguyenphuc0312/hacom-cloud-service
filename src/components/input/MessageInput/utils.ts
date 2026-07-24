@@ -79,8 +79,14 @@ export const normalizeMentionCandidates = (
       departmentName: candidate.departmentName,
       companyName: candidate.companyName,
       // Local-only alias label — carried through so the suggestion row can show
-      // it and the filter can match it. Never feeds resolvedName (what we insert).
+      // it and the filter can match it. Never feeds the inserted tag.
       aliasLabel: candidate.aliasLabel?.trim() || undefined,
+      avatarUrl: candidate.avatarUrl?.trim() || undefined,
+      // The short nick we insert; fall back to displayName/username here.
+      mentionInsertName:
+        candidate.mentionInsertName?.trim() ||
+        candidate.displayName?.trim() ||
+        username,
       resolvedName,
     });
   });

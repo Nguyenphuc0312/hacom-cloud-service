@@ -13,8 +13,17 @@ export interface MentionCandidate {
   /** HR department / company for the secondary line */
   departmentName?: string;
   companyName?: string;
-  /** Resolved display name for insert (fullName > displayName > username) */
+  /** Full resolved name (fullName > displayName > username) — used for the
+   *  secondary line and server-side resolution, no longer for the inserted tag. */
   resolvedName?: string;
+  /**
+   * The "nick" inserted into the message when picked — the self-set display
+   * name, else username (Zalo-style short tag). NOT the HR full name and NOT
+   * the private alias, so the tag reads the same for everyone in the group.
+   */
+  mentionInsertName?: string;
+  /** Avatar shown on the suggestion row (Zalo-style). */
+  avatarUrl?: string;
   /**
    * "Tên gợi nhớ" (alias) the viewer set for this user — LOCAL ONLY.
    * Used to label the suggestion row so the viewer can search by the name they

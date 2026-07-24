@@ -108,24 +108,23 @@ function extractMentionDetails(
   for (const candidate of candidates) {
     const id = candidate.id;
 
-    // Username token
-    const username = candidate.username.toLowerCase().trim();
-    if (username) {
-      const displayName = candidate.resolvedName || candidate.displayName || candidate.fullName || candidate.username;
-      tokenToInfo.set(username, { id, displayName });
-    }
+    // Each token maps to the exact surface form present in the text. The
+    // returned `displayName` MUST equal the matched text — the message renderer
+    // builds its highlight regex from mentions[].displayName, so a mismatch
+    // would leave the tag un-highlighted and un-clickable.
+    const register = (surface: string | undefined | null) => {
+      const token = (surface || "").toLowerCase().trim();
+      if (token && !tokenToInfo.has(token)) {
+        tokenToInfo.set(token, { id, displayName: (surface || "").trim() });
+      }
+    };
 
-    // Resolved display name token (handles @fullName insert with spaces)
-    const resolvedName = (
-      candidate.resolvedName ||
-      candidate.displayName ||
-      candidate.fullName ||
-      ""
-    ).toLowerCase().trim();
-    if (resolvedName && resolvedName !== username) {
-      const displayName = candidate.resolvedName || candidate.displayName || candidate.fullName || candidate.username;
-      tokenToInfo.set(resolvedName, { id, displayName });
-    }
+    // Inserted nick first (what handleMentionSelect writes today), then the
+    // other surface forms so legacy @fullName / @username messages still resolve.
+    register(candidate.mentionInsertName);
+    register(candidate.displayName);
+    register(candidate.resolvedName || candidate.fullName);
+    register(candidate.username);
   }
 
   if (tokenToInfo.size === 0) return [];
@@ -1022,20 +1021,37 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           employeeCode ||
           participant.id;
 
+        const displayName =
+          resolveUserDisplayName(participant, {
+            allowLegacyFallback: false,
+          }) || undefined;
+
+        // The "nick" we actually insert (Zalo-style): the short self-set name,
+        // else username. Never the HR full name (too long) and never the alias
+        // (private to the viewer — would leak to the group).
+        const mentionInsertName =
+          displayName ||
+          participant.username?.trim() ||
+          resolvedName;
+
         return {
           id: participant.id,
           username:
             participant.username?.trim() || employeeCode || participant.id,
-          displayName:
-            resolveUserDisplayName(participant, {
-              allowLegacyFallback: false,
-            }) || undefined,
+          displayName,
           fullName: fullNameFromHR || undefined,
           aliasLabel: aliasLabel || undefined,
+          avatarUrl:
+            (typeof participantRecord.avatar === "string" &&
+              participantRecord.avatar.trim()) ||
+            (typeof participantRecord.avatarUrl === "string" &&
+              participantRecord.avatarUrl.trim()) ||
+            undefined,
           employeeCode: employeeCode || undefined,
           departmentName: mentionHrByUserId[participant.id]?.departmentName,
           companyName: mentionHrByUserId[participant.id]?.companyName,
           resolvedName,
+          mentionInsertName,
         };
       });
 

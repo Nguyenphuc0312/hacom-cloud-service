@@ -1056,10 +1056,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     (candidate: MentionCandidate) => {
       if (!mentionMatch) return;
 
-      // Insert @fullName (display name) for better readability, NOT @username.
-      // Backend resolves userId from the content via extractMentionUserIds on the server side.
-      const resolvedName = candidate.resolvedName || candidate.displayName || candidate.username;
-      const insertion = `@${resolvedName} `;
+      // Insert the short "nick" (self-set display name / username), Zalo-style —
+      // NOT the long HR full name. extractMentionDetails registers this token so
+      // it still resolves to the userId. Never the private alias.
+      const insertName =
+        candidate.mentionInsertName ||
+        candidate.displayName ||
+        candidate.resolvedName ||
+        candidate.username;
+      const insertion = `@${insertName} `;
       const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
 
       const editor = tipTapRef.current?.getEditor();
