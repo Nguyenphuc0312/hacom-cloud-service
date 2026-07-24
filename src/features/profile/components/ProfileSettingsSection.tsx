@@ -38,9 +38,6 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
   const actionButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const displayName = profile.displayName || t("common:labels.user");
-  // "Tên người dùng" is the login username/code (e.g. HC987656), distinct from
-  // the display name above — keep it showing the real account identifier.
-  const username = profile.username || displayName;
   const phone =
     profile.phone ||
     t("profile:settings.phoneEmpty", {
@@ -116,10 +113,8 @@ export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
           </div>
 
           <dl>
-            <SummaryItem
-              label={t("profile:settings.username")}
-              value={username}
-            />
+            {/* "Tên người dùng" ẩn: là username đăng nhập (kỹ thuật), trùng khái niệm
+                với "Mã nhân viên" bên dưới nhưng không phải mã NS thật — theo yêu cầu. */}
             <SummaryItem
               label={t("profile:editProfileModal.phone")}
               value={phone}
