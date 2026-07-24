@@ -27,6 +27,9 @@ export const MentionChip = Node.create({
     return {
       id: { default: null },
       label: { default: "" },
+      // "@all" gets an amber pill (matches the sent-bubble styling); a real user
+      // gets the blue pill.
+      variant: { default: "user" },
     };
   },
 
@@ -35,14 +38,17 @@ export const MentionChip = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
+    const isAll = node.attrs.variant === "all";
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
         "data-mention-chip": "",
         "data-mention-id": node.attrs.id ?? "",
-        // Zalo-style blue rounded pill. Inline styles + a class so it renders
-        // even outside the composer's Tailwind scope (e.g. copied HTML).
-        class: "composer-mention-chip",
+        // Rounded pill. Inline styles + a class so it renders even outside the
+        // composer's Tailwind scope (e.g. copied HTML).
+        class: isAll
+          ? "composer-mention-chip composer-mention-chip--all"
+          : "composer-mention-chip",
       }),
       `@${node.attrs.label}`,
     ];
