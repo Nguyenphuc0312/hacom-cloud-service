@@ -11,7 +11,6 @@ import {
   type LongMessageRenderMode,
 } from "../../utils/longMessagePolicy";
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
-import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
 
@@ -114,10 +113,9 @@ const renderWithMentions = (
     currentUserId?: string;
     mentions?: Mention[];
     currentUsername?: string;
-    enrichedNames?: Record<string, string>;
   },
 ): React.ReactNode[] => {
-  const { currentUserId, mentions, currentUsername, enrichedNames } = options;
+  const { currentUserId, mentions, currentUsername } = options;
 
   const fromMetadata = mentions && mentions.length > 0;
   const regex = fromMetadata
@@ -159,14 +157,11 @@ const renderWithMentions = (
             candidate.toLowerCase() === currentUsername.toLowerCase(),
         );
     const isMentionAll = resolved?.userId === "all" || candidate.toLowerCase() === "all";
-    // Prefer enriched name from profile store over raw API displayName
-    const enrichedLabel =
-      resolved?.userId && enrichedNames
-        ? enrichedNames[resolved.userId]
-        : undefined;
-    const displayLabel = enrichedLabel
-      ? `@${enrichedLabel}`
-      : token;
+    // WYSIWYG (Zalo model): render the tag exactly as it was inserted/sent, so
+    // everyone in the group sees the same name. Do NOT overlay the viewer's
+    // private alias here — that would make the bubble differ per-viewer and
+    // diverge from what was typed. Alias stays viewer-local.
+    const displayLabel = token;
     out.push(
       <span
         key={`m-${key++}`}
@@ -242,24 +237,6 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
       if (m.userId && m.userId !== "all") enrichUserProfile(m.userId);
     }
   }, [mentions]);
-
-  const mentionUserIds = React.useMemo(
-    () => (mentions ?? []).map((m) => m.userId).filter(Boolean),
-    [mentions],
-  );
-  // Select the whole nameByUserId map (stable reference — only replaced when a new
-  // profile is added) then derive enrichedNames in useMemo. Avoid a selector that
-  // returns a new object on every call, which would cause an infinite Zustand loop.
-  const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
-  const enrichedNames = React.useMemo(() => {
-    if (mentionUserIds.length === 0) return undefined;
-    const result: Record<string, string> = {};
-    for (const uid of mentionUserIds) {
-      const name = nameByUserId[uid];
-      if (name) result[uid] = name;
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
-  }, [nameByUserId, mentionUserIds]);
 
   const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
@@ -406,7 +383,6 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
                   currentUserId,
                   currentUsername,
                   mentions,
-                  enrichedNames,
                 })}
               </React.Fragment>
             );

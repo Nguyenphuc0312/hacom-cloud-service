@@ -1026,13 +1026,10 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             allowLegacyFallback: false,
           }) || undefined;
 
-        // The "nick" we actually insert (Zalo-style): the short self-set name,
-        // else username. Never the HR full name (too long) and never the alias
-        // (private to the viewer — would leak to the group).
-        const mentionInsertName =
-          displayName ||
-          participant.username?.trim() ||
-          resolvedName;
+        // The single shared name inserted into the message (Zalo WYSIWYG model):
+        // the same canonical name shown in the member list. Never the private
+        // alias — that stays viewer-local and must not be sent to the group.
+        const mentionInsertName = resolvedName;
 
         return {
           id: participant.id,
