@@ -820,10 +820,13 @@ export const CalendarPage: React.FC = () => {
   // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
   const allEvents = calendarEventsWithAvatars;
 
-  // Filter events based on selected filters
+  // Filter events based on selected filters.
+  // knownTypes = đúng những loại CÓ checkbox; loại khác (vd "task") không có ô để
+  // tick nên phải hiện mặc định, không được lọc mất.
   const filteredEvents = useMemo(() => {
     const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
-    return filterCalendarEventsByType(allEvents, activeTypes);
+    const knownTypes = localFilters.map((f) => f.type);
+    return filterCalendarEventsByType(allEvents, activeTypes, knownTypes);
   }, [allEvents, localFilters]);
 
   // Search filtered events

@@ -309,10 +309,24 @@ export const mergeCalendarEventSources = (
   ...sources: ReadonlyArray<ReadonlyArray<CalendarEvent>>
 ): CalendarEvent[] => sources.flat();
 
+/**
+ * Lọc theo checkbox sidebar — nhưng CHỈ trừ đúng loại người dùng chủ động bỏ tick.
+ *
+ * Trước đây dùng allow-list (`active.has(event.type)`) nên mọi loại KHÔNG có
+ * checkbox tương ứng đều bị nuốt im lặng: sidebar chỉ có meeting/personal/attendance,
+ * còn `mapApiEventTypeToLocal` vẫn sinh ra "task" → event TASK từ API tạo được
+ * nhưng không bao giờ hiện. Mặc định của lịch là HIỂN THỊ những gì API trả về;
+ * ẩn phải là hành động có chủ đích của người dùng.
+ *
+ * @param knownTypes các loại có checkbox thật (mới áp dụng ẩn/hiện). Loại nằm
+ *   ngoài danh sách này luôn được render.
+ */
 export const filterCalendarEventsByType = (
   events: ReadonlyArray<CalendarEvent>,
   activeTypes: ReadonlyArray<EventType>,
+  knownTypes: ReadonlyArray<EventType> = activeTypes,
 ): CalendarEvent[] => {
   const active = new Set(activeTypes);
-  return events.filter((event) => active.has(event.type));
+  const known = new Set(knownTypes);
+  return events.filter((event) => !known.has(event.type) || active.has(event.type));
 };

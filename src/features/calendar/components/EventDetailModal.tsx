@@ -154,39 +154,19 @@ export const EventDetailModal: React.FC<{
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
-  // Owner (người tạo) không nằm trong participants[] từ BE, nhưng phải xuất hiện
-  // trong danh sách "Người tham gia" để đồng bộ với avatar stack ở Day/Week/Widget
-  // (cả 2 chiều người tạo ↔ người nhận thấy đủ mặt). Ghép owner lên đầu, dedup.
-  const hrParticipants = React.useMemo(() => {
-    const list = hrEvent?.participants ?? [];
-    const owner = hrEvent?.owner;
-    if (!owner) return list;
-    const ownerCode = owner.employeeCode?.toLowerCase();
-    const ownerName = owner.fullName?.trim().toLowerCase();
-    const already = list.some(
-      (p) =>
-        (ownerCode &&
-          (p.employeeCode?.toLowerCase() === ownerCode ||
-            p.employee?.employeeCode?.toLowerCase() === ownerCode)) ||
-        (ownerName &&
-          (p.fullName?.trim().toLowerCase() === ownerName ||
-            p.employee?.fullName?.trim().toLowerCase() === ownerName)),
-    );
-    if (already) return list;
-    // Người tạo mặc định coi như đã tham gia (ACCEPTED).
-    const ownerRow: HRCalendarParticipant = {
-      id: `owner-${owner.id}`,
-      employeeId: owner.id,
-      authUserId: hrEvent?.ownerAuthUserId ?? null,
-      employeeCode: owner.employeeCode,
-      fullName: owner.fullName,
-      avatarUrl: (owner as { avatarUrl?: string | null }).avatarUrl ?? null,
-      employee: { id: owner.id, fullName: owner.fullName, employeeCode: owner.employeeCode },
-      response: "ACCEPTED",
-      createdAt: hrEvent?.createdAt ?? new Date().toISOString(),
-    };
-    return [ownerRow, ...list];
-  }, [hrEvent]);
+  // Người tham gia = ĐÚNG những gì API trả về, không thêm bớt.
+  //
+  // Trước đây FE tự chèn người tạo vào roster với response "ACCEPTED" → đếm sai
+  // ("Người tham gia (4)" / "1 tham gia" trong khi người tạo chưa hề phản hồi).
+  // Người tạo KHÔNG mặc nhiên là người tham gia: muốn dự thì tự thêm mình vào ô
+  // "Người tham gia" lúc tạo/sửa. Người tạo vẫn thấy lịch mình tạo nhờ query BE
+  // khớp theo owner (calendar.service.ts → buildOwnerWhereClause), không phải nhờ
+  // hàng participant bịa ra ở FE.
+  // useMemo để tham chiếu ổn định — effect tra avatar phụ thuộc mảng này.
+  const hrParticipants = React.useMemo(
+    () => hrEvent?.participants ?? [],
+    [hrEvent],
+  );
   const isHrOwner = !!hrEvent?.canEdit;
   const canRespond = !!hrEvent?.isParticipant && !isHrOwner && !!onRespond;
   const respSummary = {

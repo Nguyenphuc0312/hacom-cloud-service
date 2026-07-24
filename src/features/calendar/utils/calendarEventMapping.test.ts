@@ -116,6 +116,49 @@ describe("calendarEventMapping", () => {
     expect(otherEvents.every((event) => event.type === "personal")).toBe(true);
   });
 
+  // Sidebar chỉ có 3 checkbox (meeting/personal/attendance) nhưng API vẫn trả TASK.
+  // Loại không có ô để tick thì phải HIỆN, không được lọc mất.
+  it("renders event types that have no sidebar checkbox instead of dropping them", () => {
+    const taskEvent = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "t1",
+        title: "Việc cần làm",
+        startAt: "2026-06-04T01:00:00.000Z",
+        endAt: "2026-06-04T02:00:00.000Z",
+        eventType: "TASK",
+        visibility: "PUBLIC",
+      }),
+    );
+    expect(taskEvent.type).toBe("task");
+
+    const visible = filterCalendarEventsByType(
+      [taskEvent],
+      ["meeting", "personal"],
+      activeSidebarTypes,
+    );
+    expect(visible.map((e) => e.title)).toEqual(["Việc cần làm"]);
+  });
+
+  it("still hides a type the user actively unticked", () => {
+    const meeting = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "m9",
+        title: "Họp bị ẩn",
+        startAt: "2026-06-04T01:00:00.000Z",
+        endAt: "2026-06-04T02:00:00.000Z",
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+
+    const visible = filterCalendarEventsByType(
+      [meeting],
+      ["personal"],
+      activeSidebarTypes,
+    );
+    expect(visible).toHaveLength(0);
+  });
+
   it("groups June 2026 fixture events onto the expected local calendar days", () => {
     const normalizedHrmEvents = hrmEvents.map(mapHrmEventToCalendarEvent);
     const visible = filterCalendarEventsByType(normalizedHrmEvents, activeSidebarTypes);
