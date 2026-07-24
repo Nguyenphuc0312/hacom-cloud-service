@@ -11,6 +11,10 @@ import {
   fetchPersonalSessionMessages,
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
+import {
+  handleScopeErrorStatus,
+  useWorkReportScopeStore,
+} from "../stores/workReportScopeStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
 import type { PersonalChatMessage, PersonalDocument } from "../types";
@@ -255,6 +259,21 @@ export function usePersonalChat() {
                 thinkingPhase: null,
               });
             },
+            // §3: BE bắt chọn phạm vi trước khi truy vấn. Lưu câu hỏi + scopes,
+            // render widget; sau khi chọn, `sendMessage` gửi lại chính câu hỏi
+            // này kèm scope_token (xem WorkReportScopeSelector.onSelected).
+            onScopeRequired: (scopeData) => {
+              const scopeStore = useWorkReportScopeStore.getState();
+              scopeStore.setScopes(scopeData.scopes);
+              scopeStore.requirePick(scopeData.question || trimmed);
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                content: "",
+                scopeRequired: true,
+                reportRequest: undefined,
+                isStreaming: false,
+                thinkingPhase: null,
+              });
+            },
             onSelectionRequest: (selectionData) => {
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",
@@ -333,13 +352,34 @@ export function usePersonalChat() {
           updateServerSessionId(convIdSnapshot, response.session_id);
         }
       } catch (err) {
+        // §5: 400 (chưa chọn scope) / 403 (token hỏng, quyền bị thu hồi) → mở
+        // lại widget chọn scope thay vì báo lỗi đỏ; câu hỏi được giữ để gửi lại.
+        if (
+          err instanceof PersonalAiError &&
+          err.kind === "http" &&
+          handleScopeErrorStatus(err.status)
+        ) {
+          useWorkReportScopeStore.getState().requirePick(trimmed);
+          patchMessage(convIdSnapshot, assistantMessage.id, {
+            content: "",
+            scopeRequired: true,
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+          return;
+        }
+
         const content =
           err instanceof PersonalAiError
             ? err.kind === "timeout"
               ? "Yêu cầu quá thời gian. Vui lòng thử lại."
               : err.kind === "network"
                 ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
-                : "Đã xảy ra lỗi. Vui lòng thử lại."
+                : err.status === 401
+                  ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+                  : err.status === 503
+                    ? "Hệ thống chưa xác nhận được quyền báo cáo. Vui lòng thử lại."
+                    : "Đã xảy ra lỗi. Vui lòng thử lại."
             : "Đã xảy ra lỗi không xác định.";
 
         finalizeMessage(convIdSnapshot, content);
@@ -366,6 +406,22 @@ export function usePersonalChat() {
       updateServerSessionId,
     ],
   );
+
+  /**
+   * §3: sau khi user chọn xong scope, gửi lại chính câu hỏi đang hoãn kèm
+   * `scope_token` (service tự lấy token từ store). Chỉ chạy khi widget đã đóng
+   * (`isPicking === false`) và đã có `selected` — tránh gửi lại lúc đang chọn.
+   */
+  const scopeSelected = useWorkReportScopeStore((s) => s.selected);
+  const scopeIsPicking = useWorkReportScopeStore((s) => s.isPicking);
+  const scopePendingQuestion = useWorkReportScopeStore((s) => s.pendingQuestion);
+
+  useEffect(() => {
+    if (!scopeSelected || scopeIsPicking || !scopePendingQuestion || isStreaming) return;
+    // Xóa câu hỏi hoãn TRƯỚC khi gửi để effect không chạy lại thành vòng lặp.
+    useWorkReportScopeStore.setState({ pendingQuestion: null });
+    void sendMessage(scopePendingQuestion);
+  }, [scopeSelected, scopeIsPicking, scopePendingQuestion, isStreaming, sendMessage]);
 
   const sendWithFile = useCallback(
     async (question: string, file: File) => {

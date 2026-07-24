@@ -42,6 +42,7 @@ function getSaveFilePicker(): SaveFilePicker | null {
 }
 import { WorkReportForm } from "../../../ai-assistant/components/WorkReportForm";
 import { DepartmentSelector } from "../../../ai-assistant/components/DepartmentSelector";
+import { WorkReportScopeSelector } from "./WorkReportScopeSelector";
 import { PersonalWeeklyReportFiles } from "./PersonalWeeklyReportFiles";
 import { ReportTextBox } from "./ReportTextBox";
 import { CalendarEventTable } from "./CalendarEventTable";
@@ -479,6 +480,17 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 />
               ) : message.weeklyReportList ? (
                 <PersonalWeeklyReportFiles />
+              ) : message.scopeRequired ? (
+                <WorkReportScopeSelector
+                  onCancel={() =>
+                    activeConversationId &&
+                    patchMessage(activeConversationId, message.id, {
+                      content: "Đã hủy chọn phạm vi báo cáo.",
+                      scopeRequired: undefined,
+                      isStreaming: false,
+                    })
+                  }
+                />
               ) : message.selectionRequest ? (
                 <DepartmentSelector
                   data={message.selectionRequest}

@@ -14,6 +14,13 @@ import type {
 import type { WeeklyReportFileItem } from "../../ai-assistant/services/aiChatApi";
 import { getAccessToken } from "../../../services/tokenService";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
+import {
+  appendScopeTokenToUrl,
+  getScopeToken,
+  withScopeToken,
+} from "../stores/workReportScopeStore";
+import { normalizeScopeList } from "./workReportScopeApi";
+import type { WorkReportScopeRequired } from "../types";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -410,6 +417,9 @@ export function uploadLevelReport(
     form.append("file", file, file.name);
     if (params.weekStart) form.append("week_start", params.weekStart);
     if (params.weekEnd) form.append("week_end", params.weekEnd);
+    // §4: nộp TBP/LĐĐV gửi scope_token dạng multipart field.
+    const scopeToken = getScopeToken();
+    if (scopeToken) form.append("scope_token", scopeToken);
 
     xhr.open("POST", LEVEL_REPORT_UPLOAD_URL, true);
     xhr.responseType = "text";
@@ -721,7 +731,8 @@ export function parseLevelReportExportHref(href: string | undefined): string | n
  * fetch blob rồi trigger download thủ công.
  */
 export async function downloadLevelReportExport(url: string): Promise<void> {
-  const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
+  // §4: xuất báo cáo cấp gửi scope_token qua query, URL-encode qua URLSearchParams.
+  const response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
   const disposition = response.headers.get("content-disposition") ?? "";
   let filename = "bao-cao-tong-hop.xlsx";
   const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
@@ -876,6 +887,8 @@ export async function streamPersonalChat(
     onThinking?: (phase: "searching" | "reasoning", text?: string) => void;
     onFormRequest?: (data: WorkReportFormRequest) => void;
     onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
+    /** SSE `work_report_scope_required` — mở widget chọn scope ngay (§3). */
+    onScopeRequired?: (data: WorkReportScopeRequired) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -894,7 +907,8 @@ export async function streamPersonalChat(
     const response = await fetch(CHAT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
-      body: JSON.stringify(request),
+      // §4: chat sau khi chọn scope gửi `scope_token` trong JSON body.
+      body: JSON.stringify(withScopeToken(request)),
       signal: options?.signal ?? controller.signal,
     });
 
@@ -958,6 +972,19 @@ export async function streamPersonalChat(
             parsed.selection_type === "company_department_report"
           ) {
             options.onSelectionRequest(parsed);
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_scope_required" && options?.onScopeRequired) {
+        // §3: BE dừng truy vấn, chờ FE gửi lại chính câu hỏi này kèm scope_token.
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const scopes = normalizeScopeList(parsed.scopes);
+          if (scopes.length > 0) {
+            options.onScopeRequired({
+              reason: String(parsed.reason ?? "multiple_authorizations"),
+              question: String(parsed.question ?? ""),
+              scopes,
+            });
           }
         } catch { /* malformed payload — ignore */ }
       } else if (eventType === "done") {

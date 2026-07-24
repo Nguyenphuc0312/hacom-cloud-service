@@ -1,4 +1,5 @@
 import { logger } from "../../../utils/logger";
+import { withScopeToken } from "../stores/workReportScopeStore";
 
 export interface ParsedTable {
   headers: string[];
@@ -141,6 +142,61 @@ function getAccessTokenForExport(): string | null {
   return null;
 }
 
+/** Một trang dữ liệu bảng chat (`POST /api/work-reports/query-page`, §4). */
+export interface WorkReportQueryPage {
+  rows: Record<string, unknown>[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * POST /api/work-reports/query-page — phân trang bảng báo cáo trong chat (§4).
+ *
+ * Gửi `scope_token` trong JSON body; đổi scope thì caller phải bỏ trang cũ,
+ * không trộn dữ liệu hai scope (§5).
+ */
+export async function fetchWorkReportQueryPage(
+  params: { sessionId: string; queryId: string; offset?: number; limit?: number },
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportQueryPage> {
+  const { getAccessToken } = await import("../../../services/tokenService");
+  const token = getAccessToken() ?? getAccessTokenForExport();
+  const offset = params.offset ?? 0;
+  const limit = params.limit ?? 100;
+
+  const resp = await fetch(`${AI_BASE_URL}/api/work-reports/query-page`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-contract": "3",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(
+      withScopeToken({
+        session_id: params.sessionId,
+        query_id: params.queryId,
+        offset,
+        limit,
+      }),
+    ),
+    signal: options?.signal,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`query-page ${resp.status}: ${text}`);
+  }
+
+  const payload = (await resp.json()) as Record<string, unknown>;
+  return {
+    rows: Array.isArray(payload.rows) ? (payload.rows as Record<string, unknown>[]) : [],
+    total: typeof payload.total === "number" ? payload.total : 0,
+    offset: typeof payload.offset === "number" ? payload.offset : offset,
+    limit: typeof payload.limit === "number" ? payload.limit : limit,
+  };
+}
+
 /** Snapshot export hết hạn (BE trả 404) — cần hỏi lại báo cáo rồi xuất lại. */
 export class ExportExpiredError extends Error {
   constructor() {
@@ -189,13 +245,16 @@ export async function exportTableToXlsx(
       "x-api-contract": "3",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({
-      title,
-      content: rawContent,
-      ...(sessionId && exportId
-        ? { session_id: sessionId, export_id: exportId }
-        : {}),
-    }),
+    // §4: xuất Excel bảng chat gửi scope_token trong JSON body.
+    body: JSON.stringify(
+      withScopeToken({
+        title,
+        content: rawContent,
+        ...(sessionId && exportId
+          ? { session_id: sessionId, export_id: exportId }
+          : {}),
+      }),
+    ),
   });
   if (!resp.ok) {
     // 404 = snapshot export hết hạn khỏi session → yêu cầu hỏi lại báo cáo.
