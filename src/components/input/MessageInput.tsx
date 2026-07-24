@@ -449,15 +449,23 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       return [] as MentionCandidate[];
     }
 
+    // Hide people already tagged in the draft (Zalo-style) — you can't tag the
+    // same person twice. Read the ids straight off the chips in the editor;
+    // draftValue in the deps refreshes this after every insert/delete.
+    const taggedIds = new Set(tipTapRef.current?.getMentionedIds() ?? []);
+    const available = normalizedMentionCandidates.filter(
+      (candidate) => !taggedIds.has(candidate.id),
+    );
+
     const query = deferredMentionQuery.trim().toLowerCase();
-    // Show every member (Zalo-style) — no cap. The panel scrolls on overflow.
-    // ponytail: renders one Avatar per member; fine for normal groups. If groups
-    // grow to hundreds, virtualize the list instead of capping.
+    // Show every remaining member (Zalo-style) — no cap. The panel scrolls on
+    // overflow. ponytail: one Avatar per member; fine for normal groups. If
+    // groups grow to hundreds, virtualize the list instead of capping.
     if (!query) {
-      return normalizedMentionCandidates;
+      return available;
     }
 
-    return normalizedMentionCandidates.filter((candidate) => {
+    return available.filter((candidate) => {
       const username = candidate.username.toLowerCase();
       const displayName = candidate.displayName?.toLowerCase() || "";
       const fullName = candidate.fullName?.toLowerCase() || "";
@@ -472,7 +480,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         aliasLabel.includes(query)
       );
     });
-  }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates]);
+    // draftValue: chip inserts/deletes change it, so tagged ids re-read then.
+  }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates, draftValue]);
 
   const showMentionPanel = Boolean(mentionMatch) && !disabled;
 

@@ -26,6 +26,9 @@ export interface TipTapEditorHandle {
     range: { from: number; to: number },
     attrs: { id: string; label: string; variant?: "user" | "all" },
   ) => void;
+  /** Ids of every mention chip currently in the document (to hide already-tagged
+   *  people from the suggestion list, Zalo-style). */
+  getMentionedIds: () => string[];
   getEditor: () => Editor | null;
 }
 
@@ -241,6 +244,16 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             { type: "text", text: " " },
           ])
           .run();
+      },
+      getMentionedIds: () => {
+        if (!editor) return [];
+        const ids: string[] = [];
+        editor.state.doc.descendants((node) => {
+          if (node.type.name === MentionChip.name && node.attrs.id) {
+            ids.push(String(node.attrs.id));
+          }
+        });
+        return ids;
       },
       getEditor: () => editor ?? null,
     }));
