@@ -5,7 +5,7 @@ Web client cho hệ thống chat nội bộ HACOM (giống Telegram/Zalo). File 
 > Khi sửa code mà phát hiện file này sai/lỗi thời, hãy cập nhật lại nó.
 
 ### Hệ tài liệu (đọc đúng file theo việc)
-- **`CLAUDE.md`** (file này) — kiến trúc FE web client + bảng màu UI (mục 14).
+- **`CLAUDE.md`** (file này) — kiến trúc FE web client + bảng màu UI (mục 14) + **quy trình commit tự động (mục 13b)**.
 - **`AGENTS.md`** — hướng dẫn cho AI agents (tools, workflow).
 - **`IMPECCABLE.md`** — hướng dẫn dùng skill `/impeccable` để thiết kế/cải thiện UI (app UI, components).
 - **`DESIGN_TASTE.md`** — hướng dẫn dùng skill `/design-taste-frontend` (landing page, portfolio, redesign marketing).
@@ -315,6 +315,51 @@ Lưu ý lỗi build đã từng dính: **casing import sai** giữa Windows loca
 ```bash
 npm run build && node scripts/verify-dist-assets.mjs
 ```
+
+---
+
+## 13b. Commit — TỰ ĐỘNG, không cần hỏi lại
+
+**Xong một task là commit ngay, không chờ user nhắc.** "Xong" = code chạy được và
+đã qua cổng kiểm tra bên dưới. Không gom nhiều task rời rạc vào một commit; task
+nào xong thì commit task đó.
+
+### Cổng bắt buộc TRƯỚC khi commit (không xanh thì KHÔNG commit)
+
+```bash
+npm run typecheck   # phải sạch
+npm run lint        # không được PHÁT SINH lỗi mới (lỗi có sẵn thì kệ)
+npx vitest run <vùng vừa sửa>   # test liên quan phải xanh
+npm run build       # theo mục 13, luôn chạy
+```
+
+Có bước nào đỏ → **sửa xong mới commit**. Tuyệt đối không commit code hỏng rồi
+"để sau sửa": nhánh luôn phải ở trạng thái chạy được.
+
+### Quy tắc
+
+- **Chỉ `git add` đúng file mình sửa.** Không `git add -A` / `git add .` — dễ
+  quét cả file rác, file tạm, `.env`, ảnh chụp màn hình.
+- **Không commit lên nhánh mặc định** (`main`/`develop`). Đang ở đó thì tạo nhánh
+  mới trước. Nhánh cá nhân (vd `nhat`) thì commit thẳng được.
+- **Không tự `git push`.** Push là quyết định của user, trừ khi user bảo push.
+- **Không `--no-verify`**, không bỏ qua hook. Hook fail = có vấn đề thật, phải sửa.
+- Logic không tầm thường (nhánh, vòng lặp, parse, tiền/bảo mật) → **kèm test**
+  trong cùng commit đó.
+
+### Thông điệp commit
+
+Tiếng Việt, dạng `type(scope): tóm tắt` — `fix|feat|perf|refactor|docs|test|chore`.
+Thân bài trả lời **"vì sao"**, không kể lể "đã sửa file nào" (diff nói rồi):
+nêu triệu chứng, nguyên nhân gốc, và bằng chứng (số đo/kết quả test) nếu có.
+
+Kết thúc bằng:
+```
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+```
+
+> ⚠️ Windows PowerShell 5.1 nuốt here-string qua tool: viết message ra file tạm
+> rồi `git commit -F <file>` — đừng dùng `-m` nhiều dòng, sẽ vỡ ở dòng đầu tiên.
 
 ---
 
