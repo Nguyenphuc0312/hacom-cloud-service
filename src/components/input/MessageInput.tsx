@@ -1074,21 +1074,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         const matchLength = mentionMatch.end - mentionMatch.start;
         const to = editor.state.selection.anchor;
         const from = to - matchLength;
-        if (candidate.id && candidate.id !== "all") {
-          // Real user → atomic blue chip (cursor steps over it, Backspace clears it).
-          tipTapRef.current?.insertMentionChip(
-            { from, to },
-            { id: candidate.id, label: insertName },
-          );
-        } else {
-          // @all (no user id) stays plain text.
-          editor
-            .chain()
-            .focus()
-            .deleteRange({ from, to })
-            .insertContent(`@${insertName} `)
-            .run();
-        }
+        const isAll = candidate.id === "all";
+        // Atomic chip either way (cursor steps over it, Backspace clears it):
+        // blue for a user, amber for @all — matches the sent-bubble styling.
+        tipTapRef.current?.insertMentionChip(
+          { from, to },
+          {
+            id: candidate.id,
+            label: insertName,
+            variant: isAll ? "all" : "user",
+          },
+        );
       }
 
       scheduleComposerResize();
