@@ -211,17 +211,20 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     };
   }, [weekRange.start, weekRange.end, fetchEvents]);
 
-  // Widget chỉ hiển thị lịch HỌP và lịch CÁ NHÂN (kể cả cá nhân dài hạn). Map
-  // store events dùng CHUNG mapping với CalendarPage: type qua mapApiEventTypeToLocal
-  // (meeting/personal…), giữ startAt/endAt để event nhiều ngày trải đủ cột ngày,
-  // giờ/ngày convert UTC→local. Nhờ vậy màu phân loại (getEventColor) khớp /calendar.
+  // Map store events dùng CHUNG mapping với CalendarPage: type qua
+  // mapApiEventTypeToLocal (meeting/personal…), giữ startAt/endAt để event nhiều
+  // ngày trải đủ cột ngày, giờ/ngày convert UTC→local. Nhờ vậy màu phân loại
+  // (getEventColor) khớp /calendar.
+  //
+  // Chỉ loại CHẤM CÔNG: widget là lịch làm việc, chấm công đã có màn riêng và sẽ
+  // làm ngập lưới (mỗi ngày một dòng). Mọi loại khác API trả về đều PHẢI hiện —
+  // trước đây dùng allow-list (chỉ giữ meeting|personal) nên event TASK bị nuốt
+  // im lặng: API trả về mà lưới trống, không có cách nào biết.
   const mappedEvents = React.useMemo(
     () =>
       safeStoreEvents
         .map(mapHrmEventToCalendarEvent)
-        // Chỉ HỌP & CÁ NHÂN (OTHER/LEAVE/REMINDER… đã map về personal); loại bỏ
-        // mọi loại khác (vd attendance/task) nếu backend trả về.
-        .filter((e) => e.type === "meeting" || e.type === "personal"),
+        .filter((e) => e.type !== "attendance"),
     [safeStoreEvents],
   );
 
