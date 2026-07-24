@@ -238,6 +238,42 @@ export const hrCalendarApi = {
   },
 
   /**
+   * Lấy TOÀN BỘ event trong khoảng, gom đủ mọi trang.
+   *
+   * `listEvents` chỉ trả 1 trang — BE mặc định `pageSize = 20` (trần 100, xem
+   * PaginationDto của hr-api). Lịch là màn hình theo KHOẢNG THỜI GIAN, không có
+   * UI phân trang: gọi thẳng `listEvents` thì mọi event từ #21 trở đi biến mất
+   * im lặng — API trả về nhưng lưới trống, không lỗi, không cách nào biết.
+   *
+   * Dùng pageSize 100 (trần) để giảm số vòng, rồi lặp tới khi hết `hasNextPage`.
+   * `maxPages` là van an toàn, tránh vòng lặp vô hạn nếu BE trả pagination lỗi.
+   */
+  listAllEvents: async (
+    params: ListHREventsParams = {},
+    maxPages = 20,
+  ): Promise<HRCalendarEventsResponse> => {
+    const pageSize = params.pageSize ?? 100;
+    const first = await hrCalendarApi.listEvents({ ...params, page: 1, pageSize });
+    // NO_HR_PROFILE (và mọi mode đặc biệt) → trả nguyên, không gom thêm.
+    if (first.mode || !first.pagination.hasNextPage) return first;
+
+    const all = [...first.data];
+    let page = 1;
+    let hasNext: boolean = first.pagination.hasNextPage;
+    while (hasNext && page < maxPages) {
+      page += 1;
+      const next = await hrCalendarApi.listEvents({ ...params, page, pageSize });
+      all.push(...next.data);
+      hasNext = next.pagination.hasNextPage;
+    }
+    return {
+      ...first,
+      data: all,
+      pagination: { ...first.pagination, page, hasNextPage: hasNext },
+    };
+  },
+
+  /**
    * Get a single calendar event by ID
    */
   getEvent: async (eventId: string): Promise<HRCalendarEvent> => {

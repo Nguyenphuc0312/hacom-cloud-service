@@ -1,19 +1,23 @@
 /**
- * Lịch "hiện xong rồi biến mất": WeeklyCalendarWidget và CalendarPage dùng CHUNG
- * useCalendarStore nhưng fetch với range KHÁC nhau, và widget còn có interval 60s
- * + refetch-on-focus. Khi tạo lịch xong, onSuccess refetch (range đúng) có thể bị
- * một request khác đang bay ghi đè → event vừa tạo biến mất khỏi lưới.
+ * Hai lỗi từng làm lịch "API trả về nhưng không hiện":
  *
- * Test này khoá hành vi chống-race của store: kết quả về TRỄ của request CŨ không
- * bao giờ được ghi đè kết quả của request MỚI hơn.
+ * 1. PHÂN TRANG — hr-api trả 20 event/trang (PaginationDto: pageSize=20, trần 100).
+ *    Store gọi listEvents (1 trang) nên mọi event từ #21 biến mất im lặng: không
+ *    lỗi, không log, lưới trống. Store phải dùng listAllEvents để gom đủ trang.
+ *
+ * 2. RACE — WeeklyCalendarWidget và CalendarPage dùng CHUNG store nhưng fetch 2
+ *    range khác nhau (cộng interval 60s + refetch-on-focus). Response CŨ về trễ
+ *    không được ghi đè response MỚI.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listEvents = vi.fn();
+const listAllEvents = vi.fn();
 
 vi.mock("../features/api/hrCalendarApi", () => ({
   hrCalendarApi: {
     listEvents: (...args: unknown[]) => listEvents(...args),
+    listAllEvents: (...args: unknown[]) => listAllEvents(...args),
   },
 }));
 
@@ -41,6 +45,28 @@ const deferred = <T,>() => {
   return { promise, resolve };
 };
 
+describe("calendarStore — lấy đủ event (phân trang)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { useCalendarStore } = await import("./calendarStore");
+    useCalendarStore.setState({ events: [], mode: "my", isLoading: false });
+  });
+
+  it("dùng listAllEvents để không mất event ngoài trang đầu", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+    // 23 event như dữ liệu thật của user — trang đầu chỉ có 20.
+    const all = Array.from({ length: 23 }, (_, i) => makeEvent(String(i + 1)));
+    listAllEvents.mockResolvedValue({ data: all });
+
+    await useCalendarStore.getState().fetchEvents("2026-01-01", "2026-08-31");
+
+    expect(listAllEvents).toHaveBeenCalledTimes(1);
+    // Không được gọi listEvents trực tiếp (chỉ trả 1 trang).
+    expect(listEvents).not.toHaveBeenCalled();
+    expect(useCalendarStore.getState().events).toHaveLength(23);
+  });
+});
+
 describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -53,7 +79,7 @@ describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
 
     const slowOld = deferred<{ data: unknown[] }>();
     const fastNew = deferred<{ data: unknown[] }>();
-    listEvents
+    listAllEvents
       .mockReturnValueOnce(slowOld.promise) // request #1 (cũ, về sau)
       .mockReturnValueOnce(fastNew.promise); // request #2 (mới, về trước)
 
@@ -71,7 +97,7 @@ describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
     slowOld.resolve({ data: [] });
     await p1;
 
-    // Event vừa tạo PHẢI còn — nếu bị xoá thì đây đúng là bug "hiện rồi biến mất".
+    // Event vừa tạo PHẢI còn — nếu bị xoá thì đúng là bug "hiện rồi biến mất".
     expect(useCalendarStore.getState().events.map((e) => e.id)).toEqual([
       "vua-tao",
     ]);
@@ -82,7 +108,7 @@ describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
 
     const slowOld = deferred<{ data: unknown[] }>();
     const fastNew = deferred<{ data: unknown[] }>();
-    listEvents
+    listAllEvents
       .mockReturnValueOnce(slowOld.promise)
       .mockReturnValueOnce(fastNew.promise);
 

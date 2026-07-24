@@ -184,7 +184,9 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
       switch (mode) {
         case "my": {
-          const myResponse = await hrCalendarApi.listEvents({
+          // listAllEvents (không phải listEvents): BE phân trang 20/trang nên
+          // gọi 1 trang là mất sạch event từ #21 — lịch trống mà không báo lỗi.
+          const myResponse = await hrCalendarApi.listAllEvents({
             scope: 'mine',
             from: startDate,
             to: endDate,
@@ -210,7 +212,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             // Viewing another user's calendar.
             // Use ownerAuthUserId (auth-domain UUID) — backend resolves to correct employee/HR user.
             // DO NOT use ownerId here: it is ambiguous (backend expects employeeId, not authUserId).
-            const otherResponse = await hrCalendarApi.listEvents({
+            const otherResponse = await hrCalendarApi.listAllEvents({
               scope: 'person',
               ownerAuthUserId: viewingUserId,
               from: startDate,
