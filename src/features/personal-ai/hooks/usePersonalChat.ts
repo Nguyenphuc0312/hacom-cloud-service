@@ -12,6 +12,7 @@ import {
 } from "../../ai-assistant/services/aiChatApi";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import {
+  getScopeToken,
   handleScopeErrorStatus,
   useWorkReportScopeStore,
 } from "../stores/workReportScopeStore";
@@ -579,6 +580,23 @@ export function usePersonalChat() {
         );
         finalizeMessage(convIdSnapshot, response.message);
       } catch (err) {
+        // §5: nộp TBP/LĐĐV cũng mang scope_token nên 400/403 ở đây có thể là lỗi
+        // scope (chưa chọn / token hết hạn / quyền bị thu hồi) chứ không phải
+        // file hỏng. Chỉ mở lại widget khi ĐANG dùng scope — không có scope thì
+        // giữ nguyên thông báo cũ (403 = sai vai, 400 = thiếu tag).
+        if (
+          err instanceof PersonalAiError &&
+          err.kind === "http" &&
+          getScopeToken() &&
+          handleScopeErrorStatus(err.status)
+        ) {
+          finalizeMessage(
+            convIdSnapshot,
+            "Phạm vi báo cáo không còn hiệu lực. Vui lòng chọn lại phạm vi rồi nộp lại tệp.",
+          );
+          return;
+        }
+
         const content =
           err instanceof PersonalAiError
             ? err.kind === "timeout"
