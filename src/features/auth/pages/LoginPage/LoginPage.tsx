@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Checkbox, Form, Input, Space, Tabs, Tooltip, Typography, message } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -12,6 +12,7 @@ import {
   isAdminAccessIpPendingError,
 } from '@/api/error/error';
 import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE } from '@/config/passwordPolicy';
+import { queryKeys } from '@/api/queryKeys/queryKeys';
 import { useAuthStore } from '@/store/authStore/authStore';
 import './LoginPage.css';
 
@@ -32,6 +33,7 @@ export const LoginPage = () => {
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const queryClient = useQueryClient();
 
   // Remember me state - persist preference separately
   const [rememberMe, setRememberMe] = useState<boolean>(() => {
@@ -48,6 +50,7 @@ export const LoginPage = () => {
   const [qrCode, setQrCode] = useState('');
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [savedEmail, setSavedEmail] = useState<string>('');
+  const loginInFlight = useRef(false);
 
   // Load saved email if remember me was checked
   useEffect(() => {
@@ -68,11 +71,15 @@ export const LoginPage = () => {
     mutationFn: authClient.login,
     onSuccess: async (data) => {
       try {
-        const admin = await currentAdminClient.getCurrentAdmin({
-          skipAuthRedirect: true,
-          headers: {
-            Authorization: `Bearer ${data.accessToken}`,
-          },
+        const admin = await queryClient.fetchQuery({
+          queryKey: queryKeys.currentAdmin,
+          queryFn: () =>
+            currentAdminClient.getCurrentAdmin({
+              skipAuthRedirect: true,
+              headers: {
+                Authorization: `Bearer ${data.accessToken}`,
+              },
+            }),
         });
 
         // Save remember me preference
@@ -103,6 +110,7 @@ export const LoginPage = () => {
         }
 
         clearAuth();
+        queryClient.removeQueries({ queryKey: queryKeys.currentAdmin });
         const errorMessage = getAdminLoginErrorMessage(error);
         setAdminLoginError(errorMessage);
         message.error(errorMessage);
@@ -113,9 +121,16 @@ export const LoginPage = () => {
       setAdminLoginError(errorMessage);
       message.error(errorMessage);
     },
+    onSettled: () => {
+      loginInFlight.current = false;
+    },
   });
 
   const onFinish = (values: LoginFormValues) => {
+    if (loginInFlight.current) {
+      return;
+    }
+
     setAdminLoginError(null);
 
     const parsed = loginSchema.safeParse(values);
@@ -127,6 +142,8 @@ export const LoginPage = () => {
     // A new credential submission must never inherit a remembered token from
     // a previous account while the admin preflight is in progress.
     clearAuth();
+    queryClient.removeQueries({ queryKey: queryKeys.currentAdmin });
+    loginInFlight.current = true;
     loginMutation.mutate(parsed.data);
   };
 
@@ -220,6 +237,7 @@ export const LoginPage = () => {
                     block
                     size="large"
                     loading={loginMutation.isPending}
+                    disabled={loginMutation.isPending}
                   >
                     Đăng nhập
                   </Button>

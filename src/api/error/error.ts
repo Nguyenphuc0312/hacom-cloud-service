@@ -3,7 +3,7 @@ import { AxiosError } from 'axios';
 import type { ApiErrorBody } from '../types/common/common';
 
 const CODE_MESSAGE_MAP: Record<string, string> = {
-  INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
+  INVALID_CREDENTIALS: 'Email hoặc mật khẩu không chính xác.',
   FORBIDDEN: 'Tài khoản không có quyền truy cập.',
   DB_SCHEMA_NOT_READY: 'Hệ thống đang cập nhật dữ liệu nền. Vui lòng thử lại sau ít phút.',
   DB_UNAVAILABLE: 'Không kết nối được cơ sở dữ liệu. Vui lòng thử lại sau.',
@@ -17,7 +17,7 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
   ADMIN_ACCESS_IP_NOT_APPROVED: 'IP hiện tại đang chờ phê duyệt.',
   ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
   RBAC_PERMISSION_DENIED: 'Tài khoản không có quyền quản trị.',
-  ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_ACCESS_DENIED: 'Tài khoản này không có quyền truy cập Bảng quản trị chat.',
   ADMIN_PERMISSION_DENIED: 'Bạn không có quyền truy cập admin panel.',
   ADMIN_AUTH_REQUIRED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   ADMIN_AUTH_TOKEN_INVALID: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
@@ -51,7 +51,7 @@ const STATUS_MESSAGE_MAP: Record<number, string> = {
 
 const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
   ADMIN_CANONICAL_PERMISSIONS_MISSING:
-    'Hệ thống chưa tải được thông tin phân quyền quản trị. Vui lòng liên hệ quản trị viên.',
+    'Không thể tải thông tin phân quyền quản trị. Vui lòng thử lại hoặc liên hệ quản trị viên.',
   ACCESS_IP_PENDING:
     'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.',
   ACCESS_IP_REJECTED: 'IP của bạn đã bị từ chối truy cập admin panel.',
@@ -61,7 +61,7 @@ const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
     'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.',
   ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
   RBAC_PERMISSION_DENIED: 'Tài khoản của bạn không có quyền quản trị.',
-  ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_ACCESS_DENIED: 'Tài khoản này không có quyền truy cập Bảng quản trị chat.',
   ADMIN_PERMISSION_DENIED: 'Bạn không có quyền truy cập admin panel.',
   ADMIN_ACCOUNT_NOT_ACTIVE:
     'Tài khoản admin của bạn chưa hoạt động. Vui lòng liên hệ quản trị viên để kích hoạt.',

@@ -175,19 +175,21 @@ describe('LoginPage admin preflight', () => {
     });
 
     await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('admin-token'));
+    expect(loginMock).toHaveBeenCalledTimes(1);
+    expect(getCurrentAdminMock).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState().user).toEqual(admin);
     expect(message.success).toHaveBeenCalledWith('Đăng nhập thành công.');
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
 
-  it('clears token and shows RBAC reason when normal user logs into admin panel', async () => {
+  it('clears token and shows the non-admin reason when normal user logs into admin panel', async () => {
     loginMock.mockResolvedValue({ accessToken: 'normal-user-token' });
-    getCurrentAdminMock.mockRejectedValue(buildAxiosError(403, 'RBAC_PERMISSION_DENIED'));
+    getCurrentAdminMock.mockRejectedValue(buildAxiosError(403, 'ADMIN_ACCESS_DENIED'));
 
     const { container } = renderLoginPage();
     await submitLogin(container);
 
-    const expectedMessage = 'Tài khoản của bạn không có quyền quản trị.';
+    const expectedMessage = 'Tài khoản này không có quyền truy cập Bảng quản trị chat.';
     expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(message.error).toHaveBeenCalledWith(expectedMessage);
@@ -203,7 +205,7 @@ describe('LoginPage admin preflight', () => {
     await submitLogin(container);
 
     const expectedMessage =
-      'Hệ thống chưa tải được thông tin phân quyền quản trị. Vui lòng liên hệ quản trị viên.';
+      'Không thể tải thông tin phân quyền quản trị. Vui lòng thử lại hoặc liên hệ quản trị viên.';
     expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(message.error).toHaveBeenCalledWith(expectedMessage);
@@ -252,5 +254,26 @@ describe('LoginPage admin preflight', () => {
     expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(message.error).toHaveBeenCalledWith(expectedMessage);
+  });
+
+  it('single-flights rapid duplicate submits', async () => {
+    let resolveLogin: ((value: { accessToken: string }) => void) | undefined;
+    loginMock.mockImplementation(
+      () =>
+        new Promise<{ accessToken: string }>((resolve) => {
+          resolveLogin = resolve;
+        }),
+    );
+    getCurrentAdminMock.mockResolvedValue(admin);
+
+    const { container } = renderLoginPage();
+    await submitLogin(container);
+    await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /Đăng nhập/ }));
+
+    expect(loginMock).toHaveBeenCalledTimes(1);
+    resolveLogin?.({ accessToken: 'admin-token' });
+
+    await waitFor(() => expect(getCurrentAdminMock).toHaveBeenCalledTimes(1));
   });
 });
