@@ -49,6 +49,8 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
+import { getMonthFetchRange } from "../utils/calendarFetchRange";
+import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
@@ -115,21 +117,6 @@ const formatDateString = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-/**
- * Khoảng FETCH cho tháng đang xem, LÙI 6 THÁNG ở đầu và TIẾN 1 THÁNG ở cuối.
- * Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
- * nhiều tháng trước nhưng vẫn kéo sang tuần/tháng đang xem; backend lọc theo
- * `startAt` nên nếu range quá hẹp sẽ KHÔNG trả các event dài bắt đầu xa → dây bị
- * đứt ở các tuần xa ngày bắt đầu. Lùi 6 tháng để chắc bắt được event dài.
- * Lưới/Day/Week vẫn lọc client theo eventOccursOnDay nên chỉ hiển thị đúng phạm
- * vi đang xem. Khớp với khoảng fetch của widget lịch tuần (EmptyState).
- */
-const getMonthFetchRange = (year: number, month: number): { from: string; to: string } => {
-  const start = new Date(year, month - 6, 1);
-  const end = new Date(year, month + 2, 0);
-  return { from: formatDateString(start), to: formatDateString(end) };
 };
 
 /**
@@ -512,6 +499,10 @@ export const CalendarPage: React.FC = () => {
     isLoading: storeLoading,
   } = storeState;
 
+  // Trễ 180ms trước khi hiện thanh tải: đa số request về nhanh hơn thế, hiện
+  // ngay chỉ tạo một nháy sáng gây cảm giác giật.
+  const showLoadingBar = useDelayedLoading(storeLoading);
+
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
@@ -610,10 +601,12 @@ export const CalendarPage: React.FC = () => {
     store.setMode("my");
   }, [currentYear, currentMonth]);
 
-  // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
+  // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác).
+  // background: sau khi lưu/xóa, lưới vẫn đang hiển thị dữ liệu — cập nhật im
+  // lặng thay vì che cả lưới bằng overlay "Đang tải lịch...".
   const refetchCurrentMonth = useCallback(() => {
     const { from, to } = getMonthFetchRange(currentYear, currentMonth);
-    void fetchEvents(from, to);
+    void fetchEvents(from, to, { background: true });
   }, [currentYear, currentMonth, fetchEvents]);
 
   // Nghiệp vụ ghi lịch dùng CHUNG hook với WeeklyCalendarWidget (tạo/sửa/xóa/
@@ -820,10 +813,13 @@ export const CalendarPage: React.FC = () => {
   // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
   const allEvents = calendarEventsWithAvatars;
 
-  // Filter events based on selected filters
+  // Filter events based on selected filters.
+  // knownTypes = đúng những loại CÓ checkbox; loại khác (vd "task") không có ô để
+  // tick nên phải hiện mặc định, không được lọc mất.
   const filteredEvents = useMemo(() => {
     const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
-    return filterCalendarEventsByType(allEvents, activeTypes);
+    const knownTypes = localFilters.map((f) => f.type);
+    return filterCalendarEventsByType(allEvents, activeTypes, knownTypes);
   }, [allEvents, localFilters]);
 
   // Search filtered events
@@ -970,6 +966,15 @@ export const CalendarPage: React.FC = () => {
     [apiEventsMap]
   );
 
+  // `selectedEvent` là SNAPSHOT lúc bấm. Sau khi Cập nhật, list refetch và
+  // apiEventsMap dựng lại, nhưng snapshot thì không → modal chi tiết vẫn hiện dữ
+  // liệu cũ (tiêu đề/giờ/địa điểm/chủ trì). Luôn đọc bản mới nhất theo id, chỉ rơi
+  // về snapshot khi event không còn trong map (vd lịch chấm công/ngày lễ tĩnh).
+  const selectedEventLive = useMemo(() => {
+    if (!selectedEvent) return null;
+    return apiEventsMap[selectedEvent.id] ?? selectedEvent;
+  }, [selectedEvent, apiEventsMap]);
+
   // Raw HR event for the selected item — carries participant roster + response.
   const selectedHrEvent = useMemo(() => {
     if (!selectedEvent) return undefined;
@@ -985,7 +990,9 @@ export const CalendarPage: React.FC = () => {
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
-    if (!selectedEvent) return;
+    // Dùng bản live (không phải snapshot) để form Sửa prefill đúng dữ liệu mới nhất
+    // sau lần Cập nhật trước đó.
+    if (!selectedEventLive) return;
 
     // Check if viewing others — don't allow edit
     if (mode === "other") {
@@ -994,14 +1001,14 @@ export const CalendarPage: React.FC = () => {
     }
 
     // Check if current user has edit permission (from API)
-    const extended = apiEventsMap[selectedEvent.id];
+    const extended = apiEventsMap[selectedEventLive.id];
     if (extended && extended.canEdit === false) {
       toast.warning("Bạn không có quyền chỉnh sửa sự kiện này.");
       return;
     }
 
     // Check if it's an extended event with startAt/endAt
-    const isExtended = "startAt" in selectedEvent && selectedEvent.startAt;
+    const isExtended = "startAt" in selectedEventLive && selectedEventLive.startAt;
 
     // Only allow editing API events (with startAt/endAt)
     if (!isExtended) {
@@ -1009,7 +1016,7 @@ export const CalendarPage: React.FC = () => {
       return;
     }
 
-    const extEvent = selectedEvent as ExtendedCalendarEvent;
+    const extEvent = selectedEventLive as ExtendedCalendarEvent;
 
     // Lịch cá nhân (type "personal") → mở form cá nhân, không phải form họp.
     if (extEvent.type === "personal") {
@@ -1056,6 +1063,9 @@ export const CalendarPage: React.FC = () => {
       startTime: extEvent.startAt ? toLocalTimeString(extEvent.startAt) : "08:00",
       endTime: extEvent.endAt ? toLocalTimeString(extEvent.endAt) : "09:00",
       chairman: meta.meetingChairman ?? "",
+      // Giữ identity chủ trì khi Sửa — không có thì lần lưu sau sẽ mất avatar/quyền.
+      chairmanEmployeeCode: meta.meetingChairmanEmployeeCode,
+      chairmanUserId: meta.meetingChairmanAuthUserId,
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",
       visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? extEvent.visibility),
@@ -1065,10 +1075,12 @@ export const CalendarPage: React.FC = () => {
       createdById: extEvent.ownerId,
       createdByName:
         selectedHrEvent?.owner?.fullName ?? selectedHrEvent?.ownerName ?? undefined,
+      // authUserId để form Sửa tra được avatar người tạo (tên thôi là không đủ).
+      createdByUserId: selectedHrEvent?.ownerAuthUserId ?? undefined,
     };
 
     setEditingEvent(data);
-  }, [selectedEvent, selectedHrEvent, mode, apiEventsMap]);
+  }, [selectedEventLive, selectedHrEvent, mode, apiEventsMap]);
 
   // Người được mời phản hồi (Tham gia / Từ chối) — nghiệp vụ trong hook dùng chung.
   const handleRespond = useCallback(
@@ -1262,15 +1274,17 @@ export const CalendarPage: React.FC = () => {
 
         {/* Main calendar area */}
         <div className="relative flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-          {/* Loading overlay */}
-          {storeLoading && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60">
-              <div className="flex flex-col items-center gap-2 rounded-xl bg-surface p-4 shadow-lg">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm text-text-secondary">
-                  Đang tải lịch...
-                </span>
-              </div>
+          {/* Trạng thái tải: thanh mảnh chạy ở mép trên, KHÔNG che lưới.
+              Overlay cũ phủ kín cả lưới nên mỗi lần đổi tháng là một nhịp nhấp
+              nháy, dù lưới cũ vẫn đọc được. Qua useDelayedLoading nên request
+              nhanh (<180ms) không kịp chớp thanh này. */}
+          {showLoadingBar && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-[#1565C0]/15"
+              role="status"
+              aria-label="Đang tải lịch"
+            >
+              <div className="h-full w-1/3 animate-calendar-loading rounded-full bg-[#1565C0]" />
             </div>
           )}
           {/* Header */}
@@ -1421,9 +1435,9 @@ export const CalendarPage: React.FC = () => {
       </div>
 
       {/* Event detail modal */}
-      {selectedEvent && (
+      {selectedEventLive && (
         <EventDetailModal
-          event={selectedEvent}
+          event={selectedEventLive}
           onClose={() => setSelectedEvent(null)}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}

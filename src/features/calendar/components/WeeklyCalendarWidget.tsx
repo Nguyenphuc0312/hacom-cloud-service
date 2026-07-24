@@ -52,6 +52,8 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
+import { getWeekFetchRange } from "../utils/calendarFetchRange";
+import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { EventDetailModal } from "./EventDetailModal";
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import { type HRCalendarEvent } from "../../api/hrCalendarApi";
@@ -135,7 +137,9 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
 
   // Calendar store - shared source of truth
   const storeEvents = useCalendarStore((s) => s.events);
-  const storeIsLoading = useCalendarStore((s) => s.isLoading);
+  const storeLoadingRaw = useCalendarStore((s) => s.isLoading);
+  // Trễ 180ms: request nhanh không kịp chớp thanh "Đang tải lịch...".
+  const storeIsLoading = useDelayedLoading(storeLoadingRaw);
   const storeError = useCalendarStore((s) => s.error);
   const storeErrorCode = useCalendarStore((s) => s.errorCode);
   const fetchEvents = useCalendarStore((s) => s.fetchEvents);
@@ -164,28 +168,21 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     return getWeekDays(base);
   }, [today, weekOffset]);
 
-  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI 6 THÁNG ở đầu khoảng.
-  // Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
-  // nhiều tháng trước nhưng vẫn kéo sang tuần đang xem; backend lọc theo startAt
-  // nên range hẹp sẽ KHÔNG trả các event dài bắt đầu xa. Lùi `from` về đầu tháng
-  // cách 6 tháng để chắc bắt được; render vẫn lọc client theo eventOccursOnDay
-  // nên chỉ hiện đúng 7 ngày của tuần.
+  // Khoảng FETCH = tuần đang xem + đệm 1 tuần mỗi đầu (dùng chung helper với
+  // CalendarPage). Không lùi 6 tháng nữa: hr-api lọc overlap hai đầu nên event
+  // dài bắt đầu từ trước vẫn được trả — xem calendarFetchRange.ts.
   const weekRange = React.useMemo(() => {
-    if (!weekDays.length) return { start: null, end: null };
-    const first = weekDays[0];
-    const last = weekDays[6];
-    const start = new Date(first.getFullYear(), first.getMonth() - 6, 1, 0, 0, 0, 0);
-    const end = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
+    const range = getWeekFetchRange(weekDays);
+    return range
+      ? { start: range.from, end: range.to }
+      : { start: null, end: null };
   }, [weekDays]);
 
   // Refetch theo đúng range của tuần đang xem (store có thể giữ range khác).
+  // background: lưới đang hiển thị dữ liệu cũ dùng được → cập nhật im lặng.
   const refetchWeek = React.useCallback(() => {
     if (weekRange.start && weekRange.end) {
-      void fetchEvents(weekRange.start, weekRange.end);
+      void fetchEvents(weekRange.start, weekRange.end, { background: true });
     }
   }, [weekRange.start, weekRange.end, fetchEvents]);
 
@@ -198,30 +195,35 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   // từ /calendar hoặc người khác (mời họp).
   React.useEffect(() => {
     if (!weekRange.start || !weekRange.end) return;
-    const refetch = () => {
-      void fetchEvents(weekRange.start!, weekRange.end!);
+    // Lần đầu / đổi tuần: hiện trạng thái tải. Poll 60s + quay lại tab: cập nhật
+    // NỀN, không bật spinner — nếu không thì cứ mỗi phút lưới lại nhấp nháy.
+    const refetch = (background: boolean) => {
+      void fetchEvents(weekRange.start!, weekRange.end!, { background });
     };
-    refetch();
-    const onFocus = () => refetch();
+    refetch(false);
+    const onFocus = () => refetch(true);
     window.addEventListener("focus", onFocus);
-    const intervalId = window.setInterval(refetch, 60_000);
+    const intervalId = window.setInterval(() => refetch(true), 60_000);
     return () => {
       window.removeEventListener("focus", onFocus);
       window.clearInterval(intervalId);
     };
   }, [weekRange.start, weekRange.end, fetchEvents]);
 
-  // Widget chỉ hiển thị lịch HỌP và lịch CÁ NHÂN (kể cả cá nhân dài hạn). Map
-  // store events dùng CHUNG mapping với CalendarPage: type qua mapApiEventTypeToLocal
-  // (meeting/personal…), giữ startAt/endAt để event nhiều ngày trải đủ cột ngày,
-  // giờ/ngày convert UTC→local. Nhờ vậy màu phân loại (getEventColor) khớp /calendar.
+  // Map store events dùng CHUNG mapping với CalendarPage: type qua
+  // mapApiEventTypeToLocal (meeting/personal…), giữ startAt/endAt để event nhiều
+  // ngày trải đủ cột ngày, giờ/ngày convert UTC→local. Nhờ vậy màu phân loại
+  // (getEventColor) khớp /calendar.
+  //
+  // Chỉ loại CHẤM CÔNG: widget là lịch làm việc, chấm công đã có màn riêng và sẽ
+  // làm ngập lưới (mỗi ngày một dòng). Mọi loại khác API trả về đều PHẢI hiện —
+  // trước đây dùng allow-list (chỉ giữ meeting|personal) nên event TASK bị nuốt
+  // im lặng: API trả về mà lưới trống, không có cách nào biết.
   const mappedEvents = React.useMemo(
     () =>
       safeStoreEvents
         .map(mapHrmEventToCalendarEvent)
-        // Chỉ HỌP & CÁ NHÂN (OTHER/LEAVE/REMINDER… đã map về personal); loại bỏ
-        // mọi loại khác (vd attendance/task) nếu backend trả về.
-        .filter((e) => e.type === "meeting" || e.type === "personal"),
+        .filter((e) => e.type !== "attendance"),
     [safeStoreEvents],
   );
 
