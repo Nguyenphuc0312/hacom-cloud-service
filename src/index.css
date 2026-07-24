@@ -934,6 +934,14 @@ a:focus-visible {
   outline: 2px solid rgba(25, 118, 210, 0.5);
   outline-offset: 1px;
 }
+/* @all variant — amber pill, matching the sent-bubble @all styling. */
+.composer-mention-chip--all {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+.composer-mention-chip--all.ProseMirror-selectednode {
+  outline-color: rgba(245, 158, 11, 0.5);
+}
 
 /* Chat background pattern */
 .chat-background {

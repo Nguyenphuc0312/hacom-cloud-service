@@ -36,4 +36,27 @@ describe("MentionChip", () => {
     expect(editor.getText()).toBe("hi @Đậu Cao Minh Nhật ok");
     editor.destroy();
   });
+
+  it("serialises the @all variant to @all (bubble renderer matches this token)", () => {
+    const editor = new Editor({
+      extensions: [Document, Paragraph, Text, MentionChip],
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: MentionChip.name,
+                attrs: { id: "all", label: "all", variant: "all" },
+              },
+              { type: "text", text: " hi" },
+            ],
+          },
+        ],
+      },
+    });
+    expect(editor.getText()).toBe("@all hi");
+    editor.destroy();
+  });
 });

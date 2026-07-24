@@ -24,7 +24,7 @@ export interface TipTapEditorHandle {
    */
   insertMentionChip: (
     range: { from: number; to: number },
-    attrs: { id: string; label: string },
+    attrs: { id: string; label: string; variant?: "user" | "all" },
   ) => void;
   getEditor: () => Editor | null;
 }
