@@ -450,27 +450,28 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     }
 
     const query = deferredMentionQuery.trim().toLowerCase();
+    // Show every member (Zalo-style) — no cap. The panel scrolls on overflow.
+    // ponytail: renders one Avatar per member; fine for normal groups. If groups
+    // grow to hundreds, virtualize the list instead of capping.
     if (!query) {
-      return normalizedMentionCandidates.slice(0, 8);
+      return normalizedMentionCandidates;
     }
 
-    return normalizedMentionCandidates
-      .filter((candidate) => {
-        const username = candidate.username.toLowerCase();
-        const displayName = candidate.displayName?.toLowerCase() || "";
-        const fullName = candidate.fullName?.toLowerCase() || "";
-        const employeeCode = candidate.employeeCode?.toLowerCase() || "";
-        // Match the viewer's alias too — they search by the name they know.
-        const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
-        return (
-          username.includes(query) ||
-          displayName.includes(query) ||
-          fullName.includes(query) ||
-          employeeCode.includes(query) ||
-          aliasLabel.includes(query)
-        );
-      })
-      .slice(0, 8);
+    return normalizedMentionCandidates.filter((candidate) => {
+      const username = candidate.username.toLowerCase();
+      const displayName = candidate.displayName?.toLowerCase() || "";
+      const fullName = candidate.fullName?.toLowerCase() || "";
+      const employeeCode = candidate.employeeCode?.toLowerCase() || "";
+      // Match the viewer's alias too — they search by the name they know.
+      const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
+      return (
+        username.includes(query) ||
+        displayName.includes(query) ||
+        fullName.includes(query) ||
+        employeeCode.includes(query) ||
+        aliasLabel.includes(query)
+      );
+    });
   }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates]);
 
   const showMentionPanel = Boolean(mentionMatch) && !disabled;
@@ -1056,39 +1057,44 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     (candidate: MentionCandidate) => {
       if (!mentionMatch) return;
 
-      // Insert @fullName (display name) for better readability, NOT @username.
-      // Backend resolves userId from the content via extractMentionUserIds on the server side.
-      const resolvedName = candidate.resolvedName || candidate.displayName || candidate.username;
-      const insertion = `@${resolvedName} `;
-      const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
+      // Insert the single shared canonical name (Zalo WYSIWYG) — NOT the private
+      // alias. The chip serialises to `@insertName` in getText(), so send /
+      // extractMentionDetails are unchanged. The editor's onUpdate then drives
+      // draftValue/onChange, so no manual value bookkeeping is needed here.
+      const insertName =
+        candidate.mentionInsertName ||
+        candidate.displayName ||
+        candidate.resolvedName ||
+        candidate.username;
 
       const editor = tipTapRef.current?.getEditor();
       if (editor) {
+        // The freshly-typed "@query" is plain text right before the caret, so
+        // its ProseMirror length equals its char count.
         const matchLength = mentionMatch.end - mentionMatch.start;
         const to = editor.state.selection.anchor;
         const from = to - matchLength;
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from, to })
-          .insertContent(insertion)
-          .run();
+        if (candidate.id && candidate.id !== "all") {
+          // Real user → atomic blue chip (cursor steps over it, Backspace clears it).
+          tipTapRef.current?.insertMentionChip(
+            { from, to },
+            { id: candidate.id, label: insertName },
+          );
+        } else {
+          // @all (no user id) stays plain text.
+          editor
+            .chain()
+            .focus()
+            .deleteRange({ from, to })
+            .insertContent(`@${insertName} `)
+            .run();
+        }
       }
 
-      setDraftValue(nextValue);
-      onChange(nextValue);
       scheduleComposerResize();
       clearMentionState();
-      recordInputLatency(nextValue);
     },
-    [
-      clearMentionState,
-      draftValue,
-      mentionMatch,
-      onChange,
-      recordInputLatency,
-      scheduleComposerResize,
-    ],
+    [clearMentionState, mentionMatch, scheduleComposerResize],
   );
 
   // Stable refs so TipTap's handleKeyDown closure doesn't go stale.
