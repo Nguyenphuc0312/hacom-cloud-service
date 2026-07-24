@@ -67,6 +67,65 @@ describe("calendarStore — lấy đủ event (phân trang)", () => {
   });
 });
 
+describe("calendarStore — refetch nền không nhấp nháy", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { useCalendarStore } = await import("./calendarStore");
+    useCalendarStore.setState({ events: [], mode: "my", isLoading: false });
+  });
+
+  it("KHÔNG bật loading khi refetch nền mà lưới đã có dữ liệu", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+    useCalendarStore.setState({ events: [makeEvent("cu")] as never });
+
+    const pending = deferred<{ data: unknown[] }>();
+    listAllEvents.mockReturnValueOnce(pending.promise);
+
+    const p = useCalendarStore
+      .getState()
+      .fetchEvents("A", "B", { background: true });
+
+    // Đang bay mà vẫn không bật spinner → lưới không nhấp nháy.
+    expect(useCalendarStore.getState().isLoading).toBe(false);
+
+    pending.resolve({ data: [makeEvent("moi")] });
+    await p;
+    expect(useCalendarStore.getState().events.map((e) => e.id)).toEqual(["moi"]);
+  });
+
+  it("VẪN bật loading khi refetch nền nhưng lưới còn trống (lần tải đầu)", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+
+    const pending = deferred<{ data: unknown[] }>();
+    listAllEvents.mockReturnValueOnce(pending.promise);
+
+    const p = useCalendarStore
+      .getState()
+      .fetchEvents("A", "B", { background: true });
+
+    // Chưa có gì để nhìn → phải cho người dùng biết đang tải.
+    expect(useCalendarStore.getState().isLoading).toBe(true);
+
+    pending.resolve({ data: [] });
+    await p;
+  });
+
+  it("bật loading cho fetch thường (đổi tháng)", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+    useCalendarStore.setState({ events: [makeEvent("cu")] as never });
+
+    const pending = deferred<{ data: unknown[] }>();
+    listAllEvents.mockReturnValueOnce(pending.promise);
+
+    const p = useCalendarStore.getState().fetchEvents("A", "B");
+
+    expect(useCalendarStore.getState().isLoading).toBe(true);
+
+    pending.resolve({ data: [] });
+    await p;
+  });
+});
+
 describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
   beforeEach(async () => {
     vi.clearAllMocks();

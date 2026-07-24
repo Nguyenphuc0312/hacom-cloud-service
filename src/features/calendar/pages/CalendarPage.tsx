@@ -50,6 +50,7 @@ import {
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
 import { getMonthFetchRange } from "../utils/calendarFetchRange";
+import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
@@ -498,6 +499,10 @@ export const CalendarPage: React.FC = () => {
     isLoading: storeLoading,
   } = storeState;
 
+  // Trễ 180ms trước khi hiện thanh tải: đa số request về nhanh hơn thế, hiện
+  // ngay chỉ tạo một nháy sáng gây cảm giác giật.
+  const showLoadingBar = useDelayedLoading(storeLoading);
+
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
@@ -596,10 +601,12 @@ export const CalendarPage: React.FC = () => {
     store.setMode("my");
   }, [currentYear, currentMonth]);
 
-  // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác)
+  // Refetch theo đúng tháng đang xem của TRANG (store có thể giữ tháng khác).
+  // background: sau khi lưu/xóa, lưới vẫn đang hiển thị dữ liệu — cập nhật im
+  // lặng thay vì che cả lưới bằng overlay "Đang tải lịch...".
   const refetchCurrentMonth = useCallback(() => {
     const { from, to } = getMonthFetchRange(currentYear, currentMonth);
-    void fetchEvents(from, to);
+    void fetchEvents(from, to, { background: true });
   }, [currentYear, currentMonth, fetchEvents]);
 
   // Nghiệp vụ ghi lịch dùng CHUNG hook với WeeklyCalendarWidget (tạo/sửa/xóa/
@@ -1267,15 +1274,17 @@ export const CalendarPage: React.FC = () => {
 
         {/* Main calendar area */}
         <div className="relative flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-          {/* Loading overlay */}
-          {storeLoading && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60">
-              <div className="flex flex-col items-center gap-2 rounded-xl bg-surface p-4 shadow-lg">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm text-text-secondary">
-                  Đang tải lịch...
-                </span>
-              </div>
+          {/* Trạng thái tải: thanh mảnh chạy ở mép trên, KHÔNG che lưới.
+              Overlay cũ phủ kín cả lưới nên mỗi lần đổi tháng là một nhịp nhấp
+              nháy, dù lưới cũ vẫn đọc được. Qua useDelayedLoading nên request
+              nhanh (<180ms) không kịp chớp thanh này. */}
+          {showLoadingBar && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-[#1565C0]/15"
+              role="status"
+              aria-label="Đang tải lịch"
+            >
+              <div className="h-full w-1/3 animate-calendar-loading rounded-full bg-[#1565C0]" />
             </div>
           )}
           {/* Header */}

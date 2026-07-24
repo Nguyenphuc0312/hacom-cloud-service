@@ -67,7 +67,13 @@ interface CalendarState {
   resetCalendarData: () => void;
 
   // Data operations
-  fetchEvents: (start?: string, end?: string) => Promise<void>;
+  /** @param opts.background true = refetch nền (poll/focus/sau khi lưu) → KHÔNG
+   *  bật cờ loading, tránh nhấp nháy khi lưới đã có dữ liệu. */
+  fetchEvents: (
+    start?: string,
+    end?: string,
+    opts?: { background?: boolean },
+  ) => Promise<void>;
   createEvent: (input: Parameters<typeof hrCalendarApi.createEvent>[0]) => Promise<HRCalendarEvent | null>;
   updateEvent: (eventId: string, input: Parameters<typeof hrCalendarApi.updateEvent>[1]) => Promise<boolean>;
   deleteEvent: (eventId: string) => Promise<boolean>;
@@ -168,7 +174,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   // Data operations
   // Uses hr-api-service for all calendar events (supports viewing others' calendars)
-  fetchEvents: async (start?: string, end?: string) => {
+  fetchEvents: async (start?: string, end?: string, opts?: { background?: boolean }) => {
     const requestSequence = ++calendarRequestSequence;
     const state = get();
     const { mode, viewingUserId } = state;
@@ -177,7 +183,11 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     const startDate = start || state.getStartOfMonth();
     const endDate = end || state.getEndOfMonth();
 
-    set({ isLoading: true, error: null });
+    // Refetch NỀN (poll 60s, quay lại tab, sau khi lưu) không bật cờ loading:
+    // lưới đang có dữ liệu dùng được, bật spinner chỉ làm nhấp nháy vô cớ.
+    // Chỉ lần tải đầu / đổi tháng mới hiện trạng thái tải.
+    const background = opts?.background === true && state.events.length > 0;
+    set(background ? { error: null } : { isLoading: true, error: null });
 
     try {
       let events: HRCalendarEvent[] = [];

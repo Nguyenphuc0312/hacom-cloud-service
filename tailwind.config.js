@@ -242,8 +242,14 @@ export default {
           "modalIn 240ms var(--motion-ease-emphasized, cubic-bezier(0.2, 0, 0, 1)) both",
         shimmer: "shimmer 2s linear infinite",
         scan: "scan 3s ease-in-out infinite",
+        /* Thanh tải mảnh ở mép trên lưới lịch (không che nội dung) */
+        "calendar-loading": "calendarLoading 1.1s ease-in-out infinite",
       },
       keyframes: {
+        calendarLoading: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(400%)" },
+        },
         typing: {
           "0%, 60%, 100%": { transform: "translateY(0)" },
           "30%": { transform: "translateY(-8px)" },

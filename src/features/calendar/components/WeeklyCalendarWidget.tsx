@@ -53,6 +53,7 @@ import {
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
 import { getWeekFetchRange } from "../utils/calendarFetchRange";
+import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { EventDetailModal } from "./EventDetailModal";
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import { type HRCalendarEvent } from "../../api/hrCalendarApi";
@@ -136,7 +137,9 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
 
   // Calendar store - shared source of truth
   const storeEvents = useCalendarStore((s) => s.events);
-  const storeIsLoading = useCalendarStore((s) => s.isLoading);
+  const storeLoadingRaw = useCalendarStore((s) => s.isLoading);
+  // Trễ 180ms: request nhanh không kịp chớp thanh "Đang tải lịch...".
+  const storeIsLoading = useDelayedLoading(storeLoadingRaw);
   const storeError = useCalendarStore((s) => s.error);
   const storeErrorCode = useCalendarStore((s) => s.errorCode);
   const fetchEvents = useCalendarStore((s) => s.fetchEvents);
@@ -176,9 +179,10 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   }, [weekDays]);
 
   // Refetch theo đúng range của tuần đang xem (store có thể giữ range khác).
+  // background: lưới đang hiển thị dữ liệu cũ dùng được → cập nhật im lặng.
   const refetchWeek = React.useCallback(() => {
     if (weekRange.start && weekRange.end) {
-      void fetchEvents(weekRange.start, weekRange.end);
+      void fetchEvents(weekRange.start, weekRange.end, { background: true });
     }
   }, [weekRange.start, weekRange.end, fetchEvents]);
 
@@ -191,13 +195,15 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   // từ /calendar hoặc người khác (mời họp).
   React.useEffect(() => {
     if (!weekRange.start || !weekRange.end) return;
-    const refetch = () => {
-      void fetchEvents(weekRange.start!, weekRange.end!);
+    // Lần đầu / đổi tuần: hiện trạng thái tải. Poll 60s + quay lại tab: cập nhật
+    // NỀN, không bật spinner — nếu không thì cứ mỗi phút lưới lại nhấp nháy.
+    const refetch = (background: boolean) => {
+      void fetchEvents(weekRange.start!, weekRange.end!, { background });
     };
-    refetch();
-    const onFocus = () => refetch();
+    refetch(false);
+    const onFocus = () => refetch(true);
     window.addEventListener("focus", onFocus);
-    const intervalId = window.setInterval(refetch, 60_000);
+    const intervalId = window.setInterval(() => refetch(true), 60_000);
     return () => {
       window.removeEventListener("focus", onFocus);
       window.clearInterval(intervalId);
