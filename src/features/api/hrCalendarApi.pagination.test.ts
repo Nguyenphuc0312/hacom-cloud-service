@@ -11,6 +11,10 @@ vi.mock("./hrApi", () => ({
   hrApiClient: { get: (...args: unknown[]) => get(...args) },
 }));
 
+vi.mock("../../utils/logger", () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 const makeItem = (id: string) => ({ id, title: `ev-${id}` });
 
 /** Response envelope y như hr-api thật: { data: { items, pagination } }. */
@@ -76,6 +80,28 @@ describe("hrCalendarApi.listAllEvents", () => {
 
     expect(get).toHaveBeenCalledTimes(3);
     expect(res.data).toHaveLength(3);
+  });
+
+  // Mất event âm thầm là loại lỗi khó truy nhất — chạm trần thì phải KÊU TO.
+  it("đánh dấu truncated khi bị cắt bớt vì chạm maxPages", async () => {
+    const { hrCalendarApi } = await import("./hrCalendarApi");
+    get.mockResolvedValue(page(["x"], 1, 999, 999));
+
+    const res = await hrCalendarApi.listAllEvents({ scope: "mine" }, 2);
+
+    expect(res.truncated).toBe(true);
+  });
+
+  it("không đánh dấu truncated khi đã lấy đủ", async () => {
+    const { hrCalendarApi } = await import("./hrCalendarApi");
+    get
+      .mockResolvedValueOnce(page(["1"], 1, 2, 2))
+      .mockResolvedValueOnce(page(["2"], 2, 2, 2));
+
+    const res = await hrCalendarApi.listAllEvents({ scope: "mine" }, 20);
+
+    expect(res.truncated).toBe(false);
+    expect(res.data).toHaveLength(2);
   });
 
   it("không gom thêm khi tài khoản chưa liên kết hồ sơ NS", async () => {

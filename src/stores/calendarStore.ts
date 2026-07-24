@@ -181,6 +181,9 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
     try {
       let events: HRCalendarEvent[] = [];
+      // true = chạm trần gom trang, danh sách BỊ CẮT → phải báo cho người dùng
+      // thay vì âm thầm hiện thiếu lịch.
+      let truncated = false;
 
       switch (mode) {
         case "my": {
@@ -205,6 +208,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
             return;
           }
           events = Array.isArray(myResponse.data) ? myResponse.data : [];
+          truncated = myResponse.truncated === true;
           break;
         }
         case "other": {
@@ -220,6 +224,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
               includeParticipantEvents: true,
             });
             events = Array.isArray(otherResponse.data) ? otherResponse.data : [];
+            truncated = otherResponse.truncated === true;
           }
           break;
         }
@@ -232,6 +237,13 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       }
 
       if (requestSequence !== calendarRequestSequence) return;
+      // Danh sách bị cắt: vẫn hiện những gì tải được (còn hơn trắng lịch) nhưng
+      // PHẢI nói rõ là thiếu — mất event âm thầm là loại lỗi khó truy nhất.
+      if (truncated) {
+        toast.warning(
+          "Khoảng thời gian này có quá nhiều lịch nên chưa tải hết. Hãy thu hẹp khoảng xem.",
+        );
+      }
       set({
         events,
         isLoading: false,

@@ -52,6 +52,7 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
+import { getWeekFetchRange } from "../utils/calendarFetchRange";
 import { EventDetailModal } from "./EventDetailModal";
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import { type HRCalendarEvent } from "../../api/hrCalendarApi";
@@ -164,22 +165,14 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
     return getWeekDays(base);
   }, [today, weekOffset]);
 
-  // Khoảng FETCH bao phủ tuần đang xem nhưng LÙI 6 THÁNG ở đầu khoảng.
-  // Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
-  // nhiều tháng trước nhưng vẫn kéo sang tuần đang xem; backend lọc theo startAt
-  // nên range hẹp sẽ KHÔNG trả các event dài bắt đầu xa. Lùi `from` về đầu tháng
-  // cách 6 tháng để chắc bắt được; render vẫn lọc client theo eventOccursOnDay
-  // nên chỉ hiện đúng 7 ngày của tuần.
+  // Khoảng FETCH = tuần đang xem + đệm 1 tuần mỗi đầu (dùng chung helper với
+  // CalendarPage). Không lùi 6 tháng nữa: hr-api lọc overlap hai đầu nên event
+  // dài bắt đầu từ trước vẫn được trả — xem calendarFetchRange.ts.
   const weekRange = React.useMemo(() => {
-    if (!weekDays.length) return { start: null, end: null };
-    const first = weekDays[0];
-    const last = weekDays[6];
-    const start = new Date(first.getFullYear(), first.getMonth() - 6, 1, 0, 0, 0, 0);
-    const end = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
+    const range = getWeekFetchRange(weekDays);
+    return range
+      ? { start: range.from, end: range.to }
+      : { start: null, end: null };
   }, [weekDays]);
 
   // Refetch theo đúng range của tuần đang xem (store có thể giữ range khác).

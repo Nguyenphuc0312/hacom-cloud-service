@@ -4,6 +4,7 @@
  */
 
 import { hrApiClient } from "./hrApi";
+import { logger } from "../../utils/logger";
 
 /**
  * HR Calendar event types (aligned with hr-api-service Prisma enums)
@@ -125,6 +126,8 @@ export interface HRCalendarEventsResponse {
     hasNextPage: boolean;
     hasPrevPage: boolean;
   };
+  /** true = còn event chưa tải hết (chạm trần gom trang) → dữ liệu KHÔNG đầy đủ. */
+  truncated?: boolean;
   capabilities?: HRCalendarCapabilities;
   warnings?: Array<{ code: string; message: string }>;
 }
@@ -247,6 +250,10 @@ export const hrCalendarApi = {
    *
    * Dùng pageSize 100 (trần) để giảm số vòng, rồi lặp tới khi hết `hasNextPage`.
    * `maxPages` là van an toàn, tránh vòng lặp vô hạn nếu BE trả pagination lỗi.
+   *
+   * Chạm `maxPages` mà BE vẫn báo còn trang → dữ liệu BỊ CẮT. Trường hợp đó phải
+   * KÊU TO (log error + cờ `truncated`) chứ không im lặng: mất event âm thầm là
+   * loại lỗi tốn nhiều giờ nhất để truy — nhìn từ UI y hệt "API không trả về".
    */
   listAllEvents: async (
     params: ListHREventsParams = {},
@@ -266,9 +273,26 @@ export const hrCalendarApi = {
       all.push(...next.data);
       hasNext = next.pagination.hasNextPage;
     }
+
+    // Vẫn còn trang sau khi hết maxPages ⇒ đã cắt bớt event.
+    const truncated = hasNext;
+    if (truncated) {
+      logger.error("calendar", "event_list_truncated", {
+        loadedEvents: all.length,
+        pagesFetched: page,
+        maxPages,
+        pageSize,
+        totalReportedByServer: first.pagination.totalItems,
+        from: params.from,
+        to: params.to,
+        scope: params.scope,
+      });
+    }
+
     return {
       ...first,
       data: all,
+      truncated,
       pagination: { ...first.pagination, page, hasNextPage: hasNext },
     };
   },

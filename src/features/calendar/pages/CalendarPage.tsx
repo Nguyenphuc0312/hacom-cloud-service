@@ -49,6 +49,7 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
+import { getMonthFetchRange } from "../utils/calendarFetchRange";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
@@ -115,21 +116,6 @@ const formatDateString = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-/**
- * Khoảng FETCH cho tháng đang xem, LÙI 6 THÁNG ở đầu và TIẾN 1 THÁNG ở cuối.
- * Lý do: lịch dài hạn (công tác/nghỉ phép có thể kéo dài 3–4 tháng) bắt đầu từ
- * nhiều tháng trước nhưng vẫn kéo sang tuần/tháng đang xem; backend lọc theo
- * `startAt` nên nếu range quá hẹp sẽ KHÔNG trả các event dài bắt đầu xa → dây bị
- * đứt ở các tuần xa ngày bắt đầu. Lùi 6 tháng để chắc bắt được event dài.
- * Lưới/Day/Week vẫn lọc client theo eventOccursOnDay nên chỉ hiển thị đúng phạm
- * vi đang xem. Khớp với khoảng fetch của widget lịch tuần (EmptyState).
- */
-const getMonthFetchRange = (year: number, month: number): { from: string; to: string } => {
-  const start = new Date(year, month - 6, 1);
-  const end = new Date(year, month + 2, 0);
-  return { from: formatDateString(start), to: formatDateString(end) };
 };
 
 /**
