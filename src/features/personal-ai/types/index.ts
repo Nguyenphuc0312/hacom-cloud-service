@@ -39,6 +39,11 @@ export interface PersonalChatMessage {
   thinkingPhase?: "searching" | "reasoning" | null;
   formRequest?: WorkReportFormRequest;
   selectionRequest?: DepartmentSelectionRequest;
+  /**
+   * SSE `work_report_scope_required` hoặc lỗi 400/403 — render widget bắt chọn
+   * phạm vi báo cáo; câu hỏi đang hoãn nằm trong `workReportScopeStore`.
+   */
+  scopeRequired?: boolean;
   /** #tongcvtuan — render danh sách file báo cáo tuần inline trong chat. */
   weeklyReportList?: boolean;
   /**
@@ -59,6 +64,47 @@ export interface PersonalChatMessage {
    * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
    */
   calendarEvents?: CalendarEventRow[];
+}
+
+/** Loại phạm vi một authorization báo cáo công việc (spec §3). */
+export type WorkReportScopeType = "CORPORATION" | "ORG_UNIT" | "DEPARTMENT";
+
+/**
+ * Một authorization HRM cấp cho tài khoản (`GET /api/work-reports/scopes`).
+ *
+ * `selectionToken` là token opaque BE ký — FE chỉ chuyển tiếp nguyên văn qua
+ * field `scope_token`, KHÔNG decode/sửa/lưu dài hạn (§3).
+ */
+export interface WorkReportScope {
+  authorizationId: string;
+  authorizationVersion: number;
+  actions: string[];
+  scopeType: WorkReportScopeType;
+  scopeId: string;
+  scopeName: string;
+  reportingTargetType: string;
+  reportingTargetId: string;
+  reportingTargetName: string;
+  reportingUnitId: string;
+  reportingUnitName: string;
+  selectionToken: string;
+}
+
+/** Response của `GET /api/work-reports/scopes`. */
+export interface WorkReportScopesResponse {
+  count: number;
+  scopes: WorkReportScope[];
+}
+
+/**
+ * SSE `work_report_scope_required` — BE báo câu hỏi cần chọn scope trước khi
+ * truy vấn. FE lưu `question`, mở widget, rồi gửi lại chính request chat kèm
+ * `scope_token` đã chọn (§3).
+ */
+export interface WorkReportScopeRequired {
+  reason: string;
+  question: string;
+  scopes: WorkReportScope[];
 }
 
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */
