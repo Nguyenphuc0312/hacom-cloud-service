@@ -27,7 +27,7 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
       aria-label={t("chat:composer.mentionList")}
       aria-activedescendant={`${mentionListId}-option-${activeMentionIndex}`}
       className={clsx(
-        "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
+        "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
         "p-1",
       )}
     >

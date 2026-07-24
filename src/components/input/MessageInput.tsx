@@ -450,27 +450,28 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     }
 
     const query = deferredMentionQuery.trim().toLowerCase();
+    // Show every member (Zalo-style) — no cap. The panel scrolls on overflow.
+    // ponytail: renders one Avatar per member; fine for normal groups. If groups
+    // grow to hundreds, virtualize the list instead of capping.
     if (!query) {
-      return normalizedMentionCandidates.slice(0, 8);
+      return normalizedMentionCandidates;
     }
 
-    return normalizedMentionCandidates
-      .filter((candidate) => {
-        const username = candidate.username.toLowerCase();
-        const displayName = candidate.displayName?.toLowerCase() || "";
-        const fullName = candidate.fullName?.toLowerCase() || "";
-        const employeeCode = candidate.employeeCode?.toLowerCase() || "";
-        // Match the viewer's alias too — they search by the name they know.
-        const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
-        return (
-          username.includes(query) ||
-          displayName.includes(query) ||
-          fullName.includes(query) ||
-          employeeCode.includes(query) ||
-          aliasLabel.includes(query)
-        );
-      })
-      .slice(0, 8);
+    return normalizedMentionCandidates.filter((candidate) => {
+      const username = candidate.username.toLowerCase();
+      const displayName = candidate.displayName?.toLowerCase() || "";
+      const fullName = candidate.fullName?.toLowerCase() || "";
+      const employeeCode = candidate.employeeCode?.toLowerCase() || "";
+      // Match the viewer's alias too — they search by the name they know.
+      const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
+      return (
+        username.includes(query) ||
+        displayName.includes(query) ||
+        fullName.includes(query) ||
+        employeeCode.includes(query) ||
+        aliasLabel.includes(query)
+      );
+    });
   }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates]);
 
   const showMentionPanel = Boolean(mentionMatch) && !disabled;
