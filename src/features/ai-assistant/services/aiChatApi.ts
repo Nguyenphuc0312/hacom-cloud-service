@@ -31,6 +31,7 @@ import type {
   WorkReportAttachment,
 } from "../types";
 import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
+import { appendScopeToken } from "../../personal-ai/stores/workReportScopeStore";
 
 export class AiApiError extends Error {
   readonly status: number;
@@ -1103,6 +1104,8 @@ export async function listWorkReportFiles(
   const qs = new URLSearchParams();
   if (params.reportDate) qs.set("report_date", params.reportDate);
   if (params.employeeCode) qs.set("employee_code", params.employeeCode);
+  // §4: danh sách file người khác gửi scope_token qua query.
+  appendScopeToken(qs);
   const query = qs.toString();
   const url = query ? `${WORK_REPORT_FILES_URL}?${query}` : WORK_REPORT_FILES_URL;
 
@@ -1126,8 +1129,13 @@ export async function fetchWorkReportFileBlob(
   fallbackName?: string,
   options?: { signal?: AbortSignal },
 ): Promise<{ blob: Blob; filename: string }> {
+  // §4: xem/tải file gửi scope_token qua query — dùng chung cho cả
+  // downloadWorkReportFile (route qua hàm này) nên chỉ cần gắn một chỗ.
+  const fileQs = appendScopeToken(new URLSearchParams()).toString();
   const response = await fetchWithAuth(
-    `${WORK_REPORT_FILES_URL}/${id}`,
+    fileQs
+      ? `${WORK_REPORT_FILES_URL}/${id}?${fileQs}`
+      : `${WORK_REPORT_FILES_URL}/${id}`,
     { method: "GET" },
     { signal: options?.signal, timeoutMs: UPLOAD_TIMEOUT_MS },
   );
@@ -1252,6 +1260,8 @@ export async function fetchWorkReports(
     start: params.start,
     end: params.end,
   });
+  // §4: xem báo cáo gửi scope_token qua query (URLSearchParams tự encode).
+  appendScopeToken(search);
   const qs = search.toString();
   const url = qs ? `${WORK_REPORTS_URL}?${qs}` : WORK_REPORTS_URL;
   const response = await aiGetRequest(url, options);
