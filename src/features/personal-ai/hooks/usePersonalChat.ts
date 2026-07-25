@@ -171,6 +171,14 @@ export function usePersonalChat() {
       // vì chờ BE đẩy SSE. Chỉ chạy khi CHƯA có scope đang chọn (getScopeToken
       // rỗng) — câu gửi-lại-sau-khi-chọn đã có token nên bỏ qua, không double.
       const capability = capabilityForTag(trimmed);
+      // §7: khóa lựa chọn theo authUserId + capability. Nếu đang giữ token của
+      // thao tác/tài khoản khác → ensureScopeKey xóa nó (không tái dùng). Sau đó
+      // getScopeToken() chỉ còn giá trị nếu token hợp cho ĐÚNG capability này —
+      // câu gửi-lại-sau-khi-chọn có token hợp nên bỏ qua pre-flight, không double.
+      if (capability) {
+        const scopeStore = useWorkReportScopeStore.getState();
+        scopeStore.ensureScopeKey(user?.id ?? "", capability);
+      }
       if (capability && !getScopeToken()) {
         const scopeStore = useWorkReportScopeStore.getState();
         try {
@@ -188,23 +196,19 @@ export function usePersonalChat() {
             });
             return;
           }
-          if (decision.kind === "pick") {
-            // ≥2 scope → mở dropdown ngay; sau khi chọn, effect gửi lại tag kèm token.
-            scopeStore.setScopes(decision.scopes, res.capability);
-            scopeStore.requirePick(trimmed, res.capability);
-            addMessage(conversationId, {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: "",
-              timestamp: new Date(),
-              isStreaming: false,
-              scopeRequired: true,
-            });
-            return;
-          }
-          // decision.kind === "auto": đúng 1 scope → tự chọn (giữ token) rồi
-          // stream tiếp bên dưới; withScopeToken sẽ gắn token vào request.
-          scopeStore.setScopes([decision.scope], res.capability);
+          // ≥1 scope → LUÔN mở dropdown (kể cả 1 lựa chọn đã pre-select ở store);
+          // sau khi user xác nhận, effect gửi lại tag kèm token.
+          scopeStore.setScopes(decision.scopes, res.capability);
+          scopeStore.requirePick(trimmed, res.capability);
+          addMessage(conversationId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "",
+            timestamp: new Date(),
+            isStreaming: false,
+            scopeRequired: true,
+          });
+          return;
         } catch (err) {
           // Flag đa-scope tắt (404) → giữ luồng cũ, không pre-flight (§2). 401/503
           // hoặc lỗi khác → để request chat bên dưới chạy và xử lý lỗi thống nhất
@@ -420,13 +424,19 @@ export function usePersonalChat() {
           updateServerSessionId(convIdSnapshot, response.session_id);
         }
       } catch (err) {
-        // §5: 400 (chưa chọn scope) / 403 (token hỏng, quyền bị thu hồi) → mở
-        // lại widget chọn scope thay vì báo lỗi đỏ; câu hỏi được giữ để gửi lại.
+        // §5/§7: 400 (chưa chọn scope) / 403 (token hỏng, quyền bị thu hồi) → mở
+        // lại widget chọn scope thay vì báo lỗi đỏ. KHÔNG tự gửi lại câu hỏi:
+        // handleScopeErrorStatus(403) đã clearSelection (xóa token lỗi) nên
+        // `selected` null → effect gửi-lại-sau-khi-chọn KHÔNG chạy tới khi user
+        // chủ động chọn lại. Câu hỏi giữ trong pendingQuestion để gửi sau khi chọn.
         if (
           err instanceof PersonalAiError &&
           err.kind === "http" &&
           handleScopeErrorStatus(err.status)
         ) {
+          // Hủy request đang treo (nếu còn) — dừng loading, không để stream dở dang.
+          controller.abort();
+          setIsStreaming(false);
           useWorkReportScopeStore.getState().requirePick(trimmed);
           patchMessage(convIdSnapshot, assistantMessage.id, {
             content: "",
@@ -626,6 +636,8 @@ export function usePersonalChat() {
       const submitCapability = capabilityForTag(trimmed);
       if (submitCapability) {
         const scopeStore = useWorkReportScopeStore.getState();
+        // §7: khóa theo authUserId + capability trước khi dùng lại token đang giữ.
+        scopeStore.ensureScopeKey(user?.id ?? "", submitCapability);
         let scope = scopeStore.selected;
         if (!getScopeToken()) {
           try {
@@ -642,22 +654,20 @@ export function usePersonalChat() {
               });
               return;
             }
-            if (decision.kind === "pick") {
-              scopeStore.setScopes(decision.scopes, res.capability);
-              scopeStore.requirePick(trimmed, res.capability);
-              addMessage(conversationId, {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content:
-                  "Bạn có nhiều phạm vi. Vui lòng chọn phạm vi báo cáo rồi đính kèm lại tệp để nộp.",
-                timestamp: new Date(),
-                isStreaming: false,
-                scopeRequired: true,
-              });
-              return;
-            }
-            scopeStore.setScopes([decision.scope], res.capability);
-            scope = decision.scope;
+            // ≥1 scope → LUÔN mở dropdown (kể cả 1 lựa chọn đã pre-select). Phải
+            // giữ File qua bước chọn nên yêu cầu user đính kèm lại sau khi xác nhận.
+            scopeStore.setScopes(decision.scopes, res.capability);
+            scopeStore.requirePick(trimmed, res.capability);
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content:
+                "Vui lòng chọn phạm vi báo cáo rồi đính kèm lại tệp để nộp.",
+              timestamp: new Date(),
+              isStreaming: false,
+              scopeRequired: true,
+            });
+            return;
           } catch (err) {
             // Flag tắt (404) → giữ luồng cũ (BE tự suy quyền từ JWT). Lỗi khác để
             // upload bên dưới chạy và xử lý lỗi thống nhất.
@@ -761,6 +771,7 @@ export function usePersonalChat() {
       addMessage,
       finalizeMessage,
       markMessageError,
+      user?.id,
     ],
   );
 

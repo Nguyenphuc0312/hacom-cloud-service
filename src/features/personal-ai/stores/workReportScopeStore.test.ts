@@ -33,10 +33,12 @@ beforeEach(() => {
 });
 
 describe("chọn scope", () => {
-  it("count == 1 thì tự chọn và giữ token, không bắt user chọn", () => {
+  it("count == 1 thì pre-select + giữ token nhưng VẪN mở dropdown để user xác nhận", () => {
     useWorkReportScopeStore.getState().setScopes([scope()]);
     const state = useWorkReportScopeStore.getState();
-    expect(state.isPicking).toBe(false);
+    // UX chốt lại: luôn hiển thị dropdown kể cả 1 lựa chọn (đã chọn sẵn).
+    expect(state.isPicking).toBe(true);
+    expect(state.selected?.selectionToken).toBe("token-1");
     expect(getScopeToken()).toBe("token-1");
   });
 
@@ -70,6 +72,42 @@ describe("chọn scope", () => {
       .getState()
       .select(scope({ authorizationId: "auth-2", selectionToken: "token-2" }));
     expect(useWorkReportScopeStore.getState().dataEpoch).toBe(epochAfterFirst + 1);
+  });
+});
+
+describe("ensureScopeKey — khóa authUserId + capability (§7)", () => {
+  it("cùng user + capability → giữ nguyên lựa chọn, trả false", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.ensureScopeKey("u1", "department_submit");
+    store.setScopes([scope()], "department_submit");
+    const changed = store.ensureScopeKey("u1", "department_submit");
+    expect(changed).toBe(false);
+    expect(getScopeToken()).toBe("token-1");
+  });
+
+  it("đổi capability → xóa token cũ, KHÔNG tái dùng cho thao tác khác", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.ensureScopeKey("u1", "department_submit");
+    store.setScopes([scope()], "department_submit");
+    expect(getScopeToken()).toBe("token-1");
+
+    const changed = store.ensureScopeKey("u1", "org_unit_submit");
+    expect(changed).toBe(true);
+    const state = useWorkReportScopeStore.getState();
+    expect(state.selected).toBeNull();
+    expect(state.scopes).toBeNull();
+    expect(state.capability).toBe("org_unit_submit");
+    expect(getScopeToken()).toBeUndefined();
+  });
+
+  it("đổi authUserId (đăng nhập tài khoản khác) → xóa token cũ", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.ensureScopeKey("u1", "department_submit");
+    store.setScopes([scope()], "department_submit");
+
+    const changed = store.ensureScopeKey("u2", "department_submit");
+    expect(changed).toBe(true);
+    expect(getScopeToken()).toBeUndefined();
   });
 });
 
