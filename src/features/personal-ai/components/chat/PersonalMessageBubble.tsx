@@ -215,6 +215,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               title="Tổng hợp báo cáo công việc"
               sessionId={useSnapshot ? message.exportSessionId : undefined}
               exportId={useSnapshot ? message.exportId : undefined}
+              scopeEpoch={useSnapshot ? message.scopeEpoch : undefined}
             />
           </div>
         </div>
@@ -387,6 +388,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
       perTableSnapshot,
       message.exportSessionId,
       message.exportId,
+      message.scopeEpoch,
     ],
   );
 

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   asCapability,
   asRequiredAction,
+  canSubmit,
+  canSubmitLevelReport,
   capabilityForTag,
   decideScopePreflight,
   describeScope,
@@ -151,6 +153,40 @@ describe("describeScope (§3 nhãn)", () => {
   });
 });
 
+describe("canSubmitLevelReport (§6 kiểm soát UI nộp)", () => {
+  const dept = scope({ scopeType: "DEPARTMENT", actions: ["READ", "SUBMIT"] });
+  const orgUnit = scope({ scopeType: "ORG_UNIT", actions: ["READ", "SUBMIT"] });
+  const deptReadOnly = scope({ scopeType: "DEPARTMENT", actions: ["READ"] });
+  const corp = scope({ scopeType: "CORPORATION", actions: ["AGGREGATE_CORPORATE_REPORTS"] });
+
+  it("#TBP_baocao chỉ nộp được với DEPARTMENT + SUBMIT", () => {
+    expect(canSubmitLevelReport("#TBP_baocao", dept)).toBe(true);
+    expect(canSubmitLevelReport("#TBP_baocao", orgUnit)).toBe(false); // sai loại
+    expect(canSubmitLevelReport("#TBP_baocao", deptReadOnly)).toBe(false); // thiếu SUBMIT
+  });
+
+  it("#LDDV_baocao chỉ nộp được với ORG_UNIT + SUBMIT", () => {
+    expect(canSubmitLevelReport("#LDDV_baocao", orgUnit)).toBe(true);
+    expect(canSubmitLevelReport("#LDDV_baocao", dept)).toBe(false); // sai loại
+  });
+
+  it("#TCT_tonghop KHÔNG bao giờ nộp (chỉ tổng hợp)", () => {
+    expect(canSubmitLevelReport("#TCT_tonghop", corp)).toBe(false);
+    expect(canSubmitLevelReport("#TCT_tonghop", dept)).toBe(false);
+  });
+
+  it("chưa chọn scope (null) → không nộp", () => {
+    expect(canSubmitLevelReport("#TBP_baocao", null)).toBe(false);
+  });
+
+  it("canSubmit: chỉ true khi có SUBMIT trong actions", () => {
+    expect(canSubmit(dept)).toBe(true);
+    expect(canSubmit(deptReadOnly)).toBe(false);
+    expect(canSubmit(corp)).toBe(false);
+    expect(canSubmit(null)).toBe(false);
+  });
+});
+
 // ── fetchWorkReportScopes (chạm mạng — mock fetch) ─────────────────────────
 
 describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
@@ -172,16 +208,16 @@ describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
     expect(String(url)).toContain("/api/work-reports/scopes?capability=department_submit");
   });
 
-  it("không có capability → gọi /scopes trần (không query)", async () => {
+  it("luôn kèm capability trong query (BE bắt buộc — không có nhánh trần)", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ count: 0, scopes: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
     );
-    await fetchWorkReportScopes();
+    await fetchWorkReportScopes({ capability: "report_read" });
     const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/api\/work-reports\/scopes$/);
+    expect(String(url)).toContain("?capability=report_read");
   });
 
   it("echo capability/requiredAction/allowedScopeTypes từ response", async () => {
@@ -221,6 +257,8 @@ describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
 
   it("401 → ScopeFetchError status 401", async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
-    await expect(fetchWorkReportScopes()).rejects.toBeInstanceOf(ScopeFetchError);
+    await expect(
+      fetchWorkReportScopes({ capability: "department_read" }),
+    ).rejects.toBeInstanceOf(ScopeFetchError);
   });
 });
