@@ -19,7 +19,12 @@ import {
   getScopeToken,
   withScopeToken,
 } from "../stores/workReportScopeStore";
-import { normalizeScopeList } from "./workReportScopeApi";
+import {
+  asCapability,
+  asRequiredAction,
+  normalizeScopeList,
+  normalizeScopeTypes,
+} from "./workReportScopeApi";
 import type { WorkReportScopeRequired } from "../types";
 
 const BASE_URL =
@@ -984,6 +989,10 @@ export async function streamPersonalChat(
               reason: String(parsed.reason ?? "multiple_authorizations"),
               question: String(parsed.question ?? ""),
               scopes,
+              // §4: BE cho biết capability/action/loại scope đang yêu cầu.
+              capability: asCapability(parsed.capability),
+              requiredAction: asRequiredAction(parsed.requiredAction),
+              allowedScopeTypes: normalizeScopeTypes(parsed.allowedScopeTypes),
             });
           }
         } catch { /* malformed payload — ignore */ }

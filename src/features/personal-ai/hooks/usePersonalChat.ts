@@ -16,6 +16,13 @@ import {
   handleScopeErrorStatus,
   useWorkReportScopeStore,
 } from "../stores/workReportScopeStore";
+import {
+  capabilityForTag,
+  decideScopePreflight,
+  fetchWorkReportScopes,
+  ScopeFeatureDisabledError,
+  ScopeFetchError,
+} from "../api/workReportScopeApi";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
 import type { PersonalChatMessage, PersonalDocument } from "../types";
@@ -158,6 +165,58 @@ export function usePersonalChat() {
       };
       addMessage(conversationId, userMessage);
 
+      // §2/§3: PRE-FLIGHT phạm vi cho tag báo cáo cấp (#TBP/#LDDV/#TCT).
+      // Biết trước capability của thao tác → gọi `/scopes?capability` NGAY thay
+      // vì chờ BE đẩy SSE. Chỉ chạy khi CHƯA có scope đang chọn (getScopeToken
+      // rỗng) — câu gửi-lại-sau-khi-chọn đã có token nên bỏ qua, không double.
+      const capability = capabilityForTag(trimmed);
+      if (capability && !getScopeToken()) {
+        const scopeStore = useWorkReportScopeStore.getState();
+        try {
+          const res = await fetchWorkReportScopes({ capability });
+          const decision = decideScopePreflight(res.scopes);
+          if (decision.kind === "deny") {
+            // 0 scope khớp → không hiện thao tác, báo không có quyền (§2).
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content:
+                "Bạn không có phạm vi phù hợp cho thao tác này. Vui lòng liên hệ quản trị nếu cần cấp quyền.",
+              timestamp: new Date(),
+              isStreaming: false,
+            });
+            return;
+          }
+          if (decision.kind === "pick") {
+            // ≥2 scope → mở dropdown ngay; sau khi chọn, effect gửi lại tag kèm token.
+            scopeStore.setScopes(decision.scopes, res.capability);
+            scopeStore.requirePick(trimmed, res.capability);
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: "",
+              timestamp: new Date(),
+              isStreaming: false,
+              scopeRequired: true,
+            });
+            return;
+          }
+          // decision.kind === "auto": đúng 1 scope → tự chọn (giữ token) rồi
+          // stream tiếp bên dưới; withScopeToken sẽ gắn token vào request.
+          scopeStore.setScopes([decision.scope], res.capability);
+        } catch (err) {
+          // Flag đa-scope tắt (404) → giữ luồng cũ, không pre-flight (§2). 401/503
+          // hoặc lỗi khác → để request chat bên dưới chạy và xử lý lỗi thống nhất
+          // ở catch của stream (tránh nhân đôi thông báo lỗi).
+          if (!(err instanceof ScopeFeatureDisabledError) && err instanceof ScopeFetchError) {
+            logger.info("usePersonalChat", "scope-preflight-failed", {
+              capability,
+              status: err.status,
+            });
+          }
+        }
+      }
+
       // #baocaocv — KHÔNG chặn ở FE nữa. Để request chạy qua SSE để BE quyết
       // định theo quyền của user:
       //   • Admin/Giám đốc → event `selection_request` → DepartmentSelector
@@ -265,8 +324,8 @@ export function usePersonalChat() {
             // này kèm scope_token (xem WorkReportScopeSelector.onSelected).
             onScopeRequired: (scopeData) => {
               const scopeStore = useWorkReportScopeStore.getState();
-              scopeStore.setScopes(scopeData.scopes);
-              scopeStore.requirePick(scopeData.question || trimmed);
+              scopeStore.setScopes(scopeData.scopes, scopeData.capability);
+              scopeStore.requirePick(scopeData.question || trimmed, scopeData.capability);
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",
                 scopeRequired: true,

@@ -37,6 +37,7 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
 }) => {
   const scopes = useWorkReportScopeStore((s) => s.scopes);
   const selected = useWorkReportScopeStore((s) => s.selected);
+  const capability = useWorkReportScopeStore((s) => s.capability);
   const setScopes = useWorkReportScopeStore((s) => s.setScopes);
   const select = useWorkReportScopeStore((s) => s.select);
   const cancelPick = useWorkReportScopeStore((s) => s.cancelPick);
@@ -46,6 +47,8 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
   const [reloadKey, setReloadKey] = useState(0);
 
   // SSE `work_report_scope_required` đã nạp sẵn scopes → không gọi lại API.
+  // Khi tự nạp (403 xóa scopes / mở trực tiếp) phải kèm `capability` để BE trả
+  // đúng danh sách của thao tác đó, không phải scope của capability khác (§3).
   useEffect(() => {
     if (scopes !== null) {
       setIsLoading(false);
@@ -53,10 +56,10 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
     }
     const ac = new AbortController();
     setIsLoading(true);
-    fetchWorkReportScopes({ signal: ac.signal })
+    fetchWorkReportScopes({ capability: capability ?? undefined, signal: ac.signal })
       .then((res) => {
         if (ac.signal.aborted) return;
-        setScopes(res.scopes);
+        setScopes(res.scopes, res.capability);
         setError(null);
       })
       .catch((err) => {
@@ -72,7 +75,7 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
         if (!ac.signal.aborted) setIsLoading(false);
       });
     return () => ac.abort();
-  }, [scopes, reloadKey, setScopes, cancelPick]);
+  }, [scopes, capability, reloadKey, setScopes, cancelPick]);
 
   const handleSelect = (scope: WorkReportScope) => {
     select(scope);

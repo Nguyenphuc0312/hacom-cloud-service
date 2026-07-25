@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { WorkReportScope } from "../types";
+import type { WorkReportCapability, WorkReportScope } from "../types";
 
 /**
  * Lựa chọn phạm vi báo cáo công việc đa-scope (spec FE 24/07/2026).
@@ -19,14 +19,21 @@ interface WorkReportScopeState {
   /** Câu hỏi chat bị hoãn để chờ chọn scope, gửi lại sau khi chọn. */
   pendingQuestion: string | null;
   /**
+   * Capability của thao tác đang chọn scope (§3). Giữ lại để khi BE trả 403
+   * (token hết hạn / quyền đổi version) nạp lại ĐÚNG `/scopes?capability=...`
+   * thay vì danh sách chung — nếu không sẽ hiện scope của capability khác.
+   * null = chưa biết (luồng SSE cũ / nạp không kèm capability).
+   */
+  capability: WorkReportCapability | null;
+  /**
    * Tăng mỗi lần đổi scope (§5). Component đang giữ bảng/snapshot export dùng
    * giá trị này làm key/dep để bỏ dữ liệu scope cũ, không trộn hai scope.
    */
   dataEpoch: number;
 
-  setScopes: (scopes: WorkReportScope[]) => void;
+  setScopes: (scopes: WorkReportScope[], capability?: WorkReportCapability) => void;
   select: (scope: WorkReportScope) => void;
-  requirePick: (pendingQuestion?: string) => void;
+  requirePick: (pendingQuestion?: string, capability?: WorkReportCapability) => void;
   /** Xóa lựa chọn khi 403 (token hết hạn / quyền bị thu hồi / đổi version). */
   clearSelection: () => void;
   cancelPick: () => void;
@@ -38,14 +45,17 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
   selected: null,
   isPicking: false,
   pendingQuestion: null,
+  capability: null,
   dataEpoch: 0,
 
-  setScopes: (scopes) =>
-    set(() => ({
+  setScopes: (scopes, capability) =>
+    set((state) => ({
       scopes,
       // count == 1 → FE tự chọn nhưng vẫn giữ token (§3). count > 1 → bắt chọn.
       selected: scopes.length === 1 ? scopes[0] : null,
       isPicking: scopes.length > 1,
+      // Giữ capability để nạp lại đúng khi 403; không truyền thì giữ giá trị cũ.
+      capability: capability ?? state.capability,
     })),
 
   select: (scope) =>
@@ -61,10 +71,11 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       };
     }),
 
-  requirePick: (pendingQuestion) =>
+  requirePick: (pendingQuestion, capability) =>
     set((state) => ({
       isPicking: true,
       pendingQuestion: pendingQuestion ?? state.pendingQuestion,
+      capability: capability ?? state.capability,
     })),
 
   clearSelection: () =>
@@ -72,6 +83,7 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       selected: null,
       scopes: null,
       isPicking: true,
+      // Giữ `capability` để selector nạp lại đúng `/scopes?capability` (§7 — 403).
       dataEpoch: state.dataEpoch + 1,
     })),
 
@@ -83,6 +95,7 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       selected: null,
       isPicking: false,
       pendingQuestion: null,
+      capability: null,
       dataEpoch: state.dataEpoch + 1,
     })),
 }));

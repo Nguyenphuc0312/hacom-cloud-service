@@ -70,6 +70,25 @@ export interface PersonalChatMessage {
 export type WorkReportScopeType = "CORPORATION" | "ORG_UNIT" | "DEPARTMENT";
 
 /**
+ * Capability = "thao tác user cần phạm vi" (spec §2/§3). FE gửi đúng một trong
+ * số này qua `GET /scopes?capability=...`; BE quyết định scope nào hợp lệ.
+ * FE KHÔNG tự đổi sang capability khác khi lỗi (§7 — 422 là lỗi tích hợp).
+ */
+export type WorkReportCapability =
+  | "department_submit"
+  | "org_unit_submit"
+  | "corporation_aggregate"
+  | "department_read"
+  | "org_unit_read"
+  | "report_read";
+
+/** Action một authorization yêu cầu để chạy được một capability (spec §6). */
+export type WorkReportRequiredAction =
+  | "READ"
+  | "SUBMIT"
+  | "AGGREGATE_CORPORATE_REPORTS";
+
+/**
  * Một authorization HRM cấp cho tài khoản (`GET /api/work-reports/scopes`).
  *
  * `selectionToken` là token opaque BE ký — FE chỉ chuyển tiếp nguyên văn qua
@@ -90,10 +109,18 @@ export interface WorkReportScope {
   selectionToken: string;
 }
 
-/** Response của `GET /api/work-reports/scopes`. */
+/**
+ * Response của `GET /api/work-reports/scopes?capability=...` (spec §3).
+ *
+ * `capability`/`requiredAction`/`allowedScopeTypes` do BE ECHO lại — FE dùng để
+ * đối chiếu (không suy quyền), KHÔNG tự nghĩ ra. `scopes` là danh sách khớp.
+ */
 export interface WorkReportScopesResponse {
   count: number;
   scopes: WorkReportScope[];
+  capability?: WorkReportCapability;
+  requiredAction?: WorkReportRequiredAction;
+  allowedScopeTypes?: WorkReportScopeType[];
 }
 
 /**
@@ -105,6 +132,10 @@ export interface WorkReportScopeRequired {
   reason: string;
   question: string;
   scopes: WorkReportScope[];
+  /** BE cho biết capability/action/loại scope đang yêu cầu (spec §4). */
+  capability?: WorkReportCapability;
+  requiredAction?: WorkReportRequiredAction;
+  allowedScopeTypes?: WorkReportScopeType[];
 }
 
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */
