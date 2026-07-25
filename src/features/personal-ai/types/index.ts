@@ -59,6 +59,14 @@ export interface PersonalChatMessage {
   /** session_id gắn với `exportId` (dùng cho endpoint export-table). */
   exportSessionId?: string;
   /**
+   * `dataEpoch` (workReportScopeStore) tại lúc bảng/snapshot được tạo (§5). Khi
+   * user đổi phạm vi báo cáo, epoch hiện tại tăng → bảng/snapshot của scope CŨ
+   * không còn khớp token mới, TableExportMenu vô hiệu nút Xuất để tránh xuất
+   * nhầm dữ liệu scope cũ với token scope mới. undefined = bảng không thuộc
+   * phạm vi báo cáo (câu trả lời thường) → không ràng buộc epoch.
+   */
+  scopeEpoch?: number;
+  /**
    * SSE `done.calendar_events` — khi câu trả lời là lịch, BE trả mảng sự kiện
    * (cùng thứ tự các dòng bảng markdown). Có thì FE render bảng lịch 5 cột +
    * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
@@ -89,10 +97,12 @@ export type WorkReportRequiredAction =
   | "AGGREGATE_CORPORATE_REPORTS";
 
 /**
- * Một authorization HRM cấp cho tài khoản (`GET /api/work-reports/scopes`).
+ * Một phạm vi báo cáo cho tài khoản (`GET /api/work-reports/scopes`).
  *
- * `selectionToken` là token opaque BE ký — FE chỉ chuyển tiếp nguyên văn qua
- * field `scope_token`, KHÔNG decode/sửa/lưu dài hạn (§3).
+ * Nguồn quyền: HRM (`/auth/me`) chỉ trả `workReportAuthorizations` thô. `scopes`
+ * ở endpoint này là kết quả CHATBOT BE lọc theo capability và ký `selectionToken`
+ * — HRM KHÔNG ký token. `selectionToken` là opaque do chatbot BE ký: FE chỉ
+ * chuyển tiếp nguyên văn qua field `scope_token`, KHÔNG decode/sửa/lưu dài hạn (§3).
  */
 export interface WorkReportScope {
   authorizationId: string;

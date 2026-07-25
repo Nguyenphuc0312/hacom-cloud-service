@@ -47,16 +47,22 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
   const [reloadKey, setReloadKey] = useState(0);
 
   // SSE `work_report_scope_required` đã nạp sẵn scopes → không gọi lại API.
-  // Khi tự nạp (403 xóa scopes / mở trực tiếp) phải kèm `capability` để BE trả
-  // đúng danh sách của thao tác đó, không phải scope của capability khác (§3).
+  // Khi tự nạp (403 xóa scopes) phải kèm `capability` để BE trả đúng danh sách
+  // của thao tác đó (§3). capability BẮT BUỘC — thiếu là lỗi luồng (widget luôn
+  // được mở kèm capability từ SSE/pre-flight), không gọi trần vì BE trả 422.
   useEffect(() => {
     if (scopes !== null) {
       setIsLoading(false);
       return;
     }
+    if (!capability) {
+      setIsLoading(false);
+      setError("Thiếu thông tin thao tác để tải phạm vi. Vui lòng thử lại thao tác từ đầu.");
+      return;
+    }
     const ac = new AbortController();
     setIsLoading(true);
-    fetchWorkReportScopes({ capability: capability ?? undefined, signal: ac.signal })
+    fetchWorkReportScopes({ capability, signal: ac.signal })
       .then((res) => {
         if (ac.signal.aborted) return;
         setScopes(res.scopes, res.capability);

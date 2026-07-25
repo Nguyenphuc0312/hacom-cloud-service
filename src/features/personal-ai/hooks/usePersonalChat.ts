@@ -17,6 +17,7 @@ import {
   useWorkReportScopeStore,
 } from "../stores/workReportScopeStore";
 import {
+  canSubmitLevelReport,
   capabilityForTag,
   decideScopePreflight,
   fetchWorkReportScopes,
@@ -376,10 +377,17 @@ export function usePersonalChat() {
         // markdown; nếu chỉ patch id khi exportable_table=true thì mất id khi BE
         // trả id mà không kèm cờ → payload export thiếu session_id/export_id.
         if (response.export_id) {
+          // §5: gắn epoch của scope hiện tại vào snapshot. Đổi scope sau này →
+          // epoch tăng → TableExportMenu vô hiệu nút Xuất của bảng scope cũ (chỉ
+          // ràng buộc khi bảng thuộc phạm vi báo cáo, tức đang có scope token).
+          const scopeEpoch = getScopeToken()
+            ? useWorkReportScopeStore.getState().dataEpoch
+            : undefined;
           patchMessage(convIdSnapshot, assistantMessage.id, {
             exportableTable: true,
             exportId: response.export_id,
             exportSessionId: response.session_id || serverSessionId || undefined,
+            ...(scopeEpoch !== undefined && { scopeEpoch }),
           });
         } else if (response.exportable_table) {
           patchMessage(convIdSnapshot, assistantMessage.id, {
@@ -607,6 +615,75 @@ export function usePersonalChat() {
       let conversationId = activeConversationId;
       if (!conversationId) {
         conversationId = createConversation();
+      }
+
+      // §6: KIỂM SOÁT UI trước khi nộp (không chỉ dựa vào BE báo lỗi).
+      //  • #TCT_tonghop chỉ tổng hợp — KHÔNG nộp được → chặn thẳng.
+      //  • #TBP chỉ DEPARTMENT+SUBMIT, #LDDV chỉ ORG_UNIT+SUBMIT.
+      // Chưa có scope đang chọn → pre-flight: 0=không quyền, 1=tự chọn rồi kiểm,
+      // ≥2=mở dropdown và yêu cầu chọn phạm vi rồi đính kèm lại (không nộp ngay
+      // vì phải giữ File qua bước chọn).
+      const submitCapability = capabilityForTag(trimmed);
+      if (submitCapability) {
+        const scopeStore = useWorkReportScopeStore.getState();
+        let scope = scopeStore.selected;
+        if (!getScopeToken()) {
+          try {
+            const res = await fetchWorkReportScopes({ capability: submitCapability });
+            const decision = decideScopePreflight(res.scopes);
+            if (decision.kind === "deny") {
+              addMessage(conversationId, {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content:
+                  "Bạn không có phạm vi phù hợp để nộp báo cáo này. Vui lòng liên hệ quản trị nếu cần cấp quyền.",
+                timestamp: new Date(),
+                isStreaming: false,
+              });
+              return;
+            }
+            if (decision.kind === "pick") {
+              scopeStore.setScopes(decision.scopes, res.capability);
+              scopeStore.requirePick(trimmed, res.capability);
+              addMessage(conversationId, {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content:
+                  "Bạn có nhiều phạm vi. Vui lòng chọn phạm vi báo cáo rồi đính kèm lại tệp để nộp.",
+                timestamp: new Date(),
+                isStreaming: false,
+                scopeRequired: true,
+              });
+              return;
+            }
+            scopeStore.setScopes([decision.scope], res.capability);
+            scope = decision.scope;
+          } catch (err) {
+            // Flag tắt (404) → giữ luồng cũ (BE tự suy quyền từ JWT). Lỗi khác để
+            // upload bên dưới chạy và xử lý lỗi thống nhất.
+            if (err instanceof ScopeFeatureDisabledError) {
+              scope = null; // không ràng buộc scope FE — BE quyết
+            } else if (err instanceof ScopeFetchError) {
+              logger.info("usePersonalChat", "level-submit-preflight-failed", {
+                capability: submitCapability,
+                status: err.status,
+              });
+            }
+          }
+        }
+        // Có scope FE đang ràng buộc mà không hợp để nộp → chặn (§6). Khi flag tắt
+        // (scope=null do 404) thì bỏ qua kiểm FE, để BE tự quyết theo JWT.
+        if (scope && !canSubmitLevelReport(trimmed, scope)) {
+          addMessage(conversationId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              "Phạm vi đang chọn không cho phép nộp báo cáo cấp này. Vui lòng chọn đúng phạm vi (phòng ban cho #TBP_baocao, đơn vị cho #LDDV_baocao).",
+            timestamp: new Date(),
+            isStreaming: false,
+          });
+          return;
+        }
       }
 
       addMessage(conversationId, {
