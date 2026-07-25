@@ -343,8 +343,12 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
 
   const busy = isSubmitting || savingForAttach || isCancelling;
 
+  // Nhãn cột CỐ ĐỊNH phía FE cho các cột đã biết — KHÔNG nghe `field_labels` BE
+  // gửi. Trước đây ưu tiên `data.field_labels` nên session nào BE trả nhãn cũ/sai
+  // (vd "Tên công ty", "tiêu đề") thì user đó ra UI lệch hẳn mẫu chuẩn dù cùng
+  // build FE. Chỉ fallback field_labels cho key LẠ (không nằm trong bộ chuẩn).
   const fieldLabel = (key: string) =>
-    data.field_labels?.[key] ?? FIELD_LABELS_VN[key] ?? key;
+    FIELD_LABELS_VN[key] ?? data.field_labels?.[key] ?? key;
 
   const handleTaskChange = (idx: number, field: TaskKey | "notes" | "completion_date", value: string) => {
     setTasks((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
