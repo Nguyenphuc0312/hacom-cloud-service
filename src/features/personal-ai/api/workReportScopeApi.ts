@@ -256,16 +256,18 @@ export function canSubmitLevelReport(
 /**
  * Quyết định của luồng "user bấm nút thao tác" sau khi có danh sách scope (§2):
  *  - `deny`   : 0 scope khớp → không hiện thao tác, báo không có quyền.
- *  - `auto`   : đúng 1 scope → không hiện dropdown, tự dùng scope đó.
- *  - `pick`   : ≥2 scope → mở dropdown, chờ user chọn.
+ *  - `pick`   : ≥1 scope → LUÔN mở dropdown, chờ user xác nhận.
+ *
+ * UX chốt lại: kể cả đúng 1 scope vẫn hiển thị dropdown (đã pre-select ở store) —
+ * user phải chủ động xác nhận phạm vi trước khi gửi, không tự dùng ngầm. Vì vậy
+ * không còn nhánh `auto`; store `setScopes` pre-select khi count === 1 nhưng vẫn
+ * bật `isPicking` để widget hiện ra.
  */
 export type ScopePreflight =
   | { kind: "deny" }
-  | { kind: "auto"; scope: WorkReportScope }
   | { kind: "pick"; scopes: WorkReportScope[] };
 
 export function decideScopePreflight(scopes: WorkReportScope[]): ScopePreflight {
   if (scopes.length === 0) return { kind: "deny" };
-  if (scopes.length === 1) return { kind: "auto", scope: scopes[0] };
   return { kind: "pick", scopes };
 }

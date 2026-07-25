@@ -105,9 +105,9 @@ describe("decideScopePreflight (§2 số scope khớp → hành vi)", () => {
   it("0 scope → deny", () => {
     expect(decideScopePreflight([])).toEqual({ kind: "deny" });
   });
-  it("1 scope → auto (tự dùng, không dropdown)", () => {
+  it("1 scope → pick (LUÔN mở dropdown, kể cả 1 lựa chọn)", () => {
     const s = scope();
-    expect(decideScopePreflight([s])).toEqual({ kind: "auto", scope: s });
+    expect(decideScopePreflight([s])).toEqual({ kind: "pick", scopes: [s] });
   });
   it("≥2 scope → pick (mở dropdown)", () => {
     const list = [scope(), scope({ authorizationId: "auth-2", selectionToken: "tok-2" })];

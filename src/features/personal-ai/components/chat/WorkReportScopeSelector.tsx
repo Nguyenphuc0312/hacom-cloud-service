@@ -111,7 +111,7 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
       </div>
 
       <p className="mb-3 text-xs text-muted-foreground">
-        Bạn được cấp nhiều phạm vi. Chọn một phạm vi để xem hoặc nộp báo cáo.
+        Chọn phạm vi để xem hoặc nộp báo cáo. Xác nhận phạm vi đã chọn để tiếp tục.
       </p>
 
       {isLoading && (
