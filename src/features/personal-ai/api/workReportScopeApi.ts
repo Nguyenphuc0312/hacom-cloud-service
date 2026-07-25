@@ -1,6 +1,9 @@
 import type {
+  WorkReportCapability,
+  WorkReportRequiredAction,
   WorkReportScope,
   WorkReportScopesResponse,
+  WorkReportScopeType,
 } from "../types";
 import { getAccessToken } from "../../../services/tokenService";
 
@@ -9,6 +12,73 @@ const BASE_URL =
   "https://ai.hacomholdings.com.vn";
 
 const SCOPES_URL = `${BASE_URL}/api/work-reports/scopes`;
+
+/**
+ * 6 capability BE cho phép (§3). FE chỉ gửi đúng một trong số này; gửi sai →
+ * BE trả 422 và FE KHÔNG tự đổi sang capability khác (§7). Dùng làm whitelist
+ * khi echo capability từ response về.
+ */
+export const WORK_REPORT_CAPABILITIES: readonly WorkReportCapability[] = [
+  "department_submit",
+  "org_unit_submit",
+  "corporation_aggregate",
+  "department_read",
+  "org_unit_read",
+  "report_read",
+] as const;
+
+const REQUIRED_ACTIONS: readonly WorkReportRequiredAction[] = [
+  "READ",
+  "SUBMIT",
+  "AGGREGATE_CORPORATE_REPORTS",
+] as const;
+
+const SCOPE_TYPES: readonly WorkReportScopeType[] = [
+  "CORPORATION",
+  "ORG_UNIT",
+  "DEPARTMENT",
+] as const;
+
+/**
+ * Map thao tác user (tag/nút) → capability gọi BE (§2). Chỉ dùng cho luồng user
+ * BẤM NÚT thao tác — biết trước ý định nên gọi `/scopes?capability` chủ động.
+ * Luồng gõ chat tự do KHÔNG map ở FE: BE quyết định và đẩy SSE với capability.
+ */
+const TAG_CAPABILITY: Record<string, WorkReportCapability> = {
+  "#tbp_baocao": "department_submit",
+  "#lddv_baocao": "org_unit_submit",
+  "#tct_tonghop": "corporation_aggregate",
+};
+
+/** Capability tương ứng một tag báo cáo cấp; undefined nếu không phải tag phạm vi. */
+export function capabilityForTag(question: string): WorkReportCapability | undefined {
+  const key = question.trim().toLowerCase();
+  return TAG_CAPABILITY[key];
+}
+
+/** Nhận diện một chuỗi có phải capability hợp lệ (echo từ BE) không. */
+export function asCapability(value: unknown): WorkReportCapability | undefined {
+  return typeof value === "string" &&
+    (WORK_REPORT_CAPABILITIES as readonly string[]).includes(value)
+    ? (value as WorkReportCapability)
+    : undefined;
+}
+
+export function asRequiredAction(value: unknown): WorkReportRequiredAction | undefined {
+  return typeof value === "string" &&
+    (REQUIRED_ACTIONS as readonly string[]).includes(value)
+    ? (value as WorkReportRequiredAction)
+    : undefined;
+}
+
+/** Lọc mảng `allowedScopeTypes` từ payload, bỏ giá trị lạ. */
+export function normalizeScopeTypes(raw: unknown): WorkReportScopeType[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.filter((v): v is WorkReportScopeType =>
+    (SCOPE_TYPES as readonly string[]).includes(v as string),
+  );
+  return out.length > 0 ? out : undefined;
+}
 
 /**
  * Flag `WORK_REPORT_MULTI_SCOPE_ENABLED` đang tắt ở BE → endpoint trả 404.
@@ -71,15 +141,22 @@ export function normalizeScopeList(raw: unknown): WorkReportScope[] {
 }
 
 /**
- * GET /api/work-reports/scopes — danh sách authorization của tài khoản.
+ * GET /api/work-reports/scopes?capability=... — danh sách authorization KHỚP với
+ * một thao tác (§3). `capability` bắt buộc theo contract v2.0: mỗi thao tác user
+ * chỉ thấy đúng scope hợp lệ (vd `department_submit` → chỉ DEPARTMENT có SUBMIT).
  *
- * 404 → ném `ScopeFeatureDisabledError` (flag tắt, KHÔNG coi là lỗi quyền §2).
+ *  - 404 → `ScopeFeatureDisabledError` (flag đa-scope tắt, KHÔNG phải lỗi quyền §2).
+ *  - 422 → capability sai (lỗi tích hợp) → ScopeFetchError, caller KHÔNG tự đổi (§7).
  */
 export async function fetchWorkReportScopes(options?: {
+  capability?: WorkReportCapability;
   signal?: AbortSignal;
 }): Promise<WorkReportScopesResponse> {
   const token = getAccessToken();
-  const response = await fetch(SCOPES_URL, {
+  const url = options?.capability
+    ? `${SCOPES_URL}?${new URLSearchParams({ capability: options.capability }).toString()}`
+    : SCOPES_URL;
+  const response = await fetch(url, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -100,6 +177,10 @@ export async function fetchWorkReportScopes(options?: {
   return {
     count: typeof payload.count === "number" ? payload.count : scopes.length,
     scopes,
+    // Echo lại từ BE để đối chiếu — ưu tiên giá trị response, lùi về capability đã gửi.
+    capability: asCapability(payload.capability) ?? options?.capability,
+    requiredAction: asRequiredAction(payload.requiredAction),
+    allowedScopeTypes: normalizeScopeTypes(payload.allowedScopeTypes),
   };
 }
 
@@ -118,15 +199,17 @@ function describeActions(actions: string[]): string {
 /**
  * Nhãn hiển thị của một scope — dựng TỪ DỮ LIỆU RESPONSE, không suy từ `roleKey` (§3).
  *
- *  - CORPORATION: "Toàn TCT — chỉ xem/tổng hợp"
+ *  - CORPORATION: "Toàn TCT — xem, tổng hợp" (nhãn cố định theo §3).
  *  - ORG_UNIT:    reportingTargetName + actions
  *  - DEPARTMENT:  reportingTargetName / reportingUnitName + actions
  */
 export function describeScope(scope: WorkReportScope): string {
   const actions = describeActions(scope.actions);
 
+  // §3: CORPORATION dùng nhãn cố định "Toàn TCT — xem, tổng hợp" (không render
+  // actions thật) — scope tổng hợp toàn TCT luôn hàm ý xem + tổng hợp.
   if (scope.scopeType === "CORPORATION") {
-    return `Toàn TCT — ${actions || "chỉ xem/tổng hợp"}`;
+    return "Toàn TCT — xem, tổng hợp";
   }
 
   // Tên đơn vị có thể rỗng (như ví dụ §3) → lùi về id để nhãn không trống.
@@ -144,4 +227,21 @@ export function describeScope(scope: WorkReportScope): string {
 /** Scope có cho phép nộp báo cáo cấp không (ẩn nút nộp nếu chỉ aggregate, §6.2). */
 export function canSubmit(scope: WorkReportScope | null): boolean {
   return scope?.actions.includes("SUBMIT") ?? false;
+}
+
+/**
+ * Quyết định của luồng "user bấm nút thao tác" sau khi có danh sách scope (§2):
+ *  - `deny`   : 0 scope khớp → không hiện thao tác, báo không có quyền.
+ *  - `auto`   : đúng 1 scope → không hiện dropdown, tự dùng scope đó.
+ *  - `pick`   : ≥2 scope → mở dropdown, chờ user chọn.
+ */
+export type ScopePreflight =
+  | { kind: "deny" }
+  | { kind: "auto"; scope: WorkReportScope }
+  | { kind: "pick"; scopes: WorkReportScope[] };
+
+export function decideScopePreflight(scopes: WorkReportScope[]): ScopePreflight {
+  if (scopes.length === 0) return { kind: "deny" };
+  if (scopes.length === 1) return { kind: "auto", scope: scopes[0] };
+  return { kind: "pick", scopes };
 }

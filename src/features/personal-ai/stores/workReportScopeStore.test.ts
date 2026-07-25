@@ -48,6 +48,18 @@ describe("chọn scope", () => {
     expect(getScopeToken()).toBeUndefined();
   });
 
+  it("giữ capability qua setScopes/requirePick để nạp lại đúng khi 403 (§7)", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([scope()], "department_submit");
+    expect(useWorkReportScopeStore.getState().capability).toBe("department_submit");
+    // 403 xóa selection + scopes nhưng GIỮ capability để selector nạp lại đúng.
+    store.clearSelection();
+    expect(useWorkReportScopeStore.getState().capability).toBe("department_submit");
+    // reset mới xóa capability (đổi phiên/thao tác).
+    store.reset();
+    expect(useWorkReportScopeStore.getState().capability).toBeNull();
+  });
+
   it("đổi scope thì bump dataEpoch để bỏ dữ liệu scope cũ (§5)", () => {
     const store = useWorkReportScopeStore.getState();
     store.setScopes([scope(), scope({ authorizationId: "auth-2", selectionToken: "token-2" })]);
@@ -118,12 +130,16 @@ describe("xử lý lỗi (§5)", () => {
 });
 
 describe("nhãn hiển thị dựng từ response (§3)", () => {
-  it("CORPORATION", () => {
+  it("CORPORATION dùng nhãn cố định theo §3, không render actions thật", () => {
     expect(
       describeScope(
         scope({ scopeType: "CORPORATION", actions: ["AGGREGATE_CORPORATE_REPORTS"] }),
       ),
-    ).toBe("Toàn TCT — tổng hợp");
+    ).toBe("Toàn TCT — xem, tổng hợp");
+    // Kể cả actions chỉ có READ, nhãn TCT vẫn cố định (không thành "Toàn TCT — xem").
+    expect(
+      describeScope(scope({ scopeType: "CORPORATION", actions: ["READ"] })),
+    ).toBe("Toàn TCT — xem, tổng hợp");
   });
 
   it("ORG_UNIT gồm tên đơn vị + action", () => {

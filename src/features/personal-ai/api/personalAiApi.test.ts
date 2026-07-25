@@ -146,3 +146,80 @@ describe("streamPersonalChat calendar_events (done)", () => {
     expect(res.calendar_events).toBeUndefined();
   });
 });
+
+describe("streamPersonalChat work_report_scope_required (§4 SSE)", () => {
+  const sseResponse = (body: string) =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body));
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "text/event-stream" } },
+    );
+
+  const rawScope = {
+    authorizationId: "a1",
+    authorizationVersion: 4,
+    actions: ["READ", "SUBMIT"],
+    scopeType: "DEPARTMENT",
+    scopeId: "s1",
+    scopeName: "BCH",
+    reportingTargetType: "DEPARTMENT",
+    reportingTargetId: "t1",
+    reportingTargetName: "BCH Công trường",
+    reportingUnitId: "u1",
+    reportingUnitName: "Cty Hacom",
+    selectionToken: "tok-a",
+  };
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("parse scopes + capability/requiredAction/allowedScopeTypes, rồi kết thúc bằng done", async () => {
+    const scopeEvent = {
+      reason: "multiple_matching_authorizations",
+      question: "#TBP_baocao",
+      capability: "department_submit",
+      requiredAction: "SUBMIT",
+      allowedScopeTypes: ["DEPARTMENT"],
+      scopes: [rawScope, { ...rawScope, authorizationId: "a2", selectionToken: "tok-b" }],
+    };
+    const body =
+      `event: work_report_scope_required\ndata: ${JSON.stringify(scopeEvent)}\n\n` +
+      `event: done\ndata: {"session_id":"s","answer":""}\n\n`;
+    fetchMock.mockResolvedValueOnce(sseResponse(body));
+
+    const onScopeRequired = vi.fn();
+    await streamPersonalChat(
+      { question: "#TBP_baocao", session_id: null },
+      { onScopeRequired },
+    );
+
+    expect(onScopeRequired).toHaveBeenCalledTimes(1);
+    const arg = onScopeRequired.mock.calls[0][0];
+    expect(arg).toMatchObject({
+      question: "#TBP_baocao",
+      capability: "department_submit",
+      requiredAction: "SUBMIT",
+      allowedScopeTypes: ["DEPARTMENT"],
+    });
+    expect(arg.scopes).toHaveLength(2);
+  });
+
+  it("payload thiếu scope hợp lệ → KHÔNG gọi onScopeRequired", async () => {
+    const body =
+      `event: work_report_scope_required\ndata: {"question":"x","scopes":[{"no":"token"}]}\n\n` +
+      `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`;
+    fetchMock.mockResolvedValueOnce(sseResponse(body));
+
+    const onScopeRequired = vi.fn();
+    await streamPersonalChat({ question: "x", session_id: null }, { onScopeRequired });
+
+    expect(onScopeRequired).not.toHaveBeenCalled();
+  });
+});
