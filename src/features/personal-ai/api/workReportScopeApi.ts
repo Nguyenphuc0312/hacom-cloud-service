@@ -142,20 +142,19 @@ export function normalizeScopeList(raw: unknown): WorkReportScope[] {
 
 /**
  * GET /api/work-reports/scopes?capability=... — danh sách authorization KHỚP với
- * một thao tác (§3). `capability` bắt buộc theo contract v2.0: mỗi thao tác user
- * chỉ thấy đúng scope hợp lệ (vd `department_submit` → chỉ DEPARTMENT có SUBMIT).
+ * một thao tác (§3). `capability` **BẮT BUỘC**: BE bắt buộc query này, thiếu →
+ * 422 (xác nhận BE 25/07). Mỗi thao tác user chỉ thấy đúng scope hợp lệ (vd
+ * `department_submit` → chỉ DEPARTMENT có SUBMIT). FE không có nhánh gọi trần.
  *
  *  - 404 → `ScopeFeatureDisabledError` (flag đa-scope tắt, KHÔNG phải lỗi quyền §2).
  *  - 422 → capability sai (lỗi tích hợp) → ScopeFetchError, caller KHÔNG tự đổi (§7).
  */
-export async function fetchWorkReportScopes(options?: {
-  capability?: WorkReportCapability;
+export async function fetchWorkReportScopes(options: {
+  capability: WorkReportCapability;
   signal?: AbortSignal;
 }): Promise<WorkReportScopesResponse> {
   const token = getAccessToken();
-  const url = options?.capability
-    ? `${SCOPES_URL}?${new URLSearchParams({ capability: options.capability }).toString()}`
-    : SCOPES_URL;
+  const url = `${SCOPES_URL}?${new URLSearchParams({ capability: options.capability }).toString()}`;
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -178,7 +177,7 @@ export async function fetchWorkReportScopes(options?: {
     count: typeof payload.count === "number" ? payload.count : scopes.length,
     scopes,
     // Echo lại từ BE để đối chiếu — ưu tiên giá trị response, lùi về capability đã gửi.
-    capability: asCapability(payload.capability) ?? options?.capability,
+    capability: asCapability(payload.capability) ?? options.capability,
     requiredAction: asRequiredAction(payload.requiredAction),
     allowedScopeTypes: normalizeScopeTypes(payload.allowedScopeTypes),
   };
@@ -227,6 +226,31 @@ export function describeScope(scope: WorkReportScope): string {
 /** Scope có cho phép nộp báo cáo cấp không (ẩn nút nộp nếu chỉ aggregate, §6.2). */
 export function canSubmit(scope: WorkReportScope | null): boolean {
   return scope?.actions.includes("SUBMIT") ?? false;
+}
+
+/** scopeType hợp lệ cho một tag nộp báo cáo cấp (§2/§6). null = tag không phải nộp. */
+const SUBMIT_TAG_SCOPE_TYPE: Record<string, WorkReportScopeType> = {
+  "#tbp_baocao": "DEPARTMENT",
+  "#lddv_baocao": "ORG_UNIT",
+};
+
+/**
+ * Được phép NỘP báo cáo cấp cho tag này với scope đang chọn không (§6, kiểm ở UI).
+ *
+ *  - `#TBP_baocao`  → chỉ khi scope là DEPARTMENT + có SUBMIT.
+ *  - `#LDDV_baocao` → chỉ khi scope là ORG_UNIT + có SUBMIT.
+ *  - `#TCT_tonghop` → KHÔNG bao giờ nộp (chỉ tổng hợp — AGGREGATE, không SUBMIT).
+ *
+ * Đây là kiểm soát UI (ẩn/chặn luồng nộp) — pre-flight/BE vẫn kiểm lại (§6).
+ * Không có scope đang chọn → false (chưa chọn thì chưa được nộp).
+ */
+export function canSubmitLevelReport(
+  question: string,
+  scope: WorkReportScope | null,
+): boolean {
+  const requiredType = SUBMIT_TAG_SCOPE_TYPE[question.trim().toLowerCase()];
+  if (!requiredType) return false; // #TCT_tonghop hoặc tag không phải nộp.
+  return !!scope && scope.scopeType === requiredType && canSubmit(scope);
 }
 
 /**

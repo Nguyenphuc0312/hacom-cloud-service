@@ -14,6 +14,7 @@ import {
   tableToPlainText,
   ExportExpiredError,
 } from "../../services/tableExport";
+import { useWorkReportScopeStore } from "../../stores/workReportScopeStore";
 import { logger } from "../../../../utils/logger";
 import { toast } from "../../../../utils/toast";
 
@@ -25,6 +26,12 @@ interface TableExportMenuProps {
   /** session_id + exportId → Excel xuất từ snapshot dữ liệu gốc (đủ cột đã ẩn). */
   sessionId?: string;
   exportId?: string;
+  /**
+   * Epoch phạm vi lúc tạo bảng (§5). Khác epoch hiện tại = user đã đổi scope →
+   * snapshot cũ không khớp token mới → vô hiệu Xuất Excel. undefined = bảng
+   * không thuộc phạm vi báo cáo → luôn cho xuất.
+   */
+  scopeEpoch?: number;
 }
 
 /**
@@ -36,11 +43,15 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   title,
   sessionId,
   exportId,
+  scopeEpoch,
 }) => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // §5: bảng thuộc phạm vi báo cáo bị "hết hạn" khi user đổi scope (epoch đổi).
+  const currentEpoch = useWorkReportScopeStore((s) => s.dataEpoch);
+  const scopeStale = scopeEpoch !== undefined && scopeEpoch !== currentEpoch;
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +90,13 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
 
   const handleDownloadExcel = async () => {
     setOpen(false);
+    // §5: đổi scope → snapshot cũ không khớp token mới. Chặn xuất, yêu cầu hỏi lại.
+    if (scopeStale) {
+      toast.error(
+        "Bạn đã đổi phạm vi báo cáo. Vui lòng hỏi lại báo cáo để xuất theo phạm vi mới.",
+      );
+      return;
+    }
     const table = parseMarkdownTable(content);
     try {
       setBusy(true);
@@ -150,7 +168,13 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
           <button
             type="button"
             onClick={() => void handleDownloadExcel()}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-text-primary transition-colors hover:bg-[#1976D2]/8"
+            disabled={scopeStale}
+            title={
+              scopeStale
+                ? "Đã đổi phạm vi báo cáo — hỏi lại báo cáo để xuất theo phạm vi mới."
+                : undefined
+            }
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-text-primary transition-colors hover:bg-[#1976D2]/8 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <span className="text-text-muted">
               <DownloadIcon size={14} />
