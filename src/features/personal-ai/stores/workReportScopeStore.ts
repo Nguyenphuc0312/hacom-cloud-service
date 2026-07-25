@@ -30,10 +30,26 @@ interface WorkReportScopeState {
    * giá trị này làm key/dep để bỏ dữ liệu scope cũ, không trộn hai scope.
    */
   dataEpoch: number;
+  /**
+   * Khóa danh tính của lựa chọn scope hiện tại = `authUserId|capability` (§7).
+   * Token scope chỉ hợp lệ cho đúng người + đúng thao tác đã nạp nó. Khi user
+   * hoặc capability đổi (đổi tag, đổi quyền, đăng nhập tài khoản khác), khóa
+   * lệch → KHÔNG tái sử dụng token cũ; `ensureScopeKey` xóa lựa chọn để nạp lại.
+   * null = chưa có lựa chọn gắn khóa. (authorizationVersion nằm trong token BE
+   * ký, BE tự kiểm khi verify — FE khóa theo user+capability là đủ ở client.)
+   */
+  scopeKey: string | null;
 
   setScopes: (scopes: WorkReportScope[], capability?: WorkReportCapability) => void;
   select: (scope: WorkReportScope) => void;
   requirePick: (pendingQuestion?: string, capability?: WorkReportCapability) => void;
+  /**
+   * Chốt khóa `authUserId|capability` cho lựa chọn sắp nạp (§7). Nếu khóa mới
+   * khác khóa đang giữ → xóa lựa chọn/scopes cũ (không tái dùng token của thao
+   * tác/tài khoản khác) rồi ghi khóa mới. Gọi TRƯỚC mỗi lần pre-flight/gửi.
+   * @returns true nếu khóa đổi (đã xóa lựa chọn cũ) — caller nên nạp lại /scopes.
+   */
+  ensureScopeKey: (authUserId: string, capability: WorkReportCapability) => boolean;
   /** Xóa lựa chọn khi 403 (token hết hạn / quyền bị thu hồi / đổi version). */
   clearSelection: () => void;
   cancelPick: () => void;
@@ -47,13 +63,16 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
   pendingQuestion: null,
   capability: null,
   dataEpoch: 0,
+  scopeKey: null,
 
   setScopes: (scopes, capability) =>
     set((state) => ({
       scopes,
-      // count == 1 → FE tự chọn nhưng vẫn giữ token (§3). count > 1 → bắt chọn.
+      // UX chốt lại: LUÔN mở dropdown khi có scope. count == 1 → pre-select sẵn
+      // lựa chọn duy nhất (giữ token) nhưng vẫn `isPicking` để widget hiện ra,
+      // user phải xác nhận. count > 1 → chưa chọn, bắt user chọn.
       selected: scopes.length === 1 ? scopes[0] : null,
-      isPicking: scopes.length > 1,
+      isPicking: scopes.length > 0,
       // Giữ capability để nạp lại đúng khi 403; không truyền thì giữ giá trị cũ.
       capability: capability ?? state.capability,
     })),
@@ -78,6 +97,25 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       capability: capability ?? state.capability,
     })),
 
+  ensureScopeKey: (authUserId, capability) => {
+    const key = `${authUserId}|${capability}`;
+    let changed = false;
+    set((state) => {
+      if (state.scopeKey === key) return {}; // cùng người + thao tác → giữ nguyên.
+      // Khóa đổi → token cũ (nếu có) thuộc thao tác/tài khoản khác, KHÔNG tái
+      // dùng. Xóa lựa chọn + danh sách để buộc nạp lại /scopes?capability đúng.
+      changed = state.selected !== null || state.scopes !== null;
+      return {
+        scopeKey: key,
+        selected: null,
+        scopes: null,
+        capability,
+        dataEpoch: changed ? state.dataEpoch + 1 : state.dataEpoch,
+      };
+    });
+    return changed;
+  },
+
   clearSelection: () =>
     set((state) => ({
       selected: null,
@@ -96,6 +134,7 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       isPicking: false,
       pendingQuestion: null,
       capability: null,
+      scopeKey: null,
       dataEpoch: state.dataEpoch + 1,
     })),
 }));
