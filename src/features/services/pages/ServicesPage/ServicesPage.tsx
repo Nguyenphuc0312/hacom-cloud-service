@@ -45,7 +45,7 @@ const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({ service }) => {
       }}
     >
       <div className="service-card-header">
-        <Text strong className="service-card-name">{service.name}</Text>
+        <Text strong className="service-card-name">{service.displayName}</Text>
         <StatusBadge
           status={
             service.status === 'up'
@@ -61,7 +61,7 @@ const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({ service }) => {
       <div className="service-card-body">
         <div className="service-card-metric">
           <Text type="secondary" className="service-card-label">Độ trễ</Text>
-          <Text strong>{formatMs(service.latencyMs)}</Text>
+          <Text strong>{service.latencyMs === null ? 'Chưa có dữ liệu canonical' : formatMs(service.latencyMs)}</Text>
         </div>
         <div className="service-card-metric">
           <Text type="secondary" className="service-card-label">Kiểm tra</Text>
@@ -72,6 +72,7 @@ const ServiceStatusCard: React.FC<ServiceStatusCardProps> = ({ service }) => {
       </div>
       <div className="service-card-footer">
         <Text type="secondary" className="service-card-summary">{service.summary}</Text>
+        {service.freshness !== 'FRESH' && <Text type="warning">Dữ liệu {service.freshness.toLowerCase()}</Text>}
         {(service.version || service.build) && (
           <Text type="secondary" className="service-card-version">
             v{service.version || service.build}
@@ -158,7 +159,7 @@ export const ServicesPage = () => {
       title: 'Độ trễ',
       dataIndex: 'latencyMs',
       width: 120,
-      render: (value: number) => formatMs(value),
+      render: (value: number | null) => value === null ? 'Chưa có dữ liệu canonical' : formatMs(value),
     },
     {
       title: 'Tóm tắt',

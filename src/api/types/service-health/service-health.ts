@@ -1,10 +1,18 @@
+export type SystemHealthStatus = 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'MAINTENANCE' | 'UNKNOWN';
+export type DataFreshnessStatus = 'FRESH' | 'STALE' | 'EXPIRED' | 'UNKNOWN';
 export type ServiceStatus = 'up' | 'down' | 'degraded' | 'unknown';
 
 export interface ServiceHealthItem {
   name: string;
+  serviceId: string;
+  displayName: string;
   status: ServiceStatus;
+  canonicalStatus: SystemHealthStatus;
+  freshness: DataFreshnessStatus;
+  required: boolean;
   checkedAt: string;
-  latencyMs: number;
+  lastSuccessfulCheckAt: string | null;
+  latencyMs: number | null;
   summary: string;
   version?: string;
   build?: string;
@@ -16,10 +24,16 @@ export interface ServiceHealthSummary {
   up: number;
   down: number;
   degraded: number;
+  critical: number;
+  unknown: number;
+  stale: number;
 }
 
 export interface ServiceHealthResponse {
   checkedAt: string;
+  overallStatus: SystemHealthStatus;
+  freshness: DataFreshnessStatus;
+  partial: boolean;
   summary: ServiceHealthSummary;
   items: ServiceHealthItem[];
 }
