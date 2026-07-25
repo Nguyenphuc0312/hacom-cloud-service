@@ -5,6 +5,20 @@
 > Backend: Go  
 > Phạm vi: Personal Cloud dạng timeline giống Zalo, chưa kết nối Chat và chưa triển khai Folder CRUD
 
+## Khởi động skeleton
+
+Yêu cầu: Go 1.22+, Docker và Docker Compose.
+
+```bash
+cp .env.example .env
+make infra-up
+make run-api
+```
+
+Kiểm tra API tại `http://localhost:8080/health`. Worker có thể chạy ở terminal khác bằng `make run-worker`.
+
+Skeleton hiện chỉ cung cấp health check, cấu hình, interface nghiệp vụ và hạ tầng local. Upload, PostgreSQL repository, MinIO adapter, migration và worker handler là các đầu việc nhóm sẽ triển khai theo quy trình bên dưới.
+
 ## 1. Cách tổ chức chung
 
 Cả bốn người cùng làm một quy trình. Chỉ khi đạt Gate chung, cả nhóm mới chuyển sang quy trình tiếp theo.
