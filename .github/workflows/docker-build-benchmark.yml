@@ -1,6 +1,9 @@
 name: Chat Admin Panel Docker Build Benchmark
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-build-benchmark.yml'
   workflow_dispatch:
     inputs:
       cache_mode:
@@ -38,9 +41,9 @@ jobs:
     env:
       CACHE_SCOPE: chat-admin-panel-docker-build
       EVIDENCE_SUBDIR: chat-admin-panel-buildkit-evidence
-      BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
-      CACHE_MODE: ${{ inputs.cache_mode }}
-      INVALIDATE_DEPENDENCY_LAYER: ${{ inputs.invalidate_dependency_layer }}
+      BENCHMARK_LABEL: ${{ inputs.benchmark_label || 'pr-benchmark' }}
+      CACHE_MODE: ${{ inputs.cache_mode || 'read-write' }}
+      INVALIDATE_DEPENDENCY_LAYER: ${{ inputs.invalidate_dependency_layer || 'true' }}
     steps:
       - uses: actions/checkout@v4
 
