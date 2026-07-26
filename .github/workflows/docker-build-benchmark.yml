@@ -75,7 +75,7 @@ jobs:
           cp -a "${GITHUB_WORKSPACE}" "${base_context}"
           cp -a "${base_context}" "${source_context}"
           cp -a "${base_context}" "${dependency_context}"
-          printf '\n/* CI benchmark source-only context mutation; not committed. */\n' >> "${source_context}/src/main/main.tsx"
+          printf 'phase-3-source-marker=%s\n' "${GITHUB_SHA}" > "${source_context}/public/phase-3-benchmark.txt"
           if [[ "${INVALIDATE_DEPENDENCY_LAYER}" == "true" ]]; then
             # Whitespace preserves valid JSON while changing the lockfile build input.
             printf '\n' >> "${dependency_context}/package-lock.json"
@@ -153,18 +153,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           source "${EVIDENCE_DIR}/images.env"
-          printf 'scenario,image_ref,healthz,http_root,container_running,result\n' > "${EVIDENCE_DIR}/smoke-results.csv"
+          printf 'scenario,image_ref,healthz,http_root,source_marker,container_running,result\n' > "${EVIDENCE_DIR}/smoke-results.csv"
 
           smoke_image() {
             local scenario="$1"
             local image_ref="$2"
             local container_name="chat-admin-panel-benchmark-${scenario}-${GITHUB_RUN_ID}"
-            local host_port healthz_ok root_ok running
+            local host_port healthz_ok root_ok source_marker_ok running
             docker rm -f "${container_name}" >/dev/null 2>&1 || true
             docker run -d --rm --name "${container_name}" -p 127.0.0.1::80 "${image_ref}" >/dev/null
             host_port="$(docker port "${container_name}" 80/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
             healthz_ok=false
             root_ok=false
+            source_marker_ok=not_applicable
             for attempt in $(seq 1 30); do
               if curl -fsS --max-time 3 "http://127.0.0.1:${host_port}/healthz" >/dev/null; then
                 healthz_ok=true
@@ -180,11 +181,18 @@ jobs:
               ! grep -Eiq 'build error|internal server error' "${EVIDENCE_DIR}/${scenario}-index.html"; then
               root_ok=true
             fi
+            if [[ "${scenario}" == "warm_source_change" ]]; then
+              source_marker_ok=false
+              if curl -fsS --max-time 3 "http://127.0.0.1:${host_port}/phase-3-benchmark.txt" | \
+                grep -Fx "phase-3-source-marker=${GITHUB_SHA}"; then
+                source_marker_ok=true
+              fi
+            fi
             running="$(docker inspect "${container_name}" --format '{{.State.Running}}')"
             docker rm -f "${container_name}" >/dev/null
-            printf '%s,%s,%s,%s,%s,%s\n' "${scenario}" "${image_ref}" "${healthz_ok}" "${root_ok}" "${running}" \
-              "$([[ "${healthz_ok}" == true && "${root_ok}" == true && "${running}" == true ]] && echo PASS || echo FAIL)" >> "${EVIDENCE_DIR}/smoke-results.csv"
-            [[ "${healthz_ok}" == true && "${root_ok}" == true && "${running}" == true ]]
+            printf '%s,%s,%s,%s,%s,%s,%s\n' "${scenario}" "${image_ref}" "${healthz_ok}" "${root_ok}" "${source_marker_ok}" "${running}" \
+              "$([[ "${healthz_ok}" == true && "${root_ok}" == true && "${source_marker_ok}" != false && "${running}" == true ]] && echo PASS || echo FAIL)" >> "${EVIDENCE_DIR}/smoke-results.csv"
+            [[ "${healthz_ok}" == true && "${root_ok}" == true && "${source_marker_ok}" != false && "${running}" == true ]]
           }
 
           smoke_image cold "${cold_image_ref}"
