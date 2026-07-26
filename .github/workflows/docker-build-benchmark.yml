@@ -1,0 +1,211 @@
+name: Chat Admin Panel Docker Build Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      cache_mode:
+        description: Cache backend mode for this non-production benchmark
+        required: true
+        default: read-write
+        type: choice
+        options:
+          - read-write
+          - read-only
+          - disabled
+      benchmark_label:
+        description: Trace label (letters, numbers, dot, underscore, or dash)
+        required: true
+        default: phase-3
+        type: string
+      invalidate_dependency_layer:
+        description: Run the controlled lockfile-input invalidation scenario
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chat-admin-panel-docker-benchmark-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: BuildKit cache benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CACHE_SCOPE: chat-admin-panel-docker-build
+      EVIDENCE_SUBDIR: chat-admin-panel-buildkit-evidence
+      BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
+      CACHE_MODE: ${{ inputs.cache_mode }}
+      INVALIDATE_DEPENDENCY_LAYER: ${{ inputs.invalidate_dependency_layer }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate non-production inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          case "${CACHE_MODE}" in
+            read-write|read-only|disabled) ;;
+            *) echo "Unsupported cache_mode" >&2; exit 1 ;;
+          esac
+          if ! [[ "${BENCHMARK_LABEL}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "benchmark_label must contain only letters, numbers, dot, underscore, or dash" >&2
+            exit 1
+          fi
+          case "${INVALIDATE_DEPENDENCY_LAYER}" in true|false) ;; *) exit 1 ;; esac
+          echo "EVIDENCE_DIR=${RUNNER_TEMP}/${EVIDENCE_SUBDIR}" >> "${GITHUB_ENV}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Prepare isolated benchmark contexts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${EVIDENCE_DIR}"
+          base_context="${RUNNER_TEMP}/chat-admin-panel-base"
+          source_context="${RUNNER_TEMP}/chat-admin-panel-source-change"
+          dependency_context="${RUNNER_TEMP}/chat-admin-panel-lockfile-change"
+          cp -a "${GITHUB_WORKSPACE}" "${base_context}"
+          cp -a "${base_context}" "${source_context}"
+          cp -a "${base_context}" "${dependency_context}"
+          printf '\n/* CI benchmark source-only context mutation; not committed. */\n' >> "${source_context}/src/main/main.tsx"
+          if [[ "${INVALIDATE_DEPENDENCY_LAYER}" == "true" ]]; then
+            # Whitespace preserves valid JSON while changing the lockfile build input.
+            printf '\n' >> "${dependency_context}/package-lock.json"
+          fi
+          {
+            printf 'head_sha=%s\n' "${GITHUB_SHA}"
+            printf 'dockerfile_sha256=%s\n' "$(sha256sum "${base_context}/Dockerfile" | awk '{print $1}')"
+            printf 'base_lockfile_sha256=%s\n' "$(sha256sum "${base_context}/package-lock.json" | awk '{print $1}')"
+            printf 'source_lockfile_sha256=%s\n' "$(sha256sum "${source_context}/package-lock.json" | awk '{print $1}')"
+            printf 'dependency_lockfile_sha256=%s\n' "$(sha256sum "${dependency_context}/package-lock.json" | awk '{print $1}')"
+            printf 'cache_scope=%s\n' "${CACHE_SCOPE}"
+            printf 'cache_mode=%s\n' "${CACHE_MODE}"
+            printf 'benchmark_label=%s\n' "${BENCHMARK_LABEL}"
+          } > "${EVIDENCE_DIR}/inputs.env"
+          printf 'scenario,started_at,completed_at,duration_seconds,cache_mode,cache_scope,context,lockfile_sha256,image_id,image_size_bytes,cache_hit_lines,build_log\n' > "${EVIDENCE_DIR}/build-runs.csv"
+
+      - name: Run cold, warm, and dependency-input builds
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source "${EVIDENCE_DIR}/inputs.env"
+
+          build_scenario() {
+            local scenario="$1"
+            local context_dir="$2"
+            local image_ref="chat-admin-panel-benchmark:${scenario}-${GITHUB_RUN_ID}"
+            local log_file="${EVIDENCE_DIR}/${scenario}-build.log"
+            local started_at completed_at started_epoch completed_epoch duration image_id image_size cache_hit_lines
+            local -a cache_flags=()
+
+            case "${CACHE_MODE}" in
+              read-write)
+                cache_flags=(--cache-from "type=gha,scope=${CACHE_SCOPE}" --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}")
+                ;;
+              read-only)
+                cache_flags=(--cache-from "type=gha,scope=${CACHE_SCOPE}")
+                ;;
+              disabled)
+                cache_flags=()
+                ;;
+            esac
+
+            started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            started_epoch="$(date +%s)"
+            docker buildx build \
+              --file "${context_dir}/Dockerfile" \
+              --target production \
+              --platform linux/amd64 \
+              --progress plain \
+              --load \
+              --tag "${image_ref}" \
+              "${cache_flags[@]}" \
+              "${context_dir}" 2>&1 | tee "${log_file}"
+            completed_epoch="$(date +%s)"
+            completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            duration="$((completed_epoch - started_epoch))"
+            image_id="$(docker image inspect "${image_ref}" --format '{{.Id}}')"
+            image_size="$(docker image inspect "${image_ref}" --format '{{.Size}}')"
+            cache_hit_lines="$(grep -Eic '(^|[[:space:]])CACHED($|[[:space:]])|cache hit' "${log_file}" || true)"
+            printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+              "${scenario}" "${started_at}" "${completed_at}" "${duration}" "${CACHE_MODE}" "${CACHE_SCOPE}" \
+              "$(basename "${context_dir}")" "$(sha256sum "${context_dir}/package-lock.json" | awk '{print $1}')" \
+              "${image_id}" "${image_size}" "${cache_hit_lines}" "$(basename "${log_file}")" >> "${EVIDENCE_DIR}/build-runs.csv"
+            printf '%s=%s\n' "${scenario}_image_ref" "${image_ref}" >> "${EVIDENCE_DIR}/images.env"
+          }
+
+          build_scenario cold "${RUNNER_TEMP}/chat-admin-panel-base"
+          build_scenario warm_source_change "${RUNNER_TEMP}/chat-admin-panel-source-change"
+          if [[ "${INVALIDATE_DEPENDENCY_LAYER}" == "true" ]]; then
+            build_scenario dependency_input_change "${RUNNER_TEMP}/chat-admin-panel-lockfile-change"
+          fi
+
+      - name: Smoke test built images on localhost
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source "${EVIDENCE_DIR}/images.env"
+          printf 'scenario,image_ref,healthz,http_root,container_running,result\n' > "${EVIDENCE_DIR}/smoke-results.csv"
+
+          smoke_image() {
+            local scenario="$1"
+            local image_ref="$2"
+            local container_name="chat-admin-panel-benchmark-${scenario}-${GITHUB_RUN_ID}"
+            local host_port healthz_ok root_ok running
+            docker rm -f "${container_name}" >/dev/null 2>&1 || true
+            docker run -d --rm --name "${container_name}" -p 127.0.0.1::80 "${image_ref}" >/dev/null
+            host_port="$(docker port "${container_name}" 80/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
+            healthz_ok=false
+            root_ok=false
+            for attempt in $(seq 1 30); do
+              if curl -fsS --max-time 3 "http://127.0.0.1:${host_port}/healthz" >/dev/null; then
+                healthz_ok=true
+                break
+              fi
+              if [[ "$(docker inspect "${container_name}" --format '{{.State.Running}}')" != "true" ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if curl -fsS --max-time 3 "http://127.0.0.1:${host_port}/" -o "${EVIDENCE_DIR}/${scenario}-index.html" && \
+              grep -Eiq '<!doctype html|<html|id="root"' "${EVIDENCE_DIR}/${scenario}-index.html" && \
+              ! grep -Eiq 'build error|internal server error' "${EVIDENCE_DIR}/${scenario}-index.html"; then
+              root_ok=true
+            fi
+            running="$(docker inspect "${container_name}" --format '{{.State.Running}}')"
+            docker rm -f "${container_name}" >/dev/null
+            printf '%s,%s,%s,%s,%s,%s\n' "${scenario}" "${image_ref}" "${healthz_ok}" "${root_ok}" "${running}" \
+              "$([[ "${healthz_ok}" == true && "${root_ok}" == true && "${running}" == true ]] && echo PASS || echo FAIL)" >> "${EVIDENCE_DIR}/smoke-results.csv"
+            [[ "${healthz_ok}" == true && "${root_ok}" == true && "${running}" == true ]]
+          }
+
+          smoke_image cold "${cold_image_ref}"
+          smoke_image warm_source_change "${warm_source_change_image_ref}"
+          if [[ "${INVALIDATE_DEPENDENCY_LAYER}" == "true" ]]; then
+            smoke_image dependency_input_change "${dependency_input_change_image_ref}"
+          fi
+
+      - name: Collect sanitized cache evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Eih 'CACHED|cache hit|RUN npm ci|COPY package' "${EVIDENCE_DIR}"/*-build.log > "${EVIDENCE_DIR}/cache-evidence.log" || true
+          if grep -REiq 'ghp_|github_pat_|authorization:[[:space:]]*bearer|password=' "${EVIDENCE_DIR}"; then
+            echo "Potential secret-like value found in benchmark evidence" >&2
+            exit 1
+          fi
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-admin-panel-buildkit-benchmark-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
