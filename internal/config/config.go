@@ -9,15 +9,15 @@ import (
 const defaultMaxUploadBytes int64 = 100 * 1024 * 1024
 
 type Config struct {
-	AppEnv            string
-	APIAddr           string
-	DatabaseURL       string
-	MinIOEndpoint     string
-	MinIOAccessKey    string
-	MinIOSecretKey    string
-	MinIOUseSSL       bool
-	MinIOBucket       string
-	MaxUploadBytes    int64
+	AppEnv         string
+	APIAddr        string
+	DatabaseURL    string
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOUseSSL    bool
+	MinIOBucket    string
+	MaxUploadBytes int64
 }
 
 func Load() (Config, error) {
