@@ -1,6 +1,6 @@
 # Hacom Cloud — Quy trình 2 Implementation
 
-> Nhánh: `feature/process-2-personal-cloud`  
+> Nhánh: `feature/process-2-personal-cloud`
 > Phạm vi: Personal Cloud dạng timeline, text, link và quota
 
 ## Kết quả triển khai
