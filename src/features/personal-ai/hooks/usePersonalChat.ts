@@ -14,6 +14,7 @@ import { usePersonalAiStore } from "../stores/personalAiStore";
 import {
   getScopeToken,
   handleScopeErrorStatus,
+  isTokenValidFor,
   useWorkReportScopeStore,
 } from "../stores/workReportScopeStore";
 import {
@@ -165,6 +166,16 @@ export function usePersonalChat() {
         timestamp: new Date(),
       };
       addMessage(conversationId, userMessage);
+
+      // §4 (bản 2.1): `selectionToken` chỉ sống trong đúng vòng "BE hỏi → user
+      // chọn → FE gửi lại ĐÚNG câu hỏi đó kèm token". Câu hỏi MỚI trong cùng hội
+      // thoại — kể cả cùng chủ đề — phải gửi KHÔNG kèm token để BE tự quyết (và
+      // hỏi lại phạm vi nếu vẫn nhiều scope). Nhả token cũ NGAY ở đây, trước
+      // pre-flight, để pre-flight/`withScopeToken` bên dưới không thấy token cũ.
+      const isTokenTurn = isTokenValidFor(trimmed);
+      if (!isTokenTurn && getScopeToken()) {
+        useWorkReportScopeStore.getState().releaseScopeToken();
+      }
 
       // §2/§3: PRE-FLIGHT phạm vi cho tag báo cáo cấp (#TBP/#LDDV/#TCT).
       // Biết trước capability của thao tác → gọi `/scopes?capability` NGAY thay
@@ -638,7 +649,13 @@ export function usePersonalChat() {
         const scopeStore = useWorkReportScopeStore.getState();
         // §7: khóa theo authUserId + capability trước khi dùng lại token đang giữ.
         scopeStore.ensureScopeKey(user?.id ?? "", submitCapability);
-        let scope = scopeStore.selected;
+        // §4 (2.1): token chỉ dùng cho ĐÚNG lượt nộp đã sinh ra nó. Lần nộp mới
+        // (user đính kèm lại tệp cho một tag khác lượt trước) không được dùng lại
+        // token cũ — nhả ra để pre-flight bên dưới mở dropdown lại.
+        if (!isTokenValidFor(trimmed) && getScopeToken()) {
+          scopeStore.releaseScopeToken();
+        }
+        let scope = useWorkReportScopeStore.getState().selected;
         if (!getScopeToken()) {
           try {
             const res = await fetchWorkReportScopes({ capability: submitCapability });
