@@ -44,7 +44,6 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
-import { getDeclineReason } from "../utils/declineReasonStore";
 import { ConfirmDialog } from "../../../components/ui/Modal";
 import { resolvePublicResourceUrl } from "../../../config";
 import { CalendarAttachmentList } from "../../../components/ui/CalendarAttachmentZone";
@@ -151,8 +150,8 @@ export const EventDetailModal: React.FC<{
   /** Raw HR event (when available) — carries participant roster + response state. */
   hrEvent?: HRCalendarEvent;
   /** Called when the current user (an invitee) accepts/declines. `reason` chỉ
-   *  gửi kèm khi DECLINED — BE chưa có field lưu lý do (xem contract FE__calendar-decline-reason),
-   *  nên caller (CalendarPage/WeeklyCalendarWidget) hiện lưu tạm ở localStorage. */
+   *  gửi kèm khi DECLINED — BE lưu vào participant.responseNote và trả lại trong
+   *  roster, nên người tạo lịch đọc được. */
   onRespond?: (response: "ACCEPTED" | "DECLINED", reason?: string) => Promise<void> | void;
 }> = ({ event, onClose, onEdit, onDelete, isViewingOthers = false, hrEvent, onRespond }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -389,12 +388,9 @@ export const EventDetailModal: React.FC<{
     ? hrParticipants.find((p) => p.authUserId === currentUserId)
     : undefined;
   const myResponse = myParticipantRow?.response;
-  // Lý do từ chối đã lưu (chỉ máy này — xem declineReasonStore). Đọc lại mỗi khi
-  // modal mở/đổi response để hiện sau khi Cập nhật thành công.
-  const myStashedDeclineReason =
-    hrEvent && currentUserId && myResponse === "DECLINED"
-      ? getDeclineReason(hrEvent.id, currentUserId)
-      : null;
+  // Lý do từ chối lấy thẳng từ roster server — mọi người cùng thấy một nội dung.
+  const myDeclineReason =
+    myResponse === "DECLINED" ? (myParticipantRow?.responseNote ?? null) : null;
 
   const handleMessagePerson = async (userId: string) => {
     setPersonActionLoading(`msg:${userId}`);
@@ -826,6 +822,14 @@ export const EventDetailModal: React.FC<{
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-text-primary">{name}</p>
                         {sub && <p className="truncate text-[11px] text-text-muted">{sub}</p>}
+                        {/* Lý do từ chối — thứ người tạo lịch cần biết nhất khi
+                            thấy ai đó không tham gia. Không cắt dòng: lý do ngắn
+                            nhưng phải đọc được trọn vẹn. */}
+                        {p.response === "DECLINED" && p.responseNote && (
+                          <p className="mt-0.5 text-[11px] italic text-rose-600 dark:text-rose-300">
+                            Lý do: {p.responseNote}
+                          </p>
+                        )}
                       </div>
                       <span
                         className={clsx(
@@ -848,10 +852,10 @@ export const EventDetailModal: React.FC<{
         {(canRespond || canEdit || canDelete) && (
           <div className="flex-shrink-0 border-t border-border px-6 py-4">
             {/* Invitee response actions — Tham gia/Không tham gia là TOGGLE, không
-                phải hành động 1 chiều: từ chối KHÔNG xóa lịch, chỉ đổi trạng thái
-                phản hồi (xem hrCalendarApi.updateMyResponse — chỉ PATCH response,
-                event/participant row vẫn còn nguyên). Nút của trạng thái hiện tại
-                được tô đậm để rõ đây là toggle, có thể bấm lại để đổi ý bất cứ lúc nào. */}
+                phải hành động 1 chiều: từ chối KHÔNG xóa lịch và cũng không thu
+                hồi quyền xem (xem getEventPermissions bên hr-api), chỉ đổi trạng
+                thái phản hồi. Nút của trạng thái hiện tại được tô đậm để rõ đây là
+                toggle, có thể bấm lại để đổi ý bất cứ lúc nào. */}
             {canRespond && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -863,9 +867,9 @@ export const EventDetailModal: React.FC<{
                           ? "Bạn đã từ chối — lịch vẫn còn đây, đổi ý bấm Tham gia"
                           : "Bạn được mời tham gia lịch họp này"}
                     </p>
-                    {myStashedDeclineReason && (
+                    {myDeclineReason && (
                       <p className="mt-0.5 text-xs italic text-text-muted">
-                        Lý do đã ghi: “{myStashedDeclineReason}” (chỉ hiện trên máy này)
+                        Lý do đã gửi: “{myDeclineReason}”
                       </p>
                     )}
                   </div>
@@ -889,7 +893,11 @@ export const EventDetailModal: React.FC<{
                     <button
                       type="button"
                       disabled={responding !== null}
-                      onClick={() => setDeclineReasonOpen((v) => !v)}
+                      onClick={() => {
+                        // Mở ra thì nạp sẵn lý do đã gửi để sửa, không bắt gõ lại.
+                        if (!declineReasonOpen) setDeclineReason(myDeclineReason ?? "");
+                        setDeclineReasonOpen((v) => !v);
+                      }}
                       className={clsx(
                         "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
                         myResponse === "DECLINED"
@@ -919,7 +927,10 @@ export const EventDetailModal: React.FC<{
                     <div className="mt-1.5 flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => setDeclineReasonOpen(false)}
+                        onClick={() => {
+                          setDeclineReasonOpen(false);
+                          setDeclineReason("");
+                        }}
                         className="rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-surface-hover"
                       >
                         Hủy
