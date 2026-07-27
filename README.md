@@ -5,7 +5,7 @@
 > Backend: Go  
 > Phạm vi: Personal Cloud dạng timeline giống Zalo, chưa kết nối Chat và chưa triển khai Folder CRUD
 
-## Khởi động skeleton
+## Khởi động local
 
 Yêu cầu: Go 1.22+, Docker và Docker Compose.
 
@@ -47,9 +47,11 @@ scripts\dev.cmd logs
 scripts\dev.cmd down
 ```
 
-Gate 1 đã tích hợp cấu hình, PostgreSQL, MinIO, migration, dependency health API và Worker skeleton. Xem kết quả kiểm thử và kịch bản demo tại [`docs/gate1-integration-report.md`](docs/gate1-integration-report.md).
+Gate 1 đã tích hợp cấu hình, PostgreSQL, MinIO, migration, dependency health API và Worker skeleton. Xem kết quả kiểm thử tại [`docs/gate1-integration-report.md`](docs/gate1-integration-report.md).
 
-Các repository nghiệp vụ hiện vẫn là bản in-memory phục vụ kiểm thử. PostgreSQL repository, presigned upload API và MinIO adapter thật sẽ được nối trong các quy trình tiếp theo.
+Quy trình 2 đã bổ sung PostgreSQL repository thật cho Personal Cloud, text, link, timeline và quota. Xem kiến trúc và cách kiểm thử tại [`docs/process2-implementation.md`](docs/process2-implementation.md).
+
+Các repository in-memory cũ chỉ phục vụ unit test/prototype. Presigned upload API và MinIO adapter nghiệp vụ sẽ được nối trong Quy trình 3.
 
 ## 1. Cách tổ chức chung
 
@@ -235,7 +237,7 @@ Cả nhóm chỉ chuyển sang Quy trình 2 khi:
 
 ### Mục tiêu chung
 
-Tạo được Personal Drive 5 GB, lưu text/link giống Zalo, list timeline và đọc được quota.
+Tạo được Personal Cloud với quota cấu hình, lưu text/link giống Zalo, list timeline và đọc được quota. Giá trị demo hiện tại là 5 GB decimal và chưa phải yêu cầu chính thức.
 
 ### Người 1 — Drive và Item Repository
 
@@ -287,7 +289,8 @@ Tạo được Personal Drive 5 GB, lưu text/link giống Zalo, list timeline v
 POST /api/v1/cloud/texts
 POST /api/v1/cloud/links
 GET  /api/v1/cloud/items
-GET  /api/v1/cloud/items/:id
+GET  /api/v1/cloud/items/{id}
+GET  /api/v1/cloud/quota
 ```
 
 **Đầu ra bàn giao:**
@@ -303,16 +306,16 @@ GET  /api/v1/cloud/items/:id
 - User không xem được item của user khác.
 - Timeline trả về cấu trúc thống nhất cho text, link và file sau này.
 
-### Người 3 — Quota, ledger và idempotency
+### Người 3 — Quota, ledger và transaction
 
 **Độ khó:** 4/5
 
 **Hướng dẫn:**
 
-1. Khi tạo drive, tạo quota mặc định `5 × 1024³` byte.
+1. Khi tạo drive, lấy quota từ `DEFAULT_QUOTA_BYTES`.
 2. Viết quota repository và ledger repository.
 3. Tạo transaction cộng dung lượng text/link.
-4. Mỗi thao tác phải có `idempotency_key` unique.
+4. Mỗi Item tạo một ledger entry nội bộ để đối soát dung lượng.
 5. Viết API/service đọc quota.
 
 **Nội dung công việc:**
@@ -320,20 +323,20 @@ GET  /api/v1/cloud/items/:id
 - `cloud_quotas`.
 - `cloud_usage_ledger`.
 - Cộng dung lượng text/link theo UTF-8 byte.
-- Chống cộng hai lần khi request retry.
+- Item, quota và ledger cùng commit hoặc cùng rollback.
 - `GET /api/v1/cloud/quota`.
 
 **Đầu ra bàn giao:**
 
 - Quota service.
 - Ledger repository.
-- Test idempotency.
+- Test transaction và request đồng thời.
 - Test số byte text/link.
 
 **Cần đạt sau khi hoàn thành:**
 
-- Quota mặc định đúng 5 GB decimal.
-- Retry cùng idempotency key không tăng dung lượng lần hai.
+- Quota mới lấy đúng giá trị cấu hình.
+- Hai lần người dùng chủ động lưu cùng nội dung tạo hai Item và đều tính quota.
 - `used_bytes` và tổng ledger khớp nhau.
 
 ### Người 4 — Test và Postman cho Quy trình 2
@@ -364,7 +367,7 @@ GET  /api/v1/cloud/items/:id
 
 - Một người khác chạy collection và nhận cùng kết quả.
 - Có test quyền sở hữu item.
-- Có test request lặp không làm sai quota.
+- Có test transaction và quyền sở hữu dữ liệu.
 
 ### Gate 2
 
@@ -372,7 +375,7 @@ GET  /api/v1/cloud/items/:id
 - Lưu và list được text/link.
 - Timeline có pagination.
 - Quota mặc định và used quota chính xác.
-- Ledger/idempotency test đạt.
+- Ledger/transaction/concurrency test đạt.
 - Postman collection chạy lại được.
 
 ## 4. Quy trình 3 — Upload file và MinIO

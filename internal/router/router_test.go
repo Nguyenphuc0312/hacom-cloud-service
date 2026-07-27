@@ -50,3 +50,28 @@ func TestHomeRejectsPost(t *testing.T) {
 		t.Fatalf("expected status 405, got %d", response.Code)
 	}
 }
+
+func TestCloudHandlerIsMountedUnderVersionedPrefix(t *testing.T) {
+	cloudHandler := http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		request *http.Request,
+	) {
+		if request.URL.Path != "/quota" {
+			t.Fatalf("cloud handler path = %q, want /quota", request.URL.Path)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	handler := New(health.NewService(0), cloudHandler)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/cloud/quota",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", response.Code)
+	}
+}
