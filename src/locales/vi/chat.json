@@ -108,7 +108,8 @@
       "editedAt": "Chỉnh sửa lúc {{time}}",
       "original": "Nội dung gốc",
       "empty": "Chưa có lịch sử chỉnh sửa.",
-      "loadError": "Không thể tải lịch sử chỉnh sửa."
+      "loadError": "Không thể tải lịch sử chỉnh sửa.",
+      "current": "hiện tại"
     }
   },
   "composer": {

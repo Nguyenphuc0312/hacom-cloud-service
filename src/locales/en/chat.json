@@ -108,7 +108,8 @@
       "editedAt": "Edited at {{time}}",
       "original": "Original",
       "empty": "No edit history yet.",
-      "loadError": "Could not load edit history."
+      "loadError": "Could not load edit history.",
+      "current": "current"
     }
   },
   "composer": {
