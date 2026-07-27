@@ -4,6 +4,7 @@ import {
   appendScopeTokenToUrl,
   getScopeToken,
   handleScopeErrorStatus,
+  isTokenValidFor,
   useWorkReportScopeStore,
   withScopeToken,
 } from "./workReportScopeStore";
@@ -108,6 +109,100 @@ describe("ensureScopeKey — khóa authUserId + capability (§7)", () => {
     const changed = store.ensureScopeKey("u2", "department_submit");
     expect(changed).toBe(true);
     expect(getScopeToken()).toBeUndefined();
+  });
+});
+
+describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1)", () => {
+  const scopeA = scope({ authorizationId: "auth-A", selectionToken: "token-A" });
+  const scopeB = scope({ authorizationId: "auth-B", selectionToken: "token-B" });
+
+  it("token chỉ hợp lệ cho ĐÚNG câu hỏi đã sinh ra dropdown", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([scopeA, scopeB], "report_read");
+    store.requirePick("tổng hợp báo cáo của mọi người trong phòng ban", "report_read");
+    store.select(scopeA);
+
+    expect(isTokenValidFor("tổng hợp báo cáo của mọi người trong phòng ban")).toBe(true);
+    // Khoảng trắng thừa vẫn là cùng câu hỏi (FE trim trước khi gửi).
+    expect(isTokenValidFor("  tổng hợp báo cáo của mọi người trong phòng ban  ")).toBe(true);
+    // Câu hỏi khác — kể cả cùng chủ đề — KHÔNG được dùng lại token.
+    expect(isTokenValidFor("tổng hợp báo cáo tuần này của phòng ban")).toBe(false);
+  });
+
+  it("chưa chọn scope thì không câu hỏi nào hợp lệ", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([scopeA, scopeB], "report_read");
+    store.requirePick("câu hỏi chung chung", "report_read");
+    expect(isTokenValidFor("câu hỏi chung chung")).toBe(false);
+  });
+
+  it("releaseScopeToken xóa token + danh sách nhưng KHÔNG mở widget", () => {
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([scopeA, scopeB], "report_read");
+    store.requirePick("câu hỏi 1", "report_read");
+    store.select(scopeA);
+    expect(getScopeToken()).toBe("token-A");
+
+    useWorkReportScopeStore.getState().releaseScopeToken();
+    const state = useWorkReportScopeStore.getState();
+    expect(getScopeToken()).toBeUndefined();
+    expect(state.scopes).toBeNull();
+    expect(state.tokenQuestion).toBeNull();
+    // Nhả token là kết thúc bình thường, không phải lỗi → không tự bật dropdown.
+    expect(state.isPicking).toBe(false);
+    // Dữ liệu/bảng của scope cũ không còn hợp lệ.
+    expect(state.dataEpoch).toBeGreaterThan(0);
+  });
+
+  it("acceptance §9.8: lượt 2 chọn scope B thì gửi token B, không phải token A", () => {
+    const store = useWorkReportScopeStore.getState();
+
+    // Lượt 1: câu hỏi chung chung → dropdown → chọn scope A → gửi kèm token A.
+    store.setScopes([scopeA, scopeB], "report_read");
+    store.requirePick("tổng hợp báo cáo phòng ban", "report_read");
+    store.select(scopeA);
+    expect(withScopeToken({ question: "tổng hợp báo cáo phòng ban" })).toMatchObject({
+      scope_token: "token-A",
+    });
+
+    // Lượt 2: câu hỏi chung chung KHÁC → token cũ không còn hợp lệ → FE nhả token
+    // và gửi KHÔNG kèm scope_token để BE hỏi lại phạm vi.
+    const nextQuestion = "tổng hợp báo cáo của mọi người";
+    expect(isTokenValidFor(nextQuestion)).toBe(false);
+    useWorkReportScopeStore.getState().releaseScopeToken();
+    expect(withScopeToken({ question: nextQuestion })).toEqual({ question: nextQuestion });
+
+    // BE trả `work_report_scope_required` lần nữa → lần này user chọn scope B.
+    const store2 = useWorkReportScopeStore.getState();
+    store2.setScopes([scopeA, scopeB], "report_read");
+    store2.requirePick(nextQuestion, "report_read");
+    store2.select(scopeB);
+    expect(isTokenValidFor(nextQuestion)).toBe(true);
+    expect(withScopeToken({ question: nextQuestion })).toMatchObject({
+      scope_token: "token-B",
+    });
+  });
+
+  it("ensureScopeKey / clearSelection / reset đều xóa tokenQuestion", () => {
+    const seed = () => {
+      const s = useWorkReportScopeStore.getState();
+      s.setScopes([scopeA], "report_read");
+      s.requirePick("câu hỏi", "report_read");
+      s.select(scopeA);
+      expect(useWorkReportScopeStore.getState().tokenQuestion).toBe("câu hỏi");
+    };
+
+    seed();
+    useWorkReportScopeStore.getState().clearSelection();
+    expect(useWorkReportScopeStore.getState().tokenQuestion).toBeNull();
+
+    seed();
+    useWorkReportScopeStore.getState().ensureScopeKey("u1", "department_submit");
+    expect(useWorkReportScopeStore.getState().tokenQuestion).toBeNull();
+
+    seed();
+    useWorkReportScopeStore.getState().reset();
+    expect(useWorkReportScopeStore.getState().tokenQuestion).toBeNull();
   });
 });
 
