@@ -41,6 +41,7 @@ import {
   toLocalDateString,
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
+import { getDeclineReason } from "../utils/declineReasonStore";
 import { ConfirmDialog } from "../../../components/ui/Modal";
 import { resolvePublicResourceUrl } from "../../../config";
 import { CalendarAttachmentList } from "../../../components/ui/CalendarAttachmentZone";
@@ -74,6 +75,9 @@ const formatDateVN = (dateStr: string): string => {
     return dateStr;
   }
 };
+
+/** Địa điểm dạng URL (Meet/Zoom/Teams…) → render clickable link thay vì text thô. */
+const isMeetingUrl = (value: string): boolean => /^https?:\/\/\S+$/i.test(value.trim());
 
 /** Human duration between two ISO timestamps (vi). */
 const calculateDuration = (startAt: string, endAt: string): string => {
@@ -143,12 +147,17 @@ export const EventDetailModal: React.FC<{
   isViewingOthers?: boolean;
   /** Raw HR event (when available) — carries participant roster + response state. */
   hrEvent?: HRCalendarEvent;
-  /** Called when the current user (an invitee) accepts/declines. */
-  onRespond?: (response: "ACCEPTED" | "DECLINED") => Promise<void> | void;
+  /** Called when the current user (an invitee) accepts/declines. `reason` chỉ
+   *  gửi kèm khi DECLINED — BE chưa có field lưu lý do (xem contract FE__calendar-decline-reason),
+   *  nên caller (CalendarPage/WeeklyCalendarWidget) hiện lưu tạm ở localStorage. */
+  onRespond?: (response: "ACCEPTED" | "DECLINED", reason?: string) => Promise<void> | void;
 }> = ({ event, onClose, onEdit, onDelete, isViewingOthers = false, hrEvent, onRespond }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEditConfirm, setShowEditConfirm] = React.useState(false);
   const [responding, setResponding] = React.useState<null | "ACCEPTED" | "DECLINED">(null);
+  // Ô nhập lý do — chỉ mở khi bấm "Không tham gia", không bắt buộc điền.
+  const [declineReasonOpen, setDeclineReasonOpen] = React.useState(false);
+  const [declineReason, setDeclineReason] = React.useState("");
   // Khối đính kèm collapse — mặc định đóng cho gọn modal.
   const [attachmentsOpen, setAttachmentsOpen] = React.useState(false);
   const colors = getEventColor(event.type);
@@ -212,11 +221,12 @@ export const EventDetailModal: React.FC<{
   // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
   // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
   const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
-  const handleRespondClick = async (response: "ACCEPTED" | "DECLINED") => {
+  const handleRespondClick = async (response: "ACCEPTED" | "DECLINED", reason?: string) => {
     if (!onRespond) return;
     setResponding(response);
     try {
-      await onRespond(response);
+      await onRespond(response, reason);
+      if (response === "DECLINED") setDeclineReasonOpen(false);
     } finally {
       setResponding(null);
     }
@@ -303,6 +313,19 @@ export const EventDetailModal: React.FC<{
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { getRelationshipState, sendFriendRequest, acceptFriendRequest } = useFriendship();
   const [personActionLoading, setPersonActionLoading] = React.useState<string | null>(null);
+
+  // Phản hồi hiện tại của CHÍNH mình trong roster — dùng để tô đậm đúng nút
+  // (Tham gia/Không tham gia) đang được chọn, và biết đây là đổi ý hay lần đầu.
+  const myParticipantRow = currentUserId
+    ? hrParticipants.find((p) => p.authUserId === currentUserId)
+    : undefined;
+  const myResponse = myParticipantRow?.response;
+  // Lý do từ chối đã lưu (chỉ máy này — xem declineReasonStore). Đọc lại mỗi khi
+  // modal mở/đổi response để hiện sau khi Cập nhật thành công.
+  const myStashedDeclineReason =
+    hrEvent && currentUserId && myResponse === "DECLINED"
+      ? getDeclineReason(hrEvent.id, currentUserId)
+      : null;
 
   const handleMessagePerson = async (userId: string) => {
     setPersonActionLoading(`msg:${userId}`);
@@ -504,7 +527,8 @@ export const EventDetailModal: React.FC<{
               </>
             )}
 
-            {/* Location / Meeting Link */}
+            {/* Location / Meeting Link — location là URL (Meet/Zoom/Teams…) → hiện
+                như link bấm được kèm nút "Tham gia họp", thay vì text thô. */}
             {location && (
               <div className="flex items-start gap-3">
                 {format === "online" ? (
@@ -512,9 +536,29 @@ export const EventDetailModal: React.FC<{
                 ) : (
                   <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" />
                 )}
-                <p className="text-sm text-text-primary break-all">
-                  {location}
-                </p>
+                {isMeetingUrl(location) ? (
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={location}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all text-sm text-[#1565C0] underline decoration-[#1565C0]/40 underline-offset-2 hover:text-[#0D47A1] dark:text-[#6BA8F0]"
+                    >
+                      {location}
+                    </a>
+                    <a
+                      href={location}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-[#1565C0] px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-[#1976D2]"
+                    >
+                      <VideoCameraIcon className="h-3.5 w-3.5" />
+                      Tham gia họp
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-primary break-all">{location}</p>
+                )}
               </div>
             )}
 
@@ -734,30 +778,94 @@ export const EventDetailModal: React.FC<{
         {/* Footer ghim — luôn thấy được, nội dung phía trên tự cuộn. */}
         {(canRespond || canEdit || canDelete) && (
           <div className="flex-shrink-0 border-t border-border px-6 py-4">
-            {/* Invitee response actions */}
+            {/* Invitee response actions — Tham gia/Không tham gia là TOGGLE, không
+                phải hành động 1 chiều: từ chối KHÔNG xóa lịch, chỉ đổi trạng thái
+                phản hồi (xem hrCalendarApi.updateMyResponse — chỉ PATCH response,
+                event/participant row vẫn còn nguyên). Nút của trạng thái hiện tại
+                được tô đậm để rõ đây là toggle, có thể bấm lại để đổi ý bất cứ lúc nào. */}
             {canRespond && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-text-primary">
-                  Bạn được mời tham gia lịch họp này
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={responding !== null}
-                    onClick={() => handleRespondClick("ACCEPTED")}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-micro hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={responding !== null}
-                    onClick={() => handleRespondClick("DECLINED")}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition-micro hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
-                  >
-                    {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
-                  </button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">
+                      {myResponse === "ACCEPTED"
+                        ? "Bạn đã xác nhận tham gia — có thể đổi ý bất cứ lúc nào"
+                        : myResponse === "DECLINED"
+                          ? "Bạn đã từ chối — lịch vẫn còn đây, đổi ý bấm Tham gia"
+                          : "Bạn được mời tham gia lịch họp này"}
+                    </p>
+                    {myStashedDeclineReason && (
+                      <p className="mt-0.5 text-xs italic text-text-muted">
+                        Lý do đã ghi: “{myStashedDeclineReason}” (chỉ hiện trên máy này)
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={responding !== null}
+                      onClick={() => {
+                        setDeclineReasonOpen(false);
+                        void handleRespondClick("ACCEPTED");
+                      }}
+                      className={clsx(
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
+                        myResponse === "ACCEPTED"
+                          ? "bg-emerald-600 text-white ring-2 ring-emerald-300 hover:bg-emerald-700 dark:ring-emerald-800"
+                          : "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
+                      )}
+                    >
+                      {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={responding !== null}
+                      onClick={() => setDeclineReasonOpen((v) => !v)}
+                      className={clsx(
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
+                        myResponse === "DECLINED"
+                          ? "bg-rose-600 text-white ring-2 ring-rose-300 hover:bg-rose-700 dark:ring-rose-800"
+                          : "border border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
+                      )}
+                    >
+                      {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
+                    </button>
+                  </div>
                 </div>
+                {/* Lý do từ chối (không bắt buộc) — chỉ FE, BE chưa có field lưu
+                    (xem contract FE__calendar-decline-reason). Lưu localStorage
+                    theo eventId để người tạo xem tạm khi mở lại modal này. */}
+                {declineReasonOpen && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-2.5 dark:border-rose-800 dark:bg-rose-900/10">
+                    <label className="mb-1 block text-xs font-medium text-rose-700 dark:text-rose-300">
+                      Lý do không tham gia (không bắt buộc)
+                    </label>
+                    <textarea
+                      value={declineReason}
+                      onChange={(e) => setDeclineReason(e.target.value)}
+                      rows={2}
+                      placeholder="VD: Trùng lịch khác, đang nghỉ phép…"
+                      className="w-full resize-none rounded-md border border-rose-200 bg-surface px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-rose-300/40 dark:border-rose-800"
+                    />
+                    <div className="mt-1.5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeclineReasonOpen(false)}
+                        className="rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-surface-hover"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        disabled={responding !== null}
+                        onClick={() => void handleRespondClick("DECLINED", declineReason.trim() || undefined)}
+                        className="rounded-md bg-rose-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+                      >
+                        {responding === "DECLINED" ? "Đang lưu..." : "Xác nhận không tham gia"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
