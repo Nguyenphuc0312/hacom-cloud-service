@@ -56,5 +56,17 @@
       "halloween": "Halloween",
       "christmas": "Giáng sinh"
     }
+  },
+  "joinByShareLink": {
+    "title": "Tham gia lịch họp",
+    "description": "Dùng liên kết này để tự động tham gia lịch họp được chia sẻ.",
+    "shareLink": "Link chia sẻ lịch họp",
+    "joining": "Đang tham gia lịch họp...",
+    "joined": "Đã tham gia lịch họp thành công",
+    "joinedDescription": "Lịch họp đã được thêm vào lịch của bạn.",
+    "alreadyJoined": "Bạn đã ở trong lịch họp này rồi",
+    "alreadyJoinedDescription": "Bạn có thể xem lịch họp này trong trang Lịch.",
+    "cta": "Tham gia ngay",
+    "openCalendar": "Mở Lịch"
   }
 }
