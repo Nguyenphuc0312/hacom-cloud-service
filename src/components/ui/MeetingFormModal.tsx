@@ -322,12 +322,14 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       }
     : { name: selfOption?.name ?? "", avatar: selfOption?.avatar ?? "", isSelf: true };
 
-  const [showFriendPicker, setShowFriendPicker] = React.useState(false);
+  // Picker mở khi ô nhập đang được dùng (focus) hoặc đang gõ @ — không cần nút
+  // "Chọn người" riêng, nó trùng chức năng với chính ô nhập ngay bên dưới.
+  const [participantInputFocused, setParticipantInputFocused] = React.useState(false);
   const mentionQuery = participantInput.startsWith("@")
     ? participantInput.slice(1).trim().toLowerCase()
     : "";
   const isMentioning = participantInput.startsWith("@");
-  const pickerOpen = showFriendPicker || isMentioning;
+  const pickerOpen = participantInputFocused || isMentioning;
 
   // --- Thêm cả nhóm chat vào người tham gia (tick 1 nhóm → add hết thành viên) ---
   // Nhóm = hội thoại chat GROUP có sẵn, không phải khái niệm "đơn vị HR" (BE chưa
@@ -995,20 +997,6 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 <UsersIcon className="h-3 w-3" />
                 Nhóm chat
               </button>
-              {participantTab === "person" && (
-                <button
-                  type="button"
-                  onClick={() => setShowFriendPicker((v) => !v)}
-                  className={clsx(
-                    "ml-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
-                    pickerOpen
-                      ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
-                      : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
-                  )}
-                >
-                  @ Chọn người
-                </button>
-              )}
             </div>
           </div>
           <div
@@ -1045,7 +1033,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 value={participantInput}
                 onChange={(e) => setParticipantInput(e.target.value)}
                 onKeyDown={handleParticipantKeyDown}
+                onFocus={() => setParticipantInputFocused(true)}
                 onBlur={() => {
+                  setParticipantInputFocused(false);
                   if (!isMentioning) addParticipant(participantInput);
                 }}
                 placeholder={
