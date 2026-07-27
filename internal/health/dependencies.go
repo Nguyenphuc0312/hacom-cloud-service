@@ -6,7 +6,7 @@ import (
 )
 
 type PostgresPinger interface {
-	PingContext(ctx context.Context) error
+	Ping(ctx context.Context) error
 }
 
 type PostgresChecker struct {
@@ -22,7 +22,7 @@ func (c *PostgresChecker) Name() string {
 }
 
 func (c *PostgresChecker) Check(ctx context.Context) error {
-	return c.db.PingContext(ctx)
+	return c.db.Ping(ctx)
 }
 
 type MinIOBucketChecker interface {

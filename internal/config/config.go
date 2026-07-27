@@ -9,6 +9,7 @@ import (
 
 const (
 	defaultMaxUploadBytes  int64 = 100_000_000
+	defaultMaxContentBytes int64 = 100_000_000
 	defaultQuotaLimitBytes int64 = 5_000_000_000
 )
 
@@ -22,6 +23,7 @@ type Config struct {
 	MinIOUseSSL       bool
 	MinIOBucket       string
 	MaxUploadBytes    int64
+	MaxContentBytes   int64
 	DefaultQuotaBytes int64
 	HealthTimeout     time.Duration
 	ShutdownTimeout   time.Duration
@@ -31,6 +33,23 @@ func Load() (Config, error) {
 	maxUploadBytes, err := int64Env("MAX_UPLOAD_BYTES", defaultMaxUploadBytes)
 	if err != nil {
 		return Config{}, err
+	}
+	if maxUploadBytes > defaultMaxUploadBytes {
+		return Config{}, fmt.Errorf(
+			"MAX_UPLOAD_BYTES must not exceed the current schema limit of %d",
+			defaultMaxUploadBytes,
+		)
+	}
+
+	maxContentBytes, err := int64Env("MAX_CONTENT_BYTES", defaultMaxContentBytes)
+	if err != nil {
+		return Config{}, err
+	}
+	if maxContentBytes > defaultMaxContentBytes {
+		return Config{}, fmt.Errorf(
+			"MAX_CONTENT_BYTES must not exceed the current schema limit of %d",
+			defaultMaxContentBytes,
+		)
 	}
 
 	defaultQuotaBytes, err := int64Env("DEFAULT_QUOTA_BYTES", defaultQuotaLimitBytes)
@@ -63,6 +82,7 @@ func Load() (Config, error) {
 		MinIOUseSSL:       useSSL,
 		MinIOBucket:       env("MINIO_BUCKET", "hacom-cloud-private"),
 		MaxUploadBytes:    maxUploadBytes,
+		MaxContentBytes:   maxContentBytes,
 		DefaultQuotaBytes: defaultQuotaBytes,
 		HealthTimeout:     healthTimeout,
 		ShutdownTimeout:   shutdownTimeout,

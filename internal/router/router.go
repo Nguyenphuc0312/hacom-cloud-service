@@ -61,7 +61,7 @@ const homePage = `<!doctype html>
 </body>
 </html>`
 
-func New(healthService *health.Service) http.Handler {
+func New(healthService *health.Service, cloudHandlers ...http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	healthHandler := health.NewHandler(healthService)
 
@@ -69,6 +69,12 @@ func New(healthService *health.Service) http.Handler {
 	mux.HandleFunc("/health", healthHandler.Readiness)
 	mux.HandleFunc("/health/ready", healthHandler.Readiness)
 	mux.HandleFunc("/health/live", healthHandler.Liveness)
+	if len(cloudHandlers) > 0 && cloudHandlers[0] != nil {
+		mux.Handle(
+			"/api/v1/cloud/",
+			http.StripPrefix("/api/v1/cloud", cloudHandlers[0]),
+		)
+	}
 
 	return mux
 }

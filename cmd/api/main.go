@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,11 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloudapi"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -29,15 +31,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
-		logger.Error("create PostgreSQL client", "error", err)
+		logger.Error("parse PostgreSQL configuration", "error", err)
+		os.Exit(1)
+	}
+	poolConfig.MaxConnLifetime = 30 * time.Minute
+	poolConfig.MinConns = 1
+	poolConfig.MaxConns = 10
+	db, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		logger.Error("create PostgreSQL pool", "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
-	db.SetConnMaxLifetime(30 * time.Minute)
-	db.SetMaxIdleConns(2)
-	db.SetMaxOpenConns(5)
 
 	minioClient, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
@@ -54,9 +61,25 @@ func main() {
 		health.NewMinIOChecker(minioClient, cfg.MinIOBucket),
 	)
 
+	cloudStore, err := repository.NewCloudPostgres(db, cfg.DefaultQuotaBytes)
+	if err != nil {
+		logger.Error("create cloud repository", "error", err)
+		os.Exit(1)
+	}
+	cloudService, err := cloud.NewService(cloudStore, cfg.MaxContentBytes)
+	if err != nil {
+		logger.Error("create cloud service", "error", err)
+		os.Exit(1)
+	}
+	cloudHandler, err := cloudapi.New(cloudService, cfg.MaxContentBytes)
+	if err != nil {
+		logger.Error("create cloud API handler", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router.New(healthService),
+		Handler:           router.New(healthService, cloudHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
