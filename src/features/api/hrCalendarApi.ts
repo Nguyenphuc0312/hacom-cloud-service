@@ -133,6 +133,29 @@ export interface HRCalendarEventsResponse {
 }
 
 /**
+ * Shareable join link for a MEETING event. Anyone with the raw token can add
+ * themselves as a participant while the link is active — mirrors the group
+ * chat invite-link feature. `token` is only ever non-null on the CREATE
+ * response (raw token is never persisted server-side, so it can't be
+ * recovered later — see FE__calendar-share-link contract).
+ */
+export interface HRCalendarShareLink {
+  id: string;
+  eventId: string;
+  token: string | null;
+  status: "ACTIVE" | "REVOKED";
+  expiresAt: string | null;
+  revokedAt: string | null;
+  joinCount: number;
+  createdAt: string;
+}
+
+export interface HRCalendarJoinByShareLinkResult {
+  eventId: string;
+  status: "joined" | "already_joined";
+}
+
+/**
  * HR Calendar Permission
  */
 export interface HRCalendarPermission {
@@ -421,6 +444,38 @@ export const hrCalendarApi = {
     await hrApiClient.patch(`/calendar/events/${eventId}/participants/me`, {
       response,
     });
+  },
+
+  /**
+   * Create (or reuse) a share link for a MEETING event. Only TEAM/UNIT/PUBLIC
+   * visibility is allowed server-side — PRIVATE/BUSY_ONLY events reject with
+   * 422 SHARE_LINK_NOT_ALLOWED_FOR_VISIBILITY (joining grants full detail
+   * view, which would defeat those visibility choices if a link leaked).
+   */
+  createShareLink: async (eventId: string): Promise<HRCalendarShareLink> => {
+    const response = await hrApiClient.post<{ data: HRCalendarShareLink }>(
+      `/calendar/events/${eventId}/share-link`,
+    );
+    return response.data.data;
+  },
+
+  /** Revoke the event's active share link (if any). */
+  revokeShareLink: async (eventId: string): Promise<void> => {
+    await hrApiClient.delete(`/calendar/events/${eventId}/share-link`);
+  },
+
+  /**
+   * Join an event via a share-link token — adds the current user as an
+   * ACCEPTED participant. Requires an HR-linked account (EMPLOYEE_LINK_REQUIRED
+   * otherwise); token itself never requires an existing invite.
+   */
+  joinByShareLink: async (
+    token: string,
+  ): Promise<HRCalendarJoinByShareLinkResult> => {
+    const response = await hrApiClient.post<{
+      data: HRCalendarJoinByShareLinkResult;
+    }>("/calendar/join-by-share-link", { token });
+    return response.data.data;
   },
 };
 

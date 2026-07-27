@@ -6,6 +6,7 @@ const ChatPage = lazy(() => import("../../pages/ChatPage"));
 const SettingsPage = lazy(() => import("../../pages/SettingsPage"));
 const FriendsPage = lazy(() => import("../../pages/FriendsPage"));
 const JoinByLinkPage = lazy(() => import("../../pages/JoinByLinkPage"));
+const CalendarJoinByShareLinkPage = lazy(() => import("../../pages/CalendarJoinByShareLinkPage"));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage"));
 const MaintenancePage = lazy(() => import("../../pages/errors/MaintenancePage"));
 // const TasksPage = lazy(() => import("../../features/tasks/pages/TasksPage")); // tạm ẩn
@@ -26,6 +27,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.FRIENDS, component: FriendsPage },
   { path: ROUTE_PATHS.FRIEND_DISCOVERY, component: FriendsPage },
   { path: ROUTE_PATHS.JOIN_BY_TOKEN, component: JoinByLinkPage },
+  { path: ROUTE_PATHS.CALENDAR_JOIN_BY_SHARE_LINK, component: CalendarJoinByShareLinkPage },
   { path: ROUTE_PATHS.SETTINGS, component: SettingsPage },
   { path: ROUTE_PATHS.MAINTENANCE, component: MaintenancePage },
   { path: ROUTE_PATHS.TASKS, component: TasksPage },

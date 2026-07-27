@@ -56,5 +56,17 @@
       "halloween": "Halloween",
       "christmas": "Christmas"
     }
+  },
+  "joinByShareLink": {
+    "title": "Join meeting",
+    "description": "Use this link to automatically join the shared meeting.",
+    "shareLink": "Meeting share link",
+    "joining": "Joining meeting...",
+    "joined": "Successfully joined the meeting",
+    "joinedDescription": "The meeting has been added to your calendar.",
+    "alreadyJoined": "You're already in this meeting",
+    "alreadyJoinedDescription": "You can view this meeting on the Calendar page.",
+    "cta": "Join now",
+    "openCalendar": "Open Calendar"
   }
 }

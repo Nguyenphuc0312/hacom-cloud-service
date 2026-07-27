@@ -25,6 +25,7 @@ import {
   DocumentTextIcon,
   PaperClipIcon,
   ChevronRightIcon,
+  LinkIcon,
 } from "@heroicons/react/24/outline";
 import {
   getEventColor,
@@ -33,8 +34,10 @@ import {
   type ExtendedCalendarEvent,
 } from "../data/calendarEvents";
 import {
+  hrCalendarApi,
   type HRCalendarEvent,
   type HRCalendarParticipant,
+  type HRCalendarVisibility,
 } from "../../api/hrCalendarApi";
 import {
   getMeetingMetadata,
@@ -160,6 +163,15 @@ export const EventDetailModal: React.FC<{
   const [declineReason, setDeclineReason] = React.useState("");
   // Khối đính kèm collapse — mặc định đóng cho gọn modal.
   const [attachmentsOpen, setAttachmentsOpen] = React.useState(false);
+  // Link chia sẻ lịch họp — panel chỉ mở khi bấm "Chia sẻ". `url` chỉ có giá trị
+  // ngay sau lần TẠO MỚI (BE không lưu token thô, không đọc lại được lần sau —
+  // xem hrCalendarApi.createShareLink). Reuse link cũ trả token:null → biết là
+  // "đã có link đang hoạt động" nhưng không hiện lại được URL, chỉ cho Thu hồi.
+  const [shareLinkOpen, setShareLinkOpen] = React.useState(false);
+  const [shareLinkLoading, setShareLinkLoading] = React.useState(false);
+  const [shareLinkUrl, setShareLinkUrl] = React.useState<string | null>(null);
+  const [shareLinkExists, setShareLinkExists] = React.useState(false);
+  const [shareLinkRevoking, setShareLinkRevoking] = React.useState(false);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
 
@@ -240,6 +252,63 @@ export const EventDetailModal: React.FC<{
   // If viewing others, always disable edit/delete
   const canEdit = !isViewingOthers && (apiCanEdit ?? false) && !!onEdit;
   const canDelete = !isViewingOthers && (apiCanDelete ?? false) && !!onDelete;
+
+  // Chỉ lịch họp (MEETING) với quyền xem Nhóm/Đơn vị/Công khai mới chia sẻ được
+  // — Riêng tư/Bận cố tình ẩn nội dung với người ngoài, join qua link sẽ cấp
+  // canViewFullDetails nên sẽ phá mục đích đó nếu cho phép (BE cũng chặn, đây
+  // chỉ là ẩn nút cho gọn UI — xem calendar.service.ts assertEventShareable).
+  const SHAREABLE_VISIBILITY: HRCalendarVisibility[] = ["TEAM", "UNIT", "PUBLIC"];
+  const canShareLink =
+    canEdit &&
+    !!hrEvent &&
+    hrEvent.eventType === "MEETING" &&
+    SHAREABLE_VISIBILITY.includes(hrEvent.visibility);
+
+  const handleOpenShareLink = async () => {
+    if (!hrEvent) return;
+    setShareLinkOpen(true);
+    setShareLinkLoading(true);
+    try {
+      const link = await hrCalendarApi.createShareLink(hrEvent.id);
+      setShareLinkExists(true);
+      setShareLinkUrl(
+        link.token
+          ? `${window.location.origin}${ROUTE_PATHS.CALENDAR_JOIN_BY_SHARE_LINK.replace(":token", encodeURIComponent(link.token))}`
+          : null,
+      );
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+      setShareLinkOpen(false);
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!shareLinkUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareLinkUrl);
+      toast.success("Đã sao chép link chia sẻ");
+    } catch {
+      toast.error("Không sao chép được, hãy tự chọn và sao chép link");
+    }
+  };
+
+  const handleRevokeShareLink = async () => {
+    if (!hrEvent) return;
+    setShareLinkRevoking(true);
+    try {
+      await hrCalendarApi.revokeShareLink(hrEvent.id);
+      toast.success("Đã thu hồi link chia sẻ");
+      setShareLinkExists(false);
+      setShareLinkUrl(null);
+      setShareLinkOpen(false);
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setShareLinkRevoking(false);
+    }
+  };
 
   // Get status badge info
   const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
@@ -869,10 +938,74 @@ export const EventDetailModal: React.FC<{
               </div>
             )}
 
+            {/* Chia sẻ link tham gia — chỉ MEETING + visibility Nhóm/Đơn vị/Công khai. */}
+            {canShareLink && (
+              <div className={clsx(canRespond && "mt-3")}>
+                {!shareLinkOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenShareLink()}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1976D2]/60 bg-[#1976D2]/10 px-3 py-1.5 text-xs font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/20"
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                    Chia sẻ link tham gia
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-[#1976D2]/40 bg-[#1976D2]/5 p-2.5">
+                    {shareLinkLoading ? (
+                      <p className="text-xs text-text-muted">Đang tạo link...</p>
+                    ) : shareLinkUrl ? (
+                      <>
+                        <p className="mb-1.5 truncate rounded-md bg-surface px-2 py-1.5 font-mono text-[11px] text-text-primary">
+                          {shareLinkUrl}
+                        </p>
+                        <p className="mb-2 text-[11px] text-text-muted">
+                          Ai bấm vào link này (đã đăng nhập) sẽ tự động tham gia lịch họp. Link tự hết hạn khi lịch kết thúc.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mb-2 text-[11px] text-text-muted">
+                        Lịch này đã có link chia sẻ đang hoạt động — link cũ không hiện lại được, chỉ có thể thu hồi rồi tạo mới.
+                      </p>
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShareLinkOpen(false)}
+                        className="rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-surface-hover"
+                      >
+                        Đóng
+                      </button>
+                      {shareLinkExists && (
+                        <button
+                          type="button"
+                          disabled={shareLinkRevoking}
+                          onClick={() => void handleRevokeShareLink()}
+                          className="rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-100 disabled:opacity-60 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                        >
+                          {shareLinkRevoking ? "Đang thu hồi..." : "Thu hồi link"}
+                        </button>
+                      )}
+                      {shareLinkUrl && (
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyShareLink()}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-[#1565C0] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#1976D2]"
+                        >
+                          <LinkIcon className="h-3.5 w-3.5" />
+                          Sao chép
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Action buttons — Xóa (phá hoại) ở góc trái, Chỉnh sửa ở góc phải,
                 tách xa nhau để tránh bấm nhầm. */}
             {(canEdit || canDelete) && (
-              <div className={clsx("flex items-center justify-between gap-2", canRespond && "mt-3")}>
+              <div className={clsx("flex items-center justify-between gap-2", (canRespond || canShareLink) && "mt-3")}>
                 {canDelete ? (
                   <button
                     type="button"

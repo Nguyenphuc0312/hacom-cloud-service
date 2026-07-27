@@ -15,6 +15,7 @@ export const ROUTE_PATHS = {
   FRIENDS: "/friends",
   FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
   JOIN_BY_TOKEN: "/join/:token",
+  CALENDAR_JOIN_BY_SHARE_LINK: "/calendar/join/:token",
   SETTINGS: "/settings",
   MAINTENANCE: "/maintenance",
   TASKS: "/tasks",
