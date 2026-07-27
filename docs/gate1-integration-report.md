@@ -30,6 +30,29 @@ Quy trình 1 đã đạt Gate kỹ thuật để chuyển sang Quy trình 2:
 
 Quota 5 GB decimal và giới hạn 100 MB decimal là cấu hình/giả định demo của nhóm, chưa được coi là yêu cầu sản phẩm chính thức cho đến khi mentor xác nhận.
 
+Payload tối thiểu đã thống nhất cho Worker:
+
+```json
+{
+  "job_type": "hash_file",
+  "payload": {
+    "item_id": "<uuid>",
+    "object_key": "<private-object-key>"
+  }
+}
+```
+
+```json
+{
+  "job_type": "cleanup_expired_upload",
+  "payload": {
+    "session_id": "<uuid>"
+  }
+}
+```
+
+`cloud.jobs.payload` chỉ chứa định danh kỹ thuật, không chứa binary, secret hoặc presigned URL.
+
 ## Kết quả kiểm thử
 
 ```text
