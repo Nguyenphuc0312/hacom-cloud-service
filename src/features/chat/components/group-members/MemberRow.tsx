@@ -8,7 +8,7 @@ import { resolveDisplayName } from "./utils/resolveDisplayName";
 import { RoomMemberRole } from "../../../../types";
 import type { UserStatus } from "../../../../types";
 import type { GroupCapabilityMatrix } from "./utils/canPerformAction";
-import { useEnrichedProfileStore } from "../../../../stores/enrichedProfileStore";
+import { useResolvedDisplayName } from "../../../../stores/useResolvedDisplayName";
 
 interface MemberRowProps {
   memberId: string;
@@ -57,13 +57,11 @@ export const MemberRow: React.FC<MemberRowProps> = ({
 }) => {
   const { t } = useTranslation("profile");
 
-  // enrichedProfileStore holds the alias when set, otherwise the enriched real
-  // name. It always wins — same rule as ChatHeader/RoomItem/MessageCluster — so
-  // the memorable name stays consistent with every other place it's shown.
-  const enrichedName = useEnrichedProfileStore((s) => s.nameByUserId[memberId]);
+  // alias ?? enriched ?? tên thật — cùng quy tắc với ChatHeader/RoomItem/timeline.
   const resolved = resolveDisplayName({ displayName, fullNameFromHR, username });
-  const resolvedName = enrichedName || resolved.displayName;
-  const usedFallback = enrichedName ? false : resolved.usedFallback;
+  const resolvedName = useResolvedDisplayName(memberId, resolved.displayName);
+  const usedFallback =
+    resolvedName === resolved.displayName ? resolved.usedFallback : false;
 
   const isCurrentUser = memberId === currentUserId;
   const orgLine = [departmentName, companyName].filter(Boolean).join(" · ");
