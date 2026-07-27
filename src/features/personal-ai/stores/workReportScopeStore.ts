@@ -39,6 +39,14 @@ interface WorkReportScopeState {
    * ký, BE tự kiểm khi verify — FE khóa theo user+capability là đủ ở client.)
    */
   scopeKey: string | null;
+  /**
+   * Câu hỏi đã sinh ra `work_report_scope_required` / pre-flight cho lựa chọn
+   * hiện tại (§4 — bản 2.1). `selectionToken` chỉ dùng lại đúng MỘT lần, cho
+   * ĐÚNG câu hỏi này. Câu hỏi mới trong cùng hội thoại → `isTokenValidFor` trả
+   * false → caller gửi KHÔNG kèm `scope_token` và để BE hỏi lại phạm vi.
+   * null = chưa có lượt chọn nào gắn với câu hỏi (vd chỉ nạp danh sách scope).
+   */
+  tokenQuestion: string | null;
 
   setScopes: (scopes: WorkReportScope[], capability?: WorkReportCapability) => void;
   select: (scope: WorkReportScope) => void;
@@ -52,6 +60,12 @@ interface WorkReportScopeState {
   ensureScopeKey: (authUserId: string, capability: WorkReportCapability) => boolean;
   /** Xóa lựa chọn khi 403 (token hết hạn / quyền bị thu hồi / đổi version). */
   clearSelection: () => void;
+  /**
+   * Bỏ token sau khi đã dùng xong cho đúng câu hỏi của nó (§4 — 2.1), hoặc khi
+   * caller phát hiện câu hỏi MỚI không thuộc token đang giữ. Xóa cả `scopes` để
+   * lượt sau nạp lại danh sách mới thay vì hiện danh sách cũ đã pre-select.
+   */
+  releaseScopeToken: () => void;
   cancelPick: () => void;
   reset: () => void;
 }
@@ -64,6 +78,7 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
   capability: null,
   dataEpoch: 0,
   scopeKey: null,
+  tokenQuestion: null,
 
   setScopes: (scopes, capability) =>
     set((state) => ({
@@ -86,6 +101,10 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       return {
         selected: scope,
         isPicking: false,
+        // §4 (2.1): token vừa chọn CHỈ hợp lệ cho đúng câu hỏi đã sinh ra dropdown
+        // này. Chốt câu hỏi đó lại ngay lúc chọn; câu hỏi mới sau này sẽ không
+        // khớp → không tái dùng token, BE hỏi lại phạm vi.
+        tokenQuestion: state.pendingQuestion ?? state.tokenQuestion,
         dataEpoch: changed ? state.dataEpoch + 1 : state.dataEpoch,
       };
     }),
@@ -110,6 +129,7 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
         selected: null,
         scopes: null,
         capability,
+        tokenQuestion: null,
         dataEpoch: changed ? state.dataEpoch + 1 : state.dataEpoch,
       };
     });
@@ -121,11 +141,25 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       selected: null,
       scopes: null,
       isPicking: true,
+      tokenQuestion: null,
       // Giữ `capability` để selector nạp lại đúng `/scopes?capability` (§7 — 403).
       dataEpoch: state.dataEpoch + 1,
     })),
 
-  cancelPick: () => set(() => ({ isPicking: false, pendingQuestion: null })),
+  releaseScopeToken: () =>
+    set((state) => ({
+      selected: null,
+      scopes: null,
+      tokenQuestion: null,
+      // KHÔNG bật `isPicking`: đây là kết thúc bình thường của một vòng token,
+      // không phải lỗi. Lượt hỏi sau nếu vẫn nhiều scope thì BE/pre-flight mở
+      // dropdown lại — đó mới là nguồn mở widget.
+      isPicking: false,
+      dataEpoch: state.selected ? state.dataEpoch + 1 : state.dataEpoch,
+    })),
+
+  cancelPick: () =>
+    set(() => ({ isPicking: false, pendingQuestion: null })),
 
   reset: () =>
     set((state) => ({
@@ -135,9 +169,23 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       pendingQuestion: null,
       capability: null,
       scopeKey: null,
+      tokenQuestion: null,
       dataEpoch: state.dataEpoch + 1,
     })),
 }));
+
+/**
+ * Token đang giữ có hợp lệ cho `question` này không (§4 — bản 2.1).
+ *
+ * Chỉ đúng khi `question` CHÍNH LÀ câu hỏi đã sinh ra dropdown và user đã chọn
+ * scope cho nó. Câu hỏi mới — kể cả cùng chủ đề, cùng hội thoại — trả false để
+ * caller gửi request KHÔNG kèm `scope_token` và để BE hỏi lại phạm vi.
+ */
+export function isTokenValidFor(question: string): boolean {
+  const state = useWorkReportScopeStore.getState();
+  if (!state.selected?.selectionToken || !state.tokenQuestion) return false;
+  return state.tokenQuestion.trim() === question.trim();
+}
 
 /**
  * Token của scope đang chọn (undefined = chưa chọn).
