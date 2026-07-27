@@ -34,7 +34,7 @@ import {
   getMessageStableKey,
 } from "../../../utils/messageTimeline";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
-import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
@@ -426,12 +426,14 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
       ? replySignedThumbs?.[replyFirstAttachment.id]?.url
       : undefined;
     const replyPreviewSenderId = resolvedReplyPreview?.senderId;
-    const enrichedReplySenderName = useEnrichedProfileStore(
-      React.useMemo(
-        () => (s) =>
-          replyPreviewSenderId ? s.nameByUserId[replyPreviewSenderId] : undefined,
-        [replyPreviewSenderId],
-      ),
+    const replyPreviewSenderName = useResolvedDisplayName(
+      replyPreviewSenderId,
+      resolvedReplyPreview
+        ? resolveUserDisplayName({
+            displayName: resolvedReplyPreview.senderName,
+            username: resolvedReplyPreview.senderId,
+          })
+        : "",
     );
     React.useEffect(() => {
       if (replyPreviewSenderId) enrichUserProfile(replyPreviewSenderId);
@@ -900,11 +902,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                       )}
                     >
                       {resolvedReplyPreview
-                        ? (enrichedReplySenderName ??
-                          resolveUserDisplayName({
-                            displayName: resolvedReplyPreview.senderName,
-                            username: resolvedReplyPreview.senderId,
-                          }))
+                        ? replyPreviewSenderName
                         : t("chat:message.replyingTo", {
                           defaultValue: "Tin nhắn được trả lời",
                         })}
@@ -1139,15 +1137,20 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
   // Tên thật (HR) được fetch theo senderId; senderName trong message có thể
   // rỗng → tránh fallback ra UUID bằng cách enrich giống MessageCluster.
-  const enrichedSenderName = useEnrichedProfileStore(
-    React.useMemo(
-      () => (s) => (leadSenderId ? s.nameByUserId[leadSenderId] : undefined),
-      [leadSenderId],
-    ),
-  );
   React.useEffect(() => {
     if (leadSenderId) enrichUserProfile(leadSenderId);
   }, [leadSenderId]);
+
+  // alias ?? enriched ?? tên trong message — hook phải chạy trước mọi early return.
+  const senderDisplayName = useResolvedDisplayName(
+    leadSenderId,
+    leadMessage
+      ? resolveUserDisplayName({
+          displayName: leadMessage.senderName,
+          username: leadMessage.senderId,
+        })
+      : "",
+  );
 
   if (!leadMessage) {
     return null;
@@ -1157,13 +1160,6 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   // column and center the card instead of own/other side alignment.
   const isPollGroup =
     leadMessage.type === MessageType.POLL || leadMessage.type === MessageType.REMINDER;
-
-  const senderDisplayName =
-    enrichedSenderName ??
-    resolveUserDisplayName({
-      displayName: leadMessage.senderName,
-      username: leadMessage.senderId,
-    });
 
   return (
     <section

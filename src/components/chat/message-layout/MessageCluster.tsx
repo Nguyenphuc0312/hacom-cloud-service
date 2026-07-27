@@ -22,7 +22,7 @@ import {
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
-import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
@@ -153,30 +153,31 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       ? candidate.threadCount
       : 0;
   })();
-  const enrichedSenderName = useEnrichedProfileStore(
-    React.useMemo(() => (s) => s.nameByUserId[message.senderId], [message.senderId]),
-  );
   const replySenderId = message.replyToMessage?.senderId;
-  const enrichedReplySenderName = useEnrichedProfileStore(
-    React.useMemo(() => (s) => (replySenderId ? s.nameByUserId[replySenderId] : undefined), [replySenderId]),
-  );
   React.useEffect(() => {
     enrichUserProfile(message.senderId);
     if (replySenderId) enrichUserProfile(replySenderId);
   }, [message.senderId, replySenderId]);
 
-  const senderDisplayName =
-    enrichedSenderName ??
+  // alias ?? enriched ?? tên trong message — xem useResolvedDisplayName.
+  const senderDisplayName = useResolvedDisplayName(
+    message.senderId,
     resolveUserDisplayName({
       displayName: message.senderName,
       username: message.senderId,
-    });
+    }),
+  );
+  const resolvedReplySenderName = useResolvedDisplayName(
+    replySenderId,
+    message.replyToMessage
+      ? resolveUserDisplayName({
+          displayName: message.replyToMessage.senderName,
+          username: message.replyToMessage.senderId,
+        })
+      : "",
+  );
   const replySenderDisplayName = message.replyToMessage
-    ? (enrichedReplySenderName ??
-      resolveUserDisplayName({
-        displayName: message.replyToMessage.senderName,
-        username: message.replyToMessage.senderId,
-      }))
+    ? resolvedReplySenderName
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 

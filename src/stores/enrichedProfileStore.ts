@@ -66,9 +66,11 @@ registerStoreResetter("enriched-profile", () => {
 
 /**
  * Resolve a user's shown name with the "tên gợi nhớ" (alias) rule: the enriched
- * name (alias-if-set, else real name) wins, else the caller's fallback. Use this
- * anywhere a sender/friend name is rendered so the label stays consistent with
- * ChatHeader/RoomItem/UserProfile.
+ * name (alias-if-set, else real name) wins, else the caller's fallback.
+ *
+ * Prefer `useResolvedDisplayName` from `useResolvedDisplayName.ts` — it also
+ * reads the authoritative alias out of `friendshipStore`. This hook only sees
+ * `nameByUserId`, which races `enrichUserProfile`.
  */
 export function useResolvedName(userId: string | undefined, fallback: string): string {
   const enriched = useEnrichedProfileStore((s) =>
