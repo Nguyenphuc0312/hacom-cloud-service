@@ -140,6 +140,16 @@ export interface WorkReportScopesResponse {
  */
 export interface WorkReportScopeRequired {
   reason: string;
+  /**
+   * §4 (bản 2.2): mã ngẫu nhiên BE sinh MỚI cho mỗi lần phát sự kiện này — kể
+   * cả khi `question` trùng chữ y hệt lần trước. Đây là NGUỒN SỰ THẬT để xác
+   * định "cùng một lần hỏi", thay cho việc so chuỗi `question` (bản 2.1 làm
+   * tạm; hai lần hỏi khác nhau thật sự vẫn có thể trùng chữ).
+   * Rỗng = BE chưa ship `promptId` → FE lùi về so chuỗi `question` (xem
+   * `isTokenValidFor`), giữ tương thích ngược với BE bản 2.1.
+   */
+  promptId?: string;
+  /** Câu hỏi gốc — từ 2.2 chỉ dùng để hiển thị/gửi lại, KHÔNG dùng để khớp token. */
   question: string;
   scopes: WorkReportScope[];
   /** BE cho biết capability/action/loại scope đang yêu cầu (spec §4). */
