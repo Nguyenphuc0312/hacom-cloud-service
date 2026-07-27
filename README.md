@@ -11,11 +11,38 @@ Yêu cầu: Go 1.22+, Docker và Docker Compose.
 
 ```bash
 cp .env.example .env
-make infra-up
+make up
 make run-api
 ```
 
 Kiểm tra API tại `http://localhost:8080/health`. Worker có thể chạy ở terminal khác bằng `make run-worker`.
+
+Các lệnh hạ tầng local:
+
+```bash
+make up
+make down
+make logs
+make ps
+```
+
+Trên Windows nếu chưa cài GNU Make, dùng PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 up
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 ps
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 logs
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 down
+```
+
+Nếu bạn dùng Command Prompt, có thể gọi wrapper `.cmd`:
+
+```bat
+scripts\dev.cmd up
+scripts\dev.cmd ps
+scripts\dev.cmd logs
+scripts\dev.cmd down
+```
 
 Skeleton hiện chỉ cung cấp health check, cấu hình, interface nghiệp vụ và hạ tầng local. Upload, PostgreSQL repository, MinIO adapter, migration và worker handler là các đầu việc nhóm sẽ triển khai theo quy trình bên dưới.
 
