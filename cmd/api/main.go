@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,33 +12,60 @@ import (
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("load configuration", "error", err)
+		logger.Error("load configuration", "error", err)
 		os.Exit(1)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"service": "hacom-cloud-api",
-			"status":  "ok",
-		})
+	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("create PostgreSQL client", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(5)
+
+	minioClient, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
+		Secure: cfg.MinIOUseSSL,
 	})
+	if err != nil {
+		logger.Error("create MinIO client", "error", err)
+		os.Exit(1)
+	}
+
+	healthService := health.NewService(
+		cfg.HealthTimeout,
+		health.NewPostgresChecker(db),
+		health.NewMinIOChecker(minioClient, cfg.MinIOBucket),
+	)
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           mux,
+		Handler:           router.New(healthService),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	serverErr := make(chan error, 1)
 	go func() {
-		slog.Info("API listening", "address", cfg.APIAddr, "environment", cfg.AppEnv)
+		logger.Info("API listening", "address", cfg.APIAddr, "environment", cfg.AppEnv)
 		serverErr <- server.ListenAndServe()
 	}()
 
@@ -47,18 +74,18 @@ func main() {
 
 	select {
 	case <-signalCtx.Done():
-		slog.Info("shutdown signal received")
+		logger.Info("shutdown signal received")
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("API stopped unexpectedly", "error", err)
+			logger.Error("API stopped unexpectedly", "error", err)
 			os.Exit(1)
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("graceful shutdown failed", "error", err)
+		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}
 }
