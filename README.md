@@ -47,7 +47,9 @@ scripts\dev.cmd logs
 scripts\dev.cmd down
 ```
 
-Skeleton hiện cung cấp cấu hình, interface nghiệp vụ, hạ tầng local và migration PostgreSQL. Upload, PostgreSQL repository, MinIO adapter và worker handler được phát triển theo các quy trình bên dưới.
+Gate 1 đã tích hợp cấu hình, PostgreSQL, MinIO, migration, dependency health API và Worker skeleton. Xem kết quả kiểm thử và kịch bản demo tại [`docs/gate1-integration-report.md`](docs/gate1-integration-report.md).
+
+Các repository nghiệp vụ hiện vẫn là bản in-memory phục vụ kiểm thử. PostgreSQL repository, presigned upload API và MinIO adapter thật sẽ được nối trong các quy trình tiếp theo.
 
 ## 1. Cách tổ chức chung
 
