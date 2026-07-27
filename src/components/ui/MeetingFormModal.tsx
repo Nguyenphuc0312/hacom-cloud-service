@@ -4,7 +4,7 @@
 
 import React from "react";
 import clsx from "clsx";
-import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, ExclamationTriangleIcon, UsersIcon } from "@heroicons/react/24/outline";
 import { Modal, ConfirmDialog } from "./Modal";
 import { Button } from "./Button";
 import { CalendarAttachmentZone, type CalendarLocalAttachment } from "./CalendarAttachmentZone";
@@ -17,6 +17,10 @@ import {
 import { Avatar } from "../common/Avatar";
 import { loadUserProfiles } from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
+import { conversationApi } from "../../services/api";
+import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
+import { unwrapApiSuccess } from "../../lib/apiContract";
+import { RoomType, type Conversation } from "../../types";
 
 export interface MeetingParticipant {
   name: string;
@@ -324,6 +328,79 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     : "";
   const isMentioning = participantInput.startsWith("@");
   const pickerOpen = showFriendPicker || isMentioning;
+
+  // --- Thêm cả nhóm chat vào người tham gia (tick 1 nhóm → add hết thành viên) ---
+  // Nhóm = hội thoại chat GROUP có sẵn, không phải khái niệm "đơn vị HR" (BE chưa
+  // hỗ trợ mời theo phòng ban — xem CALENDAR_SPEC.md #15). Mỗi thành viên vẫn được
+  // gửi lên BE như 1 participant ref riêng lẻ (participantIds), không đổi contract.
+  const [participantTab, setParticipantTab] = React.useState<"person" | "group">("person");
+  const [groupList, setGroupList] = React.useState<Conversation[] | null>(null);
+  // Đang tải = đã bắt đầu fetch (tab group + chưa có kết quả) — derive thay vì thêm
+  // state riêng, và tránh setState đồng bộ ngay trong effect (react-hooks/set-state-in-effect).
+  const groupListLoading = participantTab === "group" && groupList === null;
+  const [activeGroupId, setActiveGroupId] = React.useState<string | null>(null);
+  const [groupMembers, setGroupMembers] = React.useState<Conversation["participants"]>([]);
+  const [groupMembersLoading, setGroupMembersLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen || participantTab !== "group" || groupList !== null) return;
+    let cancelled = false;
+    void conversationApi
+      .getConversations(1, 100)
+      .then((res) => {
+        if (cancelled) return;
+        const rows = unwrapApiSuccess(res);
+        setGroupList((Array.isArray(rows) ? rows : []).filter((c) => c.type === RoomType.GROUP));
+      })
+      .catch(() => {
+        if (!cancelled) setGroupList([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, participantTab, groupList]);
+
+  const openGroupMembers = (groupId: string) => {
+    setActiveGroupId(groupId);
+    setGroupMembers([]);
+    setGroupMembersLoading(true);
+    void getConversationByIdUseCase(groupId)
+      .then((res) => {
+        if (res.success) {
+          setGroupMembers(res.data.participants ?? []);
+        }
+      })
+      .finally(() => setGroupMembersLoading(false));
+  };
+
+  const allGroupMembersAdded =
+    !!groupMembers?.length &&
+    groupMembers.every((m) =>
+      participants.some((p) => p.userId === m.id || p.name.toLowerCase() === (m.displayName ?? m.username).toLowerCase()),
+    );
+
+  const toggleWholeGroup = () => {
+    if (!groupMembers?.length) return;
+    if (allGroupMembersAdded) {
+      const memberIds = new Set(groupMembers.map((m) => m.id));
+      setParticipants((prev) => prev.filter((p) => !p.userId || !memberIds.has(p.userId)));
+      return;
+    }
+    setParticipants((prev) => {
+      const next = [...prev];
+      for (const m of groupMembers) {
+        const name = (m.displayName ?? m.username ?? "").trim();
+        if (!name) continue;
+        const exists = next.some(
+          (p) => p.userId === m.id || p.name.toLowerCase() === name.toLowerCase(),
+        );
+        if (!exists) {
+          next.push({ name, userId: m.id, employeeCode: m.employeeCode ?? undefined });
+        }
+      }
+      return next;
+    });
+  };
 
   // Chairman @-mention picker
   const isChairmanMentioning = chairmanInput.startsWith("@");
@@ -892,18 +969,47 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             <label className="block text-sm font-medium text-text-primary">
               Người tham gia
             </label>
-            <button
-              type="button"
-              onClick={() => setShowFriendPicker((v) => !v)}
-              className={clsx(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
-                pickerOpen
-                  ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
-                  : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setParticipantTab("person")}
+                className={clsx(
+                  "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
+                  participantTab === "person"
+                    ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
+                    : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
+                )}
+              >
+                Từng người
+              </button>
+              <button
+                type="button"
+                onClick={() => setParticipantTab("group")}
+                className={clsx(
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
+                  participantTab === "group"
+                    ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
+                    : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
+                )}
+              >
+                <UsersIcon className="h-3 w-3" />
+                Nhóm chat
+              </button>
+              {participantTab === "person" && (
+                <button
+                  type="button"
+                  onClick={() => setShowFriendPicker((v) => !v)}
+                  className={clsx(
+                    "ml-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-micro",
+                    pickerOpen
+                      ? "border-[#1976D2]/60 bg-[#1976D2]/10 text-[#1565C0]"
+                      : "border-border bg-surface-overlay text-text-secondary hover:border-[#1976D2]/50 hover:text-[#1565C0]",
+                  )}
+                >
+                  @ Chọn người
+                </button>
               )}
-            >
-              @ Chọn người
-            </button>
+            </div>
           </div>
           <div
             className={clsx(
@@ -933,25 +1039,129 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 </button>
               </span>
             ))}
-            <input
-              type="text"
-              value={participantInput}
-              onChange={(e) => setParticipantInput(e.target.value)}
-              onKeyDown={handleParticipantKeyDown}
-              onBlur={() => {
-                if (!isMentioning) addParticipant(participantInput);
-              }}
-              placeholder={
-                participants.length === 0
-                  ? "Nhập tên, gõ @ để tìm trong công ty, Enter/dấu phẩy để thêm"
-                  : ""
-              }
-              className="min-w-[180px] flex-1 bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
+            {participantTab === "person" && (
+              <input
+                type="text"
+                value={participantInput}
+                onChange={(e) => setParticipantInput(e.target.value)}
+                onKeyDown={handleParticipantKeyDown}
+                onBlur={() => {
+                  if (!isMentioning) addParticipant(participantInput);
+                }}
+                placeholder={
+                  participants.length === 0
+                    ? "Nhập tên, gõ @ để tìm trong công ty, Enter/dấu phẩy để thêm"
+                    : ""
+                }
+                className="min-w-[180px] flex-1 bg-transparent py-0.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+            )}
           </div>
 
+          {/* Chọn cả nhóm chat — tick 1 nhóm để add hết thành viên vào danh sách trên */}
+          {participantTab === "group" && (
+            <div className="mt-1.5 flex gap-2">
+              <div className="max-h-72 w-2/5 shrink-0 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-elev2">
+                {groupListLoading ? (
+                  <p className="px-2 py-3 text-center text-xs text-text-muted">Đang tải nhóm…</p>
+                ) : !groupList?.length ? (
+                  <p className="px-2 py-3 text-center text-xs text-text-muted">Bạn chưa ở trong nhóm chat nào.</p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {groupList.map((g) => (
+                      <li key={g.id}>
+                        <button
+                          type="button"
+                          onClick={() => openGroupMembers(g.id)}
+                          className={clsx(
+                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                            activeGroupId === g.id ? "bg-[#1976D2]/10 text-[#1565C0]" : "hover:bg-surface-hover text-text-primary",
+                          )}
+                        >
+                          <Avatar
+                            src={g.avatar ? resolvePublicResourceUrl(g.avatar) : undefined}
+                            alt={g.displayName ?? g.name ?? "Nhóm"}
+                            size="sm"
+                            className="shrink-0"
+                          />
+                          <span className="min-w-0 flex-1 truncate font-medium">
+                            {g.displayName ?? g.name ?? "Nhóm không tên"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="max-h-72 flex-1 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-elev2">
+                {!activeGroupId ? (
+                  <p className="px-2 py-3 text-center text-xs text-text-muted">Chọn 1 nhóm bên trái để xem thành viên.</p>
+                ) : groupMembersLoading ? (
+                  <p className="px-2 py-3 text-center text-xs text-text-muted">Đang tải thành viên…</p>
+                ) : !groupMembers?.length ? (
+                  <p className="px-2 py-3 text-center text-xs text-text-muted">Nhóm này chưa có thành viên.</p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleWholeGroup}
+                      className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-[#1565C0] hover:bg-[#1976D2]/10"
+                    >
+                      <UsersIcon className="h-3.5 w-3.5" />
+                      {allGroupMembersAdded ? "Bỏ chọn cả nhóm" : `Thêm cả nhóm (${groupMembers.length} người)`}
+                    </button>
+                    <ul className="space-y-0.5">
+                      {groupMembers.map((m) => {
+                        const name = (m.displayName ?? m.username ?? "").trim();
+                        const checked = participants.some(
+                          (p) => p.userId === m.id || p.name.toLowerCase() === name.toLowerCase(),
+                        );
+                        return (
+                          <li key={m.id}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleParticipant(name, { userId: m.id, employeeCode: m.employeeCode ?? undefined })
+                              }
+                              className={clsx(
+                                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors",
+                                checked ? "bg-teal-500/10" : "hover:bg-surface-hover",
+                              )}
+                            >
+                              <span
+                                className={clsx(
+                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                                  checked ? "border-[#1565C0] bg-[#1565C0] text-white" : "border-border bg-surface-overlay",
+                                )}
+                              >
+                                {checked && (
+                                  <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M2.5 6.5L5 9l4.5-5.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                )}
+                              </span>
+                              <Avatar
+                                src={m.avatar ? resolvePublicResourceUrl(m.avatar) : undefined}
+                                alt={name}
+                                size="sm"
+                                className="shrink-0"
+                              />
+                              <span className={clsx("truncate text-sm font-medium", checked ? "text-teal-700 dark:text-teal-300" : "text-text-primary")}>
+                                {name}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Gợi ý chọn từ bạn bè */}
-          {pickerOpen && (
+          {participantTab === "person" && pickerOpen && (
             <div className="mt-1.5 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-elev2">
               {isFriendsLoading && friendOptions.length === 0 ? (
                 <p className="px-2 py-3 text-center text-xs text-text-muted">
@@ -1046,7 +1256,11 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           )}
 
           <p className="mt-1 text-[11px] text-text-muted">
-            Gõ <span className="font-mono text-teal-600 dark:text-teal-400">@</span> để tìm bất kỳ ai trong công ty (không cần là bạn bè) · Tag đỏ = có lịch trùng giờ, vẫn có thể thêm.
+            {participantTab === "person" ? (
+              <>Gõ <span className="font-mono text-teal-600 dark:text-teal-400">@</span> để tìm bất kỳ ai trong công ty (không cần là bạn bè) · Tag đỏ = có lịch trùng giờ, vẫn có thể thêm.</>
+            ) : (
+              "Chọn 1 nhóm chat để thêm nhanh cả nhóm; vẫn có thể bỏ bớt từng người sau khi thêm."
+            )}
           </p>
         </div>
 
@@ -1099,9 +1313,14 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
           </p>
         </div>
 
-        {/* 6. Địa điểm */}
+        {/* 6. Địa điểm / Link họp — cùng field "location" ở BE, chỉ đổi nhãn theo
+            hình thức. Online chưa có kiểu link có cấu trúc (provider/url riêng)
+            ở BE — xem CALENDAR_SPEC.md #14 — nên dùng free-text location sẵn có,
+            paste thẳng URL Meet/Zoom/Teams vào đây. */}
         <div className="relative">
-          <label className="mb-1 block text-sm font-medium text-text-primary">Địa điểm họp</label>
+          <label className="mb-1 block text-sm font-medium text-text-primary">
+            {format === "online" ? "Link họp trực tuyến" : "Địa điểm họp"}
+          </label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <input
@@ -1114,7 +1333,11 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 }}
                 onFocus={() => setShowLocationSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
-                placeholder="Nhập địa điểm hoặc chọn từ danh sách đã lưu"
+                placeholder={
+                  format === "online"
+                    ? "Dán link Google Meet / Zoom / Teams…"
+                    : "Nhập địa điểm hoặc chọn từ danh sách đã lưu"
+                }
                 className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
               />
               {showLocationSuggestions && filteredSavedLocations.length > 0 && (
@@ -1138,7 +1361,9 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
             </div>
           </div>
           <p className="mt-1 text-[11px] text-text-muted">
-            Địa điểm mới sẽ được lưu để dùng lại sau.
+            {format === "online"
+              ? "Người tham gia sẽ thấy link này trong chi tiết lịch để bấm vào tham gia."
+              : "Địa điểm mới sẽ được lưu để dùng lại sau."}
           </p>
         </div>
 

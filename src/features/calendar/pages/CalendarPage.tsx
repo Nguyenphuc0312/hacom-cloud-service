@@ -1084,9 +1084,9 @@ export const CalendarPage: React.FC = () => {
 
   // Người được mời phản hồi (Tham gia / Từ chối) — nghiệp vụ trong hook dùng chung.
   const handleRespond = useCallback(
-    async (response: "ACCEPTED" | "DECLINED") => {
+    async (response: "ACCEPTED" | "DECLINED", reason?: string) => {
       if (!selectedEvent) return;
-      await mutations.respond(selectedEvent.id, response);
+      await mutations.respond(selectedEvent.id, response, reason);
     },
     [selectedEvent, mutations],
   );
