@@ -101,7 +101,15 @@
     "loadMore": "Loading...",
     "loadingHistory": "Loading conversation history...",
     "loadingMoreHistory": "Loading more history",
-    "senderYou": "You:"
+    "senderYou": "You:",
+    "editHistory": {
+      "title": "Edit history",
+      "viewTitle": "View original message",
+      "editedAt": "Edited at {{time}}",
+      "original": "Original",
+      "empty": "No edit history yet.",
+      "loadError": "Could not load edit history."
+    }
   },
   "composer": {
     "replyingTo": "Replying to {{name}}",

@@ -10,6 +10,7 @@ export const fallbackMessageActionLabels: Record<MessageActionId, string> = {
   pin: "Ghim tin nhắn",
   unpin: "Bỏ ghim",
   select: "Chọn nhiều tin nhắn",
+  edit: "Chỉnh sửa",
   deleteForMe: "Xóa chỉ ở phía tôi",
   recall: "Thu hồi",
   adminDelete: "Xóa ở mọi người",

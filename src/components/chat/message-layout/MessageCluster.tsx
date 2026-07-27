@@ -100,6 +100,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   conversationType,
   onReply,
   onReact,
+  onEdit,
   onDelete,
   onForward,
   onPin,
@@ -324,6 +325,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canForward: Boolean(onForward),
         canSelect: Boolean(onStartSelectionMode && onToggleSelect),
         canDelete: Boolean(onDelete),
+        canEdit: Boolean(onEdit),
         canRecallOthers: viewerCanRecallOthers,
       }),
     [
@@ -332,6 +334,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isSelectionMode,
       message,
       onDelete,
+      onEdit,
       onForward,
       onStartSelectionMode,
       onToggleSelect,
@@ -399,6 +402,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           onToggleSelect?.(message.id);
           closeActions();
           break;
+        case "edit":
+          if (onEdit) {
+            void Promise.resolve(onEdit(message));
+          }
+          closeActions();
+          break;
         case "more":
           openActions();
           break;
@@ -411,6 +420,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       isActionsOpen,
       message,
       onDelete,
+      onEdit,
       onForward,
       onPin,
       onStartSelectionMode,

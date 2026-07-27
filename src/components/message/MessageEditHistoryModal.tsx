@@ -91,7 +91,7 @@ export const MessageEditHistoryModal: React.FC<MessageEditHistoryModalProps> = (
             type="button"
             onClick={onClose}
             className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-            aria-label={t("common:close", { defaultValue: "Đóng" })}
+            aria-label={t("common:actions.close")}
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
@@ -101,7 +101,7 @@ export const MessageEditHistoryModal: React.FC<MessageEditHistoryModalProps> = (
         <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
           {loading && (
             <p className="py-4 text-center text-sm text-text-muted">
-              {t("common:loading", { defaultValue: "Đang tải..." })}
+              {t("common:loading.default")}
             </p>
           )}
 
@@ -137,6 +137,11 @@ export const MessageEditHistoryModal: React.FC<MessageEditHistoryModalProps> = (
                         })}
                       </p>
                       <div className="space-y-1 rounded-lg bg-surface-overlay/60 px-3 py-2">
+                        {idx === 0 && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                            {t("chat:message.editHistory.original")}
+                          </p>
+                        )}
                         <p
                           className={clsx(
                             "text-xs text-text-muted line-through",

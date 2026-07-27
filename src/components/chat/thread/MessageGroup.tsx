@@ -565,6 +565,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canForward: Boolean(onForward),
           canSelect: Boolean(onStartSelectionMode && onToggleSelect),
           canDelete: Boolean(onDelete),
+          canEdit: Boolean(onEdit),
           canRecallOthers: viewerCanRecallOthers,
         }),
       [
@@ -573,6 +574,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         isSelectionMode,
         message,
         onDelete,
+        onEdit,
         onForward,
         onPin,
         onStartSelectionMode,
@@ -694,6 +696,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           case "select":
             onStartSelectionMode?.();
             onToggleSelect?.(message.id);
+            break;
+          case "edit":
+            if (onEdit) {
+              void Promise.resolve(onEdit(message));
+            }
             break;
           case "more":
             setIsActionSheetOpen(true);

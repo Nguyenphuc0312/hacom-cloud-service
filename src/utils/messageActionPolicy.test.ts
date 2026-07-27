@@ -50,6 +50,58 @@ describe("resolveMessageActions", () => {
     ).toEqual(["copy", "select", "recall", "deleteForMe"]);
   });
 
+  it("offers edit on own text messages, above the destructive block", () => {
+    expect(
+      resolveMessageActions({
+        message: message(),
+        isOwn: true,
+        isCoarsePointer: false,
+        canSelect: true,
+        canDelete: true,
+        canEdit: true,
+      }).menuActions,
+    ).toEqual(["copy", "select", "edit", "recall", "deleteForMe"]);
+  });
+
+  it("hides edit on other people's messages and on non-text messages", () => {
+    expect(
+      resolveMessageActions({
+        message: message(),
+        isOwn: false,
+        isCoarsePointer: false,
+        canDelete: true,
+        canEdit: true,
+      }).menuActions,
+    ).not.toContain("edit");
+
+    expect(
+      resolveMessageActions({
+        message: message({ type: MessageType.IMAGE }),
+        isOwn: true,
+        isCoarsePointer: false,
+        canDelete: true,
+        canEdit: true,
+      }).menuActions,
+    ).not.toContain("edit");
+  });
+
+  it("keeps edit available past the 24h recall window", () => {
+    const twentyFiveHoursAgo = new Date(
+      Date.now() - 25 * 60 * 60 * 1000,
+    ).toISOString() as unknown as Date;
+
+    const menuActions = resolveMessageActions({
+      message: message({ createdAt: twentyFiveHoursAgo }),
+      isOwn: true,
+      isCoarsePointer: false,
+      canDelete: true,
+      canEdit: true,
+    }).menuActions;
+
+    expect(menuActions).toContain("edit");
+    expect(menuActions).not.toContain("recall");
+  });
+
   it("drops recall after the 24h window, keeping delete-for-me", () => {
     const twentyFiveHoursAgo = new Date(
       Date.now() - 25 * 60 * 60 * 1000,

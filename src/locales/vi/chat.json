@@ -101,7 +101,15 @@
     "loadMore": "Đang tải...",
     "loadingHistory": "Đang tải lịch sử trò chuyện...",
     "loadingMoreHistory": "Đang tải thêm lịch sử",
-    "senderYou": "Bạn:"
+    "senderYou": "Bạn:",
+    "editHistory": {
+      "title": "Lịch sử chỉnh sửa",
+      "viewTitle": "Xem tin nhắn gốc",
+      "editedAt": "Chỉnh sửa lúc {{time}}",
+      "original": "Nội dung gốc",
+      "empty": "Chưa có lịch sử chỉnh sửa.",
+      "loadError": "Không thể tải lịch sử chỉnh sửa."
+    }
   },
   "composer": {
     "replyingTo": "Đang trả lời {{name}}",
