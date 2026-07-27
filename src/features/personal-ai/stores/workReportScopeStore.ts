@@ -47,10 +47,26 @@ interface WorkReportScopeState {
    * null = chưa có lượt chọn nào gắn với câu hỏi (vd chỉ nạp danh sách scope).
    */
   tokenQuestion: string | null;
+  /**
+   * `promptId` của lần BE hỏi đã sinh ra token đang giữ (§4 — bản 2.2).
+   *
+   * BE sinh mã này MỚI cho mỗi lần phát `work_report_scope_required`, kể cả khi
+   * `question` trùng chữ y hệt. Đây là nguồn sự thật để nhận diện "cùng một lần
+   * hỏi" — thay `tokenQuestion` (2.1), vốn coi hai lần hỏi khác nhau ở hai hội
+   * thoại nhưng trùng chữ là một, dẫn tới tái dùng token (bug production 27-28/07).
+   * null = lượt này BE không gửi `promptId` (BE bản 2.1) → lùi về so `tokenQuestion`.
+   */
+  tokenPromptId: string | null;
+  /** `promptId` của lần hỏi đang chờ user chọn scope; chốt vào `tokenPromptId` khi chọn. */
+  pendingPromptId: string | null;
 
   setScopes: (scopes: WorkReportScope[], capability?: WorkReportCapability) => void;
   select: (scope: WorkReportScope) => void;
-  requirePick: (pendingQuestion?: string, capability?: WorkReportCapability) => void;
+  requirePick: (
+    pendingQuestion?: string,
+    capability?: WorkReportCapability,
+    promptId?: string,
+  ) => void;
   /**
    * Chốt khóa `authUserId|capability` cho lựa chọn sắp nạp (§7). Nếu khóa mới
    * khác khóa đang giữ → xóa lựa chọn/scopes cũ (không tái dùng token của thao
@@ -79,6 +95,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
   dataEpoch: 0,
   scopeKey: null,
   tokenQuestion: null,
+  tokenPromptId: null,
+  pendingPromptId: null,
 
   setScopes: (scopes, capability) =>
     set((state) => ({
@@ -101,19 +119,32 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       return {
         selected: scope,
         isPicking: false,
-        // §4 (2.1): token vừa chọn CHỈ hợp lệ cho đúng câu hỏi đã sinh ra dropdown
-        // này. Chốt câu hỏi đó lại ngay lúc chọn; câu hỏi mới sau này sẽ không
-        // khớp → không tái dùng token, BE hỏi lại phạm vi.
+        // §4 (2.1/2.2): token vừa chọn CHỈ hợp lệ cho đúng LẦN HỎI đã sinh ra
+        // dropdown này. Chốt cả `promptId` (khoá chính, 2.2) lẫn câu hỏi (fallback
+        // khi BE chưa gửi promptId) ngay lúc chọn; lần hỏi mới sẽ không khớp →
+        // không tái dùng token, BE hỏi lại phạm vi.
         tokenQuestion: state.pendingQuestion ?? state.tokenQuestion,
+        // Lấy THẲNG `pendingPromptId` (không `?? tokenPromptId`): lượt chọn mới
+        // không kèm promptId mà thừa hưởng khoá của lượt trước thì token lại
+        // dùng chung khoá giữa hai lần hỏi — đúng bug 2.2 cần diệt. Không có
+        // promptId → null → lùi về khớp theo câu hỏi (2.1).
+        tokenPromptId: state.pendingPromptId,
         dataEpoch: changed ? state.dataEpoch + 1 : state.dataEpoch,
       };
     }),
 
-  requirePick: (pendingQuestion, capability) =>
+  requirePick: (pendingQuestion, capability, promptId) =>
     set((state) => ({
       isPicking: true,
       pendingQuestion: pendingQuestion ?? state.pendingQuestion,
       capability: capability ?? state.capability,
+      // §4 (2.2): lần hỏi mới → promptId mới. Ghi đè (không `??` giữ giá trị cũ)
+      // khi caller mở một lượt chọn mới, nếu không lượt này sẽ thừa hưởng
+      // promptId của lượt trước → lại tái dùng token, đúng bug 2.2 cần diệt.
+      // Chuỗi rỗng/thiếu (BE bản 2.1) → null, `select` lùi về khớp theo câu hỏi.
+      pendingPromptId: pendingQuestion
+        ? promptId?.trim() || null
+        : (promptId?.trim() ?? state.pendingPromptId),
     })),
 
   ensureScopeKey: (authUserId, capability) => {
@@ -130,6 +161,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
         scopes: null,
         capability,
         tokenQuestion: null,
+        tokenPromptId: null,
+        pendingPromptId: null,
         dataEpoch: changed ? state.dataEpoch + 1 : state.dataEpoch,
       };
     });
@@ -142,6 +175,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       scopes: null,
       isPicking: true,
       tokenQuestion: null,
+      tokenPromptId: null,
+      pendingPromptId: null,
       // Giữ `capability` để selector nạp lại đúng `/scopes?capability` (§7 — 403).
       dataEpoch: state.dataEpoch + 1,
     })),
@@ -151,6 +186,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       selected: null,
       scopes: null,
       tokenQuestion: null,
+      tokenPromptId: null,
+      pendingPromptId: null,
       // KHÔNG bật `isPicking`: đây là kết thúc bình thường của một vòng token,
       // không phải lỗi. Lượt hỏi sau nếu vẫn nhiều scope thì BE/pre-flight mở
       // dropdown lại — đó mới là nguồn mở widget.
@@ -159,7 +196,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
     })),
 
   cancelPick: () =>
-    set(() => ({ isPicking: false, pendingQuestion: null })),
+    // Huỷ chọn → lượt hỏi này kết thúc, promptId của nó không còn dùng làm gì.
+    set(() => ({ isPicking: false, pendingQuestion: null, pendingPromptId: null })),
 
   reset: () =>
     set((state) => ({
@@ -170,6 +208,8 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
       capability: null,
       scopeKey: null,
       tokenQuestion: null,
+      tokenPromptId: null,
+      pendingPromptId: null,
       dataEpoch: state.dataEpoch + 1,
     })),
 }));
@@ -181,9 +221,21 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
  * scope cho nó. Câu hỏi mới — kể cả cùng chủ đề, cùng hội thoại — trả false để
  * caller gửi request KHÔNG kèm `scope_token` và để BE hỏi lại phạm vi.
  */
-export function isTokenValidFor(question: string): boolean {
+export function isTokenValidFor(question: string, promptId?: string): boolean {
   const state = useWorkReportScopeStore.getState();
-  if (!state.selected?.selectionToken || !state.tokenQuestion) return false;
+  if (!state.selected?.selectionToken) return false;
+
+  // §4 (2.2): `promptId` là nguồn sự thật. Token đã gắn với một lần hỏi cụ thể
+  // → chỉ hợp lệ cho ĐÚNG lần hỏi đó. Caller không nêu promptId (lượt gửi mới
+  // do user gõ, chưa qua vòng BE hỏi) → không khớp, phải nhả token.
+  if (state.tokenPromptId) {
+    return !!promptId && promptId.trim() === state.tokenPromptId;
+  }
+
+  // Lùi về so chuỗi câu hỏi (2.1) khi BE chưa gửi `promptId`. Cách này KHÔNG
+  // phân biệt được hai lần hỏi trùng chữ ở hai hội thoại — đó chính là lý do
+  // 2.2 thêm `promptId`. Chỉ còn là đường tương thích ngược với BE bản cũ.
+  if (!state.tokenQuestion) return false;
   return state.tokenQuestion.trim() === question.trim();
 }
 

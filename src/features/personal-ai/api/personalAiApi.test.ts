@@ -211,6 +211,49 @@ describe("streamPersonalChat work_report_scope_required (§4 SSE)", () => {
     expect(arg.scopes).toHaveLength(2);
   });
 
+  it("parse `promptId` (§4 bản 2.2) để FE khớp token theo lần hỏi, không theo chuỗi", async () => {
+    const scopeEvent = {
+      reason: "multiple_matching_authorizations",
+      promptId: "9f2c1a7e4b3d4c5e8a6f0d1b2c3e4f5a",
+      question: "tổng hợp báo cáo của mọi người trong phòng ban",
+      capability: "report_read",
+      scopes: [rawScope, { ...rawScope, authorizationId: "a2", selectionToken: "tok-b" }],
+    };
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_scope_required\ndata: ${JSON.stringify(scopeEvent)}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":""}\n\n`,
+      ),
+    );
+
+    const onScopeRequired = vi.fn();
+    await streamPersonalChat({ question: "x", session_id: null }, { onScopeRequired });
+
+    expect(onScopeRequired.mock.calls[0][0].promptId).toBe(
+      "9f2c1a7e4b3d4c5e8a6f0d1b2c3e4f5a",
+    );
+  });
+
+  it("BE bản cũ không gửi `promptId` → chuỗi rỗng (store lùi về khớp câu hỏi)", async () => {
+    const scopeEvent = {
+      reason: "multiple_matching_authorizations",
+      question: "#TBP_baocao",
+      capability: "department_submit",
+      scopes: [rawScope],
+    };
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_scope_required\ndata: ${JSON.stringify(scopeEvent)}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":""}\n\n`,
+      ),
+    );
+
+    const onScopeRequired = vi.fn();
+    await streamPersonalChat({ question: "x", session_id: null }, { onScopeRequired });
+
+    expect(onScopeRequired.mock.calls[0][0].promptId).toBe("");
+  });
+
   it("payload thiếu scope hợp lệ → KHÔNG gọi onScopeRequired", async () => {
     const body =
       `event: work_report_scope_required\ndata: {"question":"x","scopes":[{"no":"token"}]}\n\n` +

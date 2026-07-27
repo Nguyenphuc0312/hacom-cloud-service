@@ -150,7 +150,7 @@ export function usePersonalChat() {
   }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
 
   const sendMessage = useCallback(
-    async (promptText: string) => {
+    async (promptText: string, scopePromptId?: string) => {
       const trimmed = promptText.trim();
       if (!trimmed || isStreaming) return;
 
@@ -167,12 +167,14 @@ export function usePersonalChat() {
       };
       addMessage(conversationId, userMessage);
 
-      // §4 (bản 2.1): `selectionToken` chỉ sống trong đúng vòng "BE hỏi → user
-      // chọn → FE gửi lại ĐÚNG câu hỏi đó kèm token". Câu hỏi MỚI trong cùng hội
-      // thoại — kể cả cùng chủ đề — phải gửi KHÔNG kèm token để BE tự quyết (và
-      // hỏi lại phạm vi nếu vẫn nhiều scope). Nhả token cũ NGAY ở đây, trước
-      // pre-flight, để pre-flight/`withScopeToken` bên dưới không thấy token cũ.
-      const isTokenTurn = isTokenValidFor(trimmed);
+      // §4 (bản 2.1, cập nhật 2.2): `selectionToken` chỉ sống trong đúng vòng
+      // "BE hỏi (promptId X) → user chọn → FE gửi lại câu hỏi đó kèm token gắn
+      // với X". Lần hỏi MỚI — kể cả trùng chữ y hệt, kể cả hội thoại khác —
+      // phải gửi KHÔNG kèm token để BE tự quyết (và hỏi lại phạm vi nếu vẫn
+      // nhiều scope). `scopePromptId` chỉ do effect gửi-lại-sau-khi-chọn truyền
+      // vào; user gõ tay không có nó → không khớp → nhả token. Nhả NGAY ở đây,
+      // trước pre-flight, để pre-flight/`withScopeToken` không thấy token cũ.
+      const isTokenTurn = isTokenValidFor(trimmed, scopePromptId);
       if (!isTokenTurn && getScopeToken()) {
         useWorkReportScopeStore.getState().releaseScopeToken();
       }
@@ -341,7 +343,14 @@ export function usePersonalChat() {
             onScopeRequired: (scopeData) => {
               const scopeStore = useWorkReportScopeStore.getState();
               scopeStore.setScopes(scopeData.scopes, scopeData.capability);
-              scopeStore.requirePick(scopeData.question || trimmed, scopeData.capability);
+              // §4 (2.2): giữ `promptId` của ĐÚNG lần hỏi này — khoá nhận diện
+              // để lượt gửi lại sau khi chọn được đính token, còn mọi lượt hỏi
+              // khác (kể cả trùng chữ) thì không.
+              scopeStore.requirePick(
+                scopeData.question || trimmed,
+                scopeData.capability,
+                scopeData.promptId,
+              );
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",
                 scopeRequired: true,
@@ -507,9 +516,13 @@ export function usePersonalChat() {
 
   useEffect(() => {
     if (!scopeSelected || scopeIsPicking || !scopePendingQuestion || isStreaming) return;
+    // §4 (2.2): đây là lượt DUY NHẤT được phép đính token — nó thuộc đúng lần
+    // hỏi vừa chốt. Truyền `tokenPromptId` để `isTokenValidFor` nhận ra; user gõ
+    // lại y hệt câu đó sau này không có promptId nên sẽ bị nhả token.
+    const { tokenPromptId } = useWorkReportScopeStore.getState();
     // Xóa câu hỏi hoãn TRƯỚC khi gửi để effect không chạy lại thành vòng lặp.
     useWorkReportScopeStore.setState({ pendingQuestion: null });
-    void sendMessage(scopePendingQuestion);
+    void sendMessage(scopePendingQuestion, tokenPromptId ?? undefined);
   }, [scopeSelected, scopeIsPicking, scopePendingQuestion, isStreaming, sendMessage]);
 
   const sendWithFile = useCallback(
@@ -649,10 +662,15 @@ export function usePersonalChat() {
         const scopeStore = useWorkReportScopeStore.getState();
         // §7: khóa theo authUserId + capability trước khi dùng lại token đang giữ.
         scopeStore.ensureScopeKey(user?.id ?? "", submitCapability);
-        // §4 (2.1): token chỉ dùng cho ĐÚNG lượt nộp đã sinh ra nó. Lần nộp mới
-        // (user đính kèm lại tệp cho một tag khác lượt trước) không được dùng lại
-        // token cũ — nhả ra để pre-flight bên dưới mở dropdown lại.
-        if (!isTokenValidFor(trimmed) && getScopeToken()) {
+        // §4 (2.1/2.2): token chỉ dùng cho ĐÚNG lượt nộp đã sinh ra nó. Lần nộp
+        // mới (user đính kèm lại tệp cho một tag khác lượt trước) không được dùng
+        // lại token cũ — nhả ra để pre-flight bên dưới mở dropdown lại.
+        // Luồng nộp là "chọn scope xong rồi đính kèm lại tệp": lượt nộp liền sau
+        // thuộc CHÍNH lần chọn đó, nên khai lại `tokenPromptId` đang giữ. Dropdown
+        // ở đây do FE tự mở (pre-flight), thường không có promptId của BE.
+        const submitPromptId =
+          useWorkReportScopeStore.getState().tokenPromptId ?? undefined;
+        if (!isTokenValidFor(trimmed, submitPromptId) && getScopeToken()) {
           scopeStore.releaseScopeToken();
         }
         let scope = useWorkReportScopeStore.getState().selected;

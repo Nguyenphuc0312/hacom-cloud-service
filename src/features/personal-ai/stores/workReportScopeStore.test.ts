@@ -112,7 +112,94 @@ describe("ensureScopeKey — khóa authUserId + capability (§7)", () => {
   });
 });
 
-describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1)", () => {
+describe("token khớp theo promptId, không theo chuỗi câu hỏi (§4 — bản 2.2)", () => {
+  const scopeA = scope({ authorizationId: "auth-A", selectionToken: "token-A" });
+  const scopeB = scope({ authorizationId: "auth-B", selectionToken: "token-B" });
+  const QUESTION = "tổng hợp báo cáo của mọi người trong phòng ban";
+
+  /** Mô phỏng 1 vòng "BE hỏi (promptId) → user chọn scope". */
+  function beAsksAndUserPicks(promptId: string, picked = scopeA) {
+    const s = useWorkReportScopeStore.getState();
+    s.setScopes([scopeA, scopeB], "report_read");
+    s.requirePick(QUESTION, "report_read", promptId);
+    useWorkReportScopeStore.getState().select(picked);
+  }
+
+  it("có promptId thì khớp theo promptId — câu hỏi trùng chữ KHÔNG đủ để dùng lại token", () => {
+    beAsksAndUserPicks("prompt-1");
+
+    // Đúng lần hỏi đó → hợp lệ.
+    expect(isTokenValidFor(QUESTION, "prompt-1")).toBe(true);
+    // Trùng chữ y hệt nhưng là LẦN HỎI KHÁC (promptId khác) → KHÔNG hợp lệ.
+    expect(isTokenValidFor(QUESTION, "prompt-2")).toBe(false);
+    // User tự gõ lại y hệt (không có promptId) → KHÔNG hợp lệ. Đây chính là bug
+    // production 27-28/07: bản 2.1 so chuỗi nên chỗ này trả true.
+    expect(isTokenValidFor(QUESTION)).toBe(false);
+  });
+
+  it("acceptance §9.9: hỏi y hệt ở hội thoại khác PHẢI hiện dropdown lại", () => {
+    // Hội thoại A: BE hỏi (prompt-A) → chọn scope A → gửi kèm token A.
+    beAsksAndUserPicks("prompt-A", scopeA);
+    expect(withScopeToken({ question: QUESTION })).toMatchObject({
+      scope_token: "token-A",
+    });
+
+    // Hội thoại MỚI, user gõ y hệt câu đó. FE không có promptId cho lượt này
+    // → token cũ không hợp lệ → nhả → gửi KHÔNG kèm scope_token.
+    expect(isTokenValidFor(QUESTION)).toBe(false);
+    useWorkReportScopeStore.getState().releaseScopeToken();
+    expect(withScopeToken({ question: QUESTION })).toEqual({ question: QUESTION });
+
+    // BE hỏi lại với promptId MỚI → user chọn scope B → gửi token B.
+    beAsksAndUserPicks("prompt-B", scopeB);
+    expect(isTokenValidFor(QUESTION, "prompt-B")).toBe(true);
+    expect(withScopeToken({ question: QUESTION })).toMatchObject({
+      scope_token: "token-B",
+    });
+    // Không được nhận nhầm promptId của lần hỏi trước.
+    expect(isTokenValidFor(QUESTION, "prompt-A")).toBe(false);
+  });
+
+  it("lượt chọn mới không kèm promptId thì KHÔNG thừa hưởng promptId lượt trước", () => {
+    beAsksAndUserPicks("prompt-1");
+    expect(useWorkReportScopeStore.getState().tokenPromptId).toBe("prompt-1");
+
+    // BE bản cũ (không promptId) hỏi lại → pendingPromptId phải bị xoá, nếu giữ
+    // lại "prompt-1" thì lượt mới lại dùng chung khoá với lượt cũ.
+    const s = useWorkReportScopeStore.getState();
+    s.setScopes([scopeA, scopeB], "report_read");
+    s.requirePick("câu hỏi khác", "report_read");
+    expect(useWorkReportScopeStore.getState().pendingPromptId).toBeNull();
+    useWorkReportScopeStore.getState().select(scopeB);
+    expect(useWorkReportScopeStore.getState().tokenPromptId).toBeNull();
+  });
+
+  it("cancelPick xoá pendingPromptId (lượt hỏi bị huỷ)", () => {
+    const s = useWorkReportScopeStore.getState();
+    s.setScopes([scopeA, scopeB], "report_read");
+    s.requirePick(QUESTION, "report_read", "prompt-1");
+    useWorkReportScopeStore.getState().cancelPick();
+    expect(useWorkReportScopeStore.getState().pendingPromptId).toBeNull();
+  });
+
+  it("mọi đường xoá lựa chọn đều xoá promptId (không để khoá treo)", () => {
+    for (const clear of [
+      () => useWorkReportScopeStore.getState().clearSelection(),
+      () => useWorkReportScopeStore.getState().releaseScopeToken(),
+      () => useWorkReportScopeStore.getState().ensureScopeKey("u9", "org_unit_submit"),
+      () => useWorkReportScopeStore.getState().reset(),
+    ]) {
+      useWorkReportScopeStore.getState().reset();
+      beAsksAndUserPicks("prompt-x");
+      expect(useWorkReportScopeStore.getState().tokenPromptId).toBe("prompt-x");
+      clear();
+      expect(useWorkReportScopeStore.getState().tokenPromptId).toBeNull();
+      expect(useWorkReportScopeStore.getState().pendingPromptId).toBeNull();
+    }
+  });
+});
+
+describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1, fallback khi BE chưa gửi promptId)", () => {
   const scopeA = scope({ authorizationId: "auth-A", selectionToken: "token-A" });
   const scopeB = scope({ authorizationId: "auth-B", selectionToken: "token-B" });
 
@@ -154,7 +241,7 @@ describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1)",
     expect(state.dataEpoch).toBeGreaterThan(0);
   });
 
-  it("acceptance §9.8: lượt 2 chọn scope B thì gửi token B, không phải token A", () => {
+  it("acceptance §9.8 (BE chưa gửi promptId): lượt 2 chọn scope B thì gửi token B, không phải token A", () => {
     const store = useWorkReportScopeStore.getState();
 
     // Lượt 1: câu hỏi chung chung → dropdown → chọn scope A → gửi kèm token A.

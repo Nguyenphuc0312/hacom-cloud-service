@@ -987,6 +987,10 @@ export async function streamPersonalChat(
           if (scopes.length > 0) {
             options.onScopeRequired({
               reason: String(parsed.reason ?? "multiple_authorizations"),
+              // §4 (2.2): khoá nhận diện "một lần hỏi". Thiếu (BE bản 2.1) →
+              // chuỗi rỗng, store tự lùi về so chuỗi `question`.
+              promptId:
+                typeof parsed.promptId === "string" ? parsed.promptId.trim() : "",
               question: String(parsed.question ?? ""),
               scopes,
               // §4: BE cho biết capability/action/loại scope đang yêu cầu.
