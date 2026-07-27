@@ -388,9 +388,9 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
   };
 
   // Người được mời phản hồi (Tham gia / Từ chối).
-  const handleRespond = async (response: "ACCEPTED" | "DECLINED") => {
+  const handleRespond = async (response: "ACCEPTED" | "DECLINED", reason?: string) => {
     if (!selectedEvent) return;
-    await mutations.respond(selectedEvent.id, response);
+    await mutations.respond(selectedEvent.id, response, reason);
   };
 
   const isToday = (d: Date) =>
