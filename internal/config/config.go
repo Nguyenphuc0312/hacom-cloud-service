@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-const defaultMaxUploadBytes int64 = 100 * 1024 * 1024
+const defaultMaxUploadBytes int64 = 100_000_000
 
 type Config struct {
 	AppEnv            string

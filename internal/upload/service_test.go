@@ -6,7 +6,7 @@ import (
 )
 
 func TestValidateSize(t *testing.T) {
-	const maximum = int64(100 * 1024 * 1024)
+	const maximum = int64(100_000_000)
 
 	tests := []struct {
 		name    string

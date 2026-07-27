@@ -10,8 +10,11 @@
 Yêu cầu: Go 1.22+, Docker và Docker Compose.
 
 ```bash
+brew install golang-migrate
 cp .env.example .env
 make up
+make migrate-up
+make db-verify
 make run-api
 ```
 
@@ -44,7 +47,7 @@ scripts\dev.cmd logs
 scripts\dev.cmd down
 ```
 
-Skeleton hiện chỉ cung cấp health check, cấu hình, interface nghiệp vụ và hạ tầng local. Upload, PostgreSQL repository, MinIO adapter, migration và worker handler là các đầu việc nhóm sẽ triển khai theo quy trình bên dưới.
+Skeleton hiện cung cấp cấu hình, interface nghiệp vụ, hạ tầng local và migration PostgreSQL. Upload, PostgreSQL repository, MinIO adapter và worker handler được phát triển theo các quy trình bên dưới.
 
 ## 1. Cách tổ chức chung
 
@@ -327,7 +330,7 @@ GET  /api/v1/cloud/items/:id
 
 **Cần đạt sau khi hoàn thành:**
 
-- Quota mặc định đúng 5 GiB.
+- Quota mặc định đúng 5 GB decimal.
 - Retry cùng idempotency key không tăng dung lượng lần hai.
 - `used_bytes` và tổng ledger khớp nhau.
 

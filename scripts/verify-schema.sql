@@ -1,0 +1,336 @@
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+DO $$
+DECLARE
+  expected_tables TEXT[] := ARRAY[
+    'audit_logs',
+    'drives',
+    'items',
+    'jobs',
+    'quotas',
+    'storage_objects',
+    'upload_parts',
+    'upload_sessions',
+    'usage_ledger'
+  ];
+  actual_tables TEXT[];
+  external_fk_count INTEGER;
+  owner_a UUID := gen_random_uuid();
+  drive_a UUID;
+  drive_b UUID;
+  object_a UUID;
+  item_a UUID;
+  session_a UUID;
+  ledger_a UUID;
+BEGIN
+  SELECT array_agg(table_name ORDER BY table_name)
+  INTO actual_tables
+  FROM information_schema.tables
+  WHERE table_schema = 'cloud'
+    AND table_type = 'BASE TABLE';
+
+  IF actual_tables IS DISTINCT FROM expected_tables THEN
+    RAISE EXCEPTION
+      'Unexpected cloud tables. expected=%, actual=%',
+      expected_tables,
+      actual_tables;
+  END IF;
+
+  SELECT COUNT(*)
+  INTO external_fk_count
+  FROM pg_constraint constraint_row
+  JOIN pg_class source_table
+    ON source_table.oid = constraint_row.conrelid
+  JOIN pg_namespace source_schema
+    ON source_schema.oid = source_table.relnamespace
+  JOIN pg_class target_table
+    ON target_table.oid = constraint_row.confrelid
+  JOIN pg_namespace target_schema
+    ON target_schema.oid = target_table.relnamespace
+  WHERE constraint_row.contype = 'f'
+    AND source_schema.nspname = 'cloud'
+    AND target_schema.nspname <> 'cloud';
+
+  IF external_fk_count <> 0 THEN
+    RAISE EXCEPTION 'Cloud schema contains cross-service foreign keys';
+  END IF;
+
+  INSERT INTO cloud.drives (owner_user_id, name)
+  VALUES (owner_a, 'Schema verification A')
+  RETURNING id INTO drive_a;
+
+  INSERT INTO cloud.drives (owner_user_id, name)
+  VALUES (gen_random_uuid(), 'Schema verification B')
+  RETURNING id INTO drive_b;
+
+  INSERT INTO cloud.quotas (drive_id)
+  VALUES (drive_a), (drive_b);
+
+  BEGIN
+    INSERT INTO cloud.drives (owner_user_id, name)
+    VALUES (owner_a, 'Duplicate personal drive');
+
+    RAISE EXCEPTION 'Duplicate personal drive was incorrectly accepted';
+  EXCEPTION
+    WHEN unique_violation THEN
+      NULL;
+  END;
+
+  IF (
+    SELECT quota_bytes
+    FROM cloud.quotas
+    WHERE drive_id = drive_a
+  ) <> 5000000000 THEN
+    RAISE EXCEPTION 'Default quota is not 5 decimal GB';
+  END IF;
+
+  INSERT INTO cloud.items (
+    drive_id,
+    item_type,
+    status,
+    text_content,
+    size_bytes,
+    billable_bytes
+  )
+  VALUES (
+    drive_a,
+    'text',
+    'ready',
+    'schema verification',
+    19,
+    19
+  );
+
+  BEGIN
+    INSERT INTO cloud.items (
+      drive_id,
+      item_type,
+      status,
+      size_bytes,
+      billable_bytes
+    )
+    VALUES (
+      drive_a,
+      'file',
+      'pending',
+      1,
+      1
+    );
+
+    RAISE EXCEPTION 'Binary item without storage object was incorrectly accepted';
+  EXCEPTION
+    WHEN check_violation THEN
+      NULL;
+  END;
+
+  BEGIN
+    INSERT INTO cloud.storage_objects (
+      drive_id,
+      bucket,
+      object_key,
+      original_name,
+      content_type,
+      declared_size_bytes
+    )
+    VALUES (
+      drive_a,
+      'hacom-cloud-private',
+      'verify/too-large',
+      'too-large.bin',
+      'application/octet-stream',
+      100000001
+    );
+
+    RAISE EXCEPTION 'Object larger than 100 decimal MB was incorrectly accepted';
+  EXCEPTION
+    WHEN check_violation THEN
+      NULL;
+  END;
+
+  INSERT INTO cloud.storage_objects (
+    drive_id,
+    bucket,
+    object_key,
+    original_name,
+    content_type,
+    declared_size_bytes
+  )
+  VALUES (
+    drive_a,
+    'hacom-cloud-private',
+    'verify/object-a',
+    'verify.txt',
+    'text/plain',
+    12
+  )
+  RETURNING id INTO object_a;
+
+  INSERT INTO cloud.items (
+    drive_id,
+    item_type,
+    status,
+    title,
+    storage_object_id,
+    size_bytes,
+    billable_bytes,
+    source_type
+  )
+  VALUES (
+    drive_a,
+    'file',
+    'pending',
+    'verify.txt',
+    object_a,
+    12,
+    12,
+    'cloud_upload'
+  )
+  RETURNING id INTO item_a;
+
+  BEGIN
+    INSERT INTO cloud.upload_sessions (
+      drive_id,
+      item_id,
+      storage_object_id,
+      original_name,
+      content_type,
+      declared_size_bytes,
+      reserved_bytes,
+      idempotency_key,
+      expires_at
+    )
+    VALUES (
+      drive_b,
+      item_a,
+      object_a,
+      'cross-drive.txt',
+      'text/plain',
+      12,
+      12,
+      'verify-cross-drive',
+      NOW() + INTERVAL '15 minutes'
+    );
+
+    RAISE EXCEPTION 'Cross-drive upload was incorrectly accepted';
+  EXCEPTION
+    WHEN foreign_key_violation THEN
+      NULL;
+  END;
+
+  INSERT INTO cloud.upload_sessions (
+    drive_id,
+    item_id,
+    storage_object_id,
+    original_name,
+    content_type,
+    declared_size_bytes,
+    reserved_bytes,
+    idempotency_key,
+    expires_at
+  )
+  VALUES (
+    drive_a,
+    item_a,
+    object_a,
+    'verify.txt',
+    'text/plain',
+    12,
+    12,
+    'verify-valid-upload',
+    NOW() + INTERVAL '15 minutes'
+  )
+  RETURNING id INTO session_a;
+
+  INSERT INTO cloud.usage_ledger (
+    drive_id,
+    item_id,
+    upload_session_id,
+    event_type,
+    delta_reserved_bytes,
+    idempotency_key
+  )
+  VALUES (
+    drive_a,
+    item_a,
+    session_a,
+    'reserve',
+    12,
+    'verify-reserve-upload'
+  )
+  RETURNING id INTO ledger_a;
+
+  DELETE FROM cloud.items
+  WHERE id = item_a;
+
+  IF EXISTS (
+    SELECT 1
+    FROM cloud.upload_sessions
+    WHERE id = session_a
+  ) THEN
+    RAISE EXCEPTION 'Upload session did not cascade when its item was purged';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM cloud.usage_ledger
+    WHERE id = ledger_a
+      AND (item_id IS NOT NULL OR upload_session_id IS NOT NULL)
+  ) THEN
+    RAISE EXCEPTION 'Ledger did not preserve history with cleared soft references';
+  END IF;
+
+  UPDATE cloud.quotas
+  SET used_bytes = used_bytes + 19
+  WHERE drive_id = drive_a;
+
+  INSERT INTO cloud.usage_ledger (
+    drive_id,
+    event_type,
+    delta_used_bytes,
+    idempotency_key
+  )
+  VALUES (
+    drive_a,
+    'consume',
+    19,
+    'verify-consume-text'
+  );
+
+  BEGIN
+    INSERT INTO cloud.usage_ledger (
+      drive_id,
+      event_type,
+      delta_used_bytes,
+      idempotency_key
+    )
+    VALUES (
+      drive_a,
+      'consume',
+      19,
+      'verify-consume-text'
+    );
+
+    RAISE EXCEPTION 'Duplicate quota event was incorrectly accepted';
+  EXCEPTION
+    WHEN unique_violation THEN
+      NULL;
+  END;
+
+  BEGIN
+    UPDATE cloud.quotas
+    SET reserved_bytes = quota_bytes + 1
+    WHERE drive_id = drive_a;
+
+    RAISE EXCEPTION 'Quota overflow was incorrectly accepted';
+  EXCEPTION
+    WHEN check_violation THEN
+      NULL;
+  END;
+
+  RAISE NOTICE 'Hacom Cloud schema verification passed';
+END;
+$$;
+
+ROLLBACK;

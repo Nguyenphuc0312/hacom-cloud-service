@@ -1,0 +1,269 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="1750" viewBox="0 0 2600 1750">
+  <defs>
+    <style>
+      .canvas { fill: #f4f7fb; }
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+      .subtitle { font: 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }
+      .table-box { fill: #ffffff; stroke: #344054; stroke-width: 2; rx: 7; }
+      .table-header { fill: #175cd3; }
+      .table-name { font: 700 19px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #ffffff; }
+      .schema-name { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #d1e0ff; }
+      .row { font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #344054; }
+      .key-pk { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #b42318; }
+      .key-fk { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #175cd3; }
+      .key-uq { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #067647; }
+      .separator { stroke: #e4e7ec; stroke-width: 1; }
+      .relationship { fill: none; stroke: #667085; stroke-width: 2.2; }
+      .relationship-strong { fill: none; stroke: #175cd3; stroke-width: 2.6; }
+      .cardinality { font: 700 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344054; }
+      .legend { font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; }
+      .note { font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }
+    </style>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#101828" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect class="canvas" width="2600" height="1750"/>
+  <text class="title" x="60" y="55">HACOM CLOUD — PHASE 1 DATABASE ERD</text>
+  <text class="subtitle" x="60" y="86">PostgreSQL schema: cloud · SQL Server-style relationship diagram · 5 GB / 100 MB decimal</text>
+
+  <!-- Relationships are drawn first so table boxes stay above the lines. -->
+  <path class="relationship-strong" d="M1300 392 L1300 455 L390 455 L390 510"/>
+  <text class="cardinality" x="1280" y="420">1</text>
+  <text class="cardinality" x="398" y="500">N</text>
+
+  <path class="relationship-strong" d="M1300 392 L1300 510"/>
+  <text class="cardinality" x="1280" y="420">1</text>
+  <text class="cardinality" x="1310" y="500">N</text>
+
+  <path class="relationship-strong" d="M1490 260 L1770 260"/>
+  <text class="cardinality" x="1510" y="250">1</text>
+  <text class="cardinality" x="1745" y="250">1</text>
+
+  <path class="relationship-strong" d="M1380 392 L1380 455 L2060 455 L2060 510"/>
+  <text class="cardinality" x="1390" y="420">1</text>
+  <text class="cardinality" x="2070" y="500">N</text>
+
+  <path class="relationship" d="M690 770 L825 770"/>
+  <text class="cardinality" x="700" y="760">1</text>
+  <text class="cardinality" x="800" y="760">N</text>
+
+  <path class="relationship" d="M1505 800 L1665 800"/>
+  <text class="cardinality" x="1515" y="790">1</text>
+  <text class="cardinality" x="1640" y="790">N</text>
+
+  <path class="relationship" d="M2250 1135 L2250 1240 L2380 1240 L2380 1300"/>
+  <text class="cardinality" x="2260" y="1165">1</text>
+  <text class="cardinality" x="2390" y="1290">N</text>
+
+  <path class="relationship" d="M1180 1095 L1180 1200 L1840 1200 L1840 1280"/>
+  <text class="cardinality" x="1190" y="1125">1</text>
+  <text class="cardinality" x="1850" y="1270">N</text>
+
+  <path class="relationship" d="M2040 1135 L2040 1200 L1950 1200 L1950 1280"/>
+  <text class="cardinality" x="2050" y="1165">1</text>
+  <text class="cardinality" x="1960" y="1270">N</text>
+
+  <path class="relationship" d="M1130 392 L1130 430 L365 430 L365 1260"/>
+  <text class="cardinality" x="1110" y="420">1</text>
+  <text class="cardinality" x="375" y="1250">N</text>
+
+  <path class="relationship" d="M1220 392 L1220 470 L1080 470 L1080 1260"/>
+  <text class="cardinality" x="1200" y="420">1</text>
+  <text class="cardinality" x="1090" y="1250">N</text>
+
+  <path class="relationship" d="M1460 392 L1460 1190 L1780 1190 L1780 1280"/>
+  <text class="cardinality" x="1440" y="420">1</text>
+  <text class="cardinality" x="1790" y="1270">N</text>
+
+  <!-- cloud.drives -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="1040" y="120" width="500" height="272"/>
+    <rect class="table-header" x="1040" y="120" width="500" height="56" rx="7"/>
+    <text class="table-name" x="1060" y="147">drives</text>
+    <text class="schema-name" x="1060" y="166">cloud.drives · Personal Cloud root</text>
+    <text class="key-pk" x="1058" y="202">PK</text><text class="row" x="1095" y="202">id                    uuid</text>
+    <text class="key-uq" x="1058" y="230">UQ</text><text class="row" x="1095" y="230">owner_user_id         uuid</text>
+    <text class="row" x="1095" y="258">name                  varchar(120)</text>
+    <text class="row" x="1095" y="286">status                drive_status</text>
+    <text class="row" x="1095" y="314">archived_at           timestamptz?</text>
+    <text class="row" x="1095" y="342">created_at            timestamptz</text>
+    <text class="row" x="1095" y="370">updated_at            timestamptz</text>
+  </g>
+
+  <!-- cloud.quotas -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="1770" y="120" width="500" height="244"/>
+    <rect class="table-header" x="1770" y="120" width="500" height="56" rx="7"/>
+    <text class="table-name" x="1790" y="147">quotas</text>
+    <text class="schema-name" x="1790" y="166">cloud.quotas · 5,000,000,000-byte snapshot</text>
+    <text class="key-pk" x="1788" y="202">PK</text><text class="key-fk" x="1818" y="202">FK</text><text class="row" x="1855" y="202">drive_id       uuid</text>
+    <text class="row" x="1855" y="230">quota_bytes    bigint</text>
+    <text class="row" x="1855" y="258">used_bytes     bigint</text>
+    <text class="row" x="1855" y="286">reserved_bytes bigint</text>
+    <text class="row" x="1855" y="314">version        bigint</text>
+    <text class="row" x="1855" y="342">updated_at     timestamptz</text>
+  </g>
+
+  <!-- cloud.storage_objects -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="60" y="510" width="630" height="610"/>
+    <rect class="table-header" x="60" y="510" width="630" height="56" rx="7"/>
+    <text class="table-name" x="80" y="537">storage_objects</text>
+    <text class="schema-name" x="80" y="556">cloud.storage_objects · MinIO object metadata</text>
+    <text class="key-pk" x="78" y="592">PK</text><text class="row" x="115" y="592">id                    uuid</text>
+    <text class="key-fk" x="78" y="620">FK</text><text class="row" x="115" y="620">drive_id              uuid</text>
+    <text class="row" x="115" y="648">bucket                varchar(255)</text>
+    <text class="key-uq" x="78" y="676">UQ</text><text class="row" x="115" y="676">object_key            text</text>
+    <text class="row" x="115" y="704">original_name         varchar(1024)</text>
+    <text class="row" x="115" y="732">content_type          varchar(255)</text>
+    <text class="row" x="115" y="760">declared_size_bytes   bigint</text>
+    <text class="row" x="115" y="788">actual_size_bytes     bigint?</text>
+    <text class="row" x="115" y="816">checksum_sha256       char(64)?</text>
+    <text class="row" x="115" y="844">etag                  text?</text>
+    <text class="row" x="115" y="872">status                object_status</text>
+    <text class="row" x="115" y="900">scan_status           scan_status</text>
+    <text class="row" x="115" y="928">uploaded_at           timestamptz?</text>
+    <text class="row" x="115" y="956">verified_at           timestamptz?</text>
+    <text class="row" x="115" y="984">delete_requested_at   timestamptz?</text>
+    <text class="row" x="115" y="1012">deleted_at            timestamptz?</text>
+    <text class="row" x="115" y="1040">created_at            timestamptz</text>
+    <text class="row" x="115" y="1068">updated_at            timestamptz</text>
+    <text class="note" x="80" y="1100">UQ(bucket, object_key) · max 100,000,000 bytes</text>
+  </g>
+
+  <!-- cloud.items -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="825" y="510" width="680" height="585"/>
+    <rect class="table-header" x="825" y="510" width="680" height="56" rx="7"/>
+    <text class="table-name" x="845" y="537">items</text>
+    <text class="schema-name" x="845" y="556">cloud.items · User-visible timeline content</text>
+    <text class="key-pk" x="843" y="592">PK</text><text class="row" x="880" y="592">id                    uuid</text>
+    <text class="key-fk" x="843" y="620">FK</text><text class="row" x="880" y="620">drive_id              uuid</text>
+    <text class="row" x="880" y="648">item_type             item_type</text>
+    <text class="row" x="880" y="676">status                item_status</text>
+    <text class="row" x="880" y="704">title                 varchar(512)?</text>
+    <text class="row" x="880" y="732">text_content          text?</text>
+    <text class="row" x="880" y="760">link_url              text?</text>
+    <text class="key-fk" x="843" y="788">FK</text><text class="row" x="880" y="788">storage_object_id     uuid?</text>
+    <text class="row" x="880" y="816">size_bytes            bigint</text>
+    <text class="row" x="880" y="844">billable_bytes        bigint</text>
+    <text class="row" x="880" y="872">source_type           varchar(32)</text>
+    <text class="row" x="880" y="900">source_service        varchar(64)?</text>
+    <text class="row" x="880" y="928">source_entity_id      text?</text>
+    <text class="key-uq" x="843" y="956">UQ</text><text class="row" x="880" y="956">idempotency_key       varchar(128)?</text>
+    <text class="row" x="880" y="984">metadata              jsonb</text>
+    <text class="row" x="880" y="1012">deleted_at            timestamptz?</text>
+    <text class="row" x="880" y="1040">purge_after           timestamptz?</text>
+    <text class="row" x="880" y="1068">created_at / updated_at</text>
+  </g>
+
+  <!-- cloud.upload_sessions -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="1665" y="510" width="760" height="625"/>
+    <rect class="table-header" x="1665" y="510" width="760" height="56" rx="7"/>
+    <text class="table-name" x="1685" y="537">upload_sessions</text>
+    <text class="schema-name" x="1685" y="556">cloud.upload_sessions · Reservation and presigned upload lifecycle</text>
+    <text class="key-pk" x="1683" y="592">PK</text><text class="row" x="1720" y="592">id                       uuid</text>
+    <text class="key-fk" x="1683" y="620">FK</text><text class="row" x="1720" y="620">drive_id                 uuid</text>
+    <text class="key-fk" x="1683" y="648">FK</text><text class="row" x="1720" y="648">item_id                  uuid</text>
+    <text class="key-fk" x="1683" y="676">FK</text><text class="row" x="1720" y="676">storage_object_id        uuid</text>
+    <text class="row" x="1720" y="704">status                   upload_status</text>
+    <text class="row" x="1720" y="732">original_name            varchar(1024)</text>
+    <text class="row" x="1720" y="760">content_type             varchar(255)</text>
+    <text class="row" x="1720" y="788">declared_size_bytes      bigint</text>
+    <text class="row" x="1720" y="816">reserved_bytes           bigint</text>
+    <text class="row" x="1720" y="844">actual_size_bytes        bigint?</text>
+    <text class="row" x="1720" y="872">expected/actual_checksum char(64)?</text>
+    <text class="row" x="1720" y="900">minio_upload_id          text?</text>
+    <text class="key-uq" x="1683" y="928">UQ</text><text class="row" x="1720" y="928">idempotency_key          varchar(128)</text>
+    <text class="row" x="1720" y="956">expires_at              timestamptz</text>
+    <text class="row" x="1720" y="984">uploaded_at             timestamptz?</text>
+    <text class="row" x="1720" y="1012">completed_at            timestamptz?</text>
+    <text class="row" x="1720" y="1040">failure_code/detail     text?</text>
+    <text class="row" x="1720" y="1068">created_at / updated_at</text>
+    <text class="note" x="1685" y="1110">UQ(drive_id, idempotency_key) · composite FK prevents cross-drive access</text>
+  </g>
+
+  <!-- cloud.audit_logs -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="60" y="1260" width="610" height="390"/>
+    <rect class="table-header" x="60" y="1260" width="610" height="56" rx="7"/>
+    <text class="table-name" x="80" y="1287">audit_logs</text>
+    <text class="schema-name" x="80" y="1306">cloud.audit_logs · Security/lifecycle audit</text>
+    <text class="key-pk" x="78" y="1342">PK</text><text class="row" x="115" y="1342">id                uuid</text>
+    <text class="row" x="115" y="1370">occurred_at       timestamptz</text>
+    <text class="row" x="115" y="1398">actor_user_id     uuid?</text>
+    <text class="row" x="115" y="1426">actor_type        varchar(24)</text>
+    <text class="row" x="115" y="1454">request_id        varchar(128)?</text>
+    <text class="row" x="115" y="1482">action            varchar(96)</text>
+    <text class="row" x="115" y="1510">entity_type       varchar(64)</text>
+    <text class="row" x="115" y="1538">entity_id         uuid?</text>
+    <text class="key-fk" x="78" y="1566">FK</text><text class="row" x="115" y="1566">drive_id          uuid?</text>
+    <text class="row" x="115" y="1594">ip_address        inet?</text>
+    <text class="row" x="115" y="1622">metadata          jsonb</text>
+  </g>
+
+  <!-- cloud.jobs -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="760" y="1260" width="650" height="420"/>
+    <rect class="table-header" x="760" y="1260" width="650" height="56" rx="7"/>
+    <text class="table-name" x="780" y="1287">jobs</text>
+    <text class="schema-name" x="780" y="1306">cloud.jobs · PostgreSQL worker queue</text>
+    <text class="key-pk" x="778" y="1342">PK</text><text class="row" x="815" y="1342">id                 uuid</text>
+    <text class="row" x="815" y="1370">job_type           job_type</text>
+    <text class="row" x="815" y="1398">status             job_status</text>
+    <text class="key-fk" x="778" y="1426">FK</text><text class="row" x="815" y="1426">drive_id           uuid</text>
+    <text class="key-fk" x="778" y="1454">FK</text><text class="row" x="815" y="1454">item_id            uuid?</text>
+    <text class="key-fk" x="778" y="1482">FK</text><text class="row" x="815" y="1482">storage_object_id  uuid?</text>
+    <text class="key-fk" x="778" y="1510">FK</text><text class="row" x="815" y="1510">upload_session_id  uuid?</text>
+    <text class="row" x="815" y="1538">payload            jsonb</text>
+    <text class="row" x="815" y="1566">priority           smallint</text>
+    <text class="row" x="815" y="1594">attempts/max       integer</text>
+    <text class="row" x="815" y="1622">run_after          timestamptz</text>
+    <text class="row" x="815" y="1650">locked_by/at       varchar/timestamptz?</text>
+  </g>
+
+  <!-- cloud.usage_ledger -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="1490" y="1280" width="650" height="370"/>
+    <rect class="table-header" x="1490" y="1280" width="650" height="56" rx="7"/>
+    <text class="table-name" x="1510" y="1307">usage_ledger</text>
+    <text class="schema-name" x="1510" y="1326">cloud.usage_ledger · Append-only quota events</text>
+    <text class="key-pk" x="1508" y="1362">PK</text><text class="row" x="1545" y="1362">id                    uuid</text>
+    <text class="key-fk" x="1508" y="1390">FK</text><text class="row" x="1545" y="1390">drive_id              uuid</text>
+    <text class="key-fk" x="1508" y="1418">FK</text><text class="row" x="1545" y="1418">item_id               uuid?</text>
+    <text class="key-fk" x="1508" y="1446">FK</text><text class="row" x="1545" y="1446">upload_session_id     uuid?</text>
+    <text class="row" x="1545" y="1474">event_type            quota_event_type</text>
+    <text class="row" x="1545" y="1502">delta_used_bytes      bigint</text>
+    <text class="row" x="1545" y="1530">delta_reserved_bytes  bigint</text>
+    <text class="key-uq" x="1508" y="1558">UQ</text><text class="row" x="1545" y="1558">idempotency_key       varchar(160)</text>
+    <text class="row" x="1545" y="1586">metadata              jsonb</text>
+    <text class="row" x="1545" y="1614">created_at            timestamptz</text>
+  </g>
+
+  <!-- cloud.upload_parts -->
+  <g filter="url(#shadow)">
+    <rect class="table-box" x="2180" y="1300" width="380" height="300"/>
+    <rect class="table-header" x="2180" y="1300" width="380" height="56" rx="7"/>
+    <text class="table-name" x="2200" y="1327">upload_parts</text>
+    <text class="schema-name" x="2200" y="1346">cloud.upload_parts · Optional Multipart</text>
+    <text class="key-pk" x="2198" y="1382">PK</text><text class="key-fk" x="2228" y="1382">FK</text><text class="row" x="2265" y="1382">upload_session_id uuid</text>
+    <text class="key-pk" x="2198" y="1410">PK</text><text class="row" x="2265" y="1410">part_number       int</text>
+    <text class="row" x="2265" y="1438">etag              text</text>
+    <text class="row" x="2265" y="1466">size_bytes        bigint</text>
+    <text class="row" x="2265" y="1494">checksum_sha256   char(64)?</text>
+    <text class="row" x="2265" y="1522">uploaded_at       timestamptz</text>
+    <text class="note" x="2200" y="1570">API demo may use single-part only</text>
+  </g>
+
+  <!-- Legend -->
+  <rect x="60" y="1688" width="2480" height="42" fill="#ffffff" stroke="#d0d5dd" rx="6"/>
+  <text class="key-pk" x="82" y="1714">PK</text><text class="legend" x="112" y="1714">Primary key</text>
+  <text class="key-fk" x="245" y="1714">FK</text><text class="legend" x="275" y="1714">Foreign key</text>
+  <text class="key-uq" x="405" y="1714">UQ</text><text class="legend" x="438" y="1714">Unique</text>
+  <text class="legend" x="560" y="1714">1—N: one-to-many</text>
+  <text class="legend" x="765" y="1714">Dashed values marked “?” are nullable</text>
+  <text class="legend" x="1130" y="1714">Binary bytes live in MinIO; no cross-database FK to Auth/Chat</text>
+</svg>

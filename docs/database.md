@@ -1,10 +1,18 @@
-# Quy ước database
+# Database
 
-Database dự kiến là PostgreSQL. Các bảng và quan hệ phải được xác nhận qua ERD trước khi viết migration chính thức.
+Hacom Cloud sử dụng PostgreSQL với schema riêng `cloud`.
+
+Tài liệu chính:
+
+- [Báo cáo xác nhận thiết kế và ERD](database/phase1-database-review.md)
+- [ERD Phase 1](database/phase1-erd.md)
+- [Thiết kế và lifecycle Phase 1](database/phase1-design.md)
+- [Hướng dẫn migration](../migrations/README.md)
 
 Nguyên tắc:
 
-- PostgreSQL chỉ lưu metadata và trạng thái; không lưu bytes của file.
-- Dung lượng đã dùng phải có cơ chế reserve/commit/release để tránh upload đồng thời vượt quota.
-- Xóa mềm và thời gian lưu trong thùng rác cần được xác nhận trước khi triển khai.
-- Mọi thay đổi quota quan trọng cần có ledger hoặc audit log để đối soát.
+- PostgreSQL lưu metadata, trạng thái, quota, job và audit; MinIO lưu binary.
+- User ID là UUID tương thích `auth.users.id`, nhưng không có foreign key chéo service.
+- Quota dùng reserve/commit/release và ledger idempotent.
+- Item trong thùng rác vẫn tính quota cho tới khi purge vĩnh viễn.
+- Phase 1 không có Folder, Share, Chat integration hoặc Version History.
