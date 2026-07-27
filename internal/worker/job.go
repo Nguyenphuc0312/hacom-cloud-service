@@ -1,14 +1,21 @@
 package worker
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNoJob = errors.New("no job available")
 
 type JobType string
 
 const (
-	JobVirusScan       JobType = "VIRUS_SCAN"
-	JobCreateThumbnail JobType = "CREATE_THUMBNAIL"
-	JobCleanupExpired  JobType = "CLEANUP_EXPIRED_UPLOAD"
-	JobReconcileQuota  JobType = "RECONCILE_QUOTA"
+	JobDemo            JobType = "demo"
+	JobHashFile        JobType = "hash_file"
+	JobVirusScan       JobType = "virus_scan"
+	JobCreateThumbnail JobType = "create_thumbnail"
+	JobCleanupExpired  JobType = "cleanup_expired_upload"
+	JobReconcileQuota  JobType = "reconcile_quota"
 )
 
 type Job struct {
@@ -17,12 +24,12 @@ type Job struct {
 	Payload []byte
 }
 
-type Repository interface {
+type JobRepository interface {
 	Claim(ctx context.Context) (Job, error)
 	Complete(ctx context.Context, jobID string) error
 	Fail(ctx context.Context, jobID string, cause error) error
 }
 
-type Handler interface {
+type JobHandler interface {
 	Handle(ctx context.Context, job Job) error
 }

@@ -10,14 +10,46 @@
 Yêu cầu: Go 1.22+, Docker và Docker Compose.
 
 ```bash
+brew install golang-migrate
 cp .env.example .env
-make infra-up
+make up
+make migrate-up
+make db-verify
 make run-api
 ```
 
 Kiểm tra API tại `http://localhost:8080/health`. Worker có thể chạy ở terminal khác bằng `make run-worker`.
 
-Skeleton hiện chỉ cung cấp health check, cấu hình, interface nghiệp vụ và hạ tầng local. Upload, PostgreSQL repository, MinIO adapter, migration và worker handler là các đầu việc nhóm sẽ triển khai theo quy trình bên dưới.
+Các lệnh hạ tầng local:
+
+```bash
+make up
+make down
+make logs
+make ps
+```
+
+Trên Windows nếu chưa cài GNU Make, dùng PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 up
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 ps
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 logs
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 down
+```
+
+Nếu bạn dùng Command Prompt, có thể gọi wrapper `.cmd`:
+
+```bat
+scripts\dev.cmd up
+scripts\dev.cmd ps
+scripts\dev.cmd logs
+scripts\dev.cmd down
+```
+
+Gate 1 đã tích hợp cấu hình, PostgreSQL, MinIO, migration, dependency health API và Worker skeleton. Xem kết quả kiểm thử và kịch bản demo tại [`docs/gate1-integration-report.md`](docs/gate1-integration-report.md).
+
+Các repository nghiệp vụ hiện vẫn là bản in-memory phục vụ kiểm thử. PostgreSQL repository, presigned upload API và MinIO adapter thật sẽ được nối trong các quy trình tiếp theo.
 
 ## 1. Cách tổ chức chung
 
@@ -300,7 +332,7 @@ GET  /api/v1/cloud/items/:id
 
 **Cần đạt sau khi hoàn thành:**
 
-- Quota mặc định đúng 5 GiB.
+- Quota mặc định đúng 5 GB decimal.
 - Retry cùng idempotency key không tăng dung lượng lần hai.
 - `used_bytes` và tổng ledger khớp nhau.
 

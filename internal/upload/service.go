@@ -8,12 +8,25 @@ import (
 
 var ErrFileTooLarge = errors.New("file exceeds upload limit")
 
+type SessionStatus string
+
+const (
+	SessionPending   SessionStatus = "initiated"
+	SessionCompleted SessionStatus = "completed"
+	SessionRejected  SessionStatus = "failed"
+	SessionExpired   SessionStatus = "EXPIRED"
+)
+
 type Session struct {
-	ID        string
-	OwnerID   string
-	ObjectKey string
-	SizeBytes int64
-	ExpiresAt time.Time
+	ID          string
+	OwnerID     string
+	ObjectKey   string
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	Status      SessionStatus
+	ItemID      string
+	ExpiresAt   time.Time
 }
 
 type Repository interface {

@@ -1,0 +1,6 @@
+BEGIN;
+
+DROP TABLE IF EXISTS cloud.audit_logs;
+DROP TABLE IF EXISTS cloud.jobs;
+
+COMMIT;

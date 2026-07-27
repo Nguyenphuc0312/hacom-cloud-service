@@ -5,10 +5,11 @@ import "time"
 type Status string
 
 const (
-	StatusPending Status = "PENDING"
-	StatusReady   Status = "READY"
-	StatusDeleted Status = "DELETED"
-	StatusFailed  Status = "FAILED"
+	StatusPending    Status = "pending"
+	StatusProcessing Status = "processing"
+	StatusReady      Status = "ready"
+	StatusTrashed    Status = "trashed"
+	StatusFailed     Status = "failed"
 )
 
 // Item is cloud metadata. File bytes are stored in object storage, not PostgreSQL.
