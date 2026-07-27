@@ -26,8 +26,9 @@ type Usage struct {
 type EventType string
 
 const (
-	EventTextCreated EventType = "TEXT_CREATED"
-	EventLinkCreated EventType = "LINK_CREATED"
+	EventTextCreated    EventType = "TEXT_CREATED"
+	EventLinkCreated    EventType = "LINK_CREATED"
+	EventUploadReleased EventType = "UPLOAD_RELEASED"
 )
 
 type LedgerEntry struct {

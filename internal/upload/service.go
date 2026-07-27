@@ -14,6 +14,7 @@ const (
 	SessionPending   SessionStatus = "PENDING"
 	SessionCompleted SessionStatus = "COMPLETED"
 	SessionRejected  SessionStatus = "REJECTED"
+	SessionExpired   SessionStatus = "EXPIRED"
 )
 
 type Session struct {
