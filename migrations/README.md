@@ -42,5 +42,6 @@ make migrate-version
 
 Thiết kế chi tiết:
 
+- `docs/database/phase1-database-review.md`
 - `docs/database/phase1-erd.md`
 - `docs/database/phase1-design.md`

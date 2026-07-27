@@ -82,8 +82,8 @@ BEGIN
     SELECT quota_bytes
     FROM cloud.quotas
     WHERE drive_id = drive_a
-  ) <> 5368709120 THEN
-    RAISE EXCEPTION 'Default quota is not 5 GiB';
+  ) <> 5000000000 THEN
+    RAISE EXCEPTION 'Default quota is not 5 decimal GB';
   END IF;
 
   INSERT INTO cloud.items (
@@ -140,10 +140,10 @@ BEGIN
       'verify/too-large',
       'too-large.bin',
       'application/octet-stream',
-      104857601
+      100000001
     );
 
-    RAISE EXCEPTION 'Object larger than 100 MiB was incorrectly accepted';
+    RAISE EXCEPTION 'Object larger than 100 decimal MB was incorrectly accepted';
   EXCEPTION
     WHEN check_violation THEN
       NULL;

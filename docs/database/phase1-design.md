@@ -4,9 +4,9 @@
 
 | Quy định | Thiết kế |
 |---|---|
-| Mỗi người có 5 GB | `cloud.quotas.quota_bytes = 5,368,709,120` bytes |
+| Mỗi người có 5 GB decimal | `cloud.quotas.quota_bytes = 5,000,000,000` bytes |
 | Text, link, ảnh, video và file đều tính quota | Mỗi item có `billable_bytes`; mọi thay đổi ghi vào ledger |
-| Tối đa 100 MB mỗi nội dung | Check constraint `1..104,857,600` bytes |
+| Tối đa 100 MB decimal mỗi nội dung | Check constraint `1..100,000,000` bytes |
 | Vượt 100 MB | API từ chối; người dùng lưu trên Drive ngoài và lưu link |
 | Không có lưu tạm ở nghiệp vụ | Item hoàn tất được lưu bền vững; upload session kỹ thuật vẫn có hạn để dọn upload dang dở |
 | Xóa có thể restore trong 24 giờ | Item chuyển `trashed`, đặt `purge_after`; worker purge sau thời hạn |
@@ -190,12 +190,15 @@ cloud.ai_embeddings
 
 Các bảng này được thêm bằng migration mới, không sửa migration Phase 1 sau khi đã merge.
 
-## 9. Giá trị cần mentor xác nhận
+## 9. Quy định đã xác nhận và quyết định kỹ thuật
 
-Schema hiện chọn giá trị rõ ràng để nhóm có thể code, nhưng cần xác nhận trước khi merge:
+Đã xác nhận:
 
-1. `5 GB` đang được hiểu là `5 GiB = 5,368,709,120 bytes`, không phải 5,000,000,000 bytes.
-2. `100 MB` đang được hiểu là `100 MiB = 104,857,600 bytes`, không phải 100,000,000 bytes.
+1. `5 GB` là decimal, bằng `5,000,000,000 bytes`.
+2. `100 MB` là decimal, bằng `100,000,000 bytes`.
 3. Item trong thùng rác vẫn tính quota và được purge sau 24 giờ.
-4. Multipart đã có schema nhưng API demo có thể chỉ làm single-part.
-5. `cloud.storage_objects` là bảng metadata riêng, không dùng lại bảng file của Chat.
+
+Quyết định kỹ thuật đề xuất:
+
+1. Giữ schema Multipart để không phải đổi database về sau; API demo có thể chỉ làm single-part.
+2. Giữ `cloud.storage_objects` là bảng metadata riêng, không dùng lại bảng file của Chat.

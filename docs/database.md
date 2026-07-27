@@ -4,6 +4,7 @@ Hacom Cloud sử dụng PostgreSQL với schema riêng `cloud`.
 
 Tài liệu chính:
 
+- [Báo cáo xác nhận thiết kế và ERD](database/phase1-database-review.md)
 - [ERD Phase 1](database/phase1-erd.md)
 - [Thiết kế và lifecycle Phase 1](database/phase1-design.md)
 - [Hướng dẫn migration](../migrations/README.md)

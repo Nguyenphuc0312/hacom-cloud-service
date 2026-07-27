@@ -46,16 +46,16 @@ CREATE TABLE cloud.upload_sessions (
   CONSTRAINT cloud_upload_sessions_content_type_not_blank_chk
     CHECK (btrim(content_type) <> ''),
   CONSTRAINT cloud_upload_sessions_declared_size_chk
-    CHECK (declared_size_bytes BETWEEN 1 AND 104857600),
+    CHECK (declared_size_bytes BETWEEN 1 AND 100000000),
   CONSTRAINT cloud_upload_sessions_reserved_size_chk
     CHECK (
-      reserved_bytes BETWEEN 1 AND 104857600
+      reserved_bytes BETWEEN 1 AND 100000000
       AND reserved_bytes = declared_size_bytes
     ),
   CONSTRAINT cloud_upload_sessions_actual_size_chk
     CHECK (
       actual_size_bytes IS NULL
-      OR actual_size_bytes BETWEEN 1 AND 104857600
+      OR actual_size_bytes BETWEEN 1 AND 100000000
     ),
   CONSTRAINT cloud_upload_sessions_expected_checksum_chk
     CHECK (
@@ -139,7 +139,7 @@ COMMENT ON TABLE cloud.upload_parts IS
 
 CREATE TABLE cloud.quotas (
   drive_id UUID PRIMARY KEY,
-  quota_bytes BIGINT NOT NULL DEFAULT 5368709120,
+  quota_bytes BIGINT NOT NULL DEFAULT 5000000000,
   used_bytes BIGINT NOT NULL DEFAULT 0,
   reserved_bytes BIGINT NOT NULL DEFAULT 0,
   version BIGINT NOT NULL DEFAULT 1,
@@ -162,7 +162,7 @@ CREATE TABLE cloud.quotas (
 );
 
 COMMENT ON TABLE cloud.quotas IS
-  'Current quota snapshot; default 5 GiB per personal drive';
+  'Current quota snapshot; default 5 decimal GB per personal drive';
 COMMENT ON CONSTRAINT cloud_quotas_capacity_chk ON cloud.quotas IS
   'Final database guard against concurrent reservations exceeding quota';
 

@@ -303,7 +303,7 @@ GET  /api/v1/cloud/items/:id
 
 **Cần đạt sau khi hoàn thành:**
 
-- Quota mặc định đúng 5 GiB.
+- Quota mặc định đúng 5 GB decimal.
 - Retry cùng idempotency key không tăng dung lượng lần hai.
 - `used_bytes` và tổng ledger khớp nhau.
 

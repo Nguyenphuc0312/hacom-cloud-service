@@ -73,11 +73,11 @@ CREATE TABLE cloud.storage_objects (
   CONSTRAINT cloud_storage_objects_content_type_not_blank_chk
     CHECK (btrim(content_type) <> ''),
   CONSTRAINT cloud_storage_objects_declared_size_chk
-    CHECK (declared_size_bytes BETWEEN 1 AND 104857600),
+    CHECK (declared_size_bytes BETWEEN 1 AND 100000000),
   CONSTRAINT cloud_storage_objects_actual_size_chk
     CHECK (
       actual_size_bytes IS NULL
-      OR actual_size_bytes BETWEEN 1 AND 104857600
+      OR actual_size_bytes BETWEEN 1 AND 100000000
     ),
   CONSTRAINT cloud_storage_objects_checksum_chk
     CHECK (
@@ -168,9 +168,9 @@ CREATE TABLE cloud.items (
   CONSTRAINT cloud_items_title_not_blank_chk
     CHECK (title IS NULL OR btrim(title) <> ''),
   CONSTRAINT cloud_items_size_chk
-    CHECK (size_bytes BETWEEN 1 AND 104857600),
+    CHECK (size_bytes BETWEEN 1 AND 100000000),
   CONSTRAINT cloud_items_billable_size_chk
-    CHECK (billable_bytes BETWEEN 1 AND 104857600),
+    CHECK (billable_bytes BETWEEN 1 AND 100000000),
   CONSTRAINT cloud_items_source_type_chk
     CHECK (
       source_type IN (
