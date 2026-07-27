@@ -11,7 +11,6 @@
 
 import { useCallback } from "react";
 import { useCalendarStore } from "../../../stores/calendarStore";
-import { useAuthStore } from "../../../stores/authStore";
 import { hrCalendarApi } from "../../api/hrCalendarApi";
 import { toast } from "../../../utils/toast";
 import {
@@ -28,7 +27,6 @@ import {
   meetingVisibilityToApi,
   personalVisibilityToApi,
 } from "../utils/calendarVisibility";
-import { saveDeclineReason, clearDeclineReason } from "../utils/declineReasonStore";
 import type { MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import type { PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import type { CalendarLocalAttachment } from "../../../components/ui/CalendarAttachmentZone";
@@ -101,8 +99,8 @@ export interface CalendarEventMutations {
   createPersonal: (data: PersonalEventFormData) => Promise<boolean>;
   updatePersonal: (data: PersonalEventFormData) => Promise<boolean>;
   remove: (eventId: string) => Promise<boolean>;
-  /** @param reason chỉ áp dụng khi DECLINED — BE chưa lưu field này (xem
-   *  contract FE__calendar-decline-reason), tạm lưu localStorage qua declineReasonStore. */
+  /** @param reason chỉ áp dụng khi DECLINED — BE lưu vào participant.responseNote
+   *  và trả về trong roster để người tạo lịch đọc được. */
   respond: (
     eventId: string,
     response: "ACCEPTED" | "DECLINED",
@@ -286,17 +284,7 @@ export const useCalendarEventMutations = (
       reason?: string,
     ): Promise<boolean> => {
       try {
-        await hrCalendarApi.updateMyResponse(eventId, response);
-        // BE không lưu lý do từ chối — tạm giữ ở máy này (declineReasonStore).
-        // Đổi ý sang Tham gia → dọn luôn, tránh hiện lý do cũ đã hết hiệu lực.
-        const authUserId = useAuthStore.getState().user?.id;
-        if (authUserId) {
-          if (response === "DECLINED" && reason) {
-            saveDeclineReason(eventId, authUserId, reason);
-          } else if (response === "ACCEPTED") {
-            clearDeclineReason(eventId, authUserId);
-          }
-        }
+        await hrCalendarApi.updateMyResponse(eventId, response, reason);
         toast.success(
           response === "ACCEPTED" ? "Bạn đã xác nhận tham gia" : "Bạn đã từ chối tham gia",
         );

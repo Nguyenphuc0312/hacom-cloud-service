@@ -30,6 +30,8 @@ export interface HRCalendarParticipant {
     employeeCode: string;
   } | null;
   response: HRParticipantResponse;
+  /** Lý do không tham gia — chỉ có khi response = DECLINED. */
+  responseNote?: string | null;
   respondedAt?: string | null;
   createdAt: string;
 }
@@ -439,10 +441,12 @@ export const hrCalendarApi = {
    */
   updateMyResponse: async (
     eventId: string,
-    response: HRParticipantResponse
+    response: HRParticipantResponse,
+    responseNote?: string
   ): Promise<void> => {
     await hrApiClient.patch(`/calendar/events/${eventId}/participants/me`, {
       response,
+      responseNote,
     });
   },
 
