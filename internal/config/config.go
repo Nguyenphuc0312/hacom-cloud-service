@@ -7,24 +7,33 @@ import (
 	"time"
 )
 
-const defaultMaxUploadBytes int64 = 100_000_000
+const (
+	defaultMaxUploadBytes  int64 = 100_000_000
+	defaultQuotaLimitBytes int64 = 5_000_000_000
+)
 
 type Config struct {
-	AppEnv          string
-	APIAddr         string
-	DatabaseURL     string
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOUseSSL     bool
-	MinIOBucket     string
-	MaxUploadBytes  int64
-	HealthTimeout   time.Duration
-	ShutdownTimeout time.Duration
+	AppEnv            string
+	APIAddr           string
+	DatabaseURL       string
+	MinIOEndpoint     string
+	MinIOAccessKey    string
+	MinIOSecretKey    string
+	MinIOUseSSL       bool
+	MinIOBucket       string
+	MaxUploadBytes    int64
+	DefaultQuotaBytes int64
+	HealthTimeout     time.Duration
+	ShutdownTimeout   time.Duration
 }
 
 func Load() (Config, error) {
 	maxUploadBytes, err := int64Env("MAX_UPLOAD_BYTES", defaultMaxUploadBytes)
+	if err != nil {
+		return Config{}, err
+	}
+
+	defaultQuotaBytes, err := int64Env("DEFAULT_QUOTA_BYTES", defaultQuotaLimitBytes)
 	if err != nil {
 		return Config{}, err
 	}
@@ -45,17 +54,18 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:          env("APP_ENV", "local"),
-		APIAddr:         env("API_ADDR", ":8080"),
-		DatabaseURL:     os.Getenv("DATABASE_URL"),
-		MinIOEndpoint:   os.Getenv("MINIO_ENDPOINT"),
-		MinIOAccessKey:  os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey:  os.Getenv("MINIO_SECRET_KEY"),
-		MinIOUseSSL:     useSSL,
-		MinIOBucket:     env("MINIO_BUCKET", "hacom-cloud-private"),
-		MaxUploadBytes:  maxUploadBytes,
-		HealthTimeout:   healthTimeout,
-		ShutdownTimeout: shutdownTimeout,
+		AppEnv:            env("APP_ENV", "local"),
+		APIAddr:           env("API_ADDR", ":8080"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		MinIOEndpoint:     os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:    os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:    os.Getenv("MINIO_SECRET_KEY"),
+		MinIOUseSSL:       useSSL,
+		MinIOBucket:       env("MINIO_BUCKET", "hacom-cloud-private"),
+		MaxUploadBytes:    maxUploadBytes,
+		DefaultQuotaBytes: defaultQuotaBytes,
+		HealthTimeout:     healthTimeout,
+		ShutdownTimeout:   shutdownTimeout,
 	}
 
 	required := []struct {

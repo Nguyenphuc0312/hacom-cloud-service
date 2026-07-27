@@ -31,6 +31,12 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	if cfg.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("expected 10s shutdown timeout, got %s", cfg.ShutdownTimeout)
 	}
+	if cfg.DefaultQuotaBytes != 5_000_000_000 {
+		t.Fatalf("expected proposed 5 decimal GB quota, got %d", cfg.DefaultQuotaBytes)
+	}
+	if cfg.MaxUploadBytes != 100_000_000 {
+		t.Fatalf("expected proposed 100 decimal MB upload limit, got %d", cfg.MaxUploadBytes)
+	}
 }
 
 func TestLoadRejectsMissingDependencyConfiguration(t *testing.T) {

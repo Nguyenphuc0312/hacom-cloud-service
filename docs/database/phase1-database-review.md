@@ -10,7 +10,7 @@
 Thiết kế hiện tại **đủ chặt chẽ và phù hợp để triển khai Phase 1**:
 
 - Mỗi người dùng chỉ có một Personal Cloud.
-- Mỗi người có chính xác `5,000,000,000 bytes` quota.
+- Demo đang đề xuất `5,000,000,000 bytes` quota mỗi người; giá trị này chờ mentor xác nhận.
 - Mỗi nội dung tối đa `100,000,000 bytes`.
 - Text, link và file đều tính quota.
 - File binary nằm trong MinIO; PostgreSQL chỉ lưu metadata.

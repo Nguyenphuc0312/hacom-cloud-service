@@ -1,10 +1,10 @@
 # Hacom Cloud Phase 1 — Database Design
 
-## 1. Quy định đã chốt
+## 1. Quy định và giả định thiết kế hiện tại
 
 | Quy định | Thiết kế |
 |---|---|
-| Mỗi người có 5 GB decimal | `cloud.quotas.quota_bytes = 5,000,000,000` bytes |
+| Đề xuất mỗi người có 5 GB decimal, chờ mentor xác nhận | Giá trị demo `cloud.quotas.quota_bytes = 5,000,000,000` bytes; application phải đọc từ cấu hình |
 | Text, link, ảnh, video và file đều tính quota | Mỗi item có `billable_bytes`; mọi thay đổi ghi vào ledger |
 | Tối đa 100 MB decimal mỗi nội dung | Check constraint `1..100,000,000` bytes |
 | Vượt 100 MB | API từ chối; người dùng lưu trên Drive ngoài và lưu link |
@@ -190,12 +190,15 @@ cloud.ai_embeddings
 
 Các bảng này được thêm bằng migration mới, không sửa migration Phase 1 sau khi đã merge.
 
-## 9. Quy định đã xác nhận và quyết định kỹ thuật
+## 9. Trạng thái xác nhận và quyết định kỹ thuật
 
-Đã xác nhận:
+Giả định demo do nhóm lựa chọn, **chưa phải yêu cầu chính thức**:
 
 1. `5 GB` là decimal, bằng `5,000,000,000 bytes`.
 2. `100 MB` là decimal, bằng `100,000,000 bytes`.
+
+Đã thống nhất trong phạm vi thiết kế hiện tại:
+
 3. Item trong thùng rác vẫn tính quota và được purge sau 24 giờ.
 
 Quyết định kỹ thuật đề xuất:
