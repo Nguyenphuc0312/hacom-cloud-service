@@ -10,8 +10,11 @@
 Yêu cầu: Go 1.22+, Docker và Docker Compose.
 
 ```bash
+brew install golang-migrate
 cp .env.example .env
 make infra-up
+make migrate-up
+make db-verify
 make run-api
 ```
 
