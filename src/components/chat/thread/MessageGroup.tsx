@@ -6,6 +6,7 @@ import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { MessageActions } from "../../message/MessageActions";
+import { MessageEditHistoryModal } from "../../message/MessageEditHistoryModal";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
 import { MessageMeta } from "../message-layout/MessageMeta";
@@ -298,6 +299,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
+    const [editHistoryMessageId, setEditHistoryMessageId] = React.useState<
+      string | null
+    >(null);
     const [menuAnchorRect, setMenuAnchorRect] = React.useState<
       { left: number; top: number; bottom: number } | null
     >(null);
@@ -565,6 +569,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canForward: Boolean(onForward),
           canSelect: Boolean(onStartSelectionMode && onToggleSelect),
           canDelete: Boolean(onDelete),
+          canEdit: Boolean(onEdit),
           canRecallOthers: viewerCanRecallOthers,
         }),
       [
@@ -573,6 +578,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         isSelectionMode,
         message,
         onDelete,
+        onEdit,
         onForward,
         onPin,
         onStartSelectionMode,
@@ -694,6 +700,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           case "select":
             onStartSelectionMode?.();
             onToggleSelect?.(message.id);
+            break;
+          case "edit":
+            if (onEdit) {
+              void Promise.resolve(onEdit(message));
+            }
             break;
           case "more":
             setIsActionSheetOpen(true);
@@ -983,6 +994,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                   onRetry={() => {
                     void retrySendMessage(message).catch(() => undefined);
                   }}
+                  onViewEditHistory={
+                    message.isEdited
+                      ? (id) => setEditHistoryMessageId(id)
+                      : undefined
+                  }
                   className={clsx(
                     "mt-1 justify-end text-[11px]",
                     isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",
@@ -1021,6 +1037,13 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             )}
           </div>
         </div>
+
+        {editHistoryMessageId && (
+          <MessageEditHistoryModal
+            messageId={editHistoryMessageId}
+            onClose={() => setEditHistoryMessageId(null)}
+          />
+        )}
 
         <MessageActions
           mode={coarsePointer ? "sheet" : "dropdown"}

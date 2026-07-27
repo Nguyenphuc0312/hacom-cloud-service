@@ -12,6 +12,7 @@ export type MessageActionId =
   | "pin"
   | "unpin"
   | "select"
+  | "edit"
   | "deleteForMe"
   | "recall"
   | "adminDelete"
@@ -28,6 +29,7 @@ export interface MessageActionPolicyInput {
   canForward?: boolean;
   canSelect?: boolean;
   canDelete?: boolean;
+  canEdit?: boolean;
   /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
   canRecallOthers?: boolean;
 }
@@ -84,6 +86,16 @@ const canDeleteMessage = (message: Message): boolean =>
   !isPendingMessage(message) &&
   !isFailedMessage(message);
 
+// BE (message-write.service updateMessage) chỉ sửa `content.text` của tin mình gửi,
+// chưa recalled. Không có cửa sổ thời gian → FE cũng không đặt thêm.
+// ponytail: chỉ cho sửa TEXT; ảnh/file/voice sửa caption thì mở thêm type ở đây.
+const canEditMessage = (message: Message): boolean =>
+  message.type === MessageType.TEXT &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message) &&
+  Boolean(message.content?.trim());
+
 // Zalo rule: thu hồi chỉ trong 24h sau khi gửi; quá hạn chỉ còn "Xóa chỉ ở phía tôi".
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -101,6 +113,7 @@ const getActionCandidates = ({
   canForward = false,
   canSelect = false,
   canDelete = false,
+  canEdit = false,
   canRecallOthers = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
@@ -169,6 +182,15 @@ const getActionCandidates = ({
     candidates.push({
       id: "select",
       menuOrder: 2,
+      railEligible: false,
+      menuEligible: true,
+    });
+  }
+
+  if (canEdit && isOwn && canEditMessage(message)) {
+    candidates.push({
+      id: "edit",
+      menuOrder: 2.5,
       railEligible: false,
       menuEligible: true,
     });
