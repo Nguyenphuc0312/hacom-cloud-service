@@ -59,6 +59,10 @@ PostgreSQL và MinIO lưu độc lập về mặt công nghệ nhưng liên kế
 
 ## 3. ERD tổng thể
 
+![Hacom Cloud Phase 1 SQL-style ERD](phase1-erd-sql-style.svg)
+
+> Mở trực tiếp file `phase1-erd-sql-style.svg` để phóng to và xem tên cột, kiểu dữ liệu, PK/FK/UQ giống Database Diagram trong SQL Server.
+
 ```mermaid
 erDiagram
     CLOUD_DRIVES ||--o{ CLOUD_ITEMS : "sở hữu"
