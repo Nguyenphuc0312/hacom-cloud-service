@@ -1,18 +1,20 @@
-import { Alert, Button, Input, Select, Space, Table, Tooltip, Typography } from 'antd';
+import { Button, Input, Select, Space, Table, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 
 import type { OnlineUser } from '@/api/clients/realtimeClient/realtimeClient';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
+import { AvatarCell } from '@/components/AvatarCell/AvatarCell';
 import { DataTableShell } from '@/components/DataTableShell/DataTableShell';
 import { DateTimeCell } from '@/components/DateTimeCell/DateTimeCell';
 import { EmptyState } from '@/components/ui/EmptyState/EmptyState';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
-import { StatCard } from '@/components/StatCard/StatCard';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
+import { TableSkeleton } from '@/components/TableSkeleton/TableSkeleton';
 import { useOnlineUsers } from '../../hooks/useOnlineUsers/useOnlineUsers';
 import { OnlineUserDetailDrawer } from '../../components/OnlineUserDetailDrawer/OnlineUserDetailDrawer';
+import { PresenceSummary } from '../../components/PresenceSummary/PresenceSummary';
 
 import './OnlineUsersPage.css';
 
@@ -41,20 +43,6 @@ export const OnlineUsersPage: React.FC = () => {
   const data = query.data;
   const items = data?.items ?? [];
 
-  // Counted from the current page only; the header total comes from the backend.
-  const stateBreakdown = useMemo(() => {
-    const breakdown = { connections: 0, away: 0, online: 0 };
-    for (const user of data?.items ?? []) {
-      breakdown.connections += user.connectionCount;
-      if (user.presenceState === 'online') {
-        breakdown.online += 1;
-      } else {
-        breakdown.away += 1;
-      }
-    }
-    return breakdown;
-  }, [data?.items]);
-
   const columns: ColumnsType<OnlineUser> = useMemo(
     () => [
       {
@@ -66,46 +54,38 @@ export const OnlineUsersPage: React.FC = () => {
       {
         title: 'Người dùng',
         dataIndex: 'displayName',
-        width: 240,
         render: (name: string, record) => (
-          <div className="user-name-cell">
-            <Text strong>{name}</Text>
-            {record.employeeCode && <Text type="secondary">{record.employeeCode}</Text>}
-          </div>
+          <AvatarCell name={name} description={record.employeeCode} />
         ),
       },
       {
         title: 'Phòng ban',
         dataIndex: 'department',
-        width: 160,
-        render: (department: string | null) => department || '-',
+        width: 180,
+        render: (department: string | null) =>
+          department || <Text type="secondary">Chưa có</Text>,
       },
       {
         title: (
-          <Tooltip title="Số kết nối WebSocket đang mở của người dùng (nhiều tab/thiết bị sẽ tính nhiều kết nối).">
-            <span>Phiên kết nối</span>
+          <Tooltip title="Số kết nối WebSocket đang mở. Nhiều tab hoặc nhiều thiết bị sẽ tính thành nhiều phiên.">
+            <span className="online-users-th-hint">Phiên</span>
           </Tooltip>
         ),
         dataIndex: 'connectionCount',
-        width: 120,
+        width: 96,
         align: 'right',
-        render: (count: number) => count,
+        render: (count: number) => (
+          <span className="online-users-sessions" data-multi={count > 1 || undefined}>
+            {count}
+          </span>
+        ),
       },
       {
         title: 'Hoạt động cuối',
         dataIndex: 'lastSeenAt',
-        width: 170,
-        render: (value: string | null) => (value ? <DateTimeCell value={value} /> : '-'),
-      },
-      {
-        title: 'Thiết bị',
-        key: 'device',
-        width: 130,
-        render: (_, record) => (
-          <Button type="link" size="small" onClick={() => setSelectedUser(record)}>
-            Xem thiết bị
-          </Button>
-        ),
+        width: 180,
+        render: (value: string | null) =>
+          value ? <DateTimeCell value={value} /> : <Text type="secondary">—</Text>,
       },
     ],
     [],
@@ -140,7 +120,8 @@ export const OnlineUsersPage: React.FC = () => {
       }
     >
       {isLoading ? (
-        <QueryStateView kind="loading" title="Đang tải danh sách người dùng..." />
+        // Skeleton reserves the real layout instead of a spinner over empty space.
+        <TableSkeleton rows={8} />
       ) : isError ? (
         <QueryStateView
           kind="error"
@@ -150,38 +131,14 @@ export const OnlineUsersPage: React.FC = () => {
         />
       ) : (
         <>
-          {isStale && (
-            <Alert
-              type="warning"
-              showIcon
-              className="online-users-stale-alert"
-              message="Không đọc được dữ liệu presence"
-              description={`${data?.staleReason ?? 'Nguồn presence không khả dụng.'} Danh sách trống ở đây KHÔNG có nghĩa là không có ai online.`}
-            />
-          )}
-
-          <section className="ds-ops-summary-grid" aria-label="Tổng quan người dùng online">
-            <StatCard
-              title="Đang online"
-              value={isStale ? '-' : (data?.total ?? 0)}
-              meta="Người dùng có kết nối WebSocket"
-            />
-            <StatCard
-              title="Trạng thái trực tuyến"
-              value={isStale ? '-' : stateBreakdown.online}
-              meta="Trong trang hiện tại"
-            />
-            <StatCard
-              title="Vắng mặt / bận"
-              value={isStale ? '-' : stateBreakdown.away}
-              meta="Trong trang hiện tại"
-            />
-            <StatCard
-              title="Tổng phiên kết nối"
-              value={isStale ? '-' : stateBreakdown.connections}
-              meta="Trong trang hiện tại"
-            />
-          </section>
+          <PresenceSummary
+            total={data?.total ?? 0}
+            pageItems={items}
+            isStale={isStale}
+            staleReason={data?.staleReason ?? null}
+            lastUpdatedAt={query.dataUpdatedAt}
+            isFetching={query.isFetching}
+          />
 
           <DataTableShell
             title="Danh sách người dùng"
@@ -216,9 +173,17 @@ export const OnlineUsersPage: React.FC = () => {
               columns={columns}
               dataSource={items}
               loading={query.isFetching && !!data}
+              rowClassName="online-users-row"
               onRow={(record) => ({
                 onClick: () => setSelectedUser(record),
-                style: { cursor: 'pointer' },
+                tabIndex: 0,
+                'aria-label': `Xem chi tiết ${record.displayName}`,
+                onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedUser(record);
+                  }
+                },
               })}
               pagination={{
                 current: page,

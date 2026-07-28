@@ -82,9 +82,42 @@ describe('OnlineUsersPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Không đọc được dữ liệu presence')).toBeInTheDocument();
+      expect(screen.getByText('Không đọc được presence')).toBeInTheDocument();
     });
-    expect(screen.getByText(/KHÔNG có nghĩa là không có ai online/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Redis presence source is not configured or unreachable'),
+    ).toBeInTheDocument();
+    // The whole point: an empty table must not read as "nobody is online".
+    // The sentence is split by <strong>, so match on the element's text content.
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName === 'P' &&
+          /không\s+có nghĩa là không có ai online/i.test(element.textContent ?? ''),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('breaks the current page down by presence state', async () => {
+    getOnlineUsersMock.mockResolvedValue({
+      items: [
+        onlineUser({ userId: 'u1', presenceState: 'online', connectionCount: 2 }),
+        onlineUser({ userId: 'u2', presenceState: 'away', connectionCount: 1 }),
+        onlineUser({ userId: 'u3', presenceState: 'away', connectionCount: 1 }),
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 50,
+      source: 'redis',
+      staleReason: null,
+    });
+
+    renderPage();
+
+    // Backend total leads; the state split describes the page.
+    expect(await screen.findByText('người đang kết nối')).toBeInTheDocument();
+    expect(screen.getByText('4 phiên WebSocket đang mở trong trang này')).toBeInTheDocument();
+    expect(screen.getByLabelText('Trực tuyến: 1, Vắng mặt: 2')).toBeInTheDocument();
   });
 
   it('distinguishes a genuinely empty list from a stale one', async () => {
@@ -100,6 +133,6 @@ describe('OnlineUsersPage', () => {
     renderPage();
 
     expect(await screen.findByText('Không có người dùng online')).toBeInTheDocument();
-    expect(screen.queryByText('Không đọc được dữ liệu presence')).not.toBeInTheDocument();
+    expect(screen.queryByText('Không đọc được presence')).not.toBeInTheDocument();
   });
 });

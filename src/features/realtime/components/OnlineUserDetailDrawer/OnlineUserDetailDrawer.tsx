@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Descriptions, Empty, Table, Tag, Typography } from 'antd';
+import { Empty, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { OnlineUser } from '@/api/clients/realtimeClient/realtimeClient';
@@ -99,29 +99,43 @@ export const OnlineUserDetailDrawer: React.FC<OnlineUserDetailDrawerProps> = ({
     >
       {user && (
         <div className="online-user-detail">
-          <Descriptions column={1} size="small" bordered>
-            <Descriptions.Item label="Trạng thái">
-              <StatusBadge status={user.presenceState} />
-            </Descriptions.Item>
-            <Descriptions.Item label="Phiên kết nối">
+          <header className="online-user-detail-identity">
+            <StatusBadge status={user.presenceState} />
+            <span className="online-user-detail-sessions">
               {user.connectionCount} kết nối WebSocket đang mở
-            </Descriptions.Item>
-            <Descriptions.Item label="Mã nhân sự">{user.employeeCode || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Phòng ban">{user.department || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Hoạt động cuối">
-              {user.lastSeenAt ? <DateTimeCell value={user.lastSeenAt} /> : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="User ID">
-              <Text copyable>{user.userId}</Text>
-            </Descriptions.Item>
-          </Descriptions>
+            </span>
+          </header>
+
+          <dl className="online-user-detail-facts">
+            <div>
+              <dt>Mã nhân sự</dt>
+              <dd>{user.employeeCode || '—'}</dd>
+            </div>
+            <div>
+              <dt>Phòng ban</dt>
+              <dd>{user.department || '—'}</dd>
+            </div>
+            <div>
+              <dt>Hoạt động cuối</dt>
+              <dd>{user.lastSeenAt ? <DateTimeCell value={user.lastSeenAt} /> : '—'}</dd>
+            </div>
+            <div>
+              <dt>User ID</dt>
+              <dd>
+                <Text copyable className="online-user-detail-id">
+                  {user.userId}
+                </Text>
+              </dd>
+            </div>
+          </dl>
 
           <section className="online-user-detail-section">
-            <Text strong>Thiết bị đã đăng ký</Text>
-            <Text type="secondary" className="online-user-detail-hint">
-              Nguồn: chat-auth-service. Đây là thiết bị đã đăng ký của tài khoản, không phải
-              thiết bị của phiên WebSocket đang mở.
-            </Text>
+            <header className="online-user-detail-section-header">
+              <Text strong>Thiết bị đã đăng ký</Text>
+              <Tooltip title="Nguồn: chat-auth-service. Đây là thiết bị đã đăng ký của tài khoản, không phải thiết bị của phiên WebSocket đang mở — presence không mang thông tin thiết bị.">
+                <span className="online-user-detail-source">tài khoản</span>
+              </Tooltip>
+            </header>
             {devicesQuery.isError ? (
               <QueryStateView
                 kind="error"
@@ -138,14 +152,24 @@ export const OnlineUserDetailDrawer: React.FC<OnlineUserDetailDrawerProps> = ({
                 loading={devicesQuery.isLoading}
                 pagination={false}
                 locale={{
-                  emptyText: <Empty description="Chưa có thiết bị đăng ký" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="Tài khoản này chưa đăng ký thiết bị nào. Thiết bị được ghi nhận khi người dùng đăng nhập trên ứng dụng di động hoặc desktop."
+                    />
+                  ),
                 }}
               />
             )}
           </section>
 
           <section className="online-user-detail-section">
-            <Text strong>Phiên đăng nhập</Text>
+            <header className="online-user-detail-section-header">
+              <Text strong>Phiên đăng nhập</Text>
+              <Tooltip title="Nguồn: chat-auth-service. Phiên đăng nhập của tài khoản, độc lập với kết nối WebSocket đang mở.">
+                <span className="online-user-detail-source">tài khoản</span>
+              </Tooltip>
+            </header>
             {sessionsQuery.isError ? (
               <QueryStateView
                 kind="error"
@@ -162,7 +186,12 @@ export const OnlineUserDetailDrawer: React.FC<OnlineUserDetailDrawerProps> = ({
                 loading={sessionsQuery.isLoading}
                 pagination={false}
                 locale={{
-                  emptyText: <Empty description="Không có phiên đăng nhập" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="Không có phiên đăng nhập nào còn hiệu lực. Người dùng vẫn có thể đang kết nối bằng phiên đã cấp trước đó."
+                    />
+                  ),
                 }}
               />
             )}

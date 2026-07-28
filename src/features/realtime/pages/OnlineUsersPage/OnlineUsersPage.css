@@ -3,29 +3,37 @@
 .online-users-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .online-users-filters {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
-.user-name-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* Header label carrying a tooltip: signal it is explainable, don't shout. */
+.online-users-th-hint {
+  border-bottom: 1px dotted var(--border-strong);
+  cursor: help;
 }
 
-.user-name-cell strong {
-  font-size: 14px;
+.online-users-sessions {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
-.user-name-cell .ant-typography-secondary {
-  font-size: 12px;
+/* More than one live session is the operationally interesting case. */
+.online-users-sessions[data-multi] {
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
-.online-users-stale-alert {
-  margin-bottom: 12px;
+.online-users-row {
+  cursor: pointer;
+}
+
+.online-users-row:focus-visible {
+  outline: 2px solid var(--border-interactive);
+  outline-offset: -2px;
 }

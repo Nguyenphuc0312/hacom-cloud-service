@@ -1,17 +1,79 @@
 .online-user-detail {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
+}
+
+.online-user-detail-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.online-user-detail-sessions {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Facts read as a scannable pair list, not a bordered table. */
+.online-user-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.online-user-detail-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.online-user-detail-facts dt {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.online-user-detail-facts dd {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+}
+
+.online-user-detail-id {
+  font-size: var(--font-xs);
+  word-break: break-all;
 }
 
 .online-user-detail-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
-.online-user-detail-hint {
-  font-size: 12px;
+.online-user-detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Names where the data comes from, so operators know which system to check. */
+.online-user-detail-source {
+  padding: 1px var(--space-2);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: help;
 }
 
 .online-user-device-cell {
@@ -21,5 +83,5 @@
 }
 
 .online-user-device-cell .ant-typography-secondary {
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
