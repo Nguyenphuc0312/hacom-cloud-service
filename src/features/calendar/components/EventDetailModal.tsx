@@ -598,8 +598,8 @@ export const EventDetailModal: React.FC<{
   // KHÔNG xóa lịch và cũng không thu hồi quyền xem (xem getEventPermissions bên
   // hr-api), chỉ đổi trạng thái phản hồi. Nút của trạng thái hiện tại được tô
   // đậm để rõ đây là toggle, bấm lại đổi ý bất cứ lúc nào.
-  // Cả hai nút ở footer cùng hàng, "Tham gia" bên phải (vị trí hành động chính),
-  // "Không tham gia" bên trái cạnh ô nhập lý do vì hai thứ đó đi liền nhau.
+  // Cả hai nút ở footer cùng hàng: "Tham gia" trước, "Không tham gia" sau —
+  // đọc thuận theo thứ tự đồng ý → từ chối.
   const acceptButton = (
     <button
       type="button"
@@ -1040,8 +1040,8 @@ export const EventDetailModal: React.FC<{
                   </div>
                   {/* gap-6 giữa 2 nút: đủ xa để không bấm nhầm Tham gia ↔ Không tham gia */}
                   <div className="flex shrink-0 items-center gap-6">
-                    {declineButton}
                     {acceptButton}
+                    {declineButton}
                   </div>
                 </div>
                 {/* Lý do từ chối (không bắt buộc) — gửi kèm response, BE lưu vào
