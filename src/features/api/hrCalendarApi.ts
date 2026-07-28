@@ -158,6 +158,23 @@ export interface HRCalendarJoinByShareLinkResult {
 }
 
 /**
+ * Thông tin xem trước của một share-link — đủ để nhận ra "lịch gì, của ai, lúc
+ * nào" trước khi quyết định tham gia. BE cố ý không trả description/địa điểm/
+ * danh sách người tham gia vì người cầm link chưa phải participant.
+ */
+export interface HRCalendarShareLinkPreview {
+  eventId: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  eventType: string;
+  organizerName: string | null;
+  participantCount: number;
+  alreadyJoined: boolean;
+}
+
+/**
  * HR Calendar Permission
  */
 export interface HRCalendarPermission {
@@ -466,6 +483,20 @@ export const hrCalendarApi = {
   /** Revoke the event's active share link (if any). */
   revokeShareLink: async (eventId: string): Promise<void> => {
     await hrApiClient.delete(`/calendar/events/${eventId}/share-link`);
+  },
+
+  /**
+   * Xem trước lịch họp sau một share-link mà KHÔNG tham gia — dùng để hiện
+   * "lịch gì, của ai, lúc nào" rồi mới cho bấm xác nhận. Không đổi state, gọi
+   * lại bao nhiêu lần cũng được. POST vì token nằm ở body (tránh lọt access log).
+   */
+  previewShareLink: async (
+    token: string,
+  ): Promise<HRCalendarShareLinkPreview> => {
+    const response = await hrApiClient.post<{
+      data: HRCalendarShareLinkPreview;
+    }>("/calendar/share-link/preview", { token });
+    return response.data.data;
   },
 
   /**
