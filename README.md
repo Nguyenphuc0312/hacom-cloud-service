@@ -526,6 +526,9 @@ Upload file trực tiếp lên MinIO bằng presigned URL, kiểm tra giới h�
 
 ## 5. Quy trình 4 — Worker và lifecycle
 
+Contract, phân chia công việc và tiêu chí bàn giao chi tiết cho nhóm bốn người:
+[`docs/README-PROCESS-4.md`](docs/README-PROCESS-4.md).
+
 ### Mục tiêu chung
 
 Worker xử lý job độc lập, tính SHA-256, chuyển file sang `READY`, retry an toàn và cleanup upload hết hạn.
