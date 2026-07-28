@@ -600,7 +600,15 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     if (!startTime) errs.startTime = "Vui lòng chọn giờ bắt đầu";
     if (!endTime) errs.endTime = "Vui lòng chọn giờ kết thúc";
     if (startTime && endTime && startTime >= endTime) errs.endTime = "Giờ kết thúc phải sau giờ bắt đầu";
-    if (!chairman.trim()) errs.chairman = "Vui lòng nhập chủ trì cuộc họp";
+    if (!chairman.trim()) {
+      errs.chairman = "Vui lòng nhập chủ trì cuộc họp";
+    } else if (!chairmanMeta && chairman.trim() !== initialData?.chairman?.trim()) {
+      // Gõ tay tên trơn → không có identity gửi lên BE (meetingChairmanRef), lịch
+      // sinh ra mất avatar chủ trì vĩnh viễn và không phân quyền chủ trì được.
+      // Chỉ chặn khi tên VỪA ĐỔI: lịch cũ (chưa có identity) sửa việc khác vẫn lưu
+      // được, không bắt người dùng dọn dữ liệu cũ mới sửa được giờ họp.
+      errs.chairman = "Vui lòng chọn chủ trì từ danh sách (gõ @ để tìm)";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
