@@ -43,7 +43,9 @@ export interface ChatSearchUser {
     | "blocked";
 }
 
-const extractSearchRows = (payload: unknown): unknown[] => {
+/** Bóc mảng user khỏi response tìm kiếm (nhiều tầng envelope tuỳ endpoint).
+ *  Export để nơi khác dùng lại parser này thay vì tự đoán shape. */
+export const extractSearchRows = (payload: unknown): unknown[] => {
   if (Array.isArray(payload)) {
     return payload;
   }
