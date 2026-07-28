@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { getOnlineUsersMock, listDevicesMock, listSessionsMock } = vi.hoisted(() => ({
@@ -118,6 +118,50 @@ describe('OnlineUsersPage', () => {
     expect(await screen.findByText('người đang kết nối')).toBeInTheDocument();
     expect(screen.getByText('4 phiên WebSocket đang mở trong trang này')).toBeInTheDocument();
     expect(screen.getByLabelText('Trực tuyến: 1, Vắng mặt: 2')).toBeInTheDocument();
+  });
+
+  it('loads devices only when a row is expanded, never one request per row', async () => {
+    getOnlineUsersMock.mockResolvedValue({
+      items: [onlineUser({ userId: 'u1' }), onlineUser({ userId: 'u2' })],
+      total: 2,
+      page: 1,
+      pageSize: 50,
+      source: 'redis',
+      staleReason: null,
+    });
+    listDevicesMock.mockResolvedValue({
+      items: [
+        {
+          id: 'd1',
+          userId: 'u1',
+          deviceName: 'Pixel 8',
+          platform: 'android',
+          hasDeviceToken: true,
+          pushEnabled: true,
+          userAgent: null,
+          lastActiveAt: '2026-07-28T08:00:00.000Z',
+          createdAt: null,
+          updatedAt: null,
+        },
+      ],
+      pagination: {},
+    });
+
+    renderPage();
+    await screen.findAllByText('Nguyen Van A');
+
+    // Nothing fetched while the table is collapsed.
+    expect(listDevicesMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Expand row' })[0]);
+
+    expect(await screen.findByText('Pixel 8')).toBeInTheDocument();
+    // Presence knows the connection count but not which device holds it.
+    expect(
+      screen.getByText('Không xác định được kết nối nào thuộc thiết bị nào'),
+    ).toBeInTheDocument();
+    expect(listDevicesMock).toHaveBeenCalledTimes(1);
+    expect(listDevicesMock).toHaveBeenCalledWith('u1', expect.anything());
   });
 
   it('distinguishes a genuinely empty list from a stale one', async () => {

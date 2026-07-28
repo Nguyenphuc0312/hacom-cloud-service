@@ -37,3 +37,9 @@
   outline: 2px solid var(--border-interactive);
   outline-offset: -2px;
 }
+
+/* Expanded device panel sits flush inside the row, not as a nested card. */
+.online-users-expanded > td {
+  padding: 0 !important;
+  background: var(--bg-sunken);
+}

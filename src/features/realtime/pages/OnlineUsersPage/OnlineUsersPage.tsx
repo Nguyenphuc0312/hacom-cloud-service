@@ -15,6 +15,7 @@ import { TableSkeleton } from '@/components/TableSkeleton/TableSkeleton';
 import { useOnlineUsers } from '../../hooks/useOnlineUsers/useOnlineUsers';
 import { OnlineUserDetailDrawer } from '../../components/OnlineUserDetailDrawer/OnlineUserDetailDrawer';
 import { PresenceSummary } from '../../components/PresenceSummary/PresenceSummary';
+import { UserDeviceStrip } from '../../components/UserDeviceStrip/UserDeviceStrip';
 
 import './OnlineUsersPage.css';
 
@@ -37,6 +38,7 @@ export const OnlineUsersPage: React.FC = () => {
   const [stateFilter, setStateFilter] = useState<string | undefined>(undefined);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
   const query = useOnlineUsers({ page, pageSize, search, state: stateFilter, autoRefresh });
 
@@ -87,6 +89,26 @@ export const OnlineUsersPage: React.FC = () => {
         render: (value: string | null) =>
           value ? <DateTimeCell value={value} /> : <Text type="secondary">—</Text>,
       },
+      {
+        title: '',
+        key: 'actions',
+        width: 60,
+        align: 'right',
+        render: (_, record) => (
+          <Tooltip title="Xem chi tiết">
+            <Button
+              type="text"
+              size="small"
+              aria-label={`Xem chi tiết ${record.displayName}`}
+              icon={<AppIcon name="arrowRight" size={14} aria-hidden />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedUser(record);
+              }}
+            />
+          </Tooltip>
+        ),
+      },
     ],
     [],
   );
@@ -99,7 +121,7 @@ export const OnlineUsersPage: React.FC = () => {
     <PageShell
       eyebrow="Realtime"
       title="Người dùng Online"
-      description="Ai đang kết nối, ở trạng thái nào và giữ bao nhiêu phiên WebSocket."
+      description="Bao nhiêu người đang online, cụ thể là ai, và thiết bị nào gắn với tài khoản của họ. Mở rộng một dòng để xem thiết bị."
       headerExtra={
         <div className="online-users-header-actions">
           <Button
@@ -173,18 +195,20 @@ export const OnlineUsersPage: React.FC = () => {
               columns={columns}
               dataSource={items}
               loading={query.isFetching && !!data}
-              rowClassName="online-users-row"
-              onRow={(record) => ({
-                onClick: () => setSelectedUser(record),
-                tabIndex: 0,
-                'aria-label': `Xem chi tiết ${record.displayName}`,
-                onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setSelectedUser(record);
-                  }
-                },
-              })}
+              expandable={{
+                // Devices load per user, so they expand on demand instead of
+                // firing one request per visible row.
+                expandedRowKeys,
+                onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
+                expandedRowRender: (record) => (
+                  <UserDeviceStrip
+                    userId={record.userId}
+                    connectionCount={record.connectionCount}
+                  />
+                ),
+                expandRowByClick: true,
+                expandedRowClassName: () => 'online-users-expanded',
+              }}
               pagination={{
                 current: page,
                 pageSize,
