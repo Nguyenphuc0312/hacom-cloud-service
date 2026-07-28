@@ -128,6 +128,32 @@ const RESP_LABEL: Record<string, string> = {
   MAYBE: "Có thể",
 };
 
+/** Khớp @MaxLength(500) của UpdateParticipantDto (hr-api) — cắt ở FE để không
+ *  gõ xong mới ăn 422. */
+const DECLINE_REASON_MAX = 500;
+
+/** URL link chia sẻ do máy này tạo, cache theo eventId. BE chỉ trả token thô
+ *  đúng lần tạo đầu (sau đó chỉ còn hash), nên không cache thì mở modal lần sau
+ *  chỉ còn nước thu hồi + tạo lại. localStorage có thể ném (private mode/quota). */
+const readShareLinkCache = (key: string | null): string | null => {
+  if (!key) return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const writeShareLinkCache = (key: string | null, url: string | null): void => {
+  if (!key) return;
+  try {
+    if (url) localStorage.setItem(key, url);
+    else localStorage.removeItem(key);
+  } catch {
+    /* mất cache thôi, không chặn luồng chia sẻ */
+  }
+};
+
 const respBadgeClass = (response: string): string => {
   switch (response) {
     case "ACCEPTED":
@@ -162,14 +188,22 @@ export const EventDetailModal: React.FC<{
   const [declineReason, setDeclineReason] = React.useState("");
   // Khối đính kèm collapse — mặc định đóng cho gọn modal.
   const [attachmentsOpen, setAttachmentsOpen] = React.useState(false);
-  // Link chia sẻ lịch họp — panel chỉ mở khi bấm "Chia sẻ". `url` chỉ có giá trị
-  // ngay sau lần TẠO MỚI (BE không lưu token thô, không đọc lại được lần sau —
-  // xem hrCalendarApi.createShareLink). Reuse link cũ trả token:null → biết là
-  // "đã có link đang hoạt động" nhưng không hiện lại được URL, chỉ cho Thu hồi.
+  // Link chia sẻ lịch họp — panel chỉ mở khi bấm "Chia sẻ". BE chỉ trả token thô
+  // đúng lần TẠO MỚI (sau đó chỉ còn hash — xem calendar.service.createShareLink),
+  // nên FE cache URL vào localStorage theo eventId để mở lại modal vẫn sao chép
+  // được ngay thay vì rơi vào panel "chỉ thu hồi được".
+  // ponytail: localStorage = per-máy; đổi máy thì thu hồi + tạo lại, chấp nhận được.
+  const shareLinkCacheKey = hrEvent ? `calendar.shareLink.${hrEvent.id}` : null;
   const [shareLinkOpen, setShareLinkOpen] = React.useState(false);
   const [shareLinkLoading, setShareLinkLoading] = React.useState(false);
-  const [shareLinkUrl, setShareLinkUrl] = React.useState<string | null>(null);
-  const [shareLinkExists, setShareLinkExists] = React.useState(false);
+  // Khởi tạo thẳng từ cache — modal luôn mount lại theo từng event nên không cần
+  // effect đồng bộ lại (effect + setState = cascading render, eslint chặn đúng).
+  const [shareLinkUrl, setShareLinkUrl] = React.useState<string | null>(() =>
+    readShareLinkCache(shareLinkCacheKey),
+  );
+  const [shareLinkExists, setShareLinkExists] = React.useState(
+    () => !!readShareLinkCache(shareLinkCacheKey),
+  );
   const [shareLinkRevoking, setShareLinkRevoking] = React.useState(false);
   const colors = getEventColor(event.type);
   const isExtended = "startAt" in event && event.startAt;
@@ -266,15 +300,17 @@ export const EventDetailModal: React.FC<{
   const handleOpenShareLink = async () => {
     if (!hrEvent) return;
     setShareLinkOpen(true);
+    // Đã có link cache sẵn → mở panel là sao chép được ngay, không gọi lại BE.
+    if (shareLinkUrl) return;
     setShareLinkLoading(true);
     try {
       const link = await hrCalendarApi.createShareLink(hrEvent.id);
       setShareLinkExists(true);
-      setShareLinkUrl(
-        link.token
-          ? `${window.location.origin}${ROUTE_PATHS.CALENDAR_JOIN_BY_SHARE_LINK.replace(":token", encodeURIComponent(link.token))}`
-          : null,
-      );
+      const url = link.token
+        ? `${window.location.origin}${ROUTE_PATHS.CALENDAR_JOIN_BY_SHARE_LINK.replace(":token", encodeURIComponent(link.token))}`
+        : null;
+      setShareLinkUrl(url);
+      writeShareLinkCache(shareLinkCacheKey, url);
     } catch (error) {
       toast.error(extractApiError(error).message);
       setShareLinkOpen(false);
@@ -302,6 +338,7 @@ export const EventDetailModal: React.FC<{
       setShareLinkExists(false);
       setShareLinkUrl(null);
       setShareLinkOpen(false);
+      writeShareLinkCache(shareLinkCacheKey, null);
     } catch (error) {
       toast.error(extractApiError(error).message);
     } finally {
@@ -369,11 +406,20 @@ export const EventDetailModal: React.FC<{
   // buộc tham gia). Nên lấy authUserId từ identity của event trước, roster chỉ để
   // nhặt sẵn avatar nếu tình cờ người đó cũng là người tham gia.
   const creatorRow = findByAuthUserId(hrEvent?.ownerAuthUserId) ?? findByName(creatorName);
+  const creatorUserId = hrEvent?.ownerAuthUserId ?? creatorRow?.authUserId ?? null;
   const chairmanIdentityUserId = meetingMeta.meetingChairmanAuthUserId ?? null;
   const chairmanRow =
     findByAuthUserId(chairmanIdentityUserId) ?? findByName(chairman);
-  const creatorUserId = hrEvent?.ownerAuthUserId ?? creatorRow?.authUserId ?? null;
-  const chairmanUserId = chairmanIdentityUserId ?? chairmanRow?.authUserId ?? null;
+  // Chủ trì không nằm trong roster và event cũ không lưu identity → mất avatar.
+  // Trùng tên người tạo thì dùng luôn identity của người tạo (đã nạp avatar).
+  const chairmanIsCreator =
+    !!chairman &&
+    !!creatorName &&
+    chairman.trim().toLowerCase() === creatorName.trim().toLowerCase();
+  const chairmanUserId =
+    chairmanIdentityUserId ??
+    chairmanRow?.authUserId ??
+    (chairmanIsCreator ? creatorUserId : null);
 
   // Hành động nhanh trên dòng Người tạo / Chủ trì: đã là bạn → Nhắn tin (mở DM);
   // chưa là bạn → Kết bạn (có lời mời đến từ họ thì "Kết bạn" = chấp nhận luôn).
@@ -823,10 +869,11 @@ export const EventDetailModal: React.FC<{
                         <p className="truncate text-sm text-text-primary">{name}</p>
                         {sub && <p className="truncate text-[11px] text-text-muted">{sub}</p>}
                         {/* Lý do từ chối — thứ người tạo lịch cần biết nhất khi
-                            thấy ai đó không tham gia. Không cắt dòng: lý do ngắn
-                            nhưng phải đọc được trọn vẹn. */}
+                            thấy ai đó không tham gia. Hiện trọn, không cắt dòng.
+                            break-all vì lý do có thể là 1 chuỗi liền không dấu
+                            cách — break-words không cắt được, đẩy vỡ layout. */}
                         {p.response === "DECLINED" && p.responseNote && (
-                          <p className="mt-0.5 text-[11px] italic text-rose-600 dark:text-rose-300">
+                          <p className="mt-0.5 break-all text-[11px] italic text-rose-600 dark:text-rose-300">
                             Lý do: {p.responseNote}
                           </p>
                         )}
@@ -859,7 +906,7 @@ export const EventDetailModal: React.FC<{
             {canRespond && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-text-primary">
                       {myResponse === "ACCEPTED"
                         ? "Bạn đã xác nhận tham gia — có thể đổi ý bất cứ lúc nào"
@@ -868,7 +915,7 @@ export const EventDetailModal: React.FC<{
                           : "Bạn được mời tham gia lịch họp này"}
                     </p>
                     {myDeclineReason && (
-                      <p className="mt-0.5 text-xs italic text-text-muted">
+                      <p className="mt-0.5 line-clamp-2 break-all text-xs italic text-text-muted">
                         Lý do đã gửi: “{myDeclineReason}”
                       </p>
                     )}
@@ -905,13 +952,18 @@ export const EventDetailModal: React.FC<{
                           : "border border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
                       )}
                     >
-                      {responding === "DECLINED" ? "Đang lưu..." : "Không tham gia"}
+                      {responding === "DECLINED"
+                        ? "Đang lưu..."
+                        : declineReasonOpen
+                          ? "Đóng ô lý do"
+                          : myResponse === "DECLINED"
+                            ? "Sửa lý do"
+                            : "Không tham gia"}
                     </button>
                   </div>
                 </div>
-                {/* Lý do từ chối (không bắt buộc) — chỉ FE, BE chưa có field lưu
-                    (xem contract FE__calendar-decline-reason). Lưu localStorage
-                    theo eventId để người tạo xem tạm khi mở lại modal này. */}
+                {/* Lý do từ chối (không bắt buộc) — gửi kèm response, BE lưu vào
+                    participant.responseNote nên cả phòng cùng đọc được. */}
                 {declineReasonOpen && (
                   <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-2.5 dark:border-rose-800 dark:bg-rose-900/10">
                     <label className="mb-1 block text-xs font-medium text-rose-700 dark:text-rose-300">
@@ -919,12 +971,16 @@ export const EventDetailModal: React.FC<{
                     </label>
                     <textarea
                       value={declineReason}
-                      onChange={(e) => setDeclineReason(e.target.value)}
-                      rows={2}
+                      onChange={(e) => setDeclineReason(e.target.value.slice(0, DECLINE_REASON_MAX))}
+                      rows={4}
+                      autoFocus
                       placeholder="VD: Trùng lịch khác, đang nghỉ phép…"
-                      className="w-full resize-none rounded-md border border-rose-200 bg-surface px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-rose-300/40 dark:border-rose-800"
+                      className="w-full resize-y rounded-md border border-rose-200 bg-surface px-2 py-1.5 text-xs leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-rose-300/40 dark:border-rose-800"
                     />
-                    <div className="mt-1.5 flex justify-end gap-2">
+                    <div className="mt-1.5 flex items-center justify-end gap-2">
+                      <span className="mr-auto text-[11px] text-text-muted">
+                        {declineReason.length}/{DECLINE_REASON_MAX}
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
@@ -941,7 +997,11 @@ export const EventDetailModal: React.FC<{
                         onClick={() => void handleRespondClick("DECLINED", declineReason.trim() || undefined)}
                         className="rounded-md bg-rose-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-rose-700 disabled:opacity-60"
                       >
-                        {responding === "DECLINED" ? "Đang lưu..." : "Xác nhận không tham gia"}
+                        {responding === "DECLINED"
+                          ? "Đang lưu..."
+                          : myResponse === "DECLINED"
+                            ? "Cập nhật lý do"
+                            : "Gửi lý do & không tham gia"}
                       </button>
                     </div>
                   </div>
@@ -955,11 +1015,19 @@ export const EventDetailModal: React.FC<{
                 {!shareLinkOpen ? (
                   <button
                     type="button"
-                    onClick={() => void handleOpenShareLink()}
+                    onClick={() => {
+                      // Đã có link → bấm 1 phát là chép luôn, không mở panel.
+                      if (shareLinkUrl) {
+                        setShareLinkOpen(true);
+                        void handleCopyShareLink();
+                        return;
+                      }
+                      void handleOpenShareLink();
+                    }}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1976D2]/60 bg-[#1976D2]/10 px-3 py-1.5 text-xs font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/20"
                   >
                     <LinkIcon className="h-4 w-4" />
-                    Chia sẻ link tham gia
+                    {shareLinkUrl ? "Sao chép link tham gia" : "Chia sẻ link tham gia"}
                   </button>
                 ) : (
                   <div className="rounded-lg border border-[#1976D2]/40 bg-[#1976D2]/5 p-2.5">
