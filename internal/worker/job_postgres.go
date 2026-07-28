@@ -53,20 +53,40 @@ func (r *JobPostgres) Claim(ctx context.Context) (Job, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	lockTimeoutMicros := r.policy.LockTimeout.Microseconds()
+	_, err = tx.Exec(ctx, `
+		UPDATE cloud.jobs
+		SET status = 'dead',
+		    locked_by = NULL,
+		    locked_at = NULL,
+		    last_error = COALESCE(
+		        last_error,
+		        'maximum attempts reached while recovering stale job'
+		    )
+		WHERE status = 'processing'
+		  AND locked_at < NOW() - ($1::bigint * INTERVAL '1 microsecond')
+		  AND attempts >= LEAST(max_attempts, $2)
+	`, lockTimeoutMicros, r.policy.MaxAttempts)
+	if err != nil {
+		return Job{}, fmt.Errorf("mark exhausted stale jobs dead: %w", err)
+	}
+
 	var (
-		job         Job
-		jobType     string
-		payload     []byte
-		staleBefore = time.Now().UTC().Add(-r.policy.LockTimeout)
+		job     Job
+		jobType string
+		payload []byte
 	)
 	err = tx.QueryRow(ctx, `
 WITH candidate AS (
 	SELECT job.id
 	FROM cloud.jobs AS job
-	WHERE job.attempts < job.max_attempts
+	WHERE job.attempts < LEAST(job.max_attempts, $2)
 	  AND (
 		(job.status IN ('pending', 'failed') AND job.run_after <= NOW())
-		OR (job.status = 'processing' AND job.locked_at < $1)
+		OR (
+			job.status = 'processing'
+			AND job.locked_at < NOW() - ($1::bigint * INTERVAL '1 microsecond')
+		)
 	  )
 	ORDER BY job.priority ASC, job.run_after ASC, job.created_at ASC, job.id ASC
 	FOR UPDATE SKIP LOCKED
@@ -75,14 +95,24 @@ WITH candidate AS (
 UPDATE cloud.jobs AS job
 SET status = 'processing',
 	attempts = job.attempts + 1,
-	locked_by = $2,
+	locked_by = $3,
 	locked_at = NOW(),
 	last_error = NULL
 FROM candidate
 WHERE job.id = candidate.id
 RETURNING job.id, job.job_type::text, job.payload
-`, staleBefore, r.workerID).Scan(&job.ID, &jobType, &payload)
+	`, lockTimeoutMicros, r.policy.MaxAttempts, r.workerID).Scan(
+		&job.ID,
+		&jobType,
+		&payload,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.Commit(ctx); err != nil {
+			return Job{}, fmt.Errorf(
+				"commit exhausted stale job recovery: %w",
+				err,
+			)
+		}
 		return Job{}, ErrNoJob
 	}
 	if err != nil {
@@ -105,15 +135,26 @@ func (r *JobPostgres) Complete(ctx context.Context, jobID string) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var (
-		status   string
-		lockedBy sql.NullString
+		status     string
+		lockedBy   sql.NullString
+		leaseValid bool
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT status::text, locked_by
+		SELECT
+			status::text,
+			locked_by,
+			COALESCE(
+				locked_at >= NOW() - ($2::bigint * INTERVAL '1 microsecond'),
+				false
+			)
 		FROM cloud.jobs
 		WHERE id = $1
 		FOR UPDATE
-	`, jobID).Scan(&status, &lockedBy)
+	`, jobID, r.policy.LockTimeout.Microseconds()).Scan(
+		&status,
+		&lockedBy,
+		&leaseValid,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errors.New("job not found")
 	}
@@ -125,7 +166,7 @@ func (r *JobPostgres) Complete(ctx context.Context, jobID string) error {
 	case JobCompleted:
 		return tx.Commit(ctx)
 	case JobProcessing:
-		if !lockedBy.Valid || lockedBy.String != r.workerID {
+		if !lockedBy.Valid || lockedBy.String != r.workerID || !leaseValid {
 			return errors.New("job lease is owned by another worker")
 		}
 	default:
@@ -142,7 +183,8 @@ func (r *JobPostgres) Complete(ctx context.Context, jobID string) error {
 		WHERE id = $1
 		  AND status = 'processing'
 		  AND locked_by = $2
-	`, jobID, r.workerID)
+		  AND locked_at >= NOW() - ($3::bigint * INTERVAL '1 microsecond')
+	`, jobID, r.workerID, r.policy.LockTimeout.Microseconds())
 	if err != nil {
 		return fmt.Errorf("complete job: %w", err)
 	}
@@ -171,13 +213,28 @@ func (r *JobPostgres) Fail(ctx context.Context, jobID string, cause error) error
 		lockedBy    sql.NullString
 		attempts    int
 		maxAttempts int
+		leaseValid  bool
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT status::text, locked_by, attempts, max_attempts
+		SELECT
+			status::text,
+			locked_by,
+			attempts,
+			max_attempts,
+			COALESCE(
+				locked_at >= NOW() - ($2::bigint * INTERVAL '1 microsecond'),
+				false
+			)
 		FROM cloud.jobs
 		WHERE id = $1
 		FOR UPDATE
-	`, jobID).Scan(&status, &lockedBy, &attempts, &maxAttempts)
+	`, jobID, r.policy.LockTimeout.Microseconds()).Scan(
+		&status,
+		&lockedBy,
+		&attempts,
+		&maxAttempts,
+		&leaseValid,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errors.New("job not found")
 	}
@@ -187,28 +244,40 @@ func (r *JobPostgres) Fail(ctx context.Context, jobID string, cause error) error
 	if JobStatus(status) != JobProcessing {
 		return fmt.Errorf("cannot fail job in status %q", status)
 	}
-	if !lockedBy.Valid || lockedBy.String != r.workerID {
+	if !lockedBy.Valid || lockedBy.String != r.workerID || !leaseValid {
 		return errors.New("job lease is owned by another worker")
 	}
 
+	effectiveMaxAttempts := min(maxAttempts, r.policy.MaxAttempts)
 	nextStatus := string(JobFailed)
-	nextRunAfter := time.Now().UTC().Add(r.retryDelay(attempts))
-	if attempts >= maxAttempts {
+	if attempts >= effectiveMaxAttempts {
 		nextStatus = string(JobDead)
-		nextRunAfter = time.Now().UTC()
 	}
+	retryDelayMicros := r.retryDelay(attempts).Microseconds()
 
 	commandTag, err := tx.Exec(ctx, `
 		UPDATE cloud.jobs
-		SET status = $3,
-			run_after = $4,
+		SET status = $3::cloud.job_status,
+			run_after = CASE
+				WHEN $3::text = 'failed'
+				THEN NOW() + ($4::bigint * INTERVAL '1 microsecond')
+				ELSE run_after
+			END,
 			locked_by = NULL,
 			locked_at = NULL,
 			last_error = $5
 		WHERE id = $1
 		  AND status = 'processing'
 		  AND locked_by = $2
-	`, jobID, r.workerID, nextStatus, nextRunAfter, truncateJobError(cause.Error()))
+		  AND locked_at >= NOW() - ($6::bigint * INTERVAL '1 microsecond')
+	`,
+		jobID,
+		r.workerID,
+		nextStatus,
+		retryDelayMicros,
+		truncateJobError(cause.Error()),
+		r.policy.LockTimeout.Microseconds(),
+	)
 	if err != nil {
 		return fmt.Errorf("fail job: %w", err)
 	}

@@ -18,18 +18,17 @@
 
 ## Trạng thái dependency tích hợp
 
-Tại thời điểm triển khai tài liệu này, codebase chưa có các implementation đã
-phân công cho Người 1–3:
+Nhánh tích hợp đã kết nối đủ implementation của Người 1–3:
 
 - `internal/repository/job_postgres.go`
-- `internal/file/hash_service.go`
+- `internal/filehash/service.go`
 - `internal/repository/file_lifecycle_postgres.go`
 - `internal/repository/upload_cleanup_postgres.go`
 
-Vì vậy `cmd/worker/main.go` chưa được phép giả lập persistence bằng SQL hoặc
-MinIO logic riêng. Khi các dependency trên được tích hợp, chỉ thay phần dựng
-dependency và truyền chúng vào `newLifecycleWorker`; không đưa nghiệp vụ queue,
-hash hoặc lifecycle vào `cmd/worker`.
+`cmd/worker/main.go` hiện khởi tạo PostgreSQL Job Repository, MinIO streaming
+Hash Service, lifecycle repository và cleanup repository thật. Nghiệp vụ queue,
+hash và lifecycle vẫn nằm trong package sở hữu tương ứng; bootstrap chỉ dựng và
+đăng ký dependency.
 
 ## Lệnh kiểm tra
 
@@ -94,8 +93,8 @@ và nêu chính xác dependency còn thiếu, thay vì báo Gate 4 thành công 
 5. Xác nhận ledger chỉ có một event với idempotency key
    `release:expired-upload:{session_id}` và quota không bị trừ lần hai.
 
-## Tiêu chí không được đánh dấu đạt sớm
+## Tiêu chí hoàn thành
 
-Không đánh dấu Gate 4 hoàn thành cho tới khi `go run ./cmd/worker` dùng
-PostgreSQL Job Repository và MinIO/lifecycle implementation thật, đồng thời các
-assertion PostgreSQL, MinIO, quota, ledger và recovery ở trên đều đạt.
+Chỉ đánh dấu Gate 4 đạt khi `go run ./cmd/worker` dùng PostgreSQL Job Repository
+và MinIO/lifecycle implementation thật, đồng thời script integration xác nhận
+PostgreSQL, MinIO, quota, ledger, retry và recovery đều đạt.

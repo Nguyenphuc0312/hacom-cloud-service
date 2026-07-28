@@ -138,7 +138,7 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 		10,
 		0,
 		3,
-		time.Now().UTC(),
+		time.Now().UTC().Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "high"},
@@ -154,8 +154,12 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 	if job.Type != JobHashFile {
 		t.Fatalf("job type = %s, want %s", job.Type, JobHashFile)
 	}
-	if string(job.Payload) != `{"name":"high"}` {
-		t.Fatalf("job payload = %s", job.Payload)
+	var payload map[string]string
+	if err := json.Unmarshal(job.Payload, &payload); err != nil {
+		t.Fatalf("decode claimed payload: %v", err)
+	}
+	if payload["name"] != "high" {
+		t.Fatalf("job payload = %v", payload)
 	}
 
 	var status string
@@ -170,6 +174,35 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 	}
 	if status != string(JobProcessing) || attempts != 1 || lockedBy != "worker-a" {
 		t.Fatalf("claimed row = status:%s attempts:%d locked_by:%s", status, attempts, lockedBy)
+	}
+}
+
+func TestJobPostgresDoesNotClaimBeforeRunAfter(t *testing.T) {
+	pool := integrationWorkerPool(t)
+	driveID := insertWorkerDrive(t, pool)
+	jobID := uuid.New()
+	insertWorkerJob(
+		t,
+		pool,
+		driveID,
+		jobID,
+		JobHashFile,
+		JobPending,
+		10,
+		0,
+		3,
+		time.Now().UTC().Add(time.Minute),
+		nil,
+		nil,
+		map[string]string{"name": "future"},
+	)
+	repository, err := NewJobPostgres(pool, "worker-a", RetryPolicy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repository.Claim(context.Background()); !errors.Is(err, ErrNoJob) {
+		t.Fatalf("future job claim error = %v, want ErrNoJob", err)
 	}
 }
 
@@ -420,5 +453,89 @@ func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 	}
 	if status != string(JobCompleted) || attempts != 2 || completedLockedBy.Valid || !completedAt.Valid {
 		t.Fatalf("completed row = status:%s attempts:%d locked_by:%v", status, attempts, completedLockedBy)
+	}
+}
+
+func TestJobPostgresMovesExhaustedStaleJobToDead(t *testing.T) {
+	pool := integrationWorkerPool(t)
+	driveID := insertWorkerDrive(t, pool)
+	jobID := uuid.New()
+	lockedAt := time.Now().UTC().Add(-2 * time.Minute)
+	workerA := "worker-a"
+	insertWorkerJob(
+		t,
+		pool,
+		driveID,
+		jobID,
+		JobHashFile,
+		JobProcessing,
+		10,
+		3,
+		3,
+		time.Now().UTC().Add(-time.Minute),
+		&workerA,
+		&lockedAt,
+		map[string]string{"name": "exhausted-stale"},
+	)
+	repository, err := NewJobPostgres(pool, "worker-b", RetryPolicy{
+		MaxAttempts: 3,
+		BaseBackoff: time.Second,
+		MaxBackoff:  time.Minute,
+		LockTimeout: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repository.Claim(context.Background()); !errors.Is(err, ErrNoJob) {
+		t.Fatalf("exhausted stale claim error = %v, want ErrNoJob", err)
+	}
+	var status string
+	var lockedBy sql.NullString
+	if err := pool.QueryRow(context.Background(), `
+		SELECT status::text, locked_by
+		FROM cloud.jobs
+		WHERE id = $1
+	`, jobID).Scan(&status, &lockedBy); err != nil {
+		t.Fatal(err)
+	}
+	if status != string(JobDead) || lockedBy.Valid {
+		t.Fatalf("exhausted stale row status=%q locked_by=%v", status, lockedBy)
+	}
+}
+
+func TestJobPostgresRejectsCompletionAfterLeaseTimeout(t *testing.T) {
+	pool := integrationWorkerPool(t)
+	driveID := insertWorkerDrive(t, pool)
+	jobID := uuid.New()
+	lockedAt := time.Now().UTC().Add(-2 * time.Minute)
+	workerID := "worker-a"
+	insertWorkerJob(
+		t,
+		pool,
+		driveID,
+		jobID,
+		JobHashFile,
+		JobProcessing,
+		10,
+		1,
+		3,
+		time.Now().UTC().Add(-time.Minute),
+		&workerID,
+		&lockedAt,
+		map[string]string{"name": "expired-lease"},
+	)
+	repository, err := NewJobPostgres(pool, workerID, RetryPolicy{
+		MaxAttempts: 3,
+		BaseBackoff: time.Second,
+		MaxBackoff:  time.Minute,
+		LockTimeout: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repository.Complete(context.Background(), jobID.String()); err == nil {
+		t.Fatal("expired lease completion error = nil")
 	}
 }
