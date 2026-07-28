@@ -158,19 +158,26 @@ export interface HRCalendarJoinByShareLinkResult {
 }
 
 /**
- * Thông tin xem trước của một share-link — đủ để nhận ra "lịch gì, của ai, lúc
- * nào" trước khi quyết định tham gia. BE cố ý không trả description/địa điểm/
- * danh sách người tham gia vì người cầm link chưa phải participant.
+ * Thông tin xem trước của một share-link — nội dung ngang với modal chi tiết
+ * lịch. Share link chỉ tạo được cho MEETING có quyền xem Nhóm/Đơn vị/Công khai,
+ * nên hiện đủ ở đây không nới lỏng quyền gì: tham gia xong cũng thấy chừng này.
  */
 export interface HRCalendarShareLinkPreview {
   eventId: string;
   title: string;
+  description: string | null;
   startAt: string;
   endAt: string;
   allDay: boolean;
+  timezone: string;
   eventType: string;
+  visibility: HRCalendarVisibility;
+  location: string | null;
+  meetingFormat: string | null;
   organizerName: string | null;
+  chairmanName: string | null;
   participantCount: number;
+  participants: HRCalendarParticipant[];
   alreadyJoined: boolean;
 }
 
