@@ -70,6 +70,7 @@
     "subtitle": "An invitation to join a meeting via share link.",
     "confirmDescription": "Review the details below. You are only added to the participant list after you confirm.",
     "organizer": "Organizer",
-    "participantCount": "{{count}} participants"
+    "participantCount": "{{count}} participants",
+    "chairman": "Chair"
   }
 }

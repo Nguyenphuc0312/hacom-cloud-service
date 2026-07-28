@@ -70,6 +70,7 @@
     "subtitle": "Lời mời tham gia lịch họp qua link chia sẻ.",
     "confirmDescription": "Xem lại thông tin bên dưới. Bạn chỉ được thêm vào danh sách tham gia sau khi bấm xác nhận.",
     "organizer": "Người tổ chức",
-    "participantCount": "{{count}} người tham gia"
+    "participantCount": "{{count}} người tham gia",
+    "chairman": "Chủ trì"
   }
 }

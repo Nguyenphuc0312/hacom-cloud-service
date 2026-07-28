@@ -11,11 +11,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import clsx from "clsx";
 import {
   CalendarDaysIcon,
   ClockIcon,
+  MapPinIcon,
   UserIcon,
   UsersIcon,
+  VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { Button, toast } from "../components/ui";
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
@@ -30,6 +33,37 @@ import { useAuthStore } from "../stores/authStore";
 
 type JoinStatus = "idle" | "joining" | "joined" | "failed";
 type PreviewStatus = "loading" | "ready" | "failed";
+
+/** Địa điểm là URL (Meet/Zoom/Teams…) → render thành link bấm được. */
+const isMeetingUrl = (value: string): boolean =>
+  /^https?:\/\/\S+$/i.test(value.trim());
+
+const RESPONSE_LABELS: Record<string, string> = {
+  ACCEPTED: "Tham gia",
+  DECLINED: "Không tham gia",
+  TENTATIVE: "Có thể tham gia",
+  PENDING: "Chưa phản hồi",
+};
+
+const RESPONSE_STYLES: Record<string, string> = {
+  ACCEPTED:
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
+  DECLINED: "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300",
+  TENTATIVE:
+    "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
+  PENDING: "bg-surface-hover text-text-muted",
+};
+
+/** Một dòng "icon + nội dung" trong thẻ xem trước. */
+const PreviewRow: React.FC<{
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ icon, children }) => (
+  <div className="flex items-start gap-2 text-xs text-text-secondary">
+    <span className="mt-0.5">{icon}</span>
+    <span className="min-w-0 flex-1">{children}</span>
+  </div>
+);
 
 export const CalendarJoinByShareLinkPage: React.FC = () => {
   const { t } = useTranslation();
@@ -130,22 +164,23 @@ export const CalendarJoinByShareLinkPage: React.FC = () => {
           <div className="app-page-panel space-y-5 p-6 sm:p-7">
             {/* Thẻ thông tin lịch họp — phải hiện TRƯỚC khi người dùng xác nhận,
                 để không ai tham gia một buổi họp mà chưa biết đó là họp gì. */}
-            <div className="app-page-subtle flex items-start gap-3 rounded-xl px-4 py-3">
-              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
-                <CalendarDaysIcon className="h-5 w-5" />
+            {previewStatus === "loading" ? (
+              <div className="app-page-subtle space-y-2 rounded-xl px-4 py-4">
+                <div className="h-5 w-2/3 animate-pulse rounded bg-surface-hover" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-surface-hover" />
+                <div className="h-3 w-2/5 animate-pulse rounded bg-surface-hover" />
               </div>
-              <div className="min-w-0 flex-1">
-                {previewStatus === "loading" ? (
-                  <>
-                    <div className="h-4 w-2/3 animate-pulse rounded bg-surface-hover" />
-                    <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-surface-hover" />
-                  </>
-                ) : preview ? (
-                  <>
-                    <p className="text-sm font-semibold text-text-primary">
+            ) : preview ? (
+              <div className="app-page-subtle space-y-3 rounded-xl px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
+                    <CalendarDaysIcon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-semibold text-text-primary">
                       {preview.title}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-text-secondary">
+                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-secondary">
                       <ClockIcon className="h-3.5 w-3.5 shrink-0" />
                       {formatShareLinkWhen(
                         preview.startAt,
@@ -153,32 +188,105 @@ export const CalendarJoinByShareLinkPage: React.FC = () => {
                         preview.allDay,
                       )}
                     </p>
-                    {preview.organizerName && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-text-secondary">
-                        <UserIcon className="h-3.5 w-3.5 shrink-0" />
-                        {t("calendar:joinByShareLink.organizer", {
-                          defaultValue: "Người tổ chức",
-                        })}
-                        : {preview.organizerName}
-                      </p>
-                    )}
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-text-secondary">
-                      <UsersIcon className="h-3.5 w-3.5 shrink-0" />
-                      {t("calendar:joinByShareLink.participantCount", {
-                        defaultValue: "{{count}} người tham gia",
-                        count: preview.participantCount,
-                      })}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm font-semibold text-text-primary">
-                    {t("calendar:joinByShareLink.shareLink", {
-                      defaultValue: "Link chia sẻ lịch họp",
-                    })}
+                  </div>
+                </div>
+
+                {preview.description && (
+                  <p className="whitespace-pre-wrap break-words border-t border-border pt-3 text-sm leading-6 text-text-secondary">
+                    {preview.description}
                   </p>
                 )}
+
+                <div className="space-y-1.5 border-t border-border pt-3">
+                  {preview.location && (
+                    <PreviewRow
+                      icon={
+                        preview.meetingFormat === "online" ? (
+                          <VideoCameraIcon className="h-4 w-4 shrink-0 text-text-muted" />
+                        ) : (
+                          <MapPinIcon className="h-4 w-4 shrink-0 text-text-muted" />
+                        )
+                      }
+                    >
+                      {isMeetingUrl(preview.location) ? (
+                        <a
+                          href={preview.location}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="break-all text-[#1565C0] underline decoration-[#1565C0]/40 underline-offset-2 dark:text-[#6BA8F0]"
+                        >
+                          {preview.location}
+                        </a>
+                      ) : (
+                        <span className="break-words">{preview.location}</span>
+                      )}
+                    </PreviewRow>
+                  )}
+                  {preview.organizerName && (
+                    <PreviewRow icon={<UserIcon className="h-4 w-4 shrink-0 text-text-muted" />}>
+                      {t("calendar:joinByShareLink.organizer", {
+                        defaultValue: "Người tổ chức",
+                      })}
+                      : {preview.organizerName}
+                    </PreviewRow>
+                  )}
+                  {preview.chairmanName && (
+                    <PreviewRow icon={<UserIcon className="h-4 w-4 shrink-0 text-text-muted" />}>
+                      {t("calendar:joinByShareLink.chairman", {
+                        defaultValue: "Chủ trì",
+                      })}
+                      : {preview.chairmanName}
+                    </PreviewRow>
+                  )}
+                  <PreviewRow icon={<UsersIcon className="h-4 w-4 shrink-0 text-text-muted" />}>
+                    {t("calendar:joinByShareLink.participantCount", {
+                      defaultValue: "{{count}} người tham gia",
+                      count: preview.participantCount,
+                    })}
+                  </PreviewRow>
+                </div>
+
+                {preview.participants.length > 0 && (
+                  <ul className="max-h-52 space-y-1.5 overflow-y-auto border-t border-border pt-3">
+                    {preview.participants.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-text-primary">
+                          {p.fullName ?? p.employeeCode ?? "—"}
+                          {p.departmentName && (
+                            <span className="text-text-muted">
+                              {" "}
+                              · {p.departmentName}
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className={clsx(
+                            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            RESPONSE_STYLES[p.response] ?? RESPONSE_STYLES.PENDING,
+                          )}
+                        >
+                          {RESPONSE_LABELS[p.response] ?? RESPONSE_LABELS.PENDING}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="app-page-subtle flex items-center gap-3 rounded-xl px-4 py-3">
+                <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1976D2]/10 text-[#1565C0]">
+                  <CalendarDaysIcon className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-semibold text-text-primary">
+                  {t("calendar:joinByShareLink.shareLink", {
+                    defaultValue: "Link chia sẻ lịch họp",
+                  })}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <p className="text-sm leading-6 text-text-secondary">
