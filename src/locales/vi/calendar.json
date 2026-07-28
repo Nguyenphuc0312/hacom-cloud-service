@@ -59,14 +59,17 @@
   },
   "joinByShareLink": {
     "title": "Tham gia lịch họp",
-    "description": "Dùng liên kết này để tự động tham gia lịch họp được chia sẻ.",
     "shareLink": "Link chia sẻ lịch họp",
     "joining": "Đang tham gia lịch họp...",
     "joined": "Đã tham gia lịch họp thành công",
     "joinedDescription": "Lịch họp đã được thêm vào lịch của bạn.",
     "alreadyJoined": "Bạn đã ở trong lịch họp này rồi",
-    "alreadyJoinedDescription": "Bạn có thể xem lịch họp này trong trang Lịch.",
-    "cta": "Tham gia ngay",
-    "openCalendar": "Mở Lịch"
+    "alreadyJoinedDescription": "Bạn đã ở trong lịch họp này. Xem chi tiết trong trang Lịch.",
+    "cta": "Xác nhận tham gia",
+    "openCalendar": "Mở Lịch",
+    "subtitle": "Lời mời tham gia lịch họp qua link chia sẻ.",
+    "confirmDescription": "Xem lại thông tin bên dưới. Bạn chỉ được thêm vào danh sách tham gia sau khi bấm xác nhận.",
+    "organizer": "Người tổ chức",
+    "participantCount": "{{count}} người tham gia"
   }
 }
