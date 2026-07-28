@@ -15,6 +15,7 @@ POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postma
 	infra-up infra-down infra-logs infra-ps \
 	migrate-up migrate-down migrate-version db-verify \
 	test-integration test-integration-clean test-postman test-postman-process3 \
+	test-integration-process4 \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -31,6 +32,9 @@ test-integration:
 
 test-integration-clean:
 	sh scripts/test-integration.sh
+
+test-integration-process4:
+	sh scripts/test-process4-integration.sh
 
 test-postman:
 	npx --yes newman run "$(POSTMAN_COLLECTION)" \
