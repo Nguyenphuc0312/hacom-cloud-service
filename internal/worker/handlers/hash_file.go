@@ -7,17 +7,15 @@ import (
 	"fmt"
 
 	cloudfile "github.com/Nguyenphuc0312/hacom-cloud-service/internal/file"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/filehash"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/worker"
 )
 
-type HashResult struct {
-	Checksum  string
-	SizeBytes int64
-}
+type HashResult = filehash.Result
 
 // HashService streams an object and calculates its SHA-256 checksum.
 type HashService interface {
-	HashObject(ctx context.Context, objectKey string) (HashResult, error)
+	HashObject(ctx context.Context, objectKey string) (filehash.Result, error)
 }
 
 type FileRepository interface {
