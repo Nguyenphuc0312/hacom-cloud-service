@@ -2,30 +2,56 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: hacom_cloud
-      POSTGRES_USER: hacom
-      POSTGRES_PASSWORD: hacom
+      POSTGRES_DB: ${POSTGRES_DB:-hacom_cloud}
+      POSTGRES_USER: ${POSTGRES_USER:-hacom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hacom}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hacom -d hacom_cloud"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-hacom} -d ${POSTGRES_DB:-hacom_cloud}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-hacom-cloud-private}
+    volumes:
+      - ../scripts/init-minio.sh:/init-minio.sh:ro
+    entrypoint: ["/bin/sh", "/init-minio.sh"]
+    restart: "no"
 
 volumes:
   postgres_data:

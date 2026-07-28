@@ -8,3 +8,26 @@
 - Phase 1 chưa kết nối Chat, AI, chia sẻ file hoặc Folder/Drive CRUD.
 
 Luồng upload dự kiến: khởi tạo upload → giữ chỗ quota → cấp presigned URL → client tải trực tiếp lên MinIO → xác nhận upload → ghi metadata → worker xử lý hậu kỳ.
+
+## Hạ tầng local
+
+```text
+Developer
+  └─> `make up`
+       ├─> PostgreSQL
+       │    ├─ metadata, quota, upload session, job state
+       │    └─ persistent volume
+       ├─> MinIO
+       │    ├─ object storage
+       │    └─ persistent volume
+       └─> minio-init
+            └─ create private bucket `hacom-cloud-private`
+```
+
+## Checklist bàn giao
+
+- `docker compose up -d` khởi động được PostgreSQL và MinIO.
+- PostgreSQL và MinIO có healthcheck.
+- Bucket private được tạo tự động.
+- Dữ liệu không mất khi restart nhờ volume.
+- Có lệnh `make up`, `make down`, `make logs`, `make ps`.
