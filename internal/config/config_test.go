@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func setRequiredEnvironment(t *testing.T) {
@@ -42,6 +44,37 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	}
 	if cfg.UploadURLTTL != 15*time.Minute {
 		t.Fatalf("expected 15m upload URL TTL, got %s", cfg.UploadURLTTL)
+	}
+	if cfg.WorkerPollInterval != 2*time.Second {
+		t.Fatalf("worker poll interval = %s", cfg.WorkerPollInterval)
+	}
+	if cfg.WorkerJobTimeout != 5*time.Minute {
+		t.Fatalf("worker job timeout = %s", cfg.WorkerJobTimeout)
+	}
+	if cfg.WorkerLockTimeout != 6*time.Minute {
+		t.Fatalf("worker lock timeout = %s", cfg.WorkerLockTimeout)
+	}
+	if cfg.WorkerMaxAttempts != 5 {
+		t.Fatalf("worker max attempts = %d", cfg.WorkerMaxAttempts)
+	}
+	if cfg.WorkerBaseBackoff != time.Second {
+		t.Fatalf("worker base backoff = %s", cfg.WorkerBaseBackoff)
+	}
+	if cfg.WorkerMaxBackoff != time.Minute {
+		t.Fatalf("worker max backoff = %s", cfg.WorkerMaxBackoff)
+	}
+	if cfg.WorkerCleanupScanInterval != 30*time.Second {
+		t.Fatalf("worker cleanup scan interval = %s", cfg.WorkerCleanupScanInterval)
+	}
+	if cfg.WorkerCleanupBatchSize != 100 {
+		t.Fatalf("worker cleanup batch size = %d", cfg.WorkerCleanupBatchSize)
+	}
+	parts := strings.Split(cfg.WorkerID, "-")
+	if len(parts) < 2 {
+		t.Fatalf("generated worker ID = %q", cfg.WorkerID)
+	}
+	if _, err := uuid.Parse(strings.Join(parts[len(parts)-5:], "-")); err != nil {
+		t.Fatalf("generated worker ID %q does not end with a UUID: %v", cfg.WorkerID, err)
 	}
 }
 
@@ -95,5 +128,92 @@ func TestLoadRejectsLimitsAboveCurrentSchema(t *testing.T) {
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "current schema limit") {
 		t.Fatalf("expected schema limit error, got %v", err)
+	}
+}
+
+func TestLoadReadsWorkerConfiguration(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_ID", "worker-integration-1")
+	t.Setenv("WORKER_POLL_INTERVAL", "25ms")
+	t.Setenv("WORKER_JOB_TIMEOUT", "10s")
+	t.Setenv("WORKER_LOCK_TIMEOUT", "15s")
+	t.Setenv("WORKER_MAX_ATTEMPTS", "7")
+	t.Setenv("WORKER_BASE_BACKOFF", "250ms")
+	t.Setenv("WORKER_MAX_BACKOFF", "30s")
+	t.Setenv("WORKER_CLEANUP_SCAN_INTERVAL", "5s")
+	t.Setenv("WORKER_CLEANUP_BATCH_SIZE", "25")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WorkerID != "worker-integration-1" {
+		t.Fatalf("worker ID = %q", cfg.WorkerID)
+	}
+	if cfg.WorkerPollInterval != 25*time.Millisecond {
+		t.Fatalf("worker poll interval = %s", cfg.WorkerPollInterval)
+	}
+	if cfg.WorkerJobTimeout != 10*time.Second {
+		t.Fatalf("worker job timeout = %s", cfg.WorkerJobTimeout)
+	}
+	if cfg.WorkerLockTimeout != 15*time.Second {
+		t.Fatalf("worker lock timeout = %s", cfg.WorkerLockTimeout)
+	}
+	if cfg.WorkerMaxAttempts != 7 {
+		t.Fatalf("worker max attempts = %d", cfg.WorkerMaxAttempts)
+	}
+	if cfg.WorkerBaseBackoff != 250*time.Millisecond {
+		t.Fatalf("worker base backoff = %s", cfg.WorkerBaseBackoff)
+	}
+	if cfg.WorkerMaxBackoff != 30*time.Second {
+		t.Fatalf("worker max backoff = %s", cfg.WorkerMaxBackoff)
+	}
+	if cfg.WorkerCleanupScanInterval != 5*time.Second {
+		t.Fatalf("worker cleanup scan interval = %s", cfg.WorkerCleanupScanInterval)
+	}
+	if cfg.WorkerCleanupBatchSize != 25 {
+		t.Fatalf("worker cleanup batch size = %d", cfg.WorkerCleanupBatchSize)
+	}
+}
+
+func TestLoadRejectsUnsafeWorkerTimeouts(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_JOB_TIMEOUT", "1m")
+	t.Setenv("WORKER_LOCK_TIMEOUT", "1m")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_LOCK_TIMEOUT") {
+		t.Fatalf("expected unsafe lock timeout error, got %v", err)
+	}
+}
+
+func TestLoadRejectsInvalidWorkerRetryConfiguration(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_BASE_BACKOFF", "2m")
+	t.Setenv("WORKER_MAX_BACKOFF", "1m")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_MAX_BACKOFF") {
+		t.Fatalf("expected invalid backoff error, got %v", err)
+	}
+}
+
+func TestLoadRejectsWorkerAttemptsAboveSchemaLimit(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_MAX_ATTEMPTS", "101")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "schema limit") {
+		t.Fatalf("expected max attempts schema limit error, got %v", err)
+	}
+}
+
+func TestLoadRejectsLongWorkerID(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_ID", strings.Repeat("x", 129))
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_ID") {
+		t.Fatalf("expected invalid worker ID error, got %v", err)
 	}
 }

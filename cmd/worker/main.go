@@ -26,7 +26,12 @@ func main() {
 		ID:   "gate-1-demo",
 		Type: worker.JobDemo,
 	})
-	runner, err := worker.New(repository, worker.WithLogger(logger))
+	runner, err := worker.New(
+		repository,
+		worker.WithLogger(logger),
+		worker.WithPollInterval(cfg.WorkerPollInterval),
+		worker.WithJobTimeout(cfg.WorkerJobTimeout),
+	)
 	if err != nil {
 		logger.Error("create worker", "error", err)
 		os.Exit(1)
@@ -36,7 +41,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("cloud worker started")
+	logger.Info(
+		"cloud worker started",
+		"worker_id", cfg.WorkerID,
+		"poll_interval", cfg.WorkerPollInterval,
+		"job_timeout", cfg.WorkerJobTimeout,
+	)
 	if err := runner.Run(ctx); err != nil {
 		logger.Error("run worker", "error", err)
 		os.Exit(1)
