@@ -8,11 +8,7 @@ import { QueryStateView } from '@/components/QueryStates/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
 import { formatDateTime } from '@/utils/date/date';
-import {
-  formatNumber,
-  formatPercent,
-  formatRate,
-} from '@/utils/formatters/formatters';
+import { formatNumber, formatRate } from '@/utils/formatters/formatters';
 import { appConfig } from '@/config/appConfig/appConfig';
 import { useRealtimeOverview } from '../../hooks/useRealtimeOverview/useRealtimeOverview';
 
@@ -140,14 +136,20 @@ export const RealtimeDashboardPage: React.FC = () => {
 
   const overview = data;
 
+  // Health reflects which upstream sources answered, which is all the backend
+  // reports. Do not derive it from metrics the API does not return.
   const getSystemHealthStatus = (): 'healthy' | 'warning' | 'danger' | 'unknown' => {
     if (!overview) return 'unknown';
-    if (overview.errorRate > 5) return 'danger';
-    if (overview.errorRate > 1) return 'warning';
-    if (overview.redisStatus === 'down' || overview.databaseStatus === 'down') return 'danger';
-    if (overview.redisStatus === 'degraded' || overview.databaseStatus === 'degraded') return 'warning';
-    return 'healthy';
+    const unavailable = Object.values(overview.sources).filter(
+      (status) => status === 'unavailable',
+    ).length;
+    if (unavailable === 0) return 'healthy';
+    if (overview.sources.redis === 'unavailable') return 'danger';
+    return 'warning';
   };
+
+  const sourceStatus = (source: 'available' | 'unavailable' | undefined) =>
+    source === 'available' ? 'healthy' : source === 'unavailable' ? 'down' : 'unknown';
 
   const systemHealthStatus = getSystemHealthStatus();
   const systemHealthPercent = systemHealthStatus === 'healthy' ? 100 : systemHealthStatus === 'warning' ? 70 : systemHealthStatus === 'danger' ? 30 : 0;
@@ -197,8 +199,8 @@ export const RealtimeDashboardPage: React.FC = () => {
               {systemHealthStatus === 'unknown' && 'Trạng thái không xác định'}
             </Text>
             <Text type="secondary">
-              {overview?.systemUptime
-                ? `Uptime: ${overview.systemUptime}`
+              {overview
+                ? `Nguồn dữ liệu: Redis ${overview.sources.redis === 'available' ? 'OK' : 'lỗi'} · WebSocket ${overview.sources.websocket === 'available' ? 'OK' : 'lỗi'} · Prometheus ${overview.sources.prometheus === 'available' ? 'OK' : 'lỗi'}`
                 : 'Đang theo dõi...'}
             </Text>
           </div>
@@ -237,58 +239,36 @@ export const RealtimeDashboardPage: React.FC = () => {
           icon="activity"
         />
         <KpiCard
-          title="Tin nhắn / Phút"
-          value={formatRate(overview?.messagesPerMinute ?? 0, '/min')}
+          title="Phòng đang hoạt động"
+          value={formatNumber(overview?.activeRooms)}
+          subtitle="Có người online"
           status="healthy"
           icon="messages"
         />
         <KpiCard
-          title="API Requests / Phút"
-          value={formatRate(overview?.apiRequestsPerMinute ?? 0, '/min')}
+          title="Đang soạn tin"
+          value={formatNumber(overview?.typingUsersCount)}
           status="healthy"
           icon="trending"
         />
         <KpiCard
-          title="Error Rate"
-          value={formatPercent(overview?.errorRate ?? 0, 2)}
-          subtitle="Tỷ lệ lỗi"
-          status={
-            (overview?.errorRate ?? 0) > 5
-              ? 'danger'
-              : (overview?.errorRate ?? 0) > 1
-                ? 'warning'
-                : 'healthy'
-          }
-          icon="alert"
-        />
-        <KpiCard
-          title="Latency Trung bình"
-          value={`${overview?.avgLatencyMs ?? '-'} ms`}
-          status={
-            (overview?.avgLatencyMs ?? 0) > 500
-              ? 'danger'
-              : (overview?.avgLatencyMs ?? 0) > 200
-                ? 'warning'
-                : 'healthy'
-          }
-          icon="clock"
-        />
-        <KpiCard
-          title="WS Delivery Failures"
-          value={formatNumber(overview?.wsDeliveryFailures)}
-          status={(overview?.wsDeliveryFailures ?? 0) > 0 ? 'danger' : 'healthy'}
+          title="Gửi tin lỗi / Phút"
+          value={formatRate(overview?.deliveryFailuresPerMinute ?? 0, '/min')}
+          subtitle="WS delivery failures"
+          status={(overview?.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'healthy'}
           icon="alertCircle"
         />
         <KpiCard
-          title="Redis Status"
-          value={overview?.redisStatus?.toUpperCase() ?? 'UNKNOWN'}
-          status={
-            overview?.redisStatus === 'healthy'
-              ? 'healthy'
-              : overview?.redisStatus === 'degraded'
-                ? 'warning'
-                : 'danger'
-          }
+          title="Kết nối lại / Phút"
+          value={formatRate(overview?.reconnectRatePerMinute ?? 0, '/min')}
+          status="healthy"
+          icon="clock"
+        />
+        <KpiCard
+          title="Nguồn Presence"
+          value={overview?.sources.redis === 'available' ? 'REDIS OK' : 'KHÔNG KHẢ DỤNG'}
+          subtitle="Redis presence"
+          status={overview?.sources.redis === 'available' ? 'healthy' : 'danger'}
           icon="server"
         />
       </div>
@@ -302,33 +282,18 @@ export const RealtimeDashboardPage: React.FC = () => {
       >
         <div className="realtime-services-grid">
           <ServiceStatusCard
-            name="Redis"
-            status={overview?.redisStatus ?? 'unknown'}
+            name="Redis (presence)"
+            status={sourceStatus(overview?.sources.redis)}
             lastChecked={lastUpdated?.toISOString()}
           />
           <ServiceStatusCard
-            name="PostgreSQL"
-            status={overview?.databaseStatus ?? 'unknown'}
+            name="WebSocket metrics"
+            status={sourceStatus(overview?.sources.websocket)}
             lastChecked={lastUpdated?.toISOString()}
           />
           <ServiceStatusCard
-            name="MongoDB"
-            status="unknown"
-            lastChecked={lastUpdated?.toISOString()}
-          />
-          <ServiceStatusCard
-            name="chat-api-service"
-            status="unknown"
-            lastChecked={lastUpdated?.toISOString()}
-          />
-          <ServiceStatusCard
-            name="chat-websocket-service"
-            status="unknown"
-            lastChecked={lastUpdated?.toISOString()}
-          />
-          <ServiceStatusCard
-            name="chat-auth-service"
-            status="unknown"
+            name="Prometheus"
+            status={sourceStatus(overview?.sources.prometheus)}
             lastChecked={lastUpdated?.toISOString()}
           />
         </div>

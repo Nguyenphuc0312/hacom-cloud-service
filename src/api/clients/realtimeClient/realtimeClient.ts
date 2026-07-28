@@ -4,93 +4,44 @@ import { adminAxiosInstance } from '@/api/axios/axios';
 import { assertAdminApiPath } from '@/api/routes/routes';
 import { unwrapApiEnvelope } from '@/api/envelope/envelope';
 
-export interface OnlineUser {
-  userId: string;
-  displayName: string;
-  email: string;
-  department?: string;
-  device?: string;
-  browser?: string;
-  ip?: string;
-  lastActive: string;
-  status: 'online' | 'idle' | 'disconnected';
-  currentRoom?: string;
-}
+/**
+ * Contracts live in `@/api/types/realtime` — the single mirror of the backend
+ * response shapes. Re-exported here for existing import sites; do not redeclare
+ * them in this file.
+ *
+ * Presence truth comes from Redis (written by chat-websocket-service) and
+ * carries no device/browser/IP: it reports `presenceState`, and real device data
+ * is loaded per user from the auth-owned devices/sessions endpoints. Do not add
+ * device columns fed by presence.
+ */
+export type {
+  ActiveRoom,
+  ActiveRoomsResponse,
+  ApiTrafficResponse,
+  MessageTrafficResponse,
+  OnlineUser,
+  OnlineUsersResponse,
+  RealtimeOverview,
+  TypingUser,
+  TypingUsersResponse,
+} from '@/api/types/realtime/realtime';
 
-export interface OnlineUsersResponse {
-  users: OnlineUser[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
+import type {
+  ActiveRoomsResponse,
+  ApiTrafficResponse,
+  MessageTrafficResponse,
+  OnlineUsersResponse,
+  RealtimeOverview,
+  TypingUsersResponse,
+} from '@/api/types/realtime/realtime';
 
-export interface RealtimeOverview {
-  onlineUsers: number;
-  activeConnections: number;
-  messagesPerMinute: number;
-  apiRequestsPerMinute: number;
-  errorRate: number;
-  avgLatencyMs: number;
-  wsDeliveryFailures: number;
-  redisStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
-  databaseStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
-  systemUptime: string;
-  lastUpdated: string;
-}
-
-export interface TypingUser {
-  userId: string;
-  displayName: string;
-  roomId: string;
-  roomName?: string;
-  startedAt: string;
-}
-
-export interface TypingUsersResponse {
-  users: TypingUser[];
-  total: number;
-}
-
-export interface ActiveRoom {
-  roomId: string;
-  roomName?: string;
-  type: 'dm' | 'group';
-  onlineMembers: number;
-  totalMembers: number;
-  lastActivity: string;
-}
-
-export interface ActiveRoomsResponse {
-  rooms: ActiveRoom[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface MessageTrafficPoint {
-  timestamp: string;
-  sent: number;
-  delivered: number;
-  failed: number;
-}
-
-export interface MessageTrafficResponse {
-  points: MessageTrafficPoint[];
-  range: string;
-  bucket: string;
-}
-
-export interface ApiTrafficPoint {
-  timestamp: string;
-  requests: number;
-  errors: number;
-  avgLatencyMs: number;
-}
-
-export interface ApiTrafficResponse {
-  points: ApiTrafficPoint[];
-  range: string;
-  service: string;
+export interface OnlineUsersQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  departmentId?: string;
+  /** Presence state filter, applied by the backend so pagination stays correct. */
+  state?: string;
 }
 
 export const realtimeClient = {
@@ -101,15 +52,12 @@ export const realtimeClient = {
     return unwrapApiEnvelope<RealtimeOverview>(response);
   },
 
-  async getOnlineUsers(
-    page: number = 1,
-    pageSize: number = 50,
-    search?: string,
-    departmentId?: string,
-  ): Promise<OnlineUsersResponse> {
+  async getOnlineUsers(query: OnlineUsersQuery = {}): Promise<OnlineUsersResponse> {
+    const { page = 1, pageSize = 50, search, departmentId, state } = query;
     const params: Record<string, string | number> = { page, pageSize };
     if (search) params.q = search;
     if (departmentId) params.departmentId = departmentId;
+    if (state) params.state = state;
 
     const path = '/realtime/online-users';
     assertAdminApiPath(path);
