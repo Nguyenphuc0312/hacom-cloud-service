@@ -15,6 +15,7 @@ const (
 	JobProcessing JobStatus = "processing"
 	JobCompleted  JobStatus = "completed"
 	JobFailed     JobStatus = "failed"
+	JobDead       JobStatus = "dead"
 )
 
 type RetryPolicy struct {

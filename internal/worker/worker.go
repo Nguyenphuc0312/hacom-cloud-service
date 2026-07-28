@@ -8,16 +8,27 @@ import (
 	"time"
 )
 
-const defaultPollInterval = 2 * time.Second
+const (
+	defaultPollInterval = 2 * time.Second
+	defaultJobTimeout   = 5 * time.Minute
+)
 
 type Worker struct {
-	repository   JobRepository
-	handlers     map[JobType]JobHandler
-	pollInterval time.Duration
-	logger       *slog.Logger
+	repository          JobRepository
+	handlers            map[JobType]JobHandler
+	pollInterval        time.Duration
+	jobTimeout          time.Duration
+	cleanupScanner      CleanupScanner
+	cleanupScanInterval time.Duration
+	cleanupBatchSize    int
+	logger              *slog.Logger
 }
 
 type Option func(*Worker)
+
+type CleanupScanner interface {
+	EnqueueExpiredUploadJobs(ctx context.Context, limit int) (int, error)
+}
 
 func WithPollInterval(interval time.Duration) Option {
 	return func(worker *Worker) {
@@ -35,6 +46,22 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+func WithJobTimeout(timeout time.Duration) Option {
+	return func(worker *Worker) {
+		if timeout > 0 {
+			worker.jobTimeout = timeout
+		}
+	}
+}
+
+func WithCleanupScanner(scanner CleanupScanner, interval time.Duration, batchSize int) Option {
+	return func(worker *Worker) {
+		worker.cleanupScanner = scanner
+		worker.cleanupScanInterval = interval
+		worker.cleanupBatchSize = batchSize
+	}
+}
+
 func New(repository JobRepository, options ...Option) (*Worker, error) {
 	if repository == nil {
 		return nil, errors.New("job repository is required")
@@ -44,10 +71,19 @@ func New(repository JobRepository, options ...Option) (*Worker, error) {
 		repository:   repository,
 		handlers:     make(map[JobType]JobHandler),
 		pollInterval: defaultPollInterval,
+		jobTimeout:   defaultJobTimeout,
 		logger:       slog.Default(),
 	}
 	for _, option := range options {
 		option(instance)
+	}
+	if instance.cleanupScanner != nil {
+		if instance.cleanupScanInterval <= 0 {
+			return nil, errors.New("cleanup scan interval must be positive")
+		}
+		if instance.cleanupBatchSize <= 0 {
+			return nil, errors.New("cleanup batch size must be positive")
+		}
 	}
 	return instance, nil
 }
@@ -72,6 +108,13 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	timer := time.NewTimer(0)
 	defer timer.Stop()
+	var cleanupTimer *time.Timer
+	var cleanupC <-chan time.Time
+	if w.cleanupScanner != nil {
+		cleanupTimer = time.NewTimer(0)
+		cleanupC = cleanupTimer.C
+		defer cleanupTimer.Stop()
+	}
 
 	for {
 		select {
@@ -80,7 +123,23 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-timer.C:
 			w.processNext(ctx)
 			timer.Reset(w.pollInterval)
+		case <-cleanupC:
+			w.scanExpiredUploads(ctx)
+			cleanupTimer.Reset(w.cleanupScanInterval)
 		}
+	}
+}
+
+func (w *Worker) scanExpiredUploads(ctx context.Context) {
+	enqueued, err := w.cleanupScanner.EnqueueExpiredUploadJobs(ctx, w.cleanupBatchSize)
+	if err != nil {
+		if ctx.Err() == nil {
+			w.logger.Error("scan expired uploads", "error", err)
+		}
+		return
+	}
+	if enqueued > 0 {
+		w.logger.Info("expired upload cleanup jobs enqueued", "count", enqueued)
 	}
 }
 
@@ -91,6 +150,9 @@ func (w *Worker) processNext(ctx context.Context) {
 		return
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
 		w.logger.Error("claim job", "error", err)
 		return
 	}
@@ -106,10 +168,22 @@ func (w *Worker) processNext(ctx context.Context) {
 		return
 	}
 
-	logger.Info("job started")
-	if err := handler.Handle(ctx, job); err != nil {
-		logger.Error("job handler failed", "error", err)
-		if failErr := w.repository.Fail(ctx, job.ID, err); failErr != nil {
+	logger.Info("job started", "timeout", w.jobTimeout)
+	jobCtx, cancel := context.WithTimeout(ctx, w.jobTimeout)
+	handleErr := handler.Handle(jobCtx, job)
+	jobContextErr := jobCtx.Err()
+	cancel()
+
+	if handleErr == nil && jobContextErr != nil {
+		handleErr = jobContextErr
+	}
+	if handleErr != nil {
+		logger.Error("job handler failed", "error", handleErr)
+		if ctx.Err() != nil {
+			logger.Info("worker is shutting down; leaving job lease for stale recovery")
+			return
+		}
+		if failErr := w.repository.Fail(ctx, job.ID, handleErr); failErr != nil {
 			logger.Error("mark job failed", "error", failErr)
 		}
 		return

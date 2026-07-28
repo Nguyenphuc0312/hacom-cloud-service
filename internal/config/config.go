@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -14,20 +17,29 @@ const (
 )
 
 type Config struct {
-	AppEnv            string
-	APIAddr           string
-	DatabaseURL       string
-	MinIOEndpoint     string
-	MinIOAccessKey    string
-	MinIOSecretKey    string
-	MinIOUseSSL       bool
-	MinIOBucket       string
-	MaxUploadBytes    int64
-	MaxContentBytes   int64
-	DefaultQuotaBytes int64
-	UploadURLTTL      time.Duration
-	HealthTimeout     time.Duration
-	ShutdownTimeout   time.Duration
+	AppEnv                    string
+	APIAddr                   string
+	DatabaseURL               string
+	MinIOEndpoint             string
+	MinIOAccessKey            string
+	MinIOSecretKey            string
+	MinIOUseSSL               bool
+	MinIOBucket               string
+	MaxUploadBytes            int64
+	MaxContentBytes           int64
+	DefaultQuotaBytes         int64
+	UploadURLTTL              time.Duration
+	HealthTimeout             time.Duration
+	ShutdownTimeout           time.Duration
+	WorkerID                  string
+	WorkerPollInterval        time.Duration
+	WorkerJobTimeout          time.Duration
+	WorkerLockTimeout         time.Duration
+	WorkerMaxAttempts         int
+	WorkerBaseBackoff         time.Duration
+	WorkerMaxBackoff          time.Duration
+	WorkerCleanupScanInterval time.Duration
+	WorkerCleanupBatchSize    int
 }
 
 func Load() (Config, error) {
@@ -77,22 +89,76 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	workerPollInterval, err := durationEnv("WORKER_POLL_INTERVAL", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	workerJobTimeout, err := durationEnv("WORKER_JOB_TIMEOUT", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	workerLockTimeout, err := durationEnv("WORKER_LOCK_TIMEOUT", 6*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	if workerLockTimeout <= workerJobTimeout {
+		return Config{}, fmt.Errorf("WORKER_LOCK_TIMEOUT must be greater than WORKER_JOB_TIMEOUT")
+	}
+	workerMaxAttempts, err := intEnv("WORKER_MAX_ATTEMPTS", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	if workerMaxAttempts > 100 {
+		return Config{}, fmt.Errorf("WORKER_MAX_ATTEMPTS must not exceed the schema limit of 100")
+	}
+	workerBaseBackoff, err := durationEnv("WORKER_BASE_BACKOFF", time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	workerMaxBackoff, err := durationEnv("WORKER_MAX_BACKOFF", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	if workerMaxBackoff < workerBaseBackoff {
+		return Config{}, fmt.Errorf("WORKER_MAX_BACKOFF must be greater than or equal to WORKER_BASE_BACKOFF")
+	}
+	workerCleanupScanInterval, err := durationEnv("WORKER_CLEANUP_SCAN_INTERVAL", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	workerCleanupBatchSize, err := intEnv("WORKER_CLEANUP_BATCH_SIZE", 100)
+	if err != nil {
+		return Config{}, err
+	}
+	workerID, err := loadWorkerID()
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
-		AppEnv:            env("APP_ENV", "local"),
-		APIAddr:           env("API_ADDR", ":8080"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		MinIOEndpoint:     os.Getenv("MINIO_ENDPOINT"),
-		MinIOAccessKey:    os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey:    os.Getenv("MINIO_SECRET_KEY"),
-		MinIOUseSSL:       useSSL,
-		MinIOBucket:       env("MINIO_BUCKET", "hacom-cloud-private"),
-		MaxUploadBytes:    maxUploadBytes,
-		MaxContentBytes:   maxContentBytes,
-		DefaultQuotaBytes: defaultQuotaBytes,
-		UploadURLTTL:      uploadURLTTL,
-		HealthTimeout:     healthTimeout,
-		ShutdownTimeout:   shutdownTimeout,
+		AppEnv:                    env("APP_ENV", "local"),
+		APIAddr:                   env("API_ADDR", ":8080"),
+		DatabaseURL:               os.Getenv("DATABASE_URL"),
+		MinIOEndpoint:             os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:            os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:            os.Getenv("MINIO_SECRET_KEY"),
+		MinIOUseSSL:               useSSL,
+		MinIOBucket:               env("MINIO_BUCKET", "hacom-cloud-private"),
+		MaxUploadBytes:            maxUploadBytes,
+		MaxContentBytes:           maxContentBytes,
+		DefaultQuotaBytes:         defaultQuotaBytes,
+		UploadURLTTL:              uploadURLTTL,
+		HealthTimeout:             healthTimeout,
+		ShutdownTimeout:           shutdownTimeout,
+		WorkerID:                  workerID,
+		WorkerPollInterval:        workerPollInterval,
+		WorkerJobTimeout:          workerJobTimeout,
+		WorkerLockTimeout:         workerLockTimeout,
+		WorkerMaxAttempts:         workerMaxAttempts,
+		WorkerBaseBackoff:         workerBaseBackoff,
+		WorkerMaxBackoff:          workerMaxBackoff,
+		WorkerCleanupScanInterval: workerCleanupScanInterval,
+		WorkerCleanupBatchSize:    workerCleanupBatchSize,
 	}
 
 	required := []struct {
@@ -132,6 +198,18 @@ func int64Env(key string, fallback int64) (int64, error) {
 	return parsed, nil
 }
 
+func intEnv(key string, fallback int) (int, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+	return parsed, nil
+}
+
 func boolEnv(key string, fallback bool) (bool, error) {
 	value := os.Getenv(key)
 	if value == "" {
@@ -154,4 +232,27 @@ func durationEnv(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a positive duration", key)
 	}
 	return parsed, nil
+}
+
+func loadWorkerID() (string, error) {
+	if value := strings.TrimSpace(os.Getenv("WORKER_ID")); value != "" {
+		if len(value) > 128 {
+			return "", fmt.Errorf("WORKER_ID must not exceed 128 characters")
+		}
+		return value, nil
+	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("get hostname for WORKER_ID: %w", err)
+	}
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		hostname = "worker"
+	}
+	const uuidLength = 36
+	maxHostnameLength := 128 - uuidLength - 1
+	if len(hostname) > maxHostnameLength {
+		hostname = hostname[:maxHostnameLength]
+	}
+	return hostname + "-" + uuid.NewString(), nil
 }

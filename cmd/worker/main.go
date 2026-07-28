@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
-	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/worker"
 )
 
 func main() {
@@ -22,21 +21,24 @@ func main() {
 	defer stop()
 
 	logger := slog.Default().With("component", "cloud-worker", "environment", cfg.AppEnv)
-	repository := worker.NewDemoRepository(worker.Job{
-		ID:   "gate-1-demo",
-		Type: worker.JobDemo,
-	})
-	runner, err := worker.New(repository, worker.WithLogger(logger))
+	runner, closeDependencies, err := newProductionLifecycleWorker(
+		ctx,
+		cfg,
+		logger,
+	)
 	if err != nil {
-		logger.Error("create worker", "error", err)
+		logger.Error("bootstrap worker", "error", err)
 		os.Exit(1)
 	}
-	if err := runner.Register(worker.JobDemo, worker.DemoHandler{Logger: logger}); err != nil {
-		logger.Error("register demo handler", "error", err)
-		os.Exit(1)
-	}
+	defer closeDependencies()
 
-	logger.Info("cloud worker started")
+	logger.Info(
+		"cloud worker started",
+		"worker_id", cfg.WorkerID,
+		"poll_interval", cfg.WorkerPollInterval,
+		"job_timeout", cfg.WorkerJobTimeout,
+		"lock_timeout", cfg.WorkerLockTimeout,
+	)
 	if err := runner.Run(ctx); err != nil {
 		logger.Error("run worker", "error", err)
 		os.Exit(1)

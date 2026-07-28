@@ -50,6 +50,33 @@ func (s *MinIOStore) Put(
 	return nil
 }
 
+func (s *MinIOStore) GetObject(
+	ctx context.Context,
+	objectKey string,
+) (io.ReadCloser, error) {
+	object, err := s.client.GetObject(
+		ctx,
+		s.bucket,
+		objectKey,
+		minio.GetObjectOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get MinIO object: %w", err)
+	}
+
+	// MinIO GetObject is lazy and can return an object handle even when the key
+	// does not exist. Stat before handing the stream to callers so missing
+	// objects have a stable storage-level error.
+	if _, err := object.Stat(); err != nil {
+		_ = object.Close()
+		if isMinIONotFound(err) {
+			return nil, ErrObjectNotFound
+		}
+		return nil, fmt.Errorf("stat MinIO object before streaming: %w", err)
+	}
+	return object, nil
+}
+
 func (s *MinIOStore) StatObject(
 	ctx context.Context,
 	objectKey string,
@@ -61,8 +88,7 @@ func (s *MinIOStore) StatObject(
 		minio.StatObjectOptions{},
 	)
 	if err != nil {
-		response := minio.ToErrorResponse(err)
-		if response.Code == "NoSuchKey" || response.Code == "NoSuchObject" {
+		if isMinIONotFound(err) {
 			return ObjectInfo{}, ErrObjectNotFound
 		}
 		return ObjectInfo{}, fmt.Errorf("stat MinIO object: %w", err)
@@ -108,6 +134,13 @@ func (s *MinIOStore) PresignUpload(
 		return "", fmt.Errorf("presign MinIO PUT: %w", err)
 	}
 	return signedURL.String(), nil
+}
+
+func isMinIONotFound(err error) bool {
+	response := minio.ToErrorResponse(err)
+	return response.Code == "NoSuchKey" ||
+		response.Code == "NoSuchObject" ||
+		response.Code == "NoSuchBucket"
 }
 
 func (s *MinIOStore) PresignDownload(
