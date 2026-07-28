@@ -59,14 +59,17 @@
   },
   "joinByShareLink": {
     "title": "Join meeting",
-    "description": "Use this link to automatically join the shared meeting.",
     "shareLink": "Meeting share link",
     "joining": "Joining meeting...",
     "joined": "Successfully joined the meeting",
     "joinedDescription": "The meeting has been added to your calendar.",
     "alreadyJoined": "You're already in this meeting",
-    "alreadyJoinedDescription": "You can view this meeting on the Calendar page.",
-    "cta": "Join now",
-    "openCalendar": "Open Calendar"
+    "alreadyJoinedDescription": "You are already in this meeting. See details on the Calendar page.",
+    "cta": "Confirm attendance",
+    "openCalendar": "Open Calendar",
+    "subtitle": "An invitation to join a meeting via share link.",
+    "confirmDescription": "Review the details below. You are only added to the participant list after you confirm.",
+    "organizer": "Organizer",
+    "participantCount": "{{count}} participants"
   }
 }
