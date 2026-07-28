@@ -141,6 +141,18 @@ const DECLINE_REASON_MAX = 500;
 /** URL link chia sẻ do máy này tạo, cache theo eventId. BE chỉ trả token thô
  *  đúng lần tạo đầu (sau đó chỉ còn hash), nên không cache thì mở modal lần sau
  *  chỉ còn nước thu hồi + tạo lại. localStorage có thể ném (private mode/quota). */
+/**
+ * Kết quả dò tên chủ trì → userId, nhớ theo tên đã chuẩn hoá cho cả phiên.
+ *
+ * Dò tên là đường CHÓT cho lịch cũ, và phần lớn lần dò là *hụt* (tên tự do,
+ * người đã nghỉ, trùng tên). Không nhớ lại thì mỗi lần mở modal — kể cả mở lại
+ * đúng cái lịch vừa xem — lại bắn thêm một request tìm kiếm cho một câu trả lời
+ * đã biết. `null` = đã dò và không ra, vẫn phải nhớ, nếu không sẽ retry mãi.
+ * ponytail: Map cả phiên, không TTL — danh bạ đổi giữa phiên là hiếm và hậu quả
+ * chỉ là thiếu 1 avatar; cần tươi hơn thì clear khi logout.
+ */
+const chairmanLookupMemo = new Map<string, string | null>();
+
 const readShareLinkCache = (key: string | null): string | null => {
   if (!key) return null;
   try {
@@ -247,8 +259,14 @@ export const EventDetailModal: React.FC<{
     getMeetingMetadata(hrEvent).meetingChairmanAuthUserId ?? null;
   // Id chủ trì dò được từ danh bạ theo tên — chỉ dùng cho lịch CŨ không có
   // identity (xem effect dò tên bên dưới). Khai báo sớm để batch-load nạp luôn
-  // avatar của người này trong cùng một lượt.
-  const [chairmanLookupUserId, setChairmanLookupUserId] = React.useState<string | null>(null);
+  // avatar của người này trong cùng một lượt. Khởi tạo từ memo phiên trước: mở
+  // lại lịch cũ là có id ngay từ render đầu, batch-load nạp avatar cùng lượt với
+  // roster thay vì phải chờ thêm một vòng effect.
+  const chairmanNameKey =
+    getMeetingMetadata(hrEvent).meetingChairman?.trim().toLowerCase() || null;
+  const [chairmanLookupUserId, setChairmanLookupUserId] = React.useState<string | null>(
+    () => (chairmanNameKey ? (chairmanLookupMemo.get(chairmanNameKey) ?? null) : null),
+  );
   React.useEffect(() => {
     const ids = [
       ...new Set(
@@ -436,20 +454,28 @@ export const EventDetailModal: React.FC<{
   // không có identity, không nằm trong roster, cũng không phải người tạo → dò
   // tên trong danh bạ để lấy avatar. Chỉ chấp nhận khi khớp ĐÚNG 1 người: trùng
   // tên mà đoán bừa thì hiện nhầm mặt người khác, tệ hơn là để chữ cái đầu.
-  const needsChairmanLookup = !!chairman && !chairmanUserId;
+  // Tên đã chuẩn hoá làm khoá memo — null khi không cần dò (đã có identity từ
+  // metadata/roster/người tạo), để effect không chạy gì ở đường thường.
+  const chairmanLookupName =
+    chairman && !chairmanUserId && chairman.trim().length >= 2
+      ? chairman.trim().toLowerCase()
+      : null;
   React.useEffect(() => {
-    if (!needsChairmanLookup) return;
-    const name = chairman!.trim();
-    if (name.length < 2) return;
+    if (!chairmanLookupName) return;
+    // Đã dò tên này rồi (kể cả dò hụt) → không bắn request nữa. Giá trị đọc
+    // thẳng lúc render (memoHit bên dưới), không setState trong effect.
+    if (chairmanLookupMemo.has(chairmanLookupName)) return;
     let cancelled = false;
-    void searchUsersUseCase(name, 1, 5)
+    void searchUsersUseCase(chairmanLookupName, 1, 5)
       .then((response) => {
-        if (cancelled) return;
         const users = extractSearchRows(response)
           .map(normalizeSearchUser)
           .filter((u): u is NonNullable<typeof u> => !!u);
-        const id = pickUniqueUserIdByName(users, name);
-        if (id) setChairmanLookupUserId(id);
+        const id = pickUniqueUserIdByName(users, chairmanLookupName);
+        // Ghi memo cả khi hụt, kể cả lần này đã bị huỷ — kết quả vẫn đúng cho
+        // lần sau, chỉ có setState là phải bỏ.
+        chairmanLookupMemo.set(chairmanLookupName, id);
+        if (!cancelled && id) setChairmanLookupUserId(id);
       })
       .catch(() => {
         /* dò avatar là tiện ích, hỏng thì rơi về chữ cái đầu */
@@ -457,9 +483,9 @@ export const EventDetailModal: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [needsChairmanLookup, chairman]);
+  }, [chairmanLookupName]);
 
-  // Avatar của người dò được nằm ở participantProfiles (effect batch-load bên dưới
+  // Avatar của người dò được nằm ở participantProfiles (effect batch-load ở trên
   // đã nạp theo id này).
   const chairmanResolvedUserId = chairmanUserId ?? chairmanLookupUserId;
 

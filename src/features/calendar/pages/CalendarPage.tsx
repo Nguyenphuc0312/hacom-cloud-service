@@ -21,7 +21,22 @@ import {
   type ExtendedCalendarEvent,
   type EventType,
 } from "../data/calendarEvents";
-import { EventDetailModal } from "../components/EventDetailModal";
+// Lazy: 3 modal chỉ render khi bấm vào sự kiện / nút Thêm. Import tĩnh thì
+// ~48 kB form + chi tiết nằm sẵn trong chunk CalendarPage, trả giá ngay lúc mở
+// trang lịch dù người dùng chỉ muốn XEM lịch.
+const EventDetailModal = React.lazy(() =>
+  import("../components/EventDetailModal").then((m) => ({ default: m.EventDetailModal })),
+);
+const MeetingFormModal = React.lazy(() =>
+  import("../../../components/ui/MeetingFormModal").then((m) => ({
+    default: m.MeetingFormModal,
+  })),
+);
+const PersonalEventFormModal = React.lazy(() =>
+  import("../../../components/ui/PersonalEventFormModal").then((m) => ({
+    default: m.PersonalEventFormModal,
+  })),
+);
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import {
   hrApi,
@@ -32,8 +47,8 @@ import {
   type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
 import { apiVisibilityToForm } from "../utils/calendarVisibility";
-import { MeetingFormModal, type MeetingFormData } from "../../../components/ui/MeetingFormModal";
-import { PersonalEventFormModal, type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
+import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
+import { type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { toast } from "../../../utils/toast";
 import { useCalendarStore } from "../../../stores/calendarStore";
@@ -1489,53 +1504,63 @@ export const CalendarPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Meeting form modal */}
-      <MeetingFormModal
-        isOpen={meetingModalOpen}
-        onClose={() => setMeetingModalOpen(false)}
-        onBack={() => {
-          setMeetingModalOpen(false);
-          setEventTypeChooserOpen(true);
-        }}
-        onSave={handleCreateEvent}
-        defaultDate={meetingModalDate}
-        defaultStartTime={meetingModalStart}
-        defaultEndTime={meetingModalEnd}
-        existingMeetings={meetingsForConflictCheck}
-        isLoading={isCreatingEvent}
-      />
+      {/* Các form modal đều lazy → PHẢI gate bằng chính cờ isOpen, không mount
+          sẵn rồi truyền isOpen={false}: mount là React.lazy tải chunk ngay, mất
+          sạch ý nghĩa của việc tách. Modal tự chạy hiệu ứng mở khi mount. */}
+      {meetingModalOpen && (
+        <MeetingFormModal
+          isOpen
+          onClose={() => setMeetingModalOpen(false)}
+          onBack={() => {
+            setMeetingModalOpen(false);
+            setEventTypeChooserOpen(true);
+          }}
+          onSave={handleCreateEvent}
+          defaultDate={meetingModalDate}
+          defaultStartTime={meetingModalStart}
+          defaultEndTime={meetingModalEnd}
+          existingMeetings={meetingsForConflictCheck}
+          isLoading={isCreatingEvent}
+        />
+      )}
 
       {/* Personal event form modal */}
-      <PersonalEventFormModal
-        isOpen={personalModalOpen}
-        onClose={() => setPersonalModalOpen(false)}
-        onBack={() => {
-          setPersonalModalOpen(false);
-          setEventTypeChooserOpen(true);
-        }}
-        onSave={handleCreatePersonalEvent}
-        defaultDate={personalModalDate}
-        defaultStartTime={personalModalStart}
-        defaultEndTime={personalModalEnd}
-        isLoading={isCreatingEvent}
-      />
+      {personalModalOpen && (
+        <PersonalEventFormModal
+          isOpen
+          onClose={() => setPersonalModalOpen(false)}
+          onBack={() => {
+            setPersonalModalOpen(false);
+            setEventTypeChooserOpen(true);
+          }}
+          onSave={handleCreatePersonalEvent}
+          defaultDate={personalModalDate}
+          defaultStartTime={personalModalStart}
+          defaultEndTime={personalModalEnd}
+          isLoading={isCreatingEvent}
+        />
+      )}
 
       {/* Edit event modal — loại chính event đang sửa khỏi danh sách check trùng */}
-      <MeetingFormModal
-        isOpen={!!editingEvent}
-        onClose={() => setEditingEvent(null)}
-        onSave={handleUpdateEvent}
-        initialData={editingEvent}
-        existingMeetings={meetingsForConflictCheck.filter((m) => m.id !== editingEvent?.id)}
-      />
+      {!!editingEvent && (
+        <MeetingFormModal
+          isOpen
+          onClose={() => setEditingEvent(null)}
+          onSave={handleUpdateEvent}
+          initialData={editingEvent}
+          existingMeetings={meetingsForConflictCheck.filter((m) => m.id !== editingEvent?.id)}
+        />
+      )}
 
       {/* Edit personal event modal — lịch cá nhân sửa bằng form cá nhân */}
-      <PersonalEventFormModal
-        isOpen={!!editingPersonalEvent}
-        onClose={() => setEditingPersonalEvent(null)}
-        onSave={handleUpdatePersonalEvent}
-        initialData={editingPersonalEvent}
-      />
+      {!!editingPersonalEvent && (
+        <PersonalEventFormModal
+          isOpen
+          onClose={() => setEditingPersonalEvent(null)}
+          onSave={handleUpdatePersonalEvent}
+          initialData={editingPersonalEvent}
+        />
+      )}
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog
