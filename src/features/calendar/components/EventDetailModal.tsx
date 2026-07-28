@@ -1118,9 +1118,21 @@ export const EventDetailModal: React.FC<{
                       <p className="text-xs text-text-muted">Đang tạo link...</p>
                     ) : shareLinkUrl ? (
                       <>
-                        <p className="mb-1.5 truncate rounded-md bg-surface px-2 py-1.5 font-mono text-[11px] text-text-primary">
-                          {shareLinkUrl}
-                        </p>
+                        {/* Hiện tên cuộc họp thay cho chuỗi token dài loằng
+                            ngoằng — vẫn là link thật (href = shareLinkUrl), và
+                            nút Sao chép vẫn chép nguyên URL. */}
+                        <a
+                          href={shareLinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={shareLinkUrl}
+                          className="mb-1.5 flex items-center gap-1.5 rounded-md bg-surface px-2 py-1.5 transition-micro hover:bg-surface-hover"
+                        >
+                          <LinkIcon className="h-3.5 w-3.5 shrink-0 text-[#1565C0] dark:text-[#6BA8F0]" />
+                          <span className="truncate text-[11px] font-medium text-[#1565C0] underline decoration-[#1565C0]/40 underline-offset-2 dark:text-[#6BA8F0]">
+                            {event.title}
+                          </span>
+                        </a>
                         <p className="mb-2 text-[11px] text-text-muted">
                           Ai bấm vào link này (đã đăng nhập) sẽ tự động tham gia lịch họp. Link tự hết hạn khi lịch kết thúc.
                         </p>
