@@ -150,6 +150,9 @@ func (w *Worker) processNext(ctx context.Context) {
 		return
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
 		w.logger.Error("claim job", "error", err)
 		return
 	}
