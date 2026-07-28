@@ -14,7 +14,16 @@ import {
   ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "./Button";
-import { WeeklyCalendarWidget } from "../../features/calendar/components/WeeklyCalendarWidget";
+
+// Lazy: widget lịch tuần kéo theo CẢ cây lịch (EventDetailModal +
+// MeetingFormModal ~48 kB). EmptyState là primitive dùng chung khắp app, nên
+// import tĩnh sẽ nhét chỗ đó vào chunk entry — tải cả ở màn login, nơi không
+// đời nào thấy cái lịch. Widget nằm dưới màn hình đầu, lazy không đổi first paint.
+const WeeklyCalendarWidget = React.lazy(() =>
+  import("../../features/calendar/components/WeeklyCalendarWidget").then((m) => ({
+    default: m.WeeklyCalendarWidget,
+  })),
+);
 
 interface EmptyStateProps {
   title: string;
@@ -286,7 +295,15 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
           </div>
         </div>
 
-        <WeeklyCalendarWidget />
+        {/* Fallback giữ đúng khung + chiều cao của widget để tải xong không
+            giật layout (khớp wrapper thật trong WeeklyCalendarWidget). */}
+        <React.Suspense
+          fallback={
+            <div className="mt-5 h-[420px] w-full animate-pulse rounded-xl border border-border bg-surface shadow-elev1" />
+          }
+        >
+          <WeeklyCalendarWidget />
+        </React.Suspense>
       </div>
     </section>
   );
