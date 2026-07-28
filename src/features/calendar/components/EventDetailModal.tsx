@@ -297,6 +297,9 @@ export const EventDetailModal: React.FC<{
   const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   const handleRespondClick = async (response: "ACCEPTED" | "DECLINED", reason?: string) => {
     if (!onRespond) return;
+    // Bấm lại đúng trạng thái đang có = no-op: không gọi BE, không toast lặp.
+    // DECLINED vẫn cho gửi lại vì có thể user chỉ đang sửa lý do.
+    if (response === "ACCEPTED" && myResponse === "ACCEPTED") return;
     setResponding(response);
     try {
       await onRespond(response, reason);
@@ -973,8 +976,8 @@ export const EventDetailModal: React.FC<{
                 toggle, có thể bấm lại để đổi ý bất cứ lúc nào. */}
             {canRespond && (
               <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                  <div className="min-w-0 flex-1 basis-56">
                     <p className="text-sm font-medium text-text-primary">
                       {myResponse === "ACCEPTED"
                         ? "Bạn đã xác nhận tham gia — có thể đổi ý bất cứ lúc nào"
@@ -988,7 +991,7 @@ export const EventDetailModal: React.FC<{
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-3">
                     <button
                       type="button"
                       disabled={responding !== null}
