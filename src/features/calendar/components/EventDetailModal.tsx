@@ -598,8 +598,8 @@ export const EventDetailModal: React.FC<{
   // KHÔNG xóa lịch và cũng không thu hồi quyền xem (xem getEventPermissions bên
   // hr-api), chỉ đổi trạng thái phản hồi. Nút của trạng thái hiện tại được tô
   // đậm để rõ đây là toggle, bấm lại đổi ý bất cứ lúc nào.
-  // "Tham gia" lên cạnh tiêu đề (hành động chính, thấy ngay); "Không tham gia"
-  // ở lại footer cạnh ô nhập lý do vì hai thứ đó đi liền nhau.
+  // Cả hai nút ở footer cùng hàng: "Tham gia" trước, "Không tham gia" sau —
+  // đọc thuận theo thứ tự đồng ý → từ chối.
   const acceptButton = (
     <button
       type="button"
@@ -701,14 +701,9 @@ export const EventDetailModal: React.FC<{
             )}
           </div>
 
-          {/* Title + nút phản hồi mời họp cùng hàng — người được mời thấy hành
-              động ngay cạnh tên cuộc họp, không phải cuộn xuống footer. */}
-          <div className="flex items-start justify-between gap-4">
-            <h3 className="min-w-0 flex-1 text-xl font-semibold text-text-primary">
-              {event.title}
-            </h3>
-            {canRespond && <div className="shrink-0">{acceptButton}</div>}
-          </div>
+          <h3 className="text-xl font-semibold text-text-primary">
+            {event.title}
+          </h3>
 
           {/* Date and Time Section */}
           <div className="mt-4 space-y-2">
@@ -1024,17 +1019,17 @@ export const EventDetailModal: React.FC<{
         {/* Footer ghim — luôn thấy được, nội dung phía trên tự cuộn. */}
         {(canRespond || canEdit || canDelete) && (
           <div className="flex-shrink-0 border-t border-border px-6 py-4">
-            {/* Trạng thái phản hồi + "Không tham gia" + ô nhập lý do. Nút
-                "Tham gia" nằm cạnh tiêu đề (acceptButton), không lặp lại ở đây. */}
+            {/* Hai nút phản hồi nằm cùng hàng ở footer (không tách lên tiêu đề
+                nữa — trông rời rạc), cách nhau một khoảng để đỡ bấm nhầm. */}
             {canRespond && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
                   <div className="min-w-0 flex-1 basis-56">
                     <p className="text-sm font-medium text-text-primary">
                       {myResponse === "ACCEPTED"
-                        ? "Bạn đã xác nhận tham gia — có thể đổi ý bất cứ lúc nào"
+                        ? "Bạn đã xác nhận tham gia"
                         : myResponse === "DECLINED"
-                          ? "Bạn đã từ chối — lịch vẫn còn đây, đổi ý bấm Tham gia"
+                          ? "Bạn đã từ chối tham gia"
                           : "Bạn được mời tham gia lịch họp này"}
                     </p>
                     {myDeclineReason && (
@@ -1043,7 +1038,11 @@ export const EventDetailModal: React.FC<{
                       </p>
                     )}
                   </div>
-                  <div className="shrink-0">{declineButton}</div>
+                  {/* gap-6 giữa 2 nút: đủ xa để không bấm nhầm Tham gia ↔ Không tham gia */}
+                  <div className="flex shrink-0 items-center gap-6">
+                    {acceptButton}
+                    {declineButton}
+                  </div>
                 </div>
                 {/* Lý do từ chối (không bắt buộc) — gửi kèm response, BE lưu vào
                     participant.responseNote nên cả phòng cùng đọc được. */}
