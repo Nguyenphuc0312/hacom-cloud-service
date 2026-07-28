@@ -14,6 +14,7 @@ import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { TableSkeleton } from '@/components/TableSkeleton/TableSkeleton';
 import { useOnlineUsers } from '../../hooks/useOnlineUsers/useOnlineUsers';
 import { OnlineUserDetailDrawer } from '../../components/OnlineUserDetailDrawer/OnlineUserDetailDrawer';
+import { PlatformCell } from '../../components/PlatformCell/PlatformCell';
 import { PresenceSummary } from '../../components/PresenceSummary/PresenceSummary';
 import { UserDeviceStrip } from '../../components/UserDeviceStrip/UserDeviceStrip';
 
@@ -80,6 +81,21 @@ export const OnlineUsersPage: React.FC = () => {
           <span className="online-users-sessions" data-multi={count > 1 || undefined}>
             {count}
           </span>
+        ),
+      },
+      {
+        title: (
+          <Tooltip title="Loại thiết bị của các kết nối đang mở, nhận diện từ trình duyệt lúc kết nối.">
+            <span className="online-users-th-hint">Thiết bị</span>
+          </Tooltip>
+        ),
+        key: 'platforms',
+        width: 120,
+        render: (_, record) => (
+          <PlatformCell
+            platforms={record.platforms ?? {}}
+            connectionCount={record.connectionCount}
+          />
         ),
       },
       {

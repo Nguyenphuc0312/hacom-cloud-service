@@ -26,12 +26,16 @@ export interface OnlineUser {
   department: string | null;
   /** Live websocket sessions held by this user (multiple tabs/devices count separately). */
   connectionCount: number;
-  /**
-   * Presence state from the websocket gateway: online | away | idle | dnd | busy.
-   * Presence carries no device identity — device truth is owned by
-   * chat-auth-service and fetched per user.
-   */
+  /** Presence state from the websocket gateway: online | away | idle | dnd | busy. */
   presenceState: string;
+  /**
+   * Live sessions per device class (web | desktop | mobile) from the gateway.
+   *
+   * May total LESS than `connectionCount`: sessions opened before the gateway
+   * reported platform, or with an unrecognized User-Agent, stay unclassified.
+   * Show that shortfall as unknown — never fill it in with a guess.
+   */
+  platforms: Record<string, number>;
   lastSeenAt: string | null;
   activeRooms: number;
 }

@@ -40,6 +40,7 @@ const onlineUser = (overrides: Record<string, unknown> = {}) => ({
   department: 'IT',
   connectionCount: 2,
   presenceState: 'online',
+  platforms: { web: 2 },
   lastSeenAt: '2026-07-28T09:00:00.000Z',
   activeRooms: 0,
   ...overrides,
@@ -120,6 +121,43 @@ describe('OnlineUsersPage', () => {
     expect(screen.getByLabelText('Trực tuyến: 1, Vắng mặt: 2')).toBeInTheDocument();
   });
 
+  it('shows the device class of live connections without extra requests', async () => {
+    getOnlineUsersMock.mockResolvedValue({
+      items: [
+        onlineUser({ userId: 'u1', connectionCount: 3, platforms: { web: 1, mobile: 2 } }),
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+      source: 'redis',
+      staleReason: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Trình duyệt: 1 kết nối')).toBeInTheDocument();
+    expect(screen.getByText('Điện thoại: 2 kết nối')).toBeInTheDocument();
+    // Device classes ride along with the presence payload; no per-user call.
+    expect(listDevicesMock).not.toHaveBeenCalled();
+  });
+
+  it('marks unclassified connections as unknown instead of guessing a device', async () => {
+    getOnlineUsersMock.mockResolvedValue({
+      // Three live sessions, only one classified by the gateway.
+      items: [onlineUser({ userId: 'u1', connectionCount: 3, platforms: { web: 1 } })],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+      source: 'redis',
+      staleReason: null,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Trình duyệt: 1 kết nối')).toBeInTheDocument();
+    expect(screen.getByText('Không rõ thiết bị: 2 kết nối')).toBeInTheDocument();
+  });
+
   it('loads devices only when a row is expanded, never one request per row', async () => {
     getOnlineUsersMock.mockResolvedValue({
       items: [onlineUser({ userId: 'u1' }), onlineUser({ userId: 'u2' })],
@@ -156,9 +194,9 @@ describe('OnlineUsersPage', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Expand row' })[0]);
 
     expect(await screen.findByText('Pixel 8')).toBeInTheDocument();
-    // Presence knows the connection count but not which device holds it.
+    // Registered devices are account-level; they are not the live connection.
     expect(
-      screen.getByText('Không xác định được kết nối nào thuộc thiết bị nào'),
+      screen.getByText('Bên dưới là thiết bị của tài khoản, không phải của kết nối'),
     ).toBeInTheDocument();
     expect(listDevicesMock).toHaveBeenCalledTimes(1);
     expect(listDevicesMock).toHaveBeenCalledWith('u1', expect.anything());

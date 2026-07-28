@@ -53,10 +53,11 @@ export const UserDeviceStrip: React.FC<UserDeviceStripProps> = ({ userId, connec
   return (
     <div className="device-strip">
       <p className="device-strip-lede">
-        <strong>{connectionCount}</strong> kết nối WebSocket đang mở.
-        <Tooltip title="Presence chỉ ghi nhận số kết nối, không ghi nhận thiết bị của từng kết nối. Danh sách dưới đây là thiết bị và phiên đăng nhập của tài khoản (nguồn: chat-auth-service).">
+        <strong>{connectionCount}</strong> kết nối WebSocket đang mở — loại thiết bị xem ở cột
+        Thiết bị.
+        <Tooltip title="Cột Thiết bị cho biết loại thiết bị của kết nối đang mở (nhận diện lúc kết nối). Danh sách dưới đây là thiết bị và phiên đăng nhập đã đăng ký của tài khoản, nguồn chat-auth-service — hai thứ này không phải lúc nào cũng trùng nhau.">
           <span className="device-strip-note">
-            Không xác định được kết nối nào thuộc thiết bị nào
+            Bên dưới là thiết bị của tài khoản, không phải của kết nối
             <AppIcon name="info" size={12} aria-hidden />
           </span>
         </Tooltip>
