@@ -594,6 +594,57 @@ export const EventDetailModal: React.FC<{
     );
   };
 
+  // Tham gia/Không tham gia là TOGGLE, không phải hành động 1 chiều: từ chối
+  // KHÔNG xóa lịch và cũng không thu hồi quyền xem (xem getEventPermissions bên
+  // hr-api), chỉ đổi trạng thái phản hồi. Nút của trạng thái hiện tại được tô
+  // đậm để rõ đây là toggle, bấm lại đổi ý bất cứ lúc nào.
+  // "Tham gia" lên cạnh tiêu đề (hành động chính, thấy ngay); "Không tham gia"
+  // ở lại footer cạnh ô nhập lý do vì hai thứ đó đi liền nhau.
+  const acceptButton = (
+    <button
+      type="button"
+      disabled={responding !== null}
+      onClick={() => {
+        setDeclineReasonOpen(false);
+        void handleRespondClick("ACCEPTED");
+      }}
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
+        myResponse === "ACCEPTED"
+          ? "bg-emerald-600 text-white ring-2 ring-emerald-300 hover:bg-emerald-700 dark:ring-emerald-800"
+          : "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
+      )}
+    >
+      {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
+    </button>
+  );
+
+  const declineButton = (
+    <button
+      type="button"
+      disabled={responding !== null}
+      onClick={() => {
+        // Mở ra thì nạp sẵn lý do đã gửi để sửa, không bắt gõ lại.
+        if (!declineReasonOpen) setDeclineReason(myDeclineReason ?? "");
+        setDeclineReasonOpen((v) => !v);
+      }}
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
+        myResponse === "DECLINED"
+          ? "bg-rose-600 text-white ring-2 ring-rose-300 hover:bg-rose-700 dark:ring-rose-800"
+          : "border border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
+      )}
+    >
+      {responding === "DECLINED"
+        ? "Đang lưu..."
+        : declineReasonOpen
+          ? "Đóng ô lý do"
+          : myResponse === "DECLINED"
+            ? "Sửa lý do"
+            : "Không tham gia"}
+    </button>
+  );
+
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <div
@@ -650,10 +701,14 @@ export const EventDetailModal: React.FC<{
             )}
           </div>
 
-          {/* Title */}
-          <h3 className="text-xl font-semibold text-text-primary">
-            {event.title}
-          </h3>
+          {/* Title + nút phản hồi mời họp cùng hàng — người được mời thấy hành
+              động ngay cạnh tên cuộc họp, không phải cuộn xuống footer. */}
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="min-w-0 flex-1 text-xl font-semibold text-text-primary">
+              {event.title}
+            </h3>
+            {canRespond && <div className="shrink-0">{acceptButton}</div>}
+          </div>
 
           {/* Date and Time Section */}
           <div className="mt-4 space-y-2">
@@ -969,11 +1024,8 @@ export const EventDetailModal: React.FC<{
         {/* Footer ghim — luôn thấy được, nội dung phía trên tự cuộn. */}
         {(canRespond || canEdit || canDelete) && (
           <div className="flex-shrink-0 border-t border-border px-6 py-4">
-            {/* Invitee response actions — Tham gia/Không tham gia là TOGGLE, không
-                phải hành động 1 chiều: từ chối KHÔNG xóa lịch và cũng không thu
-                hồi quyền xem (xem getEventPermissions bên hr-api), chỉ đổi trạng
-                thái phản hồi. Nút của trạng thái hiện tại được tô đậm để rõ đây là
-                toggle, có thể bấm lại để đổi ý bất cứ lúc nào. */}
+            {/* Trạng thái phản hồi + "Không tham gia" + ô nhập lý do. Nút
+                "Tham gia" nằm cạnh tiêu đề (acceptButton), không lặp lại ở đây. */}
             {canRespond && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
@@ -991,47 +1043,7 @@ export const EventDetailModal: React.FC<{
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 gap-3">
-                    <button
-                      type="button"
-                      disabled={responding !== null}
-                      onClick={() => {
-                        setDeclineReasonOpen(false);
-                        void handleRespondClick("ACCEPTED");
-                      }}
-                      className={clsx(
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
-                        myResponse === "ACCEPTED"
-                          ? "bg-emerald-600 text-white ring-2 ring-emerald-300 hover:bg-emerald-700 dark:ring-emerald-800"
-                          : "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
-                      )}
-                    >
-                      {responding === "ACCEPTED" ? "Đang lưu..." : "Tham gia"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={responding !== null}
-                      onClick={() => {
-                        // Mở ra thì nạp sẵn lý do đã gửi để sửa, không bắt gõ lại.
-                        if (!declineReasonOpen) setDeclineReason(myDeclineReason ?? "");
-                        setDeclineReasonOpen((v) => !v);
-                      }}
-                      className={clsx(
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-micro disabled:opacity-60",
-                        myResponse === "DECLINED"
-                          ? "bg-rose-600 text-white ring-2 ring-rose-300 hover:bg-rose-700 dark:ring-rose-800"
-                          : "border border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
-                      )}
-                    >
-                      {responding === "DECLINED"
-                        ? "Đang lưu..."
-                        : declineReasonOpen
-                          ? "Đóng ô lý do"
-                          : myResponse === "DECLINED"
-                            ? "Sửa lý do"
-                            : "Không tham gia"}
-                    </button>
-                  </div>
+                  <div className="shrink-0">{declineButton}</div>
                 </div>
                 {/* Lý do từ chối (không bắt buộc) — gửi kèm response, BE lưu vào
                     participant.responseNote nên cả phòng cùng đọc được. */}
