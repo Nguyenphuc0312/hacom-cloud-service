@@ -71,7 +71,7 @@ func main() {
 		logger.Error("create cloud service", "error", err)
 		os.Exit(1)
 	}
-	cloudHandler, err := cloudapi.New(cloudService, cfg.MaxContentBytes)
+	cloudHandler, err := cloudapi.New(cloudService, cfg.MaxContentBytes, logger)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)
 		os.Exit(1)

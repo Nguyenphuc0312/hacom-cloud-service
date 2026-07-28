@@ -7,7 +7,7 @@
 
 ## Khởi động local
 
-Yêu cầu: Go 1.22+, Docker và Docker Compose.
+Yêu cầu: Go 1.25+, Docker và Docker Compose.
 
 ```bash
 brew install golang-migrate

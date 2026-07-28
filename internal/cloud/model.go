@@ -20,9 +20,12 @@ const (
 	ItemStatusReady ItemStatus = "ready"
 )
 
+const DriveStatusActive = "active"
+
 var (
 	ErrNotFound       = errors.New("cloud item not found")
 	ErrQuotaExceeded  = errors.New("cloud quota exceeded")
+	ErrDriveNotActive = errors.New("cloud drive is not active")
 	ErrInvalidContent = errors.New("invalid cloud content")
 	ErrInvalidCursor  = errors.New("invalid pagination cursor")
 )

@@ -274,3 +274,113 @@ func TestCloudPostgresConcurrentQuotaCannotBeExceeded(t *testing.T) {
 		t.Fatalf("item/ledger count = %d/%d, want 1/1", itemCount, ledgerCount)
 	}
 }
+
+func TestCloudPostgresSuspendedDriveCannotCreateContent(t *testing.T) {
+	pool := integrationPool(t)
+	repository, err := NewCloudPostgres(pool, 5_000_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := cloud.NewService(repository, 100_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	ownerID := uuid.New()
+	cleanupOwner(t, pool, ownerID)
+
+	quota, err := service.GetQuota(ctx, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `
+		UPDATE cloud.drives
+		SET status = 'suspended'
+		WHERE id = $1
+	`, quota.DriveID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.CreateText(ctx, ownerID, "must be blocked"); !errors.Is(
+		err,
+		cloud.ErrDriveNotActive,
+	) {
+		t.Fatalf("create on suspended drive error = %v, want ErrDriveNotActive", err)
+	}
+
+	readableQuota, err := service.GetQuota(ctx, ownerID)
+	if err != nil {
+		t.Fatalf("suspended drive must remain readable: %v", err)
+	}
+	if readableQuota.DriveID != quota.DriveID {
+		t.Fatalf("readable drive = %s, want %s", readableQuota.DriveID, quota.DriveID)
+	}
+
+	var itemCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM cloud.items WHERE drive_id = $1
+	`, quota.DriveID).Scan(&itemCount); err != nil {
+		t.Fatal(err)
+	}
+	if itemCount != 0 {
+		t.Fatalf("item count = %d, want 0", itemCount)
+	}
+}
+
+func TestCloudPostgresRollsBackWhenQuotaUpdateFails(t *testing.T) {
+	pool := integrationPool(t)
+	repository, err := NewCloudPostgres(pool, 5_000_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := cloud.NewService(repository, 100_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	ownerID := uuid.New()
+	cleanupOwner(t, pool, ownerID)
+
+	quota, err := service.GetQuota(ctx, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `
+		UPDATE cloud.quotas
+		SET version = 9223372036854775807
+		WHERE drive_id = $1
+	`, quota.DriveID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.CreateText(ctx, ownerID, "rollback me"); err == nil {
+		t.Fatal("expected quota update overflow")
+	}
+
+	var (
+		usedBytes   int64
+		itemCount   int
+		ledgerCount int
+	)
+	err = pool.QueryRow(ctx, `
+		SELECT
+			quota.used_bytes,
+			(SELECT COUNT(*) FROM cloud.items WHERE drive_id = $1),
+			(SELECT COUNT(*) FROM cloud.usage_ledger WHERE drive_id = $1)
+		FROM cloud.quotas AS quota
+		WHERE quota.drive_id = $1
+	`, quota.DriveID).Scan(&usedBytes, &itemCount, &ledgerCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usedBytes != 0 || itemCount != 0 || ledgerCount != 0 {
+		t.Fatalf(
+			"used/item/ledger after rollback = %d/%d/%d, want 0/0/0",
+			usedBytes,
+			itemCount,
+			ledgerCount,
+		)
+	}
+}

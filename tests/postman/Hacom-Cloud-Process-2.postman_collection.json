@@ -31,6 +31,20 @@
       "value": ""
     }
   ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "if (!pm.collectionVariables.get('runInitialized')) {",
+          "  pm.collectionVariables.set('userA', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('userB', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('runInitialized', 'true');",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "01 - Health",

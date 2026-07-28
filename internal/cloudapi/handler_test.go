@@ -1,9 +1,12 @@
 package cloudapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,7 +67,11 @@ func (s fakeService) GetQuota(
 
 func newTestHandler(t *testing.T, service Service) http.Handler {
 	t.Helper()
-	handler, err := New(service, 100_000_000)
+	handler, err := New(
+		service,
+		100_000_000,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +171,59 @@ func TestCreateTextRejectsUnknownJSONField(t *testing.T) {
 		t.Fatalf("status = %d, want 400", response.Code)
 	}
 	assertErrorCode(t, response, "INVALID_JSON")
+}
+
+func TestCreateTextRejectsUnsupportedMediaType(t *testing.T) {
+	service := fakeService{
+		createText: func(context.Context, uuid.UUID, string) (cloud.Item, error) {
+			t.Fatal("service must not be called")
+			return cloud.Item{}, nil
+		},
+	}
+	handler := newTestHandler(t, service)
+	request := requestWithUser(
+		http.MethodPost,
+		"/texts",
+		`{"content":"hello"}`,
+		uuid.New(),
+	)
+	request.Header.Set("Content-Type", "text/plain")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want 415", response.Code)
+	}
+	assertErrorCode(t, response, "UNSUPPORTED_MEDIA_TYPE")
+}
+
+func TestListItemsRejectsExplicitZeroLimit(t *testing.T) {
+	service := fakeService{
+		listItems: func(
+			context.Context,
+			uuid.UUID,
+			string,
+			int,
+		) (cloud.Page, error) {
+			t.Fatal("service must not be called")
+			return cloud.Page{}, nil
+		},
+	}
+	handler := newTestHandler(t, service)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodGet,
+		"/items?limit=0",
+		"",
+		uuid.New(),
+	))
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+	assertErrorCode(t, response, "INVALID_LIMIT")
 }
 
 func TestKnownRouteRejectsUnsupportedMethod(t *testing.T) {
@@ -268,6 +328,12 @@ func TestServiceErrorsMapToStableAPIResponses(t *testing.T) {
 			wantCode:   "QUOTA_EXCEEDED",
 		},
 		{
+			name:       "drive not active",
+			err:        cloud.ErrDriveNotActive,
+			wantStatus: http.StatusForbidden,
+			wantCode:   "DRIVE_NOT_ACTIVE",
+		},
+		{
 			name:       "validation",
 			err:        cloud.ErrInvalidContent,
 			wantStatus: http.StatusBadRequest,
@@ -302,6 +368,56 @@ func TestServiceErrorsMapToStableAPIResponses(t *testing.T) {
 			}
 			assertErrorCode(t, response, test.wantCode)
 		})
+	}
+}
+
+func TestCloudAPIAddsRequestID(t *testing.T) {
+	handler := newTestHandler(t, fakeService{})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/quota", nil))
+
+	if _, err := uuid.Parse(response.Header().Get(requestIDHeader)); err != nil {
+		t.Fatalf("X-Request-ID must be a UUID: %v", err)
+	}
+}
+
+func TestInternalErrorIsLoggedWithRequestContext(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	service := fakeService{
+		getQuota: func(context.Context, uuid.UUID) (cloud.Quota, error) {
+			return cloud.Quota{}, errors.New("database unavailable")
+		},
+	}
+	handler, err := New(service, 100_000_000, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerID := uuid.New()
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodGet,
+		"/quota",
+		"",
+		ownerID,
+	))
+
+	requestID := response.Header().Get(requestIDHeader)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", response.Code)
+	}
+	for _, expected := range []string{
+		"database unavailable",
+		requestID,
+		ownerID.String(),
+		`"method":"GET"`,
+		`"path":"/quota"`,
+	} {
+		if !strings.Contains(logs.String(), expected) {
+			t.Fatalf("log %q does not contain %q", logs.String(), expected)
+		}
 	}
 }
 

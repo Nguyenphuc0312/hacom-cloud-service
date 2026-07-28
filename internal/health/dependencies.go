@@ -2,18 +2,24 @@ package health
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
-type PostgresPinger interface {
+const minimumSchemaVersion int64 = 4
+
+type PostgresReadinessClient interface {
 	Ping(ctx context.Context) error
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 type PostgresChecker struct {
-	db PostgresPinger
+	db PostgresReadinessClient
 }
 
-func NewPostgresChecker(db PostgresPinger) *PostgresChecker {
+func NewPostgresChecker(db PostgresReadinessClient) *PostgresChecker {
 	return &PostgresChecker{db: db}
 }
 
@@ -22,7 +28,43 @@ func (c *PostgresChecker) Name() string {
 }
 
 func (c *PostgresChecker) Check(ctx context.Context) error {
-	return c.db.Ping(ctx)
+	if err := c.db.Ping(ctx); err != nil {
+		return fmt.Errorf("ping PostgreSQL: %w", err)
+	}
+
+	var (
+		version     int64
+		dirty       bool
+		schemaReady bool
+	)
+	err := c.db.QueryRow(ctx, `
+		SELECT
+			version,
+			dirty,
+			to_regclass('cloud.drives') IS NOT NULL
+				AND to_regclass('cloud.quotas') IS NOT NULL
+				AND to_regclass('cloud.items') IS NOT NULL
+				AND to_regclass('cloud.usage_ledger') IS NOT NULL
+		FROM public.schema_migrations
+		LIMIT 1
+	`).Scan(&version, &dirty, &schemaReady)
+	if err != nil {
+		return fmt.Errorf("read migration state: %w", err)
+	}
+	if dirty {
+		return errors.New("database migration is dirty")
+	}
+	if version < minimumSchemaVersion {
+		return fmt.Errorf(
+			"database schema version %d is below required version %d",
+			version,
+			minimumSchemaVersion,
+		)
+	}
+	if !schemaReady {
+		return errors.New("required cloud schema objects are missing")
+	}
+	return nil
 }
 
 type MinIOBucketChecker interface {

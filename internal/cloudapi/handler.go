@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +15,12 @@ import (
 	"github.com/google/uuid"
 )
 
-const demoUserHeader = "X-Demo-User-ID"
+const (
+	demoUserHeader  = "X-Demo-User-ID"
+	requestIDHeader = "X-Request-ID"
+)
+
+var errUnsupportedMediaType = errors.New("content type must be application/json")
 
 type Service interface {
 	CreateText(ctx context.Context, ownerUserID uuid.UUID, content string) (cloud.Item, error)
@@ -36,19 +43,28 @@ type Service interface {
 type Handler struct {
 	service      Service
 	maxBodyBytes int64
+	logger       *slog.Logger
 }
 
-func New(service Service, maxContentBytes int64) (http.Handler, error) {
+func New(
+	service Service,
+	maxContentBytes int64,
+	logger *slog.Logger,
+) (http.Handler, error) {
 	if service == nil {
 		return nil, errors.New("cloud API service is required")
 	}
 	if maxContentBytes <= 0 {
 		return nil, errors.New("maximum content size must be positive")
 	}
+	if logger == nil {
+		return nil, errors.New("cloud API logger is required")
+	}
 
 	handler := &Handler{
 		service:      service,
 		maxBodyBytes: maxContentBytes + 64*1024,
+		logger:       logger,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /texts", handler.createText)
@@ -63,7 +79,7 @@ func New(service Service, maxContentBytes int64) (http.Handler, error) {
 	mux.HandleFunc("/quota", methodNotAllowed(http.MethodGet))
 	mux.HandleFunc("/", handler.notFound)
 
-	return handler.demoUserMiddleware(mux), nil
+	return handler.requestIDMiddleware(handler.demoUserMiddleware(mux)), nil
 }
 
 type createTextRequest struct {
@@ -83,7 +99,7 @@ func (h *Handler) createText(writer http.ResponseWriter, request *http.Request) 
 		input.Content,
 	)
 	if err != nil {
-		h.writeServiceError(writer, err)
+		h.writeServiceError(writer, request, err)
 		return
 	}
 	writeJSON(writer, http.StatusCreated, itemResponseFrom(item))
@@ -108,7 +124,7 @@ func (h *Handler) createLink(writer http.ResponseWriter, request *http.Request) 
 		input.Title,
 	)
 	if err != nil {
-		h.writeServiceError(writer, err)
+		h.writeServiceError(writer, request, err)
 		return
 	}
 	writeJSON(writer, http.StatusCreated, itemResponseFrom(item))
@@ -132,7 +148,7 @@ func (h *Handler) getItem(writer http.ResponseWriter, request *http.Request) {
 		itemID,
 	)
 	if err != nil {
-		h.writeServiceError(writer, err)
+		h.writeServiceError(writer, request, err)
 		return
 	}
 	writeJSON(writer, http.StatusOK, itemResponseFrom(item))
@@ -142,12 +158,12 @@ func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
 	limit := 0
 	if rawLimit := request.URL.Query().Get("limit"); rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)
-		if err != nil {
+		if err != nil || parsed < 1 || parsed > cloud.MaxPageSize {
 			writeError(
 				writer,
 				http.StatusBadRequest,
 				"INVALID_LIMIT",
-				"limit must be an integer",
+				"limit must be an integer between 1 and 100",
 			)
 			return
 		}
@@ -161,7 +177,7 @@ func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
 		limit,
 	)
 	if err != nil {
-		h.writeServiceError(writer, err)
+		h.writeServiceError(writer, request, err)
 		return
 	}
 
@@ -181,7 +197,7 @@ func (h *Handler) getQuota(writer http.ResponseWriter, request *http.Request) {
 		ownerUserID(request.Context()),
 	)
 	if err != nil {
-		h.writeServiceError(writer, err)
+		h.writeServiceError(writer, request, err)
 		return
 	}
 	writeJSON(writer, http.StatusOK, quotaResponse{
@@ -202,6 +218,11 @@ func (h *Handler) decodeJSON(
 	request *http.Request,
 	target any,
 ) error {
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errUnsupportedMediaType
+	}
+
 	request.Body = http.MaxBytesReader(writer, request.Body, h.maxBodyBytes)
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
@@ -219,6 +240,15 @@ func (h *Handler) decodeJSON(
 }
 
 func (h *Handler) writeDecodeError(writer http.ResponseWriter, err error) {
+	if errors.Is(err, errUnsupportedMediaType) {
+		writeError(
+			writer,
+			http.StatusUnsupportedMediaType,
+			"UNSUPPORTED_MEDIA_TYPE",
+			"Content-Type must be application/json",
+		)
+		return
+	}
 	var maxBytesError *http.MaxBytesError
 	if errors.As(err, &maxBytesError) {
 		writeError(
@@ -232,17 +262,37 @@ func (h *Handler) writeDecodeError(writer http.ResponseWriter, err error) {
 	writeError(writer, http.StatusBadRequest, "INVALID_JSON", "request body must be valid JSON")
 }
 
-func (h *Handler) writeServiceError(writer http.ResponseWriter, err error) {
+func (h *Handler) writeServiceError(
+	writer http.ResponseWriter,
+	request *http.Request,
+	err error,
+) {
 	switch {
 	case errors.Is(err, cloud.ErrNotFound):
 		writeError(writer, http.StatusNotFound, "ITEM_NOT_FOUND", "cloud item not found")
 	case errors.Is(err, cloud.ErrQuotaExceeded):
 		writeError(writer, http.StatusConflict, "QUOTA_EXCEEDED", "cloud quota exceeded")
+	case errors.Is(err, cloud.ErrDriveNotActive):
+		writeError(
+			writer,
+			http.StatusForbidden,
+			"DRIVE_NOT_ACTIVE",
+			"cloud drive does not allow new content",
+		)
 	case errors.Is(err, cloud.ErrInvalidCursor):
 		writeError(writer, http.StatusBadRequest, "INVALID_CURSOR", "pagination cursor is invalid")
 	case errors.Is(err, cloud.ErrInvalidContent):
 		writeError(writer, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	default:
+		h.logger.ErrorContext(
+			request.Context(),
+			"cloud API request failed",
+			"error", err,
+			"request_id", requestID(request.Context()),
+			"method", request.Method,
+			"path", request.URL.Path,
+			"owner_user_id", ownerUserID(request.Context()),
+		)
 		writeError(
 			writer,
 			http.StatusInternalServerError,
@@ -255,6 +305,16 @@ func (h *Handler) writeServiceError(writer http.ResponseWriter, err error) {
 type contextKey string
 
 const ownerUserIDKey contextKey = "cloud-owner-user-id"
+const requestIDKey contextKey = "cloud-request-id"
+
+func (h *Handler) requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		id := uuid.NewString()
+		writer.Header().Set(requestIDHeader, id)
+		ctx := context.WithValue(request.Context(), requestIDKey, id)
+		next.ServeHTTP(writer, request.WithContext(ctx))
+	})
+}
 
 func (h *Handler) demoUserMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -276,6 +336,11 @@ func (h *Handler) demoUserMiddleware(next http.Handler) http.Handler {
 
 func ownerUserID(ctx context.Context) uuid.UUID {
 	value, _ := ctx.Value(ownerUserIDKey).(uuid.UUID)
+	return value
+}
+
+func requestID(ctx context.Context) string {
+	value, _ := ctx.Value(requestIDKey).(string)
 	return value
 }
 

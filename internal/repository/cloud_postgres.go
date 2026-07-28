@@ -222,6 +222,9 @@ func (r *CloudPostgres) createItem(
 	if err != nil {
 		return cloud.Item{}, err
 	}
+	if drive.Status != cloud.DriveStatusActive {
+		return cloud.Item{}, cloud.ErrDriveNotActive
+	}
 
 	quota, err := scanQuota(tx.QueryRow(ctx, `
 		SELECT drive_id, quota_bytes, used_bytes, reserved_bytes, updated_at

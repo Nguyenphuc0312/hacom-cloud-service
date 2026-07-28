@@ -14,6 +14,9 @@
 - Timeline dùng keyset/cursor pagination theo `(created_at, id)`.
 - Mọi truy vấn chi tiết đều kiểm tra owner.
 - Middleware local lấy UUID từ `X-Demo-User-ID`.
+- Mỗi response Cloud API có `X-Request-ID`; lỗi nội bộ được log kèm request/user/path nhưng không lộ ra client.
+- Readiness kiểm tra cả migration version, các bảng Cloud bắt buộc, PostgreSQL và MinIO.
+- Drive không `active` vẫn đọc được dữ liệu cũ nhưng bị chặn tạo nội dung mới.
 - Có unit test, integration test PostgreSQL và Postman collection.
 
 ## Ranh giới đã giữ đúng
@@ -94,6 +97,8 @@ Unit test:
 - Error mapping API.
 - Middleware user demo.
 - JSON field không hỗ trợ.
+- Content-Type không phải JSON và `limit` ngoài khoảng hợp lệ.
+- Readiness từ chối database chưa migrate, migration dirty/cũ hoặc thiếu bảng.
 
 Integration test PostgreSQL:
 
@@ -103,7 +108,8 @@ Integration test PostgreSQL:
 - `used_bytes` bằng tổng ledger.
 - 12 request đồng thời vẫn chỉ tạo một Drive/Quota.
 - Hai request đồng thời gần hết quota: một thành công, một bị từ chối.
-- Transaction lỗi không để lại Item hoặc ledger thừa.
+- Cưỡng bức lỗi sau bước insert Item để xác nhận transaction không để lại Item, quota usage hoặc ledger thừa.
+- Drive `suspended` chặn ghi mới nhưng quota/dữ liệu cũ vẫn đọc được.
 
 ## Chạy test
 
@@ -144,8 +150,9 @@ make test-postman
 go test -race ./...                         PASS
 go vet ./...                                PASS
 go build ./...                              PASS
-Docker build hacom-cloud-api:process2       PASS
-PostgreSQL integration tests                3/3 PASS
+govulncheck ./...                           PASS (0 reachable vulnerabilities)
+Docker build hacom-cloud-api:process2-fixed PASS
+PostgreSQL integration tests                5/5 PASS
 Postman requests/assertions                 10/10 PASS
 ```
 
@@ -156,3 +163,8 @@ Smoke test thật xác nhận:
 - User khác đọc Item nhận HTTP 404.
 - Text/link sử dụng tổng cộng 75 byte thì quota báo `usedBytes = 75`.
 - PostgreSQL và MinIO vẫn báo `UP`.
+- Database chưa migrate: liveness `200 UP`, readiness `503 DOWN`.
+- Database đã migrate: readiness `200 UP`.
+- Drive `suspended`: tạo mới trả `403`, dữ liệu cũ vẫn đọc được.
+- JSON sai Content-Type trả `415`; `limit=0` trả `400`.
+- Postman chạy liên tiếp hai lần với user ngẫu nhiên đều đạt 10/10.
