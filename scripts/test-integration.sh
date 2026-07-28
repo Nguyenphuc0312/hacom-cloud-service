@@ -14,6 +14,7 @@ TEST_DB_NAME=${INTEGRATION_TEST_DB_NAME:-hacom_cloud_integration_test}
 POSTGRES_USER=${POSTGRES_USER:-hacom}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hacom}
 TEST_DATABASE_URL=${TEST_DATABASE_URL:-"postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${TEST_DB_NAME}?sslmode=disable"}
+TEST_MINIO_ENDPOINT=${TEST_MINIO_ENDPOINT:-${MINIO_ENDPOINT:-localhost:9000}}
 
 cleanup() {
   docker compose -f deployments/docker-compose.yml exec -T postgres \
@@ -27,4 +28,6 @@ docker compose -f deployments/docker-compose.yml exec -T postgres \
   createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 
 migrate -path migrations -database "$TEST_DATABASE_URL" up
-TEST_DATABASE_URL="$TEST_DATABASE_URL" go test -race ./internal/repository -count=1 -v
+TEST_DATABASE_URL="$TEST_DATABASE_URL" \
+TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
+go test -race ./internal/repository ./internal/filehash -count=1 -v
