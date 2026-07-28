@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/google/uuid"
@@ -15,11 +16,23 @@ import (
 type CloudPostgres struct {
 	pool              *pgxpool.Pool
 	defaultQuotaBytes int64
+	storageBucket     string
+}
+
+type CloudPostgresOption func(*CloudPostgres)
+
+func WithStorageBucket(bucket string) CloudPostgresOption {
+	return func(repository *CloudPostgres) {
+		if value := strings.TrimSpace(bucket); value != "" {
+			repository.storageBucket = value
+		}
+	}
 }
 
 func NewCloudPostgres(
 	pool *pgxpool.Pool,
 	defaultQuotaBytes int64,
+	options ...CloudPostgresOption,
 ) (*CloudPostgres, error) {
 	if pool == nil {
 		return nil, errors.New("PostgreSQL pool is required")
@@ -27,10 +40,15 @@ func NewCloudPostgres(
 	if defaultQuotaBytes <= 0 {
 		return nil, errors.New("default quota must be positive")
 	}
-	return &CloudPostgres{
+	repository := &CloudPostgres{
 		pool:              pool,
 		defaultQuotaBytes: defaultQuotaBytes,
-	}, nil
+		storageBucket:     "hacom-cloud-private",
+	}
+	for _, option := range options {
+		option(repository)
+	}
+	return repository, nil
 }
 
 func (r *CloudPostgres) CreateText(

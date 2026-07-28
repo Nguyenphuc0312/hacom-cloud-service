@@ -16,6 +16,8 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/storage"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -61,7 +63,17 @@ func main() {
 		health.NewMinIOChecker(minioClient, cfg.MinIOBucket),
 	)
 
-	cloudStore, err := repository.NewCloudPostgres(db, cfg.DefaultQuotaBytes)
+	objectStore, err := storage.NewMinIOStore(minioClient, cfg.MinIOBucket)
+	if err != nil {
+		logger.Error("create MinIO object store", "error", err)
+		os.Exit(1)
+	}
+
+	cloudStore, err := repository.NewCloudPostgres(
+		db,
+		cfg.DefaultQuotaBytes,
+		repository.WithStorageBucket(cfg.MinIOBucket),
+	)
 	if err != nil {
 		logger.Error("create cloud repository", "error", err)
 		os.Exit(1)
@@ -71,7 +83,22 @@ func main() {
 		logger.Error("create cloud service", "error", err)
 		os.Exit(1)
 	}
-	cloudHandler, err := cloudapi.New(cloudService, cfg.MaxContentBytes, logger)
+	uploadService, err := upload.NewService(
+		cloudStore,
+		objectStore,
+		cfg.MaxUploadBytes,
+		cfg.UploadURLTTL,
+	)
+	if err != nil {
+		logger.Error("create upload service", "error", err)
+		os.Exit(1)
+	}
+	cloudHandler, err := cloudapi.New(
+		cloudService,
+		cfg.MaxContentBytes,
+		logger,
+		cloudapi.WithUploadService(uploadService),
+	)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)
 		os.Exit(1)

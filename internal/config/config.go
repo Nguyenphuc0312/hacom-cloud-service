@@ -25,6 +25,7 @@ type Config struct {
 	MaxUploadBytes    int64
 	MaxContentBytes   int64
 	DefaultQuotaBytes int64
+	UploadURLTTL      time.Duration
 	HealthTimeout     time.Duration
 	ShutdownTimeout   time.Duration
 }
@@ -67,6 +68,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	uploadURLTTL, err := durationEnv("UPLOAD_URL_TTL", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
 	shutdownTimeout, err := durationEnv("SHUTDOWN_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return Config{}, err
@@ -84,6 +90,7 @@ func Load() (Config, error) {
 		MaxUploadBytes:    maxUploadBytes,
 		MaxContentBytes:   maxContentBytes,
 		DefaultQuotaBytes: defaultQuotaBytes,
+		UploadURLTTL:      uploadURLTTL,
 		HealthTimeout:     healthTimeout,
 		ShutdownTimeout:   shutdownTimeout,
 	}

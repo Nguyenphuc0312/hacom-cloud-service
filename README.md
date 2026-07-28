@@ -51,7 +51,9 @@ Gate 1 đã tích hợp cấu hình, PostgreSQL, MinIO, migration, dependency he
 
 Quy trình 2 đã bổ sung PostgreSQL repository thật cho Personal Cloud, text, link, timeline và quota. Xem kiến trúc và cách kiểm thử tại [`docs/process2-implementation.md`](docs/process2-implementation.md).
 
-Các repository in-memory cũ chỉ phục vụ unit test/prototype. Presigned upload API và MinIO adapter nghiệp vụ sẽ được nối trong Quy trình 3.
+Quy trình 3 đã bổ sung upload trực tiếp bằng MinIO presigned URL, quota reservation và complete idempotent. Xem [`docs/process3-upload-implementation.md`](docs/process3-upload-implementation.md).
+
+Worker ở Quy trình 4 chưa xử lý `hash_file`, vì vậy file sau complete chủ động dừng ở trạng thái `processing`.
 
 ## 1. Cách tổ chức chung
 

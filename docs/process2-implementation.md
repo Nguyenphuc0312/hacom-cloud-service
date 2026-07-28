@@ -121,7 +121,7 @@ go vet ./...
 Integration test cần database đã migrate:
 
 ```bash
-TEST_DATABASE_URL='postgres://hacom:hacom@localhost:5432/hacom_cloud_process2_test?sslmode=disable' \
+TEST_DATABASE_URL='postgres://hacom:hacom@localhost:5432/hacom_cloud_integration_test?sslmode=disable' \
   go test ./internal/repository -count=1 -v
 ```
 

@@ -34,26 +34,38 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 	t.Helper()
 	t.Cleanup(func() {
 		ctx := context.Background()
-		_, err := pool.Exec(ctx, `
-			WITH owned_drives AS (
+		queries := []string{
+			`DELETE FROM cloud.jobs WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
-			),
-			delete_ledger AS (
-				DELETE FROM cloud.usage_ledger
-				WHERE drive_id IN (SELECT id FROM owned_drives)
-			),
-			delete_items AS (
-				DELETE FROM cloud.items
-				WHERE drive_id IN (SELECT id FROM owned_drives)
-			),
-			delete_quotas AS (
-				DELETE FROM cloud.quotas
-				WHERE drive_id IN (SELECT id FROM owned_drives)
-			)
-			DELETE FROM cloud.drives WHERE owner_user_id = $1
-		`, ownerID)
-		if err != nil {
-			t.Errorf("cleanup owner %s: %v", ownerID, err)
+			)`,
+			`DELETE FROM cloud.usage_ledger WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.upload_parts WHERE upload_session_id IN (
+				SELECT session.id
+				FROM cloud.upload_sessions AS session
+				JOIN cloud.drives AS drive ON drive.id = session.drive_id
+				WHERE drive.owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.upload_sessions WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.items WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.storage_objects WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.quotas WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.drives WHERE owner_user_id = $1`,
+		}
+		for _, query := range queries {
+			if _, err := pool.Exec(ctx, query, ownerID); err != nil {
+				t.Errorf("cleanup owner %s: %v", ownerID, err)
+				return
+			}
 		}
 	})
 }

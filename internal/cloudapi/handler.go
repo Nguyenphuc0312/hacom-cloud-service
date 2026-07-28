@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
 )
 
@@ -40,16 +41,41 @@ type Service interface {
 	GetQuota(ctx context.Context, ownerUserID uuid.UUID) (cloud.Quota, error)
 }
 
+type UploadService interface {
+	Initiate(
+		ctx context.Context,
+		request upload.InitiateRequest,
+	) (upload.InitiateResult, error)
+	Complete(
+		ctx context.Context,
+		request upload.CompleteRequest,
+	) (upload.CompleteResult, error)
+}
+
 type Handler struct {
 	service      Service
+	uploads      UploadService
 	maxBodyBytes int64
 	logger       *slog.Logger
+}
+
+type Option func(*Handler) error
+
+func WithUploadService(service UploadService) Option {
+	return func(handler *Handler) error {
+		if service == nil {
+			return errors.New("upload service is required")
+		}
+		handler.uploads = service
+		return nil
+	}
 }
 
 func New(
 	service Service,
 	maxContentBytes int64,
 	logger *slog.Logger,
+	options ...Option,
 ) (http.Handler, error) {
 	if service == nil {
 		return nil, errors.New("cloud API service is required")
@@ -66,6 +92,11 @@ func New(
 		maxBodyBytes: maxContentBytes + 64*1024,
 		logger:       logger,
 	}
+	for _, option := range options {
+		if err := option(handler); err != nil {
+			return nil, err
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /texts", handler.createText)
 	mux.HandleFunc("/texts", methodNotAllowed(http.MethodPost))
@@ -77,9 +108,98 @@ func New(
 	mux.HandleFunc("/items/{itemID}", methodNotAllowed(http.MethodGet))
 	mux.HandleFunc("GET /quota", handler.getQuota)
 	mux.HandleFunc("/quota", methodNotAllowed(http.MethodGet))
+	if handler.uploads != nil {
+		mux.HandleFunc("POST /uploads", handler.initiateUpload)
+		mux.HandleFunc("/uploads", methodNotAllowed(http.MethodPost))
+		mux.HandleFunc(
+			"POST /uploads/{sessionID}/complete",
+			handler.completeUpload,
+		)
+		mux.HandleFunc(
+			"/uploads/{sessionID}/complete",
+			methodNotAllowed(http.MethodPost),
+		)
+	}
 	mux.HandleFunc("/", handler.notFound)
 
 	return handler.requestIDMiddleware(handler.demoUserMiddleware(mux)), nil
+}
+
+type initiateUploadRequest struct {
+	FileName    string `json:"fileName"`
+	ContentType string `json:"contentType"`
+	SizeBytes   int64  `json:"sizeBytes"`
+}
+
+func (h *Handler) initiateUpload(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	var input initiateUploadRequest
+	if err := h.decodeJSON(writer, request, &input); err != nil {
+		h.writeDecodeError(writer, err)
+		return
+	}
+
+	result, err := h.uploads.Initiate(request.Context(), upload.InitiateRequest{
+		OwnerUserID:    ownerUserID(request.Context()),
+		FileName:       input.FileName,
+		ContentType:    input.ContentType,
+		DeclaredBytes:  input.SizeBytes,
+		IdempotencyKey: request.Header.Get("Idempotency-Key"),
+	})
+	if err != nil {
+		h.writeUploadError(writer, request, err)
+		return
+	}
+
+	status := http.StatusCreated
+	if !result.Created {
+		status = http.StatusOK
+	}
+	writeJSON(writer, status, initiateUploadResponse{
+		UploadSessionID: result.Session.ID.String(),
+		ItemID:          result.Session.ItemID.String(),
+		Status:          result.Session.Status,
+		UploadURL:       result.UploadURL,
+		Method:          http.MethodPut,
+		RequiredHeaders: result.RequiredHeaders,
+		SizeBytes:       result.Session.DeclaredBytes,
+		ExpiresAt:       result.Session.ExpiresAt,
+	})
+}
+
+func (h *Handler) completeUpload(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	sessionID, err := uuid.Parse(request.PathValue("sessionID"))
+	if err != nil || sessionID == uuid.Nil {
+		writeError(
+			writer,
+			http.StatusBadRequest,
+			"INVALID_UPLOAD_SESSION_ID",
+			"upload session ID must be a valid UUID",
+		)
+		return
+	}
+
+	result, err := h.uploads.Complete(request.Context(), upload.CompleteRequest{
+		OwnerUserID: ownerUserID(request.Context()),
+		SessionID:   sessionID,
+	})
+	if err != nil {
+		h.writeUploadError(writer, request, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, completeUploadResponse{
+		Item: itemResponseFrom(result.Item),
+		Job: uploadJobResponse{
+			ID:     result.Job.ID.String(),
+			Type:   result.Job.Type,
+			Status: result.Job.Status,
+		},
+	})
 }
 
 type createTextRequest struct {
@@ -284,15 +404,7 @@ func (h *Handler) writeServiceError(
 	case errors.Is(err, cloud.ErrInvalidContent):
 		writeError(writer, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	default:
-		h.logger.ErrorContext(
-			request.Context(),
-			"cloud API request failed",
-			"error", err,
-			"request_id", requestID(request.Context()),
-			"method", request.Method,
-			"path", request.URL.Path,
-			"owner_user_id", ownerUserID(request.Context()),
-		)
+		h.logInternalError(request, err)
 		writeError(
 			writer,
 			http.StatusInternalServerError,
@@ -300,6 +412,103 @@ func (h *Handler) writeServiceError(
 			"an internal error occurred",
 		)
 	}
+}
+
+func (h *Handler) writeUploadError(
+	writer http.ResponseWriter,
+	request *http.Request,
+	err error,
+) {
+	switch {
+	case errors.Is(err, upload.ErrInvalidUpload):
+		writeError(writer, http.StatusBadRequest, "INVALID_UPLOAD", err.Error())
+	case errors.Is(err, upload.ErrFileTooLarge):
+		writeError(
+			writer,
+			http.StatusRequestEntityTooLarge,
+			"FILE_TOO_LARGE",
+			"file exceeds maximum upload size",
+		)
+	case errors.Is(err, cloud.ErrQuotaExceeded):
+		writeError(writer, http.StatusConflict, "QUOTA_EXCEEDED", "cloud quota exceeded")
+	case errors.Is(err, cloud.ErrDriveNotActive):
+		writeError(
+			writer,
+			http.StatusForbidden,
+			"DRIVE_NOT_ACTIVE",
+			"cloud drive does not allow new uploads",
+		)
+	case errors.Is(err, upload.ErrIdempotencyConflict):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"IDEMPOTENCY_CONFLICT",
+			err.Error(),
+		)
+	case errors.Is(err, upload.ErrSessionNotFound):
+		writeError(
+			writer,
+			http.StatusNotFound,
+			"UPLOAD_SESSION_NOT_FOUND",
+			"upload session not found",
+		)
+	case errors.Is(err, upload.ErrObjectNotFound):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"UPLOAD_OBJECT_NOT_FOUND",
+			"upload file to the presigned URL before completing",
+		)
+	case errors.Is(err, upload.ErrSessionExpired):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"UPLOAD_SESSION_EXPIRED",
+			err.Error(),
+		)
+	case errors.Is(err, upload.ErrSessionRejected),
+		errors.Is(err, upload.ErrSessionCompleted):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"UPLOAD_SESSION_CONFLICT",
+			err.Error(),
+		)
+	case errors.Is(err, upload.ErrObjectSizeMismatch):
+		writeError(
+			writer,
+			http.StatusUnprocessableEntity,
+			"UPLOAD_SIZE_MISMATCH",
+			"uploaded object size does not match declared size",
+		)
+	case errors.Is(err, upload.ErrObjectTypeMismatch):
+		writeError(
+			writer,
+			http.StatusUnprocessableEntity,
+			"UPLOAD_CONTENT_TYPE_MISMATCH",
+			"uploaded object content type does not match declared type",
+		)
+	default:
+		h.logInternalError(request, err)
+		writeError(
+			writer,
+			http.StatusInternalServerError,
+			"INTERNAL_ERROR",
+			"an internal error occurred",
+		)
+	}
+}
+
+func (h *Handler) logInternalError(request *http.Request, err error) {
+	h.logger.ErrorContext(
+		request.Context(),
+		"cloud API request failed",
+		"error", err,
+		"request_id", requestID(request.Context()),
+		"method", request.Method,
+		"path", request.URL.Path,
+		"owner_user_id", ownerUserID(request.Context()),
+	)
 }
 
 type contextKey string

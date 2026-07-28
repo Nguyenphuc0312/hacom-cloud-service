@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
 )
 
@@ -23,6 +24,25 @@ type fakeService struct {
 	getItem    func(context.Context, uuid.UUID, uuid.UUID) (cloud.Item, error)
 	listItems  func(context.Context, uuid.UUID, string, int) (cloud.Page, error)
 	getQuota   func(context.Context, uuid.UUID) (cloud.Quota, error)
+}
+
+type fakeUploadService struct {
+	initiate func(context.Context, upload.InitiateRequest) (upload.InitiateResult, error)
+	complete func(context.Context, upload.CompleteRequest) (upload.CompleteResult, error)
+}
+
+func (s fakeUploadService) Initiate(
+	ctx context.Context,
+	request upload.InitiateRequest,
+) (upload.InitiateResult, error) {
+	return s.initiate(ctx, request)
+}
+
+func (s fakeUploadService) Complete(
+	ctx context.Context,
+	request upload.CompleteRequest,
+) (upload.CompleteResult, error) {
+	return s.complete(ctx, request)
 }
 
 func (s fakeService) CreateText(
@@ -71,6 +91,23 @@ func newTestHandler(t *testing.T, service Service) http.Handler {
 		service,
 		100_000_000,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
+}
+
+func newTestHandlerWithUploads(
+	t *testing.T,
+	uploads UploadService,
+) http.Handler {
+	t.Helper()
+	handler, err := New(
+		fakeService{},
+		100_000_000,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithUploadService(uploads),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +171,198 @@ func TestCreateTextReturnsCreatedItem(t *testing.T) {
 	}
 	if payload.ID != itemID.String() || payload.Content == nil || *payload.Content != content {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestInitiateUploadPassesOwnerMetadataAndIdempotencyKey(t *testing.T) {
+	ownerID := uuid.New()
+	sessionID := uuid.New()
+	itemID := uuid.New()
+	var received upload.InitiateRequest
+	handler := newTestHandlerWithUploads(t, fakeUploadService{
+		initiate: func(
+			_ context.Context,
+			request upload.InitiateRequest,
+		) (upload.InitiateResult, error) {
+			received = request
+			return upload.InitiateResult{
+				Session: upload.Session{
+					ID:            sessionID,
+					ItemID:        itemID,
+					Status:        upload.SessionInitiated,
+					DeclaredBytes: 4,
+					ExpiresAt:     time.Now().Add(time.Minute),
+				},
+				UploadURL: "http://minio/upload",
+				RequiredHeaders: map[string]string{
+					"Content-Type": "text/plain",
+				},
+				Created: true,
+			}, nil
+		},
+	})
+	request := requestWithUser(
+		http.MethodPost,
+		"/uploads",
+		`{"fileName":"a.txt","contentType":"text/plain","sizeBytes":4}`,
+		ownerID,
+	)
+	request.Header.Set("Idempotency-Key", "upload-1")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if received.OwnerUserID != ownerID ||
+		received.FileName != "a.txt" ||
+		received.ContentType != "text/plain" ||
+		received.DeclaredBytes != 4 ||
+		received.IdempotencyKey != "upload-1" {
+		t.Fatalf("initiate request = %+v", received)
+	}
+	var payload initiateUploadResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.UploadSessionID != sessionID.String() ||
+		payload.ItemID != itemID.String() ||
+		payload.UploadURL != "http://minio/upload" {
+		t.Fatalf("response = %+v", payload)
+	}
+}
+
+func TestIdempotentInitiateReturnsOK(t *testing.T) {
+	handler := newTestHandlerWithUploads(t, fakeUploadService{
+		initiate: func(
+			context.Context,
+			upload.InitiateRequest,
+		) (upload.InitiateResult, error) {
+			return upload.InitiateResult{
+				Session: upload.Session{
+					ID:        uuid.New(),
+					ItemID:    uuid.New(),
+					ExpiresAt: time.Now().Add(time.Minute),
+				},
+				Created: false,
+			}, nil
+		},
+	})
+	request := requestWithUser(
+		http.MethodPost,
+		"/uploads",
+		`{"fileName":"a.txt","contentType":"text/plain","sizeBytes":4}`,
+		uuid.New(),
+	)
+	request.Header.Set("Idempotency-Key", "same")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+}
+
+func TestCompleteUploadUsesPathSessionAndOwner(t *testing.T) {
+	ownerID := uuid.New()
+	sessionID := uuid.New()
+	itemID := uuid.New()
+	jobID := uuid.New()
+	var received upload.CompleteRequest
+	handler := newTestHandlerWithUploads(t, fakeUploadService{
+		complete: func(
+			_ context.Context,
+			request upload.CompleteRequest,
+		) (upload.CompleteResult, error) {
+			received = request
+			return upload.CompleteResult{
+				Item: cloud.Item{
+					ID:        itemID,
+					Type:      cloud.ItemTypeFile,
+					Status:    cloud.ItemStatusProcessing,
+					SizeBytes: 4,
+				},
+				Job: upload.Job{
+					ID:     jobID,
+					Type:   "hash_file",
+					Status: "pending",
+				},
+			}, nil
+		},
+	})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodPost,
+		"/uploads/"+sessionID.String()+"/complete",
+		"",
+		ownerID,
+	))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if received.OwnerUserID != ownerID || received.SessionID != sessionID {
+		t.Fatalf("complete request = %+v", received)
+	}
+	var payload completeUploadResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Item.ID != itemID.String() ||
+		payload.Job.ID != jobID.String() ||
+		payload.Job.Status != "pending" {
+		t.Fatalf("response = %+v", payload)
+	}
+}
+
+func TestUploadErrorsMapToStableResponses(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{"invalid", upload.ErrInvalidUpload, 400, "INVALID_UPLOAD"},
+		{"too large", upload.ErrFileTooLarge, 413, "FILE_TOO_LARGE"},
+		{"quota", cloud.ErrQuotaExceeded, 409, "QUOTA_EXCEEDED"},
+		{"drive", cloud.ErrDriveNotActive, 403, "DRIVE_NOT_ACTIVE"},
+		{"idempotency", upload.ErrIdempotencyConflict, 409, "IDEMPOTENCY_CONFLICT"},
+		{"session missing", upload.ErrSessionNotFound, 404, "UPLOAD_SESSION_NOT_FOUND"},
+		{"object missing", upload.ErrObjectNotFound, 409, "UPLOAD_OBJECT_NOT_FOUND"},
+		{"expired", upload.ErrSessionExpired, 409, "UPLOAD_SESSION_EXPIRED"},
+		{"size mismatch", upload.ErrObjectSizeMismatch, 422, "UPLOAD_SIZE_MISMATCH"},
+		{"type mismatch", upload.ErrObjectTypeMismatch, 422, "UPLOAD_CONTENT_TYPE_MISMATCH"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := newTestHandlerWithUploads(t, fakeUploadService{
+				initiate: func(
+					context.Context,
+					upload.InitiateRequest,
+				) (upload.InitiateResult, error) {
+					return upload.InitiateResult{}, test.err
+				},
+			})
+			request := requestWithUser(
+				http.MethodPost,
+				"/uploads",
+				`{"fileName":"a.txt","contentType":"text/plain","sizeBytes":4}`,
+				uuid.New(),
+			)
+			request.Header.Set("Idempotency-Key", "key")
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			assertErrorCode(t, response, test.wantCode)
+		})
 	}
 }
 

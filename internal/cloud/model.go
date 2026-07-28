@@ -10,14 +10,21 @@ import (
 type ItemType string
 
 const (
-	ItemTypeText ItemType = "text"
-	ItemTypeLink ItemType = "link"
+	ItemTypeText  ItemType = "text"
+	ItemTypeLink  ItemType = "link"
+	ItemTypeFile  ItemType = "file"
+	ItemTypeImage ItemType = "image"
+	ItemTypeVideo ItemType = "video"
+	ItemTypeAudio ItemType = "audio"
 )
 
 type ItemStatus string
 
 const (
-	ItemStatusReady ItemStatus = "ready"
+	ItemStatusPending    ItemStatus = "pending"
+	ItemStatusProcessing ItemStatus = "processing"
+	ItemStatusReady      ItemStatus = "ready"
+	ItemStatusFailed     ItemStatus = "failed"
 )
 
 const DriveStatusActive = "active"
@@ -40,16 +47,17 @@ type Drive struct {
 }
 
 type Item struct {
-	ID          uuid.UUID
-	DriveID     uuid.UUID
-	Type        ItemType
-	Status      ItemStatus
-	Title       *string
-	TextContent *string
-	LinkURL     *string
-	SizeBytes   int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID              uuid.UUID
+	DriveID         uuid.UUID
+	Type            ItemType
+	Status          ItemStatus
+	Title           *string
+	TextContent     *string
+	LinkURL         *string
+	StorageObjectID uuid.UUID
+	SizeBytes       int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Quota struct {

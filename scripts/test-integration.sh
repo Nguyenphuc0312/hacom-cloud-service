@@ -10,7 +10,7 @@ if [ -f .env ]; then
   set +a
 fi
 
-TEST_DB_NAME=${PROCESS2_TEST_DB_NAME:-hacom_cloud_process2_test}
+TEST_DB_NAME=${INTEGRATION_TEST_DB_NAME:-hacom_cloud_integration_test}
 POSTGRES_USER=${POSTGRES_USER:-hacom}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hacom}
 TEST_DATABASE_URL=${TEST_DATABASE_URL:-"postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${TEST_DB_NAME}?sslmode=disable"}

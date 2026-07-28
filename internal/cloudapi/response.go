@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 )
 
 type itemResponse struct {
@@ -31,6 +32,28 @@ type quotaResponse struct {
 	ReservedBytes  int64     `json:"reservedBytes"`
 	AvailableBytes int64     `json:"availableBytes"`
 	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type initiateUploadResponse struct {
+	UploadSessionID string               `json:"uploadSessionId"`
+	ItemID          string               `json:"itemId"`
+	Status          upload.SessionStatus `json:"status"`
+	UploadURL       string               `json:"uploadUrl"`
+	Method          string               `json:"method"`
+	RequiredHeaders map[string]string    `json:"requiredHeaders"`
+	SizeBytes       int64                `json:"sizeBytes"`
+	ExpiresAt       time.Time            `json:"expiresAt"`
+}
+
+type uploadJobResponse struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
+type completeUploadResponse struct {
+	Item itemResponse      `json:"item"`
+	Job  uploadJobResponse `json:"job"`
 }
 
 type errorEnvelope struct {

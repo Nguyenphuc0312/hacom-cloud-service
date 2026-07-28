@@ -2,14 +2,18 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 )
+
+var ErrObjectNotFound = errors.New("object not found")
 
 type ObjectInfo struct {
 	Key         string
 	SizeBytes   int64
 	ContentType string
+	ETag        string
 }
 
 // ObjectStore abstracts MinIO so business logic is not coupled to its SDK.

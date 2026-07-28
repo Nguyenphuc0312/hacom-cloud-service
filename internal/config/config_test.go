@@ -40,6 +40,9 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	if cfg.MaxContentBytes != 100_000_000 {
 		t.Fatalf("expected proposed 100 decimal MB content limit, got %d", cfg.MaxContentBytes)
 	}
+	if cfg.UploadURLTTL != 15*time.Minute {
+		t.Fatalf("expected 15m upload URL TTL, got %s", cfg.UploadURLTTL)
+	}
 }
 
 func TestLoadRejectsMissingDependencyConfiguration(t *testing.T) {

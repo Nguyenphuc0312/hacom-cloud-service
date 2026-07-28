@@ -6,14 +6,15 @@ endif
 COMPOSE_FILE ?= deployments/docker-compose.yml
 COMPOSE ?= docker compose -f $(COMPOSE_FILE)
 MIGRATE ?= migrate
-TEST_DATABASE_URL ?= postgres://hacom:hacom@localhost:5432/hacom_cloud_process2_test?sslmode=disable
+TEST_DATABASE_URL ?= postgres://hacom:hacom@localhost:5432/hacom_cloud_integration_test?sslmode=disable
 POSTMAN_COLLECTION ?= tests/postman/Hacom-Cloud-Process-2.postman_collection.json
 POSTMAN_ENVIRONMENT ?= tests/postman/Hacom-Cloud-Local.postman_environment.json
+POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postman_collection.json
 
 .PHONY: run-api run-worker test fmt vet up down logs ps \
 	infra-up infra-down infra-logs infra-ps \
 	migrate-up migrate-down migrate-version db-verify \
-	test-integration test-integration-clean test-postman \
+	test-integration test-integration-clean test-postman test-postman-process3 \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -29,10 +30,14 @@ test-integration:
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test ./internal/repository -count=1 -v
 
 test-integration-clean:
-	sh scripts/test-process2-integration.sh
+	sh scripts/test-integration.sh
 
 test-postman:
 	npx --yes newman run "$(POSTMAN_COLLECTION)" \
+		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli
+
+test-postman-process3:
+	npx --yes newman run "$(POSTMAN_PROCESS3_COLLECTION)" \
 		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli
 
 fmt:
