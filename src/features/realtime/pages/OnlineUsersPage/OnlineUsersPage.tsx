@@ -1,110 +1,152 @@
-import { useQuery } from '@tanstack/react-query';
-import { Button, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Input, Select, Space, Table, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { realtimeClient, type OnlineUser } from '@/api/clients/realtimeClient/realtimeClient';
-import { queryKeys } from '@/api/queryKeys/queryKeys';
+import type { OnlineUser } from '@/api/clients/realtimeClient/realtimeClient';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
+import { AvatarCell } from '@/components/AvatarCell/AvatarCell';
 import { DataTableShell } from '@/components/DataTableShell/DataTableShell';
 import { DateTimeCell } from '@/components/DateTimeCell/DateTimeCell';
 import { EmptyState } from '@/components/ui/EmptyState/EmptyState';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
+import { TableSkeleton } from '@/components/TableSkeleton/TableSkeleton';
+import { useOnlineUsers } from '../../hooks/useOnlineUsers/useOnlineUsers';
+import { OnlineUserDetailDrawer } from '../../components/OnlineUserDetailDrawer/OnlineUserDetailDrawer';
+import { PlatformCell } from '../../components/PlatformCell/PlatformCell';
+import { PresenceSummary } from '../../components/PresenceSummary/PresenceSummary';
+import { UserDeviceStrip } from '../../components/UserDeviceStrip/UserDeviceStrip';
 
 import './OnlineUsersPage.css';
 
 const { Text } = Typography;
 
+/** Presence states that still mean "connected"; mirrors the websocket gateway. */
+const STATE_OPTIONS = [
+  { label: 'Tất cả trạng thái', value: '' },
+  { label: 'Trực tuyến', value: 'online' },
+  { label: 'Vắng mặt', value: 'away' },
+  { label: 'Chờ', value: 'idle' },
+  { label: 'Không làm phiền', value: 'dnd' },
+  { label: 'Bận', value: 'busy' },
+];
+
 export const OnlineUsersPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [stateFilter, setStateFilter] = useState<string | undefined>(undefined);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
-  const query = useQuery({
-    queryKey: queryKeys.realtimeOnlineUsers({ page, pageSize, search }),
-    queryFn: () => realtimeClient.getOnlineUsers(page, pageSize, search),
-    placeholderData: (previousData) => previousData,
-    staleTime: 5000,
-    refetchInterval: 15000,
-    refetchIntervalInBackground: false,
-  });
+  const query = useOnlineUsers({ page, pageSize, search, state: stateFilter, autoRefresh });
 
-  const columns: ColumnsType<OnlineUser> = [
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      width: 100,
-      render: (status: string) => (
-        <StatusBadge
-          status={
-            status === 'online'
-              ? 'healthy'
-              : status === 'idle'
-                ? 'warning'
-                : 'unknown'
-          }
-        />
-      ),
-    },
-    {
-      title: 'Tên hiển thị',
-      dataIndex: 'displayName',
-      width: 200,
-      render: (name: string, record) => (
-        <div className="user-name-cell">
-          <Text strong>{name || 'Unknown'}</Text>
-          {record.email && <Text type="secondary">{record.email}</Text>}
-        </div>
-      ),
-    },
-    {
-      title: 'Phòng ban',
-      dataIndex: 'department',
-      width: 150,
-      render: (dept: string) => dept || '-',
-    },
-    {
-      title: 'Thiết bị',
-      key: 'device',
-      width: 150,
-      render: (_, record) => (
-        <div className="device-cell">
-          {record.browser && <Tag>{record.browser}</Tag>}
-          {record.device && <Tag color="blue">{record.device}</Tag>}
-        </div>
-      ),
-    },
-    {
-      title: 'IP',
-      dataIndex: 'ip',
-      width: 130,
-      render: (ip: string) => ip || '-',
-    },
-    {
-      title: 'Hoạt động cuối',
-      dataIndex: 'lastActive',
-      width: 160,
-      render: (time: string) => <DateTimeCell value={time} />,
-    },
-  ];
-
-  const isLoading = query.isLoading && !query.data;
-  const isError = query.isError && !query.data;
   const data = query.data;
+  const items = data?.items ?? [];
+
+  const columns: ColumnsType<OnlineUser> = useMemo(
+    () => [
+      {
+        title: 'Trạng thái',
+        dataIndex: 'presenceState',
+        width: 130,
+        render: (state: string) => <StatusBadge status={state} />,
+      },
+      {
+        title: 'Người dùng',
+        dataIndex: 'displayName',
+        render: (name: string, record) => (
+          <AvatarCell name={name} description={record.employeeCode} />
+        ),
+      },
+      {
+        title: 'Phòng ban',
+        dataIndex: 'department',
+        width: 180,
+        render: (department: string | null) =>
+          department || <Text type="secondary">Chưa có</Text>,
+      },
+      {
+        title: (
+          <Tooltip title="Số kết nối WebSocket đang mở. Nhiều tab hoặc nhiều thiết bị sẽ tính thành nhiều phiên.">
+            <span className="online-users-th-hint">Phiên</span>
+          </Tooltip>
+        ),
+        dataIndex: 'connectionCount',
+        width: 96,
+        align: 'right',
+        render: (count: number) => (
+          <span className="online-users-sessions" data-multi={count > 1 || undefined}>
+            {count}
+          </span>
+        ),
+      },
+      {
+        title: (
+          <Tooltip title="Loại thiết bị của các kết nối đang mở, nhận diện từ trình duyệt lúc kết nối.">
+            <span className="online-users-th-hint">Thiết bị</span>
+          </Tooltip>
+        ),
+        key: 'platforms',
+        width: 120,
+        render: (_, record) => (
+          <PlatformCell
+            platforms={record.platforms ?? {}}
+            connectionCount={record.connectionCount}
+          />
+        ),
+      },
+      {
+        title: 'Hoạt động cuối',
+        dataIndex: 'lastSeenAt',
+        width: 180,
+        render: (value: string | null) =>
+          value ? <DateTimeCell value={value} /> : <Text type="secondary">—</Text>,
+      },
+      {
+        title: '',
+        key: 'actions',
+        width: 60,
+        align: 'right',
+        render: (_, record) => (
+          <Tooltip title="Xem chi tiết">
+            <Button
+              type="text"
+              size="small"
+              aria-label={`Xem chi tiết ${record.displayName}`}
+              icon={<AppIcon name="arrowRight" size={14} aria-hidden />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedUser(record);
+              }}
+            />
+          </Tooltip>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const isLoading = query.isLoading && !data;
+  const isError = query.isError && !data;
+  const isStale = data?.source === 'stale';
 
   return (
     <PageShell
       eyebrow="Realtime"
       title="Người dùng Online"
-      description="Danh sách người dùng đang hoạt động trên hệ thống chat."
+      description="Bao nhiêu người đang online, cụ thể là ai, và thiết bị nào gắn với tài khoản của họ. Mở rộng một dòng để xem thiết bị."
       headerExtra={
         <div className="online-users-header-actions">
-          <Text type="secondary">
-            {data?.total ?? 0} người dùng online
-          </Text>
+          <Button
+            type={autoRefresh ? 'primary' : 'default'}
+            icon={<AppIcon name={autoRefresh ? 'pause' : 'play'} size={14} aria-hidden />}
+            onClick={() => setAutoRefresh((prev) => !prev)}
+          >
+            {autoRefresh ? 'Tạm dừng' : 'Tự làm mới'}
+          </Button>
           <Button
             icon={<AppIcon name="refresh" size={14} aria-hidden />}
             onClick={() => void query.refetch()}
@@ -116,7 +158,8 @@ export const OnlineUsersPage: React.FC = () => {
       }
     >
       {isLoading ? (
-        <QueryStateView kind="loading" title="Đang tải danh sách người dùng..." />
+        // Skeleton reserves the real layout instead of a spinner over empty space.
+        <TableSkeleton rows={8} />
       ) : isError ? (
         <QueryStateView
           kind="error"
@@ -125,56 +168,94 @@ export const OnlineUsersPage: React.FC = () => {
           onRetry={() => void query.refetch()}
         />
       ) : (
-        <DataTableShell
-          title="Danh sách người dùng"
-          toolbar={
-            <div className="online-users-filters">
-              <Space>
-                <Input.Search
-                  placeholder="Tìm theo tên, email..."
-                  allowClear
-                  onSearch={setSearch}
-                  style={{ width: 250 }}
-                />
-                <Select
-                  placeholder="Lọc trạng thái"
-                  allowClear
-                  style={{ width: 140 }}
-                  onChange={setStatusFilter}
-                  options={[
-                    { label: 'Tất cả', value: '' },
-                    { label: 'Online', value: 'online' },
-                    { label: 'Idle', value: 'idle' },
-                    { label: 'Đã ngắt', value: 'disconnected' },
-                  ]}
-                />
-              </Space>
-            </div>
-          }
-        >
-          <Table
-            rowKey="userId"
-            columns={columns}
-            dataSource={data?.users.filter((u) => !statusFilter || u.status === statusFilter)}
-            loading={query.isFetching && !!data}
-            pagination={{
-              current: page,
-              pageSize,
-              total: data?.total ?? 0,
-              showSizeChanger: true,
-              showTotal: (total) => `${total} người dùng`,
-              onChange: (p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              },
-            }}
-            locale={{
-              emptyText: <EmptyState title="Không có người dùng online" description="Không có người dùng nào đang hoạt động." compact />,
-            }}
-            scroll={{ x: 900 }}
+        <>
+          <PresenceSummary
+            total={data?.total ?? 0}
+            pageItems={items}
+            isStale={isStale}
+            staleReason={data?.staleReason ?? null}
+            lastUpdatedAt={query.dataUpdatedAt}
+            isFetching={query.isFetching}
           />
-        </DataTableShell>
+
+          <DataTableShell
+            title="Danh sách người dùng"
+            toolbar={
+              <div className="online-users-filters">
+                <Space>
+                  <Input.Search
+                    placeholder="Tìm theo tên, mã NS, phòng ban..."
+                    allowClear
+                    onSearch={(value) => {
+                      setSearch(value);
+                      setPage(1);
+                    }}
+                    style={{ width: 260 }}
+                  />
+                  <Select
+                    placeholder="Lọc trạng thái"
+                    allowClear
+                    style={{ width: 180 }}
+                    onChange={(value) => {
+                      setStateFilter(value || undefined);
+                      setPage(1);
+                    }}
+                    options={STATE_OPTIONS}
+                  />
+                </Space>
+              </div>
+            }
+          >
+            <Table
+              rowKey="userId"
+              columns={columns}
+              dataSource={items}
+              loading={query.isFetching && !!data}
+              expandable={{
+                // Devices load per user, so they expand on demand instead of
+                // firing one request per visible row.
+                expandedRowKeys,
+                onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
+                expandedRowRender: (record) => (
+                  <UserDeviceStrip
+                    userId={record.userId}
+                    connectionCount={record.connectionCount}
+                  />
+                ),
+                expandRowByClick: true,
+                expandedRowClassName: () => 'online-users-expanded',
+              }}
+              pagination={{
+                current: page,
+                pageSize,
+                total: data?.total ?? 0,
+                showSizeChanger: true,
+                showTotal: (total) => `${total} người dùng`,
+                onChange: (nextPage, nextPageSize) => {
+                  setPage(nextPage);
+                  setPageSize(nextPageSize);
+                },
+              }}
+              locale={{
+                emptyText: (
+                  <EmptyState
+                    title={isStale ? 'Chưa có dữ liệu presence' : 'Không có người dùng online'}
+                    description={
+                      isStale
+                        ? 'Không đọc được nguồn presence, xem cảnh báo phía trên.'
+                        : 'Hiện không có ai đang kết nối.'
+                    }
+                    compact
+                  />
+                ),
+              }}
+              scroll={{ x: 900 }}
+            />
+          </DataTableShell>
+        </>
       )}
+
+      <OnlineUserDetailDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />
     </PageShell>
   );
 };
