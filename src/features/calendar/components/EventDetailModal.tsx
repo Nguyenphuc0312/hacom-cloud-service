@@ -51,6 +51,12 @@ import { Avatar } from "../../../components/common/Avatar";
 import { loadUserProfiles, type UserProfileSummary } from "../../../services/userBatchLoader";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { useFriendship } from "../../../hooks/useFriendship";
+import {
+  extractSearchRows,
+  normalizeSearchUser,
+} from "../../chat/hooks/useChatUserSearch";
+import { searchUsersUseCase } from "../../chat/usecases/searchUsers";
+import { pickUniqueUserIdByName } from "../utils/pickUniqueUserIdByName";
 import { useAuthStore } from "../../../stores/authStore";
 import { conversationApi } from "../../../services/api";
 import { unwrapApiSuccess, extractApiError } from "../../../lib/apiContract";
@@ -239,6 +245,10 @@ export const EventDetailModal: React.FC<{
   const ownerAuthUserId = hrEvent?.ownerAuthUserId ?? null;
   const chairmanAuthUserId =
     getMeetingMetadata(hrEvent).meetingChairmanAuthUserId ?? null;
+  // Id chủ trì dò được từ danh bạ theo tên — chỉ dùng cho lịch CŨ không có
+  // identity (xem effect dò tên bên dưới). Khai báo sớm để batch-load nạp luôn
+  // avatar của người này trong cùng một lượt.
+  const [chairmanLookupUserId, setChairmanLookupUserId] = React.useState<string | null>(null);
   React.useEffect(() => {
     const ids = [
       ...new Set(
@@ -246,6 +256,7 @@ export const EventDetailModal: React.FC<{
           ...hrParticipants.map((p) => p.authUserId),
           ownerAuthUserId,
           chairmanAuthUserId,
+          chairmanLookupUserId,
         ].filter((id): id is string => !!id),
       ),
     ];
@@ -262,7 +273,7 @@ export const EventDetailModal: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [hrParticipants, ownerAuthUserId, chairmanAuthUserId]);
+  }, [hrParticipants, ownerAuthUserId, chairmanAuthUserId, chairmanLookupUserId]);
   // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
   // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
   const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
@@ -420,6 +431,37 @@ export const EventDetailModal: React.FC<{
     chairmanIdentityUserId ??
     chairmanRow?.authUserId ??
     (chairmanIsCreator ? creatorUserId : null);
+
+  // Chặng chót cho lịch CŨ (tạo trước khi BE lưu meetingChairmanRef): chủ trì
+  // không có identity, không nằm trong roster, cũng không phải người tạo → dò
+  // tên trong danh bạ để lấy avatar. Chỉ chấp nhận khi khớp ĐÚNG 1 người: trùng
+  // tên mà đoán bừa thì hiện nhầm mặt người khác, tệ hơn là để chữ cái đầu.
+  const needsChairmanLookup = !!chairman && !chairmanUserId;
+  React.useEffect(() => {
+    if (!needsChairmanLookup) return;
+    const name = chairman!.trim();
+    if (name.length < 2) return;
+    let cancelled = false;
+    void searchUsersUseCase(name, 1, 5)
+      .then((response) => {
+        if (cancelled) return;
+        const users = extractSearchRows(response)
+          .map(normalizeSearchUser)
+          .filter((u): u is NonNullable<typeof u> => !!u);
+        const id = pickUniqueUserIdByName(users, name);
+        if (id) setChairmanLookupUserId(id);
+      })
+      .catch(() => {
+        /* dò avatar là tiện ích, hỏng thì rơi về chữ cái đầu */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsChairmanLookup, chairman]);
+
+  // Avatar của người dò được nằm ở participantProfiles (effect batch-load bên dưới
+  // đã nạp theo id này).
+  const chairmanResolvedUserId = chairmanUserId ?? chairmanLookupUserId;
 
   // Hành động nhanh trên dòng Người tạo / Chủ trì: đã là bạn → Nhắn tin (mở DM);
   // chưa là bạn → Kết bạn (có lời mời đến từ họ thì "Kết bạn" = chấp nhận luôn).
@@ -716,12 +758,12 @@ export const EventDetailModal: React.FC<{
                   </p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <Avatar
-                      src={avatarForRow(chairmanRow, chairmanUserId)}
+                      src={avatarForRow(chairmanRow, chairmanResolvedUserId)}
                       alt={chairman}
                       size="sm"
                     />
                     <p className="truncate text-sm text-text-primary">{chairman}</p>
-                    {renderPersonAction(chairmanUserId)}
+                    {renderPersonAction(chairmanResolvedUserId)}
                   </div>
                 </div>
               </div>
