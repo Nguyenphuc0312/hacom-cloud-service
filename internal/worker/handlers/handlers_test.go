@@ -8,209 +8,261 @@ import (
 	"sync"
 	"testing"
 
-	cloudfile "github.com/Nguyenphuc0312/hacom-cloud-service/internal/file"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/worker"
 )
 
+const (
+	testItemID    = "11111111-1111-4111-8111-111111111111"
+	testObjectID  = "22222222-2222-4222-8222-222222222222"
+	testSessionID = "33333333-3333-4333-8333-333333333333"
+)
+
 type fakeHashService struct {
-	mu     sync.Mutex
-	result HashResult
-	err    error
-	calls  int
+	mu         sync.Mutex
+	result     HashResult
+	err        error
+	calls      int
+	objectKeys []string
 }
 
-func (s *fakeHashService) HashObject(ctx context.Context, _ string) (HashResult, error) {
+func (s *fakeHashService) HashObject(
+	ctx context.Context,
+	objectKey string,
+) (HashResult, error) {
 	if err := ctx.Err(); err != nil {
 		return HashResult{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls++
+	s.objectKeys = append(s.objectKeys, objectKey)
 	return s.result, s.err
 }
 
-type memoryFileRepository struct {
-	mu    sync.Mutex
-	items map[string]cloudfile.Item
+type memoryFileLifecycle struct {
+	mu        sync.Mutex
+	target    HashTarget
+	getErr    error
+	markErr   error
+	markCalls int
 }
 
-func (r *memoryFileRepository) GetItem(ctx context.Context, itemID string) (cloudfile.Item, error) {
+func (r *memoryFileLifecycle) GetHashTarget(
+	ctx context.Context,
+	_ HashFilePayload,
+) (HashTarget, error) {
 	if err := ctx.Err(); err != nil {
-		return cloudfile.Item{}, err
+		return HashTarget{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	item, exists := r.items[itemID]
-	if !exists {
-		return cloudfile.Item{}, errors.New("item not found")
-	}
-	return item, nil
+	return r.target, r.getErr
 }
 
-func (r *memoryFileRepository) MarkReady(
+func (r *memoryFileLifecycle) MarkHashReady(
 	ctx context.Context,
-	itemID string,
-	checksum string,
-	sizeBytes int64,
+	target HashTarget,
+	result HashResult,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	item, exists := r.items[itemID]
-	if !exists {
-		return errors.New("item not found")
+	r.markCalls++
+	if r.markErr != nil {
+		return r.markErr
 	}
-	if item.Status == cloudfile.StatusReady {
+	if r.target.ItemStatus == "ready" && r.target.ObjectStatus == "ready" {
+		if r.target.Checksum != result.Checksum ||
+			r.target.ExpectedBytes != result.SizeBytes {
+			return ErrHashResultConflict
+		}
 		return nil
 	}
-	if item.Status != cloudfile.StatusProcessing {
-		return errors.New("item is not processing")
+	if r.target.ItemStatus != "processing" ||
+		r.target.ObjectStatus != "processing" {
+		return ErrHashTargetState
 	}
-	item.Status = cloudfile.StatusReady
-	item.Checksum = checksum
-	item.SizeBytes = sizeBytes
-	r.items[itemID] = item
+	r.target.ItemStatus = "ready"
+	r.target.ObjectStatus = "ready"
+	r.target.Checksum = result.Checksum
 	return nil
 }
 
-func TestHashFileHandlerMovesProcessingItemToReady(t *testing.T) {
-	content := []byte("hacom cloud")
+func hashFixture(content []byte, status string) (*HashFileHandler, *fakeHashService, *memoryFileLifecycle) {
 	sum := sha256.Sum256(content)
 	checksum := hex.EncodeToString(sum[:])
 	hash := &fakeHashService{result: HashResult{
 		Checksum:  checksum,
 		SizeBytes: int64(len(content)),
 	}}
-	files := &memoryFileRepository{items: map[string]cloudfile.Item{
-		"item-1": {
-			ID:        "item-1",
-			ObjectKey: "owner/object-1",
-			SizeBytes: int64(len(content)),
-			Status:    cloudfile.StatusProcessing,
-		},
+	lifecycle := &memoryFileLifecycle{target: HashTarget{
+		ItemID:          testItemID,
+		StorageObjectID: testObjectID,
+		UploadSessionID: testSessionID,
+		ObjectKey:       "uploads/owner/object",
+		ExpectedBytes:   int64(len(content)),
+		ItemStatus:      status,
+		ObjectStatus:    status,
 	}}
-	handler, err := NewHashFileHandler(hash, files)
-	if err != nil {
-		t.Fatal(err)
+	if status == "ready" {
+		lifecycle.target.Checksum = checksum
 	}
+	handler, err := NewHashFileHandler(hash, lifecycle)
+	if err != nil {
+		panic(err)
+	}
+	return handler, hash, lifecycle
+}
 
-	err = handler.Handle(context.Background(), worker.Job{
-		ID:      "job-1",
-		Type:    worker.JobHashFile,
-		Payload: []byte(`{"item_id":"item-1","object_key":"owner/object-1"}`),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	item, err := files.GetItem(context.Background(), "item-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if item.Status != cloudfile.StatusReady || item.Checksum != checksum {
-		t.Fatalf("item after hash = %+v", item)
+func hashJob() worker.Job {
+	return worker.Job{
+		ID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		Type: worker.JobHashFile,
+		Payload: []byte(`{
+			"item_id":"` + testItemID + `",
+			"storage_object_id":"` + testObjectID + `",
+			"upload_session_id":"` + testSessionID + `",
+			"object_key":"uploads/owner/object"
+		}`),
 	}
 }
 
-func TestHashFileHandlerRetryIsIdempotent(t *testing.T) {
-	hash := &fakeHashService{result: HashResult{Checksum: "unused", SizeBytes: 10}}
-	files := &memoryFileRepository{items: map[string]cloudfile.Item{
-		"item-1": {
-			ID:        "item-1",
-			ObjectKey: "owner/object-1",
-			SizeBytes: 10,
-			Checksum:  "existing-checksum",
-			Status:    cloudfile.StatusReady,
-		},
-	}}
-	handler, err := NewHashFileHandler(hash, files)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestHashFileHandlerMovesProcessingTargetToReady(t *testing.T) {
+	handler, hash, lifecycle := hashFixture([]byte("hacom cloud"), "processing")
 
-	err = handler.Handle(context.Background(), worker.Job{
-		Payload: []byte(`{"item_id":"item-1","object_key":"owner/object-1"}`),
-	})
-	if err != nil {
+	if err := handler.Handle(context.Background(), hashJob()); err != nil {
 		t.Fatal(err)
 	}
-	if hash.calls != 0 {
-		t.Fatalf("hash calls = %d, want 0 for READY item", hash.calls)
+	if lifecycle.target.ItemStatus != "ready" ||
+		lifecycle.target.ObjectStatus != "ready" ||
+		lifecycle.target.Checksum != hash.result.Checksum {
+		t.Fatalf("target after hash = %+v", lifecycle.target)
 	}
-	item, _ := files.GetItem(context.Background(), "item-1")
-	if item.Checksum != "existing-checksum" {
-		t.Fatalf("retry replaced checksum with %q", item.Checksum)
+	if len(hash.objectKeys) != 1 ||
+		hash.objectKeys[0] != lifecycle.target.ObjectKey {
+		t.Fatalf("hashed object keys = %v", hash.objectKeys)
+	}
+}
+
+func TestHashFileHandlerReadyRetryVerifiesSameHash(t *testing.T) {
+	handler, hash, lifecycle := hashFixture([]byte("retry-safe"), "ready")
+
+	if err := handler.Handle(context.Background(), hashJob()); err != nil {
+		t.Fatal(err)
+	}
+	if hash.calls != 1 || lifecycle.markCalls != 1 {
+		t.Fatalf("hash/mark calls = %d/%d, want 1/1", hash.calls, lifecycle.markCalls)
+	}
+}
+
+func TestHashFileHandlerReadyRetryRejectsDifferentChecksum(t *testing.T) {
+	handler, hash, _ := hashFixture([]byte("original"), "ready")
+	different := sha256.Sum256([]byte("changed!"))
+	hash.result.Checksum = hex.EncodeToString(different[:])
+
+	err := handler.Handle(context.Background(), hashJob())
+	if !errors.Is(err, ErrHashResultConflict) {
+		t.Fatalf("Handle() error = %v, want ErrHashResultConflict", err)
 	}
 }
 
 func TestHashFileHandlerRejectsSizeMismatch(t *testing.T) {
-	hash := &fakeHashService{result: HashResult{Checksum: "checksum", SizeBytes: 9}}
-	files := &memoryFileRepository{items: map[string]cloudfile.Item{
-		"item-1": {
-			ID:        "item-1",
-			ObjectKey: "owner/object-1",
-			SizeBytes: 10,
-			Status:    cloudfile.StatusProcessing,
-		},
-	}}
-	handler, _ := NewHashFileHandler(hash, files)
-	err := handler.Handle(context.Background(), worker.Job{
-		Payload: []byte(`{"item_id":"item-1","object_key":"owner/object-1"}`),
-	})
-	if err == nil {
-		t.Fatal("size mismatch error = nil")
+	handler, hash, lifecycle := hashFixture([]byte("ten bytes!"), "processing")
+	hash.result.SizeBytes--
+
+	err := handler.Handle(context.Background(), hashJob())
+	if !errors.Is(err, ErrHashSizeMismatch) {
+		t.Fatalf("Handle() error = %v, want ErrHashSizeMismatch", err)
 	}
-	item, _ := files.GetItem(context.Background(), "item-1")
-	if item.Status != cloudfile.StatusProcessing {
-		t.Fatalf("item status = %q, want PROCESSING", item.Status)
+	if lifecycle.markCalls != 0 {
+		t.Fatalf("MarkHashReady calls = %d, want 0", lifecycle.markCalls)
+	}
+}
+
+func TestHashFileHandlerRejectsInvalidOrUntrustedPayload(t *testing.T) {
+	handler, _, lifecycle := hashFixture([]byte("payload"), "processing")
+	tests := []worker.Job{
+		{
+			Type:    worker.JobHashFile,
+			Payload: []byte(`{"item_id":"not-a-uuid","storage_object_id":"` + testObjectID + `","upload_session_id":"` + testSessionID + `","object_key":"key"}`),
+		},
+		{
+			Type:    worker.JobHashFile,
+			Payload: []byte(`{"item_id":"` + testItemID + `","storage_object_id":"` + testObjectID + `","upload_session_id":"` + testSessionID + `","object_key":"key","unexpected":true}`),
+		},
+		{
+			Type:    worker.JobCleanupExpired,
+			Payload: hashJob().Payload,
+		},
+	}
+	for _, job := range tests {
+		if err := handler.Handle(context.Background(), job); err == nil {
+			t.Fatalf("Handle(%s) error = nil", job.Payload)
+		}
+	}
+
+	lifecycle.getErr = ErrHashTargetMismatch
+	err := handler.Handle(context.Background(), hashJob())
+	if !errors.Is(err, ErrHashTargetMismatch) {
+		t.Fatalf("relationship mismatch error = %v", err)
 	}
 }
 
 type memoryCleanupRepository struct {
 	mu            sync.Mutex
-	records       map[string]CleanupRecord
-	reservedBytes int64
-	ledgerEvents  int
+	target        CleanupTarget
+	getErr        error
+	completeErr   error
+	completeCalls int
+	releases      int
 }
 
-func (r *memoryCleanupRepository) GetCleanupRecord(
+func (r *memoryCleanupRepository) EnqueueExpiredUploadJobs(
+	context.Context,
+	int,
+) (int, error) {
+	return 0, nil
+}
+
+func (r *memoryCleanupRepository) GetCleanupTarget(
 	ctx context.Context,
-	sessionID string,
-) (CleanupRecord, error) {
+	_ string,
+) (CleanupTarget, error) {
 	if err := ctx.Err(); err != nil {
-		return CleanupRecord{}, err
+		return CleanupTarget{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	record, exists := r.records[sessionID]
-	if !exists {
-		return CleanupRecord{}, errors.New("session not found")
-	}
-	return record, nil
+	return r.target, r.getErr
 }
 
-func (r *memoryCleanupRepository) CompleteCleanup(ctx context.Context, sessionID string) error {
+func (r *memoryCleanupRepository) CompleteCleanup(
+	ctx context.Context,
+	_ string,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	record := r.records[sessionID]
-	if record.Cleaned {
+	r.completeCalls++
+	if r.completeErr != nil {
+		return r.completeErr
+	}
+	if r.target.AlreadyCleaned {
 		return nil
 	}
-	r.reservedBytes -= record.ReservedBytes
-	r.ledgerEvents++
-	record.Cleaned = true
-	r.records[sessionID] = record
+	r.target.AlreadyCleaned = true
+	r.releases++
 	return nil
 }
 
 type fakeObjectRemover struct {
 	mu      sync.Mutex
 	deleted map[string]bool
+	err     error
 	calls   int
 }
 
@@ -221,28 +273,33 @@ func (r *fakeObjectRemover) Delete(ctx context.Context, objectKey string) error 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.calls++
+	if r.err != nil {
+		return r.err
+	}
 	r.deleted[objectKey] = true
 	return nil
 }
 
-func TestCleanupHandlerDeletesObjectReleasesQuotaAndWritesLedger(t *testing.T) {
-	repository := &memoryCleanupRepository{
-		records: map[string]CleanupRecord{
-			"session-1": {
-				SessionID:     "session-1",
-				OwnerID:       "owner-1",
-				ObjectKey:     "owner/temp-1",
-				ReservedBytes: 1024,
-			},
-		},
-		reservedBytes: 1024,
-	}
+func cleanupFixture() (*CleanupExpiredUploadHandler, *memoryCleanupRepository, *fakeObjectRemover) {
+	repository := &memoryCleanupRepository{target: CleanupTarget{
+		SessionID:       testSessionID,
+		DriveID:         "44444444-4444-4444-8444-444444444444",
+		ItemID:          testItemID,
+		StorageObjectID: testObjectID,
+		ObjectKey:       "uploads/owner/expired",
+		ReservedBytes:   1024,
+	}}
 	objects := &fakeObjectRemover{deleted: make(map[string]bool)}
 	handler, err := NewCleanupExpiredUploadHandler(repository, objects)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	job, err := NewCleanupJob("cleanup-1", "session-1")
+	return handler, repository, objects
+}
+
+func TestCleanupHandlerDeletesObjectAndCompletesExactlyOnce(t *testing.T) {
+	handler, repository, objects := cleanupFixture()
+	job, err := NewCleanupJob("cleanup-job", testSessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,33 +307,70 @@ func TestCleanupHandlerDeletesObjectReleasesQuotaAndWritesLedger(t *testing.T) {
 	if err := handler.Handle(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if !objects.deleted["owner/temp-1"] {
-		t.Fatal("expired object was not deleted")
-	}
-	if repository.reservedBytes != 0 || repository.ledgerEvents != 1 {
-		t.Fatalf("reserved=%d ledger events=%d, want 0 and 1", repository.reservedBytes, repository.ledgerEvents)
+	if !objects.deleted["uploads/owner/expired"] ||
+		repository.releases != 1 {
+		t.Fatalf("deleted=%v releases=%d", objects.deleted, repository.releases)
 	}
 
 	if err := handler.Handle(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if repository.reservedBytes != 0 || repository.ledgerEvents != 1 || objects.calls != 1 {
-		t.Fatalf(
-			"retry duplicated cleanup: reserved=%d ledger=%d deletes=%d",
-			repository.reservedBytes,
-			repository.ledgerEvents,
-			objects.calls,
-		)
+	if objects.calls != 1 || repository.releases != 1 {
+		t.Fatalf("retry duplicated cleanup: deletes=%d releases=%d", objects.calls, repository.releases)
+	}
+}
+
+func TestCleanupHandlerTreatsMissingObjectAsSuccessfulDeletion(t *testing.T) {
+	handler, repository, _ := cleanupFixture()
+	job, _ := NewCleanupJob("cleanup-job", testSessionID)
+
+	// ObjectRemover's contract represents a missing object as nil.
+	if err := handler.Handle(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	if repository.releases != 1 {
+		t.Fatalf("release count = %d, want 1", repository.releases)
+	}
+}
+
+func TestCleanupHandlerDoesNotCompleteWhenObjectDeletionFails(t *testing.T) {
+	handler, repository, objects := cleanupFixture()
+	objects.err = errors.New("MinIO temporarily unavailable")
+	job, _ := NewCleanupJob("cleanup-job", testSessionID)
+
+	if err := handler.Handle(context.Background(), job); err == nil {
+		t.Fatal("Handle() error = nil")
+	}
+	if repository.completeCalls != 0 {
+		t.Fatalf("complete calls = %d, want 0", repository.completeCalls)
+	}
+}
+
+func TestCleanupHandlerRejectsInvalidPayloadAndIneligibleTarget(t *testing.T) {
+	handler, repository, _ := cleanupFixture()
+	err := handler.Handle(context.Background(), worker.Job{
+		Type:    worker.JobCleanupExpired,
+		Payload: []byte(`{"session_id":"not-a-uuid"}`),
+	})
+	if err == nil {
+		t.Fatal("invalid UUID error = nil")
+	}
+
+	repository.getErr = ErrCleanupNotExpired
+	job, _ := NewCleanupJob("cleanup-job", testSessionID)
+	err = handler.Handle(context.Background(), job)
+	if !errors.Is(err, ErrCleanupNotExpired) {
+		t.Fatalf("not expired error = %v", err)
 	}
 }
 
 func TestNewCleanupJob(t *testing.T) {
-	job, err := NewCleanupJob("job-1", "session-1")
+	job, err := NewCleanupJob("job-1", testSessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if job.Type != worker.JobCleanupExpired ||
-		string(job.Payload) != `{"session_id":"session-1"}` {
+		string(job.Payload) != `{"session_id":"`+testSessionID+`"}` {
 		t.Fatalf("cleanup job = %+v", job)
 	}
 }
@@ -286,14 +380,8 @@ func TestRegisterLifecycleHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hash, _ := NewHashFileHandler(
-		&fakeHashService{},
-		&memoryFileRepository{items: make(map[string]cloudfile.Item)},
-	)
-	cleanup, _ := NewCleanupExpiredUploadHandler(
-		&memoryCleanupRepository{records: make(map[string]CleanupRecord)},
-		&fakeObjectRemover{deleted: make(map[string]bool)},
-	)
+	hash, _, _ := hashFixture([]byte("register"), "processing")
+	cleanup, _, _ := cleanupFixture()
 	if err := RegisterLifecycleHandlers(runner, hash, cleanup); err != nil {
 		t.Fatal(err)
 	}

@@ -7,26 +7,38 @@ import (
 	"fmt"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/worker"
+	"github.com/google/uuid"
 )
 
-type CleanupRecord struct {
-	SessionID     string
-	OwnerID       string
-	ObjectKey     string
-	ReservedBytes int64
-	Cleaned       bool
+var (
+	ErrCleanupTargetNotFound = errors.New("cleanup target not found")
+	ErrCleanupNotExpired     = errors.New("upload session has not expired")
+	ErrCleanupNotEligible    = errors.New("upload session is not eligible for cleanup")
+	ErrCleanupQuotaInvariant = errors.New("reserved quota is inconsistent with upload session")
+)
+
+type CleanupExpiredUploadPayload struct {
+	SessionID string `json:"session_id"`
+}
+
+type CleanupTarget struct {
+	SessionID       string
+	DriveID         string
+	ItemID          string
+	StorageObjectID string
+	ObjectKey       string
+	ReservedBytes   int64
+	AlreadyCleaned  bool
 }
 
 func NewCleanupJob(jobID, sessionID string) (worker.Job, error) {
 	if jobID == "" {
 		return worker.Job{}, errors.New("cleanup job ID is required")
 	}
-	if sessionID == "" {
-		return worker.Job{}, errors.New("cleanup session ID is required")
+	if _, err := uuid.Parse(sessionID); err != nil {
+		return worker.Job{}, fmt.Errorf("cleanup session ID must be a valid UUID: %w", err)
 	}
-	payload, err := json.Marshal(struct {
-		SessionID string `json:"session_id"`
-	}{SessionID: sessionID})
+	payload, err := json.Marshal(CleanupExpiredUploadPayload{SessionID: sessionID})
 	if err != nil {
 		return worker.Job{}, fmt.Errorf("marshal cleanup payload: %w", err)
 	}
@@ -37,15 +49,16 @@ func NewCleanupJob(jobID, sessionID string) (worker.Job, error) {
 	}, nil
 }
 
-// CleanupRepository owns the database transaction that marks a session
-// expired, releases reserved quota and appends UPLOAD_RELEASED to the ledger.
+// CleanupRepository owns the database transactions for enqueueing expired
+// sessions and releasing their reserved quota exactly once.
 type CleanupRepository interface {
-	GetCleanupRecord(ctx context.Context, sessionID string) (CleanupRecord, error)
+	EnqueueExpiredUploadJobs(ctx context.Context, limit int) (int, error)
+	GetCleanupTarget(ctx context.Context, sessionID string) (CleanupTarget, error)
 	CompleteCleanup(ctx context.Context, sessionID string) error
 }
 
-// ObjectRemover must treat deletion of a missing object as success so a
-// cleanup job remains safe when retried after a partial failure.
+// ObjectRemover must treat deletion of a missing object as success so cleanup
+// remains safe when retried after a partial failure.
 type ObjectRemover interface {
 	Delete(ctx context.Context, objectKey string) error
 }
@@ -69,27 +82,29 @@ func NewCleanupExpiredUploadHandler(
 }
 
 func (h *CleanupExpiredUploadHandler) Handle(ctx context.Context, job worker.Job) error {
-	var payload struct {
-		SessionID string `json:"session_id"`
-	}
-	if err := json.Unmarshal(job.Payload, &payload); err != nil {
-		return fmt.Errorf("decode cleanup payload: %w", err)
-	}
-	if payload.SessionID == "" {
-		return errors.New("cleanup payload requires session_id")
+	if job.Type != worker.JobCleanupExpired {
+		return fmt.Errorf("cleanup handler received job type %q", job.Type)
 	}
 
-	record, err := h.repository.GetCleanupRecord(ctx, payload.SessionID)
-	if err != nil {
-		return fmt.Errorf("get cleanup record: %w", err)
+	var payload CleanupExpiredUploadPayload
+	if err := decodeStrictJSON(job.Payload, &payload); err != nil {
+		return fmt.Errorf("decode cleanup payload: %w", err)
 	}
-	if record.Cleaned {
+	if _, err := uuid.Parse(payload.SessionID); err != nil {
+		return fmt.Errorf("cleanup payload session_id must be a valid UUID: %w", err)
+	}
+
+	target, err := h.repository.GetCleanupTarget(ctx, payload.SessionID)
+	if err != nil {
+		return fmt.Errorf("get cleanup target: %w", err)
+	}
+	if target.AlreadyCleaned {
 		return nil
 	}
-	if err := h.objects.Delete(ctx, record.ObjectKey); err != nil {
+	if err := h.objects.Delete(ctx, target.ObjectKey); err != nil {
 		return fmt.Errorf("delete expired upload object: %w", err)
 	}
-	if err := h.repository.CompleteCleanup(ctx, record.SessionID); err != nil {
+	if err := h.repository.CompleteCleanup(ctx, target.SessionID); err != nil {
 		return fmt.Errorf("complete expired upload cleanup: %w", err)
 	}
 	return nil
