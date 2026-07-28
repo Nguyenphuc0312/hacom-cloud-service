@@ -1,0 +1,25 @@
+.online-user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.online-user-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online-user-detail-hint {
+  font-size: 12px;
+}
+
+.online-user-device-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.online-user-device-cell .ant-typography-secondary {
+  font-size: 12px;
+}

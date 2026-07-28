@@ -24,8 +24,14 @@ export interface OnlineUser {
   displayName: string;
   employeeCode: string | null;
   department: string | null;
+  /** Live websocket sessions held by this user (multiple tabs/devices count separately). */
   connectionCount: number;
-  deviceSummary: string;
+  /**
+   * Presence state from the websocket gateway: online | away | idle | dnd | busy.
+   * Presence carries no device identity — device truth is owned by
+   * chat-auth-service and fetched per user.
+   */
+  presenceState: string;
   lastSeenAt: string | null;
   activeRooms: number;
 }

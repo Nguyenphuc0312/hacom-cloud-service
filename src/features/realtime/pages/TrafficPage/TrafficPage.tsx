@@ -5,8 +5,6 @@ import { getErrorMessage } from '@/api/error/error';
 import {
   useMessageTrafficQuery,
   useApiTrafficQuery,
-  type MessageTrafficPoint,
-  type ApiTrafficPoint,
 } from '@/api/clients/realtimeClient/realtimeClient';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { PageShell } from '@/components/PageShell/PageShell';
@@ -66,27 +64,14 @@ export const TrafficPage: React.FC = () => {
   const messageData = messageTrafficQuery.data;
   const apiData = apiTrafficQuery.data;
 
-  // Calculate totals with explicit types
-  const messagePoints = messageData?.points ?? [];
-  const apiPoints = apiData?.points ?? [];
-
-  const totalMessages = messagePoints.reduce(
-    (sum: number, p: MessageTrafficPoint) => sum + p.sent,
-    0,
-  );
-  const totalDelivered = messagePoints.reduce(
-    (sum: number, p: MessageTrafficPoint) => sum + p.delivered,
-    0,
-  );
-  const totalFailed = messagePoints.reduce(
-    (sum: number, p: MessageTrafficPoint) => sum + p.failed,
-    0,
-  );
-  const avgRequests = apiPoints.length
-    ? Math.round(
-        apiPoints.reduce((sum: number, p: ApiTrafficPoint) => sum + p.requests, 0) / apiPoints.length,
-      )
-    : 0;
+  // The backend already aggregates these; do not re-derive them here.
+  const messageSeries = messageData?.series ?? [];
+  const totalMessages = messageData?.summary.totalSent ?? 0;
+  const totalDelivered = messageData?.summary.totalDelivered ?? 0;
+  const totalFailed =
+    (messageData?.summary.totalPartialFailure ?? 0) +
+    (messageData?.summary.totalTerminalFailure ?? 0);
+  const requestsPerSecond = apiData?.requests.perSecond ?? 0;
 
   return (
     <PageShell
@@ -147,9 +132,9 @@ export const TrafficPage: React.FC = () => {
         <Card size="small" className="traffic-summary-card">
           <div className="traffic-summary-header">
             <AppIcon name="trending" size={18} aria-hidden />
-            <Text type="secondary">Avg API Requests</Text>
+            <Text type="secondary">API Requests</Text>
           </div>
-          <Text strong className="traffic-summary-value">{formatNumber(avgRequests)}/min</Text>
+          <Text strong className="traffic-summary-value">{formatNumber(requestsPerSecond)}/s</Text>
         </Card>
       </div>
 
@@ -166,7 +151,7 @@ export const TrafficPage: React.FC = () => {
               Biểu đồ message traffic sẽ hiển thị ở đây khi backend API hỗ trợ.
             </Text>
             <Text type="secondary" className="traffic-chart-hint">
-              {messageData?.points.length ?? 0} data points trong khoảng {range}
+              {messageSeries.length} data points trong khoảng {range}
             </Text>
           </div>
         </SurfaceCard>
@@ -181,8 +166,11 @@ export const TrafficPage: React.FC = () => {
             <Text type="secondary">
               Biểu đồ API traffic sẽ hiển thị ở đây khi backend API hỗ trợ.
             </Text>
+            {/* /traffic/api returns aggregates, not a time series. */}
             <Text type="secondary" className="traffic-chart-hint">
-              {apiData?.points.length ?? 0} data points trong khoảng {range}
+              {formatNumber(apiData?.requests.total ?? 0)} requests · p95{' '}
+              {apiData?.latency.p95 ?? '-'} ms · {apiData?.topEndpoints.length ?? 0} endpoint trong
+              khoảng {range}
             </Text>
           </div>
         </SurfaceCard>

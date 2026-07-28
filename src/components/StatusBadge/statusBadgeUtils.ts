@@ -29,6 +29,8 @@ const statusMap: Record<string, StatusBadgeConfig> = {
   ready_for_provision: { color: 'gold', text: 'Sẵn sàng cấp tài khoản' },
   activation_required: { color: 'gold', text: 'Cần kích hoạt' },
   away: { color: 'gold', text: 'Vắng mặt' },
+  idle: { color: 'gold', text: 'Chờ' },
+  busy: { color: 'gold', text: 'Bận' },
   info: { color: 'blue', text: 'Thông tin' },
 
   rejected: { color: 'red', text: 'Đã từ chối' },

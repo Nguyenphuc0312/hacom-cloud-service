@@ -26,8 +26,6 @@
   font-size: 12px;
 }
 
-.device-cell {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+.online-users-stale-alert {
+  margin-bottom: 12px;
 }
