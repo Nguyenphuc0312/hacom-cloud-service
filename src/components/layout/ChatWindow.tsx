@@ -424,13 +424,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleForwardSelected = React.useCallback(() => {
-    const messages = Array.from(selectedMessageIds)
-      .map((id) => useChatStore.getState().messageById?.[id])
-      .filter((m): m is Message => Boolean(m));
+    // Selection lưu id theo bất kỳ dạng nào MessageItem dùng (id/localId/
+    // stableId/clientMessageId) nên phải đối chiếu cả 4, giống handleSelectionCopy.
+    const messages = (
+      rtkChatApi.endpoints.getMessages
+        .select({ conversationId: conversation.id })(store.getState())
+        .data?.messages ?? []
+    ).filter((message) =>
+      [
+        message.id,
+        message.localId,
+        message.stableId,
+        message.clientMessageId,
+      ].some((id) => typeof id === "string" && selectedMessageIds.has(id)),
+    );
     if (messages.length > 0) {
       setForwardMessages(messages);
+      exitSelectionMode();
     }
-  }, [selectedMessageIds]);
+  }, [conversation.id, selectedMessageIds, exitSelectionMode]);
 
   const handleCancelReply = React.useCallback(() => {
     setReplyToMessage(undefined);
