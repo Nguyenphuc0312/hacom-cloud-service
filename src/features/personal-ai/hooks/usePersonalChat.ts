@@ -385,15 +385,6 @@ export function usePersonalChat() {
           },
         );
 
-        // ponytail: diag tạm (BE response 06-07 §3) — gỡ sau khi chốt gốc lỗi
-        // payload export thiếu id. Mốc 1: giá trị vừa parse từ event `done`.
-        logger.info("usePersonalChat", "export-done-parsed", {
-          messageId: assistantMessage.id,
-          exportable_table: response.exportable_table,
-          export_id: response.export_id,
-          session_id: response.session_id,
-        });
-
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
 
         // Câu trả lời lịch: BE trả `calendar_events` ở SSE done → render bảng
@@ -426,20 +417,6 @@ export function usePersonalChat() {
         } else if (response.exportable_table) {
           patchMessage(convIdSnapshot, assistantMessage.id, {
             exportableTable: true,
-          });
-        }
-
-        // ponytail: diag tạm (BE response 06-07 §3) — Mốc 2: đọc lại message vừa
-        // patch, xác nhận id đã nằm trên ĐÚNG message đang hiển thị. Gỡ sau khi chốt.
-        {
-          const saved = usePersonalAiStore
-            .getState()
-            .conversations.find((c) => c.id === convIdSnapshot)
-            ?.messages.find((m) => m.id === assistantMessage.id);
-          logger.info("usePersonalChat", "export-msg-after-patch", {
-            messageId: assistantMessage.id,
-            exportId: saved?.exportId,
-            exportSessionId: saved?.exportSessionId,
           });
         }
 
