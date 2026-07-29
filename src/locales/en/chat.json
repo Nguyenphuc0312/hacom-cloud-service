@@ -45,6 +45,7 @@
       "emptyTab": "No conversations yet",
       "success": "Message forwarded",
       "quickSent": "Sent to {{name}}",
+      "blocked": "You can't send to this conversation",
       "error": "Unable to forward message"
     },
     "bubbleAria": "{{name}} at {{time}}",
