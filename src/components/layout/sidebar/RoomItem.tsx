@@ -32,6 +32,7 @@ import {
   decodeMessageDrag,
   isMessageDrag,
 } from "../../../features/chat/quickForward";
+import { resolveForwardErrorMessage } from "../../../features/chat/forwardErrorMessage";
 import {
   useForwardMessagesMutation,
   useDeleteMessageMutation,
@@ -596,12 +597,8 @@ export const RoomItemContainer = React.memo(
                 }
               },
             );
-          } catch {
-            toast.error(
-              i18n.t("chat:message.forward.error", {
-                defaultValue: "Không thể chuyển tiếp tin nhắn",
-              }),
-            );
+          } catch (error) {
+            toast.error(resolveForwardErrorMessage(error));
           }
         })();
       },

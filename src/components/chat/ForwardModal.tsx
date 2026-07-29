@@ -30,6 +30,7 @@ import { FileTypeIcon } from "../message/FileTypeIcon";
 import { Avatar } from "../common/Avatar";
 import { toast } from "../ui";
 import { useForwardMessagesMutation } from "../../features/api/chatApi";
+import { resolveForwardErrorMessage } from "../../features/chat/forwardErrorMessage";
 import { messageApi } from "../../services/api";
 
 type TabKey = "recent" | "groups" | "friends";
@@ -60,6 +61,14 @@ const resolveConvName = (
     "Cuộc trò chuyện"
   );
 };
+
+/**
+ * BE từ chối forward vào hội thoại đang bị chặn gửi (vd DM đã huỷ kết bạn) và
+ * throw ngay ở item đầu tiên hỏng, làm hỏng cả lượt chuyển tiếp. Chặn ở đây để
+ * người dùng thấy lý do trước khi bấm, thay vì nhận toast lỗi sau đó.
+ */
+const isForwardBlocked = (conv: Conversation): boolean =>
+  Boolean(conv.sendRestriction) || conv.canCurrentUserSend === false;
 
 const isGroupConversation = (conv: Conversation): boolean =>
   conv.type === RoomType.GROUP ||
@@ -325,12 +334,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         }),
       );
       onClose();
-    } catch {
-      toast.error(
-        t("chat:message.forward.error", {
-          defaultValue: "Không thể chuyển tiếp tin nhắn",
-        }),
-      );
+    } catch (error) {
+      toast.error(resolveForwardErrorMessage(error));
     }
   };
 
@@ -445,12 +450,19 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                   const isSelected = selected.has(conv.id);
                   const name = resolveConvName(conv, currentUserId, enrichedNames);
                   const isGroup = isGroupConversation(conv);
+                  const blocked = isForwardBlocked(conv);
                   return (
                     <button
                       key={conv.id}
                       type="button"
+                      disabled={blocked}
                       onClick={() => toggleSelect(conv.id)}
-                      className="flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition-colors hover:bg-surface-hover"
+                      className={clsx(
+                        "flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition-colors",
+                        blocked
+                          ? "cursor-not-allowed opacity-50"
+                          : "hover:bg-surface-hover",
+                      )}
                     >
                       <span
                         className={clsx(
@@ -485,9 +497,18 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                           </div>
                         )}
                       </div>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
-                        {name}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text-primary">
+                          {name}
+                        </p>
+                        {blocked && (
+                          <p className="truncate text-xs text-text-muted">
+                            {t("chat:message.forward.blocked", {
+                              defaultValue: "Không thể gửi tới cuộc trò chuyện này",
+                            })}
+                          </p>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
