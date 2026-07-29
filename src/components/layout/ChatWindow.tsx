@@ -1101,8 +1101,6 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     let cancelled = false;
     void loadUserProfiles(ids).then((profileMap) => {
       if (cancelled) return;
-      // ponytail: temp debug — remove after verifying dept/company presence
-      console.log("[mention profiles]", JSON.parse(JSON.stringify(profileMap)));
       const resolved: Record<string, { departmentName?: string; companyName?: string }> = {};
       for (const [id, profile] of Object.entries(profileMap)) {
         if (!profile) continue;
