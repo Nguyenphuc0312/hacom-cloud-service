@@ -667,6 +667,14 @@ Worker xử lý job độc lập, tính SHA-256, chuyển file sang `READY`, ret
 
 ## 6. Quy trình 5 — Tích hợp và chuẩn bị demo
 
+Contract triển khai chính thức cho Quy trình 5:
+
+- [`docs/README-PROCESS-5.md`](docs/README-PROCESS-5.md)
+- [`docs/PROCESS-5-WORK-REPORT.md`](docs/PROCESS-5-WORK-REPORT.md)
+
+Theo yêu cầu của nhóm, cả bốn người commit lên nhánh chung
+`integration/process-5-release-demo`; không commit trực tiếp lên `main`.
+
 ### Mục tiêu chung
 
 Chạy toàn bộ hệ thống từ môi trường sạch, sửa lỗi tích hợp và chuẩn bị demo dưới 10 phút.
