@@ -85,10 +85,25 @@ function scopeRequiredError(promptId = "prompt-1") {
 
 const FILE = new File(["noi dung"], "bao-cao-tuan.xlsx");
 
+/** Kết quả `/scopes` khi user chỉ có ĐÚNG một phạm vi → BE tự bind (§2.4). */
+const AUTO_SELECTED_SCOPES = {
+  count: 1,
+  scopes: [scopeA],
+  capability: "department_submit" as const,
+  requiredAction: "SUBMIT" as const,
+  allowedScopeTypes: ["DEPARTMENT" as const],
+  autoSelected: true,
+  promptId: undefined,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   useWorkReportScopeStore.getState().reset();
   usePersonalAiStore.setState({ conversations: [], activeConversationId: null });
+  // §2.6: nộp file nay pre-flight `/scopes` trước. Mặc định trả "một phạm vi,
+  // BE tự bind" để các test cũ vẫn kiểm đúng thứ chúng muốn kiểm (đường lùi
+  // 400-kèm-scopes, hủy, lỗi 413) mà không phải quan tâm tới pre-flight.
+  fetchWorkReportScopesMock.mockResolvedValue(AUTO_SELECTED_SCOPES);
 });
 
 describe("usePersonalChat — nộp file kèm chọn phạm vi (§2.5)", () => {
@@ -110,12 +125,14 @@ describe("usePersonalChat — nộp file kèm chọn phạm vi (§2.5)", () => {
       scopeToken: undefined,
     });
 
-    // Dropdown mở sẵn từ payload lỗi — KHÔNG gọi /scopes.
+    // Dropdown mở sẵn từ payload lỗi — không cần gọi lại /scopes để dựng nó.
     const picking = useWorkReportScopeStore.getState();
     expect(picking.isPicking).toBe(true);
     expect(picking.scopes).toHaveLength(2);
     expect(picking.pendingPromptId).toBe("prompt-1");
-    expect(fetchWorkReportScopesMock).not.toHaveBeenCalled();
+    // Pre-flight (§2.6) chạy đúng MỘT lần cho lượt nộp đầu; lượt nộp lại đã có
+    // token nên không pre-flight nữa.
+    expect(fetchWorkReportScopesMock).toHaveBeenCalledTimes(1);
 
     // User chọn phòng B.
     await act(async () => {
@@ -181,6 +198,50 @@ describe("usePersonalChat — nộp file kèm chọn phạm vi (§2.5)", () => {
       useWorkReportScopeStore.getState().setScopes([scopeA, scopeB], "department_submit");
       useWorkReportScopeStore.getState().select(scopeA);
     });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(uploadLevelReportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("§2.6: ≥2 phạm vi → pre-flight hỏi TRƯỚC, file chỉ đi qua mạng ĐÚNG MỘT lần", async () => {
+    // Đây là bug "upload hai lần mỗi lượt nộp": bản cũ nộp trần → 400 → nộp lại,
+    // đẩy toàn bộ file qua mạng hai lượt. Pre-flight biết trước có 2 phạm vi nên
+    // hỏi ngay, không tốn lượt gửi file nào cho một câu trả lời 400 biết trước.
+    fetchWorkReportScopesMock.mockResolvedValue({
+      count: 2,
+      scopes: [scopeA, scopeB],
+      capability: "department_submit",
+      requiredAction: "SUBMIT",
+      allowedScopeTypes: ["DEPARTMENT"],
+      autoSelected: false,
+      promptId: "prompt-9",
+    });
+    uploadLevelReportMock.mockResolvedValue({ ok: true, message: "Đã nhận báo cáo." });
+
+    const { result } = renderHook(() => usePersonalChat());
+    await act(async () => {
+      await result.current.sendLevelReportWithFile("#TBP_baocao", FILE);
+    });
+
+    // Chưa gửi file lần nào — mới chỉ hỏi phạm vi.
+    expect(uploadLevelReportMock).not.toHaveBeenCalled();
+    const picking = useWorkReportScopeStore.getState();
+    expect(picking.isPicking).toBe(true);
+    expect(picking.scopes).toHaveLength(2);
+    expect(picking.pendingPromptId).toBe("prompt-9");
+
+    await act(async () => {
+      useWorkReportScopeStore.getState().select(scopeB);
+    });
+    await waitFor(() => expect(uploadLevelReportMock).toHaveBeenCalledTimes(1));
+
+    // Lượt gửi file DUY NHẤT mang sẵn token đã chọn, cùng File gốc.
+    const [sentFile, sentParams] = uploadLevelReportMock.mock.calls[0];
+    expect(sentFile).toBe(FILE);
+    expect(sentParams).toMatchObject({
+      question: "#TBP_baocao",
+      scopeToken: "tok-B",
+    });
+
     await new Promise((r) => setTimeout(r, 20));
     expect(uploadLevelReportMock).toHaveBeenCalledTimes(1);
   });

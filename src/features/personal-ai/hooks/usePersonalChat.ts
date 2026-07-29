@@ -648,10 +648,70 @@ export function usePersonalChat() {
       // §6: KIỂM SOÁT UI trước khi nộp (không chỉ dựa vào BE báo lỗi).
       //  • #TCT_tonghop chỉ tổng hợp — KHÔNG nộp được → chặn thẳng.
       //  • #TBP chỉ DEPARTMENT+SUBMIT, #LDDV chỉ ORG_UNIT+SUBMIT.
-      // §2.5: KHÔNG pre-flight `/scopes` nữa. Nộp thẳng: BE trả 400/403 kèm
-      // `detail.scopes` để mở dropdown ngay tại chỗ, file giữ trong memory và
-      // tự nộp lại — user chỉ thao tác 1 lần chọn file + 1 lần chọn phạm vi.
       const submitCapability = capabilityForTag(trimmed);
+
+      // §2.6: PRE-FLIGHT `/scopes` TRƯỚC khi gửi file. Bản 2.5 cố ý nộp trần rồi
+      // để BE trả 400 kèm `detail.scopes`, nhưng như vậy mỗi lượt nộp đẩy TOÀN BỘ
+      // file qua mạng hai lần (400 → chọn phạm vi → 200). File mẫu vài KB không
+      // sao; báo cáo thật vài MB trên mạng công ty chậm thì gấp đôi thời gian chờ
+      // và là nguồn của những request bị huỷ giữa chừng. BE không tự chặn sớm
+      // được: HTTP không cho từ chối trước khi client gửi xong thân request.
+      //
+      // Nhánh lỗi 400/403 kèm `detail.scopes` bên dưới GIỮ NGUYÊN — nó vẫn là
+      // đường lùi khi token hết hạn giữa chừng hoặc pre-flight không chạy được.
+      if (submitCapability && !scopeToken) {
+        const scopeStore = useWorkReportScopeStore.getState();
+        scopeStore.ensureScopeKey(user?.id ?? "", submitCapability);
+        try {
+          const res = await fetchWorkReportScopes({ capability: submitCapability });
+          const decision = decideScopePreflight(res);
+          if (decision.kind === "deny") {
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content:
+                "Bạn không có phạm vi phù hợp để nộp báo cáo này. Vui lòng liên hệ quản trị nếu cần cấp quyền.",
+              timestamp: new Date(),
+              isStreaming: false,
+            });
+            return;
+          }
+          if (decision.kind === "pick") {
+            // ≥2 phạm vi → hỏi TRƯỚC khi tốn băng thông. Giữ file trong memory;
+            // effect nộp-lại-sau-khi-chọn gửi đúng lượt này kèm token đã chọn.
+            scopeStore.setScopes(decision.scopes, res.capability);
+            scopeStore.requirePick(trimmed, res.capability, res.promptId);
+            pendingLevelReportFile.current = { question: trimmed, file };
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: `[Tệp đính kèm: ${file.name}]\n\n${trimmed}`,
+              timestamp: new Date(),
+            });
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: "",
+              timestamp: new Date(),
+              isStreaming: false,
+              scopeRequired: true,
+            });
+            return;
+          }
+          // `auto`: đúng MỘT phạm vi → BE tự bind, gửi thẳng KHÔNG kèm token (§2.4).
+        } catch (err) {
+          // Flag đa-scope tắt (404) → luồng cũ, nộp thẳng. Lỗi khác → cũng nộp
+          // thẳng và để nhánh 400/403 kèm `detail.scopes` bên dưới lo, thay vì
+          // chặn user vì một pre-flight tối ưu băng thông không chạy được.
+          if (!(err instanceof ScopeFeatureDisabledError) && err instanceof ScopeFetchError) {
+            logger.info("usePersonalChat", "level-report-preflight-failed", {
+              capability: submitCapability,
+              status: err.status,
+            });
+          }
+        }
+      }
+
       const scope = scopeToken
         ? useWorkReportScopeStore.getState().selected
         : null;
@@ -742,9 +802,15 @@ export function usePersonalChat() {
                   ? "Tệp vượt quá dung lượng cho phép (tối đa 25MB)."
                   : err.status === 403
                     ? "Bạn không có quyền nộp báo cáo cấp này."
-                    : err.status === 400
-                      ? err.message || "File không hợp lệ hoặc thiếu tag báo cáo."
-                      : err.message || "Đã xảy ra lỗi. Vui lòng thử lại."
+                    : // §2.6: tới đây là 401 SAU khi `uploadLevelReport` đã tự làm
+                      // mới token và gửi lại — tức hết phiên thật, không phải
+                      // token cũ kẹt lại. Nói rõ để user đăng nhập lại, và báo
+                      // tệp chưa được nhận để họ biết phải nộp lại.
+                      err.status === 401
+                      ? "Phiên đăng nhập đã hết hạn. Tệp CHƯA được nộp — vui lòng đăng nhập lại rồi nộp lại tệp."
+                      : err.status === 400
+                        ? err.message || "File không hợp lệ hoặc thiếu tag báo cáo."
+                        : err.message || "Đã xảy ra lỗi. Vui lòng thử lại."
             : "Đã xảy ra lỗi không xác định.";
         finalizeMessage(convIdSnapshot, content);
         markMessageError(convIdSnapshot);
