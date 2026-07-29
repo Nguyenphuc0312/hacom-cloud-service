@@ -173,10 +173,30 @@ Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải
 | 422 | `UPLOAD_CONTENT_TYPE_MISMATCH` | MIME type thực tế khác khai báo |
 | 500 | `INTERNAL_ERROR` | Lỗi nội bộ không làm lộ chi tiết database |
 
+## Quy tắc an toàn Gate 5
+
+- Mọi Cloud endpoint yêu cầu UUID hợp lệ trong `X-Demo-User-ID`; đây chỉ là
+  contract local, không phải Auth production.
+- JSON có field lạ, JSON nối đuôi, body quá lớn và media type sai đều bị từ
+  chối trước khi gọi service.
+- Item/session của user khác trả cùng `404` như dữ liệu không tồn tại.
+- Object key do server sinh theo `uploads/{owner_uuid}/{object_uuid}`; tên file
+  client không đi vào key.
+- Presigned URL là output duy nhất được phép chứa chữ ký, có TTL 15 phút và ký
+  `Content-Type` cùng `If-None-Match: *`.
+- Internal error response chỉ trả `INTERNAL_ERROR`; logger chỉ giữ request ID,
+  method, path, owner và loại lỗi, không serialize lỗi dependency.
+- Không ghi binary, presigned URL, access key, secret key, SQL hay object key
+  vào log/báo cáo kiểm thử.
+
+Catalog trên là contract đóng băng của Gate 5; endpoint mới cần phase/contract
+mới, không bổ sung trong release hardening.
+
 ## Phạm vi chưa triển khai
 
 - Không dedup nội dung; lưu cùng text/link hai lần tạo hai Item.
 - Không nhận `Idempotency-Key` ở API Quy trình 2.
 - Chưa kết nối Chat/Auth thật.
-- Chưa chạy hash/virus scan/thumbnail; đây là phạm vi Quy trình 4.
-- Chưa Multipart, download URL, share, xóa/restore hoặc cleanup session hết hạn.
+- Worker đã chạy SHA-256; chưa có virus scan, thumbnail hoặc preview.
+- Chưa Multipart, download URL, share hoặc xóa/restore.
+- Cleanup upload hết hạn đã có; chưa có dashboard quản trị job.

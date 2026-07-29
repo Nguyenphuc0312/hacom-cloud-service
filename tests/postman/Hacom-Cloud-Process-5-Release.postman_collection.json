@@ -1,0 +1,380 @@
+{
+  "info": {
+    "_postman_id": "6b0323cb-2564-4f51-b5e4-2adcd5ec6937",
+    "name": "Hacom Cloud - Process 5 Release",
+    "description": "Gate 5 backend release demo: health, text, link, timeline, direct upload, Worker hash, ownership, quota and validation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "demoUserId",
+      "value": "11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "key": "otherUserId",
+      "value": "22222222-2222-4222-8222-222222222222"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Readiness",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health/ready"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('API, PostgreSQL and MinIO are ready', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('UP');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Create Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"content\":\"Process 5 Postman release candidate\"}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/texts"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('text is ready', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.type).to.eql('text');",
+              "  pm.expect(body.status).to.eql('ready');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Create Link",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"url\":\"https://hacom.vn\",\"title\":\"Hacom\"}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/links"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('link is ready', function () {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(pm.response.json().type).to.eql('link');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Timeline",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items?limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('timeline returns items', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().items.length).to.be.at.least(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Initiate Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "p5-{{$guid}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"p5-demo.txt\",\"contentType\":\"text/plain\",\"sizeBytes\":7}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('quota is reserved and URL is finite', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.method).to.eql('PUT');",
+              "  pm.expect(body.requiredHeaders['If-None-Match']).to.eql('*');",
+              "  pm.collectionVariables.set('uploadUrl', body.uploadUrl);",
+              "  pm.collectionVariables.set('sessionId', body.uploadSessionId);",
+              "  pm.collectionVariables.set('itemId', body.itemId);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - PUT Binary Directly to MinIO",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain"
+          },
+          {
+            "key": "If-None-Match",
+            "value": "*"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "p5-demo"
+        },
+        "url": "{{uploadUrl}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('direct PUT succeeds once', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Complete Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/uploads/{{sessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('upload enters Worker pipeline', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.item.status).to.eql('processing');",
+              "  pm.expect(body.job.type).to.eql('hash_file');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - File Reaches Ready",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items/{{itemId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('item endpoint is available', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const pollRequest = {",
+              "  url: pm.environment.get('baseUrl') + '/api/v1/cloud/items/' + pm.collectionVariables.get('itemId'),",
+              "  header: { 'X-Demo-User-ID': pm.collectionVariables.get('demoUserId') }",
+              "};",
+              "function poll(attempt) {",
+              "  pm.sendRequest(pollRequest, function (error, response) {",
+              "    if (!error && response.code === 200 && response.json().status === 'ready') {",
+              "      pm.test('Worker hashes file to ready', function () {",
+              "        pm.expect(response.json().status).to.eql('ready');",
+              "      });",
+              "      return;",
+              "    }",
+              "    if (attempt >= 20) {",
+              "      pm.test('Worker hashes file to ready', function () {",
+              "        pm.expect.fail('item did not reach ready within 10 seconds');",
+              "      });",
+              "      return;",
+              "    }",
+              "    setTimeout(function () { poll(attempt + 1); }, 500);",
+              "  });",
+              "}",
+              "poll(0);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Cross-owner Read Is Hidden",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{otherUserId}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items/{{itemId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('other owner receives stable 404', function () {",
+              "  pm.response.to.have.status(404);",
+              "  pm.expect(pm.response.json().error.code).to.eql('ITEM_NOT_FOUND');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Quota Reconciles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('quota invariants hold', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const quota = pm.response.json();",
+              "  pm.expect(quota.usedBytes).to.be.at.least(7);",
+              "  pm.expect(quota.reservedBytes).to.eql(0);",
+              "  pm.expect(quota.usedBytes + quota.reservedBytes + quota.availableBytes).to.eql(quota.limitBytes);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Reject Over-limit Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{demoUserId}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "p5-too-large-{{$guid}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"large.bin\",\"contentType\":\"application/octet-stream\",\"sizeBytes\":100000001}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('100 MB decimal boundary is enforced', function () {",
+              "  pm.response.to.have.status(413);",
+              "  pm.expect(pm.response.json().error.code).to.eql('FILE_TOO_LARGE');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

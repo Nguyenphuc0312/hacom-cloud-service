@@ -5,6 +5,73 @@
 > Backend: Go  
 > Phạm vi: Personal Cloud dạng timeline giống Zalo, chưa kết nối Chat và chưa triển khai Folder CRUD
 
+## Release candidate Quy trình 5
+
+Quy trình 5 khóa phạm vi ở backend Phase 1: text, link, timeline, quota, upload
+trực tiếp MinIO, Worker hash và cleanup upload hết hạn. Không có giao diện,
+Auth/Chat thật, folder, share, preview, virus scan hay tính năng sản phẩm mới.
+
+Yêu cầu: Go 1.25+, Docker có Compose, `golang-migrate`, `curl` và `jq`. Newman
+chỉ cần khi chạy Postman bằng CLI.
+
+Từ một checkout sạch:
+
+```bash
+cp .env.example .env
+make up
+make migrate-up
+make db-verify
+```
+
+Chạy API và Worker ở hai terminal:
+
+```bash
+make run-api
+make run-worker
+```
+
+Kiểm tra release đầy đủ trên database test riêng:
+
+```bash
+make test-release-process5
+```
+
+Lệnh này tự tạo/xóa database `hacom_cloud_process5_release_test`, chạy migration
+`up → down 1 → up 1`, verify schema, race/integration test, `go vet` và
+`go build`. Nó không xóa database `hacom_cloud` hay volume local.
+
+Khi API và Worker đang chạy, có thể chạy demo tự động hoặc Postman:
+
+```bash
+make demo-process5
+make test-postman-process5
+```
+
+Demo không in presigned URL/credential và kiểm tra text, link, upload, Worker
+đưa file về `ready`, ownership `404` và quota. Collection Postman tự lấy
+`uploadUrl`, session ID và item ID từ response; không hard-code URL đã ký.
+
+Khắc phục lỗi thường gặp:
+
+- `/health/ready` trả `503`: chạy `make ps`, `make logs`, kiểm tra PostgreSQL,
+  MinIO và migration.
+- API không khởi động: kiểm tra `DATABASE_URL`, `MINIO_*` trong `.env` và port
+  `8080`.
+- File giữ `processing`: kiểm tra Worker đang chạy, `WORKER_ID` không trùng và
+  xem job theo runbook trong `docs/worker-release-checklist.md`.
+- `migrate` báo dirty version: không tự sửa bảng; dừng demo, giữ database làm
+  bằng chứng và dựng lại database test bằng `make test-release-process5`.
+- Port `5432`, `9000`, `9001` bị chiếm: dừng service ngoài phạm vi hoặc đổi
+  mapping local trước khi chạy; không đổi contract ứng dụng.
+
+Tài liệu bàn giao:
+
+- Contract và Gate 5: [`docs/README-PROCESS-5.md`](docs/README-PROCESS-5.md)
+- API/security: [`docs/process5-api-security-review.md`](docs/process5-api-security-review.md)
+- Worker recovery: [`docs/process5-worker-recovery-report.md`](docs/process5-worker-recovery-report.md)
+- Demo: [`docs/process5-demo-script.md`](docs/process5-demo-script.md)
+- Release report: [`docs/process5-release-report.md`](docs/process5-release-report.md)
+
 ## Khởi động local
 
 Yêu cầu: Go 1.25+, Docker và Docker Compose.
@@ -53,7 +120,8 @@ Quy trình 2 đã bổ sung PostgreSQL repository thật cho Personal Cloud, tex
 
 Quy trình 3 đã bổ sung upload trực tiếp bằng MinIO presigned URL, quota reservation và complete idempotent. Xem [`docs/process3-upload-implementation.md`](docs/process3-upload-implementation.md).
 
-Worker ở Quy trình 4 chưa xử lý `hash_file`, vì vậy file sau complete chủ động dừng ở trạng thái `processing`.
+Worker Quy trình 4 đã xử lý `hash_file` và cleanup upload hết hạn. File sau
+complete chuyển `processing`, rồi thành `ready` sau khi Worker tính SHA-256.
 
 ## 1. Cách tổ chức chung
 

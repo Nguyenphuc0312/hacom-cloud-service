@@ -11,12 +11,14 @@ TEST_MINIO_ENDPOINT ?= localhost:9000
 POSTMAN_COLLECTION ?= tests/postman/Hacom-Cloud-Process-2.postman_collection.json
 POSTMAN_ENVIRONMENT ?= tests/postman/Hacom-Cloud-Local.postman_environment.json
 POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postman_collection.json
+POSTMAN_PROCESS5_COLLECTION ?= tests/postman/Hacom-Cloud-Process-5-Release.postman_collection.json
 
 .PHONY: run-api run-worker test fmt vet up down logs ps \
 	infra-up infra-down infra-logs infra-ps \
 	migrate-up migrate-down migrate-version db-verify \
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
+	test-release-process5 test-postman-process5 demo-process5 \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -38,6 +40,17 @@ test-integration-clean:
 
 test-integration-process4:
 	sh scripts/test-process4-integration.sh
+
+test-release-process5:
+	sh scripts/test-process5-release.sh
+
+test-postman-process5:
+	npx --yes newman run "$(POSTMAN_PROCESS5_COLLECTION)" \
+		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli --silent
+	@echo "Process 5 Postman acceptance passed (silent mode protects presigned URLs)."
+
+demo-process5:
+	sh scripts/demo-process5.sh
 
 test-postman:
 	npx --yes newman run "$(POSTMAN_COLLECTION)" \

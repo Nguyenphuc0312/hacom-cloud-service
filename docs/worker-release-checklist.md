@@ -2,13 +2,15 @@
 
 ## Kiểm tra tự động
 
-- Chạy `go test ./internal/worker/... -count=100`.
-- Chạy `go test ./...`.
-- Chạy `go vet ./...`.
-- Nhiều Worker chạy đồng thời chỉ có một Worker claim được một job.
-- Lỗi tạm thời đưa job về `pending` và lên lịch retry theo exponential backoff.
+- Chạy `go test -race -count=1 ./...`.
+- Chạy `make test-release-process5`.
+- Chạy `go vet ./...` và `go build ./...`.
+- Mười Worker chạy đồng thời chỉ có một Worker claim được một job.
+- Lỗi tạm thời đưa job về `failed` và lên lịch retry theo exponential backoff.
+- Backoff lần 1/2/3 tăng `base → 2×base → max` và không vượt trần.
 - Job chuyển sang `dead` sau khi đạt `max_attempts` trong PostgreSQL repository.
 - Job `processing` có stale lock được claim lại sau khi Worker restart.
+- Worker đã mất lease không được `Complete` hoặc `Fail`.
 - Job `hash_file` được claim lại không ghi đè item đã ở trạng thái `ready`.
 - Cleanup được retry không giải phóng quota hoặc ghi `UPLOAD_RELEASED` hai lần.
 
@@ -39,9 +41,12 @@ Với mỗi upload đã complete, cần kiểm tra:
 1. Đọc `job_type`, `attempts`, `last_error`, payload và các mốc thời gian.
 2. Kiểm tra item hoặc upload session tương ứng, object trong MinIO và quota ledger.
 3. Sửa nguyên nhân bên ngoài trước; không tự ý reset job khi chưa xác định nguyên nhân.
-4. Đưa cùng tác vụ logic vào queue trở lại và giữ nguyên định danh idempotency.
-5. Khởi động Worker và xác nhận job chuyển sang `completed`.
-6. Chạy lại checklist đối soát trạng thái trước khi tiếp tục demo.
+4. Nếu job đang `failed`, chờ `run_after`; Worker sẽ tự claim lại.
+5. Nếu job đã `dead`, không sửa `attempts/status` bằng tay. Sửa nguyên nhân,
+   tạo lại đúng tác vụ qua luồng nghiệp vụ/recovery đã duyệt với cùng định danh
+   logic và giữ job cũ làm audit evidence.
+6. Khởi động Worker và xác nhận job mới/chờ retry chuyển `completed`.
+7. Chạy `scripts/reconcile-process5.sql` trước khi tiếp tục demo.
 
 PostgreSQL repository cần sử dụng `FOR UPDATE SKIP LOCKED`, lưu
 `run_after`, `locked_at`, `attempts` và `last_error`, đồng thời áp dụng cùng
