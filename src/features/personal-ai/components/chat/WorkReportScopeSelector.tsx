@@ -65,6 +65,12 @@ export const WorkReportScopeSelector: React.FC<WorkReportScopeSelectorProps> = (
     fetchWorkReportScopes({ capability, signal: ac.signal })
       .then((res) => {
         if (ac.signal.aborted) return;
+        // §2.4: BE báo còn đúng MỘT phạm vi (đã gộp) và tự bind → không có gì để
+        // chọn, đóng widget thay vì hiện danh sách rỗng/token rỗng.
+        if (res.autoSelected) {
+          cancelPick();
+          return;
+        }
         setScopes(res.scopes, res.capability);
         setError(null);
       })

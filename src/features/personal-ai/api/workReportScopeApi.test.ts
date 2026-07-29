@@ -10,11 +10,12 @@ import {
   fetchWorkReportScopes,
   normalizeScopeList,
   normalizeScopeTypes,
+  parseScopeRequiredDetail,
   ScopeFeatureDisabledError,
   ScopeFetchError,
   WORK_REPORT_CAPABILITIES,
 } from "./workReportScopeApi";
-import type { WorkReportScope } from "../types";
+import type { WorkReportScope, WorkReportScopesResponse } from "../types";
 
 vi.mock("../../../services/tokenService", () => ({
   getAccessToken: () => "test-token",
@@ -102,16 +103,23 @@ describe("normalizeScopeTypes", () => {
 });
 
 describe("decideScopePreflight (§2 số scope khớp → hành vi)", () => {
+  const res = (
+    scopes: WorkReportScope[],
+    autoSelected = false,
+  ): WorkReportScopesResponse => ({ count: scopes.length, scopes, autoSelected });
+
   it("0 scope → deny", () => {
-    expect(decideScopePreflight([])).toEqual({ kind: "deny" });
+    expect(decideScopePreflight(res([]))).toEqual({ kind: "deny" });
   });
-  it("1 scope → pick (LUÔN mở dropdown, kể cả 1 lựa chọn)", () => {
-    const s = scope();
-    expect(decideScopePreflight([s])).toEqual({ kind: "pick", scopes: [s] });
+  it("autoSelected (§2.4 một phạm vi, BE tự bind) → auto, KHÔNG dropdown", () => {
+    // BE trả selectionToken rỗng có chủ đích ở nhánh này.
+    expect(decideScopePreflight(res([scope({ selectionToken: "" })], true))).toEqual({
+      kind: "auto",
+    });
   });
   it("≥2 scope → pick (mở dropdown)", () => {
     const list = [scope(), scope({ authorizationId: "auth-2", selectionToken: "tok-2" })];
-    expect(decideScopePreflight(list)).toEqual({ kind: "pick", scopes: list });
+    expect(decideScopePreflight(res(list))).toEqual({ kind: "pick", scopes: list });
   });
 });
 
@@ -241,6 +249,36 @@ describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
     expect(res.scopes).toHaveLength(1);
   });
 
+  it("[2.4/2.5] echo autoSelected + promptId (một phạm vi → token rỗng có chủ đích)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          capability: "department_submit",
+          count: 1,
+          autoSelected: true,
+          promptId: "",
+          scopes: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const res = await fetchWorkReportScopes({ capability: "department_submit" });
+    expect(res.autoSelected).toBe(true);
+    expect(res.promptId).toBe("");
+    expect(decideScopePreflight(res)).toEqual({ kind: "auto" });
+  });
+
+  it("[2.4] BE bản cũ không có autoSelected → lùi về count === 1", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ count: 1, scopes: [rawScope()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const res = await fetchWorkReportScopes({ capability: "department_submit" });
+    expect(res.autoSelected).toBe(true);
+  });
+
   it("404 → ScopeFeatureDisabledError (flag tắt, không phải lỗi quyền §2)", async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
     await expect(fetchWorkReportScopes({ capability: "report_read" })).rejects.toBeInstanceOf(
@@ -260,5 +298,44 @@ describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
     await expect(
       fetchWorkReportScopes({ capability: "department_read" }),
     ).rejects.toBeInstanceOf(ScopeFetchError);
+  });
+});
+
+// ── parseScopeRequiredDetail (§2.5 lỗi nộp/xuất mang sẵn dropdown) ──────────
+
+describe("parseScopeRequiredDetail (§2.5)", () => {
+  const body = (detail: unknown) => JSON.stringify({ detail });
+
+  it("detail object có scopes → dựng được payload dropdown (promptId, message)", () => {
+    const parsed = parseScopeRequiredDetail(
+      body({
+        reason: "multiple_matching_authorizations",
+        message: "Bạn có nhiều phạm vi phù hợp.",
+        promptId: " 00c8c7c4120c45499c78a057c11f456c ",
+        question: "#TBP_baocao",
+        capability: "department_submit",
+        requiredAction: "SUBMIT",
+        allowedScopeTypes: ["DEPARTMENT", "junk"],
+        scopes: [rawScope(), rawScope({ authorizationId: "auth-2", selectionToken: "tok-2" })],
+      }),
+    );
+    expect(parsed).toMatchObject({
+      reason: "multiple_matching_authorizations",
+      message: "Bạn có nhiều phạm vi phù hợp.",
+      promptId: "00c8c7c4120c45499c78a057c11f456c",
+      capability: "department_submit",
+      requiredAction: "SUBMIT",
+      allowedScopeTypes: ["DEPARTMENT"],
+    });
+    expect(parsed?.scopes).toHaveLength(2);
+  });
+
+  it("detail vẫn là CHUỖI (đường lùi BE không ký được token) → null, giữ luồng cũ", () => {
+    expect(parseScopeRequiredDetail(body("Bạn có nhiều phạm vi phù hợp."))).toBeNull();
+  });
+
+  it("body không phải JSON hoặc detail thiếu scopes → null", () => {
+    expect(parseScopeRequiredDetail("<html>502</html>")).toBeNull();
+    expect(parseScopeRequiredDetail(body({ reason: "x", scopes: [] }))).toBeNull();
   });
 });

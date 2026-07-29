@@ -2,6 +2,7 @@ import type {
   WorkReportCapability,
   WorkReportRequiredAction,
   WorkReportScope,
+  WorkReportScopeRequired,
   WorkReportScopesResponse,
   WorkReportScopeType,
 } from "../types";
@@ -141,6 +142,43 @@ export function normalizeScopeList(raw: unknown): WorkReportScope[] {
 }
 
 /**
+ * §2.5: lỗi chọn phạm vi của `/api/level-reports/upload` và `/export` nay là
+ * OBJECT `detail` mang đủ dữ liệu dựng dropdown (cùng shape SSE
+ * `work_report_scope_required` + `message`), thay vì chuỗi tiếng Việt như trước.
+ *
+ * Trả null khi `detail` vẫn là chuỗi — đường lùi của BE khi không ký được token
+ * (thiếu/ngắn `WORK_REPORT_SCOPE_TOKEN_SECRET`); caller giữ nguyên xử lý cũ.
+ */
+export function parseScopeRequiredDetail(
+  rawBody: string,
+): (WorkReportScopeRequired & { message?: string }) | null {
+  let detail: unknown;
+  try {
+    detail = (JSON.parse(rawBody) as Record<string, unknown>)?.detail;
+  } catch {
+    return null;
+  }
+  if (!detail || typeof detail !== "object") return null;
+
+  const obj = detail as Record<string, unknown>;
+  const scopes = normalizeScopeList(obj.scopes);
+  if (scopes.length === 0) return null;
+
+  return {
+    reason: typeof obj.reason === "string" ? obj.reason : "",
+    promptId: typeof obj.promptId === "string" ? obj.promptId.trim() : undefined,
+    // Câu hỏi trong payload đã chuẩn hoá khoảng trắng ở BE — chỉ để hiển thị/log,
+    // KHÔNG dùng để khớp token (§2.5 mục 1.4); khớp bằng `promptId`.
+    question: typeof obj.question === "string" ? obj.question : "",
+    scopes,
+    capability: asCapability(obj.capability),
+    requiredAction: asRequiredAction(obj.requiredAction),
+    allowedScopeTypes: normalizeScopeTypes(obj.allowedScopeTypes),
+    message: typeof obj.message === "string" ? obj.message.trim() || undefined : undefined,
+  };
+}
+
+/**
  * GET /api/work-reports/scopes?capability=... — danh sách authorization KHỚP với
  * một thao tác (§3). `capability` **BẮT BUỘC**: BE bắt buộc query này, thiếu →
  * 422 (xác nhận BE 25/07). Mỗi thao tác user chỉ thấy đúng scope hợp lệ (vd
@@ -173,13 +211,19 @@ export async function fetchWorkReportScopes(options: {
 
   const payload = (await response.json()) as Record<string, unknown>;
   const scopes = normalizeScopeList(payload.scopes);
+  const count = typeof payload.count === "number" ? payload.count : scopes.length;
   return {
-    count: typeof payload.count === "number" ? payload.count : scopes.length,
+    count,
     scopes,
     // Echo lại từ BE để đối chiếu — ưu tiên giá trị response, lùi về capability đã gửi.
     capability: asCapability(payload.capability) ?? options.capability,
     requiredAction: asRequiredAction(payload.requiredAction),
     allowedScopeTypes: normalizeScopeTypes(payload.allowedScopeTypes),
+    // §2.4: BE bản cũ chưa có field này → lùi về `count === 1` (cùng ý nghĩa:
+    // một phạm vi thì BE tự bind), giữ tương thích ngược.
+    autoSelected:
+      typeof payload.autoSelected === "boolean" ? payload.autoSelected : count === 1,
+    promptId: typeof payload.promptId === "string" ? payload.promptId.trim() : undefined,
   };
 }
 
@@ -255,19 +299,19 @@ export function canSubmitLevelReport(
 
 /**
  * Quyết định của luồng "user bấm nút thao tác" sau khi có danh sách scope (§2):
- *  - `deny`   : 0 scope khớp → không hiện thao tác, báo không có quyền.
- *  - `pick`   : ≥1 scope → LUÔN mở dropdown, chờ user xác nhận.
- *
- * UX chốt lại: kể cả đúng 1 scope vẫn hiển thị dropdown (đã pre-select ở store) —
- * user phải chủ động xác nhận phạm vi trước khi gửi, không tự dùng ngầm. Vì vậy
- * không còn nhánh `auto`; store `setScopes` pre-select khi count === 1 nhưng vẫn
- * bật `isPicking` để widget hiện ra.
+ *  - `deny` : 0 scope khớp → không hiện thao tác, báo không có quyền.
+ *  - `auto` : BE báo `autoSelected` (đúng MỘT phạm vi sau khi gộp, §2.4) → không
+ *    hiện dropdown, gọi thẳng thao tác KHÔNG kèm `scope_token`. `selectionToken`
+ *    rỗng ở nhánh này là chủ đích của BE, không phải lỗi.
+ *  - `pick` : ≥2 phạm vi → mở dropdown, chờ user chọn.
  */
 export type ScopePreflight =
   | { kind: "deny" }
+  | { kind: "auto" }
   | { kind: "pick"; scopes: WorkReportScope[] };
 
-export function decideScopePreflight(scopes: WorkReportScope[]): ScopePreflight {
-  if (scopes.length === 0) return { kind: "deny" };
-  return { kind: "pick", scopes };
+export function decideScopePreflight(res: WorkReportScopesResponse): ScopePreflight {
+  if (res.autoSelected) return { kind: "auto" };
+  if (res.scopes.length === 0) return { kind: "deny" };
+  return { kind: "pick", scopes: res.scopes };
 }

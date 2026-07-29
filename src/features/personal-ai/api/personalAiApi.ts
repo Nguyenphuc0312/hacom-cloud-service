@@ -16,7 +16,6 @@ import { getAccessToken } from "../../../services/tokenService";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
 import {
   appendScopeTokenToUrl,
-  getScopeToken,
   withScopeToken,
 } from "../stores/workReportScopeStore";
 import {
@@ -24,6 +23,7 @@ import {
   asRequiredAction,
   normalizeScopeList,
   normalizeScopeTypes,
+  parseScopeRequiredDetail,
 } from "./workReportScopeApi";
 import type { WorkReportScopeRequired } from "../types";
 
@@ -73,12 +73,55 @@ export class PersonalAiError extends Error {
   }
 }
 
+/**
+ * Lỗi HTTP giữ nguyên BODY response — `aiRequest` đọc body ngay tại chỗ vì
+ * `Response` chỉ đọc được một lần. Nhờ đó caller lấy được lý do thật (§2.5:
+ * `detail` object của /level-reports/*) mà không phải gọi lại request.
+ */
+export class AiHttpError extends PersonalAiError {
+  readonly rawBody: string;
+
+  constructor(status: number, rawBody: string) {
+    super(status, "http", parseHttpErrorMessage(rawBody));
+    this.name = "AiHttpError";
+    this.rawBody = rawBody;
+  }
+}
+
+/**
+ * §2.5: lỗi 400/403 của nộp/xuất báo cáo cấp KÈM danh sách phạm vi để dựng
+ * dropdown ngay tại chỗ. Caller giữ File trong memory, mở dropdown từ `scope`
+ * rồi nộp lại chính lượt đó — không bắt user đính lại tệp, không gọi `/scopes`.
+ */
+export class LevelReportScopeRequiredError extends PersonalAiError {
+  readonly scope: WorkReportScopeRequired & { message?: string };
+
+  constructor(status: number, scope: WorkReportScopeRequired & { message?: string }) {
+    super(
+      status,
+      "http",
+      scope.message ?? "Bạn có nhiều phạm vi phù hợp. Vui lòng chọn một phạm vi.",
+    );
+    this.name = "LevelReportScopeRequiredError";
+    this.scope = scope;
+  }
+}
+
 function extractHttpErrorMessage(rawText: string): string | undefined {
   if (!rawText.trim()) return undefined;
 
   try {
     const payload = JSON.parse(rawText) as Record<string, unknown>;
-    const message = payload.detail ?? payload.message ?? payload.error ?? payload.title;
+    // §2.5: `detail` của /level-reports/* nay có thể là OBJECT — lấy
+    // `detail.message` để không in ra "[object Object]".
+    const detail = payload.detail;
+    const message =
+      (detail && typeof detail === "object"
+        ? (detail as Record<string, unknown>).message
+        : detail) ??
+      payload.message ??
+      payload.error ??
+      payload.title;
     if (typeof message === "string" && message.trim()) return message.trim();
   } catch {
     return rawText.trim();
@@ -137,7 +180,12 @@ async function aiRequest(
       headers: mergedHeaders,
       signal: init.signal ?? controller.signal,
     });
-    if (!response.ok) throw new PersonalAiError(response.status, "http");
+    if (!response.ok) {
+      // Đọc body lỗi NGAY (response chỉ đọc được một lần) để caller có lý do
+      // thật — §2.5 `detail` object của /level-reports/* nằm trong đây.
+      const rawBody = await response.text().catch(() => "");
+      throw new AiHttpError(response.status, rawBody);
+    }
     return response;
   } catch (err) {
     if (err instanceof PersonalAiError) throw err;
@@ -386,10 +434,20 @@ export function uploadPersonalDocument(
  * `file` (.xlsx ≤ 25MB), tùy chọn `week_start`/`week_end` (nộp muộn). Quyền +
  * phạm vi BE tự suy từ JWT — FE KHÔNG gửi. Nộp lại cùng tuần = thay bản cũ (BE
  * tự xử lý). Lỗi: 400 (file/tag hỏng), 403 (sai vai), 413 (>25MB).
+ *
+ * §2.5: `scopeToken` truyền TƯỜNG MINH (không tự đọc store) — token chỉ hợp lệ
+ * cho đúng lượt nộp đã sinh ra nó, caller mới là nơi biết điều đó. 400/403 kèm
+ * `detail.scopes` → ném `LevelReportScopeRequiredError` để caller mở dropdown
+ * tại chỗ và nộp lại chính lượt đó bằng file còn trong memory.
  */
 export function uploadLevelReport(
   file: File,
-  params: { question: string; weekStart?: string; weekEnd?: string },
+  params: {
+    question: string;
+    weekStart?: string;
+    weekEnd?: string;
+    scopeToken?: string;
+  },
   options?: { signal?: AbortSignal },
 ): Promise<LevelReportUploadResponse> {
   return new Promise((resolve, reject) => {
@@ -422,9 +480,9 @@ export function uploadLevelReport(
     form.append("file", file, file.name);
     if (params.weekStart) form.append("week_start", params.weekStart);
     if (params.weekEnd) form.append("week_end", params.weekEnd);
-    // §4: nộp TBP/LĐĐV gửi scope_token dạng multipart field.
-    const scopeToken = getScopeToken();
-    if (scopeToken) form.append("scope_token", scopeToken);
+    // §4: nộp TBP/LĐĐV gửi scope_token dạng multipart field. Token do caller
+    // quyết định (§2.5) — không tự lấy từ store, tránh đính token của lượt khác.
+    if (params.scopeToken) form.append("scope_token", params.scopeToken);
 
     xhr.open("POST", LEVEL_REPORT_UPLOAD_URL, true);
     xhr.responseType = "text";
@@ -451,13 +509,22 @@ export function uploadLevelReport(
           reject(new PersonalAiError(status, "http", "Phản hồi máy chủ không hợp lệ."));
         }
       } else {
+        // §2.5: 400 (chưa chọn phạm vi) / 403 (token hỏng mà vẫn nhiều phạm vi)
+        // nay kèm sẵn `detail.scopes` → trả lỗi mang payload để caller mở dropdown
+        // ngay, không phải gọi lại `/scopes` và bắt user đính lại tệp.
+        const scopeDetail =
+          status === 400 || status === 403
+            ? parseScopeRequiredDetail(xhr.responseText)
+            : null;
         reject(
-          new PersonalAiError(
-            status,
-            "http",
-            parseHttpErrorMessage(xhr.responseText) ??
-              formatHttpErrorMessage(xhr.responseText, status),
-          ),
+          scopeDetail
+            ? new LevelReportScopeRequiredError(status, scopeDetail)
+            : new PersonalAiError(
+                status,
+                "http",
+                parseHttpErrorMessage(xhr.responseText) ??
+                  formatHttpErrorMessage(xhr.responseText, status),
+              ),
         );
       }
     });
@@ -737,7 +804,18 @@ export function parseLevelReportExportHref(href: string | undefined): string | n
  */
 export async function downloadLevelReportExport(url: string): Promise<void> {
   // §4: xuất báo cáo cấp gửi scope_token qua query, URL-encode qua URLSearchParams.
-  const response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
+  } catch (err) {
+    // §2.5: endpoint này dùng chung cổng phạm vi với upload nên 400/403 cũng là
+    // object `detail` kèm `scopes` + `promptId`.
+    if (err instanceof AiHttpError && (err.status === 400 || err.status === 403)) {
+      const scopeDetail = parseScopeRequiredDetail(err.rawBody);
+      if (scopeDetail) throw new LevelReportScopeRequiredError(err.status, scopeDetail);
+    }
+    throw err;
+  }
   const disposition = response.headers.get("content-disposition") ?? "";
   let filename = "bao-cao-tong-hop.xlsx";
   const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);

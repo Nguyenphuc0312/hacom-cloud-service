@@ -131,6 +131,19 @@ export interface WorkReportScopesResponse {
   capability?: WorkReportCapability;
   requiredAction?: WorkReportRequiredAction;
   allowedScopeTypes?: WorkReportScopeType[];
+  /**
+   * §2.4: BE đã gộp nhiều authorization cùng trỏ một phòng/đơn vị thành MỘT
+   * phạm vi; còn đúng một lựa chọn → `true` và BE tự bind, `selectionToken`
+   * rỗng CÓ CHỦ ĐÍCH. FE không hiện dropdown và gọi thao tác KHÔNG kèm
+   * `scope_token` (gửi token cũ quá TTL từng gây 403 "lần đầu nộp không được").
+   */
+  autoSelected: boolean;
+  /**
+   * §2.5: `promptId` của chính lần gọi `/scopes` này — sinh mới mỗi lần gọi, để
+   * token lấy CHỦ ĐỘNG từ `/scopes` (luồng nộp file) cũng gắn được vào đúng một
+   * lượt gửi như luồng chat SSE. Rỗng khi `autoSelected` (không có gì để chọn).
+   */
+  promptId?: string;
 }
 
 /**
