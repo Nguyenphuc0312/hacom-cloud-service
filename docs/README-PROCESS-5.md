@@ -5,6 +5,11 @@
 > Nguồn đầu vào: `main` tại Gate 4, merge commit `8f8a2c9`  
 > Nhánh làm việc chung: `integration/process-5-release-demo`
 
+> Ghi chú thực thi 29/07/2026: theo yêu cầu mới của user, một người hoàn thành
+> toàn bộ bốn phạm vi. Phân công bên dưới được giữ làm checklist ownership và
+> review; yêu cầu kỹ thuật/đầu ra/Gate không bị giảm. Tất cả commit vẫn nằm trên
+> nhánh chung đã chốt.
+
 ## 1. Mục tiêu
 
 Quy trình 5 không mở thêm tính năng sản phẩm. Mục tiêu là biến kết quả của
@@ -685,27 +690,27 @@ Không chạy Gate cuối khi còn `BLOCKER` hoặc `MAJOR`.
 
 Gate 5 chỉ đạt khi tất cả mục dưới đây hoàn thành:
 
-- [ ] Bốn người commit đúng nhánh `integration/process-5-release-demo`.
-- [ ] Không có commit trực tiếp lên `main`.
-- [ ] Database sạch migrate và verify được.
-- [ ] Migration `down/up` đạt.
-- [ ] Unit test và race detector đạt.
-- [ ] PostgreSQL/MinIO integration đạt.
-- [ ] Regression Quy trình 2–4 đạt.
-- [ ] Concurrency không vượt quota hoặc ghi trùng ledger.
-- [ ] Snapshot quota khớp tổng ledger.
-- [ ] Ownership và validation API đạt.
-- [ ] Log/response không lộ secret hoặc presigned URL.
-- [ ] Worker retry/backoff/max attempts đạt.
-- [ ] Stale-lock và lost-lease recovery đạt.
-- [ ] Hash và cleanup idempotent.
-- [ ] Không còn job kẹt `processing`.
-- [ ] README được kiểm tra từ môi trường sạch.
-- [ ] Postman chạy được và có assertion.
-- [ ] Demo live dưới 10 phút.
-- [ ] Có slide outline và video/phương án dự phòng.
-- [ ] Release report ghi commit SHA và kết quả test.
-- [ ] Không còn finding `BLOCKER` hoặc `MAJOR`.
+- [x] Bốn phạm vi được hoàn thành trên `integration/process-5-release-demo`.
+- [x] Không có commit trực tiếp lên `main`.
+- [x] Database sạch migrate và verify được.
+- [x] Migration `down/up` đạt.
+- [x] Unit test và race detector đạt.
+- [x] PostgreSQL/MinIO integration đạt.
+- [x] Regression Quy trình 2–4 đạt.
+- [x] Concurrency không vượt quota hoặc ghi trùng ledger.
+- [x] Snapshot quota khớp tổng ledger.
+- [x] Ownership và validation API đạt.
+- [x] Log/response không lộ secret hoặc presigned URL.
+- [x] Worker retry/backoff/max attempts đạt.
+- [x] Stale-lock và lost-lease recovery đạt.
+- [x] Hash và cleanup idempotent.
+- [x] Không còn job kẹt `processing`.
+- [x] README được kiểm tra từ môi trường/database sạch.
+- [x] Postman chạy được và có assertion.
+- [x] Demo live dưới 10 phút.
+- [x] Có slide outline và phương án dự phòng.
+- [x] Release report ghi commit SHA và kết quả test.
+- [x] Không còn finding `BLOCKER` hoặc `MAJOR`.
 
 ## 7. Kết quả sau khi hoàn thành Quy trình 5
 
