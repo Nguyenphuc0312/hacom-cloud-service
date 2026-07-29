@@ -7,9 +7,24 @@ import {
   uploadLevelReport,
 } from "./personalAiApi";
 
+let currentToken = "test-token";
 vi.mock("../../../services/tokenService", () => ({
-  getAccessToken: () => "test-token",
+  getAccessToken: () => currentToken,
 }));
+
+const ensureFreshMock = vi.fn(async () => currentToken);
+const refreshSharedMock = vi.fn(async () => currentToken);
+vi.mock("../../../services/authRefreshCoordinator", () => ({
+  ensureFreshAccessToken: (...args: unknown[]) => ensureFreshMock(...(args as [])),
+  refreshAccessTokenShared: (...args: unknown[]) => refreshSharedMock(...(args as [])),
+}));
+
+beforeEach(() => {
+  currentToken = "test-token";
+  ensureFreshMock.mockClear();
+  refreshSharedMock.mockClear();
+  refreshSharedMock.mockImplementation(async () => currentToken);
+});
 
 const fetchMock = vi.fn();
 
@@ -282,30 +297,83 @@ describe("uploadLevelReport — lỗi chọn phạm vi mang sẵn dropdown (§2.
 
   /** XHR giả: trả sẵn status + body cho lần `send()` kế tiếp. */
   function stubXhr(status: number, responseText: string) {
+    return stubXhrSequence([{ status, responseText }]);
+  }
+
+  /**
+   * XHR giả trả kết quả KHÁC NHAU theo từng lượt gửi — cần cho §2.6 (401 rồi
+   * gửi lại thành công). Lượt vượt quá dãy dùng lại phần tử cuối.
+   */
+  function stubXhrSequence(steps: { status: number; responseText: string }[]) {
     const sent: FormData[] = [];
+    const headers: Record<string, string>[] = [];
+    let call = 0;
     class FakeXhr {
       status = 0;
       responseText = "";
       responseType = "";
+      private myHeaders: Record<string, string> = {};
       private handlers: Record<string, (() => void)[]> = {};
       open() {}
-      setRequestHeader() {}
+      setRequestHeader(key: string, value: string) {
+        this.myHeaders[key] = value;
+      }
       abort() {}
       addEventListener(type: string, fn: () => void) {
         (this.handlers[type] ??= []).push(fn);
       }
       send(form: FormData) {
+        const step = steps[Math.min(call, steps.length - 1)];
+        call += 1;
         sent.push(form);
-        this.status = status;
-        this.responseText = responseText;
+        headers.push(this.myHeaders);
+        this.status = step.status;
+        this.responseText = step.responseText;
         this.handlers.load?.forEach((fn) => fn());
       }
     }
     vi.stubGlobal("XMLHttpRequest", FakeXhr as unknown as typeof XMLHttpRequest);
-    return sent;
+    return Object.assign(sent, { headers });
   }
 
   afterEach(() => vi.unstubAllGlobals());
+
+  // §2.6 — 401 KHÔNG được làm mất file đang nộp.
+  it("[2.6] 401 → làm mới token rồi gửi lại CÙNG file, user không mất tệp", async () => {
+    const sent = stubXhrSequence([
+      { status: 401, responseText: JSON.stringify({ detail: { reason: "session_expired" } }) },
+      { status: 200, responseText: JSON.stringify({ ok: true, message: "Đã nhận." }) },
+    ]);
+    refreshSharedMock.mockImplementation(async () => {
+      currentToken = "fresh-token";
+      return currentToken;
+    });
+
+    const file = new File(["x"], "bc.xlsx");
+    const res = await uploadLevelReport(file, {
+      question: "#TBP_baocao",
+      scopeToken: "tok-a",
+    });
+
+    expect(res.message).toBe("Đã nhận.");
+    expect(sent).toHaveLength(2);
+    // Lượt gửi lại: cùng tệp, cùng scope_token, token auth MỚI.
+    expect((sent[1].get("file") as File).name).toBe(file.name);
+    expect(sent[1].get("scope_token")).toBe("tok-a");
+    expect(sent.headers[1].Authorization).toBe("Bearer fresh-token");
+  });
+
+  it("[2.6] 401 mà refresh hỏng (hết phiên thật) → ném 401, không gửi lại", async () => {
+    const sent = stubXhrSequence([{ status: 401, responseText: "" }]);
+    refreshSharedMock.mockRejectedValueOnce(new Error("session gone"));
+
+    const err = await uploadLevelReport(new File(["x"], "bc.xlsx"), {
+      question: "#TBP_baocao",
+    }).catch((e) => e);
+
+    expect(err.status).toBe(401);
+    expect(sent).toHaveLength(1);
+  });
 
   it("400 kèm detail.scopes → LevelReportScopeRequiredError giữ scopes + promptId", async () => {
     stubXhr(

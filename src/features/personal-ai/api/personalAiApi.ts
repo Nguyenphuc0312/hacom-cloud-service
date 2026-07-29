@@ -13,6 +13,10 @@ import type {
 } from "../../ai-assistant/types";
 import type { WeeklyReportFileItem } from "../../ai-assistant/services/aiChatApi";
 import { getAccessToken } from "../../../services/tokenService";
+import {
+  ensureFreshAccessToken,
+  refreshAccessTokenShared,
+} from "../../../services/authRefreshCoordinator";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
 import {
   appendScopeTokenToUrl,
@@ -55,6 +59,29 @@ export function containsLevelReportTag(question: string): boolean {
 function buildAuthHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}`, "x-api-contract": "3" } : { "x-api-contract": "3" };
+}
+
+/**
+ * Header auth cho các endpoint AI, có LÀM MỚI access token nếu sắp hết hạn.
+ *
+ * Các endpoint AI gọi bằng `fetch`/`XHR` trần nên KHÔNG đi qua interceptor
+ * refresh của axios (`lib/axios.ts`) như phần còn lại của app. Hai endpoint báo
+ * cáo cấp lại hỏi HRM `/auth/me` mỗi request
+ * (`CHAT_AUTH_REQUIRE_FRESH_AUTHORIZATION=1`) nên chúng 401 ngay khi token hết
+ * hạn, trong khi màn hình vẫn "trông như đang đăng nhập" — đúng triệu chứng mất
+ * file lúc nộp. Làm mới ở đây để mọi caller (kể cả multipart) dùng chung một
+ * đường như request JSON.
+ *
+ * Refresh hỏng (hết phiên thật) → vẫn trả header với token cũ: để BE trả 401 và
+ * caller xử lý một chỗ, thay vì ném thêm một loại lỗi nữa ở đây.
+ */
+async function buildFreshAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    await ensureFreshAccessToken("http_401");
+  } catch {
+    // ponytail: nuốt lỗi refresh, để 401 của BE là nguồn sự thật duy nhất.
+  }
+  return buildAuthHeaders();
 }
 
 export class PersonalAiError extends Error {
@@ -439,8 +466,14 @@ export function uploadPersonalDocument(
  * cho đúng lượt nộp đã sinh ra nó, caller mới là nơi biết điều đó. 400/403 kèm
  * `detail.scopes` → ném `LevelReportScopeRequiredError` để caller mở dropdown
  * tại chỗ và nộp lại chính lượt đó bằng file còn trong memory.
+ *
+ * §2.6: 401 KHÔNG được làm mất file. Endpoint này hỏi HRM `/auth/me` mỗi request
+ * nên hết hạn token đúng lúc bấm nộp là 401 ngay, dù phần còn lại của app vẫn
+ * "trông như đang đăng nhập". Xử lý: làm mới token rồi gửi lại CHÍNH lượt nộp đó
+ * với `File` vẫn đang giữ; chỉ khi làm mới thất bại mới để 401 nổi lên cho caller
+ * đẩy sang đăng nhập.
  */
-export function uploadLevelReport(
+export async function uploadLevelReport(
   file: File,
   params: {
     question: string;
@@ -448,6 +481,34 @@ export function uploadLevelReport(
     weekEnd?: string;
     scopeToken?: string;
   },
+  options?: { signal?: AbortSignal },
+): Promise<LevelReportUploadResponse> {
+  const headers = await buildFreshAuthHeaders();
+  try {
+    return await postLevelReport(file, params, headers, options);
+  } catch (err) {
+    // Token vừa hết hạn giữa lúc gửi (hoặc HRM thu hồi rồi cấp lại) → làm mới
+    // rồi gửi lại đúng lượt này. `file` vẫn trong memory nên user không phải
+    // đính lại. Retry ĐÚNG MỘT lần: 401 lần hai là hết phiên thật.
+    if (!(err instanceof PersonalAiError) || err.status !== 401) throw err;
+    const retryHeaders = await refreshAccessTokenShared("http_401").then(
+      () => buildAuthHeaders(),
+      () => null,
+    );
+    if (!retryHeaders) throw err;
+    return postLevelReport(file, params, retryHeaders, options);
+  }
+}
+
+function postLevelReport(
+  file: File,
+  params: {
+    question: string;
+    weekStart?: string;
+    weekEnd?: string;
+    scopeToken?: string;
+  },
+  authHeaders: Record<string, string>,
   options?: { signal?: AbortSignal },
 ): Promise<LevelReportUploadResponse> {
   return new Promise((resolve, reject) => {
@@ -486,7 +547,6 @@ export function uploadLevelReport(
 
     xhr.open("POST", LEVEL_REPORT_UPLOAD_URL, true);
     xhr.responseType = "text";
-    const authHeaders = buildAuthHeaders();
     for (const [key, value] of Object.entries(authHeaders)) {
       xhr.setRequestHeader(key, value);
     }

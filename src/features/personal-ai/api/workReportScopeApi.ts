@@ -7,6 +7,10 @@ import type {
   WorkReportScopeType,
 } from "../types";
 import { getAccessToken } from "../../../services/tokenService";
+import {
+  ensureFreshAccessToken,
+  refreshAccessTokenShared,
+} from "../../../services/authRefreshCoordinator";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -191,17 +195,30 @@ export async function fetchWorkReportScopes(options: {
   capability: WorkReportCapability;
   signal?: AbortSignal;
 }): Promise<WorkReportScopesResponse> {
-  const token = getAccessToken();
   const url = `${SCOPES_URL}?${new URLSearchParams({ capability: options.capability }).toString()}`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "x-api-contract": "3",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    signal: options?.signal,
+  const send = (token: string | null) =>
+    fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "x-api-contract": "3",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: options?.signal,
+    });
+
+  // §2.6: endpoint này hỏi HRM `/auth/me` mỗi request nên 401 ngay khi access
+  // token hết hạn, dù phần còn lại của app vẫn "trông như đang đăng nhập". Nó
+  // gọi bằng `fetch` trần nên không đi qua interceptor refresh của axios — làm
+  // mới ở đây, và thử lại một lần nếu vẫn 401 (token vừa hết hạn giữa chừng).
+  await ensureFreshAccessToken("http_401").catch(() => {
+    // Hết phiên thật → để 401 bên dưới là nguồn sự thật, không ném thêm loại lỗi.
   });
+  let response = await send(getAccessToken());
+  if (response.status === 401) {
+    const retryToken = await refreshAccessTokenShared("http_401").catch(() => null);
+    if (retryToken) response = await send(retryToken);
+  }
 
   if (response.status === 404) throw new ScopeFeatureDisabledError();
   if (!response.ok) {
