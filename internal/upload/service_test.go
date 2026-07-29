@@ -195,6 +195,7 @@ func TestInitiateRejectsInvalidInputBeforePresignOrDatabase(t *testing.T) {
 		{OwnerUserID: uuid.New(), FileName: "a.txt", ContentType: "text/plain", DeclaredBytes: 0, IdempotencyKey: "a"},
 		{OwnerUserID: uuid.New(), FileName: "a.txt", ContentType: "text/plain", DeclaredBytes: 100_000_001, IdempotencyKey: "a"},
 		{OwnerUserID: uuid.New(), FileName: "a.txt", ContentType: "text/plain", DeclaredBytes: 1},
+		{OwnerUserID: uuid.New(), FileName: "a.txt", ContentType: "text/plain", DeclaredBytes: 1, IdempotencyKey: strings.Repeat("a", MaxIdempotencyKeyBytes+1)},
 	}
 	for _, input := range tests {
 		if _, err := service.Initiate(context.Background(), input); err == nil {
@@ -203,6 +204,38 @@ func TestInitiateRejectsInvalidInputBeforePresignOrDatabase(t *testing.T) {
 	}
 	if repositoryCalls != 0 || presignCalls != 0 {
 		t.Fatalf("repository/presign calls = %d/%d, want 0/0", repositoryCalls, presignCalls)
+	}
+}
+
+func TestInitiateAcceptsExactUploadAndIdempotencyBoundaries(t *testing.T) {
+	var received InitiateDraft
+	service := newInitiateService(t, fakeRepository{
+		initiate: func(
+			_ context.Context,
+			draft InitiateDraft,
+		) (Session, bool, error) {
+			received = draft
+			return sessionFromDraft(draft), true, nil
+		},
+	}, fakeObjectStore{
+		presign: func(context.Context, string, time.Duration) (string, error) {
+			return "http://minio/upload", nil
+		},
+	})
+
+	_, err := service.Initiate(context.Background(), InitiateRequest{
+		OwnerUserID:    uuid.New(),
+		FileName:       "boundary.bin",
+		ContentType:    "application/octet-stream",
+		DeclaredBytes:  100_000_000,
+		IdempotencyKey: strings.Repeat("k", MaxIdempotencyKeyBytes),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received.DeclaredBytes != 100_000_000 ||
+		len(received.IdempotencyKey) != MaxIdempotencyKeyBytes {
+		t.Fatalf("boundary draft = %+v", received)
 	}
 }
 

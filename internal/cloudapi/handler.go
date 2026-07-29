@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -503,7 +504,11 @@ func (h *Handler) logInternalError(request *http.Request, err error) {
 	h.logger.ErrorContext(
 		request.Context(),
 		"cloud API request failed",
-		"error", err,
+		// Dependency errors can contain presigned URLs, credentials, SQL or
+		// object keys. Keep the correlation context, but never serialize the
+		// underlying error into application logs.
+		"error", "internal dependency failure",
+		"error_type", fmt.Sprintf("%T", err),
 		"request_id", requestID(request.Context()),
 		"method", request.Method,
 		"path", request.URL.Path,

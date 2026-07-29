@@ -379,6 +379,20 @@ func TestCloudAPIRequiresDemoUser(t *testing.T) {
 	assertErrorCode(t, response, "DEMO_USER_REQUIRED")
 }
 
+func TestCloudAPIRejectsInvalidDemoUser(t *testing.T) {
+	handler := newTestHandler(t, fakeService{})
+	request := httptest.NewRequest(http.MethodGet, "/quota", nil)
+	request.Header.Set(demoUserHeader, "not-a-uuid")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", response.Code)
+	}
+	assertErrorCode(t, response, "DEMO_USER_REQUIRED")
+}
+
 func TestCreateTextRejectsUnknownJSONField(t *testing.T) {
 	service := fakeService{
 		createText: func(context.Context, uuid.UUID, string) (cloud.Item, error) {
@@ -400,6 +414,59 @@ func TestCreateTextRejectsUnknownJSONField(t *testing.T) {
 		t.Fatalf("status = %d, want 400", response.Code)
 	}
 	assertErrorCode(t, response, "INVALID_JSON")
+}
+
+func TestCreateTextRejectsTrailingJSON(t *testing.T) {
+	service := fakeService{
+		createText: func(context.Context, uuid.UUID, string) (cloud.Item, error) {
+			t.Fatal("service must not be called")
+			return cloud.Item{}, nil
+		},
+	}
+	handler := newTestHandler(t, service)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodPost,
+		"/texts",
+		`{"content":"hello"} {"content":"second"}`,
+		uuid.New(),
+	))
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+	assertErrorCode(t, response, "INVALID_JSON")
+}
+
+func TestCreateTextRejectsOversizedBody(t *testing.T) {
+	service := fakeService{
+		createText: func(context.Context, uuid.UUID, string) (cloud.Item, error) {
+			t.Fatal("service must not be called")
+			return cloud.Item{}, nil
+		},
+	}
+	handler, err := New(
+		service,
+		8,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodPost,
+		"/texts",
+		`{"content":"`+strings.Repeat("x", 70_000)+`"}`,
+		uuid.New(),
+	))
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", response.Code)
+	}
+	assertErrorCode(t, response, "BODY_TOO_LARGE")
 }
 
 func TestCreateTextRejectsUnsupportedMediaType(t *testing.T) {
@@ -614,9 +681,12 @@ func TestCloudAPIAddsRequestID(t *testing.T) {
 func TestInternalErrorIsLoggedWithRequestContext(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	sensitiveError := "database unavailable: " +
+		"http://localhost:9000/bucket/object?X-Amz-Signature=top-secret " +
+		"access_key=minioadmin secret_key=minioadmin"
 	service := fakeService{
 		getQuota: func(context.Context, uuid.UUID) (cloud.Quota, error) {
-			return cloud.Quota{}, errors.New("database unavailable")
+			return cloud.Quota{}, errors.New(sensitiveError)
 		},
 	}
 	handler, err := New(service, 100_000_000, logger)
@@ -638,7 +708,7 @@ func TestInternalErrorIsLoggedWithRequestContext(t *testing.T) {
 		t.Fatalf("status = %d, want 500", response.Code)
 	}
 	for _, expected := range []string{
-		"database unavailable",
+		"internal dependency failure",
 		requestID,
 		ownerID.String(),
 		`"method":"GET"`,
@@ -646,6 +716,18 @@ func TestInternalErrorIsLoggedWithRequestContext(t *testing.T) {
 	} {
 		if !strings.Contains(logs.String(), expected) {
 			t.Fatalf("log %q does not contain %q", logs.String(), expected)
+		}
+	}
+	for _, forbidden := range []string{
+		"database unavailable",
+		"X-Amz-Signature",
+		"top-secret",
+		"minioadmin",
+		"access_key",
+		"secret_key",
+	} {
+		if strings.Contains(logs.String(), forbidden) {
+			t.Fatalf("log contains sensitive value %q: %s", forbidden, logs.String())
 		}
 	}
 }

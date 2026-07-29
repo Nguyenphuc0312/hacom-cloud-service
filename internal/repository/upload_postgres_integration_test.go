@@ -152,7 +152,7 @@ func TestUploadPostgresHappyPathAndIdempotency(t *testing.T) {
 		OwnerUserID: ownerID,
 		SessionID:   first.Session.ID,
 	}
-	const completeAttempts = 12
+	const completeAttempts = 20
 	completeResults := make(chan upload.CompleteResult, completeAttempts)
 	completeErrors := make(chan error, completeAttempts)
 	var completeWaitGroup sync.WaitGroup
@@ -270,7 +270,7 @@ func TestUploadPostgresConcurrentSameKeyCreatesOneReservation(t *testing.T) {
 		IdempotencyKey: "same-concurrent-key",
 	}
 
-	const attempts = 12
+	const attempts = 20
 	results := make(chan upload.InitiateResult, attempts)
 	errs := make(chan error, attempts)
 	var waitGroup sync.WaitGroup
@@ -369,14 +369,15 @@ func TestUploadPostgresIdempotencyConflictDoesNotReserveTwice(t *testing.T) {
 }
 
 func TestUploadPostgresConcurrentReservationCannotExceedQuota(t *testing.T) {
-	repository, service, _ := integrationUploadFixture(t, 10)
+	repository, service, _ := integrationUploadFixture(t, 60)
 	ownerID := uuid.New()
 	cleanupOwner(t, repository.pool, ownerID)
 
 	start := make(chan struct{})
-	results := make(chan error, 2)
+	const attempts = 24
+	results := make(chan error, attempts)
 	var waitGroup sync.WaitGroup
-	for index := range 2 {
+	for index := range attempts {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -407,15 +408,41 @@ func TestUploadPostgresConcurrentReservationCannotExceedQuota(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	}
-	if successes != 1 || quotaFailures != 1 {
-		t.Fatalf("success/quota failures = %d/%d", successes, quotaFailures)
+	if successes != 10 || quotaFailures != attempts-successes {
+		t.Fatalf(
+			"success/quota failures = %d/%d, want 10/%d",
+			successes,
+			quotaFailures,
+			attempts-10,
+		)
 	}
 	quota, err := repository.GetQuota(context.Background(), ownerID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if quota.ReservedBytes != 6 || quota.UsedBytes != 0 {
+	if quota.ReservedBytes != 60 || quota.UsedBytes != 0 {
 		t.Fatalf("quota = %+v", quota)
+	}
+
+	var sessionCount, reserveCount int
+	var reserveDelta int64
+	if err := repository.pool.QueryRow(context.Background(), `
+		SELECT
+			(SELECT COUNT(*) FROM cloud.upload_sessions WHERE drive_id = $1),
+			(SELECT COUNT(*) FROM cloud.usage_ledger
+			 WHERE drive_id = $1 AND event_type = 'reserve'),
+			(SELECT COALESCE(SUM(delta_reserved_bytes), 0)
+			 FROM cloud.usage_ledger WHERE drive_id = $1)
+	`, quota.DriveID).Scan(&sessionCount, &reserveCount, &reserveDelta); err != nil {
+		t.Fatal(err)
+	}
+	if sessionCount != successes || reserveCount != successes || reserveDelta != 60 {
+		t.Fatalf(
+			"session/reserve/delta = %d/%d/%d",
+			sessionCount,
+			reserveCount,
+			reserveDelta,
+		)
 	}
 }
 

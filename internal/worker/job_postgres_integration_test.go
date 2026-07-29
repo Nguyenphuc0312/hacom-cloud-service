@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -123,7 +124,7 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 		50,
 		0,
 		3,
-		time.Now().UTC(),
+		time.Now().UTC().Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "low"},
@@ -220,26 +221,31 @@ func TestJobPostgresConcurrentClaimAllowsOnlyOneWinner(t *testing.T) {
 		10,
 		0,
 		3,
-		time.Now().UTC(),
+		time.Now().UTC().Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "race"},
 	)
 
-	workerA, err := NewJobPostgres(pool, "worker-a", RetryPolicy{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	workerB, err := NewJobPostgres(pool, "worker-b", RetryPolicy{})
-	if err != nil {
-		t.Fatal(err)
+	const workerCount = 10
+	repositories := make([]JobRepository, 0, workerCount)
+	for index := range workerCount {
+		repository, err := NewJobPostgres(
+			pool,
+			fmt.Sprintf("worker-%02d", index),
+			RetryPolicy{},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repositories = append(repositories, repository)
 	}
 
 	start := make(chan struct{})
-	results := make(chan error, 2)
-	claimed := make(chan string, 2)
+	results := make(chan error, workerCount)
+	claimed := make(chan string, workerCount)
 	var waitGroup sync.WaitGroup
-	for _, repo := range []JobRepository{workerA, workerB} {
+	for _, repo := range repositories {
 		waitGroup.Add(1)
 		go func(repository JobRepository) {
 			defer waitGroup.Done()
@@ -291,7 +297,7 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 		10,
 		0,
 		2,
-		time.Now().UTC(),
+		time.Now().UTC().Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "retry"},
@@ -371,6 +377,96 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 	}
 }
 
+func TestJobPostgresRetryBackoffIsExponentialAndCapped(t *testing.T) {
+	pool := integrationWorkerPool(t)
+	driveID := insertWorkerDrive(t, pool)
+	jobID := uuid.New()
+	insertWorkerJob(
+		t,
+		pool,
+		driveID,
+		jobID,
+		JobHashFile,
+		JobPending,
+		10,
+		0,
+		4,
+		time.Now().UTC().Add(-time.Second),
+		nil,
+		nil,
+		map[string]string{"name": "backoff-cap"},
+	)
+
+	repository, err := NewJobPostgres(pool, "worker-backoff", RetryPolicy{
+		MaxAttempts: 4,
+		BaseBackoff: time.Second,
+		MaxBackoff:  2 * time.Second,
+		LockTimeout: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt, wantDelay := range []float64{1, 2, 2, 0} {
+		job, err := repository.Claim(context.Background())
+		if err != nil {
+			t.Fatalf("claim attempt %d: %v", attempt+1, err)
+		}
+		if err := repository.Fail(
+			context.Background(),
+			job.ID,
+			fmt.Errorf("failure %d", attempt+1),
+		); err != nil {
+			t.Fatalf("fail attempt %d: %v", attempt+1, err)
+		}
+
+		var status string
+		var attempts int
+		var delaySeconds float64
+		if err := pool.QueryRow(context.Background(), `
+			SELECT
+				status::text,
+				attempts,
+				CASE
+					WHEN status = 'failed'
+					THEN EXTRACT(EPOCH FROM (run_after - NOW()))
+					ELSE 0
+				END
+			FROM cloud.jobs
+			WHERE id = $1
+		`, jobID).Scan(&status, &attempts, &delaySeconds); err != nil {
+			t.Fatal(err)
+		}
+		if attempts != attempt+1 {
+			t.Fatalf("attempts = %d, want %d", attempts, attempt+1)
+		}
+		if wantDelay == 0 {
+			if status != string(JobDead) {
+				t.Fatalf("final status = %q, want dead", status)
+			}
+			continue
+		}
+		if status != string(JobFailed) ||
+			delaySeconds < wantDelay-0.35 ||
+			delaySeconds > wantDelay+0.35 {
+			t.Fatalf(
+				"attempt %d status/delay = %q/%.3fs, want failed/~%.0fs",
+				attempt+1,
+				status,
+				delaySeconds,
+				wantDelay,
+			)
+		}
+		if _, err := pool.Exec(context.Background(), `
+			UPDATE cloud.jobs
+			SET run_after = NOW() - INTERVAL '1 second'
+			WHERE id = $1
+		`, jobID); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 	pool := integrationWorkerPool(t)
 	driveID := insertWorkerDrive(t, pool)
@@ -387,7 +483,7 @@ func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 		10,
 		1,
 		4,
-		time.Now().UTC(),
+		time.Now().UTC().Add(-time.Second),
 		&workerA,
 		&lockedAt,
 		map[string]string{"session_id": "session-1"},
@@ -431,6 +527,13 @@ func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 	}
 	if err := formerOwner.Complete(context.Background(), jobID.String()); err == nil {
 		t.Fatal("old worker complete error = nil, want lease rejection")
+	}
+	if err := formerOwner.Fail(
+		context.Background(),
+		jobID.String(),
+		errors.New("late failure"),
+	); err == nil {
+		t.Fatal("old worker fail error = nil, want lease rejection")
 	}
 
 	if err := reclaimer.Complete(context.Background(), jobID.String()); err != nil {
