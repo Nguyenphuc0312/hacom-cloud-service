@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  LevelReportScopeRequiredError,
   listPersonalDocuments,
   selectPersonalSources,
   streamPersonalChat,
+  uploadLevelReport,
 } from "./personalAiApi";
 
 vi.mock("../../../services/tokenService", () => ({
@@ -264,5 +266,94 @@ describe("streamPersonalChat work_report_scope_required (§4 SSE)", () => {
     await streamPersonalChat({ question: "x", session_id: null }, { onScopeRequired });
 
     expect(onScopeRequired).not.toHaveBeenCalled();
+  });
+});
+
+describe("uploadLevelReport — lỗi chọn phạm vi mang sẵn dropdown (§2.5)", () => {
+  const rawScope = {
+    authorizationId: "a1",
+    authorizationVersion: 1,
+    actions: ["SUBMIT"],
+    scopeType: "DEPARTMENT",
+    reportingTargetName: "BCH Công trường Liền kề",
+    reportingUnitName: "Văn phòng TCT",
+    selectionToken: "tok-a",
+  };
+
+  /** XHR giả: trả sẵn status + body cho lần `send()` kế tiếp. */
+  function stubXhr(status: number, responseText: string) {
+    const sent: FormData[] = [];
+    class FakeXhr {
+      status = 0;
+      responseText = "";
+      responseType = "";
+      private handlers: Record<string, (() => void)[]> = {};
+      open() {}
+      setRequestHeader() {}
+      abort() {}
+      addEventListener(type: string, fn: () => void) {
+        (this.handlers[type] ??= []).push(fn);
+      }
+      send(form: FormData) {
+        sent.push(form);
+        this.status = status;
+        this.responseText = responseText;
+        this.handlers.load?.forEach((fn) => fn());
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXhr as unknown as typeof XMLHttpRequest);
+    return sent;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("400 kèm detail.scopes → LevelReportScopeRequiredError giữ scopes + promptId", async () => {
+    stubXhr(
+      400,
+      JSON.stringify({
+        detail: {
+          reason: "multiple_matching_authorizations",
+          message: "Bạn có nhiều phạm vi phù hợp.",
+          promptId: "00c8c7c4120c45499c78a057c11f456c",
+          question: "#TBP_baocao",
+          capability: "department_submit",
+          scopes: [rawScope, { ...rawScope, authorizationId: "a2", selectionToken: "tok-b" }],
+        },
+      }),
+    );
+
+    const err = await uploadLevelReport(new File(["x"], "bc.xlsx"), {
+      question: "#TBP_baocao",
+    }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(LevelReportScopeRequiredError);
+    expect(err.status).toBe(400);
+    expect(err.message).toBe("Bạn có nhiều phạm vi phù hợp.");
+    expect(err.scope.promptId).toBe("00c8c7c4120c45499c78a057c11f456c");
+    expect(err.scope.scopes).toHaveLength(2);
+  });
+
+  it("detail vẫn là chuỗi (đường lùi BE) → lỗi thường, KHÔNG in [object Object]", async () => {
+    stubXhr(400, JSON.stringify({ detail: "Thiếu tag báo cáo." }));
+
+    const err = await uploadLevelReport(new File(["x"], "bc.xlsx"), {
+      question: "#TBP_baocao",
+    }).catch((e) => e);
+
+    expect(err).not.toBeInstanceOf(LevelReportScopeRequiredError);
+    expect(err.message).toBe("Thiếu tag báo cáo.");
+  });
+
+  it("chỉ gửi scope_token khi caller truyền vào (lượt nộp đầu gửi trần — §2.4)", async () => {
+    const sentFirst = stubXhr(200, JSON.stringify({ ok: true, message: "Đã nhận." }));
+    await uploadLevelReport(new File(["x"], "bc.xlsx"), { question: "#TBP_baocao" });
+    expect(sentFirst[0].get("scope_token")).toBeNull();
+
+    const sentRetry = stubXhr(200, JSON.stringify({ ok: true, message: "Đã nhận." }));
+    await uploadLevelReport(new File(["x"], "bc.xlsx"), {
+      question: "#TBP_baocao",
+      scopeToken: "tok-b",
+    });
+    expect(sentRetry[0].get("scope_token")).toBe("tok-b");
   });
 });
