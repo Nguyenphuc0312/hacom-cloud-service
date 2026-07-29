@@ -101,10 +101,10 @@ export const useWorkReportScopeStore = create<WorkReportScopeState>((set) => ({
   setScopes: (scopes, capability) =>
     set((state) => ({
       scopes,
-      // UX chốt lại: LUÔN mở dropdown khi có scope. count == 1 → pre-select sẵn
-      // lựa chọn duy nhất (giữ token) nhưng vẫn `isPicking` để widget hiện ra,
-      // user phải xác nhận. count > 1 → chưa chọn, bắt user chọn.
-      selected: scopes.length === 1 ? scopes[0] : null,
+      // §2.4: một phạm vi duy nhất KHÔNG đi qua đây nữa — BE trả `autoSelected`
+      // và caller gửi thẳng không kèm token. Danh sách tới đây là ≥2 lựa chọn
+      // thật (BE đã gộp bản ghi trùng phòng/đơn vị) nên luôn bắt user chọn.
+      selected: null,
       isPicking: scopes.length > 0,
       // Giữ capability để nạp lại đúng khi 403; không truyền thì giữ giá trị cũ.
       capability: capability ?? state.capability,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   streamPersonalChat,
   PersonalAiError,
+  LevelReportScopeRequiredError,
   uploadLevelReport,
   normalizeCalendarEvents,
 } from "../api/personalAiApi";
@@ -73,6 +74,11 @@ export function usePersonalChat() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const fetchedSessionIds = useRef(new Set<string>());
+  /**
+   * §2.5: lượt nộp file đang chờ user chọn phạm vi. Giữ File trong memory để
+   * nộp lại đúng lượt đó sau khi chọn — không bắt người dùng đính lại tệp.
+   */
+  const pendingLevelReportFile = useRef<{ question: string; file: File } | null>(null);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -196,7 +202,7 @@ export function usePersonalChat() {
         const scopeStore = useWorkReportScopeStore.getState();
         try {
           const res = await fetchWorkReportScopes({ capability });
-          const decision = decideScopePreflight(res.scopes);
+          const decision = decideScopePreflight(res);
           if (decision.kind === "deny") {
             // 0 scope khớp → không hiện thao tác, báo không có quyền (§2).
             addMessage(conversationId, {
@@ -209,19 +215,23 @@ export function usePersonalChat() {
             });
             return;
           }
-          // ≥1 scope → LUÔN mở dropdown (kể cả 1 lựa chọn đã pre-select ở store);
-          // sau khi user xác nhận, effect gửi lại tag kèm token.
-          scopeStore.setScopes(decision.scopes, res.capability);
-          scopeStore.requirePick(trimmed, res.capability);
-          addMessage(conversationId, {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: "",
-            timestamp: new Date(),
-            isStreaming: false,
-            scopeRequired: true,
-          });
-          return;
+          // §2.4 `autoSelected`: đúng MỘT phạm vi sau khi BE gộp → không hỏi,
+          // gửi thẳng KHÔNG kèm token (BE tự bind). `selectionToken` rỗng ở
+          // nhánh này là chủ đích; đính token cũ quá TTL từng gây 403.
+          if (decision.kind === "pick") {
+            // ≥2 phạm vi → mở dropdown; sau khi user chọn, effect gửi lại tag kèm token.
+            scopeStore.setScopes(decision.scopes, res.capability);
+            scopeStore.requirePick(trimmed, res.capability, res.promptId);
+            addMessage(conversationId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: "",
+              timestamp: new Date(),
+              isStreaming: false,
+              scopeRequired: true,
+            });
+            return;
+          }
         } catch (err) {
           // Flag đa-scope tắt (404) → giữ luồng cũ, không pre-flight (§2). 401/503
           // hoặc lỗi khác → để request chat bên dưới chạy và xử lý lỗi thống nhất
@@ -516,6 +526,9 @@ export function usePersonalChat() {
 
   useEffect(() => {
     if (!scopeSelected || scopeIsPicking || !scopePendingQuestion || isStreaming) return;
+    // Lượt đang treo là NỘP FILE (§2.5) → effect nộp lại bên dưới lo, không gửi
+    // câu hỏi này qua chat (sẽ mất file và chạy nhầm luồng).
+    if (pendingLevelReportFile.current) return;
     // §4 (2.2): đây là lượt DUY NHẤT được phép đính token — nó thuộc đúng lần
     // hỏi vừa chốt. Truyền `tokenPromptId` để `isTokenValidFor` nhận ra; user gõ
     // lại y hệt câu đó sau này không có promptId nên sẽ bị nhả token.
@@ -640,9 +653,13 @@ export function usePersonalChat() {
    * endpoint riêng /api/level-reports/upload. Khác #congviectuan: BE tự suy
    * quyền/phạm vi từ JWT và tự thay bản cũ nếu nộp lại cùng tuần — FE chỉ hiện
    * `message` trả về.
+   *
+   * `scopeToken` chỉ do effect nộp-lại-sau-khi-chọn truyền vào (§2.5) — lượt nộp
+   * đầu luôn gửi trần để BE tự bind nếu chỉ có một phạm vi (§2.4), hoặc trả về
+   * danh sách phạm vi để FE mở dropdown mà không mất file.
    */
   const sendLevelReportWithFile = useCallback(
-    async (question: string, file: File) => {
+    async (question: string, file: File, scopeToken?: string) => {
       const trimmed = question.trim();
       if (!trimmed || isStreaming) return;
 
@@ -654,81 +671,23 @@ export function usePersonalChat() {
       // §6: KIỂM SOÁT UI trước khi nộp (không chỉ dựa vào BE báo lỗi).
       //  • #TCT_tonghop chỉ tổng hợp — KHÔNG nộp được → chặn thẳng.
       //  • #TBP chỉ DEPARTMENT+SUBMIT, #LDDV chỉ ORG_UNIT+SUBMIT.
-      // Chưa có scope đang chọn → pre-flight: 0=không quyền, 1=tự chọn rồi kiểm,
-      // ≥2=mở dropdown và yêu cầu chọn phạm vi rồi đính kèm lại (không nộp ngay
-      // vì phải giữ File qua bước chọn).
+      // §2.5: KHÔNG pre-flight `/scopes` nữa. Nộp thẳng: BE trả 400/403 kèm
+      // `detail.scopes` để mở dropdown ngay tại chỗ, file giữ trong memory và
+      // tự nộp lại — user chỉ thao tác 1 lần chọn file + 1 lần chọn phạm vi.
       const submitCapability = capabilityForTag(trimmed);
-      if (submitCapability) {
-        const scopeStore = useWorkReportScopeStore.getState();
-        // §7: khóa theo authUserId + capability trước khi dùng lại token đang giữ.
-        scopeStore.ensureScopeKey(user?.id ?? "", submitCapability);
-        // §4 (2.1/2.2): token chỉ dùng cho ĐÚNG lượt nộp đã sinh ra nó. Lần nộp
-        // mới (user đính kèm lại tệp cho một tag khác lượt trước) không được dùng
-        // lại token cũ — nhả ra để pre-flight bên dưới mở dropdown lại.
-        // Luồng nộp là "chọn scope xong rồi đính kèm lại tệp": lượt nộp liền sau
-        // thuộc CHÍNH lần chọn đó, nên khai lại `tokenPromptId` đang giữ. Dropdown
-        // ở đây do FE tự mở (pre-flight), thường không có promptId của BE.
-        const submitPromptId =
-          useWorkReportScopeStore.getState().tokenPromptId ?? undefined;
-        if (!isTokenValidFor(trimmed, submitPromptId) && getScopeToken()) {
-          scopeStore.releaseScopeToken();
-        }
-        let scope = useWorkReportScopeStore.getState().selected;
-        if (!getScopeToken()) {
-          try {
-            const res = await fetchWorkReportScopes({ capability: submitCapability });
-            const decision = decideScopePreflight(res.scopes);
-            if (decision.kind === "deny") {
-              addMessage(conversationId, {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content:
-                  "Bạn không có phạm vi phù hợp để nộp báo cáo này. Vui lòng liên hệ quản trị nếu cần cấp quyền.",
-                timestamp: new Date(),
-                isStreaming: false,
-              });
-              return;
-            }
-            // ≥1 scope → LUÔN mở dropdown (kể cả 1 lựa chọn đã pre-select). Phải
-            // giữ File qua bước chọn nên yêu cầu user đính kèm lại sau khi xác nhận.
-            scopeStore.setScopes(decision.scopes, res.capability);
-            scopeStore.requirePick(trimmed, res.capability);
-            addMessage(conversationId, {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content:
-                "Vui lòng chọn phạm vi báo cáo rồi đính kèm lại tệp để nộp.",
-              timestamp: new Date(),
-              isStreaming: false,
-              scopeRequired: true,
-            });
-            return;
-          } catch (err) {
-            // Flag tắt (404) → giữ luồng cũ (BE tự suy quyền từ JWT). Lỗi khác để
-            // upload bên dưới chạy và xử lý lỗi thống nhất.
-            if (err instanceof ScopeFeatureDisabledError) {
-              scope = null; // không ràng buộc scope FE — BE quyết
-            } else if (err instanceof ScopeFetchError) {
-              logger.info("usePersonalChat", "level-submit-preflight-failed", {
-                capability: submitCapability,
-                status: err.status,
-              });
-            }
-          }
-        }
-        // Có scope FE đang ràng buộc mà không hợp để nộp → chặn (§6). Khi flag tắt
-        // (scope=null do 404) thì bỏ qua kiểm FE, để BE tự quyết theo JWT.
-        if (scope && !canSubmitLevelReport(trimmed, scope)) {
-          addMessage(conversationId, {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content:
-              "Phạm vi đang chọn không cho phép nộp báo cáo cấp này. Vui lòng chọn đúng phạm vi (phòng ban cho #TBP_baocao, đơn vị cho #LDDV_baocao).",
-            timestamp: new Date(),
-            isStreaming: false,
-          });
-          return;
-        }
+      const scope = scopeToken
+        ? useWorkReportScopeStore.getState().selected
+        : null;
+      if (submitCapability && scope && !canSubmitLevelReport(trimmed, scope)) {
+        addMessage(conversationId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "Phạm vi đang chọn không cho phép nộp báo cáo cấp này. Vui lòng chọn đúng phạm vi (phòng ban cho #TBP_baocao, đơn vị cho #LDDV_baocao).",
+          timestamp: new Date(),
+          isStreaming: false,
+        });
+        return;
       }
 
       addMessage(conversationId, {
@@ -756,19 +715,37 @@ export function usePersonalChat() {
       try {
         const response = await uploadLevelReport(
           file,
-          { question: trimmed },
+          { question: trimmed, scopeToken },
           { signal: controller.signal },
         );
         finalizeMessage(convIdSnapshot, response.message);
+        // §4: token chỉ sống trong đúng vòng "BE hỏi → user chọn → nộp lại".
+        if (scopeToken) useWorkReportScopeStore.getState().releaseScopeToken();
       } catch (err) {
-        // §5: nộp TBP/LĐĐV cũng mang scope_token nên 400/403 ở đây có thể là lỗi
-        // scope (chưa chọn / token hết hạn / quyền bị thu hồi) chứ không phải
-        // file hỏng. Chỉ mở lại widget khi ĐANG dùng scope — không có scope thì
-        // giữ nguyên thông báo cũ (403 = sai vai, 400 = thiếu tag).
+        // §2.5: lỗi mang sẵn danh sách phạm vi → mở dropdown NGAY, giữ file trong
+        // memory (`pendingLevelReportFile`) để effect bên dưới nộp lại chính lượt
+        // này sau khi user chọn. Không gọi `/scopes`, không bắt đính lại tệp.
+        if (err instanceof LevelReportScopeRequiredError) {
+          const scopeStore = useWorkReportScopeStore.getState();
+          scopeStore.ensureScopeKey(user?.id ?? "", err.scope.capability ?? submitCapability!);
+          scopeStore.setScopes(err.scope.scopes, err.scope.capability ?? submitCapability);
+          scopeStore.requirePick(trimmed, err.scope.capability, err.scope.promptId);
+          pendingLevelReportFile.current = { question: trimmed, file };
+          patchMessage(convIdSnapshot, assistantId, {
+            content: err.message,
+            scopeRequired: true,
+            isStreaming: false,
+            thinkingPhase: null,
+          });
+          return;
+        }
+
+        // BE bản cũ (chưa ship 2.5) hoặc đường lùi khi không ký được token:
+        // `detail` vẫn là chuỗi → giữ xử lý cũ, gọi lại `/scopes` qua widget.
         if (
           err instanceof PersonalAiError &&
           err.kind === "http" &&
-          getScopeToken() &&
+          scopeToken &&
           handleScopeErrorStatus(err.status)
         ) {
           finalizeMessage(
@@ -806,9 +783,35 @@ export function usePersonalChat() {
       addMessage,
       finalizeMessage,
       markMessageError,
+      patchMessage,
       user?.id,
     ],
   );
+
+  /**
+   * §2.5: user vừa chọn phạm vi cho một lượt NỘP FILE đang treo → nộp lại chính
+   * lượt đó bằng file còn trong memory, kèm token vừa chọn. Không hỏi lại file.
+   */
+  useEffect(() => {
+    const pending = pendingLevelReportFile.current;
+    if (!pending) return;
+    // User bấm "Hủy" trên widget (đóng dropdown mà không chọn) → bỏ lượt nộp,
+    // không giữ File treo trong memory chờ một lựa chọn không bao giờ tới.
+    if (!scopeIsPicking && !scopeSelected) {
+      pendingLevelReportFile.current = null;
+      return;
+    }
+    if (!scopeSelected || scopeIsPicking || isStreaming) return;
+    pendingLevelReportFile.current = null;
+    // Câu hỏi hoãn thuộc lượt nộp file này, không phải lượt chat — xóa để effect
+    // gửi-lại-chat ở trên không gửi trùng cùng một câu.
+    useWorkReportScopeStore.setState({ pendingQuestion: null });
+    void sendLevelReportWithFile(
+      pending.question,
+      pending.file,
+      scopeSelected.selectionToken,
+    );
+  }, [scopeSelected, scopeIsPicking, isStreaming, sendLevelReportWithFile]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();

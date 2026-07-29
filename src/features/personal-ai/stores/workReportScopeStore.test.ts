@@ -34,13 +34,15 @@ beforeEach(() => {
 });
 
 describe("chọn scope", () => {
-  it("count == 1 thì pre-select + giữ token nhưng VẪN mở dropdown để user xác nhận", () => {
+  it("[2.4] setScopes KHÔNG pre-select — một phạm vi đi nhánh autoSelected, không qua đây", () => {
+    // BE gộp bản ghi trùng phòng/đơn vị rồi mới trả; còn đúng 1 phạm vi thì BE
+    // báo `autoSelected` và tự bind, FE không mở dropdown → danh sách tới store
+    // luôn là lựa chọn thật, phải để user chọn.
     useWorkReportScopeStore.getState().setScopes([scope()]);
     const state = useWorkReportScopeStore.getState();
-    // UX chốt lại: luôn hiển thị dropdown kể cả 1 lựa chọn (đã chọn sẵn).
     expect(state.isPicking).toBe(true);
-    expect(state.selected?.selectionToken).toBe("token-1");
-    expect(getScopeToken()).toBe("token-1");
+    expect(state.selected).toBeNull();
+    expect(getScopeToken()).toBeUndefined();
   });
 
   it("count > 1 thì bắt buộc chọn, chưa chọn thì chưa có token", () => {
@@ -81,6 +83,7 @@ describe("ensureScopeKey — khóa authUserId + capability (§7)", () => {
     const store = useWorkReportScopeStore.getState();
     store.ensureScopeKey("u1", "department_submit");
     store.setScopes([scope()], "department_submit");
+    store.select(scope());
     const changed = store.ensureScopeKey("u1", "department_submit");
     expect(changed).toBe(false);
     expect(getScopeToken()).toBe("token-1");
@@ -90,6 +93,7 @@ describe("ensureScopeKey — khóa authUserId + capability (§7)", () => {
     const store = useWorkReportScopeStore.getState();
     store.ensureScopeKey("u1", "department_submit");
     store.setScopes([scope()], "department_submit");
+    store.select(scope());
     expect(getScopeToken()).toBe("token-1");
 
     const changed = store.ensureScopeKey("u1", "org_unit_submit");
@@ -273,7 +277,7 @@ describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1, f
   it("ensureScopeKey / clearSelection / reset đều xóa tokenQuestion", () => {
     const seed = () => {
       const s = useWorkReportScopeStore.getState();
-      s.setScopes([scopeA], "report_read");
+      s.setScopes([scopeA, scopeB], "report_read");
       s.requirePick("câu hỏi", "report_read");
       s.select(scopeA);
       expect(useWorkReportScopeStore.getState().tokenQuestion).toBe("câu hỏi");
@@ -294,12 +298,17 @@ describe("token dùng đúng 1 lần cho đúng câu hỏi (§4 — bản 2.1, f
 });
 
 describe("gắn scope_token vào request (§4)", () => {
-  beforeEach(() => {
-    useWorkReportScopeStore.getState().setScopes([scope()]);
-  });
+  /** Mô phỏng "BE hỏi (≥2 phạm vi) → user chọn": chỉ khi đó mới có token. */
+  const pick = (s = scope()) => {
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([s, scope({ authorizationId: "auth-2", selectionToken: "token-2" })]);
+    store.select(s);
+  };
+
+  beforeEach(() => pick());
 
   it("query dùng URLSearchParams nên token được encode", () => {
-    useWorkReportScopeStore.getState().setScopes([scope({ selectionToken: "a+b/c=" })]);
+    pick(scope({ selectionToken: "a+b/c=" }));
     const qs = appendScopeToken(new URLSearchParams({ all: "true" })).toString();
     expect(qs).toContain("scope_token=a%2Bb%2Fc%3D");
   });
@@ -326,7 +335,9 @@ describe("gắn scope_token vào request (§4)", () => {
 
 describe("xử lý lỗi (§5)", () => {
   beforeEach(() => {
-    useWorkReportScopeStore.getState().setScopes([scope()]);
+    const store = useWorkReportScopeStore.getState();
+    store.setScopes([scope(), scope({ authorizationId: "auth-2", selectionToken: "token-2" })]);
+    store.select(scope());
   });
 
   it("400 mở lại widget nhưng giữ lựa chọn hiện có", () => {
