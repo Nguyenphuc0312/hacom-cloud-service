@@ -45,6 +45,7 @@
       "emptyTab": "Chưa có cuộc trò chuyện nào",
       "success": "Đã chuyển tiếp tin nhắn",
       "quickSent": "Đã gửi tới {{name}}",
+      "blocked": "Không thể gửi tới cuộc trò chuyện này",
       "error": "Không thể chuyển tiếp tin nhắn"
     },
     "bubbleAria": "{{name}} lúc {{time}}",
