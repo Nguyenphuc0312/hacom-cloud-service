@@ -17,8 +17,16 @@ import {
 } from "./workReportScopeApi";
 import type { WorkReportScope, WorkReportScopesResponse } from "../types";
 
+let currentToken = "test-token";
 vi.mock("../../../services/tokenService", () => ({
-  getAccessToken: () => "test-token",
+  getAccessToken: () => currentToken,
+}));
+
+const ensureFreshMock = vi.fn(async () => currentToken);
+const refreshSharedMock = vi.fn(async () => currentToken);
+vi.mock("../../../services/authRefreshCoordinator", () => ({
+  ensureFreshAccessToken: (...args: unknown[]) => ensureFreshMock(...(args as [])),
+  refreshAccessTokenShared: (...args: unknown[]) => refreshSharedMock(...(args as [])),
 }));
 
 const fetchMock = vi.fn();
@@ -200,9 +208,57 @@ describe("canSubmitLevelReport (§6 kiểm soát UI nộp)", () => {
 describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
   beforeEach(() => {
     fetchMock.mockReset();
+    currentToken = "test-token";
+    ensureFreshMock.mockClear();
+    refreshSharedMock.mockClear();
+    refreshSharedMock.mockImplementation(async () => currentToken);
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  // §2.6 — endpoint này hỏi HRM /auth/me mỗi request nên 401 ngay khi access
+  // token hết hạn; nó gọi fetch trần nên không đi qua interceptor của axios.
+  it("[2.6] làm mới access token TRƯỚC khi gửi", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ count: 0, scopes: [] }), { status: 200 }),
+    );
+    await fetchWorkReportScopes({ capability: "department_submit" });
+    expect(ensureFreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("[2.6] 401 → làm mới token rồi gửi LẠI, không đẩy user ra đăng nhập", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ count: 1, scopes: [rawScope()] }), { status: 200 }),
+      );
+    refreshSharedMock.mockImplementation(async () => {
+      currentToken = "fresh-token";
+      return currentToken;
+    });
+
+    const res = await fetchWorkReportScopes({ capability: "department_submit" });
+
+    expect(res.scopes).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Lượt gửi lại mang token MỚI, không phải token cũ đã hết hạn.
+    const retryHeaders = (fetchMock.mock.calls[1][1] as RequestInit).headers as Record<
+      string,
+      string
+    >;
+    expect(retryHeaders.Authorization).toBe("Bearer fresh-token");
+  });
+
+  it("[2.6] 401 mà refresh hỏng (hết phiên thật) → ném ScopeFetchError 401", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 401 }));
+    refreshSharedMock.mockRejectedValueOnce(new Error("session gone"));
+
+    await expect(
+      fetchWorkReportScopes({ capability: "department_submit" }),
+    ).rejects.toMatchObject({ name: "ScopeFetchError", status: 401 });
+    // Không gửi lại khi không có token mới — tránh vòng lặp 401.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   it("gửi capability trong query string", async () => {
     fetchMock.mockResolvedValueOnce(
@@ -294,7 +350,9 @@ describe("fetchWorkReportScopes (§3 GET /scopes?capability)", () => {
   });
 
   it("401 → ScopeFetchError status 401", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    // §2.6: 401 nay được thử lại MỘT lần sau khi làm mới token — vẫn 401 thì mới
+    // là lỗi thật. Mock cả hai lượt để kiểm đúng kết cục đó.
+    fetchMock.mockResolvedValue(new Response(null, { status: 401 }));
     await expect(
       fetchWorkReportScopes({ capability: "department_read" }),
     ).rejects.toBeInstanceOf(ScopeFetchError);
