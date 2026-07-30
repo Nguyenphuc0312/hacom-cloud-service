@@ -93,9 +93,15 @@ const MentionRow = React.memo<MentionRowProps>(
 );
 MentionRow.displayName = "MentionRow";
 
-// WYSIWYG (Zalo model): the primary is exactly the name inserted and shown in
-// the bubble — one shared name for everyone. The private alias is NOT used for
-// tags. Secondary = dept · company.
+// Người xem đặt "tên gợi nhớ" thì thấy đúng cái tên đó — ở đây, trong bong bóng
+// chat, và ở mọi chỗ khác. Nhãn chỉ là chuyện hiển thị; chữ ghi vào tin nhắn vẫn
+// là `mentionInsertName` (tên chung), nên alias không rời khỏi máy người xem.
+const resolveCanonicalName = (candidate: MentionCandidate): string =>
+  candidate.mentionInsertName ||
+  candidate.resolvedName ||
+  candidate.displayName ||
+  candidate.username;
+
 const resolvePrimaryLabel = (
   candidate: MentionCandidate,
   isMentionAll: boolean,
@@ -103,11 +109,10 @@ const resolvePrimaryLabel = (
 ): string =>
   isMentionAll
     ? mentionAllLabel
-    : candidate.mentionInsertName ||
-      candidate.resolvedName ||
-      candidate.displayName ||
-      candidate.username;
+    : candidate.aliasLabel?.trim() || resolveCanonicalName(candidate);
 
+// Dòng phụ chỉ là phòng ban · công ty. KHÔNG kèm tên thật: người đặt "tên gợi
+// nhớ" là để khỏi phải đọc tên thật nữa, hiện lại thành ra rối.
 const resolveSecondaryLabel = (
   candidate: MentionCandidate,
   isMentionAll: boolean,

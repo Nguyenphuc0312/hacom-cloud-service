@@ -22,6 +22,9 @@ export const toMessageSummary = (
     type: message.type,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,
+    // Giữ lại mention: thiếu nó thì preview sidebar không biết đoạn `@Tên` trỏ
+    // tới ai, nên không đổi được sang "tên gợi nhớ" của người xem.
+    ...(message.mentions?.length ? { mentions: message.mentions } : {}),
     ...(message.sendState ? { sendState: message.sendState } : {}),
     ...(message.status ? { status: message.status } : {}),
   }) as Conversation["lastMessage"];

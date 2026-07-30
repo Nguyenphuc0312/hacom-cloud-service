@@ -3,10 +3,16 @@ import { Node, mergeAttributes } from "@tiptap/core";
 /**
  * Atomic inline "@mention" chip for the composer (Zalo-style blue pill).
  *
- * The chip is purely a compose-time affordance: `renderText` serialises it back
- * to plain `@Label`, so `editor.getText()` — the single source of truth for
- * send / drafts / extractMentionDetails — is byte-for-byte identical to typing
- * the name by hand. Nothing downstream needs to know the chip exists.
+ * **Hai nhãn, hai việc khác nhau — đừng gộp lại:**
+ * - `label` = chữ NGƯỜI GÕ NHÌN THẤY. Là "tên gợi nhớ" của họ khi có đặt, nên ô
+ *   nhập đọc giống hệt bong bóng chat sau khi gửi.
+ * - `sendLabel` = chữ THỰC SỰ GỬI ĐI (tên chung cả nhóm cùng thấy). `renderText`
+ *   trả về cái này, nên `editor.getText()` — nguồn truth cho send / draft /
+ *   extractMentionDetails — không hề đổi so với trước.
+ *
+ * Tách ra là bắt buộc: gộp làm một thì hoặc ô nhập hiện tên thật (lệch với bong
+ * bóng chat), hoặc nhãn riêng tư của người gõ lọt vào nội dung cả nhóm đọc được.
+ * Không đặt alias → `sendLabel` bằng `label`, y như cũ.
  *
  * atom+inline+selectable means the cursor treats it as one unit: arrow keys step
  * over it and Backspace removes the whole chip, never half a name.
@@ -14,6 +20,8 @@ import { Node, mergeAttributes } from "@tiptap/core";
 export interface MentionChipAttrs {
   id: string;
   label: string;
+  /** Chữ ghi vào nội dung tin nhắn. Thiếu thì dùng `label`. */
+  sendLabel?: string;
 }
 
 export const MentionChip = Node.create({
@@ -27,6 +35,8 @@ export const MentionChip = Node.create({
     return {
       id: { default: null },
       label: { default: "" },
+      // Rỗng = không có alias → gửi đúng `label`.
+      sendLabel: { default: "" },
       // "@all" gets an amber pill (matches the sent-bubble styling); a real user
       // gets the blue pill.
       variant: { default: "user" },
@@ -55,8 +65,9 @@ export const MentionChip = Node.create({
   },
 
   // What editor.getText() emits for this node — MUST match the typed form so the
-  // send pipeline and extractMentionDetails resolve it unchanged.
+  // send pipeline and extractMentionDetails resolve it unchanged. Đây là chữ đi
+  // vào tin nhắn, nên luôn là tên chung, KHÔNG BAO GIỜ là alias riêng.
   renderText({ node }) {
-    return `@${node.attrs.label}`;
+    return `@${node.attrs.sendLabel || node.attrs.label}`;
   },
 });

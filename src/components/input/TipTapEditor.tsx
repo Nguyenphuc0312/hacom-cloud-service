@@ -19,12 +19,18 @@ export interface TipTapEditorHandle {
   insertAtCursor: (text: string) => void;
   /**
    * Replace the `@query` range (from..to) with a blue mention chip + trailing
-   * space. Chip serialises to `@label` in getText(), so send/drafts are
-   * unaffected.
+   * space. `label` là chữ hiển thị trong ô nhập (có thể là "tên gợi nhớ" riêng),
+   * `sendLabel` là chữ đi vào getText() → gửi lên server. Thiếu `sendLabel` thì
+   * dùng `label`, y như trước.
    */
   insertMentionChip: (
     range: { from: number; to: number },
-    attrs: { id: string; label: string; variant?: "user" | "all" },
+    attrs: {
+      id: string;
+      label: string;
+      sendLabel?: string;
+      variant?: "user" | "all";
+    },
   ) => void;
   /** Ids of every mention chip currently in the document (to hide already-tagged
    *  people from the suggestion list, Zalo-style). */
