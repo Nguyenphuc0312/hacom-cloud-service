@@ -49,6 +49,7 @@ import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getConversationDisplayName, getOtherParticipant } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { loadUserProfiles } from "../../services/userBatchLoader";
 import { isDirectConversation } from "../../lib/conversationAdapter";
@@ -983,6 +984,10 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   );
 
   const enrichedNameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  // Nguồn CHUẨN của "tên gợi nhớ". `nameByUserId` không dùng được cho việc này:
+  // `enrichUserProfile` ghi TÊN THẬT vào chính map đó nên request nào về sau thì
+  // thắng — alias lúc có lúc không.
+  const aliasByFriendUserId = useFriendshipStore((s) => s.friendByUserId);
   // Phòng ban/công ty không nằm trong participant payload → enrich từ /users/batch
   // để dòng phụ trong dropdown @mention hiện "phòng ban · công ty".
   const [mentionHrByUserId, setMentionHrByUserId] = React.useState<
@@ -1016,12 +1021,11 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             participantRecord.fullName.trim()) ||
           "";
 
-        // `nameByUserId` holds the viewer's "tên gợi nhớ" (alias) when one is set
-        // — a LOCAL-ONLY label. It must never reach resolvedName/displayName,
-        // which are what we insert into the message text and send as mention
-        // metadata; otherwise the viewer's private alias leaks to every other
-        // participant, who would see it instead of the real name.
-        const aliasLabel = enrichedNameByUserId[participant.id];
+        // "Tên gợi nhớ" — nhãn RIÊNG của người xem. Chỉ dùng để HIỂN THỊ (dòng
+        // gợi ý, và tag sau khi gửi); tuyệt đối không được chảy vào resolvedName/
+        // displayName vì đó là thứ ghi vào nội dung tin nhắn và gửi lên server —
+        // alias mà lọt ra thì cả nhóm đọc được nhãn riêng của một người.
+        const aliasLabel = aliasByFriendUserId[participant.id]?.alias?.trim();
 
         // Resolve display name once (called per participant on every recompute —
         // avoid running it twice for large groups).
@@ -1077,7 +1081,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     }
 
     return individualCandidates;
-  }, [conversation, currentUser.id, enrichedNameByUserId, mentionHrByUserId]);
+  }, [conversation, currentUser.id, aliasByFriendUserId, mentionHrByUserId]);
 
   // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
   React.useLayoutEffect(() => {

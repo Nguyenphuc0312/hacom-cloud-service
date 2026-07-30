@@ -93,9 +93,15 @@ const MentionRow = React.memo<MentionRowProps>(
 );
 MentionRow.displayName = "MentionRow";
 
-// WYSIWYG (Zalo model): the primary is exactly the name inserted and shown in
-// the bubble — one shared name for everyone. The private alias is NOT used for
-// tags. Secondary = dept · company.
+// Người xem đặt "tên gợi nhớ" thì thấy đúng cái tên đó — ở đây, trong bong bóng
+// chat, và ở mọi chỗ khác. Nhãn chỉ là chuyện hiển thị; chữ ghi vào tin nhắn vẫn
+// là `mentionInsertName` (tên chung), nên alias không rời khỏi máy người xem.
+const resolveCanonicalName = (candidate: MentionCandidate): string =>
+  candidate.mentionInsertName ||
+  candidate.resolvedName ||
+  candidate.displayName ||
+  candidate.username;
+
 const resolvePrimaryLabel = (
   candidate: MentionCandidate,
   isMentionAll: boolean,
@@ -103,21 +109,28 @@ const resolvePrimaryLabel = (
 ): string =>
   isMentionAll
     ? mentionAllLabel
-    : candidate.mentionInsertName ||
-      candidate.resolvedName ||
-      candidate.displayName ||
-      candidate.username;
+    : candidate.aliasLabel?.trim() || resolveCanonicalName(candidate);
 
+// Có alias thì dòng phụ là TÊN THẬT — người dùng phải biết mình đang tag ai
+// trước khi gửi, vì cả nhóm sẽ đọc tên thật đó chứ không phải nhãn riêng.
 const resolveSecondaryLabel = (
   candidate: MentionCandidate,
   isMentionAll: boolean,
   mentionAllDescription: string,
-): string | null =>
-  isMentionAll
-    ? mentionAllDescription
-    : [candidate.departmentName, candidate.companyName]
-        .filter(Boolean)
-        .join(" · ") || null;
+): string | null => {
+  if (isMentionAll) return mentionAllDescription;
+
+  const orgLine =
+    [candidate.departmentName, candidate.companyName]
+      .filter(Boolean)
+      .join(" · ") || null;
+
+  const alias = candidate.aliasLabel?.trim();
+  const canonicalName = resolveCanonicalName(candidate);
+  if (!alias || alias === canonicalName) return orgLine;
+
+  return orgLine ? `${canonicalName} · ${orgLine}` : canonicalName;
+};
 
 export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
   mentionListId,

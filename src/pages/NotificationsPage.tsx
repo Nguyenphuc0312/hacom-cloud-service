@@ -25,19 +25,12 @@ import {
   dispatchContactProfileView,
 } from "../features/chat/events/chatUiEvents";
 import { notificationApi, applyAliasToNotification } from "../services/notificationApi";
-import { useFriendshipStore } from "../stores/friendshipStore";
+import { aliasByUserId } from "../utils/mentionAliasText";
 import { formatRelativeTime } from "../utils/formatTime";
 import { ROUTE_PATHS } from "../router/paths";
 import { logger } from "../utils/logger";
 
 const filterOrder: NotificationFilter[] = ["all", "unread", "message", "mention", "group_activity", "system"];
-
-const notificationAliasMap = (): Record<string, string | null | undefined> => {
-  const byUser = useFriendshipStore.getState().friendByUserId;
-  const out: Record<string, string | null | undefined> = {};
-  for (const id in byUser) out[id] = byUser[id]?.alias;
-  return out;
-};
 
 const getFilterLabel = (
   filter: NotificationFilter,
@@ -114,7 +107,7 @@ const NotificationsPage: React.FC = () => {
                     ? "system"
                     : "message",
             ...(() => {
-              const { title, body } = applyAliasToNotification(n, notificationAliasMap());
+              const { title, body } = applyAliasToNotification(n, aliasByUserId());
               return { title, body: body ?? "" };
             })(),
             createdAt: n.createdAt,
