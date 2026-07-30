@@ -50,7 +50,8 @@ const railItems: SideRailItem[] = [
     to: ROUTE_PATHS.CHAT,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.CHAT ||
-      pathname.startsWith(`${ROUTE_PATHS.CHAT}/`),
+      pathname.startsWith(`${ROUTE_PATHS.CHAT}/`) ||
+      pathname === ROUTE_PATHS.CLOUD,
   },
   {
     id: "contacts",

@@ -83,6 +83,8 @@ import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
 import { fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
+import { CloudConversationEntry } from "../features/cloud/components/CloudConversationEntry";
+import { ROUTE_PATHS } from "../router/paths";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -1307,6 +1309,11 @@ export const ChatPage: React.FC = () => {
                 layoutState={sidebarLayoutState}
                 currentUser={currentUserSummary}
                 selectedId={routeConversationId}
+                leadingContent={
+                  <CloudConversationEntry
+                    onSelect={() => navigate(ROUTE_PATHS.CLOUD)}
+                  />
+                }
                 isLoadingMoreConversations={isLoadingMoreConversations}
                 hasMoreConversations={hasMoreConversations}
                 showConversationSkeleton={showConversationSkeleton}

@@ -216,6 +216,21 @@ export const HR_API_BASE_URL = resolveHttpBaseUrl(
 );
 
 /**
+ * Hacom Cloud Phase 1 runs as an independent Go service. The local web preview
+ * uses a dedicated Vite proxy so Cloud traffic never gets mixed with Chat API
+ * routes and the browser does not need an unsafe CORS workaround.
+ */
+export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_API_BASE_URL,
+  "/cloud-api/api/v1/cloud",
+);
+
+export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_HEALTH_URL,
+  "/cloud-api/health/ready",
+);
+
+/**
  * Feature flag: redirect auth traffic to the dedicated auth-service.
  * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
  * false → FE calls API_BASE_URL (legacy, rollback).

@@ -26,6 +26,8 @@ interface SidebarProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
   selectedId: string | null;
+  leadingContent?: React.ReactNode;
+  hideConversationList?: boolean;
 
   isLoadingMoreConversations?: boolean;
   hasMoreConversations?: boolean;
@@ -42,6 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   layoutState,
   currentUser,
   selectedId,
+  leadingContent,
+  hideConversationList = false,
 
   isLoadingMoreConversations = false,
   hasMoreConversations = false,
@@ -143,24 +147,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div
           className={clsx(
-            "flex min-h-0 flex-1",
+            "flex min-h-0 flex-1 flex-col",
             layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
           )}
         >
-          <RoomList
-            layoutState={layoutState}
-            conversationIds={conversationIds}
-            currentUser={currentUser}
-            selectedId={selectedId}
-            searchQuery={deferredSearchQuery}
-            showLoadingSkeleton={showConversationSkeleton}
-            error={conversationsError}
-            onRetry={onRetryConversations}
-            hasMore={hasMoreConversations}
-            isLoadingMore={isLoadingMoreConversations}
-            onLoadMore={onLoadMoreConversations}
-            onSelect={handleSelectRoom}
-          />
+          {leadingContent}
+          {!hideConversationList ? (
+            <div className="min-h-0 flex-1">
+              <RoomList
+                layoutState={layoutState}
+                conversationIds={conversationIds}
+                currentUser={currentUser}
+                selectedId={selectedId}
+                searchQuery={deferredSearchQuery}
+                showLoadingSkeleton={showConversationSkeleton}
+                error={conversationsError}
+                onRetry={onRetryConversations}
+                hasMore={hasMoreConversations}
+                isLoadingMore={isLoadingMoreConversations}
+                onLoadMore={onLoadMoreConversations}
+                onSelect={handleSelectRoom}
+              />
+            </div>
+          ) : null}
         </div>
 
         {isSearchOpen ? (
