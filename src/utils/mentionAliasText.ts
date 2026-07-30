@@ -2,6 +2,11 @@ import type { Mention } from "../types";
 import { useFriendshipStore } from "../stores/friendshipStore";
 import { buildMentionSegments } from "./mentionSegments";
 
+// Re-export cho các chỗ đã dùng cả hai hàm. Ai chỉ cần hàm thuần (nhất là
+// `conversationAdapter`) phải import THẲNG từ "./parseMentionDetails" — qua file
+// này là kéo theo `friendshipStore` và tạo lại vòng import.
+export { parseMentionDetails } from "./parseMentionDetails";
+
 /**
  * Bảng alias theo userId, đọc một lần ngoài React.
  *
@@ -14,23 +19,6 @@ export const aliasByUserId = (): Record<string, string | null | undefined> => {
   const out: Record<string, string | null | undefined> = {};
   for (const id in byUser) out[id] = byUser[id]?.alias;
   return out;
-};
-
-/**
- * Đọc `mentions` từ payload realtime (dữ liệu thô, chưa tin được) thành `Mention[]`.
- *
- * Chỉ giữ phần tử có `userId` là chuỗi — dạng userId thuần (`string[]`) bị bỏ
- * vì thiếu tên thì không dò được tag trong nội dung.
- */
-export const parseMentionDetails = (mentions: unknown): Mention[] => {
-  if (!Array.isArray(mentions)) return [];
-  return mentions.filter(
-    (item): item is Mention =>
-      item !== null &&
-      typeof item === "object" &&
-      typeof (item as { userId?: unknown }).userId === "string" &&
-      (item as { userId: string }).userId.trim().length > 0,
-  );
 };
 
 /**
