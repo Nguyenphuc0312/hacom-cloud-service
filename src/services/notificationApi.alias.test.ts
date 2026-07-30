@@ -32,4 +32,88 @@ describe("applyAliasToNotification", () => {
       body: base.body,
     });
   });
+
+  it("đổi tag @ trong body theo metadata.mentions", () => {
+    const n: BackendNotification = {
+      ...base,
+      body: "Minh Nhật kiểm thử: @Nguyễn Minh Quang xem giúp nhé",
+      metadata: {
+        senderName: "Minh Nhật kiểm thử",
+        mentions: [{ userId: "u2", displayName: "Nguyễn Minh Quang" }],
+      },
+    };
+    const { body } = applyAliasToNotification(n, {
+      u1: "Sếp deadline",
+      u2: "Quang IT",
+    });
+    expect(body).toBe("Sếp deadline: @Quang IT xem giúp nhé");
+  });
+
+  it("chỉ đổi tag của người CÓ alias", () => {
+    const n: BackendNotification = {
+      ...base,
+      body: "Minh Nhật kiểm thử: @Nguyễn Minh Quang @Vũ Minh Quốc họp nhé",
+      metadata: {
+        senderName: "Minh Nhật kiểm thử",
+        mentions: [
+          { userId: "u2", displayName: "Nguyễn Minh Quang" },
+          { userId: "u3", displayName: "Vũ Minh Quốc" },
+        ],
+      },
+    };
+    const { body } = applyAliasToNotification(n, { u2: "Quang IT" });
+    expect(body).toBe(
+      "Minh Nhật kiểm thử: @Quang IT @Vũ Minh Quốc họp nhé",
+    );
+  });
+
+  // Người gửi và người bị tag trùng tên thật: thay tên người gửi trước có thể
+  // ăn mất chuỗi "@Tên" của tag. Tag phải theo alias của CHÍNH người bị tag.
+  it("người gửi trùng tên người bị tag thì tag vẫn đúng người", () => {
+    const n: BackendNotification = {
+      ...base,
+      body: "Nguyễn Minh Quang: @Nguyễn Minh Quang ơi",
+      metadata: {
+        senderName: "Nguyễn Minh Quang",
+        mentions: [{ userId: "u2", displayName: "Nguyễn Minh Quang" }],
+      },
+    };
+    const { body } = applyAliasToNotification(n, {
+      u1: "Sếp deadline",
+      u2: "Quang IT",
+    });
+    expect(body).toBe("Sếp deadline: @Quang IT ơi");
+  });
+
+  // Ca hiếm nhưng có thật: BE nướng tên người gửi vào body ĐÚNG dạng "@Tên"
+  // (vd tin nhắn mở đầu bằng chính tag đó). Khi ấy hai cặp thay có cùng chuỗi
+  // nguồn — tag phải thắng, vì đoạn đó là tag chứ không phải tên người gửi.
+  it("tag và tên người gửi trùng hệt chuỗi nguồn thì tag thắng", () => {
+    const n: BackendNotification = {
+      ...base,
+      title: "@Nguyễn Minh Quang đã nhắc đến bạn",
+      body: "@Nguyễn Minh Quang ơi",
+      metadata: {
+        senderName: "@Nguyễn Minh Quang",
+        mentions: [{ userId: "u2", displayName: "Nguyễn Minh Quang" }],
+      },
+    };
+    const { body } = applyAliasToNotification(n, {
+      u1: "Sếp deadline",
+      u2: "Quang IT",
+    });
+    expect(body).toBe("@Quang IT ơi");
+  });
+
+  it("metadata.mentions rác thì bỏ qua, không vỡ", () => {
+    const n: BackendNotification = {
+      ...base,
+      body: "Minh Nhật kiểm thử: @Nguyễn Minh Quang ơi",
+      metadata: {
+        senderName: "Minh Nhật kiểm thử",
+        mentions: [null, "u2", { userId: "u2" }, { displayName: "X" }],
+      },
+    };
+    expect(applyAliasToNotification(n, { u2: "Quang IT" }).body).toBe(n.body);
+  });
 });

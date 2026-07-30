@@ -12,6 +12,7 @@ import i18n from "../i18n";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { getPreviewFromMessage } from "./messageContent.utils";
 import { asRecord } from "./payloadGuards";
+import { aliasByUserId, applyMentionAliases } from "./mentionAliasText";
 
 
 const asTrimmedString = (value: unknown): string =>
@@ -143,6 +144,16 @@ export function getMessagePreview(
     default:
       preview = message.content;
   }
+
+  // Tag `@` trong preview phải hiện "tên gợi nhớ" giống hệt trong bong bóng chat.
+  // Thay TRƯỚC khi cắt độ dài, không thì tag cuối bị cắt mất một nửa rồi mới thay.
+  // `MessageSummary` (lastMessage của sidebar) không khai báo `mentions`, nên đọc
+  // optional: thiếu thì giữ nguyên tên thật, không đoán.
+  preview = applyMentionAliases(
+    preview,
+    (message as Partial<Message>).mentions,
+    aliasByUserId(),
+  );
 
   const previewState = getMessagePreviewState(message, currentUserId);
   const stateLabel =

@@ -43,6 +43,12 @@ import {
   showSingletonMessageToast,
 } from "../utils/messageToast";
 import { RoomType } from "../types";
+import type { Mention } from "../types";
+import {
+  aliasByUserId,
+  applyMentionAliases,
+  parseMentionDetails,
+} from "../utils/mentionAliasText";
 import { markPreviewReady, markPreviewFailed } from "./useBatchThumbnailUrl";
 import {
   broadcastUnreadSnapshot,
@@ -787,6 +793,12 @@ export const useWebSocket = (
       content: string;
       messageType?: string | null;
       mentions: string[];
+      /**
+       * Mention đầy đủ (userId + tên) — chỉ để đổi tag `@` trong preview sang
+       * "tên gợi nhớ". `mentions` ở trên là userId thuần, dùng cho policy
+       * (bỏ qua mute khi bị tag), không đủ để dò tag trong chữ.
+       */
+      mentionDetails?: Mention[];
       kind?: "message" | "mention" | "group_activity" | "system";
       eventId?: string | null;
     }) => {
@@ -912,6 +924,15 @@ export const useWebSocket = (
             ? "mention"
             : input.kind || "message";
 
+      // Tag `@` trong nội dung phải hiện "tên gợi nhớ" của người xem — giống hệt
+      // trong bong bóng chat. Tính một lần, dùng cho cả trung tâm thông báo,
+      // thông báo hệ điều hành lẫn toast nổi.
+      const aliasedContent = applyMentionAliases(
+        input.content,
+        input.mentionDetails,
+        aliasByUserId(),
+      );
+
       useNotificationStore.getState().upsertNotification({
         id:
           input.eventId ||
@@ -919,7 +940,7 @@ export const useWebSocket = (
         kind: notificationKind,
         title: conversationLabel,
         body:
-          input.content ||
+          aliasedContent ||
           (notificationKind === "system"
             ? t("chat:notification.systemActivity", { defaultValue: "Hoạt động hệ thống" })
             : t("chat:notification.sentAttachment", { defaultValue: "Đã gửi một tệp đính kèm." })),
@@ -951,7 +972,7 @@ export const useWebSocket = (
         input.eventId ||
         `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
       const preview = notificationSettings.messagePreview
-        ? formatMessagePreview(input.content, input.messageType ?? undefined)
+        ? formatMessagePreview(aliasedContent, input.messageType ?? undefined)
         : hasMention
           ? "Đã nhắc đến bạn."
           : "Tin nhắn mới";
@@ -1399,6 +1420,7 @@ export const useWebSocket = (
           // Server sends Mention[] objects ({ userId, displayName, ... });
           // normalize to user-id strings so mention bypass works for muted chats.
           mentions: normalizeMentionUserIds(messagePayload.mentions),
+          mentionDetails: parseMentionDetails(messagePayload.mentions),
           kind:
             asString(messagePayload.type) === "system" ? "system" : "message",
           eventId,

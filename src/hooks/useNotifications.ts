@@ -12,15 +12,8 @@ import {
   type BackendNotification,
   type BackendNotificationType,
 } from "../services/notificationApi";
-import { useFriendshipStore } from "../stores/friendshipStore";
+import { aliasByUserId } from "../utils/mentionAliasText";
 import { logger } from "../utils/logger";
-
-const aliasMap = (): Record<string, string | null | undefined> => {
-  const byUser = useFriendshipStore.getState().friendByUserId;
-  const out: Record<string, string | null | undefined> = {};
-  for (const id in byUser) out[id] = byUser[id]?.alias;
-  return out;
-};
 
 const backendTypeToKind = (
   type: BackendNotificationType,
@@ -43,7 +36,7 @@ const backendTypeToKind = (
 };
 
 const backendToItem = (n: BackendNotification): NotificationItem => {
-  const { title, body } = applyAliasToNotification(n, aliasMap());
+  const { title, body } = applyAliasToNotification(n, aliasByUserId());
   return {
   id: n.id,
   kind: backendTypeToKind(n.type),
