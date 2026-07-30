@@ -95,7 +95,10 @@ export const applyAliasToNotification = (
 
   // Quét MỘT LƯỢT: mỗi vị trí chỉ khớp đúng một lần. Thay tuần tự từng cặp sẽ
   // để lượt sau ăn lại kết quả lượt trước — tag bị gán nhầm alias người gửi.
+  //
   // Chuỗi dài match trước, để "@An Nguyen" không bị "An" ăn mất một nửa.
+  // `sort` của JS ổn định, nên khi dài bằng nhau thì giữ nguyên thứ tự đưa vào —
+  // tag đã được push trước tên người gửi, tag thắng. Đúng ý định.
   const ordered = [...replacements].sort((a, b) => b[0].length - a[0].length);
   const pattern = new RegExp(
     ordered
@@ -103,7 +106,10 @@ export const applyAliasToNotification = (
       .join("|"),
     "g",
   );
-  const bySource = new Map(ordered);
+  // Dựng NGƯỢC rồi để cặp ĐẦU ghi đè cuối cùng: `new Map(ordered)` giữ cặp SAU,
+  // tức tên người gửi sẽ thắng tag khi hai bên trùng hệt chuỗi nguồn — ngược ý
+  // định. Ca này chỉ xảy ra khi tag và tên người gửi giống nhau từng ký tự.
+  const bySource = new Map([...ordered].reverse());
   const swap = (s: string | null) =>
     s === null ? null : s.replace(pattern, (hit) => bySource.get(hit) ?? hit);
 
