@@ -142,6 +142,10 @@ export default defineConfig(({ mode }) => {
   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
   const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
   const aiTarget   = resolveHttpTarget(env.VITE_DEV_AI_PROXY_TARGET,   "https://ai.hacomholdings.com.vn");
+  const cloudTarget = resolveHttpTarget(
+    env.VITE_DEV_CLOUD_PROXY_TARGET,
+    "http://localhost:8080",
+  );
 
   const shouldAnalyzeBundle = mode === "analyze";
 
@@ -312,6 +316,11 @@ export default defineConfig(({ mode }) => {
       port: 5100,
       strictPort: true,
       proxy: {
+        // Cloud is an independent service. Keep this prefix out of Chat API.
+        "/cloud-api": {
+          ...httpProxy(cloudTarget),
+          rewrite: (path: string) => path.replace(/^\/cloud-api/, ""),
+        },
         // Auth must be listed before the generic /api/v1 rule
         "/api/v1/auth": httpProxy(authTarget),
         "/api/v1":      httpProxy(apiTarget),
