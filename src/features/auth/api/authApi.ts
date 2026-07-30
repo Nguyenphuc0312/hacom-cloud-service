@@ -79,6 +79,8 @@ const normalizeAccessToken = (value: unknown): string | undefined =>
 
 const normalizeUser = (value: unknown): Record<string, unknown> => {
   const user = asRecord(value) || {};
+  const hrProfile = asRecord(user.hrProfile);
+  const organization = asRecord(hrProfile?.organization);
   const id = asString(user.id) || asString(user.userId) || "unknown-user";
   const username =
     asString(user.username) ||
@@ -93,6 +95,27 @@ const normalizeUser = (value: unknown): Record<string, unknown> => {
     ...user,
     id,
     username,
+    // Auth `/me` keeps HR data under `hrProfile`. This is the sole adapter
+    // into the legacy UI store; the server no longer sends duplicate aliases.
+    email: asString(user.accountEmail) || asString(user.email) || undefined,
+    employeeCode:
+      asString(hrProfile?.employeeCode) || asString(user.employeeCode) || undefined,
+    hrEmployeeId:
+      asString(hrProfile?.employeeId) || asString(user.hrEmployeeId) || undefined,
+    fullName: asString(hrProfile?.fullName) || asString(user.fullName) || undefined,
+    fullNameFromHr:
+      asString(hrProfile?.fullName) || asString(user.fullNameFromHr) || undefined,
+    displayName:
+      asString(hrProfile?.fullName) || asString(user.displayName) || undefined,
+    effectiveDisplayName:
+      asString(hrProfile?.fullName) || asString(user.effectiveDisplayName) || undefined,
+    departmentName:
+      asString(organization?.departmentName) || asString(user.departmentName) || undefined,
+    orgUnit:
+      asString(organization?.unitName) || asString(user.orgUnit) || undefined,
+    unitCode:
+      asString(organization?.unitCode) || asString(user.unitCode) || undefined,
+    phone: asString(hrProfile?.phone) || asString(user.phone) || undefined,
   };
 };
 
