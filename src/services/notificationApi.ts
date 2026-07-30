@@ -45,24 +45,68 @@ export interface ListNotificationsResponse {
 }
 
 /**
- * Swap the actor's real name baked into a notification's title/body with the
- * viewer's "tên gợi nhớ" (alias). BE stores the exact baked name in
- * metadata.senderName, so this is an exact-substring replace (not a guess).
- * Applied in the single backendToItem mapper → covers initial load + realtime.
- * ponytail: FE interim — durable fix is BE rendering alias-aware notifications
- * (tracked in FE__contact-alias-notifications contract).
+ * Đổi mọi tên thật trong title/body của một thông báo sang "tên gợi nhớ" của
+ * người xem. BE luôn nướng tên thật vào chữ (alias là nhãn riêng, BE không biết),
+ * nên việc đổi bắt buộc phải làm ở client.
+ *
+ * Hai thứ được đổi, cả hai đều **thay đúng chuỗi BE đã ghi**, không đoán:
+ * 1. Tên NGƯỜI GỬI — lấy từ `metadata.senderName`.
+ * 2. Tag `@` trong nội dung — lấy từ `metadata.mentions` (BE ship 30-07-26).
+ *    Thiếu field này (thông báo cũ) thì bỏ qua, hiện tên thật như trước.
+ *
+ * Áp trong đúng một mapper `backendToItem` → phủ cả lần tải đầu lẫn realtime.
  */
 export const applyAliasToNotification = (
   n: BackendNotification,
   aliasByUserId: Record<string, string | null | undefined>,
 ): { title: string; body: string | null } => {
+  const replacements: [string, string][] = [];
+
+  // Tag đứng TRƯỚC tên người gửi trong danh sách: người gửi và người bị tag có
+  // thể trùng tên thật, khi đó "@Tên" phải ăn theo alias của người BỊ TAG.
+  const mentions = Array.isArray(n.metadata?.mentions)
+    ? n.metadata.mentions
+    : [];
+  for (const mention of mentions) {
+    if (!mention || typeof mention !== "object") continue;
+    const { userId, displayName } = mention as {
+      userId?: unknown;
+      displayName?: unknown;
+    };
+    if (typeof userId !== "string" || typeof displayName !== "string") continue;
+    const alias = aliasByUserId[userId]?.trim();
+    if (!alias || alias === displayName) continue;
+    // Kèm '@' để chỉ đụng vào tag, không đụng tên xuất hiện trong câu chữ thường.
+    replacements.push([`@${displayName}`, `@${alias}`]);
+  }
+
   const bakedName =
     typeof n.metadata?.senderName === "string" ? n.metadata.senderName : null;
-  const alias = n.actorUserId ? aliasByUserId[n.actorUserId] ?? null : null;
-  if (!bakedName || !alias || bakedName === alias) {
+  const senderAlias = n.actorUserId
+    ? aliasByUserId[n.actorUserId]?.trim() || null
+    : null;
+  if (bakedName && senderAlias && bakedName !== senderAlias) {
+    replacements.push([bakedName, senderAlias]);
+  }
+
+  if (replacements.length === 0) {
     return { title: n.title, body: n.body ?? null };
   }
-  const swap = (s: string | null) => (s ? s.split(bakedName).join(alias) : s);
+
+  // Quét MỘT LƯỢT: mỗi vị trí chỉ khớp đúng một lần. Thay tuần tự từng cặp sẽ
+  // để lượt sau ăn lại kết quả lượt trước — tag bị gán nhầm alias người gửi.
+  // Chuỗi dài match trước, để "@An Nguyen" không bị "An" ăn mất một nửa.
+  const ordered = [...replacements].sort((a, b) => b[0].length - a[0].length);
+  const pattern = new RegExp(
+    ordered
+      .map(([from]) => from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|"),
+    "g",
+  );
+  const bySource = new Map(ordered);
+  const swap = (s: string | null) =>
+    s === null ? null : s.replace(pattern, (hit) => bySource.get(hit) ?? hit);
+
   return { title: swap(n.title) ?? n.title, body: swap(n.body ?? null) };
 };
 

@@ -1066,15 +1066,17 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     (candidate: MentionCandidate) => {
       if (!mentionMatch) return;
 
-      // Insert the single shared canonical name (Zalo WYSIWYG) — NOT the private
-      // alias. The chip serialises to `@insertName` in getText(), so send /
-      // extractMentionDetails are unchanged. The editor's onUpdate then drives
-      // draftValue/onChange, so no manual value bookkeeping is needed here.
-      const insertName =
+      // Chữ GỬI ĐI: tên chung, cả nhóm cùng đọc một thứ. Chip serialise ra đúng
+      // cái này trong getText() nên send / extractMentionDetails không đổi.
+      const sendName =
         candidate.mentionInsertName ||
         candidate.displayName ||
         candidate.resolvedName ||
         candidate.username;
+
+      // Chữ NGƯỜI GÕ NHÌN THẤY: "tên gợi nhớ" nếu họ có đặt, để ô nhập đọc giống
+      // hệt bong bóng chat sau khi gửi. Nhãn này không rời khỏi máy họ.
+      const displayLabel = candidate.aliasLabel?.trim() || sendName;
 
       const editor = tipTapRef.current?.getEditor();
       if (editor) {
@@ -1090,7 +1092,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           { from, to },
           {
             id: candidate.id,
-            label: insertName,
+            label: displayLabel,
+            sendLabel: sendName,
             variant: isAll ? "all" : "user",
           },
         );

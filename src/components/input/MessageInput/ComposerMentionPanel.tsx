@@ -111,26 +111,18 @@ const resolvePrimaryLabel = (
     ? mentionAllLabel
     : candidate.aliasLabel?.trim() || resolveCanonicalName(candidate);
 
-// Có alias thì dòng phụ là TÊN THẬT — người dùng phải biết mình đang tag ai
-// trước khi gửi, vì cả nhóm sẽ đọc tên thật đó chứ không phải nhãn riêng.
+// Dòng phụ chỉ là phòng ban · công ty. KHÔNG kèm tên thật: người đặt "tên gợi
+// nhớ" là để khỏi phải đọc tên thật nữa, hiện lại thành ra rối.
 const resolveSecondaryLabel = (
   candidate: MentionCandidate,
   isMentionAll: boolean,
   mentionAllDescription: string,
-): string | null => {
-  if (isMentionAll) return mentionAllDescription;
-
-  const orgLine =
-    [candidate.departmentName, candidate.companyName]
-      .filter(Boolean)
-      .join(" · ") || null;
-
-  const alias = candidate.aliasLabel?.trim();
-  const canonicalName = resolveCanonicalName(candidate);
-  if (!alias || alias === canonicalName) return orgLine;
-
-  return orgLine ? `${canonicalName} · ${orgLine}` : canonicalName;
-};
+): string | null =>
+  isMentionAll
+    ? mentionAllDescription
+    : [candidate.departmentName, candidate.companyName]
+        .filter(Boolean)
+        .join(" · ") || null;
 
 export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
   mentionListId,
