@@ -316,6 +316,26 @@ Lưu ý lỗi build đã từng dính: **casing import sai** giữa Windows loca
 npm run build && node scripts/verify-dist-assets.mjs
 ```
 
+### ⚠️ Import vòng — typecheck/lint/build/test ĐỀU KHÔNG bắt được
+
+Đã dính 30-07-26: `conversationAdapter` → `utils/mentionAliasText` → `stores/friendshipStore`
+→ `services/api` → ngược lại `conversationAdapter`. Cả 4 cổng đều xanh, nhưng **app trắng
+xoá** vì lúc module init `normalizeConversation` là `undefined`.
+
+Khi thêm `import` vào một file ở `lib/` hoặc `utils/` mà file đó được `services/` hay
+`stores/` dùng, kiểm tra bằng:
+```bash
+npx madge --circular --extensions ts,tsx src/
+```
+
+So với **số vòng trước khi sửa** (repo đang có sẵn 9 vòng cũ ở calendar/ui/index) — tăng lên
+là do mình. Cách gỡ: hàm thuần thì tách ra file riêng không import store, và import **thẳng**
+file đó thay vì qua barrel/file có store.
+
+Test đơn vị không bắt được vì nó import trực tiếp module cần test, không chạy đúng thứ tự
+khởi tạo của app. **Đổi file dạng này thì phải mở thật `localhost:5100` xem trang có render
+không**, đừng tin mỗi build xanh.
+
 ---
 
 ## 13b. Commit — TỰ ĐỘNG, không cần hỏi lại

@@ -7,7 +7,9 @@ import type {
 } from "../types";
 import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
 import { asStringValue as asString } from "../utils/payloadGuards";
-import { parseMentionDetails } from "../utils/mentionAliasText";
+// Import THẲNG file thuần: qua "mentionAliasText" sẽ kéo theo `friendshipStore`
+// → `services/api` → chính file này, thành vòng import và app trắng màn.
+import { parseMentionDetails } from "../utils/parseMentionDetails";
 
 type UnknownRecord = Record<string, unknown>;
 
