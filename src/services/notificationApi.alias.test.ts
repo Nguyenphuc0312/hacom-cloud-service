@@ -85,6 +85,26 @@ describe("applyAliasToNotification", () => {
     expect(body).toBe("Sếp deadline: @Quang IT ơi");
   });
 
+  // Ca hiếm nhưng có thật: BE nướng tên người gửi vào body ĐÚNG dạng "@Tên"
+  // (vd tin nhắn mở đầu bằng chính tag đó). Khi ấy hai cặp thay có cùng chuỗi
+  // nguồn — tag phải thắng, vì đoạn đó là tag chứ không phải tên người gửi.
+  it("tag và tên người gửi trùng hệt chuỗi nguồn thì tag thắng", () => {
+    const n: BackendNotification = {
+      ...base,
+      title: "@Nguyễn Minh Quang đã nhắc đến bạn",
+      body: "@Nguyễn Minh Quang ơi",
+      metadata: {
+        senderName: "@Nguyễn Minh Quang",
+        mentions: [{ userId: "u2", displayName: "Nguyễn Minh Quang" }],
+      },
+    };
+    const { body } = applyAliasToNotification(n, {
+      u1: "Sếp deadline",
+      u2: "Quang IT",
+    });
+    expect(body).toBe("@Quang IT ơi");
+  });
+
   it("metadata.mentions rác thì bỏ qua, không vỡ", () => {
     const n: BackendNotification = {
       ...base,
