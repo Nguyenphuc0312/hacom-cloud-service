@@ -13,6 +13,8 @@ import {
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
+import { buildMentionSegments } from "../../utils/mentionSegments";
+import { useResolvedDisplayName } from "../../stores/useResolvedDisplayName";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
@@ -81,30 +83,75 @@ const getStructuredBlockContent = (content: string): string | null => {
   return null;
 };
 
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Legacy messages carry no mention metadata at all. Unicode-aware so Vietnamese
+// diacritics are part of the token (plain `\w` was not). Styled but never
+// clickable — without metadata there is no userId to open a profile with.
+const FALLBACK_MENTION_REGEX = /@[\p{L}\p{N}_.-]+/gu;
+
+interface MentionTokenProps {
+  /** The tag exactly as it appears in the message body, including '@'. */
+  rawText: string;
+  mention?: Mention;
+  isOwn: boolean;
+  isSelfMention: boolean;
+  isMentionAll: boolean;
+}
 
 /**
- * Build an alternation regex from resolved mention displayNames.
- * Matches longest-first to avoid "@An" eating part of "@An Nguyen".
- * Returns null when there are no usable mentions.
+ * One `@` tag.
+ *
+ * The label is resolved per-viewer via `useResolvedDisplayName`, so each person
+ * sees their own "tên gợi nhớ" (alias) for the tagged user — and, when no alias
+ * is set, the user's *current* name rather than the name frozen into the text at
+ * send time. The message body itself is untouched: alias never leaves this
+ * client, so nothing private leaks to the group.
  */
-const buildMentionRegexFromMetadata = (mentions: Mention[]): RegExp | null => {
-  const names = mentions
-    .map((m) => m.displayName?.trim())
-    .filter((name): name is string => Boolean(name));
-  if (names.length === 0) return null;
+const MentionToken: React.FC<MentionTokenProps> = ({
+  rawText,
+  mention,
+  isOwn,
+  isSelfMention,
+  isMentionAll,
+}) => {
+  // Strip the '@' before resolving so we never render "@@Name".
+  const rawLabel = rawText.startsWith("@") ? rawText.slice(1) : rawText;
+  const resolvedLabel = useResolvedDisplayName(mention?.userId, rawLabel);
+  const label = isMentionAll ? rawLabel : resolvedLabel;
+  const isClickable = !isMentionAll && Boolean(mention?.userId);
 
-  const sorted = [...new Set(names)].sort((a, b) => b.length - a.length);
-  const alternation = sorted.map(escapeRegExp).join("|");
-  return new RegExp(`@(?:${alternation})`, "gu");
+  return (
+    <span
+      className={clsx(
+        "inline rounded px-0.5 font-semibold",
+        isMentionAll
+          ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+          : isSelfMention
+            ? isOwn
+              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
+              : "bg-[#1976D2]/10 text-[#1565C0]"
+            : isOwn
+              ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
+              : "text-[#1565C0]/80",
+        isClickable && "cursor-pointer hover:underline",
+      )}
+      title={mention?.employeeCode || undefined}
+      onClick={
+        isClickable && mention
+          ? (e) => {
+              e.stopPropagation();
+              dispatchMentionProfileView({
+                userId: mention.userId,
+                displayName: mention.displayName,
+                avatarUrl: mention.avatarUrl,
+              });
+            }
+          : undefined
+      }
+    >
+      @{label}
+    </span>
+  );
 };
-
-// Unicode-aware fallback for legacy messages without mention metadata.
-// Matches `@<token>` where token is letters / digits / Vietnamese diacritics
-// (the original `\w` alternative did not). Used only when `mentions[]` is
-// missing — the metadata path is preferred.
-const FALLBACK_MENTION_REGEX = /@[\p{L}\p{N}_.-]+/gu;
 
 const renderWithMentions = (
   text: string,
@@ -117,92 +164,71 @@ const renderWithMentions = (
 ): React.ReactNode[] => {
   const { currentUserId, mentions, currentUsername } = options;
 
-  const fromMetadata = mentions && mentions.length > 0;
-  const regex = fromMetadata
-    ? buildMentionRegexFromMetadata(mentions)
-    : currentUsername || mentions
-      ? FALLBACK_MENTION_REGEX
-      : null;
-
-  if (!regex) return [text];
-
-  // Build a lookup by displayName to resolve userId for self-mention check.
-  const byName = new Map<string, Mention>();
-  if (mentions) {
-    for (const m of mentions) {
-      if (m.displayName) byName.set(m.displayName.toLowerCase(), m);
+  // No metadata at all: style bare `@token`s so legacy messages still look like
+  // mentions, but they stay inert.
+  if (!mentions || mentions.length === 0) {
+    if (!currentUsername) return [text];
+    const out: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+    FALLBACK_MENTION_REGEX.lastIndex = 0;
+    while ((match = FALLBACK_MENTION_REGEX.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        out.push(
+          <React.Fragment key={`t-${key++}`}>
+            {text.slice(lastIndex, match.index)}
+          </React.Fragment>,
+        );
+      }
+      const token = match[0];
+      const candidate = token.slice(1);
+      out.push(
+        <MentionToken
+          key={`m-${key++}`}
+          rawText={token}
+          isOwn={isOwn}
+          isSelfMention={
+            candidate.toLowerCase() === currentUsername.toLowerCase()
+          }
+          isMentionAll={candidate.toLowerCase() === "all"}
+        />,
+      );
+      lastIndex = match.index + token.length;
     }
-  }
-
-  const out: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  regex.lastIndex = 0;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
+    if (lastIndex < text.length) {
       out.push(
         <React.Fragment key={`t-${key++}`}>
-          {text.slice(lastIndex, match.index)}
+          {text.slice(lastIndex)}
         </React.Fragment>,
       );
     }
-    const token = match[0];
-    const candidate = token.startsWith("@") ? token.slice(1) : token;
-    const resolved = byName.get(candidate.toLowerCase());
-    const isSelfMention = resolved
-      ? Boolean(currentUserId && resolved.userId === currentUserId)
-      : Boolean(
-          currentUsername &&
-            candidate.toLowerCase() === currentUsername.toLowerCase(),
-        );
-    const isMentionAll = resolved?.userId === "all" || candidate.toLowerCase() === "all";
-    // WYSIWYG (Zalo model): render the tag exactly as it was inserted/sent, so
-    // everyone in the group sees the same name. Do NOT overlay the viewer's
-    // private alias here — that would make the bubble differ per-viewer and
-    // diverge from what was typed. Alias stays viewer-local.
-    const displayLabel = token;
-    out.push(
-      <span
-        key={`m-${key++}`}
-        className={clsx(
-          "inline rounded px-0.5 font-semibold",
-          isMentionAll
-            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-            : isSelfMention
-              ? isOwn
-                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
-                : "bg-[#1976D2]/10 text-[#1565C0]"
-              : isOwn
-                ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
-                : "text-[#1565C0]/80",
-          !isMentionAll && resolved?.userId && "cursor-pointer hover:underline",
+    return out.length > 0 ? out : [text];
+  }
+
+  const byUserId = new Map(mentions.map((m) => [m.userId, m] as const));
+  const segments = buildMentionSegments(text, mentions);
+
+  return segments.map((segment, index) => {
+    if (!segment.userId && !segment.isAll) {
+      return (
+        <React.Fragment key={`t-${index}`}>{segment.text}</React.Fragment>
+      );
+    }
+    const mention = segment.userId ? byUserId.get(segment.userId) : undefined;
+    return (
+      <MentionToken
+        key={`m-${index}`}
+        rawText={segment.text}
+        mention={mention}
+        isOwn={isOwn}
+        isSelfMention={Boolean(
+          currentUserId && segment.userId === currentUserId,
         )}
-        title={resolved?.employeeCode || undefined}
-        onClick={
-          !isMentionAll && resolved?.userId
-            ? (e) => {
-                e.stopPropagation();
-                dispatchMentionProfileView({
-                  userId: resolved.userId,
-                  displayName: resolved.displayName,
-                  avatarUrl: resolved.avatarUrl,
-                });
-              }
-            : undefined
-        }
-      >
-        {displayLabel}
-      </span>,
+        isMentionAll={Boolean(segment.isAll)}
+      />
     );
-    lastIndex = match.index + token.length;
-  }
-  if (lastIndex < text.length) {
-    out.push(
-      <React.Fragment key={`t-${key++}`}>{text.slice(lastIndex)}</React.Fragment>,
-    );
-  }
-  return out;
+  });
 };
 
 const getMentionsRenderSignature = (mentions?: Mention[]): string =>

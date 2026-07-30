@@ -97,6 +97,14 @@ export interface Mention {
   displayName: string;
   employeeCode?: string;
   avatarUrl?: string;
+  /**
+   * Vị trí tag trong `content`, tính bằng code point, gồm cả '@'.
+   * `null`/thiếu = tin nhắn gửi trước khi BE ship range → render fallback dò
+   * theo tên. Contract: `FE__mention-structured-ranges__contract__30-07-26`.
+   */
+  offset?: number | null;
+  /** Độ dài tag tính bằng code point, gồm cả '@'. */
+  length?: number | null;
 }
 
 /**
