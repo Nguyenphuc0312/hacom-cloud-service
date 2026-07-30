@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
 import { asStringValue as asString } from "../utils/payloadGuards";
+import { parseMentionDetails } from "../utils/mentionAliasText";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -235,6 +236,13 @@ const normalizeLastMessage = (
       raw.createdAt ?? source.lastMessageAt ?? source.updatedAt,
       new Date(),
     ),
+    // Ai được tag trong `content` — để preview sidebar đổi tag `@` sang "tên gợi
+    // nhớ" của người xem. BE ship 30-07-26 (migration 071); tin cũ không có field
+    // này thì preview hiện tên thật, đúng như trước.
+    ...(() => {
+      const mentions = parseMentionDetails(raw.mentions);
+      return mentions.length > 0 ? { mentions } : {};
+    })(),
     ...(asString(raw.sendState) ? { sendState: asString(raw.sendState) } : {}),
     ...(asString(raw.status) &&
     Object.values(MessageStatus).includes(asString(raw.status) as MessageStatus)
