@@ -1,20 +1,9 @@
-﻿import React, { useEffect, useRef, useState } from "react";
-import {
-  CopyIcon,
-  CheckIcon,
-} from "lucide-react";
+import React, { useCallback, useEffect, useRef } from "react";
 import clsx from "clsx";
 import type { AiMessage } from "../types";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
-import {
-  AiMessageAvatar,
-  AI_MESSAGE_ROW_PADDING,
-  AI_ANSWER_MAX_WIDTH,
-} from "./AiMessageAvatar";
-import { AiAnswerContent } from "./AiAnswerContent";
-import { AiSourceList } from "./AiSourceList";
-import { WorkReportForm } from "./WorkReportForm";
-import { DepartmentSelector } from "./DepartmentSelector";
+import { AiMessageAvatar, AI_MESSAGE_ROW_PADDING } from "./AiMessageAvatar";
+import { AiMessageRow } from "./AiMessageRow";
 import "../styles/ai-animations.css";
 
 interface AiChatPreviewProps {
@@ -25,37 +14,12 @@ interface AiChatPreviewProps {
   autoScroll?: boolean;
 }
 
-const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
-  const [isOpen, setIsOpen] = useState(true);
-
-  return (
-    <div className="mb-3">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-xs text-text-muted hover:text-text-secondary transition-colors mb-1"
-      >
-        <div className="flex gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0s" }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.2s" }} />
-          <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.4s" }} />
-        </div>
-        <span className="font-medium">Đang suy nghĩ...</span>
-      </button>
-      {isOpen && content && (
-        <div className="pl-4 border-l-2 border-border text-sm text-text-muted italic leading-relaxed">
-          {content}
-        </div>
-      )}
-    </div>
-  );
-};
-
 /**
  * Danh sách tin nhắn AI – user messages căn phải, AI messages căn trái.
  * Citation [N] trong answer được render thành link chip.
  * Nguồn tham khảo hiển thị inline bên dưới mỗi câu trả lời.
  */
-export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
+const AiChatPreviewImpl: React.FC<AiChatPreviewProps> = ({
   messages,
   isLoading = false,
   onUpdateMessage,
@@ -64,12 +28,14 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const scrolledWidgetIdRef = useRef<string | null>(null);
-  const { selectedEndpoint } = useChatUiStore();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const selectedEndpoint = useChatUiStore((s) => s.selectedEndpoint);
 
   // Message cuối có đang hiển thị form/selector tương tác (#baocaocv) không?
   const lastMsg = messages[messages.length - 1];
-  const hasInteractiveWidget = !!(lastMsg?.formRequest || lastMsg?.selectionRequest);
+  const widgetMessageId =
+    lastMsg && (lastMsg.formRequest || lastMsg.selectionRequest)
+      ? lastMsg.id
+      : null;
 
   useEffect(() => {
     // Khi message cuối là form/selector: đưa ĐỈNH widget vào tầm nhìn ĐÚNG MỘT LẦN
@@ -77,9 +43,9 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
     // chạy dở (từ lúc streaming) — chính nó là nguyên nhân khiến widget "nhảy lên"
     // khi nội dung load bất đồng bộ và cao dần. Neo theo đỉnh widget (không theo
     // bottomRef) nên nội dung load thêm bên dưới không còn gây giật.
-    if (hasInteractiveWidget) {
-      if (lastMsg && scrolledWidgetIdRef.current !== lastMsg.id) {
-        scrolledWidgetIdRef.current = lastMsg.id;
+    if (widgetMessageId) {
+      if (scrolledWidgetIdRef.current !== widgetMessageId) {
+        scrolledWidgetIdRef.current = widgetMessageId;
         requestAnimationFrame(() => {
           widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
@@ -90,176 +56,59 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
     if (autoScroll) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isLoading, hasInteractiveWidget, lastMsg, autoScroll]);
+    // Chỉ chạy khi SỐ LƯỢNG message đổi hoặc widget xuất hiện — không chạy theo
+    // từng frame streaming (parent lo việc bám đáy khi stream).
+  }, [messages.length, widgetMessageId, autoScroll]);
 
-  const handleCopy = (message: AiMessage) => {
-    navigator.clipboard.writeText(message.content);
-    setCopiedId(message.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  const assistantLabel =
+    selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân";
+
+  // Ổn định reference để memo của AiMessageRow không bị phá mỗi render.
+  const handleUpdateMessage = useCallback(
+    (messageId: string, patch: Partial<AiMessage>) =>
+      onUpdateMessage?.(messageId, patch),
+    [onUpdateMessage],
+  );
 
   return (
     <div className="flex w-full flex-col gap-0 py-4">
-      {messages.map((message, index) => {
-        const isWidgetMessage =
-          index === messages.length - 1 &&
-          !!(message.formRequest || message.selectionRequest);
-        return (
+      {messages.map((message) => (
         <div
           key={message.id}
-          ref={isWidgetMessage ? widgetRef : undefined}
-          className="group w-full animate-fade-in-up bg-surface"
+          ref={message.id === widgetMessageId ? widgetRef : undefined}
         >
+          <AiMessageRow
+            message={message}
+            assistantLabel={assistantLabel}
+            onUpdateMessage={handleUpdateMessage}
+          />
+        </div>
+      ))}
+
+      {/* Loading ghost – khi đang chờ AI response */}
+      {isLoading && lastMsg?.role === "user" && (
+        <div className="w-full bg-surface">
           <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
-            <div
-              className={clsx(
-                "flex gap-3.5",
-                // User: avatar căn GIỮA bong bóng (không cao lêu nghêu, không
-                // thấp quá). Assistant: căn đỉnh vì câu trả lời dài.
-                message.role === "user"
-                  ? "flex-row-reverse items-center"
-                  : "flex-row items-start",
-              )}
-            >
-              <AiMessageAvatar role={message.role} isError={message.isError} />
-
-              {/* Content */}
-              <div
-                className={clsx(
-                  "flex flex-col gap-1 min-w-0 flex-1",
-                  message.role === "user" ? "items-end" : "items-start",
-                )}
-              >
-                {/* Label — chỉ hiện cho assistant. User bỏ nhãn "Bạn" để bong
-                    bóng + avatar căn đáy gọn như bên chat. */}
-                {message.role === "assistant" && (
-                  <span className="text-xs font-semibold text-text-muted mb-1">
-                    {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
-                  </span>
-                )}
-
-                {/* Thinking */}
-                {message.thinking && message.role === "assistant" && (
-                  <ThinkingBlock content={message.thinking} />
-                )}
-
-                {/* Message body */}
-                <div
-                  className={clsx(
-                    message.role === "user"
-                      ? "w-fit max-w-[75%] max-sm:max-w-[88%] bg-surface-hover rounded-2xl rounded-tr-sm px-5 py-3.5 text-text-primary break-words text-justify"
-                      : clsx("w-full", AI_ANSWER_MAX_WIDTH),
-                  )}
-                >
-                  {message.role === "assistant" &&
-                  message.isStreaming &&
-                  !message.content &&
-                  !message.thinking ? (
-                    /* Loading dots */
-                    <div className="flex items-center gap-1.5 py-1">
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s]" />
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-text-muted animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
-                    </div>
-                  ) : message.formRequest ? (
-                    <WorkReportForm
-                      data={message.formRequest}
-                      onSuccess={(msg) =>
-                        onUpdateMessage?.(message.id, {
-                          content: msg,
-                          formRequest: undefined,
-                          isStreaming: false,
-                        })
-                      }
-                      onCancel={() =>
-                        onUpdateMessage?.(message.id, {
-                          content: "Đã hủy báo cáo.",
-                          formRequest: undefined,
-                          isStreaming: false,
-                        })
-                      }
-                    />
-                  ) : message.selectionRequest ? (
-                    <DepartmentSelector
-                      data={message.selectionRequest}
-                      onCancel={() =>
-                        onUpdateMessage?.(message.id, {
-                          content: "Đã hủy.",
-                          selectionRequest: undefined,
-                          isStreaming: false,
-                        })
-                      }
-                    />
-                  ) : message.role === "assistant" ? (
-                    <AiAnswerContent
-                      content={message.content}
-                      sources={message.isStreaming ? undefined : message.sources}
-                      isStreaming={message.isStreaming}
-                    />
-                  ) : (
-                    <div className="text-[12px] leading-[1.4] whitespace-pre-wrap break-words text-justify">
-                      {message.content}
-                    </div>
-                  )}
+            <div className="flex gap-3.5">
+              <AiMessageAvatar role="assistant" />
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted mb-1">
+                  {assistantLabel}
+                </span>
+                <div className="flex items-center gap-1.5 py-1">
+                  <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0s" }} />
+                  <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.2s" }} />
+                  <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.4s" }} />
                 </div>
-
-                {/* Actions bar – chỉ hiện khi hover (AI messages) */}
-                {!message.isStreaming && message.role === "assistant" && (
-                  <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleCopy(message)}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
-                      title="Sao chép"
-                    >
-                      {copiedId === message.id ? (
-                        <CheckIcon size={14} className="text-green-600" />
-                      ) : (
-                        <CopyIcon size={14} />
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Nguồn tham khảo – inline dưới answer */}
-                {message.role === "assistant" &&
-                  !message.isStreaming &&
-                  message.sources &&
-                  message.sources.length > 0 && (
-                    <div className="w-full max-w-[680px]">
-                      <AiSourceList sources={message.sources} />
-                    </div>
-                  )}
               </div>
             </div>
           </div>
         </div>
-        );
-      })}
-
-      {/* Loading ghost – khi đang chờ AI response */}
-      {isLoading &&
-        messages.length > 0 &&
-        messages[messages.length - 1].role === "user" && (
-          <div className="w-full bg-surface">
-            <div className={clsx("w-full", AI_MESSAGE_ROW_PADDING)}>
-              <div className="flex gap-3.5">
-                <AiMessageAvatar role="assistant" />
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-text-muted mb-1">
-                    {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
-                  </span>
-                  <div className="flex items-center gap-1.5 py-1">
-                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0s" }} />
-                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.2s" }} />
-                    <span className="h-2 w-2 rounded-full bg-text-muted animate-dot-bounce" style={{ animationDelay: "0.4s" }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+      )}
 
       <div ref={bottomRef} className="h-4" aria-hidden="true" />
     </div>
   );
 };
+
+export const AiChatPreview = React.memo(AiChatPreviewImpl);

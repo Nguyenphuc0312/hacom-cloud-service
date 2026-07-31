@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -31,6 +31,27 @@ const sanitizeSchema = {
   },
 };
 
+// Hoist ra ngoài component: mảng plugin tạo mới ở mỗi render sẽ khiến
+// react-markdown dựng lại pipeline processor và parse lại toàn bộ nội dung.
+const REMARK_PLUGINS = [remarkGfm];
+const REHYPE_PLUGINS = [
+  rehypeReportTableCols,
+  [rehypeSanitize, sanitizeSchema],
+] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+
+const TableWrapper = ({
+  children,
+  className,
+}: React.ComponentPropsWithoutRef<"table">) => (
+  // Bảng báo cáo bọc khung bo góc + cuộn ngang trong bảng (không phải cả
+  // message). Màn này không có TableExportMenu → wrapper gọn hơn Cá nhân.
+  <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
+    <table className={clsx("w-full border-collapse text-[13px]", className)}>
+      {children}
+    </table>
+  </div>
+);
+
 function flattenLinkLabel(children: React.ReactNode): string {
   return React.Children.toArray(children)
     .map((child) => {
@@ -47,7 +68,7 @@ function flattenLinkLabel(children: React.ReactNode): string {
  * Render nội dung AI dạng markdown, nhận biết citation [N] và chuyển thành link chip.
  * Link báo cáo tuần: tên file → xem trên web, "Tải về" → tải xuống.
  */
-export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
+const AiAnswerContentImpl: React.FC<AiAnswerContentProps> = ({
   content,
   sources,
   isStreaming,
@@ -61,29 +82,20 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
   } = useWeeklyReportFileActions();
   const { open: openSource, isOpening: isOpeningSource } = useOpenAiSource();
 
-  const processedContent =
-    sources && sources.length > 0
-      ? preprocessCitations(content, sources)
-      : content;
+  const processedContent = useMemo(
+    () =>
+      sources && sources.length > 0
+        ? preprocessCitations(content, sources)
+        : content,
+    [content, sources],
+  );
 
-  return (
-    <>
-      <div className="prose-chatgpt relative">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeReportTableCols, [rehypeSanitize, sanitizeSchema]]}
-          components={{
-            ...reportTableComponents,
-            // Bảng báo cáo bọc khung bo góc + cuộn ngang trong bảng (không phải cả
-            // message). Màn này không có TableExportMenu → wrapper gọn hơn Cá nhân.
-            table: ({ children, className }: React.ComponentPropsWithoutRef<"table">) => (
-              <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
-                <table className={clsx("w-full border-collapse text-[13px]", className)}>
-                  {children}
-                </table>
-              </div>
-            ),
-            a: ({
+  const components = useMemo(
+    () =>
+      ({
+        ...reportTableComponents,
+        table: TableWrapper,
+        a: ({
               href,
               title,
               children,
@@ -156,7 +168,17 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
                 </a>
               );
             },
-          }}
+      }) satisfies React.ComponentProps<typeof ReactMarkdown>["components"],
+    [busyFileId, handleDownload, handleView, isOpeningSource, openSource],
+  );
+
+  return (
+    <>
+      <div className="prose-chatgpt relative">
+        <ReactMarkdown
+          remarkPlugins={REMARK_PLUGINS}
+          rehypePlugins={REHYPE_PLUGINS}
+          components={components}
         >
           {processedContent}
         </ReactMarkdown>
@@ -169,3 +191,7 @@ export const AiAnswerContent: React.FC<AiAnswerContentProps> = ({
     </>
   );
 };
+
+/** memo: message cũ có content/sources không đổi thì không parse lại Markdown
+ * ở mỗi frame streaming của message cuối. */
+export const AiAnswerContent = React.memo(AiAnswerContentImpl);
