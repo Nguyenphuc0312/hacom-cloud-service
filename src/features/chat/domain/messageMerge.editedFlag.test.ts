@@ -88,6 +88,31 @@ describe("isEdited survives later message events", () => {
     expect(Boolean(merged.editedAt)).toBe(true);
   });
 
+  it("derives isEdited from editedAt when the payload omits the flag", () => {
+    // WS payload (MessageEventPayload.isEdited là optional) và tin cũ tải lại
+    // từ server có thể chỉ mang editedAt.
+    const cache = buildConversationMessagesCache("conv-1", [
+      message({
+        id: "server-A",
+        content: "A-edited",
+        messageSeq: 1,
+        isEdited: undefined as unknown as boolean,
+        editedAt: "2026-06-11T01:00:00.000Z" as unknown as Date,
+      }),
+    ]);
+
+    expect(cache.messages[0].isEdited).toBe(true);
+  });
+
+  it("leaves an untouched message alone", () => {
+    const cache = buildConversationMessagesCache("conv-1", [
+      message({ id: "server-A", content: "A", messageSeq: 1 }),
+    ]);
+
+    expect(cache.messages[0].isEdited).toBe(false);
+    expect(cache.messages[0].editedAt).toBeUndefined();
+  });
+
   it("still lets a server payload turn isEdited on", () => {
     const current = message({ id: "server-A" });
     const incoming = message({
