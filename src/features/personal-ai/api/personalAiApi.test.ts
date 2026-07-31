@@ -2,10 +2,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LevelReportScopeRequiredError,
   listPersonalDocuments,
+  matchLevelReportTag,
   selectPersonalSources,
   streamPersonalChat,
   uploadLevelReport,
 } from "./personalAiApi";
+
+describe("matchLevelReportTag", () => {
+  it("nhận ra tag nộp lên TBP và LĐĐV (không phân biệt hoa thường)", () => {
+    expect(matchLevelReportTag("#TBP_baocao tuần này")?.tag).toBe("#tbp_baocao");
+    expect(matchLevelReportTag("#tbp_BaoCao")?.tag).toBe("#tbp_baocao");
+    expect(matchLevelReportTag("nộp #LDDV_baocao")?.tag).toBe("#lddv_baocao");
+  });
+
+  it("mô tả đích đến để hộp xác nhận nói rõ báo cáo đi đâu", () => {
+    expect(matchLevelReportTag("#TBP_baocao")?.destination).toContain("Trưởng bộ phận");
+    expect(matchLevelReportTag("#LDDV_baocao")?.destination).toContain("Lãnh đạo đơn vị");
+  });
+
+  it("KHÔNG coi #TCT_tonghop là nộp — tag đó chỉ tổng hợp", () => {
+    expect(matchLevelReportTag("#TCT_tonghop")).toBeNull();
+  });
+
+  it("trả null khi không có tag nộp nào", () => {
+    expect(matchLevelReportTag("#congviectuan")).toBeNull();
+    expect(matchLevelReportTag("báo cáo giúp tôi")).toBeNull();
+  });
+});
 
 let currentToken = "test-token";
 vi.mock("../../../services/tokenService", () => ({

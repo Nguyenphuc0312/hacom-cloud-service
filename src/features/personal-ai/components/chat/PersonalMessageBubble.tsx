@@ -474,7 +474,9 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   onCancel={() =>
                     activeConversationId &&
                     patchMessage(activeConversationId, message.id, {
-                      content: "Đã hủy báo cáo.",
+                      // Nói rõ CHƯA gửi gì — "Đã hủy báo cáo" từng bị hiểu nhầm
+                      // là đã thu hồi một báo cáo đã nộp.
+                      content: "Đã đóng biểu mẫu — chưa gửi báo cáo nào.",
                       formRequest: undefined,
                       isStreaming: false,
                     })
@@ -499,7 +501,7 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                   onCancel={() =>
                     activeConversationId &&
                     patchMessage(activeConversationId, message.id, {
-                      content: "Đã hủy.",
+                      content: "Đã hủy chọn phòng ban — chưa xem báo cáo nào.",
                       selectionRequest: undefined,
                       isStreaming: false,
                     })

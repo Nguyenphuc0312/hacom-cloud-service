@@ -17,6 +17,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { ActiveSourcePills } from "./ActiveSourcePills";
+import { splitTagSegments, tagBeforeCursor } from "./tagText";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
 import { useVisibleReportTags } from "../../permissions/useVisibleReportTags";
 import type { ReportTagCommand } from "../../permissions/reportTags";
@@ -49,6 +50,12 @@ const LINE_HEIGHT = 24;
 const MAX_LINES = 6;
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
+/**
+ * Typography + padding dùng CHUNG cho textarea và lớp phủ tô màu. Đổi ở đây là
+ * đổi cả hai — tách ra là chữ lệch nhau, sinh bóng đôi.
+ */
+const TEXT_BOX_CLASS = "px-2 py-3.5 text-xs leading-6";
+
 function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -78,11 +85,18 @@ export const PersonalChatInput = forwardRef<
       usePersonalDocuments();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const hashMenuRef = useRef<HTMLDivElement>(null);
+    /** Lớp phủ tô màu tag — phải cuộn theo textarea khi nội dung dài. */
+    const overlayRef = useRef<HTMLDivElement>(null);
     const [hashMenuOpen, setHashMenuOpen] = useState(false);
     const [hashQuery, setHashQuery] = useState("");
     const [hashSelectedIdx, setHashSelectedIdx] = useState(0);
 
     const hashCommands = useVisibleReportTags();
+    /** Tên tag hợp lệ — chỉ những cái này mới được tô chip trong ô nhập. */
+    const knownTags = useMemo(
+      () => hashCommands.map((c) => c.label),
+      [hashCommands],
+    );
 
     const filteredHashCommands = useMemo(() => {
       if (!hashMenuOpen) return [];
@@ -99,10 +113,23 @@ export const PersonalChatInput = forwardRef<
       (cmd: HashCommand) => {
         setHashMenuOpen(false);
         setHashQuery("");
-        onChange("");
         if (ref && "current" in ref && ref.current) {
           ref.current.style.height = "52px";
         }
+        // Tag NỘP báo cáo: chỉ điền vào ô nhập, KHÔNG gửi. Người dùng còn phải
+        // đính tệp và soát lại — chọn nhầm trong menu không được biến thành một
+        // bản báo cáo đã gửi đi.
+        if (cmd.submits) {
+          onChange(cmd.prompt);
+          setTimeout(() => {
+            const el = ref && "current" in ref ? ref.current : null;
+            if (!el) return;
+            el.focus();
+            el.setSelectionRange(cmd.prompt.length, cmd.prompt.length);
+          }, 0);
+          return;
+        }
+        onChange("");
         onSubmit(cmd.prompt);
       },
       [onChange, onSubmit, ref],
@@ -124,8 +151,20 @@ export const PersonalChatInput = forwardRef<
 
     const adjustHeight = useCallback((el: HTMLTextAreaElement) => {
       el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+      const h = Math.min(el.scrollHeight, MAX_HEIGHT);
+      el.style.height = `${h}px`;
+      // Lớp phủ phải cao ĐÚNG bằng textarea, nếu không tầm cuộn hai lớp lệch.
+      if (overlayRef.current) overlayRef.current.style.height = `${h}px`;
     }, []);
+
+    /** Nội dung vượt 6 dòng → textarea cuộn, lớp phủ phải cuộn theo cùng nhịp. */
+    const syncOverlayScroll = useCallback(
+      (e: React.UIEvent<HTMLTextAreaElement>) => {
+        const overlay = overlayRef.current;
+        if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+      },
+      [],
+    );
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -174,6 +213,27 @@ export const PersonalChatInput = forwardRef<
         }
       }
 
+      // Backspace ngay sau một tag → xóa TRỌN tag, như chip @ bên chat. Có vùng
+      // chọn thì để trình duyệt xử lý bình thường.
+      if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const el = e.currentTarget;
+        if (el.selectionStart === el.selectionEnd) {
+          const tag = tagBeforeCursor(value, el.selectionStart, knownTags);
+          if (tag) {
+            e.preventDefault();
+            const next = value.slice(0, tag.start) + value.slice(el.selectionStart);
+            onChange(next);
+            setHashMenuOpen(false);
+            setTimeout(() => {
+              el.focus();
+              el.setSelectionRange(tag.start, tag.start);
+              adjustHeight(el);
+            }, 0);
+            return;
+          }
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const trimmed = value.trim();
@@ -186,12 +246,19 @@ export const PersonalChatInput = forwardRef<
       }
     };
 
-    // Reset height on submit (when value cleared externally)
+    // Đồng bộ chiều cao hai lớp mỗi khi `value` đổi từ BÊN NGOÀI (chọn tag ở
+    // menu, gửi xong bị xoá trắng…). Không có nhánh này thì lớp phủ giữ chiều
+    // cao cũ và lệch tầm cuộn so với textarea.
     useEffect(() => {
-      if (!value && ref && "current" in ref && ref.current) {
-        ref.current.style.height = "52px";
+      const el = ref && "current" in ref ? ref.current : null;
+      if (!el) return;
+      if (!value) {
+        el.style.height = "52px";
+        if (overlayRef.current) overlayRef.current.style.height = "52px";
+        return;
       }
-    }, [value, ref]);
+      adjustHeight(el);
+    }, [value, ref, adjustHeight]);
 
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -353,19 +420,75 @@ export const PersonalChatInput = forwardRef<
               <PaperclipIcon size={18} strokeWidth={2} />
             </button>
 
-            {/* Textarea */}
-            <textarea
-              ref={ref}
-              value={value}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={1}
-              disabled={isStreaming || isUploading}
-              className="flex-1 resize-none bg-transparent px-2 py-3.5 text-xs leading-6 text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70"
-              style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
-              aria-label="Nhập câu hỏi"
-            />
+            {/* Textarea + lớp phủ tô màu tag.
+                Lớp phủ vẽ lại đúng nội dung ở phía sau; textarea nằm trên với
+                chữ trong suốt (caret vẫn hiện nhờ caret-color). Hai lớp DÙNG
+                CHUNG `TEXT_BOX_CLASS` nên chữ chồng khít — lệch một px là thấy
+                bóng đôi ngay. */}
+            <div className="relative flex-1">
+              <div
+                aria-hidden="true"
+                ref={overlayRef}
+                className={clsx(
+                  TEXT_BOX_CLASS,
+                  // `top-0 left-0 w-full` + chiều cao ĐỒNG BỘ từ textarea, KHÔNG
+                  // dùng `inset-0`: inset-0 kéo lớp phủ cao bằng container cha
+                  // (cao hơn textarea 6px do min-height), làm hai tầm cuộn lệch
+                  // nhau khi nội dung dài — đo được bằng Chromium.
+                  "pointer-events-none absolute left-0 top-0 w-full overflow-hidden whitespace-pre-wrap break-words text-text-primary",
+                  // Mờ cùng nhịp với textarea lúc bị khoá, nếu không hai lớp
+                  // lệch độ đậm và lộ ra là có lớp phủ.
+                  (isStreaming || isUploading) && "opacity-70",
+                )}
+              >
+                {splitTagSegments(value, knownTags).map((seg, i) =>
+                  seg.isTag ? (
+                    // KHÔNG padding/margin ngang và KHÔNG đổi font-weight: mọi
+                    // thứ làm chữ rộng ra sẽ đẩy tag lệch khỏi chữ thật trong
+                    // textarea nằm đè lên → bóng đôi. Nền vẽ bằng box-shadow
+                    // nên nó nở ra ngoài mà không chiếm chỗ trong dòng chữ.
+                    <span
+                      key={i}
+                      className="rounded text-[#1565C0]"
+                      style={{
+                        // Nền nở ra ngoài để dày như chip @ mà KHÔNG chiếm chỗ
+                        // trong dòng chữ (padding/font-weight sẽ đẩy lệch khỏi
+                        // textarea nằm đè lên → bóng đôi).
+                        // Viết inline: `bg-[#1976D2]/16` từng bị Tailwind bỏ qua
+                        // (thang opacity không có nấc 16) nên nền ra trong suốt.
+                        backgroundColor: "rgb(25 118 210 / 0.16)",
+                        // 2px: đủ dày mà chữ gõ ngay sau tag không chạm vào nền.
+                        boxShadow: "0 0 0 2px rgb(25 118 210 / 0.16)",
+                      }}
+                    >
+                      {seg.text}
+                    </span>
+                  ) : (
+                    <span key={i}>{seg.text}</span>
+                  ),
+                )}
+                {/* KHÔNG chèn ký tự phụ ở đây: đo bằng Chromium thấy nó làm lớp
+                    phủ cao hơn textarea 6px, khiến hai lớp cuộn lệch nhau khi
+                    nội dung dài. `whitespace-pre-wrap` đã giữ dòng cuối rồi. */}
+              </div>
+
+              <textarea
+                ref={ref}
+                value={value}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                onScroll={syncOverlayScroll}
+                placeholder={placeholder}
+                rows={1}
+                disabled={isStreaming || isUploading}
+                className={clsx(
+                  TEXT_BOX_CLASS,
+                  "relative w-full resize-none bg-transparent text-transparent caret-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70",
+                )}
+                style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
+                aria-label="Nhập câu hỏi"
+              />
+            </div>
 
             {/* Send / Stop */}
             <div className="flex items-center pr-3 pb-2">

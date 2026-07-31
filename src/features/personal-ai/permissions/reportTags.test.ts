@@ -24,6 +24,45 @@ function grant(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe("cờ `submits` — tag nào KHÔNG được gửi thẳng khi chọn ở menu #", () => {
+  /** Tag gửi báo cáo đi; chọn ở menu phải điền vào ô nhập, không gửi ngay. */
+  const submitting = (profile: ReportTagProfileLike | null | undefined) =>
+    getVisibleReportTags(profile)
+      .filter((c) => c.submits)
+      .map((c) => c.label);
+
+  it("#congviectuan nộp báo cáo tuần → phải đánh dấu submits", () => {
+    expect(submitting(null)).toEqual(["#congviectuan"]);
+  });
+
+  it("#baocaocongviec chỉ mở biểu mẫu → KHÔNG đánh dấu submits", () => {
+    expect(submitting(null)).not.toContain("#baocaocongviec");
+  });
+
+  it("#TBP_baocao và #LDDV_baocao nộp lên cấp trên → phải đánh dấu submits", () => {
+    const both = submitting({
+      workReportAuthorizations: [
+        grant(),
+        grant({ scopeType: "ORG_UNIT" }),
+      ],
+    });
+    expect(both).toContain(TBP);
+    expect(both).toContain(LDDV);
+  });
+
+  it("#TCT_tonghop chỉ tổng hợp → KHÔNG đánh dấu submits", () => {
+    const tags = submitting({
+      workReportAuthorizations: [
+        grant({
+          scopeType: "CORPORATION",
+          actions: ["AGGREGATE_CORPORATE_REPORTS"],
+        }),
+      ],
+    });
+    expect(tags).not.toContain(TCT);
+  });
+});
+
 describe("getVisibleReportTags — mỗi tag soi ĐÚNG cấp quyền của nó", () => {
   it("DEPARTMENT + SUBMIT → chỉ thêm #TBP_baocao", () => {
     expect(labels({ workReportAuthorizations: [grant()] })).toEqual([

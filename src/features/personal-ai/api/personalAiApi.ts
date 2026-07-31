@@ -50,10 +50,43 @@ const UPLOAD_TIMEOUT_MS = 120_000;
  */
 export const LEVEL_REPORT_TAGS = ["#TBP_baocao", "#LDDV_baocao", "#TCT_tonghop"] as const;
 
+/**
+ * Tên đích của từng tag — dùng cho hộp xác nhận trước khi nộp, để người dùng
+ * thấy rõ báo cáo đi ĐÂU (đã có trường hợp lỡ gửi thẳng lên TBP vì UI không nói).
+ * `#TCT_tonghop` không nộp được (chỉ tổng hợp) nên không có mặt ở đây.
+ */
+const LEVEL_REPORT_DESTINATIONS: Record<
+  string,
+  { destination: string; destinationLong: string }
+> = {
+  "#tbp_baocao": {
+    destination: "báo cáo lên Trưởng bộ phận",
+    destinationLong: "lên Trưởng bộ phận (TBP)",
+  },
+  "#lddv_baocao": {
+    destination: "báo cáo lên Lãnh đạo đơn vị",
+    destinationLong: "lên Lãnh đạo đơn vị (Giám đốc)",
+  },
+};
+
 /** Câu hỏi có chứa đúng MỘT tag báo cáo cấp không (dùng để định tuyến upload). */
 export function containsLevelReportTag(question: string): boolean {
   const lower = question.toLowerCase();
   return LEVEL_REPORT_TAGS.some((tag) => lower.includes(tag.toLowerCase()));
+}
+
+/**
+ * Tag NỘP báo cáo cấp trong câu hỏi + nơi báo cáo sẽ được gửi tới. `null` khi
+ * câu hỏi không nộp lên cấp nào (không có tag, hoặc chỉ `#TCT_tonghop`).
+ */
+export function matchLevelReportTag(
+  question: string,
+): { tag: string; destination: string; destinationLong: string } | null {
+  const lower = question.toLowerCase();
+  for (const [tag, dest] of Object.entries(LEVEL_REPORT_DESTINATIONS)) {
+    if (lower.includes(tag)) return { tag, ...dest };
+  }
+  return null;
 }
 
 function buildAuthHeaders(): Record<string, string> {

@@ -261,7 +261,9 @@ export function usePersonalChat() {
         prevConv?.messages.forEach((m) => {
           if (m.formRequest) {
             patchMessage(conversationId, m.id, {
-              content: "Đã hủy báo cáo.",
+              // Người dùng KHÔNG bấm hủy ở đây — form cũ tự đóng để nhường form
+              // mới. Nói đúng như vậy, đừng báo "đã hủy báo cáo".
+              content: "Biểu mẫu này đã đóng để mở biểu mẫu mới bên dưới.",
               formRequest: undefined,
               isStreaming: false,
             });

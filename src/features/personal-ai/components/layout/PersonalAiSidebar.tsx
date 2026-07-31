@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useDeferredValue } from "react";
 import clsx from "clsx";
 import {
   PlusIcon,
@@ -18,6 +18,7 @@ import {
   deletePersonalSession,
   renamePersonalSession,
 } from "../../../ai-assistant/services/aiChatApi";
+import { ConfirmDialog } from "../../../../components/ui";
 import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
 /**
@@ -46,56 +47,74 @@ export const PersonalAiSidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  /** Hội thoại đang chờ xác nhận xóa — xóa mất cả lịch sử, không hoàn tác được. */
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    title: string;
+    serverSessionId?: string | null;
+  } | null>(null);
 
   const activeTab = selectedEndpoint;
 
+  // Gõ tìm kiếm quét nội dung MỌI tin nhắn của MỌI hội thoại → với lịch sử dài
+  // thì mỗi phím gõ là một lượt quét toàn bộ, gây khựng ô tìm kiếm. Hoãn 150ms:
+  // người dùng gõ liên tục chỉ tốn một lượt quét sau khi dừng tay.
+  const deferredQuery = useDeferredValue(searchQuery);
+
   /** Nhóm hội thoại theo thời gian */
   const groupedConversations = useMemo(() => {
-    const filtered = conversations.filter(
-      (c) =>
-        (!currentOwnerId || !c.ownerId || c.ownerId === currentOwnerId) &&
-        (c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.messages.some((m) =>
-            m.content.toLowerCase().includes(searchQuery.toLowerCase()),
-          )),
-    );
+    const q = deferredQuery.trim().toLowerCase();
+    const filtered = conversations.filter((c) => {
+      if (currentOwnerId && c.ownerId && c.ownerId !== currentOwnerId) return false;
+      if (!q) return true;
+      // Tên khớp là đủ — khỏi quét nội dung tin nhắn của hội thoại đó.
+      return (
+        c.title.toLowerCase().includes(q) ||
+        c.messages.some((m) => m.content.toLowerCase().includes(q))
+      );
+    });
 
-    const groups: { label: string; items: typeof conversations }[] = [
-      { label: "Đã ghim", items: filtered.filter((c) => c.isPinned) },
-      {
-        label: "Hôm nay",
-        items: filtered.filter(
-          (c) => !c.isPinned && isToday(new Date(c.updatedAt)),
-        ),
-      },
-      {
-        label: "Hôm qua",
-        items: filtered.filter(
-          (c) => !c.isPinned && isYesterday(new Date(c.updatedAt)),
-        ),
-      },
-      {
-        label: "7 ngày qua",
-        items: filtered.filter(
-          (c) =>
-            !c.isPinned &&
-            !isToday(new Date(c.updatedAt)) &&
-            !isYesterday(new Date(c.updatedAt)) &&
-            isAfter(new Date(c.updatedAt), subDays(new Date(), 7)),
-        ),
-      },
-      {
-        label: "Cũ hơn",
-        items: filtered.filter(
-          (c) =>
-            !c.isPinned &&
-            !isAfter(new Date(c.updatedAt), subDays(new Date(), 7)),
-        ),
-      },
-    ];
+    // MỘT lượt duyệt, mỗi hội thoại dựng Date đúng một lần. Trước đây là 5 lượt
+    // filter chồng nhau với tới 7 `new Date()` mỗi hội thoại — phần lớn công
+    // việc render lại sidebar nằm ở đây.
+    const pinned: typeof conversations = [];
+    const today: typeof conversations = [];
+    const yesterday: typeof conversations = [];
+    const lastWeek: typeof conversations = [];
+    const older: typeof conversations = [];
+    const weekAgo = subDays(new Date(), 7);
 
-    return groups.filter((g) => g.items.length > 0);
-  }, [conversations, searchQuery, currentOwnerId]);
+    for (const c of filtered) {
+      if (c.isPinned) {
+        pinned.push(c);
+        continue;
+      }
+      const updatedAt = new Date(c.updatedAt);
+      if (isToday(updatedAt)) today.push(c);
+      else if (isYesterday(updatedAt)) yesterday.push(c);
+      else if (isAfter(updatedAt, weekAgo)) lastWeek.push(c);
+      else older.push(c);
+    }
+
+    return [
+      { label: "Đã ghim", items: pinned },
+      { label: "Hôm nay", items: today },
+      { label: "Hôm qua", items: yesterday },
+      { label: "7 ngày qua", items: lastWeek },
+      { label: "Cũ hơn", items: older },
+    ].filter((g) => g.items.length > 0);
+  }, [conversations, deferredQuery, currentOwnerId]);
+
+  /** Xác nhận xóa → xóa trên BE rồi bỏ khỏi danh sách local. */
+  const confirmDelete = () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    if (target.serverSessionId) {
+      deletePersonalSession(target.serverSessionId).catch(() => {});
+    }
+    deleteConversation(target.id);
+  };
 
   /** Bắt đầu đổi tên */
   const handleStartRename = (
@@ -267,10 +286,11 @@ export const PersonalAiSidebar: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (conv.serverSessionId) {
-                            deletePersonalSession(conv.serverSessionId).catch(() => {});
-                          }
-                          deleteConversation(conv.id);
+                          setPendingDelete({
+                            id: conv.id,
+                            title: conv.title,
+                            serverSessionId: conv.serverSessionId,
+                          });
                         }}
                         className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"
                         title="Xóa"
@@ -324,6 +344,18 @@ export const PersonalAiSidebar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Xóa hội thoại là mất toàn bộ lịch sử chat của nó — hỏi lại trước. */}
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Xóa hội thoại?"
+        message={`Toàn bộ nội dung của "${pendingDelete?.title ?? ""}" sẽ bị xóa. Hành động này không thể hoàn tác.`}
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
+      />
     </div>
   );
 };
