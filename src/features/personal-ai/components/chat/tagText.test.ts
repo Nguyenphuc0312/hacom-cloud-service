@@ -36,10 +36,22 @@ describe("splitTagSegments", () => {
     ]);
   });
 
-  it("gõ thêm chữ sau tag → KHÔNG nuốt chữ đó vào chip", () => {
-    // Bug thật: "#congviectuanad" từng tô xanh cả "ad" và dính liền vào tag.
+  it("gõ thêm chữ sau tag → tag GIỮ chip, chữ thừa tách ra", () => {
+    // Hai bug đã gặp: (1) chip nuốt luôn "ad"; (2) sửa quá tay thành đòi khớp
+    // trọn cụm nên cả chip biến mất chỉ vì gõ lỡ một ký tự.
     expect(splitTagSegments("#congviectuanad", TAGS)).toEqual([
-      { text: "#congviectuanad", isTag: false },
+      { text: "#congviectuan", isTag: true },
+      { text: "ad", isTag: false },
+    ]);
+    expect(splitTagSegments("#congviectuana", TAGS)).toEqual([
+      { text: "#congviectuan", isTag: true },
+      { text: "a", isTag: false },
+    ]);
+  });
+
+  it("hai lệnh cùng tiền tố → lấy tên DÀI NHẤT, không cắt nhầm cái ngắn", () => {
+    expect(splitTagSegments("#baocaocongviec", ["#baocao", "#baocaocongviec"])).toEqual([
+      { text: "#baocaocongviec", isTag: true },
     ]);
   });
 
@@ -95,6 +107,11 @@ describe("tagBeforeCursor — Backspace xóa trọn tag", () => {
 
   it("có chữ thừa sau tag → null (không xóa oan cả cụm)", () => {
     expect(tagBeforeCursor("#congviectuanad", 15, TAGS)).toBeNull();
+    expect(tagBeforeCursor("#congviectuana", 14, TAGS)).toBeNull();
+  });
+
+  it("xóa hết chữ thừa, con trỏ về ngay sau tag → lại xóa trọn được", () => {
+    expect(tagBeforeCursor("#congviectuan", 13, TAGS)).toEqual({ start: 0 });
   });
 
   it("sau khoảng trắng → null", () => {

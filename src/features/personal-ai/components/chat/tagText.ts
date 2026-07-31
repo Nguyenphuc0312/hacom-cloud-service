@@ -18,18 +18,25 @@ export interface TagSegment {
 const TAG_CANDIDATE_RE = /#[A-Za-z0-9_]+/g;
 
 /**
- * Tag khớp ĐÚNG một lệnh có thật thì mới tô.
+ * Độ dài tên lệnh DÀI NHẤT khớp phần đầu của `candidate`; 0 nếu không lệnh nào
+ * khớp.
  *
- * Không tô mọi chuỗi bắt đầu bằng `#`: gõ thêm chữ sau tag (`#congviectuan` →
- * `#congviectuanad`) thì phần thừa cũng bị nuốt vào chip, nhìn như tag hợp lệ
- * trong khi BE sẽ không hiểu. Chỉ tô khi đúng tên lệnh, người gõ nhìn màu là
- * biết mình gõ đúng hay sai.
+ * Khớp theo TIỀN TỐ chứ không đòi khớp trọn cụm: gõ lỡ một ký tự sau tag
+ * (`#congviectuan` → `#congviectuana`) thì tag vẫn giữ chip và chỉ ký tự thừa
+ * là chữ thường. Nếu đòi khớp trọn, cả chip biến mất chỉ vì một phím — nhìn như
+ * tag hỏng hẳn.
  *
+ * Lấy DÀI NHẤT để khi có hai lệnh cùng tiền tố thì không cắt nhầm cái ngắn.
  * So khớp không phân biệt hoa thường vì BE nhận `#TBP_baocao` lẫn `#tbp_baocao`.
  */
-function matchExactTag(candidate: string, tags: readonly string[]): boolean {
+function matchedTagLength(candidate: string, tags: readonly string[]): number {
   const lower = candidate.toLowerCase();
-  return tags.some((t) => t.toLowerCase() === lower);
+  let best = 0;
+  for (const t of tags) {
+    const tl = t.toLowerCase();
+    if (tl.length > best && lower.startsWith(tl)) best = tl.length;
+  }
+  return best;
 }
 
 /**
@@ -57,10 +64,12 @@ export function splitTagSegments(
 
   for (const m of text.matchAll(TAG_CANDIDATE_RE)) {
     const start = m.index ?? 0;
-    if (!matchExactTag(m[0], tags)) continue;
+    const len = matchedTagLength(m[0], tags);
+    if (len === 0) continue;
     if (start > last) push(text.slice(last, start), false);
-    push(m[0], true);
-    last = start + m[0].length;
+    // Chỉ phần đúng tên lệnh vào chip; ký tự gõ thừa phía sau là chữ thường.
+    push(m[0].slice(0, len), true);
+    last = start + len;
   }
   if (last < text.length) push(text.slice(last), false);
   return out;
@@ -77,6 +86,10 @@ export function tagBeforeCursor(
   tags: readonly string[],
 ): { start: number } | null {
   const m = value.slice(0, caret).match(/#[A-Za-z0-9_]+$/);
-  if (!m || !matchExactTag(m[0], tags)) return null;
+  if (!m) return null;
+  // Phải đứng ngay sau ĐÚNG tên lệnh. Có ký tự gõ thừa phía sau (`#congviectuana`)
+  // thì Backspace xoá từng ký tự như thường — xoá trọn cả cụm là xoá oan.
+  const lower = m[0].toLowerCase();
+  if (!tags.some((t) => t.toLowerCase() === lower)) return null;
   return { start: caret - m[0].length };
 }
