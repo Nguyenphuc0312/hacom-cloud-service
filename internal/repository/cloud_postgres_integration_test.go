@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -168,6 +169,87 @@ func TestCloudPostgresPersonalTimelineAndQuota(t *testing.T) {
 			ledgerCount,
 			quota.UsedBytes,
 		)
+	}
+}
+
+func TestCloudPostgresFileAccessIsReadyAndOwnerScoped(t *testing.T) {
+	pool := integrationPool(t)
+	repository, err := NewCloudPostgres(pool, 5_000_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	ownerID := uuid.New()
+	otherOwnerID := uuid.New()
+	cleanupOwner(t, pool, ownerID)
+	cleanupOwner(t, pool, otherOwnerID)
+
+	quota, err := repository.GetQuota(ctx, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemID := uuid.New()
+	objectID := uuid.New()
+	objectKey := "uploads/" + ownerID.String() + "/" + objectID.String()
+	_, err = pool.Exec(ctx, `
+		INSERT INTO cloud.storage_objects (
+			id, drive_id, bucket, object_key, original_name, content_type,
+			declared_size_bytes, actual_size_bytes, status, uploaded_at
+		)
+		VALUES (
+			$1, $2, 'hacom-cloud-private', $3, 'preview.txt', 'text/plain',
+			7, 7, 'ready', NOW()
+		)
+	`, objectID, quota.DriveID, objectKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `
+		INSERT INTO cloud.items (
+			id, drive_id, item_type, status, title, storage_object_id,
+			size_bytes, billable_bytes, source_type
+		)
+		VALUES (
+			$1, $2, 'file', 'ready', 'preview.txt', $3,
+			7, 7, 'cloud_upload'
+		)
+	`, itemID, quota.DriveID, objectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := repository.GetFileAccessTarget(ctx, ownerID, itemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.ItemID != itemID ||
+		target.ObjectKey != objectKey ||
+		target.FileName != "preview.txt" ||
+		target.ContentType != "text/plain" ||
+		target.SizeBytes != 7 {
+		t.Fatalf("target = %+v", target)
+	}
+
+	if _, err := repository.GetFileAccessTarget(
+		ctx,
+		otherOwnerID,
+		itemID,
+	); !errors.Is(err, fileaccess.ErrNotFound) {
+		t.Fatalf("cross-owner error = %v, want ErrNotFound", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		UPDATE cloud.items SET status = 'processing' WHERE id = $1
+	`, itemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.GetFileAccessTarget(
+		ctx,
+		ownerID,
+		itemID,
+	); !errors.Is(err, fileaccess.ErrNotReady) {
+		t.Fatalf("processing item error = %v, want ErrNotReady", err)
 	}
 }
 

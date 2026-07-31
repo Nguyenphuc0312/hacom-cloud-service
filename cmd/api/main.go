@@ -13,6 +13,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloudapi"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
@@ -93,11 +94,21 @@ func main() {
 		logger.Error("create upload service", "error", err)
 		os.Exit(1)
 	}
+	fileAccessService, err := fileaccess.NewService(
+		cloudStore,
+		objectStore,
+		cfg.DownloadURLTTL,
+	)
+	if err != nil {
+		logger.Error("create file access service", "error", err)
+		os.Exit(1)
+	}
 	cloudHandler, err := cloudapi.New(
 		cloudService,
 		cfg.MaxContentBytes,
 		logger,
 		cloudapi.WithUploadService(uploadService),
+		cloudapi.WithFileAccessService(fileAccessService),
 	)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
 )
@@ -29,6 +30,22 @@ type fakeService struct {
 type fakeUploadService struct {
 	initiate func(context.Context, upload.InitiateRequest) (upload.InitiateResult, error)
 	complete func(context.Context, upload.CompleteRequest) (upload.CompleteResult, error)
+}
+
+type fakeFileAccessService struct {
+	createAccess func(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+	) (fileaccess.Access, error)
+}
+
+func (s fakeFileAccessService) CreateAccess(
+	ctx context.Context,
+	ownerID uuid.UUID,
+	itemID uuid.UUID,
+) (fileaccess.Access, error) {
+	return s.createAccess(ctx, ownerID, itemID)
 }
 
 func (s fakeUploadService) Initiate(
@@ -115,6 +132,23 @@ func newTestHandlerWithUploads(
 	return handler
 }
 
+func newTestHandlerWithFileAccess(
+	t *testing.T,
+	fileAccess FileAccessService,
+) http.Handler {
+	t.Helper()
+	handler, err := New(
+		fakeService{},
+		100_000_000,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithFileAccessService(fileAccess),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
+}
+
 func requestWithUser(
 	method, target, body string,
 	userID uuid.UUID,
@@ -172,6 +206,84 @@ func TestCreateTextReturnsCreatedItem(t *testing.T) {
 	if payload.ID != itemID.String() || payload.Content == nil || *payload.Content != content {
 		t.Fatalf("payload = %+v", payload)
 	}
+}
+
+func TestGetFileAccessReturnsShortLivedOwnerScopedURL(t *testing.T) {
+	ownerID := uuid.New()
+	itemID := uuid.New()
+	expiresAt := time.Date(2026, 7, 31, 4, 15, 0, 0, time.UTC)
+	handler := newTestHandlerWithFileAccess(t, fakeFileAccessService{
+		createAccess: func(
+			_ context.Context,
+			gotOwnerID uuid.UUID,
+			gotItemID uuid.UUID,
+		) (fileaccess.Access, error) {
+			if gotOwnerID != ownerID || gotItemID != itemID {
+				t.Fatalf("owner/item = %s/%s", gotOwnerID, gotItemID)
+			}
+			return fileaccess.Access{
+				ItemID:      itemID,
+				URL:         "http://minio.local/signed",
+				ExpiresAt:   expiresAt,
+				FileName:    "bao-cao.pdf",
+				ContentType: "application/pdf",
+				SizeBytes:   42,
+			}, nil
+		},
+	})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodGet,
+		"/items/"+itemID.String()+"/access",
+		"",
+		ownerID,
+	))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
+	}
+	var payload fileAccessResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.ItemID != itemID.String() ||
+		payload.URL != "http://minio.local/signed" ||
+		payload.ExpiresAt != expiresAt ||
+		payload.FileName != "bao-cao.pdf" ||
+		payload.ContentType != "application/pdf" ||
+		payload.SizeBytes != 42 {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestGetFileAccessHidesOtherUsersItems(t *testing.T) {
+	itemID := uuid.New()
+	handler := newTestHandlerWithFileAccess(t, fakeFileAccessService{
+		createAccess: func(
+			context.Context,
+			uuid.UUID,
+			uuid.UUID,
+		) (fileaccess.Access, error) {
+			return fileaccess.Access{}, fileaccess.ErrNotFound
+		},
+	})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, requestWithUser(
+		http.MethodGet,
+		"/items/"+itemID.String()+"/access",
+		"",
+		uuid.New(),
+	))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	assertErrorCode(t, response, "ITEM_NOT_FOUND")
 }
 
 func TestInitiateUploadPassesOwnerMetadataAndIdempotencyKey(t *testing.T) {

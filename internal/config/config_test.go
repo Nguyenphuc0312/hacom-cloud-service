@@ -45,6 +45,9 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	if cfg.UploadURLTTL != 15*time.Minute {
 		t.Fatalf("expected 15m upload URL TTL, got %s", cfg.UploadURLTTL)
 	}
+	if cfg.DownloadURLTTL != 15*time.Minute {
+		t.Fatalf("expected 15m download URL TTL, got %s", cfg.DownloadURLTTL)
+	}
 	if cfg.WorkerPollInterval != 2*time.Second {
 		t.Fatalf("worker poll interval = %s", cfg.WorkerPollInterval)
 	}

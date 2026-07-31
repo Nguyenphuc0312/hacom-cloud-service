@@ -138,6 +138,37 @@ Complete kiểm tra object tồn tại và size thực tế bằng size khai bá
 
 Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải lưu ở hệ thống khác và chỉ lưu link trong Hacom Cloud.
 
+## Truy cập nội dung file để preview/download
+
+Chỉ Item dạng file đã được Worker đưa sang `ready` mới được cấp URL truy cập:
+
+```http
+GET /api/v1/cloud/items/{itemID}/access
+X-Demo-User-ID: <uuid>
+```
+
+```json
+{
+  "itemId": "12c14a68-902f-4c84-b74e-c420f0660f44",
+  "url": "http://localhost:9000/...",
+  "expiresAt": "2026-07-31T09:15:00Z",
+  "fileName": "bao-cao.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 12345
+}
+```
+
+Contract:
+
+- Client chỉ gửi `itemID`; không được tự gửi hoặc suy luận bucket/object key.
+- Backend kiểm tra Item thuộc user hiện tại, Item và Storage Object cùng ở trạng
+  thái `ready`, object thật sự tồn tại trong MinIO và size khớp metadata.
+- Item của user khác trả `404 ITEM_NOT_FOUND`, giống Item không tồn tại.
+- URL là presigned GET có TTL cấu hình bằng `DOWNLOAD_URL_TTL` (mặc định 15
+  phút). Response JSON có `Cache-Control: no-store`; không lưu hoặc ghi log URL.
+- Frontend dùng URL này cho viewer ảnh, video, audio, text, PDF và các định dạng
+  trình duyệt hỗ trợ; định dạng không preview được vẫn có thể tải xuống.
+
 ## Error response
 
 ```json
@@ -157,6 +188,7 @@ Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải
 | 400 | `INVALID_CURSOR` | Cursor không hợp lệ |
 | 400 | `INVALID_UPLOAD` | Metadata upload hoặc Idempotency-Key không hợp lệ |
 | 400 | `INVALID_UPLOAD_SESSION_ID` | Upload session ID không phải UUID |
+| 400 | `INVALID_ITEM_ID` | Item ID của endpoint access không phải UUID |
 | 401 | `DEMO_USER_REQUIRED` | Thiếu hoặc sai UUID local |
 | 403 | `DRIVE_NOT_ACTIVE` | Drive bị suspended/archived nên không được ghi mới |
 | 404 | `ITEM_NOT_FOUND` | Không có Item thuộc user hiện tại |
@@ -166,6 +198,9 @@ Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải
 | 409 | `IDEMPOTENCY_CONFLICT` | Key đã dùng với metadata khác |
 | 409 | `UPLOAD_OBJECT_NOT_FOUND` | Client chưa PUT binary lên MinIO |
 | 409 | `UPLOAD_SESSION_EXPIRED` | Upload session đã hết hạn |
+| 409 | `ITEM_NOT_FILE` | Item không phải file/image/video/audio |
+| 409 | `ITEM_NOT_READY` | File hoặc Storage Object chưa ở trạng thái `ready` |
+| 409 | `FILE_OBJECT_UNAVAILABLE` | Object MinIO thiếu hoặc không khớp metadata |
 | 413 | `BODY_TOO_LARGE` | HTTP request body vượt giới hạn |
 | 413 | `FILE_TOO_LARGE` | File khai báo hoặc thực tế vượt 100 MB decimal |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | POST body không dùng `application/json` |
@@ -182,21 +217,24 @@ Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải
 - Item/session của user khác trả cùng `404` như dữ liệu không tồn tại.
 - Object key do server sinh theo `uploads/{owner_uuid}/{object_uuid}`; tên file
   client không đi vào key.
-- Presigned URL là output duy nhất được phép chứa chữ ký, có TTL 15 phút và ký
-  `Content-Type` cùng `If-None-Match: *`.
+- Presigned upload URL ký `Content-Type` cùng `If-None-Match: *`; presigned
+  access URL chỉ được cấp sau khi kiểm tra ownership/readiness/object, cả hai có
+  TTL ngắn.
 - Internal error response chỉ trả `INTERNAL_ERROR`; logger chỉ giữ request ID,
   method, path, owner và loại lỗi, không serialize lỗi dependency.
 - Không ghi binary, presigned URL, access key, secret key, SQL hay object key
   vào log/báo cáo kiểm thử.
 
-Catalog trên là contract đóng băng của Gate 5; endpoint mới cần phase/contract
-mới, không bổ sung trong release hardening.
+Endpoint access là phần bổ sung phục vụ preview UI, không thay đổi contract
+upload, quota hoặc lifecycle đã đóng băng của Gate 5.
 
 ## Phạm vi chưa triển khai
 
 - Không dedup nội dung; lưu cùng text/link hai lần tạo hai Item.
 - Không nhận `Idempotency-Key` ở API Quy trình 2.
 - Chưa kết nối Chat/Auth thật.
-- Worker đã chạy SHA-256; chưa có virus scan, thumbnail hoặc preview.
-- Chưa Multipart, download URL, share hoặc xóa/restore.
+- Worker đã chạy SHA-256; chưa có virus scan hoặc sinh thumbnail phía server.
+- Preview hiện phụ thuộc khả năng phát nội dung của trình duyệt; chưa chuyển mã
+  video/audio và chưa render bộ Office phía server.
+- Chưa Multipart, share hoặc xóa/restore.
 - Cleanup upload hết hạn đã có; chưa có dashboard quản trị job.

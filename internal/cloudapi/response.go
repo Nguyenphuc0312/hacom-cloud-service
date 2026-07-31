@@ -56,6 +56,15 @@ type completeUploadResponse struct {
 	Job  uploadJobResponse `json:"job"`
 }
 
+type fileAccessResponse struct {
+	ItemID      string    `json:"itemId"`
+	URL         string    `json:"url"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	FileName    string    `json:"fileName"`
+	ContentType string    `json:"contentType"`
+	SizeBytes   int64     `json:"sizeBytes"`
+}
+
 type errorEnvelope struct {
 	Error apiError `json:"error"`
 }

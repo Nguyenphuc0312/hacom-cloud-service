@@ -29,6 +29,7 @@ type Config struct {
 	MaxContentBytes           int64
 	DefaultQuotaBytes         int64
 	UploadURLTTL              time.Duration
+	DownloadURLTTL            time.Duration
 	HealthTimeout             time.Duration
 	ShutdownTimeout           time.Duration
 	WorkerID                  string
@@ -81,6 +82,10 @@ func Load() (Config, error) {
 	}
 
 	uploadURLTTL, err := durationEnv("UPLOAD_URL_TTL", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	downloadURLTTL, err := durationEnv("DOWNLOAD_URL_TTL", 15*time.Minute)
 	if err != nil {
 		return Config{}, err
 	}
@@ -148,6 +153,7 @@ func Load() (Config, error) {
 		MaxContentBytes:           maxContentBytes,
 		DefaultQuotaBytes:         defaultQuotaBytes,
 		UploadURLTTL:              uploadURLTTL,
+		DownloadURLTTL:            downloadURLTTL,
 		HealthTimeout:             healthTimeout,
 		ShutdownTimeout:           shutdownTimeout,
 		WorkerID:                  workerID,

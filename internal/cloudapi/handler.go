@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
 )
@@ -53,9 +54,18 @@ type UploadService interface {
 	) (upload.CompleteResult, error)
 }
 
+type FileAccessService interface {
+	CreateAccess(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		itemID uuid.UUID,
+	) (fileaccess.Access, error)
+}
+
 type Handler struct {
 	service      Service
 	uploads      UploadService
+	fileAccess   FileAccessService
 	maxBodyBytes int64
 	logger       *slog.Logger
 }
@@ -68,6 +78,16 @@ func WithUploadService(service UploadService) Option {
 			return errors.New("upload service is required")
 		}
 		handler.uploads = service
+		return nil
+	}
+}
+
+func WithFileAccessService(service FileAccessService) Option {
+	return func(handler *Handler) error {
+		if service == nil {
+			return errors.New("file access service is required")
+		}
+		handler.fileAccess = service
 		return nil
 	}
 }
@@ -107,6 +127,13 @@ func New(
 	mux.HandleFunc("/items", methodNotAllowed(http.MethodGet))
 	mux.HandleFunc("GET /items/{itemID}", handler.getItem)
 	mux.HandleFunc("/items/{itemID}", methodNotAllowed(http.MethodGet))
+	if handler.fileAccess != nil {
+		mux.HandleFunc("GET /items/{itemID}/access", handler.getFileAccess)
+		mux.HandleFunc(
+			"/items/{itemID}/access",
+			methodNotAllowed(http.MethodGet),
+		)
+	}
 	mux.HandleFunc("GET /quota", handler.getQuota)
 	mux.HandleFunc("/quota", methodNotAllowed(http.MethodGet))
 	if handler.uploads != nil {
@@ -124,6 +151,42 @@ func New(
 	mux.HandleFunc("/", handler.notFound)
 
 	return handler.requestIDMiddleware(handler.demoUserMiddleware(mux)), nil
+}
+
+func (h *Handler) getFileAccess(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	itemID, err := uuid.Parse(request.PathValue("itemID"))
+	if err != nil || itemID == uuid.Nil {
+		writeError(
+			writer,
+			http.StatusBadRequest,
+			"INVALID_ITEM_ID",
+			"item ID must be a valid UUID",
+		)
+		return
+	}
+
+	access, err := h.fileAccess.CreateAccess(
+		request.Context(),
+		ownerUserID(request.Context()),
+		itemID,
+	)
+	if err != nil {
+		h.writeFileAccessError(writer, request, err)
+		return
+	}
+
+	writer.Header().Set("Cache-Control", "no-store")
+	writeJSON(writer, http.StatusOK, fileAccessResponse{
+		ItemID:      access.ItemID.String(),
+		URL:         access.URL,
+		ExpiresAt:   access.ExpiresAt,
+		FileName:    access.FileName,
+		ContentType: access.ContentType,
+		SizeBytes:   access.SizeBytes,
+	})
 }
 
 type initiateUploadRequest struct {
@@ -488,6 +551,53 @@ func (h *Handler) writeUploadError(
 			http.StatusUnprocessableEntity,
 			"UPLOAD_CONTENT_TYPE_MISMATCH",
 			"uploaded object content type does not match declared type",
+		)
+	default:
+		h.logInternalError(request, err)
+		writeError(
+			writer,
+			http.StatusInternalServerError,
+			"INTERNAL_ERROR",
+			"an internal error occurred",
+		)
+	}
+}
+
+func (h *Handler) writeFileAccessError(
+	writer http.ResponseWriter,
+	request *http.Request,
+	err error,
+) {
+	switch {
+	case errors.Is(err, fileaccess.ErrInvalidInput):
+		writeError(
+			writer,
+			http.StatusBadRequest,
+			"INVALID_ITEM_ID",
+			"item ID must be a valid UUID",
+		)
+	case errors.Is(err, fileaccess.ErrNotFound):
+		writeError(writer, http.StatusNotFound, "ITEM_NOT_FOUND", "cloud item not found")
+	case errors.Is(err, fileaccess.ErrNotFile):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"ITEM_NOT_FILE",
+			"cloud item does not contain a file",
+		)
+	case errors.Is(err, fileaccess.ErrNotReady):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"ITEM_NOT_READY",
+			"cloud file is not ready",
+		)
+	case errors.Is(err, fileaccess.ErrObjectUnavailable):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"FILE_OBJECT_UNAVAILABLE",
+			"cloud file object is unavailable",
 		)
 	default:
 		h.logInternalError(request, err)

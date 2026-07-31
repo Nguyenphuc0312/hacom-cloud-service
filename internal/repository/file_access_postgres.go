@@ -1,0 +1,87 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+)
+
+func (r *CloudPostgres) GetFileAccessTarget(
+	ctx context.Context,
+	ownerUserID uuid.UUID,
+	itemID uuid.UUID,
+) (fileaccess.Target, error) {
+	var (
+		target       fileaccess.Target
+		itemType     string
+		itemStatus   string
+		objectStatus sql.NullString
+		objectKey    sql.NullString
+		originalName sql.NullString
+		contentType  sql.NullString
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			item.id,
+			item.item_type::text,
+			item.status::text,
+			object.status::text,
+			object.object_key,
+			object.original_name,
+			object.content_type,
+			item.size_bytes
+		FROM cloud.items AS item
+		JOIN cloud.drives AS drive
+		  ON drive.id = item.drive_id
+		LEFT JOIN cloud.storage_objects AS object
+		  ON object.id = item.storage_object_id
+		 AND object.drive_id = item.drive_id
+		WHERE item.id = $1
+		  AND drive.owner_user_id = $2
+	`, itemID, ownerUserID).Scan(
+		&target.ItemID,
+		&itemType,
+		&itemStatus,
+		&objectStatus,
+		&objectKey,
+		&originalName,
+		&contentType,
+		&target.SizeBytes,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fileaccess.Target{}, fileaccess.ErrNotFound
+	}
+	if err != nil {
+		return fileaccess.Target{}, fmt.Errorf("get file access target: %w", err)
+	}
+
+	switch itemType {
+	case "file", "image", "video", "audio":
+	default:
+		return fileaccess.Target{}, fileaccess.ErrNotFile
+	}
+	if itemStatus != "ready" ||
+		!objectStatus.Valid ||
+		objectStatus.String != "ready" {
+		return fileaccess.Target{}, fileaccess.ErrNotReady
+	}
+	if !objectKey.Valid ||
+		!originalName.Valid ||
+		!contentType.Valid ||
+		strings.TrimSpace(objectKey.String) == "" ||
+		strings.TrimSpace(originalName.String) == "" ||
+		strings.TrimSpace(contentType.String) == "" {
+		return fileaccess.Target{}, fileaccess.ErrObjectUnavailable
+	}
+
+	target.ObjectKey = objectKey.String
+	target.FileName = originalName.String
+	target.ContentType = contentType.String
+	return target, nil
+}
