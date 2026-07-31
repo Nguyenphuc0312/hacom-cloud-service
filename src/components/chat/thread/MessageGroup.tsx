@@ -11,6 +11,7 @@ import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
 import { MessageMeta } from "../message-layout/MessageMeta";
 import { MessageBubble, type MessageBubblePosition } from "./MessageBubble";
+import { shouldShowMessageMeta } from "./messageMetaVisibility";
 import {
   DocumentIcon,
   PhotoIcon,
@@ -982,7 +983,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                 onFilePreview={onFilePreview}
               />
 
-              {isGroupTail && (
+              {shouldShowMessageMeta(isGroupTail, message) && (
                 <MessageMeta
                   message={message}
                   isOwn={isOwn}
