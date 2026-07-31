@@ -6,14 +6,53 @@ import { PersonalChatArea } from "../components/chat/PersonalChatArea";
 import { PersonalChatInput } from "../components/chat/PersonalChatInput";
 import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceHeader";
 import { usePersonalChat } from "../hooks/usePersonalChat";
-import { containsLevelReportTag } from "../api/personalAiApi";
+import { matchLevelReportTag } from "../api/personalAiApi";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { fetchPersonalSessions } from "../../ai-assistant/services/aiChatApi";
 import { toast } from "../../../utils/toast";
+import { ConfirmDialog } from "../../../components/ui";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+
+/** Lượt nộp file đang chờ user xác nhận (xem `pendingSubmit`). */
+interface PendingSubmit {
+  /** `level` = nộp lên cấp trên (#TBP/#LDDV); `weekly` = báo cáo tuần cá nhân. */
+  kind: "level" | "weekly";
+  text: string;
+  file: File;
+  title: string;
+  message: string;
+  confirmText: string;
+}
+
+/**
+ * Nội dung hộp xác nhận cho một lượt nộp file. Nói rõ báo cáo đi ĐÂU và điều gì
+ * xảy ra với bản cũ — người dùng đã từng lỡ gửi thẳng lên TBP vì không có bước
+ * hỏi lại nào.
+ */
+function describeSubmit(text: string, file: File): PendingSubmit {
+  const tag = matchLevelReportTag(text);
+  if (tag) {
+    return {
+      kind: "level",
+      text,
+      file,
+      title: `Gửi ${tag.destination}?`,
+      message: `Tệp "${file.name}" sẽ được nộp ${tag.destinationLong}. Bản đã nộp của tuần này (nếu có) sẽ bị thay thế.`,
+      confirmText: "Gửi báo cáo",
+    };
+  }
+  return {
+    kind: "weekly",
+    text,
+    file,
+    title: "Gửi báo cáo tuần?",
+    message: `Tệp "${file.name}" sẽ THAY THẾ báo cáo tuần này của bạn (mỗi tuần chỉ giữ 1 file).`,
+    confirmText: "Gửi báo cáo",
+  };
+}
 
 /**
  * Full-page Personal AI Workspace — NotebookLM-inspired three-panel layout.
@@ -69,6 +108,11 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const [inputValue, setInputValue] = React.useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /**
+   * Lượt nộp file đã bấm Gửi nhưng CHƯA xác nhận. Mọi luồng đính file (báo cáo
+   * tuần cá nhân lẫn nộp lên cấp trên) đều dừng ở đây trước khi rời máy.
+   */
+  const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleAttachFile = useCallback((file: File) => {
@@ -86,37 +130,48 @@ export const PersonalAiWorkspacePage: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (text: string) => {
+      // Mọi lượt gửi KÈM FILE đều là hành động không hoàn tác được (ghi đè bản
+      // tuần này, hoặc nộp thẳng lên cấp trên) → hỏi lại trước khi rời máy.
+      // Không hoàn tác được nghĩa là bấm nhầm không sửa được, nên không có
+      // ngoại lệ nào ở đây kể cả khi BE tự thay bản cũ giúp.
       if (pendingFile) {
-        // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) → endpoint
-        // riêng /api/level-reports/upload. BE tự thay bản cũ nếu nộp lại cùng
-        // tuần — KHÔNG hỏi confirm gì thêm (spec §2).
-        if (containsLevelReportTag(text)) {
-          setInputValue("");
-          setPendingFile(null);
-          setIsUploading(true);
-          await sendLevelReportWithFile(text, pendingFile);
-          setIsUploading(false);
-          setTimeout(() => textareaRef.current?.focus(), 0);
-          return;
-        }
-        // #congviectuan (báo cáo tuần cá nhân) là GHI ĐÈ (mỗi tuần 1 file) — xác nhận trước.
-        const confirmed = window.confirm(
-          `Tải lên báo cáo tuần sẽ THAY THẾ file của tuần này (mỗi tuần chỉ giữ 1 file).\n\nTiếp tục với "${pendingFile.name}"?`,
-        );
-        if (!confirmed) return;
-        setInputValue("");
-        setPendingFile(null);
-        setIsUploading(true);
-        await sendWithFile(text, pendingFile);
-        setIsUploading(false);
-      } else {
-        setInputValue("");
-        await sendMessage(text);
+        // Đang nộp dở / đã mở hộp xác nhận → bỏ qua, không xếp chồng hai lượt.
+        if (isUploading || pendingSubmit) return;
+        setPendingSubmit(describeSubmit(text, pendingFile));
+        return;
       }
+      setInputValue("");
+      await sendMessage(text);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [sendMessage, sendWithFile, sendLevelReportWithFile, pendingFile],
+    [sendMessage, pendingFile, isUploading, pendingSubmit],
   );
+
+  /** Người dùng đã xác nhận gửi → thực sự nộp file. */
+  const handleConfirmSubmit = useCallback(async () => {
+    const submit = pendingSubmit;
+    if (!submit) return;
+    setPendingSubmit(null);
+    setInputValue("");
+    setPendingFile(null);
+    setIsUploading(true);
+    // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) đi endpoint
+    // riêng /api/level-reports/upload; BE tự thay bản cũ nếu nộp lại cùng tuần.
+    if (submit.kind === "level") {
+      await sendLevelReportWithFile(submit.text, submit.file);
+    } else {
+      await sendWithFile(submit.text, submit.file);
+    }
+    setIsUploading(false);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, [pendingSubmit, sendWithFile, sendLevelReportWithFile]);
+
+  /** Hủy ở hộp xác nhận → giữ nguyên file + câu hỏi để sửa rồi gửi lại. */
+  const handleCancelSubmit = useCallback(() => {
+    setPendingSubmit(null);
+    toast.info("Đã hủy gửi báo cáo. Tệp vẫn được giữ để bạn kiểm tra lại.");
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
 
   const handleSuggestionSelect = useCallback((value: string) => {
     setInputValue(value);
@@ -177,6 +232,18 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Xác nhận trước khi nộp file — chặn gửi nhầm lên cấp trên / ghi đè bản tuần. */}
+      <ConfirmDialog
+        isOpen={pendingSubmit !== null}
+        onClose={handleCancelSubmit}
+        onConfirm={() => void handleConfirmSubmit()}
+        title={pendingSubmit?.title ?? ""}
+        message={pendingSubmit?.message ?? ""}
+        confirmText={pendingSubmit?.confirmText ?? "Gửi"}
+        cancelText="Hủy"
+        variant="warning"
+      />
     </div>
   );
 };

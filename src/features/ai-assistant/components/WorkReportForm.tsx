@@ -335,6 +335,18 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  /**
+   * Thao tác xóa đang chờ xác nhận. Một state cho MỌI kiểu xóa (công việc đã
+   * nộp, tệp của công việc, tệp chung) → chỉ một hộp thoại tồn tại tại một thời
+   * điểm, và mỗi lời nhắn nói đúng thứ sắp mất.
+   */
+  const [pendingDelete, setPendingDelete] = useState<
+    | { kind: "task"; taskId: string; label: string }
+    | { kind: "task-file"; taskIdx: number; att: WorkReportAttachment }
+    | { kind: "common-file"; att: WorkReportAttachment }
+    | null
+  >(null);
 
   // Id công việc do FE TỰ LƯU NHÁP để có chỗ đính kèm (không phải user bấm "Lưu
   // báo cáo"). Khi bấm Hủy phải xóa các việc này khỏi BE — nếu không, báo cáo
@@ -475,7 +487,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       setSavingForAttach(false);
     }
     if (!taskId) {
-      setAttachError("Chưa lấy được mã công việc. Vui lòng Lưu báo cáo rồi thử lại.");
+      setAttachError("Chưa lấy được mã công việc. Vui lòng gửi báo cáo rồi thử lại.");
       return;
     }
     // Việc này đã được lưu (tự động) để đính kèm → ghi nhận để Hủy có thể xóa.
@@ -609,8 +621,44 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  /** Nội dung hộp thoại cho thao tác xóa đang chờ — nói rõ thứ sắp mất. */
+  const deleteDialogCopy = (() => {
+    if (!pendingDelete) return null;
+    if (pendingDelete.kind === "task") {
+      return {
+        title: "Xóa công việc đã nộp?",
+        message: `"${pendingDelete.label}" và các tệp đính kèm của nó sẽ bị xóa khỏi báo cáo. Hành động này không thể hoàn tác.`,
+      };
+    }
+    return {
+      title: "Xóa tệp đính kèm?",
+      message: `"${pendingDelete.att.original_filename}" sẽ bị xóa khỏi báo cáo. Hành động này không thể hoàn tác.`,
+    };
+  })();
+
+  const confirmPendingDelete = async () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    if (target.kind === "task") await handleDeleteSubmittedTask(target.taskId);
+    else if (target.kind === "task-file")
+      await handleDeleteTaskFile(target.taskIdx, target.att);
+    else await handleDeleteCommonFile(target.att);
+  };
+
+  /** Bấm "Gửi báo cáo" → hỏi lại; báo cáo đã gửi là quản lý xem được ngay. */
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    // Tên công việc rỗng hết thì báo tại chỗ, đừng bắt xác nhận rồi mới lỗi.
+    if (!tasks.some((t) => t.task_name.trim())) {
+      setError("Cần nhập ít nhất một tên công việc");
+      return;
+    }
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
@@ -618,8 +666,10 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
       // Đã chốt báo cáo có chủ đích → các việc tự-lưu-nháp giờ là hợp lệ, không
       // còn coi là "rác cần dọn khi hủy".
       autoSavedTaskIds.current.clear();
-      onSuccess(`✅ Đã lưu báo cáo ngày ${formatDateVN(data.date)}`);
+      setShowSubmitConfirm(false);
+      onSuccess(`✅ Đã gửi báo cáo ngày ${formatDateVN(data.date)}`);
     } catch (err) {
+      setShowSubmitConfirm(false);
       setError(err instanceof Error ? err.message : "Không thể lưu báo cáo");
     } finally {
       setIsSubmitting(false);
@@ -714,7 +764,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
                 downloading={downloadingId === att.id}
                 deleting={deletingId === att.id}
                 onDownload={() => handleDownload(att)}
-                onDelete={() => handleDeleteTaskFile(idx, att)}
+                onDelete={() => setPendingDelete({ kind: "task-file", taskIdx: idx, att })}
               />
             ))}
             {uploadingNames.map((name) => (
@@ -967,7 +1017,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
                 downloading={downloadingId === att.id}
                 deleting={deletingId === att.id}
                 onDownload={() => handleDownload(att)}
-                onDelete={() => handleDeleteCommonFile(att)}
+                onDelete={() => setPendingDelete({ kind: "common-file", att })}
               />
             ))}
           </div>
@@ -1065,7 +1115,13 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
                   {taskId && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteSubmittedTask(taskId)}
+                      onClick={() =>
+                        setPendingDelete({
+                          kind: "task",
+                          taskId,
+                          label: task.task_name || `Công việc ${idx + 1}`,
+                        })
+                      }
                       disabled={busy || deletingTaskId === taskId}
                       title="Xóa công việc này"
                       className="shrink-0 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
@@ -1153,7 +1209,7 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-[#1565C0] hover:bg-[#1976D2] transition-all disabled:opacity-50 shadow-sm"
         >
           <SaveIcon size={14} />
-          {isSubmitting ? "Đang lưu..." : "Lưu báo cáo"}
+          {isSubmitting ? "Đang gửi..." : "Gửi báo cáo"}
         </button>
       </div>
 
@@ -1170,6 +1226,33 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         cancelText="Tiếp tục nhập"
         variant="danger"
         isLoading={isCancelling}
+      />
+
+      {/* Xác nhận xóa công việc đã nộp / tệp đính kèm — cả hai đều xóa thật ở BE. */}
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => void confirmPendingDelete()}
+        title={deleteDialogCopy?.title ?? ""}
+        message={deleteDialogCopy?.message ?? ""}
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
+      />
+
+      {/* Xác nhận lưu — báo cáo được gửi đi và quản lý xem được ngay. */}
+      <ConfirmDialog
+        isOpen={showSubmitConfirm}
+        onClose={() => {
+          if (!isSubmitting) setShowSubmitConfirm(false);
+        }}
+        onConfirm={() => void confirmSubmit()}
+        title="Gửi báo cáo công việc?"
+        message={`Báo cáo ngày ${formatDateVN(data.date)} sẽ được lưu và quản lý có thể xem.`}
+        confirmText="Gửi báo cáo"
+        cancelText="Xem lại"
+        variant="warning"
+        isLoading={isSubmitting}
       />
     </form>
   );
