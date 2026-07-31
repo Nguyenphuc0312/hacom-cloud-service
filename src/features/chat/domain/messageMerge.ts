@@ -219,6 +219,12 @@ export const mergeMessageRecords = (
       incoming.id ||
       current.id,
     localOrder: incoming.localOrder ?? current.localOrder,
+    // "Đã chỉnh sửa" chỉ tiến, không lùi. Các event sau (read receipt, delivered,
+    // reaction…) đi qua đây với payload KHÔNG mang isEdited/editedAt, spread mù
+    // sẽ xoá cờ đang có trong cache → tin cũ mất nhãn "đã chỉnh sửa" dù nội dung
+    // đã bị sửa. Chỉ BE thu hồi/xoá tin mới được phép reset (xử lý riêng bên dưới).
+    isEdited: Boolean(incoming.isEdited || current.isEdited),
+    editedAt: incoming.editedAt ?? current.editedAt,
     // Preserve failed state only if message is not deleted
     // Deleted messages should not show as "failed"
     sendState:
