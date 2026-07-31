@@ -7,6 +7,13 @@ import Link from "@tiptap/extension-link";
 import type { Editor } from "@tiptap/react";
 import { MentionChip } from "./mentionNode";
 
+/**
+ * How TipTap's `getText()` joins block nodes. Any offset computed with
+ * `textBetween` must pass this same value, otherwise the two disagree by one
+ * character per line break.
+ */
+export const GET_TEXT_BLOCK_SEPARATOR = "\n\n";
+
 export interface TipTapEditorHandle {
   getHTML: () => string;
   getJSON: () => object;
@@ -118,6 +125,28 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       [], // stable — placeholder is read via ref, not captured in closure
     );
 
+    // Plain-text caret offset into getText(). Both arguments below must mirror how
+    // getText() serialises the doc, or the offset drifts and buildMentionMatch
+    // silently misses:
+    //  - blockSeparator: getText() joins blocks with "\n\n". Passing "\n" loses one
+    //    char PER LINE, so in a multi-line message the caret lands mid-word and the
+    //    mention panel only opens after typing extra spaces that happen to realign it.
+    //  - leafText: must match renderText in mentionNode.ts, i.e. `sendLabel || label`.
+    //    A chip is one ProseMirror position but many characters of text, and with an
+    //    alias label/sendLabel differ in length.
+    const emitSelection = React.useCallback((e: Editor) => {
+      if (!onSelectionChangeRef.current) return;
+      const text = e.getText();
+      const anchor = e.state.selection.anchor;
+      const before = e.state.doc.textBetween(0, anchor, GET_TEXT_BLOCK_SEPARATOR, (leaf) =>
+        leaf.type.name === MentionChip.name
+          ? `@${leaf.attrs.sendLabel || leaf.attrs.label}`
+          : "",
+      );
+      const caretOffset = Math.max(0, Math.min(before.length, text.length));
+      onSelectionChangeRef.current(text, caretOffset);
+    }, []);
+
     const editor = useEditor({
       extensions: allExtensions,
       content: initialContent || "",
@@ -125,6 +154,11 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       immediatelyRender: false,
       onUpdate: ({ editor: e }) => {
         onContentChange?.(e.getText());
+        // Typing must refresh the mention match too. onSelectionUpdate does not
+        // fire for every text input (ProseMirror maps the selection through the
+        // transaction instead of "changing" it, and IME composition batches),
+        // so relying on it alone leaves the mention panel closed while typing.
+        emitSelection(e);
       },
       onFocus: () => onFocus?.(),
       onBlur: () => onBlur?.(),
@@ -132,19 +166,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
         onEditorReady?.(e);
       },
       onSelectionUpdate: ({ editor: e }) => {
-        if (onSelectionChangeRef.current) {
-          const text = e.getText();
-          const anchor = e.state.selection.anchor;
-          // Plain-text caret offset. Can't use `anchor - 1`: a mention chip is
-          // an atom (1 ProseMirror pos) but serialises to `@label` (many chars),
-          // so after a chip the two diverge. textBetween with a leafText that
-          // matches renderText/getText gives the true offset.
-          const before = e.state.doc.textBetween(0, anchor, "\n", (leaf) =>
-            leaf.type.name === MentionChip.name ? `@${leaf.attrs.label}` : "",
-          );
-          const caretOffset = Math.max(0, Math.min(before.length, text.length));
-          onSelectionChangeRef.current(text, caretOffset);
-        }
+        emitSelection(e);
       },
       editorProps: {
         handlePaste(_, event) {
