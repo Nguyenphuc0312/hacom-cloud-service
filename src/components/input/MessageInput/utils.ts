@@ -20,12 +20,10 @@ export const buildMentionMatch = (
     return null;
   }
 
-  const prefixChar = mentionStart === 0 ? " " : beforeCaret[mentionStart - 1];
-  const isValidPrefix = /\s|\(|\[|\{|"|'|`/.test(prefixChar);
-  if (!isValidPrefix) {
-    return null;
-  }
-
+  // No prefix rule on purpose: "@" opens the panel wherever it is typed, even
+  // glued to the previous word ("bạn@", "email@"). The old rule required a
+  // space/bracket before it, which silently killed tagging mid-word and was
+  // impossible for users to guess.
   const mentionQuery = beforeCaret.slice(mentionStart + 1);
   if (
     mentionQuery.includes(" ") ||
