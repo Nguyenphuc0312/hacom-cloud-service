@@ -3,7 +3,8 @@
   "subtitle": "Personal content",
   "common": {
     "soon": "Soon",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel"
   },
   "workspace": {
     "title": "My Documents",
@@ -37,7 +38,11 @@
     "loading": "Loading storage...",
     "usage": "{{used}} of {{limit}} used",
     "usageCompact": "{{used}} / {{limit}} used",
-    "reserved": "{{value}} reserved for uploads"
+    "reserved": "{{value}} reserved for uploads",
+    "of": " / {{limit}} used",
+    "active": "{{value}} active",
+    "trash": "{{value}} in trash",
+    "available": "{{value}} available"
   },
   "service": {
     "checking": "Checking Cloud service",
@@ -124,7 +129,30 @@
     "processing": "Processing",
     "ready": "Ready",
     "failed": "Failed",
-    "trashed": "Trashed"
+    "trashed": "In trash",
+    "deleting": "Deleting",
+    "deleted": "Permanently deleted"
+  },
+  "delete": {
+    "dialogTitle": "How would you like to delete this item?",
+    "permanentTitle": "Permanently delete this item?",
+    "moveToTrash": "Move to trash",
+    "moveToTrashDescription": "The item disappears from the conversation but continues to use storage.",
+    "retention": "Restorable for 24 hours",
+    "permanent": "Delete now",
+    "permanentDescription": "Release storage now. This action cannot be undone."
+  },
+  "trash": {
+    "headerSubtitle": "Items are automatically deleted after 24 hours",
+    "loading": "Loading Trash...",
+    "emptyTitle": "Trash is empty",
+    "emptyDescription": "Items moved here can be restored for 24 hours.",
+    "restore": "Restore",
+    "deletePermanently": "Delete permanently",
+    "retentionNotice": "Items in Trash still use storage and are automatically deleted after 24 hours.",
+    "expired": "Restore window expired",
+    "hoursRemaining": "About {{count}} hours left",
+    "minutesRemaining": "About {{count}} minutes left"
   },
   "inspector": {
     "title": "Hacom Cloud",
@@ -150,18 +178,23 @@
       "share": "Share"
     },
     "phaseLater": "Available in a later phase",
-    "phaseNote": "Download, sharing, folders, and trash have no Phase 1 API, so they are explicitly disabled."
+    "phaseNote": "Download, sharing, and folders have no Phase 1 API, so they are explicitly disabled."
   },
   "toast": {
     "textCreated": "Note saved.",
     "linkCreated": "Link saved.",
-    "uploadStarted": "File uploaded and processing started."
+    "uploadStarted": "File uploaded and processing started.",
+    "movedToTrash": "Item moved to Trash.",
+    "restored": "Item restored.",
+    "permanentlyDeleted": "Item permanently deleted and storage released."
   },
   "errors": {
     "user": "The current user could not be identified. Sign in again.",
     "quota": "There is not enough Cloud storage for this action.",
     "fileTooLarge": "This file exceeds the allowed limit.",
     "driveInactive": "Your Cloud workspace is not active.",
+    "itemNotReady": "This item is still processing and cannot be deleted yet.",
+    "trashExpired": "The 24-hour restore window has expired.",
     "offline": "The Cloud service is unreachable. Check the local backend.",
     "generic": "The Cloud action could not be completed. Please try again."
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CloudItem } from "../types";
 import {
   formatBytes,
+  getTrashCountdown,
   getCloudItemPreview,
   getCloudItemTitle,
   isSafeExternalUrl,
@@ -40,5 +41,21 @@ describe("cloudFormat", () => {
     expect(isSafeExternalUrl("http://localhost:8080")).toBe(true);
     expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false);
     expect(isSafeExternalUrl("not-a-url")).toBe(false);
+  });
+
+  it("calculates trash countdowns at the exact expiry boundary", () => {
+    const now = new Date("2026-07-31T03:00:00Z").getTime();
+    expect(
+      getTrashCountdown("2026-07-31T05:30:00Z", now),
+    ).toMatchObject({
+      expired: false,
+      hours: 2,
+      minutes: 30,
+    });
+    expect(getTrashCountdown("2026-07-31T03:00:00Z", now)).toEqual({
+      expired: true,
+      hours: 0,
+      minutes: 0,
+    });
   });
 });

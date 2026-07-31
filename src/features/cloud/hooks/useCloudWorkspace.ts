@@ -12,24 +12,31 @@ const PROCESSING_REFRESH_MS = 2_000;
 
 interface CloudWorkspaceState {
   items: CloudItem[];
+  trashItems: CloudItem[];
   quota: CloudQuota | null;
   health: CloudHealth | null;
   isLoading: boolean;
   isRefreshing: boolean;
   isLoadingMore: boolean;
+  isLoadingTrash: boolean;
+  isLoadingMoreTrash: boolean;
   isMutating: boolean;
   error: CloudApiError | null;
   nextCursor?: string;
+  trashNextCursor?: string;
   uploadProgress: CloudUploadProgress | null;
 }
 
 const initialState: CloudWorkspaceState = {
   items: [],
+  trashItems: [],
   quota: null,
   health: null,
   isLoading: true,
   isRefreshing: false,
   isLoadingMore: false,
+  isLoadingTrash: true,
+  isLoadingMoreTrash: false,
   isMutating: false,
   error: null,
   uploadProgress: null,
@@ -58,6 +65,19 @@ const mergeItems = (current: CloudItem[], incoming: CloudItem[]): CloudItem[] =>
     (left, right) =>
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
   );
+};
+
+const mergeTrashItems = (
+  current: CloudItem[],
+  incoming: CloudItem[],
+): CloudItem[] => {
+  const byId = new Map(current.map((item) => [item.id, item]));
+  incoming.forEach((item) => byId.set(item.id, item));
+  return Array.from(byId.values()).sort((left, right) => {
+    const leftTime = new Date(left.trashedAt ?? left.createdAt).getTime();
+    const rightTime = new Date(right.trashedAt ?? right.createdAt).getTime();
+    return rightTime - leftTime;
+  });
 };
 
 export const useCloudWorkspace = (userId: string | undefined) => {
@@ -91,8 +111,9 @@ export const useCloudWorkspace = (userId: string | undefined) => {
       }));
 
       try {
-        const [page, quota, health] = await Promise.all([
+        const [page, trashPage, quota, health] = await Promise.all([
           cloudApi.listItems(userId, { signal }),
+          cloudApi.listTrash(userId, { signal }),
           cloudApi.getQuota(userId, signal),
           cloudApi.health(signal).catch(
             (): CloudHealth => ({
@@ -105,11 +126,14 @@ export const useCloudWorkspace = (userId: string | undefined) => {
         setState((current) => ({
           ...current,
           items: page.items,
+          trashItems: trashPage.items,
           quota,
           health,
           nextCursor: page.nextCursor,
+          trashNextCursor: trashPage.nextCursor,
           isLoading: false,
           isRefreshing: false,
+          isLoadingTrash: false,
           error: null,
         }));
       } catch (error) {
@@ -118,6 +142,7 @@ export const useCloudWorkspace = (userId: string | undefined) => {
           ...current,
           isLoading: false,
           isRefreshing: false,
+          isLoadingTrash: false,
           error: asCloudError(error),
         }));
       }
@@ -158,6 +183,30 @@ export const useCloudWorkspace = (userId: string | undefined) => {
       }));
     }
   }, [state.isLoadingMore, state.nextCursor, userId]);
+
+  const loadMoreTrash = useCallback(async () => {
+    if (!userId || !state.trashNextCursor || state.isLoadingMoreTrash) return;
+    setState((current) => ({ ...current, isLoadingMoreTrash: true }));
+    try {
+      const page = await cloudApi.listTrash(userId, {
+        cursor: state.trashNextCursor,
+      });
+      if (!mountedRef.current) return;
+      setState((current) => ({
+        ...current,
+        trashItems: mergeTrashItems(current.trashItems, page.items),
+        trashNextCursor: page.nextCursor,
+        isLoadingMoreTrash: false,
+      }));
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setState((current) => ({
+        ...current,
+        isLoadingMoreTrash: false,
+        error: asCloudError(error),
+      }));
+    }
+  }, [state.isLoadingMoreTrash, state.trashNextCursor, userId]);
 
   const refreshQuota = useCallback(async () => {
     if (!userId) return;
@@ -319,6 +368,100 @@ export const useCloudWorkspace = (userId: string | undefined) => {
     [refreshQuota, userId],
   );
 
+  const trashItem = useCallback(
+    async (itemId: string) => {
+      if (!userId) throw createMissingUserError();
+      setState((current) => ({ ...current, isMutating: true, error: null }));
+      try {
+        const item = await cloudApi.trashItem(userId, itemId);
+        await refreshQuota();
+        if (!mountedRef.current) return;
+        setState((current) => ({
+          ...current,
+          items: current.items.filter((candidate) => candidate.id !== itemId),
+          trashItems: mergeTrashItems(
+            current.trashItems.filter((candidate) => candidate.id !== itemId),
+            [item],
+          ),
+          isMutating: false,
+        }));
+      } catch (error) {
+        if (!mountedRef.current) return;
+        const cloudError = asCloudError(error);
+        setState((current) => ({
+          ...current,
+          isMutating: false,
+          error: cloudError,
+        }));
+        throw cloudError;
+      }
+    },
+    [refreshQuota, userId],
+  );
+
+  const restoreItem = useCallback(
+    async (itemId: string) => {
+      if (!userId) throw createMissingUserError();
+      setState((current) => ({ ...current, isMutating: true, error: null }));
+      try {
+        const item = await cloudApi.restoreItem(userId, itemId);
+        await refreshQuota();
+        if (!mountedRef.current) return;
+        setState((current) => ({
+          ...current,
+          items: mergeItems(
+            current.items.filter((candidate) => candidate.id !== itemId),
+            [item],
+          ),
+          trashItems: current.trashItems.filter(
+            (candidate) => candidate.id !== itemId,
+          ),
+          isMutating: false,
+        }));
+      } catch (error) {
+        if (!mountedRef.current) return;
+        const cloudError = asCloudError(error);
+        setState((current) => ({
+          ...current,
+          isMutating: false,
+          error: cloudError,
+        }));
+        throw cloudError;
+      }
+    },
+    [refreshQuota, userId],
+  );
+
+  const permanentlyDeleteItem = useCallback(
+    async (itemId: string) => {
+      if (!userId) throw createMissingUserError();
+      setState((current) => ({ ...current, isMutating: true, error: null }));
+      try {
+        await cloudApi.permanentlyDeleteItem(userId, itemId);
+        await refreshQuota();
+        if (!mountedRef.current) return;
+        setState((current) => ({
+          ...current,
+          items: current.items.filter((candidate) => candidate.id !== itemId),
+          trashItems: current.trashItems.filter(
+            (candidate) => candidate.id !== itemId,
+          ),
+          isMutating: false,
+        }));
+      } catch (error) {
+        if (!mountedRef.current) return;
+        const cloudError = asCloudError(error);
+        setState((current) => ({
+          ...current,
+          isMutating: false,
+          error: cloudError,
+        }));
+        throw cloudError;
+      }
+    },
+    [refreshQuota, userId],
+  );
+
   const hasProcessingItems = useMemo(
     () => state.items.some((item) => item.status === "processing"),
     [state.items],
@@ -387,9 +530,13 @@ export const useCloudWorkspace = (userId: string | undefined) => {
     ...state,
     refresh,
     loadMore,
+    loadMoreTrash,
     createText,
     createLink,
     uploadFile,
+    trashItem,
+    restoreItem,
+    permanentlyDeleteItem,
     clearError,
   };
 };

@@ -5,7 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { LoaderCircle, Search, X } from "lucide-react";
+import { Files, LoaderCircle, Search, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
@@ -35,9 +35,17 @@ import {
   CloudConversationAvatar,
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
+import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
+import { CloudQuotaSummary } from "../components/CloudQuotaSummary";
+import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
+import type { CloudItem, CloudViewMode } from "../types";
 import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
-import { formatBytes } from "../utils/cloudFormat";
+import {
+  formatBytes,
+  getCloudItemPreview,
+  getCloudItemTitle,
+} from "../utils/cloudFormat";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
@@ -51,6 +59,10 @@ const getErrorTranslationKey = (code: string): string => {
       return "errors.fileTooLarge";
     case "DRIVE_NOT_ACTIVE":
       return "errors.driveInactive";
+    case "ITEM_NOT_READY":
+      return "errors.itemNotReady";
+    case "TRASH_EXPIRED":
+      return "errors.trashExpired";
     case "OBJECT_UPLOAD_NETWORK_ERROR":
     case "CLOUD_NETWORK_ERROR":
     case "CLOUD_UNAVAILABLE":
@@ -89,6 +101,8 @@ export default function CloudPage() {
   const [draftResetKey, setDraftResetKey] = useState(0);
   const [search, setSearch] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<CloudViewMode>("active");
+  const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const workspace = useCloudWorkspace(authUser?.id);
   const fetchConversations = useChatStore((state) => state.fetchConversations);
   const hasFetchedConversationsOnce = useChatStore(
@@ -200,6 +214,21 @@ export default function CloudPage() {
     });
   }, [messages, search]);
 
+  const visibleTrashItems = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return workspace.trashItems;
+    return workspace.trashItems.filter((item) => {
+      const title = getCloudItemTitle(item, {
+        text: t("item.untitledText"),
+        link: t("item.untitledLink"),
+        file: t("item.untitledFile"),
+      });
+      return `${title} ${getCloudItemPreview(item)}`
+        .toLocaleLowerCase()
+        .includes(query);
+    });
+  }, [search, t, workspace.trashItems]);
+
   const showPhaseNotice = useCallback(() => {
     toast.info(t("workspace.phaseAction"));
   }, [t]);
@@ -265,10 +294,45 @@ export default function CloudPage() {
     showPhaseNotice();
   }, [showPhaseNotice]);
 
-  const noopMessageIdAction = useCallback((_messageId: string) => {
-    void _messageId;
-    showPhaseNotice();
-  }, [showPhaseNotice]);
+  const noopMessageIdAction = useCallback(
+    (_messageId: string) => {
+      void _messageId;
+      showPhaseNotice();
+    },
+    [showPhaseNotice],
+  );
+
+  const handleDeleteRequest = useCallback(
+    (messageId: string) => {
+      const item = workspace.items.find((candidate) => candidate.id === messageId);
+      if (item) setDeleteTarget(item);
+    },
+    [workspace.items],
+  );
+
+  const handleTrash = useCallback(
+    async (itemId: string) => {
+      await workspace.trashItem(itemId);
+      toast.success(t("toast.movedToTrash"));
+    },
+    [t, workspace],
+  );
+
+  const handleRestore = useCallback(
+    async (itemId: string) => {
+      await workspace.restoreItem(itemId);
+      toast.success(t("toast.restored"));
+    },
+    [t, workspace],
+  );
+
+  const handlePermanentDelete = useCallback(
+    async (itemId: string) => {
+      await workspace.permanentlyDeleteItem(itemId);
+      toast.success(t("toast.permanentlyDeleted"));
+    },
+    [t, workspace],
+  );
 
   return (
     <AppShell
@@ -314,13 +378,41 @@ export default function CloudPage() {
             conversation={conversation}
             currentUserId={currentUser.id}
             titleOverride={t("workspace.title")}
-            subtitleOverride={t("workspace.onlyYou")}
+            subtitleOverride={
+              viewMode === "trash"
+                ? t("trash.headerSubtitle")
+                : t("workspace.onlyYou")
+            }
             avatarOverride={<CloudConversationAvatar size="sm" />}
             onBack={() => navigate("/chat")}
             onInfoClick={showPhaseNotice}
             onSearchClick={() => setIsSearchOpen((value) => !value)}
             onPinnedClick={showPhaseNotice}
           />
+
+          <div className="cloud-mode-bar">
+            <ConversationLane className="flex items-center gap-2">
+              <button
+                type="button"
+                className={viewMode === "active" ? "is-active" : undefined}
+                onClick={() => setViewMode("active")}
+              >
+                <Files className="h-4 w-4" aria-hidden />
+                {t("navigation.all")}
+                <span>{workspace.items.length}</span>
+              </button>
+              <button
+                type="button"
+                className={viewMode === "trash" ? "is-active" : undefined}
+                onClick={() => setViewMode("trash")}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+                {t("navigation.trash")}
+                <span>{workspace.trashItems.length}</span>
+              </button>
+              <CloudQuotaSummary quota={workspace.quota} />
+            </ConversationLane>
+          </div>
 
           {isSearchOpen ? (
             <div className="border-b border-border/60 bg-surface py-2">
@@ -372,26 +464,39 @@ export default function CloudPage() {
             </ConversationLane>
           ) : null}
 
-          <SimpleVirtualizedChatTimeline
-            conversationId={CLOUD_CONVERSATION_ID}
-            conversationType={conversation.type}
-            currentUserId={currentUser.id}
-            messages={visibleMessages}
-            onReply={noopMessageAction}
-            onReact={noopMessageIdAction}
-            onForward={noopMessageAction}
-            onPin={noopMessageIdAction}
-            onEdit={noopMessageAction}
-            onDelete={noopMessageIdAction}
-            hasMore={Boolean(workspace.nextCursor)}
-            isLoadingMore={workspace.isLoadingMore}
-            isInitialLoading={workspace.isLoading}
-            onLoadMore={() => workspace.loadMore()}
-            density="comfortable"
-            layoutState={layoutState}
-            selectedMessageIds={new Set()}
-            className="min-h-0 flex-1"
-          />
+          {viewMode === "active" ? (
+            <SimpleVirtualizedChatTimeline
+              conversationId={CLOUD_CONVERSATION_ID}
+              conversationType={conversation.type}
+              currentUserId={currentUser.id}
+              messages={visibleMessages}
+              onReply={noopMessageAction}
+              onReact={noopMessageIdAction}
+              onForward={noopMessageAction}
+              onPin={noopMessageIdAction}
+              onEdit={noopMessageAction}
+              onDelete={handleDeleteRequest}
+              hasMore={Boolean(workspace.nextCursor)}
+              isLoadingMore={workspace.isLoadingMore}
+              isInitialLoading={workspace.isLoading}
+              onLoadMore={() => workspace.loadMore()}
+              density="comfortable"
+              layoutState={layoutState}
+              selectedMessageIds={new Set()}
+              className="min-h-0 flex-1"
+            />
+          ) : (
+            <CloudTrashTimeline
+              items={visibleTrashItems}
+              isLoading={workspace.isLoadingTrash}
+              isLoadingMore={workspace.isLoadingMoreTrash}
+              hasMore={Boolean(workspace.trashNextCursor)}
+              isMutating={workspace.isMutating}
+              onRestore={handleRestore}
+              onDelete={setDeleteTarget}
+              onLoadMore={() => workspace.loadMoreTrash()}
+            />
+          )}
 
           {workspace.uploadProgress ? (
             <div className="cloud-chat-upload" role="status" aria-live="polite">
@@ -412,37 +517,54 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            <MessageInput
-              value={draft}
-              valueResetKey={draftResetKey}
-              onChange={setDraft}
-              onSend={handleSend}
-              mode="normal"
-              conversationId={CLOUD_CONVERSATION_ID}
-              conversationType="direct"
-              currentUserId={currentUser.id}
-              sendOnEnter
-              disabled={workspace.isMutating}
-              submitDisabled={workspace.isMutating}
-              attachmentsDisabled={workspace.isMutating}
-              disabledReason={
-                workspace.isMutating
-                  ? t("workspace.saving", {
-                      size: workspace.uploadProgress
-                        ? formatBytes(
-                            workspace.quota?.reservedBytes ?? 0,
-                          )
-                        : "",
-                    })
-                  : undefined
-              }
-              composerMode="online"
-              conversationName={t("workspace.title")}
-              onAddFiles={handleAddFiles}
-            />
+            {viewMode === "active" ? (
+              <MessageInput
+                value={draft}
+                valueResetKey={draftResetKey}
+                onChange={setDraft}
+                onSend={handleSend}
+                mode="normal"
+                conversationId={CLOUD_CONVERSATION_ID}
+                conversationType="direct"
+                currentUserId={currentUser.id}
+                sendOnEnter
+                disabled={workspace.isMutating}
+                submitDisabled={workspace.isMutating}
+                attachmentsDisabled={workspace.isMutating}
+                disabledReason={
+                  workspace.isMutating
+                    ? t("workspace.saving", {
+                        size: workspace.uploadProgress
+                          ? formatBytes(
+                              workspace.quota?.reservedBytes ?? 0,
+                            )
+                          : "",
+                      })
+                    : undefined
+                }
+                composerMode="online"
+                conversationName={t("workspace.title")}
+                onAddFiles={handleAddFiles}
+              />
+            ) : (
+              <div className="cloud-trash-retention-note">
+                <ConversationLane>
+                  <p>{t("trash.retentionNotice")}</p>
+                </ConversationLane>
+              </div>
+            )}
           </div>
         </div>
       </section>
+      <CloudDeleteDialog
+        key={`${deleteTarget?.id ?? "closed"}-${viewMode}`}
+        item={deleteTarget}
+        permanentOnly={viewMode === "trash"}
+        isLoading={workspace.isMutating}
+        onClose={() => setDeleteTarget(null)}
+        onTrash={handleTrash}
+        onPermanentDelete={handlePermanentDelete}
+      />
     </AppShell>
   );
 }

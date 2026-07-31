@@ -67,3 +67,25 @@ export const isSafeExternalUrl = (value: string | undefined): boolean => {
     return false;
   }
 };
+
+export interface TrashCountdown {
+  expired: boolean;
+  hours: number;
+  minutes: number;
+}
+
+export const getTrashCountdown = (
+  expiresAt: string | undefined,
+  now = Date.now(),
+): TrashCountdown => {
+  const expiry = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+  if (!Number.isFinite(expiry) || expiry <= now) {
+    return { expired: true, hours: 0, minutes: 0 };
+  }
+  const remainingMinutes = Math.max(1, Math.ceil((expiry - now) / 60_000));
+  return {
+    expired: false,
+    hours: Math.floor(remainingMinutes / 60),
+    minutes: remainingMinutes % 60 || 60,
+  };
+};

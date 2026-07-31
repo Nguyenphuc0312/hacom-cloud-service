@@ -5,7 +5,9 @@ export type CloudItemStatus =
   | "processing"
   | "ready"
   | "failed"
-  | "trashed";
+  | "trashed"
+  | "deleting"
+  | "deleted";
 
 export interface CloudItem {
   id: string;
@@ -15,6 +17,8 @@ export interface CloudItem {
   content?: string;
   url?: string;
   sizeBytes: number;
+  trashedAt?: string;
+  expiresAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +31,8 @@ export interface CloudPage {
 export interface CloudQuota {
   limitBytes: number;
   usedBytes: number;
+  activeBytes: number;
+  trashBytes: number;
   reservedBytes: number;
   availableBytes: number;
   updatedAt: string;
@@ -53,6 +59,18 @@ export interface CloudUploadComplete {
   item: CloudItem;
   job: CloudUploadJob;
 }
+
+export interface CloudDeleteResult {
+  itemId: string;
+  status: "deleting" | "deleted";
+  job?: {
+    id: string;
+    type: "permanent_delete";
+    status: "pending" | "processing" | "completed" | "failed" | "dead";
+  };
+}
+
+export type CloudViewMode = "active" | "trash";
 
 export interface CloudHealth {
   status: "UP" | "DOWN";

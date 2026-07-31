@@ -3,6 +3,7 @@ import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinat
 import { getAccessToken } from "../../../services/tokenService";
 import type {
   CloudHealth,
+  CloudDeleteResult,
   CloudItem,
   CloudPage,
   CloudQuota,
@@ -136,6 +137,19 @@ export const cloudApi = {
     });
   },
 
+  listTrash(
+    userId: string,
+    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+  ): Promise<CloudPage> {
+    const query = new URLSearchParams();
+    query.set("limit", String(options.limit ?? 30));
+    if (options.cursor) query.set("cursor", options.cursor);
+    return cloudRequest<CloudPage>(`trash?${query.toString()}`, {
+      userId,
+      signal: options.signal,
+    });
+  },
+
   getItem(userId: string, itemId: string, signal?: AbortSignal): Promise<CloudItem> {
     return cloudRequest<CloudItem>(`items/${encodeURIComponent(itemId)}`, {
       userId,
@@ -163,6 +177,39 @@ export const cloudApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, title }),
     });
+  },
+
+  trashItem(userId: string, itemId: string): Promise<CloudItem> {
+    return cloudRequest<CloudItem>(
+      `items/${encodeURIComponent(itemId)}/trash`,
+      {
+        userId,
+        method: "POST",
+      },
+    );
+  },
+
+  restoreItem(userId: string, itemId: string): Promise<CloudItem> {
+    return cloudRequest<CloudItem>(
+      `items/${encodeURIComponent(itemId)}/restore`,
+      {
+        userId,
+        method: "POST",
+      },
+    );
+  },
+
+  permanentlyDeleteItem(
+    userId: string,
+    itemId: string,
+  ): Promise<CloudDeleteResult> {
+    return cloudRequest<CloudDeleteResult>(
+      `items/${encodeURIComponent(itemId)}`,
+      {
+        userId,
+        method: "DELETE",
+      },
+    );
   },
 
   initiateUpload(userId: string, file: File): Promise<CloudUploadSession> {

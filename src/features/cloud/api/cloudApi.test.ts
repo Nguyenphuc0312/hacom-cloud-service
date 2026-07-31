@@ -13,10 +13,7 @@ vi.mock("../../../services/authRefreshCoordinator", () => ({
 
 const userId = "11111111-1111-4111-8111-111111111111";
 
-const jsonResponse = (
-  payload: unknown,
-  init: ResponseInit = {},
-): Response =>
+const jsonResponse = (payload: unknown, init: ResponseInit = {}): Response =>
   new Response(JSON.stringify(payload), {
     ...init,
     headers: {
@@ -65,7 +62,9 @@ describe("cloudApi", () => {
     );
     const requestHeaders = fetchMock.mock.calls[0]?.[1]?.headers;
     expect(requestHeaders).toBeInstanceOf(Headers);
-    expect((requestHeaders as Headers).get("Content-Type")).toBe("application/json");
+    expect((requestHeaders as Headers).get("Content-Type")).toBe(
+      "application/json",
+    );
     expect((requestHeaders as Headers).get("Accept")).toBe("application/json");
     expect((requestHeaders as Headers).get("X-Demo-User-ID")).toBe(userId);
   });
@@ -116,7 +115,9 @@ describe("cloudApi", () => {
   it("sends the auth-store bearer token without the demo header in production mode", async () => {
     vi.stubEnv("VITE_CLOUD_DEMO_MODE", "false");
     vi.mocked(getAccessToken).mockReturnValue("access-token");
-    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [], nextCursor: null }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ items: [], nextCursor: null }),
+    );
 
     await cloudApi.listItems(userId);
 
@@ -130,7 +131,9 @@ describe("cloudApi", () => {
     vi.mocked(getAccessToken).mockReturnValue("expired-token");
     vi.mocked(refreshAccessTokenShared).mockResolvedValue("fresh-token");
     fetchMock
-      .mockResolvedValueOnce(jsonResponse({ error: { code: "TOKEN_EXPIRED" } }, { status: 401 }))
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: "TOKEN_EXPIRED" } }, { status: 401 }),
+      )
       .mockResolvedValueOnce(jsonResponse({ items: [], nextCursor: null }));
 
     await cloudApi.listItems(userId);
@@ -145,15 +148,61 @@ describe("cloudApi", () => {
   it("does not loop when a revoked session remains forbidden after one retry", async () => {
     vi.stubEnv("VITE_CLOUD_DEMO_MODE", "false");
     vi.mocked(getAccessToken).mockReturnValue("revoked-token");
-    vi.mocked(refreshAccessTokenShared).mockResolvedValue("still-revoked-token");
+    vi.mocked(refreshAccessTokenShared).mockResolvedValue(
+      "still-revoked-token",
+    );
     fetchMock
-      .mockResolvedValueOnce(jsonResponse({ error: { code: "SESSION_REVOKED" } }, { status: 403 }))
-      .mockResolvedValueOnce(jsonResponse({ error: { code: "SESSION_REVOKED" } }, { status: 403 }));
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: "SESSION_REVOKED" } }, { status: 403 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: "SESSION_REVOKED" } }, { status: 403 }),
+      );
 
-    const error = await cloudApi.listItems(userId).catch((reason: unknown) => reason);
+    const error = await cloudApi
+      .listItems(userId)
+      .catch((reason: unknown) => reason);
 
     expect(error).toMatchObject({ status: 403, code: "SESSION_REVOKED" });
     expect(refreshAccessTokenShared).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the trash lifecycle endpoints without request bodies", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ items: [], nextCursor: "trash-cursor" }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "item-1",
+          type: "text",
+          status: "trashed",
+          sizeBytes: 5,
+          trashedAt: "2026-07-31T03:00:00Z",
+          expiresAt: "2026-08-01T03:00:00Z",
+          createdAt: "2026-07-31T02:00:00Z",
+          updatedAt: "2026-07-31T03:00:00Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ itemId: "item-1", status: "deleting" }, { status: 202 }),
+      );
+
+    await cloudApi.listTrash(userId, { cursor: "trash/cursor" });
+    await cloudApi.trashItem(userId, "item-1");
+    await cloudApi.permanentlyDeleteItem(userId, "item-1");
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "trash?limit=30&cursor=trash%2Fcursor",
+    );
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "/cloud-api/api/v1/cloud/items/item-1/trash",
+      expect.objectContaining({ method: "POST" }),
+    ]);
+    expect(fetchMock.mock.calls[2]).toEqual([
+      "/cloud-api/api/v1/cloud/items/item-1",
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
   });
 });

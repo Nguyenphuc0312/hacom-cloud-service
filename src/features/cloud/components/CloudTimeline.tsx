@@ -33,6 +33,8 @@ const statusTone: Record<CloudItem["status"], string> = {
   pending: "cloud-status--pending",
   failed: "cloud-status--failed",
   trashed: "cloud-status--muted",
+  deleting: "cloud-status--muted",
+  deleted: "cloud-status--muted",
 };
 
 const TimelineSkeleton = () => (
