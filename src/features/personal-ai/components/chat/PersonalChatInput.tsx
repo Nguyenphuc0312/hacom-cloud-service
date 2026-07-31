@@ -92,6 +92,11 @@ export const PersonalChatInput = forwardRef<
     const [hashSelectedIdx, setHashSelectedIdx] = useState(0);
 
     const hashCommands = useVisibleReportTags();
+    /** Tên tag hợp lệ — chỉ những cái này mới được tô chip trong ô nhập. */
+    const knownTags = useMemo(
+      () => hashCommands.map((c) => c.label),
+      [hashCommands],
+    );
 
     const filteredHashCommands = useMemo(() => {
       if (!hashMenuOpen) return [];
@@ -213,7 +218,7 @@ export const PersonalChatInput = forwardRef<
       if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const el = e.currentTarget;
         if (el.selectionStart === el.selectionEnd) {
-          const tag = tagBeforeCursor(value, el.selectionStart);
+          const tag = tagBeforeCursor(value, el.selectionStart, knownTags);
           if (tag) {
             e.preventDefault();
             const next = value.slice(0, tag.start) + value.slice(el.selectionStart);
@@ -436,7 +441,7 @@ export const PersonalChatInput = forwardRef<
                   (isStreaming || isUploading) && "opacity-70",
                 )}
               >
-                {splitTagSegments(value).map((seg, i) =>
+                {splitTagSegments(value, knownTags).map((seg, i) =>
                   seg.isTag ? (
                     // KHÔNG padding/margin ngang và KHÔNG đổi font-weight: mọi
                     // thứ làm chữ rộng ra sẽ đẩy tag lệch khỏi chữ thật trong
@@ -446,13 +451,14 @@ export const PersonalChatInput = forwardRef<
                       key={i}
                       className="rounded text-[#1565C0]"
                       style={{
-                        // Nền + viền nở ra ngoài để dày như chip @ mà KHÔNG
-                        // chiếm chỗ trong dòng chữ (padding/font-weight sẽ đẩy
-                        // lệch khỏi textarea nằm đè lên → bóng đôi).
+                        // Nền nở ra ngoài để dày như chip @ mà KHÔNG chiếm chỗ
+                        // trong dòng chữ (padding/font-weight sẽ đẩy lệch khỏi
+                        // textarea nằm đè lên → bóng đôi).
                         // Viết inline: `bg-[#1976D2]/16` từng bị Tailwind bỏ qua
                         // (thang opacity không có nấc 16) nên nền ra trong suốt.
                         backgroundColor: "rgb(25 118 210 / 0.16)",
-                        boxShadow: "0 0 0 3px rgb(25 118 210 / 0.16)",
+                        // 2px: đủ dày mà chữ gõ ngay sau tag không chạm vào nền.
+                        boxShadow: "0 0 0 2px rgb(25 118 210 / 0.16)",
                       }}
                     >
                       {seg.text}
