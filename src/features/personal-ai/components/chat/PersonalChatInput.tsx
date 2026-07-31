@@ -18,49 +18,13 @@ import {
 } from "lucide-react";
 import { ActiveSourcePills } from "./ActiveSourcePills";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
+import { useVisibleReportTags } from "../../permissions/useVisibleReportTags";
+import type { ReportTagCommand } from "../../permissions/reportTags";
 
-interface HashCommand {
-  id: string;
-  label: string;
-  description: string;
-  prompt: string;
-}
-
-// #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Thay bằng 3
-// tag theo cấp — hiện cho MỌI người; BE tự kiểm quyền theo JWT và trả thông báo
-// hướng dẫn nếu sai vai (đừng chặn client-side).
-const HASH_COMMANDS: HashCommand[] = [
-  {
-    id: "congviectuan",
-    label: "#congviectuan",
-    description: "Gửi báo cáo công việc tuần",
-    prompt: "#congviectuan",
-  },
-  {
-    id: "baocaocongviec",
-    label: "#baocaocongviec",
-    description: "Gửi báo cáo công việc hằng ngày",
-    prompt: "#baocaocongviec",
-  },
-  {
-    id: "TBP_baocao",
-    label: "#TBP_baocao",
-    description: "Báo cáo bộ phận (TBP) — xem/nộp",
-    prompt: "#TBP_baocao",
-  },
-  {
-    id: "LDDV_baocao",
-    label: "#LDDV_baocao",
-    description: "Báo cáo đơn vị (Giám đốc) — xem/nộp",
-    prompt: "#LDDV_baocao",
-  },
-  {
-    id: "TCT_tonghop",
-    label: "#TCT_tonghop",
-    description: "Tổng hợp toàn tập đoàn (superadmin)",
-    prompt: "#TCT_tonghop",
-  },
-];
+// #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Danh sách tag
+// + quy tắc ẩn/hiện theo quyền SUBMIT nằm ở `permissions/reportTags.ts` (spec
+// 31/07) — dùng chung với AiPromptBox, đừng khai báo lại ở đây.
+type HashCommand = ReportTagCommand;
 
 const WEEKLY_REPORT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv";
 
@@ -118,16 +82,18 @@ export const PersonalChatInput = forwardRef<
     const [hashQuery, setHashQuery] = useState("");
     const [hashSelectedIdx, setHashSelectedIdx] = useState(0);
 
+    const hashCommands = useVisibleReportTags();
+
     const filteredHashCommands = useMemo(() => {
       if (!hashMenuOpen) return [];
       const q = hashQuery.toLowerCase();
-      if (!q) return HASH_COMMANDS;
-      return HASH_COMMANDS.filter(
+      if (!q) return hashCommands;
+      return hashCommands.filter(
         (cmd) =>
           cmd.id.toLowerCase().includes(q) ||
           cmd.description.toLowerCase().includes(q),
       );
-    }, [hashMenuOpen, hashQuery]);
+    }, [hashMenuOpen, hashQuery, hashCommands]);
 
     const handleSelectHashCommand = useCallback(
       (cmd: HashCommand) => {

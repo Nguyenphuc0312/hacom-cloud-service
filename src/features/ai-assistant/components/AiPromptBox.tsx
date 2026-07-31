@@ -21,49 +21,23 @@ import {
 import { useTranslation } from "react-i18next";
 import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 import { toast } from "../../../utils/toast";
+import { useVisibleReportTags } from "../../personal-ai/permissions/useVisibleReportTags";
+import type { ReportTagCommand } from "../../personal-ai/permissions/reportTags";
 
-interface HashCommand {
-  id: string;
-  label: string;
-  description: string;
-  prompt: string;
-}
+// #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Danh sách tag
+// + quy tắc ẩn/hiện theo quyền SUBMIT nằm ở `personal-ai/permissions/reportTags.ts`
+// (spec 31/07) — dùng chung với PersonalChatInput.
+type HashCommand = ReportTagCommand;
 
-// #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Ba tag theo
-// cấp bên dưới gửi NGUYÊN VĂN tag (BE định tuyến theo tag, không theo prose) và
-// hiện cho mọi người — BE tự kiểm quyền theo JWT.
-const HASH_COMMANDS: HashCommand[] = [
-  {
-    id: "congviectuan",
-    label: "#congviectuan",
-    description: "Gửi báo cáo công việc tuần",
-    prompt: "Gửi báo cáo công việc tuần",
-  },
-  {
-    id: "baocaocongviec",
-    label: "#baocaocongviec",
-    description: "Gửi báo cáo công việc hằng ngày",
-    prompt: "Gửi báo cáo công việc hằng ngày",
-  },
-  {
-    id: "TBP_baocao",
-    label: "#TBP_baocao",
-    description: "Báo cáo bộ phận (TBP) — xem/nộp",
-    prompt: "#TBP_baocao",
-  },
-  {
-    id: "LDDV_baocao",
-    label: "#LDDV_baocao",
-    description: "Báo cáo đơn vị (Giám đốc) — xem/nộp",
-    prompt: "#LDDV_baocao",
-  },
-  {
-    id: "TCT_tonghop",
-    label: "#TCT_tonghop",
-    description: "Tổng hợp toàn tập đoàn (superadmin)",
-    prompt: "#TCT_tonghop",
-  },
-];
+/**
+ * Ở màn này, hai lệnh CÁ NHÂN gửi PROSE tiếng Việt chứ không gửi nguyên văn tag
+ * (khác PersonalChatInput) — giữ nguyên hành vi cũ. Ba tag theo cấp vẫn gửi
+ * nguyên văn tag vì BE định tuyến theo tag, không theo prose.
+ */
+const PROSE_PROMPTS: Record<string, string> = {
+  congviectuan: "Gửi báo cáo công việc tuần",
+  baocaocongviec: "Gửi báo cáo công việc hằng ngày",
+};
 
 interface AiPromptBoxProps {
   value: string;
@@ -228,16 +202,25 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       [onAttachFiles],
     );
 
+    const visibleReportTags = useVisibleReportTags();
+    const hashCommands = useMemo(
+      () =>
+        visibleReportTags.map((cmd) =>
+          PROSE_PROMPTS[cmd.id] ? { ...cmd, prompt: PROSE_PROMPTS[cmd.id] } : cmd,
+        ),
+      [visibleReportTags],
+    );
+
     const filteredHashCommands = useMemo(() => {
       if (!hashMenuOpen) return [];
       const q = hashQuery.toLowerCase();
-      if (!q) return HASH_COMMANDS;
-      return HASH_COMMANDS.filter(
+      if (!q) return hashCommands;
+      return hashCommands.filter(
         (cmd) =>
           cmd.id.toLowerCase().includes(q) ||
           cmd.description.toLowerCase().includes(q),
       );
-    }, [hashMenuOpen, hashQuery]);
+    }, [hashMenuOpen, hashQuery, hashCommands]);
 
     const handleSelectHashCommand = useCallback(
       (cmd: HashCommand) => {
