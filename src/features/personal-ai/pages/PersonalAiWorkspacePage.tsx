@@ -140,6 +140,11 @@ export const PersonalAiWorkspacePage: React.FC = () => {
         setPendingSubmit(describeSubmit(text, pendingFile));
         return;
       }
+      // Tag nộp mà KHÔNG đính tệp → đây là lượt XEM, không nộp gì cả. Nói trước
+      // để người quên đính tệp không tưởng là đã nộp xong.
+      if (matchLevelReportTag(text)) {
+        toast.info("Đang xem báo cáo. Muốn nộp thì đính kèm tệp báo cáo rồi gửi lại.");
+      }
       setInputValue("");
       await sendMessage(text);
       setTimeout(() => textareaRef.current?.focus(), 0);

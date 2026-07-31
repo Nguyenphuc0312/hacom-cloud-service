@@ -226,11 +226,24 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       (cmd: HashCommand) => {
         setHashMenuOpen(false);
         setHashQuery("");
-        // Clear input and immediately submit the command prompt
-        onChange("");
         if (ref && "current" in ref && ref.current) {
           ref.current.style.height = "52px";
         }
+        // Tag NỘP báo cáo lên cấp trên: điền vào ô nhập để soát lại rồi mới gửi
+        // (xem `submits` ở personal-ai/permissions/reportTags.ts). Hai tag cá
+        // nhân ở màn này gửi PROSE (xem PROSE_PROMPTS) — prose không nộp gì, nó
+        // chỉ mở luồng hỏi đáp, nên giữ gửi ngay như cũ.
+        if (cmd.submits && !PROSE_PROMPTS[cmd.id]) {
+          onChange(cmd.prompt);
+          setTimeout(() => {
+            const el = ref && "current" in ref ? ref.current : null;
+            if (!el) return;
+            el.focus();
+            el.setSelectionRange(cmd.prompt.length, cmd.prompt.length);
+          }, 0);
+          return;
+        }
+        onChange("");
         onSubmit(cmd.prompt);
       },
       [onChange, onSubmit, ref],

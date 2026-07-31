@@ -34,6 +34,12 @@ export interface ReportTagCommand {
   label: string;
   description: string;
   prompt: string;
+  /**
+   * Tag này NỘP báo cáo đi (người khác đọc được) chứ không chỉ xem. Chọn nó ở
+   * menu `#` phải đưa vào ô nhập để người dùng đính tệp/soát lại rồi mới gửi —
+   * KHÔNG gửi thẳng. Đây là chỗ từng khiến báo cáo bay lên TBP do bấm nhầm.
+   */
+  submits?: true;
 }
 
 /** Hiện cho mọi user đã đăng nhập, không phụ thuộc quyền. */
@@ -43,6 +49,7 @@ export const PERSONAL_REPORT_TAGS: readonly ReportTagCommand[] = [
     label: "#congviectuan",
     description: "Gửi báo cáo công việc tuần",
     prompt: "#congviectuan",
+    submits: true,
   },
   {
     id: "baocaocongviec",
@@ -73,6 +80,7 @@ export const SUBMIT_REPORT_TAGS: readonly (ReportTagCommand & {
     label: "#TBP_baocao",
     description: "Báo cáo bộ phận (TBP) — xem/nộp",
     prompt: "#TBP_baocao",
+    submits: true,
     requires: { scopeType: "DEPARTMENT", action: "SUBMIT" },
   },
   {
@@ -80,6 +88,7 @@ export const SUBMIT_REPORT_TAGS: readonly (ReportTagCommand & {
     label: "#LDDV_baocao",
     description: "Báo cáo đơn vị (Giám đốc) — xem/nộp",
     prompt: "#LDDV_baocao",
+    submits: true,
     requires: { scopeType: "ORG_UNIT", action: "SUBMIT" },
   },
   {
