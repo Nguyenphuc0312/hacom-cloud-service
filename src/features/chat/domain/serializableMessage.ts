@@ -49,15 +49,33 @@ const normalizeAttachmentForReduxCache = (attachment: Attachment): Attachment =>
     : attachment;
 };
 
-const normalizeMessageLikeRecord = <T extends Record<string, unknown>>(
+/**
+ * `isEdited` là optional trong payload WebSocket, và tin cũ tải lại từ server có
+ * thể chỉ mang `editedAt`. Suy ra cờ từ mốc sửa như BE làm (`Boolean(edited_at)`)
+ * để mọi đường vào cache — GET, ack, realtime — đều nhất quán, thay vì để tin đã
+ * sửa hiện như tin gốc.
+ */
+const withDerivedEditedFlag = <T extends Record<string, unknown>>(
   message: T,
 ): T => {
+  if (message.isEdited || !message.editedAt) {
+    return message;
+  }
+  return { ...message, isEdited: true };
+};
+
+const normalizeMessageLikeRecord = <T extends Record<string, unknown>>(
+  rawMessage: T,
+): T => {
+  const message = withDerivedEditedFlag(rawMessage);
   const normalizedMessage = normalizeDateFields(
     message,
     MESSAGE_DATE_KEYS,
   );
   let next: Record<string, unknown> | null = normalizedMessage.changed
     ? normalizedMessage.value
+    : message !== rawMessage
+    ? message
     : null;
 
   const replyToMessage = message.replyToMessage;
