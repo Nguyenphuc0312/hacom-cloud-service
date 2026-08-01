@@ -1,5 +1,9 @@
 import React from "react";
 import clsx from "clsx";
+// Style bảng báo cáo (.chat-report-table .col--*, .chat-report-scroll) sống ở
+// đây. Import ngay cạnh renderer thay vì trông chờ màn Công ty (AiChatPreview)
+// tình cờ nạp hộ — màn Cá nhân là route/chunk riêng, không đi qua file đó.
+import "../styles/ai-animations.css";
 
 /**
  * Renderer bảng báo cáo DÙNG CHUNG cho cả 2 màn AI:

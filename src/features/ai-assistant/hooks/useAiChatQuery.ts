@@ -22,6 +22,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import aiChatClient from "../../../services/ai-chat/aiChatClient";
@@ -228,19 +229,50 @@ export function useAiChatSessions(
 // useAiChatHistory
 // ---------------------------------------------------------------------------
 
+/** Số message tải mỗi trang khi mở session. `offset=0` là trang MỚI NHẤT,
+ * `offset=PAGE_SIZE` là trang cũ hơn kế tiếp (semantics của BE). */
+export const AI_HISTORY_PAGE_SIZE = 40;
+
+/** Đọc cờ còn-lịch-sử-cũ từ response. BE trả `has_more`; nếu thiếu field thì
+ * suy ra từ việc trang có đầy hay không. */
+function readHasMore(raw: unknown, pageLength: number): boolean {
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const flag = obj.has_more ?? obj.hasMore;
+    if (typeof flag === "boolean") return flag;
+  }
+  return pageLength >= AI_HISTORY_PAGE_SIZE;
+}
+
+export interface AiChatHistoryState extends QueryState<AiMessage[]> {
+  /** Còn message cũ hơn ở server. */
+  hasMore: boolean;
+  /** Đang tải trang cũ hơn (khác `loading` của trang đầu). */
+  loadingMore: boolean;
+  /** Tải trang cũ hơn và prepend vào `data`. */
+  loadMore: () => void;
+}
+
 export function useAiChatHistory(
   sessionId: string | null | undefined,
   userId?: string | null,
   employeeCode?: string | null,
-): QueryState<AiMessage[]> {
+): AiChatHistoryState {
   // Lưu messages KÈM session_id mà chúng thuộc về. Nhờ vậy khi `sessionId`
   // đổi (chuyển hội thoại / mở hội thoại mới), `data` được tính lại ngay trong
   // render → KHÔNG để lịch sử cũ rò sang hội thoại khác (hội thoại mới bị
   // "dính" nội dung cũ).
-  const [entry, setEntry] = useState<{ sid: string; messages: AiMessage[] } | null>(null);
+  const [entry, setEntry] = useState<{
+    sid: string;
+    messages: AiMessage[];
+    hasMore: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
   const [trigger, setTrigger] = useState(0);
+  // Chặn hai lần loadMore chồng nhau cho cùng một offset.
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -257,11 +289,24 @@ export function useAiChatHistory(
       try {
         const { data: res } = await aiChatClient.get<unknown>(
           `/api/sessions/${sessionId}`,
-          { signal: ac.signal },
+          {
+            signal: ac.signal,
+            // Không có limit thì BE trả TOÀN BỘ session — payload lớn là nguồn
+            // giật chính khi mở hội thoại dài.
+            params: { limit: AI_HISTORY_PAGE_SIZE, offset: 0 },
+          },
         );
         if (!ac.signal.aborted) {
           const messages = normalizeMessagesResponse(res);
-          setEntry(messages.length > 0 ? { sid: sessionId, messages } : null);
+          setEntry(
+            messages.length > 0
+              ? {
+                  sid: sessionId,
+                  messages,
+                  hasMore: readHasMore(res, messages.length),
+                }
+              : null,
+          );
         }
       } catch (err) {
         if (ac.signal.aborted) return;
@@ -277,15 +322,67 @@ export function useAiChatHistory(
     };
 
     void run();
-    return () => ac.abort("cleanup");
+    return () => {
+      ac.abort("cleanup");
+      loadMoreAbortRef.current?.abort("session-change");
+      loadMoreAbortRef.current = null;
+    };
   }, [sessionId, trigger, userId, employeeCode]);
 
   const refetch = useCallback(() => setTrigger((n) => n + 1), []);
 
-  // Chỉ trả về data khi nó đúng với sessionId hiện tại (tránh rò dữ liệu cũ).
-  const data = entry && sessionId && entry.sid === sessionId ? entry.messages : undefined;
+  const loadMore = useCallback(() => {
+    if (!sessionId || loadMoreAbortRef.current) return;
+    const current = entry;
+    if (!current || current.sid !== sessionId || !current.hasMore) return;
 
-  return { data, loading, error, refetch };
+    const ac = new AbortController();
+    loadMoreAbortRef.current = ac;
+    setLoadingMore(true);
+
+    void aiChatClient
+      .get<unknown>(`/api/sessions/${sessionId}`, {
+        signal: ac.signal,
+        params: { limit: AI_HISTORY_PAGE_SIZE, offset: current.messages.length },
+      })
+      .then(({ data: res }) => {
+        if (ac.signal.aborted) return;
+        const older = normalizeMessagesResponse(res);
+        setEntry((prev) => {
+          // Session đã đổi trong lúc chờ → bỏ kết quả, không ghi nhầm hội thoại.
+          if (!prev || prev.sid !== sessionId) return prev;
+          const known = new Set(prev.messages.map((m) => m.id));
+          const fresh = older.filter((m) => !known.has(m.id));
+          return {
+            sid: prev.sid,
+            // Trang cũ hơn nằm TRƯỚC theo thứ tự thời gian tăng dần.
+            messages: fresh.length > 0 ? [...fresh, ...prev.messages] : prev.messages,
+            hasMore: fresh.length > 0 && readHasMore(res, older.length),
+          };
+        });
+      })
+      .catch((err) => {
+        if (!ac.signal.aborted) setError(normalizeAiChatError(err));
+      })
+      .finally(() => {
+        if (loadMoreAbortRef.current === ac) loadMoreAbortRef.current = null;
+        if (!ac.signal.aborted) setLoadingMore(false);
+      });
+  }, [sessionId, entry]);
+
+  // Chỉ trả về data khi nó đúng với sessionId hiện tại (tránh rò dữ liệu cũ).
+  const isCurrent = !!entry && !!sessionId && entry.sid === sessionId;
+  const data = isCurrent ? entry.messages : undefined;
+
+  return {
+    data,
+    loading,
+    loadingMore,
+    hasMore: isCurrent ? entry.hasMore : false,
+    error,
+    refetch,
+    loadMore,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -375,10 +472,10 @@ export function usePrefetchSession(
 
     const ac = new AbortController();
     void aiChatClient
-      .get<unknown>(
-        `/api/sessions/${sessionId}`,
-        { signal: ac.signal },
-      )
+      .get<unknown>(`/api/sessions/${sessionId}`, {
+        signal: ac.signal,
+        params: { limit: AI_HISTORY_PAGE_SIZE, offset: 0 },
+      })
       .then(({ data }) => {
         const messages = normalizeMessagesResponse(data);
         if (messages.length > 0) {

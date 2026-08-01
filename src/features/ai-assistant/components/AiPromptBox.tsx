@@ -40,8 +40,9 @@ const PROSE_PROMPTS: Record<string, string> = {
 };
 
 interface AiPromptBoxProps {
-  value: string;
-  onChange: (value: string) => void;
+  /** Nội dung áp từ ngoài (chip gợi ý). Chỉ dùng làm giá trị KHỞI TẠO lại khi
+   * đổi — gõ hằng ngày là state nội bộ, không đẩy từng ký tự lên component cha. */
+  presetValue?: string;
   onSubmit: (value: string) => void;
   onStop?: () => void;
   isLoading?: boolean;
@@ -85,11 +86,10 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
+const AiPromptBoxImpl = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
   (
     {
-      value,
-      onChange,
+      presetValue = "",
       onSubmit,
       onStop,
       isLoading = false,
@@ -107,6 +107,16 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
     ref,
   ) => {
     const { t } = useTranslation("aiAssistant");
+    // Draft là state NỘI BỘ: gõ một ký tự chỉ re-render component này, không kéo
+    // theo cả danh sách message ở page cha.
+    const [value, setValue] = useState(presetValue);
+    const lastPresetRef = useRef(presetValue);
+    if (presetValue !== lastPresetRef.current) {
+      // Preset đổi (user bấm chip gợi ý) → áp vào ô nhập ngay trong render này.
+      lastPresetRef.current = presetValue;
+      setValue(presetValue);
+    }
+    const onChange = setValue;
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
     const hashMenuRef = useRef<HTMLDivElement>(null);
@@ -269,6 +279,17 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       [onChange, adjustHeight, isCompany],
     );
 
+    /** Gửi draft hiện tại rồi dọn ô nhập về trạng thái rỗng, cao 1 dòng. */
+    const submitDraft = useCallback(() => {
+      const text = value.trim();
+      if (!text) return;
+      setValue("");
+      if (ref && "current" in ref && ref.current) {
+        ref.current.style.height = "52px";
+      }
+      onSubmit(text);
+    }, [value, onSubmit, ref]);
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (hashMenuOpen && filteredHashCommands.length > 0) {
         if (e.key === "ArrowDown") {
@@ -301,10 +322,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (value.trim() && !isLoading && !isUploading) {
-          onSubmit(value.trim());
-          if (ref && "current" in ref && ref.current) {
-            ref.current.style.height = "52px";
-          }
+          submitDraft();
         }
       }
     };
@@ -534,12 +552,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                 <button
                   type="button"
                   onClick={() => {
-                    if (canSend) {
-                      onSubmit(value.trim());
-                      if (ref && "current" in ref && ref.current) {
-                        ref.current.style.height = "52px";
-                      }
-                    }
+                    if (canSend) submitDraft();
                   }}
                   disabled={!canSend}
                   className={clsx(
@@ -577,4 +590,8 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
   },
 );
 
-AiPromptBox.displayName = "AiPromptBox";
+AiPromptBoxImpl.displayName = "AiPromptBox";
+
+/** memo: page cha re-render mỗi token streaming; composer không phụ thuộc
+ * messages nên chặn ở đây là chặn được re-render nặng nhất của ô nhập. */
+export const AiPromptBox = React.memo(AiPromptBoxImpl);
