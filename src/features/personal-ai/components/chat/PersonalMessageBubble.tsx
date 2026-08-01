@@ -201,7 +201,9 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
         const useSnapshot = perTableSnapshot; // 1 bảng (hoặc fallback) → giữ cột ẩn
         return (
         <div className="my-4">
-          <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
+          {/* chat-report-scroll: cuộn cả NGANG lẫn DỌC trong khung, kèm sticky
+              header (ai-animations.css) → bảng 150+ dòng không kéo dài cả trang. */}
+          <div className="chat-report-scroll rounded-2xl border border-border shadow-sm">
             {/* className mang "chat-report-table" (rehypeReportTableCols) → kích hoạt min-width cột. */}
             <table className={clsx("w-full border-collapse text-[13px]", className)}>
               {children}

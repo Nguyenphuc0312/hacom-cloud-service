@@ -45,7 +45,7 @@ const TableWrapper = ({
 }: React.ComponentPropsWithoutRef<"table">) => (
   // Bảng báo cáo bọc khung bo góc + cuộn ngang trong bảng (không phải cả
   // message). Màn này không có TableExportMenu → wrapper gọn hơn Cá nhân.
-  <div className="my-4 overflow-x-auto rounded-2xl border border-border shadow-sm">
+  <div className="chat-report-scroll my-4 rounded-2xl border border-border shadow-sm">
     <table className={clsx("w-full border-collapse text-[13px]", className)}>
       {children}
     </table>
