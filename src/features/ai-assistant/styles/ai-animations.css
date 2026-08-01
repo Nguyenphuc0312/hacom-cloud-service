@@ -172,6 +172,26 @@
 .chat-report-table .col--mid  { min-width: 150px; max-width: 260px; }
 .chat-report-table .col--wide { min-width: 240px; max-width: 380px; } /* Công việc / Đã làm được / Đánh giá */
 
+/* ── Khung cuộn của bảng báo cáo ────────────────────────────────────────────
+   Báo cáo tổng hợp cấp công ty có thể ra 150+ dòng: nếu để bảng cao tự nhiên
+   thì cả trang chat dài lê thê, phải cuộn rất lâu mới tới ô nhập. Giới hạn
+   chiều cao khung bảng → bảng tự cuộn DỌC bên trong (ngang đã có sẵn), header
+   dính (sticky) để còn biết đang đọc cột nào. */
+.chat-report-scroll {
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  /* Bảng ngắn (vài dòng) không bị ép cao bằng max-height — height tự co. */
+}
+.chat-report-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* thead gradient là của <thead>, sticky lại nằm ở <th> → phải có nền riêng,
+     nếu không chữ dòng dưới sẽ chạy xuyên qua header khi cuộn. */
+  background: hsl(var(--color-surface-active));
+  box-shadow: inset 0 -1px 0 hsl(var(--color-border));
+}
+
 .prose-chatgpt a {
   color: hsl(var(--color-primary));
   text-decoration: underline;

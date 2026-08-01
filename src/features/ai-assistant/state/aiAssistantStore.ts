@@ -49,6 +49,128 @@ interface AiAssistantState {
   clearStore: () => void;
 }
 
+/**
+ * localStorage với setItem debounce 800 ms. Store này persist cả nội dung
+ * messages, nên nếu ghi đồng bộ theo từng lần set() thì mỗi frame streaming
+ * phải JSON.stringify toàn bộ lịch sử — chính là nguồn giật khi session dài.
+ * Đọc/xoá vẫn đồng bộ; ghi treo được xả khi tab ẩn/đóng để không mất dữ liệu.
+ */
+const PERSIST_DEBOUNCE_MS = 800;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let persistPending: { key: string; value: string } | null = null;
+
+function writePendingPersist(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  if (!persistPending) return;
+  const { key, value } = persistPending;
+  persistPending = null;
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Quota đầy / storage bị chặn — bỏ qua, dữ liệu thật vẫn ở backend.
+  }
+}
+
+const debouncedLocalStorage: Storage = {
+  get length() {
+    return localStorage.length;
+  },
+  key: (index) => localStorage.key(index),
+  clear: () => {
+    persistPending = null;
+    localStorage.clear();
+  },
+  getItem: (key) =>
+    persistPending?.key === key ? persistPending.value : localStorage.getItem(key),
+  removeItem: (key) => {
+    if (persistPending?.key === key) persistPending = null;
+    localStorage.removeItem(key);
+  },
+  setItem: (key, value) => {
+    persistPending = { key, value };
+    if (persistTimer !== null) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      writePendingPersist();
+    }, PERSIST_DEBOUNCE_MS);
+  },
+};
+
+if (typeof window !== "undefined") {
+  // pagehide bắt được cả đóng tab lẫn bfcache; visibilitychange lo trường hợp
+  // chuyển tab trên mobile (pagehide có thể không bắn).
+  window.addEventListener("pagehide", writePendingPersist);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") writePendingPersist();
+  });
+}
+
+/** Patch message cuối của một conversation (giữ nguyên reference các message cũ
+ * để React.memo ở MessageRow ăn được). */
+function applyLastMessage(
+  conversationId: string,
+  content: string,
+  partial: boolean,
+) {
+  return (state: AiAssistantState) => ({
+    conversations: state.conversations.map((c) => {
+      if (c.id !== conversationId) return c;
+      const lastIndex = c.messages.length - 1;
+      const last = c.messages[lastIndex];
+      // Không ghi đè message đã có widget đặc biệt (selector/form)
+      if (!last || last.selectionRequest || last.formRequest) return c;
+      const messages = c.messages.slice();
+      messages[lastIndex] = {
+        ...last,
+        content: partial ? last.content + content : content,
+        isStreaming: partial,
+      };
+      return { ...c, messages, updatedAt: new Date() };
+    }),
+  });
+}
+
+// ── Buffer token streaming: gom token, flush 1 lần/animation frame ──
+let pendingConversationId: string | null = null;
+let pendingTokens = "";
+let pendingFrame: number | null = null;
+
+/** Đẩy buffer vào store ngay lập tức. Gọi khi stream xong/lỗi/huỷ hoặc khi
+ * ghi đè content (non-partial) để không mất token còn treo trong buffer. */
+export function flushStreamBuffer(): void {
+  if (pendingFrame !== null) {
+    cancelAnimationFrame(pendingFrame);
+    pendingFrame = null;
+  }
+  if (!pendingConversationId || !pendingTokens) {
+    pendingConversationId = null;
+    pendingTokens = "";
+    return;
+  }
+  const conversationId = pendingConversationId;
+  const chunk = pendingTokens;
+  pendingConversationId = null;
+  pendingTokens = "";
+  useAiAssistantStore.setState(applyLastMessage(conversationId, chunk, true));
+}
+
+function bufferStreamToken(conversationId: string, token: string): void {
+  // Đổi conversation giữa chừng → xả buffer của cuộc cũ trước, không ghi nhầm.
+  if (pendingConversationId && pendingConversationId !== conversationId) {
+    flushStreamBuffer();
+  }
+  pendingConversationId = conversationId;
+  pendingTokens += token;
+  if (pendingFrame !== null) return;
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null;
+    flushStreamBuffer();
+  });
+}
+
 export const useAiAssistantStore = create<AiAssistantState>()(
   persist(
     (set) => ({
@@ -126,41 +248,27 @@ export const useAiAssistantStore = create<AiAssistantState>()(
       },
 
       updateLastMessage: (conversationId, content, partial = false) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) => {
-            if (c.id !== conversationId) return c;
-            return {
-              ...c,
-              messages: c.messages.map((m, index) => {
-                if (index !== c.messages.length - 1) return m;
-                // Không ghi đè message đã có widget đặc biệt (selector/form)
-                if (m.selectionRequest || m.formRequest) return m;
-                return {
-                  ...m,
-                  content: partial ? m.content + content : content,
-                  isStreaming: partial,
-                };
-              }),
-              updatedAt: new Date(),
-            };
-          }),
-        }));
+        // Streaming token: gom vào buffer, flush 1 lần/frame. Không batch thì mỗi
+        // token là 1 set() → re-render toàn danh sách + 1 lần ghi localStorage.
+        if (partial) {
+          bufferStreamToken(conversationId, content);
+          return;
+        }
+        flushStreamBuffer();
+        set(applyLastMessage(conversationId, content, false));
       },
 
       setThinking: (conversationId, thinking) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  messages: c.messages.map((m, index) =>
-                    index === c.messages.length - 1
-                      ? { ...m, thinking }
-                      : m
-                  ),
-                }
-              : c
-          ),
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const lastIndex = c.messages.length - 1;
+            const last = c.messages[lastIndex];
+            if (!last || last.thinking === thinking) return c;
+            const messages = c.messages.slice();
+            messages[lastIndex] = { ...last, thinking };
+            return { ...c, messages };
+          }),
         }));
       },
 
@@ -333,11 +441,18 @@ export const useAiAssistantStore = create<AiAssistantState>()(
 
       loadMessagesForConversation: (conversationId, messages) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === conversationId && c.messages.length === 0
-              ? { ...c, messages: messages.map((m) => ({ ...m, isStreaming: false })) }
-              : c
-          ),
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const incoming = messages.map((m) => ({ ...m, isStreaming: false }));
+            if (c.messages.length === 0) return { ...c, messages: incoming };
+            // Đã có message trên máy: chỉ nhận phần LỊCH SỬ CŨ HƠN chưa biết
+            // (trang trước từ pagination), giữ nguyên phần đang hiển thị để
+            // không đụng vào message đang stream và không phá memo của row.
+            const known = new Set(c.messages.map((m) => m.id));
+            const older = incoming.filter((m) => !known.has(m.id));
+            if (older.length === 0) return c;
+            return { ...c, messages: [...older, ...c.messages] };
+          }),
         }));
       },
 
@@ -347,7 +462,7 @@ export const useAiAssistantStore = create<AiAssistantState>()(
     }),
     {
       name: "hacom-ai-assistant-storage",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => debouncedLocalStorage),
       partialize: (state) => ({
         // Persist conversations (kèm messages) để hiển thị ngay khi F5 / navigate
         // lại mà không cần chờ API — cùng pattern với personalAiStore.

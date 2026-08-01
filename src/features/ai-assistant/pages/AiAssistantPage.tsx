@@ -13,7 +13,7 @@ import {
 import { useAiChatSessions, useAiChatHistory } from "../hooks/useAiChatQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
-import { useAiAssistantStore } from "../state/aiAssistantStore";
+import { useAiAssistantStore, flushStreamBuffer } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
@@ -35,7 +35,10 @@ const WEEKLY_REPORT_ACCEPT =
 export const AiAssistantPage: React.FC = () => {
   const { t } = useTranslation("aiAssistant");
   const user = useAuthStore((s) => s.user);
-  const [inputValue, setInputValue] = useState("");
+  // Chỉ dùng để áp prompt từ chip gợi ý vào ô nhập. Draft khi gõ nằm TRONG
+  // AiPromptBox (state nội bộ) — không đẩy từng ký tự lên đây, nếu không mỗi
+  // phím bấm sẽ render lại toàn bộ danh sách message.
+  const [presetPrompt, setPresetPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -46,6 +49,8 @@ export const AiAssistantPage: React.FC = () => {
   const openWeeklyReportFilePickerRef = useRef<() => void>(() => {});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  /** scrollHeight - scrollTop ngay trước khi prepend lịch sử cũ (để bù vị trí). */
+  const prependAnchorRef = useRef<number | null>(null);
 
   // Global state
   const {
@@ -99,7 +104,12 @@ export const AiAssistantPage: React.FC = () => {
   // khớp hợp đồng "gọi GET /api/sessions khi mở tab Công ty". Lần fetch đầu đã chạy
   // lúc mount; effect này lo các lần user quay lại tab. (Tab Cá nhân tự refetch vì
   // PersonalAiWorkspacePage remount mỗi lần mở.)
+  const lastFetchedEndpointRef = useRef(selectedEndpoint);
   useEffect(() => {
+    // Bỏ qua lần chạy đầu: useAiChatSessions đã fetch lúc mount rồi, gọi thêm ở
+    // đây là GET /api/sessions trùng ngay khi mở trang.
+    if (lastFetchedEndpointRef.current === selectedEndpoint) return;
+    lastFetchedEndpointRef.current = selectedEndpoint;
     if (selectedEndpoint === "company") refetchCompanySessions();
   }, [selectedEndpoint, refetchCompanySessions]);
 
@@ -133,24 +143,42 @@ export const AiAssistantPage: React.FC = () => {
   );
 
   // Fetch messages từ server khi conversation có serverSessionId nhưng chưa có messages trên thiết bị này.
-  // Bỏ qua session ẩn danh (anon-*): được tạo lúc chưa đăng nhập, không thuộc tài khoản này
-  // nên backend luôn trả 403 — không fetch để tránh lỗi đỏ lặp lại trên F12.
   const rawServerSessionId = activeConversation?.serverSessionId;
+  // Quyết định "có tải hay không" chốt MỘT LẦN mỗi session. Nếu tính lại theo
+  // messages.length thì ngay sau khi trang đầu nạp vào store, id sẽ thành null
+  // → hook huỷ state → mất cờ hasMore, không tải được lịch sử cũ hơn nữa.
+  const [fetchDecision, setFetchDecision] = useState<{
+    sid: string | null | undefined;
+    sessionIdToFetch: string | null;
+  }>({ sid: undefined, sessionIdToFetch: null });
+  if (fetchDecision.sid !== rawServerSessionId) {
+    setFetchDecision({
+      sid: rawServerSessionId,
+      // Bỏ qua session ẩn danh (anon-*): tạo lúc chưa đăng nhập, không thuộc
+      // tài khoản này nên backend luôn trả 403 — fetch chỉ tổ log đỏ trên F12.
+      sessionIdToFetch:
+        rawServerSessionId &&
+        !rawServerSessionId.startsWith("anon-") &&
+        activeConversation?.messages.length === 0
+          ? rawServerSessionId
+          : null,
+    });
+  }
   const serverSessionIdToFetch =
-    rawServerSessionId &&
-    !rawServerSessionId.startsWith("anon-") &&
-    activeConversation?.messages.length === 0
-      ? rawServerSessionId
+    fetchDecision.sid === rawServerSessionId
+      ? fetchDecision.sessionIdToFetch
       : null;
   // GET /api/sessions/{id}: backend lấy danh tính từ JWT Bearer token và tự
   // chọn scope theo loại session (chat-… / personal-…); userId/employeeCode chỉ
   // còn là khoá refetch.
   const employeeCode = user?.employeeCode ?? user?.employee_code ?? "";
-  const { data: historyMessages, loading: historyLoading } = useAiChatHistory(
-    serverSessionIdToFetch,
-    companyUserId,
-    employeeCode,
-  );
+  const {
+    data: historyMessages,
+    loading: historyLoading,
+    loadingMore: historyLoadingMore,
+    hasMore: hasOlderHistory,
+    loadMore: loadOlderHistory,
+  } = useAiChatHistory(serverSessionIdToFetch, companyUserId, employeeCode);
 
   useEffect(() => {
     if (!historyMessages?.length || !activeConversationId) return;
@@ -174,17 +202,39 @@ export const AiAssistantPage: React.FC = () => {
 
   const isPersonal = selectedEndpoint === "personal";
 
+  // Reference ổn định — inline arrow sẽ phá React.memo của AiChatPreview/row.
+  const handleUpdateMessage = useCallback(
+    (msgId: string, patch: Partial<AiMessage>) => {
+      if (activeConversationId) updateMessage(activeConversationId, msgId, patch);
+    },
+    [activeConversationId, updateMessage],
+  );
+
   const handleScrollContainer = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
-  }, []);
+    // Cuộn gần đỉnh → tải trang lịch sử cũ hơn. Ghi lại chiều cao trước khi
+    // prepend để bù scrollTop, giữ nguyên message người dùng đang đọc.
+    if (el.scrollTop < 200 && hasOlderHistory && !historyLoadingMore) {
+      prependAnchorRef.current = el.scrollHeight - el.scrollTop;
+      loadOlderHistory();
+    }
+  }, [hasOlderHistory, historyLoadingMore, loadOlderHistory]);
 
-  // Auto-scroll to bottom on streaming token updates, but only when user is near bottom.
+  // Bám đáy khi stream, chỉ khi người dùng đang ở gần cuối. Khi vừa prepend
+  // lịch sử cũ thì bù scrollTop thay vì nhảy xuống đáy.
   useEffect(() => {
-    if (!isAtBottomRef.current) return;
     const el = scrollContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const anchor = prependAnchorRef.current;
+    if (anchor !== null) {
+      prependAnchorRef.current = null;
+      el.scrollTop = el.scrollHeight - anchor;
+      return;
+    }
+    if (!isAtBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   /** Helper: chuẩn hoá nội dung message của user khi gửi kèm file. */
@@ -254,7 +304,7 @@ export const AiAssistantPage: React.FC = () => {
       };
 
       addMessage(currentId, userMessage);
-      setInputValue("");
+      setPresetPrompt("");
       // User sent a message — always scroll to bottom regardless of current position.
       isAtBottomRef.current = true;
       requestAnimationFrame(() => {
@@ -287,6 +337,9 @@ export const AiAssistantPage: React.FC = () => {
 
       // Helper — ghi đè message assistant, bảo vệ widget đặc biệt đã set
       const finalizeAssistantMessage = (patch: Partial<AiMessage>) => {
+        // Xả token còn treo trong buffer trước khi ghi đè, nếu không những token
+        // của frame cuối sẽ flush SAU và ghi đè mất nội dung final.
+        flushStreamBuffer();
         useAiAssistantStore.setState((state) => ({
           conversations: state.conversations.map((c) =>
             c.id === currentId
@@ -570,8 +623,7 @@ export const AiAssistantPage: React.FC = () => {
               <div className="w-full">
                 <AiPromptBox
                   ref={textareaRef}
-                  value={inputValue}
-                  onChange={setInputValue}
+                  presetValue={presetPrompt}
                   onSubmit={handleSubmit}
                   onStop={handleStop}
                   isLoading={isLoading}
@@ -593,7 +645,7 @@ export const AiAssistantPage: React.FC = () => {
               <div className="w-full">
                 <AiSuggestionChips
                   onSelect={(prompt) => {
-                    setInputValue(prompt);
+                    setPresetPrompt(prompt);
                     setTimeout(() => textareaRef.current?.focus(), 0);
                   }}
                 />
@@ -611,14 +663,17 @@ export const AiAssistantPage: React.FC = () => {
               onScroll={handleScrollContainer}
               className="flex-1 overflow-y-auto ai-scrollbar"
             >
+              {historyLoadingMore && (
+                <div className="flex items-center justify-center gap-2 py-3 text-xs text-text-muted">
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+                  Đang tải lịch sử cũ hơn...
+                </div>
+              )}
               <AiChatPreview
                 messages={messages}
                 isLoading={isLoading}
                 autoScroll={false}
-                onUpdateMessage={(msgId, patch) =>
-                  activeConversationId &&
-                  updateMessage(activeConversationId, msgId, patch)
-                }
+                onUpdateMessage={handleUpdateMessage}
               />
             </div>
 
@@ -627,8 +682,7 @@ export const AiAssistantPage: React.FC = () => {
               <div className="w-full">
                 <AiPromptBox
                   ref={textareaRef}
-                  value={inputValue}
-                  onChange={setInputValue}
+                  presetValue={presetPrompt}
                   onSubmit={handleSubmit}
                   onStop={handleStop}
                   isLoading={isLoading}
