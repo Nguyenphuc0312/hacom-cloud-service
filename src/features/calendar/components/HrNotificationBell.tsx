@@ -4,7 +4,7 @@
  * The HR calendar is an optional feature, so all fetches fail silently.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BellIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
@@ -14,8 +14,27 @@ import {
   type HrAppNotification,
 } from "../../api/hrNotificationApi";
 import { refreshHrUnreadCount, useHrUnreadCount } from "../useHrUnreadCount";
+import {
+  filterHrNotifications,
+  type HrNotificationKindFilter,
+  type HrNotificationTimeFilter,
+} from "../utils/filterHrNotifications";
 
 const POLL_MS = 30_000;
+
+const TIME_TABS: Array<{ id: HrNotificationTimeFilter; label: string }> = [
+  { id: "all", label: "Tất cả" },
+  { id: "today", label: "Hôm nay" },
+  { id: "week", label: "Tuần này" },
+];
+
+const KIND_TABS: Array<{ id: HrNotificationKindFilter; label: string }> = [
+  { id: "all", label: "Tất cả" },
+  { id: "invited", label: "Mời họp" },
+  { id: "accepted", label: "Đã xác nhận" },
+  { id: "declined", label: "Đã từ chối" },
+  { id: "changed", label: "Đổi / huỷ" },
+];
 
 const relativeTime = (iso: string): string => {
   const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -40,10 +59,32 @@ const actionUrlOf = (n: HrAppNotification): string | null => {
   return null;
 };
 
+const FilterChip: React.FC<{
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}> = ({ label, active, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={clsx(
+      "rounded-full px-2.5 py-1 text-[11px] font-medium transition-micro",
+      active
+        ? "bg-[#1565C0] text-white"
+        : "bg-surface-hover text-text-muted hover:text-text-primary",
+    )}
+  >
+    {label}
+  </button>
+);
+
 export const HrNotificationBell: React.FC = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HrAppNotification[]>([]);
+  const [timeFilter, setTimeFilter] = useState<HrNotificationTimeFilter>("all");
+  const [kindFilter, setKindFilter] = useState<HrNotificationKindFilter>("all");
   // Count is shared with the SideRail badge so both show the same number.
   const unread = useHrUnreadCount();
   const mountedRef = useRef(true);
@@ -87,6 +128,11 @@ export const HrNotificationBell: React.FC = () => {
     if (url) navigate(url);
   };
 
+  const visibleItems = useMemo(
+    () => filterHrNotifications(items, timeFilter, kindFilter),
+    [items, timeFilter, kindFilter],
+  );
+
   const handleMarkAll = async () => {
     try {
       await hrNotificationApi.markAllRead();
@@ -120,7 +166,7 @@ export const HrNotificationBell: React.FC = () => {
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+          <div className="absolute right-0 z-50 mt-2 w-96 overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
             <div className="flex items-center justify-between px-4 py-2.5">
               <span className="text-sm font-semibold text-text-primary">
                 Thông báo
@@ -135,13 +181,39 @@ export const HrNotificationBell: React.FC = () => {
                 </button>
               )}
             </div>
+
+            <div className="space-y-1.5 border-t border-border px-3 pb-2.5 pt-2">
+              <div className="flex flex-wrap gap-1">
+                {TIME_TABS.map((tab) => (
+                  <FilterChip
+                    key={tab.id}
+                    label={tab.label}
+                    active={timeFilter === tab.id}
+                    onClick={() => setTimeFilter(tab.id)}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {KIND_TABS.map((tab) => (
+                  <FilterChip
+                    key={tab.id}
+                    label={tab.label}
+                    active={kindFilter === tab.id}
+                    onClick={() => setKindFilter(tab.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
             <div className="max-h-96 overflow-y-auto">
-              {items.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-text-muted">
-                  Không có thông báo
+                  {items.length === 0
+                    ? "Không có thông báo"
+                    : "Không có thông báo khớp bộ lọc"}
                 </p>
               ) : (
-                items.map((n) => (
+                visibleItems.map((n) => (
                   <button
                     key={n.id}
                     type="button"
