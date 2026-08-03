@@ -39,13 +39,15 @@ const TIME_TABS: Array<{ id: HrNotificationTimeFilter; label: string }> = [
   { id: "week", label: "Tuần này" },
 ];
 
+// Nhãn ngắn để 6 mục vừa đúng bề ngang panel — hàng bị cắt cụt ở mép phải
+// trông như lỗi giao diện, dù nó cuộn được.
 const KIND_TABS: Array<{ id: HrNotificationKindFilter; label: string }> = [
   { id: "all", label: "Tất cả" },
   { id: "invited", label: "Mời họp" },
-  { id: "accepted", label: "Đã xác nhận" },
-  { id: "declined", label: "Đã từ chối" },
+  { id: "accepted", label: "Đồng ý" },
+  { id: "declined", label: "Từ chối" },
   { id: "updated", label: "Đổi lịch" },
-  { id: "cancelled", label: "Huỷ lịch" },
+  { id: "cancelled", label: "Huỷ" },
 ];
 
 const relativeTime = (iso: string): string => {
@@ -98,8 +100,10 @@ const TONE_CHANGED: NotificationTone = {
   label: "Thay đổi",
   icon: ExclamationTriangleIcon,
   stripe: "bg-[hsl(var(--color-warning))]",
-  chip: "bg-[hsl(var(--color-warning)/0.14)]",
-  text: "text-[hsl(var(--color-warning))]",
+  chip: "bg-[hsl(var(--color-warning)/0.16)]",
+  // Vàng nguyên bản trên nền trắng đọc không ra (kiểm bằng ảnh chụp thật).
+  // Tối màu lại cho chữ/icon, vẫn giữ đúng sắc cảnh báo.
+  text: "text-amber-700 dark:text-amber-400",
 };
 
 const toneOf = (n: HrAppNotification): NotificationTone => {
