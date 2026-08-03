@@ -520,6 +520,19 @@ export const CalendarPage: React.FC = () => {
   // ngay chỉ tạo một nháy sáng gây cảm giác giật.
   const showLoadingBar = useDelayedLoading(storeLoading);
 
+  // Rời trang lịch là trả store về "lịch của tôi". Chế độ xem lịch người khác
+  // sống trong zustand store nên trước đây chỉ reset lúc logout: thoát ra rồi
+  // quay lại vẫn thấy lịch người kia. Nặng hơn: WeeklyCalendarWidget ở màn chat
+  // dùng chung store này và gọi fetchEvents mà KHÔNG set mode → nó lặng lẽ tải
+  // lịch người kia rồi gắn nhãn "Lịch tuần" như thể lịch mình.
+  // Dùng getState() thay vì đưa vào deps: reset chỉ chạy đúng lúc unmount.
+  useEffect(() => {
+    return () => {
+      const s = useCalendarStore.getState();
+      if (s.mode !== "my") s.resetCalendarData();
+    };
+  }, []);
+
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
