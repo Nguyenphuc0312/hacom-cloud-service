@@ -53,6 +53,10 @@ export const hrNotificationApi = {
   markAllRead: async (): Promise<void> => {
     await hrApiClient.patch(`/notifications/read-all`);
   },
+
+  remove: async (id: string): Promise<void> => {
+    await hrApiClient.delete(`/notifications/${id}`);
+  },
 };
 
 export default hrNotificationApi;

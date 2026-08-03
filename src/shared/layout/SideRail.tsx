@@ -23,6 +23,7 @@ import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useReminderStore } from "../../stores/reminderStore";
 import { useChatUiStore } from "../../features/chat/state/chatUiStore";
+import { useHrUnreadCount } from "../../features/calendar/useHrUnreadCount";
 import { SafeImage } from "../../components/common/SafeImage";
 
 type SideRailItem = {
@@ -203,10 +204,12 @@ export const SideRail: React.FC<SideRailProps> = ({
   const hasPendingReminder = useReminderStore((s) => s.hasPendingReminder);
   const activateReminder = useReminderStore((s) => s.activateReminder);
   const setSelectedEndpoint = useChatUiStore((s) => s.setSelectedEndpoint);
+  const calendarUnreadCount = useHrUnreadCount();
 
   const getBadge = (itemId: string): number | undefined => {
     if (itemId === "messages") return messagesUnreadCount;
     if (itemId === "contacts") return friendRequestPendingCount;
+    if (itemId === "calendar") return calendarUnreadCount;
     if (itemId === "ai-assistant") return hasPendingReminder ? 1 : undefined;
     return undefined;
   };

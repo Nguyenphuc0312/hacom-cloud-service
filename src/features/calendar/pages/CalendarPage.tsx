@@ -43,6 +43,7 @@ import {
   type AttendanceCalendarDay,
 } from "../../api/hrApi";
 import {
+  hrCalendarApi,
   type HRCalendarEvent,
   type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
@@ -65,6 +66,7 @@ import {
   toLocalTimeString,
 } from "../utils/calendarEventMapping";
 import { getMonthFetchRange } from "../utils/calendarFetchRange";
+import { resolveOpenEventRequest } from "../utils/resolveOpenEventRequest";
 import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
@@ -526,7 +528,10 @@ export const CalendarPage: React.FC = () => {
 
   // Khi navigate từ widget lịch tuần với state { openEventId, openEventSource, view }
   const location = useLocation();
-  const handledNavState = useRef(false);
+  // Lưu yêu cầu đã xử lý (không phải cờ boolean): đang ở sẵn /calendar mà bấm
+  // tiếp thông báo thứ hai thì key đổi → mở đúng sự kiện mới. Cờ boolean sẽ
+  // khoá vĩnh viễn sau lần đầu và mọi lần bấm sau đó im lặng không mở gì.
+  const handledNavState = useRef<string | null>(null);
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
 
   // Attendance data state. (Loading/error state đã bỏ: giá trị chưa từng được
@@ -571,40 +576,79 @@ export const CalendarPage: React.FC = () => {
     setViewingUser(userId, userName);
   };
 
-  // Đọc navigation state từ widget lịch tuần: đặt view theo yêu cầu (mặc định
-  // "week" khi mở kèm event) và mở event nếu có openEventId. "Xem lịch đầy đủ →"
-  // gửi { view: "month" } (không kèm event) → chỉ đổi sang view Tháng.
-  // Effect hợp lệ: react theo location.state (router). set-state đồng bộ là chủ ý
+  // Hai nguồn cùng yêu cầu mở sẵn một sự kiện:
+  //  - location.state { openEventId, view } — widget lịch tuần. "Xem lịch đầy
+  //    đủ →" gửi { view: "month" } (không kèm event) → chỉ đổi sang view Tháng.
+  //  - query ?eventId=... — chuông thông báo (actionUrl của hr-api) và mọi link
+  //    dán ra ngoài; đây là dạng deep-link duy nhất sống sót qua reload.
+  // Effect hợp lệ: react theo location (router). set-state đồng bộ là chủ ý
   // (one-shot, guard bằng handledNavState) → theo convention repo, disable rule.
   useEffect(() => {
-    if (handledNavState.current) return;
     const navState = location.state as { openEventId?: string; view?: CalendarView } | null;
-    if (!navState?.openEventId && !navState?.view) return;
-    handledNavState.current = true;
-    if (navState.view) {
-      setView(navState.view);
-    } else if (navState.openEventId) {
+    const request = resolveOpenEventRequest(navState, location.search);
+    if (!request) return;
+    if (handledNavState.current === request.key) return;
+    handledNavState.current = request.key;
+    if (request.view) {
+      setView(request.view as CalendarView);
+    } else if (request.openEventId) {
       setView("week");
     }
-    if (navState.openEventId) {
+    if (request.openEventId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPendingOpenEventId(navState.openEventId);
+      setPendingOpenEventId(request.openEventId);
     }
-    // Clear state khỏi history để back/refresh không mở lại
-    window.history.replaceState({}, "");
-  }, [location.state, setView]);
+    // Dọn cả state lẫn ?eventId= khỏi history để back/refresh không mở lại.
+    window.history.replaceState({}, "", location.pathname);
+  }, [location.state, location.search, location.pathname, setView]);
 
   // Khi apiEvents đã load và còn pending event id → tìm và mở. Effect hợp lệ:
   // react theo data async về (không phải derive thuần).
   useEffect(() => {
-    if (!pendingOpenEventId || !apiEvents.length) return;
+    if (!pendingOpenEventId) return;
     const match = apiEvents.find((e) => e.id === pendingOpenEventId);
     if (match) {
+      // Lưới Tuần/Ngày bám theo selectedDate. Không dời ngày thì vẫn đứng ở
+      // tuần hiện tại và người dùng thấy một tuần TRỐNG, dù modal mở đúng.
+      const start = new Date(match.startAt);
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedDate(start);
+      // Sự kiện có thể rơi sang tháng kề (tuần vắt qua hai tháng) → đồng bộ
+      // luôn tháng của trang, nếu không lưới Tháng vẫn hiện tháng cũ.
+      setCurrentYear(start.getFullYear());
+      setCurrentMonth(start.getMonth());
       setSelectedEvent(mapHrmEventToCalendarEvent(match));
       setPendingOpenEventId(null);
+      return;
     }
-  }, [pendingOpenEventId, apiEvents]);
+    // apiEvents chỉ chứa tháng đang xem. Thông báo thường trỏ tới cuộc họp ở
+    // tháng khác → tìm trong danh sách sẽ không bao giờ thấy và modal không mở.
+    // Lấy thẳng theo id rồi mở, và nhảy lịch về đúng tháng của sự kiện.
+    if (storeLoading) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const event = await hrCalendarApi.getEvent(pendingOpenEventId);
+        if (cancelled) return;
+        const start = new Date(event.startAt);
+        // Phải dời tháng của TRANG: effect tải lịch bám theo currentYear/
+        // currentMonth cục bộ, không phải tháng trong store. Chỉ gọi
+        // store.setDate() thì lưới đứng im, không có sự kiện nào được tải về —
+        // đúng triệu chứng "bấm vào không hiện gì, F5 mới thấy".
+        setCurrentYear(start.getFullYear());
+        setCurrentMonth(start.getMonth());
+        setSelectedDate(start);
+        setSelectedEvent(mapHrmEventToCalendarEvent(event));
+      } catch {
+        // Sự kiện đã xoá / không có quyền xem → im lặng, lịch vẫn dùng được.
+      } finally {
+        if (!cancelled) setPendingOpenEventId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingOpenEventId, apiEvents, storeLoading]);
 
   // Quay về "Lịch của tôi" ngay tại chỗ (không cần reload trang).
   // setMode tự gọi fetchEvents() theo currentMonth của STORE — vốn không đồng bộ
@@ -1453,7 +1497,13 @@ export const CalendarPage: React.FC = () => {
       {selectedEventLive && (
         <EventDetailModal
           event={selectedEventLive}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => {
+            setSelectedEvent(null);
+            // Nhả chốt deep-link: URL đã được dọn về /calendar nên bấm LẠI đúng
+            // thông báo đó sẽ ra khoá y hệt lần trước → không nhả thì lần bấm
+            // thứ hai bị chặn im lặng, không mở gì.
+            handledNavState.current = null;
+          }}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
           isViewingOthers={mode === "other"}
