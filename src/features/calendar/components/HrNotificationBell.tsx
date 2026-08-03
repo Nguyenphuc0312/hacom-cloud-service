@@ -7,6 +7,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BellIcon } from "@heroicons/react/24/outline";
+import {
+  CalendarDaysIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/solid";
 import clsx from "clsx";
 
 import {
@@ -19,6 +25,7 @@ import {
   type HrNotificationKindFilter,
   type HrNotificationTimeFilter,
 } from "../utils/filterHrNotifications";
+import { parseNotificationBody } from "../utils/parseNotificationBody";
 
 const POLL_MS = 30_000;
 
@@ -47,6 +54,64 @@ const relativeTime = (iso: string): string => {
   return new Date(iso).toLocaleDateString("vi-VN");
 };
 
+/**
+ * Trạng thái hiển thị của một thông báo — mã hoá bằng MÀU + ICON + nhãn, không
+ * chỉ bằng chữ. Danh sách toàn tiêu đề "Cập nhật phản hồi lịch họp" giống hệt
+ * nhau thì mắt không lướt được; phải nhìn ra ngay ai từ chối, ai đồng ý.
+ */
+type NotificationTone = {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /** Vạch màu bên trái + nền chip + màu chữ/icon. Dùng token semantic của app. */
+  stripe: string;
+  chip: string;
+  text: string;
+};
+
+const TONE_ACCEPTED: NotificationTone = {
+  label: "Đồng ý",
+  icon: CheckCircleIcon,
+  stripe: "bg-[hsl(var(--color-success))]",
+  chip: "bg-[hsl(var(--color-success)/0.12)]",
+  text: "text-[hsl(var(--color-success))]",
+};
+const TONE_DECLINED: NotificationTone = {
+  label: "Từ chối",
+  icon: XCircleIcon,
+  stripe: "bg-[hsl(var(--color-danger))]",
+  chip: "bg-[hsl(var(--color-danger)/0.12)]",
+  text: "text-[hsl(var(--color-danger))]",
+};
+const TONE_INVITED: NotificationTone = {
+  label: "Mời họp",
+  icon: CalendarDaysIcon,
+  stripe: "bg-[#1565C0]",
+  chip: "bg-[#1565C0]/[0.12]",
+  text: "text-[#1565C0]",
+};
+const TONE_CHANGED: NotificationTone = {
+  label: "Thay đổi",
+  icon: ExclamationTriangleIcon,
+  stripe: "bg-[hsl(var(--color-warning))]",
+  chip: "bg-[hsl(var(--color-warning)/0.14)]",
+  text: "text-[hsl(var(--color-warning))]",
+};
+
+const toneOf = (n: HrAppNotification): NotificationTone => {
+  if (n.type === "calendar.meeting.participant_responded") {
+    return n.payload?.["response"] === "DECLINED"
+      ? TONE_DECLINED
+      : TONE_ACCEPTED;
+  }
+  if (n.type === "calendar.meeting.cancelled") {
+    return { ...TONE_CHANGED, label: "Đã huỷ" };
+  }
+  if (n.type === "calendar.meeting.updated") {
+    return { ...TONE_CHANGED, label: "Đổi lịch" };
+  }
+  return TONE_INVITED;
+};
+
 const actionUrlOf = (n: HrAppNotification): string | null => {
   const fromPayload =
     n.payload && typeof n.payload["actionUrl"] === "string"
@@ -69,7 +134,8 @@ const FilterChip: React.FC<{
     onClick={onClick}
     aria-pressed={active}
     className={clsx(
-      "rounded-full px-2.5 py-1 text-[11px] font-medium transition-micro",
+      "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium transition-micro",
+      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#1565C0]",
       active
         ? "bg-[#1565C0] text-white"
         : "bg-surface-hover text-text-muted hover:text-text-primary",
@@ -182,18 +248,29 @@ export const HrNotificationBell: React.FC = () => {
               )}
             </div>
 
-            <div className="space-y-1.5 border-t border-border px-3 pb-2.5 pt-2">
-              <div className="flex flex-wrap gap-1">
+            <div className="space-y-2 border-t border-border px-3 pb-2.5 pt-2.5">
+              {/* Thời gian: segmented control — 3 lựa chọn loại trừ nhau, chia
+                  đều một dải liền để mắt đọc là "một nhóm", không phải 3 nút rời. */}
+              <div className="flex rounded-lg bg-surface-hover p-0.5">
                 {TIME_TABS.map((tab) => (
-                  <FilterChip
+                  <button
                     key={tab.id}
-                    label={tab.label}
-                    active={timeFilter === tab.id}
+                    type="button"
                     onClick={() => setTimeFilter(tab.id)}
-                  />
+                    aria-pressed={timeFilter === tab.id}
+                    className={clsx(
+                      "flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-micro",
+                      timeFilter === tab.id
+                        ? "bg-surface text-text-primary shadow-sm"
+                        : "text-text-muted hover:text-text-primary",
+                    )}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-1">
+              {/* Loại: 5 mục, cuộn ngang một hàng thay vì xuống dòng lởm chởm. */}
+              <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {KIND_TABS.map((tab) => (
                   <FilterChip
                     key={tab.id}
@@ -213,39 +290,85 @@ export const HrNotificationBell: React.FC = () => {
                     : "Không có thông báo khớp bộ lọc"}
                 </p>
               ) : (
-                visibleItems.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() => void handleOpen(n)}
-                    className={clsx(
-                      "flex w-full gap-2 border-t border-border px-4 py-2.5 text-left transition-micro hover:bg-surface-hover",
-                      !n.readAt && "bg-[#1976D2]/5",
-                    )}
-                  >
-                    {!n.readAt && (
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1976D2]" />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={clsx(
-                          "block truncate text-sm text-text-primary",
-                          n.readAt ? "font-normal" : "font-semibold",
-                        )}
-                      >
-                        {n.title}
-                      </span>
-                      {n.body && (
-                        <span className="mt-0.5 block line-clamp-2 text-xs text-text-muted">
-                          {n.body}
-                        </span>
+                visibleItems.map((n) => {
+                  const tone = toneOf(n);
+                  const ToneIcon = tone.icon;
+                  const { event, reason } = parseNotificationBody(n.body);
+                  const actor = n.actorName;
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => void handleOpen(n)}
+                      className={clsx(
+                        "relative flex w-full gap-2.5 border-t border-border py-2.5 pl-4 pr-3 text-left transition-micro hover:bg-surface-hover",
+                        !n.readAt && "bg-[#1976D2]/[0.04]",
                       )}
-                      <span className="mt-0.5 block text-[11px] text-text-muted">
-                        {relativeTime(n.createdAt)}
+                    >
+                      {/* Vạch trạng thái: đọc được màu trước cả khi đọc chữ. */}
+                      <span
+                        aria-hidden="true"
+                        className={clsx(
+                          "absolute inset-y-0 left-0 w-[3px]",
+                          tone.stripe,
+                          n.readAt && "opacity-40",
+                        )}
+                      />
+                      <ToneIcon
+                        className={clsx(
+                          "mt-0.5 h-4 w-4 shrink-0",
+                          tone.text,
+                          n.readAt && "opacity-60",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        {/* Tên cuộc họp là thứ người ta tìm → cho lên đầu. */}
+                        <span
+                          className={clsx(
+                            "block truncate text-sm text-text-primary",
+                            n.readAt ? "font-medium" : "font-semibold",
+                          )}
+                        >
+                          {event ?? n.title}
+                        </span>
+
+                        <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                          <span
+                            className={clsx(
+                              "rounded-full px-1.5 py-px text-[10px] font-semibold",
+                              tone.chip,
+                              tone.text,
+                            )}
+                          >
+                            {tone.label}
+                          </span>
+                          {actor && (
+                            <span className="min-w-0 truncate text-xs text-text-primary/80">
+                              {actor}
+                            </span>
+                          )}
+                        </span>
+
+                        {reason && (
+                          <span className="mt-1 block line-clamp-2 border-l-2 border-border pl-2 text-xs italic text-text-muted">
+                            {reason}
+                          </span>
+                        )}
+
+                        <span className="mt-1 block text-[11px] text-text-muted">
+                          {relativeTime(n.createdAt)}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                ))
+
+                      {!n.readAt && (
+                        <span
+                          aria-label="Chưa đọc"
+                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1976D2]"
+                        />
+                      )}
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
