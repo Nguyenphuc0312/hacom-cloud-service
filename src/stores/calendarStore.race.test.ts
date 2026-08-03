@@ -184,3 +184,48 @@ describe("calendarStore — chống race khi 2 nơi cùng fetch", () => {
     expect(useCalendarStore.getState().isLoading).toBe(false);
   });
 });
+
+describe("calendarStore — rời trang lịch thì hết xem lịch người khác", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { useCalendarStore } = await import("./calendarStore");
+    useCalendarStore.getState().resetCalendarData();
+  });
+
+  it("resetCalendarData trả mode về 'my' và xoá người đang xem", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+    listAllEvents.mockResolvedValue({ data: [] });
+
+    useCalendarStore.getState().setViewingUser("auth-cong", "Trần Đăng Công");
+    expect(useCalendarStore.getState().mode).toBe("other");
+
+    useCalendarStore.getState().resetCalendarData();
+
+    const s = useCalendarStore.getState();
+    expect(s.mode).toBe("my");
+    expect(s.viewingUserId).toBeNull();
+    expect(s.viewingUserName).toBeNull();
+  });
+
+  it("sau khi reset, fetch tiếp theo hỏi lịch CỦA MÌNH chứ không phải người kia", async () => {
+    const { useCalendarStore } = await import("./calendarStore");
+    listAllEvents.mockResolvedValue({ data: [] });
+
+    useCalendarStore.getState().setViewingUser("auth-cong", "Trần Đăng Công");
+    useCalendarStore.getState().resetCalendarData();
+    listAllEvents.mockClear();
+
+    // Đây là cú fetch mà WeeklyCalendarWidget ở màn chat gọi khi mount: nó
+    // KHÔNG tự set mode, nên mode kẹt ở "other" là widget lặng lẽ tải lịch
+    // người kia rồi gắn nhãn "Lịch tuần" như thể lịch mình.
+    await useCalendarStore.getState().fetchEvents("2026-08-03", "2026-08-09");
+
+    expect(listAllEvents).toHaveBeenCalledTimes(1);
+    const arg = listAllEvents.mock.calls[0][0] as {
+      scope: string;
+      ownerAuthUserId?: string;
+    };
+    expect(arg.scope).toBe("mine");
+    expect(arg.ownerAuthUserId).toBeUndefined();
+  });
+});

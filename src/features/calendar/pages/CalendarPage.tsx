@@ -520,6 +520,19 @@ export const CalendarPage: React.FC = () => {
   // ngay chỉ tạo một nháy sáng gây cảm giác giật.
   const showLoadingBar = useDelayedLoading(storeLoading);
 
+  // Rời trang lịch là trả store về "lịch của tôi". Chế độ xem lịch người khác
+  // sống trong zustand store nên trước đây chỉ reset lúc logout: thoát ra rồi
+  // quay lại vẫn thấy lịch người kia. Nặng hơn: WeeklyCalendarWidget ở màn chat
+  // dùng chung store này và gọi fetchEvents mà KHÔNG set mode → nó lặng lẽ tải
+  // lịch người kia rồi gắn nhãn "Lịch tuần" như thể lịch mình.
+  // Dùng getState() thay vì đưa vào deps: reset chỉ chạy đúng lúc unmount.
+  useEffect(() => {
+    return () => {
+      const s = useCalendarStore.getState();
+      if (s.mode !== "my") s.resetCalendarData();
+    };
+  }, []);
+
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
@@ -1353,9 +1366,14 @@ export const CalendarPage: React.FC = () => {
               mode === "other" ? "py-2" : "py-3",
             )}
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* ponytail: một hàng không xuống dòng. Trước đây flex-wrap +
+                tiêu đề dài ngắn khác nhau theo view ("Tuần 32 · 03/08–09/08/2026"
+                dài hơn "Tháng 8 2026") làm cụm phải rơi xuống dòng 2 ở khổ hẹp
+                → đổi view là toolbar nhảy cao thấp. Tiêu đề co lại (min-w-0 +
+                truncate) thay vì đẩy cụm phải. */}
+            <div className="flex items-center justify-between gap-3">
               {/* Month/Year title and navigation */}
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 {/* Viewing others indicator */}
                 {mode === "other" && viewingUserName && (
                   <div className="flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 dark:bg-blue-900/30">
@@ -1371,7 +1389,7 @@ export const CalendarPage: React.FC = () => {
                 {(mode === "my" || mode === "other") && (
                   <h2
                     className={clsx(
-                      "font-semibold text-text-primary",
+                      "min-w-0 truncate font-semibold text-text-primary",
                       mode === "other" ? "text-sm" : "text-lg",
                     )}
                   >
@@ -1385,7 +1403,7 @@ export const CalendarPage: React.FC = () => {
                 {/* Điều hướng ‹ › cho cả lịch mình và lịch người khác (chỉ đổi
                     khoảng xem; effect tự refetch lịch người đó theo tháng). */}
                 {(mode === "my" || mode === "other") && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
                       onClick={
@@ -1420,7 +1438,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={goToToday}
-                    className="rounded-xl bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#1976D2] active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
+                    className="shrink-0 rounded-xl bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#1976D2] active:scale-95 shadow-sm shadow-[#1565C0]/25 transition-micro"
                   >
                     Hôm nay
                   </button>
@@ -1428,7 +1446,7 @@ export const CalendarPage: React.FC = () => {
               </div>
 
               {/* Notifications + View switcher */}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
               <HrNotificationBell />
               <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
                 {viewButtons.map((view) => (

@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
 import type { Editor } from "@tiptap/react";
 import { MentionChip } from "./mentionNode";
 
@@ -120,6 +121,8 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           openOnClick: false,
           protocols: ["http", "https"],
         }),
+        TextStyle,
+        Color,
         MentionChip,
       ],
       [], // stable — placeholder is read via ref, not captured in closure
@@ -201,17 +204,24 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             return true;
           }
           if (event.key === "Enter" && !event.isComposing) {
-            // Alt+Enter inserts a line break (same as Shift+Enter).
-            if (event.altKey) {
+            const inListItem = !!editor?.isActive("listItem");
+            // Shift/Alt+Enter: new line. Inside a list that means a new
+            // bulleted/numbered item (Zalo has no soft-line-inside-one-bullet
+            // concept); outside a list it's a literal line break.
+            if (event.shiftKey || event.altKey) {
               event.preventDefault();
-              editor?.commands.setHardBreak();
+              if (inListItem) {
+                editor?.commands.splitListItem("listItem");
+              } else {
+                editor?.commands.setHardBreak();
+              }
               return true;
             }
-            if (!event.shiftKey) {
-              event.preventDefault();
-              onEnterPressRef.current?.();
-              return true;
-            }
+            // Plain Enter always sends, in or out of a list — same as every
+            // other composer in the app.
+            event.preventDefault();
+            onEnterPressRef.current?.();
+            return true;
           }
           return false;
         },
