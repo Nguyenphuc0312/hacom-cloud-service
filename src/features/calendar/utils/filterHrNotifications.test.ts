@@ -64,6 +64,16 @@ describe("filterHrNotifications", () => {
     expect(r.every((n) => n.type === "calendar.meeting.invited")).toBe(true);
   });
 
+  it('tách "đổi lịch" và "huỷ lịch" thành hai bộ lọc riêng', () => {
+    // Gộp chung một nhãn "Đổi / huỷ" thì không ai hiểu nó lọc cái gì.
+    const rows: FilterableNotification[] = [
+      { type: "calendar.meeting.updated", createdAt: at(5) },
+      { type: "calendar.meeting.cancelled", createdAt: at(5) },
+    ];
+    expect(filterHrNotifications(rows, "all", "updated", NOW)).toHaveLength(1);
+    expect(filterHrNotifications(rows, "all", "cancelled", NOW)).toHaveLength(1);
+  });
+
   it("hai trục giao nhau chứ không cộng dồn", () => {
     // Hôm nay AND từ chối → DECLINED của hôm qua không được lọt.
     expect(filterHrNotifications(items, "today", "declined", NOW)).toHaveLength(

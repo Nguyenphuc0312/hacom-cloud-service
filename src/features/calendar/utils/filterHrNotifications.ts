@@ -1,7 +1,7 @@
 /**
  * Lọc thông báo lịch trong chuông. Hai trục ĐỘC LẬP, giao nhau (AND):
  *  - thời gian: hôm nay / tuần này / tất cả
- *  - loại: mời họp / đã xác nhận / đã từ chối / cập nhật-huỷ
+ *  - loại: mời họp / đã xác nhận / đã từ chối / đổi giờ / huỷ
  * Tách riêng khỏi component để test được mà không cần dựng DOM.
  */
 
@@ -11,7 +11,8 @@ export type HrNotificationKindFilter =
   | "invited"
   | "accepted"
   | "declined"
-  | "changed";
+  | "updated"
+  | "cancelled";
 
 /** Chỉ cần đúng phần dữ liệu dùng để lọc — không buộc cả HrAppNotification. */
 export interface FilterableNotification {
@@ -58,12 +59,10 @@ const matchesKind = (
       n.type === "calendar.meeting.joined_via_share_link"
     );
   }
-  if (filter === "changed") {
-    return (
-      n.type === "calendar.meeting.updated" ||
-      n.type === "calendar.meeting.cancelled"
-    );
-  }
+  // "updated" = đổi giờ/nội dung. "cancelled" gộp cả huỷ lịch lẫn gỡ mình khỏi
+  // lịch — BE dùng chung một type cho hai việc này.
+  if (filter === "updated") return n.type === "calendar.meeting.updated";
+  if (filter === "cancelled") return n.type === "calendar.meeting.cancelled";
   // accepted / declined: chỉ có ở thông báo phản hồi, phân biệt bằng payload.
   if (n.type !== "calendar.meeting.participant_responded") return false;
   const response = n.payload?.["response"];

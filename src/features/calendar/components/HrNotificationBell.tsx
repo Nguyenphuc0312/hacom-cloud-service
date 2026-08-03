@@ -7,6 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BellIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import {
   CalendarDaysIcon,
   CheckCircleIcon,
@@ -43,7 +44,8 @@ const KIND_TABS: Array<{ id: HrNotificationKindFilter; label: string }> = [
   { id: "invited", label: "Mời họp" },
   { id: "accepted", label: "Đã xác nhận" },
   { id: "declined", label: "Đã từ chối" },
-  { id: "changed", label: "Đổi / huỷ" },
+  { id: "updated", label: "Đổi lịch" },
+  { id: "cancelled", label: "Huỷ lịch" },
 ];
 
 const relativeTime = (iso: string): string => {
@@ -202,6 +204,18 @@ export const HrNotificationBell: React.FC = () => {
     [items, timeFilter, kindFilter],
   );
 
+  const handleRemove = async (id: string) => {
+    // Bỏ khỏi danh sách ngay để bấm X thấy phản hồi tức thì; hỏng thì refresh
+    // bên dưới kéo lại đúng trạng thái server.
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await hrNotificationApi.remove(id);
+    } catch {
+      /* ignore — refresh sẽ dựng lại danh sách đúng */
+    }
+    void refresh();
+  };
+
   const handleMarkAll = async () => {
     try {
       await hrNotificationApi.markAllRead();
@@ -309,14 +323,20 @@ export const HrNotificationBell: React.FC = () => {
                         ? "Được mời"
                         : null;
                   return (
-                    <button
+                    // Bọc div: nút X phải là anh em của nút hàng, không lồng
+                    // trong nó — button lồng button là HTML không hợp lệ và
+                    // bàn phím không tới được nút trong.
+                    <div
                       key={n.id}
-                      type="button"
-                      onClick={() => void handleOpen(n)}
                       className={clsx(
-                        "relative flex w-full gap-2.5 border-t border-border py-2.5 pl-4 pr-3 text-left transition-micro hover:bg-surface-hover",
+                        "group relative border-t border-border",
                         !n.readAt && "bg-[#1976D2]/[0.04]",
                       )}
+                    >
+                    <button
+                      type="button"
+                      onClick={() => void handleOpen(n)}
+                      className="relative flex w-full gap-2.5 py-2.5 pl-4 pr-9 text-left transition-micro hover:bg-surface-hover"
                     >
                       {/* Vạch trạng thái: đọc được màu trước cả khi đọc chữ. */}
                       <span
@@ -376,18 +396,38 @@ export const HrNotificationBell: React.FC = () => {
                           </span>
                         )}
 
-                        <span className="mt-1 block text-[11px] text-text-muted">
+                        <span className="mt-1 flex items-center gap-1.5 text-[11px] text-text-muted">
+                          {!n.readAt && (
+                            <span
+                              aria-label="Chưa đọc"
+                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1976D2]"
+                            />
+                          )}
                           {relativeTime(n.createdAt)}
                         </span>
                       </span>
-
-                      {!n.readAt && (
-                        <span
-                          aria-label="Chưa đọc"
-                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1976D2]"
-                        />
-                      )}
                     </button>
+
+                    {/* Xoá hẳn một thông báo. Hiện mờ, rõ lên khi rê chuột hoặc
+                        khi focus bằng bàn phím. */}
+                    <button
+                      type="button"
+                      onClick={() => void handleRemove(n.id)}
+                      aria-label={`Xoá thông báo${event ? `: ${event}` : ""}`}
+                      title="Xoá thông báo"
+                      className={clsx(
+                        "absolute right-1.5 top-2 rounded p-1 text-text-muted transition-micro",
+                        "hover:bg-surface-hover hover:text-[hsl(var(--color-danger))]",
+                        "focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1565C0]",
+                        // Máy có chuột: ẩn cho gọn, rê vào mới hiện. Máy cảm
+                        // ứng không có hover nên luôn hiện, nếu không sẽ không
+                        // bao giờ bấm được nút này.
+                        "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100",
+                      )}
+                    >
+                      <XMarkIcon className="h-3.5 w-3.5" />
+                    </button>
+                    </div>
                   );
                 })
               )}
