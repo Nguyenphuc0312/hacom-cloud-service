@@ -204,21 +204,24 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
             return true;
           }
           if (event.key === "Enter" && !event.isComposing) {
-            // Alt+Enter inserts a line break (same as Shift+Enter).
-            if (event.altKey) {
-              event.preventDefault();
-              editor?.commands.setHardBreak();
-              return true;
-            }
-            // Inside a list item, Enter must split into a new list item (so
-            // multi-item lists are typeable, matching indent/outdent's use
-            // case) — only send when the caret is in plain paragraph text.
             const inListItem = !!editor?.isActive("listItem");
-            if (!event.shiftKey && !inListItem) {
+            // Shift/Alt+Enter: new line. Inside a list that means a new
+            // bulleted/numbered item (Zalo has no soft-line-inside-one-bullet
+            // concept); outside a list it's a literal line break.
+            if (event.shiftKey || event.altKey) {
               event.preventDefault();
-              onEnterPressRef.current?.();
+              if (inListItem) {
+                editor?.commands.splitListItem("listItem");
+              } else {
+                editor?.commands.setHardBreak();
+              }
               return true;
             }
+            // Plain Enter always sends, in or out of a list — same as every
+            // other composer in the app.
+            event.preventDefault();
+            onEnterPressRef.current?.();
+            return true;
           }
           return false;
         },
