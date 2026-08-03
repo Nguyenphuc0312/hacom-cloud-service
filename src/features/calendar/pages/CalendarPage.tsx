@@ -610,8 +610,13 @@ export const CalendarPage: React.FC = () => {
     if (match) {
       // Lưới Tuần/Ngày bám theo selectedDate. Không dời ngày thì vẫn đứng ở
       // tuần hiện tại và người dùng thấy một tuần TRỐNG, dù modal mở đúng.
+      const start = new Date(match.startAt);
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedDate(new Date(match.startAt));
+      setSelectedDate(start);
+      // Sự kiện có thể rơi sang tháng kề (tuần vắt qua hai tháng) → đồng bộ
+      // luôn tháng của trang, nếu không lưới Tháng vẫn hiện tháng cũ.
+      setCurrentYear(start.getFullYear());
+      setCurrentMonth(start.getMonth());
       setSelectedEvent(mapHrmEventToCalendarEvent(match));
       setPendingOpenEventId(null);
       return;
@@ -626,9 +631,12 @@ export const CalendarPage: React.FC = () => {
         const event = await hrCalendarApi.getEvent(pendingOpenEventId);
         if (cancelled) return;
         const start = new Date(event.startAt);
-        useCalendarStore
-          .getState()
-          .setDate(start.getFullYear(), start.getMonth() + 1);
+        // Phải dời tháng của TRANG: effect tải lịch bám theo currentYear/
+        // currentMonth cục bộ, không phải tháng trong store. Chỉ gọi
+        // store.setDate() thì lưới đứng im, không có sự kiện nào được tải về —
+        // đúng triệu chứng "bấm vào không hiện gì, F5 mới thấy".
+        setCurrentYear(start.getFullYear());
+        setCurrentMonth(start.getMonth());
         setSelectedDate(start);
         setSelectedEvent(mapHrmEventToCalendarEvent(event));
       } catch {
