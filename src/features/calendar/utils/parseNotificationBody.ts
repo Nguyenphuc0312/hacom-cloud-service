@@ -13,7 +13,11 @@ export interface ParsedNotificationBody {
   reason: string | null;
 }
 
-const EVENT_MARKER = "lịch họp:";
+const EVENT_MARKERS = [
+  "lịch họp:", // phản hồi / cập nhật / tham gia qua link
+  "đã mời bạn tham gia:", // mời họp
+  "đã gỡ bạn khỏi:", // gỡ khỏi lịch
+];
 const REASON_MARKER = " — Lý do:";
 
 export const parseNotificationBody = (
@@ -27,9 +31,32 @@ export const parseNotificationBody = (
     ? reasonParts.join(REASON_MARKER).trim() || null
     : null;
 
-  const at = main.indexOf(EVENT_MARKER);
-  const event =
-    at >= 0 ? main.slice(at + EVENT_MARKER.length).trim() || null : null;
+  // hr-api dùng vài cách dẫn khác nhau tuỳ loại thông báo (phản hồi, mời,
+  // cập nhật, gỡ, tham gia qua link). Lấy mốc khớp SỚM NHẤT trong câu.
+  let event: string | null = null;
+  let best = Number.POSITIVE_INFINITY;
+  for (const marker of EVENT_MARKERS) {
+    const at = main.indexOf(marker);
+    if (at >= 0 && at < best) {
+      best = at;
+      event = main.slice(at + marker.length).trim() || null;
+    }
+  }
 
   return { event, reason };
+};
+
+/**
+ * Ưu tiên payload.eventTitle do hr-api gửi kèm; chỉ cắt chuỗi khi không có.
+ * Thông báo CŨ tạo trước khi BE thêm field vẫn hiện đúng nhờ nhánh dự phòng.
+ */
+export const eventTitleOf = (
+  payload: Record<string, unknown> | null | undefined,
+  body: string | null | undefined,
+): string | null => {
+  const fromPayload = payload?.["eventTitle"];
+  if (typeof fromPayload === "string" && fromPayload.trim()) {
+    return fromPayload.trim();
+  }
+  return parseNotificationBody(body).event;
 };

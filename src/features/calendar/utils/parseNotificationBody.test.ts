@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseNotificationBody } from "./parseNotificationBody";
+import { eventTitleOf, parseNotificationBody } from "./parseNotificationBody";
 
 describe("parseNotificationBody", () => {
   it("tách tên cuộc họp ra khỏi câu kể", () => {
@@ -38,5 +38,43 @@ describe("parseNotificationBody", () => {
     const r = parseNotificationBody("A đã từ chối tham gia lịch họp: X — Lý do:   ");
     expect(r.event).toBe("X");
     expect(r.reason).toBeNull();
+  });
+
+  it("lấy được tên lịch từ thông báo MỜI HỌP (câu dẫn khác)", () => {
+    // Trước đây chỉ khớp "lịch họp:" nên dòng mời họp mất hẳn tên lịch.
+    expect(
+      parseNotificationBody("Trần Đăng Công đã mời bạn tham gia: Họp Bộ phận CĐS")
+        .event,
+    ).toBe("Họp Bộ phận CĐS");
+  });
+
+  it("lấy được tên lịch khi bị gỡ khỏi lịch", () => {
+    expect(
+      parseNotificationBody("Trần Đăng Công đã gỡ bạn khỏi: Họp tuần").event,
+    ).toBe("Họp tuần");
+  });
+});
+
+describe("eventTitleOf", () => {
+  it("ưu tiên payload.eventTitle do BE gửi kèm", () => {
+    expect(
+      eventTitleOf({ eventTitle: "Họp CĐS" }, "A đã mời bạn tham gia: Tên cũ"),
+    ).toBe("Họp CĐS");
+  });
+
+  it("thông báo cũ không có eventTitle thì rơi về cắt chuỗi", () => {
+    expect(eventTitleOf(null, "A đã từ chối tham gia lịch họp: Hội ý")).toBe(
+      "Hội ý",
+    );
+    expect(eventTitleOf({}, "A đã mời bạn tham gia: Hội ý")).toBe("Hội ý");
+  });
+
+  it("eventTitle rỗng/sai kiểu thì không dùng, quay về cắt chuỗi", () => {
+    expect(
+      eventTitleOf({ eventTitle: "   " }, "A đã mời bạn tham gia: Hội ý"),
+    ).toBe("Hội ý");
+    expect(eventTitleOf({ eventTitle: 42 }, "A đã mời bạn tham gia: Hội ý")).toBe(
+      "Hội ý",
+    );
   });
 });

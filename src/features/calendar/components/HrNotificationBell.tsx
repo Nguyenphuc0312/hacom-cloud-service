@@ -25,7 +25,10 @@ import {
   type HrNotificationKindFilter,
   type HrNotificationTimeFilter,
 } from "../utils/filterHrNotifications";
-import { parseNotificationBody } from "../utils/parseNotificationBody";
+import {
+  eventTitleOf,
+  parseNotificationBody,
+} from "../utils/parseNotificationBody";
 
 const POLL_MS = 30_000;
 
@@ -293,8 +296,18 @@ export const HrNotificationBell: React.FC = () => {
                 visibleItems.map((n) => {
                   const tone = toneOf(n);
                   const ToneIcon = tone.icon;
-                  const { event, reason } = parseNotificationBody(n.body);
+                  const event = eventTitleOf(n.payload, n.body);
+                  const { reason } = parseNotificationBody(n.body);
                   const actor = n.actorName;
+                  // Thông báo CŨ (trước khi BE gửi isOwnEvent) không có field
+                  // này → không đoán bừa, ẩn nhãn đi thay vì gán sai.
+                  const ownership = n.payload?.["isOwnEvent"];
+                  const ownerLabel =
+                    ownership === true
+                      ? "Lịch của tôi"
+                      : ownership === false
+                        ? "Được mời"
+                        : null;
                   return (
                     <button
                       key={n.id}
@@ -342,6 +355,14 @@ export const HrNotificationBell: React.FC = () => {
                           >
                             {tone.label}
                           </span>
+                          {/* Lịch mình tạo hay người khác tạo — hai việc khác
+                              hẳn nhau: một bên là người ta trả lời MÌNH, bên
+                              kia là mình được mời. */}
+                          {ownerLabel && (
+                            <span className="rounded-full border border-border px-1.5 py-px text-[10px] font-medium text-text-muted">
+                              {ownerLabel}
+                            </span>
+                          )}
                           {actor && (
                             <span className="min-w-0 truncate text-xs text-text-primary/80">
                               {actor}
