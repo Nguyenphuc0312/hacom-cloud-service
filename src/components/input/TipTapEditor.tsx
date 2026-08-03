@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
 import type { Editor } from "@tiptap/react";
 import { MentionChip } from "./mentionNode";
 
@@ -120,6 +121,8 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           openOnClick: false,
           protocols: ["http", "https"],
         }),
+        TextStyle,
+        Color,
         MentionChip,
       ],
       [], // stable — placeholder is read via ref, not captured in closure
@@ -207,7 +210,11 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
               editor?.commands.setHardBreak();
               return true;
             }
-            if (!event.shiftKey) {
+            // Inside a list item, Enter must split into a new list item (so
+            // multi-item lists are typeable, matching indent/outdent's use
+            // case) — only send when the caret is in plain paragraph text.
+            const inListItem = !!editor?.isActive("listItem");
+            if (!event.shiftKey && !inListItem) {
               event.preventDefault();
               onEnterPressRef.current?.();
               return true;
