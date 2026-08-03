@@ -64,14 +64,14 @@ describe("filterHrNotifications", () => {
     expect(r.every((n) => n.type === "calendar.meeting.invited")).toBe(true);
   });
 
-  it('tách "đổi lịch" và "huỷ lịch" thành hai bộ lọc riêng', () => {
-    // Gộp chung một nhãn "Đổi / huỷ" thì không ai hiểu nó lọc cái gì.
+  it('"Thay đổi" gom cả sửa lịch lẫn huỷ/gỡ khỏi lịch', () => {
+    // Hai loại này hiếm nên gộp một nút; tách riêng thì gần như luôn rỗng.
     const rows: FilterableNotification[] = [
       { type: "calendar.meeting.updated", createdAt: at(5) },
       { type: "calendar.meeting.cancelled", createdAt: at(5) },
+      { type: "calendar.meeting.invited", createdAt: at(5) },
     ];
-    expect(filterHrNotifications(rows, "all", "updated", NOW)).toHaveLength(1);
-    expect(filterHrNotifications(rows, "all", "cancelled", NOW)).toHaveLength(1);
+    expect(filterHrNotifications(rows, "all", "changed", NOW)).toHaveLength(2);
   });
 
   it("hai trục giao nhau chứ không cộng dồn", () => {

@@ -21,6 +21,7 @@ import {
   type HrAppNotification,
 } from "../../api/hrNotificationApi";
 import { refreshHrUnreadCount, useHrUnreadCount } from "../useHrUnreadCount";
+import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import {
   filterHrNotifications,
   type HrNotificationKindFilter,
@@ -39,15 +40,15 @@ const TIME_TABS: Array<{ id: HrNotificationTimeFilter; label: string }> = [
   { id: "week", label: "Tuần này" },
 ];
 
-// Nhãn ngắn để 6 mục vừa đúng bề ngang panel — hàng bị cắt cụt ở mép phải
-// trông như lỗi giao diện, dù nó cuộn được.
+// Bốn mục, vừa đúng một hàng. "Đổi lịch" và "Huỷ" chỉ phát sinh khi người tổ
+// chức sửa/huỷ lịch — hiếm hơn hẳn mời và phản hồi, tách riêng hai nút thì
+// hầu như lúc nào cũng rỗng. Gộp lại thành "Thay đổi" cho đỡ rối.
 const KIND_TABS: Array<{ id: HrNotificationKindFilter; label: string }> = [
   { id: "all", label: "Tất cả" },
   { id: "invited", label: "Mời họp" },
   { id: "accepted", label: "Đồng ý" },
   { id: "declined", label: "Từ chối" },
-  { id: "updated", label: "Đổi lịch" },
-  { id: "cancelled", label: "Huỷ" },
+  { id: "changed", label: "Thay đổi" },
 ];
 
 const relativeTime = (iso: string): string => {
@@ -131,6 +132,21 @@ const actionUrlOf = (n: HrAppNotification): string | null => {
     return `/calendar?eventId=${n.entityId}`;
   }
   return null;
+};
+
+/**
+ * Tên người trong thông báo, ưu tiên "tên gợi nhớ" (alias) mà người xem đã đặt.
+ * Là component riêng vì useResolvedDisplayName là hook — không gọi được trong
+ * .map(), và cần re-render khi alias đổi.
+ */
+const ActorName: React.FC<{
+  authUserId: string | undefined;
+  fallback: string;
+}> = ({ authUserId, fallback }) => {
+  const name = useResolvedDisplayName(authUserId, fallback);
+  return (
+    <span className="min-w-0 truncate text-xs text-text-primary/80">{name}</span>
+  );
 };
 
 const FilterChip: React.FC<{
@@ -317,6 +333,11 @@ export const HrNotificationBell: React.FC = () => {
                   const event = eventTitleOf(n.payload, n.body);
                   const { reason } = parseNotificationBody(n.body);
                   const actor = n.actorName;
+                  const rawActorId = n.payload?.["actorAuthUserId"];
+                  const actorAuthUserId =
+                    typeof rawActorId === "string" && rawActorId
+                      ? rawActorId
+                      : undefined;
                   // Thông báo CŨ (trước khi BE gửi isOwnEvent) không có field
                   // này → không đoán bừa, ẩn nhãn đi thay vì gán sai.
                   const ownership = n.payload?.["isOwnEvent"];
@@ -388,9 +409,10 @@ export const HrNotificationBell: React.FC = () => {
                             </span>
                           )}
                           {actor && (
-                            <span className="min-w-0 truncate text-xs text-text-primary/80">
-                              {actor}
-                            </span>
+                            <ActorName
+                              authUserId={actorAuthUserId}
+                              fallback={actor}
+                            />
                           )}
                         </span>
 

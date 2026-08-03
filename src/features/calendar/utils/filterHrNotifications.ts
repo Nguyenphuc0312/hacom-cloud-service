@@ -11,8 +11,7 @@ export type HrNotificationKindFilter =
   | "invited"
   | "accepted"
   | "declined"
-  | "updated"
-  | "cancelled";
+  | "changed";
 
 /** Chỉ cần đúng phần dữ liệu dùng để lọc — không buộc cả HrAppNotification. */
 export interface FilterableNotification {
@@ -59,10 +58,14 @@ const matchesKind = (
       n.type === "calendar.meeting.joined_via_share_link"
     );
   }
-  // "updated" = đổi giờ/nội dung. "cancelled" gộp cả huỷ lịch lẫn gỡ mình khỏi
-  // lịch — BE dùng chung một type cho hai việc này.
-  if (filter === "updated") return n.type === "calendar.meeting.updated";
-  if (filter === "cancelled") return n.type === "calendar.meeting.cancelled";
+  // "changed" gom mọi thay đổi từ phía người tổ chức: đổi giờ/nội dung, huỷ
+  // lịch, và gỡ mình khỏi lịch (BE dùng chung type cancelled cho hai việc cuối).
+  if (filter === "changed") {
+    return (
+      n.type === "calendar.meeting.updated" ||
+      n.type === "calendar.meeting.cancelled"
+    );
+  }
   // accepted / declined: chỉ có ở thông báo phản hồi, phân biệt bằng payload.
   if (n.type !== "calendar.meeting.participant_responded") return false;
   const response = n.payload?.["response"];
