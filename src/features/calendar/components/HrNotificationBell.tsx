@@ -13,6 +13,7 @@ import {
   hrNotificationApi,
   type HrAppNotification,
 } from "../../api/hrNotificationApi";
+import { refreshHrUnreadCount, useHrUnreadCount } from "../useHrUnreadCount";
 
 const POLL_MS = 30_000;
 
@@ -43,18 +44,16 @@ export const HrNotificationBell: React.FC = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HrAppNotification[]>([]);
-  const [unread, setUnread] = useState(0);
+  // Count is shared with the SideRail badge so both show the same number.
+  const unread = useHrUnreadCount();
   const mountedRef = useRef(true);
 
   const refresh = useCallback(async () => {
+    refreshHrUnreadCount();
     try {
-      const [list, count] = await Promise.all([
-        hrNotificationApi.list({ page: 1, pageSize: 20 }),
-        hrNotificationApi.unreadCount(),
-      ]);
+      const list = await hrNotificationApi.list({ page: 1, pageSize: 20 });
       if (!mountedRef.current) return;
       setItems(list);
-      setUnread(count);
     } catch {
       // Optional feature — ignore (HR not linked, network, 401/403, etc.)
     }
