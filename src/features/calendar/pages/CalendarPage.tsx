@@ -608,7 +608,10 @@ export const CalendarPage: React.FC = () => {
     if (!pendingOpenEventId) return;
     const match = apiEvents.find((e) => e.id === pendingOpenEventId);
     if (match) {
+      // Lưới Tuần/Ngày bám theo selectedDate. Không dời ngày thì vẫn đứng ở
+      // tuần hiện tại và người dùng thấy một tuần TRỐNG, dù modal mở đúng.
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedDate(new Date(match.startAt));
       setSelectedEvent(mapHrmEventToCalendarEvent(match));
       setPendingOpenEventId(null);
       return;
@@ -626,6 +629,7 @@ export const CalendarPage: React.FC = () => {
         useCalendarStore
           .getState()
           .setDate(start.getFullYear(), start.getMonth() + 1);
+        setSelectedDate(start);
         setSelectedEvent(mapHrmEventToCalendarEvent(event));
       } catch {
         // Sự kiện đã xoá / không có quyền xem → im lặng, lịch vẫn dùng được.
@@ -1485,7 +1489,13 @@ export const CalendarPage: React.FC = () => {
       {selectedEventLive && (
         <EventDetailModal
           event={selectedEventLive}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => {
+            setSelectedEvent(null);
+            // Nhả chốt deep-link: URL đã được dọn về /calendar nên bấm LẠI đúng
+            // thông báo đó sẽ ra khoá y hệt lần trước → không nhả thì lần bấm
+            // thứ hai bị chặn im lặng, không mở gì.
+            handledNavState.current = null;
+          }}
           onEdit={handleEditEvent}
           onDelete={handleDeleteEvent}
           isViewingOthers={mode === "other"}
