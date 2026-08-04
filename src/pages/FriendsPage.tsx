@@ -1101,8 +1101,8 @@ export const FriendsPage: React.FC = () => {
       if (friendIdSet.has(user.id)) return false;
       if (user.isFriend === true) return false;
       if (isAcceptedFriendshipStatus(user.friendshipStatus)) return false;
-      // `/users/search` khớp cả subsequence (c-h-i-ê-n rời rạc) nên trả về
-      // người không liên quan. Lọc lại theo cùng luật với tab Bạn bè.
+      // `/users/search` khớp gần đúng (trigram) nên vẫn lẫn người không liên quan.
+      // Lọc lại theo cùng luật với tab Bạn bè.
       return matchesContactQuery(debouncedQuery, [
         toDisplayName(user),
         user.username,
