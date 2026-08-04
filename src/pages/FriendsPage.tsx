@@ -28,6 +28,7 @@ import {
 import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../stores";
 import { formatCalendarDate, formatCalendarDateTime } from "../utils/formatTime";
+import { matchesContactQuery } from "../utils/contactSearchMatch";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
 import { usePresence } from "../hooks/usePresence";
@@ -881,14 +882,15 @@ export const FriendsPage: React.FC = () => {
 
   // ponytail: lọc client-side trong số bạn ĐÃ tải. Nếu cần tìm bạn ở trang chưa
   // tải (list rất dài), nâng lên gọi API /friends?q= khi backend hỗ trợ.
+  // Khớp qua `matchesContactQuery` để CÙNG luật với tab Khám phá (bỏ dấu).
   const visibleFriendItems = useMemo(() => {
-    const q = friendFilter.trim().toLowerCase();
-    if (!q) return friendItems;
-    return friendItems.filter((friend) => {
-      const name = toDisplayName(friend).toLowerCase();
-      const username = (friend.username ?? "").toLowerCase();
-      return name.includes(q) || username.includes(q);
-    });
+    if (!friendFilter.trim()) return friendItems;
+    return friendItems.filter((friend) =>
+      matchesContactQuery(friendFilter, [
+        toDisplayName(friend),
+        friend.username,
+      ]),
+    );
   }, [friendItems, friendFilter]);
 
   const handleListScroll = useCallback(
@@ -1099,10 +1101,16 @@ export const FriendsPage: React.FC = () => {
       if (friendIdSet.has(user.id)) return false;
       if (user.isFriend === true) return false;
       if (isAcceptedFriendshipStatus(user.friendshipStatus)) return false;
-      return true;
+      // `/users/search` khớp cả subsequence (c-h-i-ê-n rời rạc) nên trả về
+      // người không liên quan. Lọc lại theo cùng luật với tab Bạn bè.
+      return matchesContactQuery(debouncedQuery, [
+        toDisplayName(user),
+        user.username,
+        user.employeeCode,
+      ]);
     });
     return sortByProximity(strangers, currentUser);
-  }, [searchResults, currentUser, currentUserId, friendIdSet]);
+  }, [searchResults, currentUser, currentUserId, friendIdSet, debouncedQuery]);
 
   const filteredSuggestions = useMemo(
     () =>
