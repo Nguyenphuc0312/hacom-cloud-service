@@ -1,4 +1,5 @@
-import { lazy } from "react";
+import { createElement, lazy } from "react";
+import { Navigate } from "react-router-dom";
 import type { AppRouteConfig } from "../types";
 import { ROUTE_PATHS } from "../paths";
 
@@ -18,6 +19,8 @@ const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
 const CloudPage = lazy(() => import("../../features/cloud/pages/CloudPage"));
+const CloudLegacyRedirect = () =>
+  createElement(Navigate, { to: ROUTE_PATHS.CLOUD, replace: true });
 const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
 
 /**
@@ -35,6 +38,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
   { path: ROUTE_PATHS.CLOUD, component: CloudPage },
+  { path: ROUTE_PATHS.CLOUD_LEGACY, component: CloudLegacyRedirect },
   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },
   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
   { path: ROUTE_PATHS.HELP, component: HelpPage },

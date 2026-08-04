@@ -151,7 +151,7 @@ export const CloudSidebar: React.FC<CloudSidebarProps> = ({
               </span>
             </div>
             <span className="text-[11px] font-medium text-text-muted">
-              {quota ? `${usedPercent.toFixed(usedPercent < 1 ? 1 : 0)}%` : "—"}
+              {quota ? `${usedPercent.toFixed(usedPercent < 1 ? 1 : 0)}%` : "?"}
             </span>
           </div>
           <div className="cloud-quota-card__track" aria-hidden="true">

@@ -80,7 +80,7 @@ export const CloudInspector: React.FC<CloudInspectorProps> = ({
           className="cloud-inspector__close"
           aria-label={t("common.close")}
         >
-          ×
+          ?
         </button>
       </div>
 

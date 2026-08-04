@@ -119,7 +119,7 @@ export default function CloudPage() {
     return {
       id: "auth-pending",
       username: "user",
-      displayName: "Người dùng",
+      displayName: "Ng??i d?ng",
       avatar: "",
       status: UserStatus.ONLINE,
       isBot: false,

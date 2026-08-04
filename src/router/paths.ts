@@ -21,7 +21,9 @@ export const ROUTE_PATHS = {
   TASKS: "/tasks",
   CALENDAR: "/calendar",
   AI_ASSISTANT: "/ai-assistant",
-  CLOUD: "/cloud",
+  // My Documents is a first-class chat conversation, not a separate module.
+  CLOUD: "/chat/my-documents",
+  CLOUD_LEGACY: "/cloud",
   ARCHIVE: "/archive",
   NOTIFICATIONS: "/notifications",
   HELP: "/help",

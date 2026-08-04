@@ -32,9 +32,6 @@ import { formatCalendarDateTime } from "../../utils/formatTime";
 interface ChatHeaderProps {
   conversation: Conversation;
   currentUserId: string;
-  titleOverride?: string;
-  subtitleOverride?: string;
-  avatarOverride?: React.ReactNode;
   typingStatus?: TypingStatus;
   typingStatuses?: TypingStatus[];
   onBack?: () => void;
@@ -43,6 +40,9 @@ interface ChatHeaderProps {
   onVideoCallClick?: () => void;
   onSearchClick?: () => void;
   onPinnedClick?: () => void;
+  titleOverride?: string;
+  subtitleOverride?: string;
+  avatarOverride?: React.ReactNode;
   onSelectionMode?: () => void;
   className?: string;
 }
@@ -58,9 +58,6 @@ const iconButtonClass = clsx(
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   currentUserId,
-  titleOverride,
-  subtitleOverride,
-  avatarOverride,
   typingStatus,
   typingStatuses,
   onBack,
@@ -69,6 +66,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onVideoCallClick,
   onSearchClick,
   onPinnedClick,
+  titleOverride,
+  subtitleOverride,
+  avatarOverride,
   className,
 }) => {
   const { t } = useTranslation();
@@ -147,8 +147,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   const displayName = alias ?? enrichedName ?? rawDisplayName;
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
-  const resolvedDisplayName = titleOverride ?? displayName;
-  const resolvedStatusText = subtitleOverride ?? statusText;
 
   return (
     <header
@@ -182,7 +180,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             {avatarOverride ?? (isDirect ? (
               <Avatar
                 src={avatarSrc}
-                alt={resolvedDisplayName}
+                alt={displayName}
                 size="md"
                 status={liveStatus}
                 showStatus={isDirect}
@@ -209,7 +207,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
           >
             <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
-              {resolvedDisplayName}
+              {titleOverride ?? displayName}
             </h2>
 
             {isTyping ? (
@@ -225,12 +223,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <p
                 className={clsx(
                   "chat-header-subtitle truncate text-[12px] leading-4",
-                  subtitleOverride || isOnline
-                    ? "text-text-secondary"
-                    : "text-text-muted",
+                  isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >
-                {resolvedStatusText}
+                {subtitleOverride ?? statusText}
               </p>
             )}
           </button>

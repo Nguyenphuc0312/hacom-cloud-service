@@ -24,15 +24,15 @@ describe("cloudFormat", () => {
   });
 
   it("derives note titles without inventing durable data", () => {
-    const item = { ...baseItem, content: "  Nội dung ghi chú  " };
+    const item = { ...baseItem, content: "  N?i dung ghi ch?  " };
     expect(
       getCloudItemTitle(item, {
-        text: "Ghi chú",
-        link: "Liên kết",
-        file: "Tệp",
+        text: "Ghi ch?",
+        link: "Li?n k?t",
+        file: "T?p",
       }),
-    ).toBe("Nội dung ghi chú");
-    expect(getCloudItemPreview(item)).toBe("Nội dung ghi chú");
+    ).toBe("N?i dung ghi ch?");
+    expect(getCloudItemPreview(item)).toBe("N?i dung ghi ch?");
   });
 
   it("allows only safe HTTP(S) external links", () => {

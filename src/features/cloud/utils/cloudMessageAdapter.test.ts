@@ -19,7 +19,7 @@ const createItem = (updates: Partial<CloudItem>): CloudItem => ({
   id: "22222222-2222-4222-8222-222222222222",
   type: "text",
   status: "ready",
-  content: "Ghi chú",
+  content: "Ghi ch?",
   sizeBytes: 8,
   createdAt: "2026-07-30T01:00:00.000Z",
   updatedAt: "2026-07-30T01:00:00.000Z",
@@ -35,7 +35,7 @@ describe("cloud message adapter", () => {
         url: "https://hacom.vn",
       }),
       currentUser,
-      { link: "Liên kết", file: "Tệp" },
+      { link: "Li?n k?t", file: "T?p" },
     );
 
     expect(message.type).toBe(MessageType.TEXT);
@@ -58,8 +58,8 @@ describe("cloud message adapter", () => {
     });
 
     const messages = cloudItemsToMessages([newer, older], currentUser, {
-      link: "Liên kết",
-      file: "Tệp",
+      link: "Li?n k?t",
+      file: "T?p",
     });
 
     expect(messages.map((message) => message.id)).toEqual([

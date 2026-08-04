@@ -19,11 +19,13 @@ describe("cloudApi", () => {
   const fetchMock = vi.fn<typeof fetch>();
 
   beforeEach(() => {
+    vi.stubEnv("VITE_CLOUD_DEMO_MODE", "true");
     vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
   });
 
@@ -33,26 +35,27 @@ describe("cloudApi", () => {
         id: "item-1",
         type: "text",
         status: "ready",
-        content: "Báo cáo",
+        content: "B?o c?o",
         sizeBytes: 7,
         createdAt: "2026-07-30T08:00:00Z",
         updatedAt: "2026-07-30T08:00:00Z",
       }),
     );
 
-    await cloudApi.createText(userId, "Báo cáo");
+    await cloudApi.createText(userId, "B?o c?o");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/cloud-api/api/v1/cloud/texts",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ content: "Báo cáo" }),
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-          "X-Demo-User-ID": userId,
-        }),
+        body: JSON.stringify({ content: "B?o c?o" }),
       }),
     );
+    const requestHeaders = fetchMock.mock.calls[0]?.[1]?.headers;
+    expect(requestHeaders).toBeInstanceOf(Headers);
+    expect((requestHeaders as Headers).get("Content-Type")).toBe("application/json");
+    expect((requestHeaders as Headers).get("Accept")).toBe("application/json");
+    expect((requestHeaders as Headers).get("X-Demo-User-ID")).toBe(userId);
   });
 
   it("keeps cursors opaque when requesting the next page", async () => {
