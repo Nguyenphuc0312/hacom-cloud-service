@@ -88,10 +88,12 @@ if [ -n "$unformatted" ]; then
 fi
 
 echo "[6/9] Running race, concurrency, reconciliation and regression tests"
+# PostgreSQL integration packages share one release database. Run packages
+# serially so one package's queue fixture cannot be claimed by another package.
 GOCACHE="$GO_CACHE_DIR" \
 TEST_DATABASE_URL="$TEST_DATABASE_URL" \
 TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
-go test -race -count=1 ./...
+go test -p 1 -race -count=1 ./...
 
 echo "[7/9] Reconciling the final database state"
 compose exec -T postgres psql \

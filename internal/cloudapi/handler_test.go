@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
@@ -30,6 +31,17 @@ type fakeService struct {
 type fakeUploadService struct {
 	initiate func(context.Context, upload.InitiateRequest) (upload.InitiateResult, error)
 	complete func(context.Context, upload.CompleteRequest) (upload.CompleteResult, error)
+}
+
+type principalAuthenticator struct {
+	principal auth.Principal
+}
+
+func (value principalAuthenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ctx := auth.WithPrincipal(request.Context(), value.principal)
+		next.ServeHTTP(writer, request.WithContext(ctx))
+	})
 }
 
 type fakeFileAccessService struct {
@@ -156,7 +168,7 @@ func requestWithUser(
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if userID != uuid.Nil {
-		request.Header.Set(demoUserHeader, userID.String())
+		request.Header.Set(auth.DemoUserHeader, userID.String())
 	}
 	return request
 }
@@ -494,7 +506,7 @@ func TestCloudAPIRequiresDemoUser(t *testing.T) {
 func TestCloudAPIRejectsInvalidDemoUser(t *testing.T) {
 	handler := newTestHandler(t, fakeService{})
 	request := httptest.NewRequest(http.MethodGet, "/quota", nil)
-	request.Header.Set(demoUserHeader, "not-a-uuid")
+	request.Header.Set(auth.DemoUserHeader, "not-a-uuid")
 	response := httptest.NewRecorder()
 
 	handler.ServeHTTP(response, request)
@@ -503,6 +515,37 @@ func TestCloudAPIRejectsInvalidDemoUser(t *testing.T) {
 		t.Fatalf("status = %d, want 401", response.Code)
 	}
 	assertErrorCode(t, response, "DEMO_USER_REQUIRED")
+}
+
+func TestCloudAPIUsesVerifiedPrincipalInsteadOfDemoHeader(t *testing.T) {
+	verifiedUserID := uuid.New()
+	forgedUserID := uuid.New()
+	service := fakeService{
+		getQuota: func(_ context.Context, ownerID uuid.UUID) (cloud.Quota, error) {
+			if ownerID != verifiedUserID {
+				t.Fatalf("owner ID = %s, want verified subject %s", ownerID, verifiedUserID)
+			}
+			return cloud.Quota{LimitBytes: 5_000_000_000}, nil
+		},
+	}
+	handler, err := New(
+		service,
+		100_000_000,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAuthenticator(principalAuthenticator{principal: auth.Principal{Subject: verifiedUserID}}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/quota", nil)
+	request.Header.Set(auth.DemoUserHeader, forgedUserID.String())
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
 }
 
 func TestCreateTextRejectsUnknownJSONField(t *testing.T) {

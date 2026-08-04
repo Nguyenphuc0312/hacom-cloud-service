@@ -10,6 +10,17 @@ import (
 
 func setRequiredEnvironment(t *testing.T) {
 	t.Helper()
+	t.Setenv("APP_ENV", "local")
+	t.Setenv("AUTH_MODE", "demo")
+	t.Setenv("AUTH_JWKS_URL", "")
+	t.Setenv("AUTH_ISSUER", "")
+	t.Setenv("AUTH_AUDIENCE", "")
+	t.Setenv("AUTH_JWKS_CACHE_TTL", "")
+	t.Setenv("AUTH_HTTP_TIMEOUT", "")
+	t.Setenv("AUTH_REDIS_URL", "")
+	t.Setenv("AUTH_REVOCATION_TIMEOUT", "")
+	t.Setenv("AUTH_LEGACY_HS256_VERIFY_ENABLED", "")
+	t.Setenv("AUTH_LEGACY_HS256_SECRET", "")
 	t.Setenv("DATABASE_URL", "postgres://hacom:hacom@localhost:5432/hacom_cloud?sslmode=disable")
 	t.Setenv("MINIO_ENDPOINT", "localhost:9000")
 	t.Setenv("MINIO_ACCESS_KEY", "minioadmin")
@@ -26,6 +37,9 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 
 	if cfg.APIAddr != ":8080" {
 		t.Fatalf("expected default API address, got %q", cfg.APIAddr)
+	}
+	if cfg.AuthMode != "demo" {
+		t.Fatalf("expected local demo auth mode, got %q", cfg.AuthMode)
 	}
 	if cfg.HealthTimeout != 3*time.Second {
 		t.Fatalf("expected 3s health timeout, got %s", cfg.HealthTimeout)
@@ -78,6 +92,85 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	}
 	if _, err := uuid.Parse(strings.Join(parts[len(parts)-5:], "-")); err != nil {
 		t.Fatalf("generated worker ID %q does not end with a UUID: %v", cfg.WorkerID, err)
+	}
+}
+
+func TestLoadRejectsDemoAuthOutsideLocalOrTest(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "demo")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "only allowed") {
+		t.Fatalf("expected unsafe demo auth error, got %v", err)
+	}
+}
+
+func TestLoadDefaultsToJWTOutsideLocal(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "AUTH_JWKS_URL") {
+		t.Fatalf("expected production JWT configuration error, got %v", err)
+	}
+}
+
+func TestLoadReadsJWTAuthConfiguration(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "jwt")
+	t.Setenv("AUTH_JWKS_URL", "https://chat.hacomholdings.com.vn/api/v1/auth/.well-known/jwks.json")
+	t.Setenv("AUTH_ISSUER", "chat-service")
+	t.Setenv("AUTH_AUDIENCE", "chat-service, hacom-cloud,chat-service")
+	t.Setenv("AUTH_REDIS_URL", "rediss://redis.example.test:6379/0")
+	t.Setenv("AUTH_JWKS_CACHE_TTL", "10m")
+	t.Setenv("AUTH_HTTP_TIMEOUT", "4s")
+	t.Setenv("AUTH_REVOCATION_TIMEOUT", "750ms")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthMode != "jwt" || cfg.AuthIssuer != "chat-service" {
+		t.Fatalf("unexpected auth config: %+v", cfg)
+	}
+	if len(cfg.AuthAudiences) != 2 || cfg.AuthAudiences[0] != "chat-service" || cfg.AuthAudiences[1] != "hacom-cloud" {
+		t.Fatalf("auth audiences = %v", cfg.AuthAudiences)
+	}
+	if cfg.AuthJWKSCacheTTL != 10*time.Minute || cfg.AuthHTTPTimeout != 4*time.Second || cfg.AuthRevocationTimeout != 750*time.Millisecond {
+		t.Fatalf("unexpected auth durations: cache=%s http=%s revocation=%s", cfg.AuthJWKSCacheTTL, cfg.AuthHTTPTimeout, cfg.AuthRevocationTimeout)
+	}
+}
+
+func TestLoadRejectsJWTWithoutRevocationAuthority(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AUTH_MODE", "jwt")
+	t.Setenv("AUTH_JWKS_URL", "https://auth.example.test/.well-known/jwks.json")
+	t.Setenv("AUTH_ISSUER", "chat-service")
+	t.Setenv("AUTH_AUDIENCE", "chat-service")
+	t.Setenv("AUTH_REDIS_URL", "")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "AUTH_REDIS_URL") {
+		t.Fatalf("expected revocation authority error, got %v", err)
+	}
+}
+
+func TestLoadRejectsWeakLegacyHS256Secret(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AUTH_MODE", "jwt")
+	t.Setenv("AUTH_JWKS_URL", "https://auth.example.test/.well-known/jwks.json")
+	t.Setenv("AUTH_ISSUER", "chat-service")
+	t.Setenv("AUTH_AUDIENCE", "chat-service")
+	t.Setenv("AUTH_REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("AUTH_LEGACY_HS256_VERIFY_ENABLED", "true")
+	t.Setenv("AUTH_LEGACY_HS256_SECRET", "too-short")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "at least 32 bytes") {
+		t.Fatalf("expected weak legacy secret error, got %v", err)
 	}
 }
 

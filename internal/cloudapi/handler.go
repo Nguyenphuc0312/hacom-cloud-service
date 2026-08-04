@@ -10,8 +10,8 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	demoUserHeader  = "X-Demo-User-ID"
 	requestIDHeader = "X-Request-ID"
 )
 
@@ -63,11 +62,12 @@ type FileAccessService interface {
 }
 
 type Handler struct {
-	service      Service
-	uploads      UploadService
-	fileAccess   FileAccessService
-	maxBodyBytes int64
-	logger       *slog.Logger
+	service       Service
+	uploads       UploadService
+	fileAccess    FileAccessService
+	maxBodyBytes  int64
+	logger        *slog.Logger
+	authenticator auth.Authenticator
 }
 
 type Option func(*Handler) error
@@ -92,6 +92,16 @@ func WithFileAccessService(service FileAccessService) Option {
 	}
 }
 
+func WithAuthenticator(authenticator auth.Authenticator) Option {
+	return func(handler *Handler) error {
+		if authenticator == nil {
+			return errors.New("Cloud API authenticator is required")
+		}
+		handler.authenticator = authenticator
+		return nil
+	}
+}
+
 func New(
 	service Service,
 	maxContentBytes int64,
@@ -109,9 +119,10 @@ func New(
 	}
 
 	handler := &Handler{
-		service:      service,
-		maxBodyBytes: maxContentBytes + 64*1024,
-		logger:       logger,
+		service:       service,
+		maxBodyBytes:  maxContentBytes + 64*1024,
+		logger:        logger,
+		authenticator: auth.DemoAuthenticator{},
 	}
 	for _, option := range options {
 		if err := option(handler); err != nil {
@@ -150,7 +161,7 @@ func New(
 	}
 	mux.HandleFunc("/", handler.notFound)
 
-	return handler.requestIDMiddleware(handler.demoUserMiddleware(mux)), nil
+	return handler.requestIDMiddleware(handler.authenticator.Middleware(mux)), nil
 }
 
 func (h *Handler) getFileAccess(
@@ -628,7 +639,6 @@ func (h *Handler) logInternalError(request *http.Request, err error) {
 
 type contextKey string
 
-const ownerUserIDKey contextKey = "cloud-owner-user-id"
 const requestIDKey contextKey = "cloud-request-id"
 
 func (h *Handler) requestIDMiddleware(next http.Handler) http.Handler {
@@ -640,27 +650,8 @@ func (h *Handler) requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (h *Handler) demoUserMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		rawUserID := strings.TrimSpace(request.Header.Get(demoUserHeader))
-		userID, err := uuid.Parse(rawUserID)
-		if err != nil || userID == uuid.Nil {
-			writeError(
-				writer,
-				http.StatusUnauthorized,
-				"DEMO_USER_REQUIRED",
-				"X-Demo-User-ID must be a valid UUID",
-			)
-			return
-		}
-		ctx := context.WithValue(request.Context(), ownerUserIDKey, userID)
-		next.ServeHTTP(writer, request.WithContext(ctx))
-	})
-}
-
 func ownerUserID(ctx context.Context) uuid.UUID {
-	value, _ := ctx.Value(ownerUserIDKey).(uuid.UUID)
-	return value
+	return auth.OwnerUserID(ctx)
 }
 
 func requestID(ctx context.Context) string {

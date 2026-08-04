@@ -8,15 +8,43 @@
 | `GET` | `/health` | Readiness của PostgreSQL, migration/schema Cloud và bucket MinIO |
 | `GET` | `/health/ready` | Alias readiness cho deployment |
 
-## Xác thực local
+## Xác thực
 
-Quy trình 2 chưa kết nối Auth Service. Các Cloud API tạm nhận UUID qua:
+Cloud API hỗ trợ hai mode tách biệt:
+
+- `AUTH_MODE=demo`: chỉ được phép khi `APP_ENV=local|test`; nhận UUID qua
+  `X-Demo-User-ID` để chạy Postman/demo Phase 1.
+- `AUTH_MODE=jwt`: production mode; nhận access token Hacom qua:
+
+```http
+Authorization: Bearer <access-token>
+```
+
+JWT mode xác minh signature bằng JWKS, pin `RS256|ES256`, kiểm tra `kid`, issuer,
+audience, `exp`, `iat`, `typ=access`, `sub`, `sid` và `jti`. `sub` là UUID owner
+duy nhất dùng cho mọi repository query; `X-Demo-User-ID` bị bỏ qua trong mode
+này. Token refresh/service, token sai contract, hết hạn hoặc revoked đều bị từ
+chối.
+
+Revocation dùng cùng contract với Auth/Chat:
+
+```text
+blacklist:<jti>
+auth_session_invalid_before:<sid>
+auth_invalid_before:<sub>
+```
+
+Redis/JWKS không khả dụng làm protected request fail closed; API không tự decode
+token hoặc fallback sang UUID do client cung cấp.
+
+Trong local demo:
 
 ```http
 X-Demo-User-ID: 11111111-1111-4111-8111-111111111111
 ```
 
-Middleware validate UUID và đưa user vào request context. Handler và repository không hard-code user. Khi kết nối Auth Service, thay middleware này bằng JWT middleware mà không đổi service/repository.
+Middleware của cả hai mode đều tạo cùng `auth.Principal` trong request context,
+vì vậy handler/repository không hard-code hoặc tự đọc owner từ body/header.
 
 Mỗi response Cloud API có `X-Request-ID` để đối chiếu với log server. Header này do API sinh, chưa phải distributed tracing hoàn chỉnh.
 
@@ -189,7 +217,13 @@ Contract:
 | 400 | `INVALID_UPLOAD` | Metadata upload hoặc Idempotency-Key không hợp lệ |
 | 400 | `INVALID_UPLOAD_SESSION_ID` | Upload session ID không phải UUID |
 | 400 | `INVALID_ITEM_ID` | Item ID của endpoint access không phải UUID |
-| 401 | `DEMO_USER_REQUIRED` | Thiếu hoặc sai UUID local |
+| 401 | `DEMO_USER_REQUIRED` | Thiếu hoặc sai UUID ở local demo mode |
+| 401 | `AUTH_REQUIRED` | Thiếu/sai định dạng Bearer token ở JWT mode |
+| 401 | `AUTH_INVALID_TOKEN` | Token sai signature/contract/issuer/audience/type |
+| 401 | `AUTH_TOKEN_EXPIRED` | Access token đã hết hạn |
+| 401 | `AUTH_TOKEN_REVOKED` | JTI/session/user đã bị Auth thu hồi |
+| 503 | `AUTH_AUTHORITY_UNAVAILABLE` | Không thể lấy signing key JWKS cần thiết |
+| 503 | `AUTH_REVOCATION_UNAVAILABLE` | Không thể xác minh revocation; request fail closed |
 | 403 | `DRIVE_NOT_ACTIVE` | Drive bị suspended/archived nên không được ghi mới |
 | 404 | `ITEM_NOT_FOUND` | Không có Item thuộc user hiện tại |
 | 404 | `UPLOAD_SESSION_NOT_FOUND` | Session không tồn tại hoặc không thuộc user |
@@ -210,8 +244,8 @@ Contract:
 
 ## Quy tắc an toàn Gate 5
 
-- Mọi Cloud endpoint yêu cầu UUID hợp lệ trong `X-Demo-User-ID`; đây chỉ là
-  contract local, không phải Auth production.
+- Local demo yêu cầu UUID hợp lệ trong `X-Demo-User-ID`; production bắt buộc JWT
+  đã verify và tuyệt đối không tin owner UUID do client gửi.
 - JSON có field lạ, JSON nối đuôi, body quá lớn và media type sai đều bị từ
   chối trước khi gọi service.
 - Item/session của user khác trả cùng `404` như dữ liệu không tồn tại.
@@ -232,7 +266,8 @@ upload, quota hoặc lifecycle đã đóng băng của Gate 5.
 
 - Không dedup nội dung; lưu cùng text/link hai lần tạo hai Item.
 - Không nhận `Idempotency-Key` ở API Quy trình 2.
-- Chưa kết nối Chat/Auth thật.
+- Backend đã có JWT/JWKS/revocation middleware; frontend/gateway production cutover
+  thuộc nhiệm vụ tiếp theo của Quy trình 1.
 - Worker đã chạy SHA-256; chưa có virus scan hoặc sinh thumbnail phía server.
 - Preview hiện phụ thuộc khả năng phát nội dung của trình duyệt; chưa chuyển mã
   video/audio và chưa render bộ Office phía server.

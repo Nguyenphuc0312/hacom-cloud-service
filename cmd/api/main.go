@@ -33,6 +33,14 @@ func main() {
 		logger.Error("load configuration", "error", err)
 		os.Exit(1)
 	}
+	authenticator, authCloser, err := buildAuthenticator(cfg)
+	if err != nil {
+		logger.Error("initialize Cloud authentication", "error", err, "auth_mode", cfg.AuthMode)
+		os.Exit(1)
+	}
+	if authCloser != nil {
+		defer authCloser.Close()
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
@@ -109,6 +117,7 @@ func main() {
 		logger,
 		cloudapi.WithUploadService(uploadService),
 		cloudapi.WithFileAccessService(fileAccessService),
+		cloudapi.WithAuthenticator(authenticator),
 	)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)
@@ -126,7 +135,12 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("API listening", "address", cfg.APIAddr, "environment", cfg.AppEnv)
+		logger.Info(
+			"API listening",
+			"address", cfg.APIAddr,
+			"environment", cfg.AppEnv,
+			"auth_mode", cfg.AuthMode,
+		)
 		serverErr <- server.ListenAndServe()
 	}()
 

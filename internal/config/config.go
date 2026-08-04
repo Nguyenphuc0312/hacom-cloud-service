@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,16 @@ const (
 type Config struct {
 	AppEnv                    string
 	APIAddr                   string
+	AuthMode                  string
+	AuthJWKSURL               string
+	AuthIssuer                string
+	AuthAudiences             []string
+	AuthJWKSCacheTTL          time.Duration
+	AuthHTTPTimeout           time.Duration
+	AuthRedisURL              string
+	AuthRevocationTimeout     time.Duration
+	AuthLegacyHS256Enabled    bool
+	AuthLegacyHS256Secret     string
 	DatabaseURL               string
 	MinIOEndpoint             string
 	MinIOAccessKey            string
@@ -44,6 +55,45 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	appEnv := strings.ToLower(strings.TrimSpace(env("APP_ENV", "local")))
+	authMode, err := loadAuthMode(appEnv)
+	if err != nil {
+		return Config{}, err
+	}
+	authJWKSCacheTTL, err := durationEnv("AUTH_JWKS_CACHE_TTL", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	authHTTPTimeout, err := durationEnv("AUTH_HTTP_TIMEOUT", 3*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	authRevocationTimeout, err := durationEnv("AUTH_REVOCATION_TIMEOUT", 500*time.Millisecond)
+	if err != nil {
+		return Config{}, err
+	}
+	authLegacyHS256Enabled, err := boolEnv("AUTH_LEGACY_HS256_VERIFY_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	authJWKSURL := strings.TrimSpace(os.Getenv("AUTH_JWKS_URL"))
+	authIssuer := strings.TrimSpace(os.Getenv("AUTH_ISSUER"))
+	authAudiences := splitCSV(os.Getenv("AUTH_AUDIENCE"))
+	authRedisURL := strings.TrimSpace(os.Getenv("AUTH_REDIS_URL"))
+	authLegacyHS256Secret := os.Getenv("AUTH_LEGACY_HS256_SECRET")
+	if authMode == "jwt" {
+		if err := validateJWTAuthConfig(
+			authJWKSURL,
+			authIssuer,
+			authAudiences,
+			authRedisURL,
+			authLegacyHS256Enabled,
+			authLegacyHS256Secret,
+		); err != nil {
+			return Config{}, err
+		}
+	}
+
 	maxUploadBytes, err := int64Env("MAX_UPLOAD_BYTES", defaultMaxUploadBytes)
 	if err != nil {
 		return Config{}, err
@@ -141,8 +191,18 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:                    env("APP_ENV", "local"),
+		AppEnv:                    appEnv,
 		APIAddr:                   env("API_ADDR", ":8080"),
+		AuthMode:                  authMode,
+		AuthJWKSURL:               authJWKSURL,
+		AuthIssuer:                authIssuer,
+		AuthAudiences:             authAudiences,
+		AuthJWKSCacheTTL:          authJWKSCacheTTL,
+		AuthHTTPTimeout:           authHTTPTimeout,
+		AuthRedisURL:              authRedisURL,
+		AuthRevocationTimeout:     authRevocationTimeout,
+		AuthLegacyHS256Enabled:    authLegacyHS256Enabled,
+		AuthLegacyHS256Secret:     authLegacyHS256Secret,
 		DatabaseURL:               os.Getenv("DATABASE_URL"),
 		MinIOEndpoint:             os.Getenv("MINIO_ENDPOINT"),
 		MinIOAccessKey:            os.Getenv("MINIO_ACCESS_KEY"),
@@ -183,6 +243,75 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func loadAuthMode(appEnv string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AUTH_MODE")))
+	if mode == "" {
+		if appEnv == "local" || appEnv == "test" {
+			return "demo", nil
+		}
+		return "jwt", nil
+	}
+	if mode != "demo" && mode != "jwt" {
+		return "", fmt.Errorf("AUTH_MODE must be demo or jwt")
+	}
+	if mode == "demo" && appEnv != "local" && appEnv != "test" {
+		return "", fmt.Errorf("AUTH_MODE=demo is only allowed when APP_ENV is local or test")
+	}
+	return mode, nil
+}
+
+func validateJWTAuthConfig(
+	jwksURL string,
+	issuer string,
+	audiences []string,
+	redisURL string,
+	legacyHS256Enabled bool,
+	legacyHS256Secret string,
+) error {
+	if jwksURL == "" {
+		return fmt.Errorf("AUTH_JWKS_URL is required when AUTH_MODE=jwt")
+	}
+	parsedJWKSURL, err := url.Parse(jwksURL)
+	if err != nil || (parsedJWKSURL.Scheme != "http" && parsedJWKSURL.Scheme != "https") || parsedJWKSURL.Host == "" {
+		return fmt.Errorf("AUTH_JWKS_URL must be an absolute http or https URL")
+	}
+	if issuer == "" {
+		return fmt.Errorf("AUTH_ISSUER is required when AUTH_MODE=jwt")
+	}
+	if len(audiences) == 0 {
+		return fmt.Errorf("AUTH_AUDIENCE is required when AUTH_MODE=jwt")
+	}
+	if redisURL == "" {
+		return fmt.Errorf("AUTH_REDIS_URL is required when AUTH_MODE=jwt")
+	}
+	parsedRedisURL, err := url.Parse(redisURL)
+	if err != nil || (parsedRedisURL.Scheme != "redis" && parsedRedisURL.Scheme != "rediss") || parsedRedisURL.Host == "" {
+		return fmt.Errorf("AUTH_REDIS_URL must be an absolute redis or rediss URL")
+	}
+	if legacyHS256Enabled && len(legacyHS256Secret) < 32 {
+		return fmt.Errorf("AUTH_LEGACY_HS256_SECRET must contain at least 32 bytes when legacy verification is enabled")
+	}
+	return nil
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, exists := seen[part]; exists {
+			continue
+		}
+		seen[part] = struct{}{}
+		result = append(result, part)
+	}
+	return result
 }
 
 func env(key, fallback string) string {
