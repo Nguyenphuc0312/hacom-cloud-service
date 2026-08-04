@@ -6,7 +6,7 @@
  * → HTML table. Có tab chọn sheet nếu file nhiều sheet.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
@@ -18,9 +18,18 @@ interface ExcelPreviewProps {
 
 interface ParsedWorkbook {
   sheetNames: string[];
-  /** HTML table string cho từng sheet (index khớp sheetNames). */
-  htmlBySheet: string[];
+  /** Cell text for each sheet. React escapes every value during rendering. */
+  rowsBySheet: string[][][];
 }
+
+const toCellText = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+};
 
 // xlsx nặng (~1MB) → lazy import để không phình bundle chính.
 async function loadXlsx(): Promise<typeof import("xlsx")> {
@@ -51,11 +60,17 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
         if (cancelled) return;
 
         const wb = XLSX.read(buf, { type: "array" });
-        const htmlBySheet = wb.SheetNames.map((name) =>
-          XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+        const rowsBySheet = wb.SheetNames.map((name) =>
+          XLSX.utils
+            .sheet_to_json<unknown[]>(wb.Sheets[name], {
+              header: 1,
+              raw: false,
+              defval: "",
+            })
+            .map((row) => row.map(toCellText)),
         );
         if (cancelled) return;
-        setParsed({ sheetNames: wb.SheetNames, htmlBySheet });
+        setParsed({ sheetNames: wb.SheetNames, rowsBySheet });
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Không đọc được file");
@@ -67,10 +82,7 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
     };
   }, [url]);
 
-  const activeHtml = useMemo(
-    () => parsed?.htmlBySheet[activeSheet] ?? "",
-    [parsed, activeSheet],
-  );
+  const activeRows = parsed?.rowsBySheet[activeSheet] ?? [];
 
   return (
     <div
@@ -114,11 +126,19 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
             Đang tải bảng tính…
           </div>
         ) : (
-          // sheet_to_html trả bảng có sẵn style tối thiểu; bọc class để căn đẹp.
-          <div
-            className="excel-preview-table text-sm text-gray-900"
-            dangerouslySetInnerHTML={{ __html: activeHtml }}
-          />
+          <div className="excel-preview-table text-sm text-gray-900">
+            <table>
+              <tbody>
+                {activeRows.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {row.map((cell, columnIndex) => (
+                      <td key={columnIndex}>{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
