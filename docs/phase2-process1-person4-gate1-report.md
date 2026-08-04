@@ -1,9 +1,12 @@
 # Phase 2 Process 1 — Person 4 delivery report
 
-Date: 2026-08-04  
-Branch: `integration/phase-2-process-1-baseline-auth`  
-Baseline commit: `74b220334871e73edc4525334867e9ed643244ee`  
-Delivery commit: recorded after the local delivery commit is created
+Date: 2026-08-04
+
+Branch: `integration/phase-2-process-1-baseline-auth`
+
+Baseline commit: `74b220334871e73edc4525334867e9ed643244ee`
+
+Delivery commit: `4f6385986d2d083f7bcd7135f56a1ece702dc47b`
 
 ## Scope completed
 
