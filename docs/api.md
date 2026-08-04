@@ -10,6 +10,11 @@
 
 ## Xác thực
 
+Phase 2 production uses the frozen Bearer/JWT/JWKS contract in
+[`phase2-auth-api-contract.md`](phase2-auth-api-contract.md) and the public
+same-origin base `/cloud-api/api/v1/cloud`. The machine-readable authentication
+boundary is [`openapi/phase2-cloud-auth.openapi.yaml`](openapi/phase2-cloud-auth.openapi.yaml).
+
 Cloud API hỗ trợ hai mode tách biệt:
 
 - `AUTH_MODE=demo`: chỉ được phép khi `APP_ENV=local|test`; nhận UUID qua
@@ -37,7 +42,8 @@ auth_invalid_before:<sub>
 Redis/JWKS không khả dụng làm protected request fail closed; API không tự decode
 token hoặc fallback sang UUID do client cung cấp.
 
-Trong local demo:
+Trong local demo, header tương thích dưới đây chỉ được bật ở `local|test` và
+không được xuất hiện trong môi trường triển khai:
 
 ```http
 X-Demo-User-ID: 11111111-1111-4111-8111-111111111111

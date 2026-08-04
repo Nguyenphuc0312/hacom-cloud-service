@@ -1,0 +1,104 @@
+{
+  "info": {
+    "name": "Hacom Cloud Phase 2 Process 1 - Auth Contract",
+    "description": "Live Auth/JWKS acceptance. Tokens must be issued by the integration chat-auth-service or its test signing key. Never export populated token variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "userAToken", "value": "" },
+    { "key": "userBToken", "value": "" },
+    { "key": "expiredToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "revokedToken", "value": "" },
+    { "key": "createdItemId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Valid Access Token",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userAToken}}" },
+          { "key": "X-Demo-User-ID", "value": "00000000-0000-4000-8000-000000000099" },
+          { "key": "X-Request-ID", "value": "attacker-controlled-request-id" },
+          { "key": "Origin", "value": "https://attacker.invalid" }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('valid access token is accepted', () => pm.response.to.have.status(200));",
+          "pm.test('request ID is server controlled', () => { const id = pm.response.headers.get('X-Request-ID'); pm.expect(id).to.be.ok; pm.expect(id).not.eql('attacker-controlled-request-id'); });",
+          "pm.test('untrusted CORS origin is not granted', () => { const origin = pm.response.headers.get('Access-Control-Allow-Origin'); pm.expect(origin).not.eql('*'); pm.expect(origin).not.eql('https://attacker.invalid'); });"
+        ]}
+      }]
+    },
+    {
+      "name": "02 - Missing Bearer Token",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/cloud/quota" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('missing token is rejected', () => pm.response.to.have.status(401));",
+        "pm.test('stable error code', () => pm.expect(pm.response.json().error.code).to.eql('AUTH_REQUIRED'));"
+      ]}}]
+    },
+    {
+      "name": "03 - Expired Access Token",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{expiredToken}}" }], "url": "{{baseUrl}}/api/v1/cloud/quota" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('expired token is rejected', () => pm.response.to.have.status(401));",
+        "pm.test('no token oracle detail', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ACCESS_TOKEN'));"
+      ]}}]
+    },
+    {
+      "name": "04 - Refresh Token Rejected",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{refreshToken}}" }], "url": "{{baseUrl}}/api/v1/cloud/quota" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('refresh token is rejected', () => pm.response.to.have.status(401));",
+        "pm.test('wrong type uses stable error', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ACCESS_TOKEN'));"
+      ]}}]
+    },
+    {
+      "name": "05 - Revoked Session Rejected",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{revokedToken}}" }], "url": "{{baseUrl}}/api/v1/cloud/quota" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('revoked session is rejected', () => pm.response.to.have.status(401));",
+        "pm.test('revocation has stable error', () => pm.expect(pm.response.json().error.code).to.eql('SESSION_REVOKED'));"
+      ]}}]
+    },
+    {
+      "name": "06 - Create Item As User A",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userAToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Demo-User-ID", "value": "00000000-0000-4000-8000-000000000099" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"content\":\"Phase 2 owner contract\"}" },
+        "url": "{{baseUrl}}/api/v1/cloud/texts"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('item is created from token subject', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('createdItemId', pm.response.json().id);"
+      ]}}]
+    },
+    {
+      "name": "07 - User B Cannot Spoof User A",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userBToken}}" },
+          { "key": "X-Demo-User-ID", "value": "00000000-0000-4000-8000-000000000099" },
+          { "key": "X-Forwarded-User-ID", "value": "00000000-0000-4000-8000-000000000099" }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items/{{createdItemId}}"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('cross-owner resource is hidden', () => pm.response.to.have.status(404));",
+        "pm.test('missing and cross-owner are indistinguishable', () => pm.expect(pm.response.json().error.code).to.eql('ITEM_NOT_FOUND'));"
+      ]}}]
+    }
+  ]
+}

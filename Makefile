@@ -12,6 +12,7 @@ POSTMAN_COLLECTION ?= tests/postman/Hacom-Cloud-Process-2.postman_collection.jso
 POSTMAN_ENVIRONMENT ?= tests/postman/Hacom-Cloud-Local.postman_environment.json
 POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postman_collection.json
 POSTMAN_PROCESS5_COLLECTION ?= tests/postman/Hacom-Cloud-Process-5-Release.postman_collection.json
+POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Auth.postman_collection.json
 
 .PHONY: run-api run-worker test fmt vet up down logs ps \
 	infra-up infra-down infra-logs infra-ps \
@@ -19,6 +20,7 @@ POSTMAN_PROCESS5_COLLECTION ?= tests/postman/Hacom-Cloud-Process-5-Release.postm
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
 	test-release-process5 test-postman-process5 demo-process5 \
+	test-gate1-person4 test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -48,6 +50,16 @@ test-postman-process5:
 	npx --yes newman run "$(POSTMAN_PROCESS5_COLLECTION)" \
 		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli --silent
 	@echo "Process 5 Postman acceptance passed (silent mode protects presigned URLs)."
+
+test-gate1-person4:
+	go test ./internal/router ./tests/contract -run 'TestGatewayContract|TestOpenAPIContract|TestPhase2AuthContractConfiguration' -count=1
+
+test-contract-phase2-auth:
+	PHASE2_CONTRACT_REQUIRED=true go test ./tests/contract -run '^TestPhase2AuthHTTPContract$$' -count=1 -v
+
+test-postman-phase2-auth:
+	npx --yes newman run "$(POSTMAN_PHASE2_AUTH_COLLECTION)" --reporters cli --silent
+	@echo "Phase 2 auth Postman acceptance passed (silent mode protects bearer tokens)."
 
 demo-process5:
 	sh scripts/demo-process5.sh
