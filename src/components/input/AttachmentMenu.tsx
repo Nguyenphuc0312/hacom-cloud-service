@@ -69,6 +69,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       color: "bg-accent/15 text-accent",
       enabled: true,
     },
+    // ponytail: ẩn "Bình chọn" khỏi menu đính kèm; bỏ dòng filter bên dưới để hiện lại
     {
       id: "poll",
       label: t("chat:attachment.types.poll"),
@@ -76,6 +77,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       color: "bg-[#1976D2]/10 text-[#1565C0]",
       enabled: canPoll,
       disabledReason: t("chat:attachment.pollGroupOnly", { defaultValue: "Chỉ dành cho nhóm" }),
+      hidden: true,
     },
     {
       id: "reminder",
@@ -147,7 +149,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
         className,
       )}
     >
-      {attachmentTypes.map((type) => {
+      {attachmentTypes.filter((type) => !type.hidden).map((type) => {
         const isDisabled = !type.enabled || disabledItemIds.includes(type.id);
         return (
         <button
