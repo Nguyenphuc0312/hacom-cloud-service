@@ -140,7 +140,7 @@ func (h *adminQuotaHandler) review(w http.ResponseWriter, r *http.Request, decis
 	result, err := h.service.Review(r.Context(), quotarequest.ReviewCommand{RequestID: id, ActorUserID: actor, Decision: decision, OperationID: r.Header.Get(idempotencyKeyHeader), Note: body.Note, RequestIDTrace: r.Header.Get(requestIDHeader)})
 	if err != nil {
 		if h.metrics != nil {
-			h.metrics.RecordAdminReview(reviewDecisionLabel(decision), "rejected")
+			h.metrics.RecordAdminReview(reviewDecisionLabel(decision), adminReviewMetricOutcome(err))
 		}
 		h.writeError(w, r, err)
 		return
@@ -156,6 +156,14 @@ func (h *adminQuotaHandler) review(w http.ResponseWriter, r *http.Request, decis
 	response.Applied = &result.Applied
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, response)
+}
+func adminReviewMetricOutcome(err error) string {
+	for _, expected := range []error{quotarequest.ErrInvalidInput, quotarequest.ErrNotFound, quotarequest.ErrInvalidState, quotarequest.ErrQuotaBelowUsage, quotarequest.ErrReviewConflict} {
+		if errors.Is(err, expected) {
+			return "rejected"
+		}
+	}
+	return "error"
 }
 func reviewDecisionLabel(decision quotarequest.Status) string {
 	if decision == quotarequest.StatusApproved {

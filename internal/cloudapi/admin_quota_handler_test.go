@@ -3,6 +3,7 @@ package cloudapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -127,5 +128,14 @@ func TestAdminQuotaRejectsUntrustedActorAndUnknownBody(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestAdminReviewMetricOutcomeSeparatesBusinessAndInternalErrors(t *testing.T) {
+	if got := adminReviewMetricOutcome(quotarequest.ErrInvalidState); got != "rejected" {
+		t.Fatalf("business outcome=%q", got)
+	}
+	if got := adminReviewMetricOutcome(errors.New("database unavailable")); got != "error" {
+		t.Fatalf("internal outcome=%q", got)
 	}
 }

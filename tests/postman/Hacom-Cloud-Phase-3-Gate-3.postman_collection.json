@@ -9,8 +9,10 @@
     { "key": "userToken", "value": "" },
     { "key": "adminToken", "value": "" },
     { "key": "quotaTierBytes", "value": "21474836480" },
+    { "key": "rejectQuotaTierBytes", "value": "53687091200" },
     { "key": "traceId", "value": "gate3-trace-{{$guid}}" },
-    { "key": "operationId", "value": "gate3-review-{{$guid}}" }
+    { "key": "operationId", "value": "gate3-review-{{$guid}}" },
+    { "key": "rejectOperationId", "value": "gate3-reject-{{$guid}}" }
   ],
   "item": [
     {
@@ -79,6 +81,57 @@
       },
       "event": [{ "listen": "test", "script": { "exec": [
         "pm.response.to.have.status(200); pm.expect(pm.response.json().limitBytes).to.eql(Number(pm.collectionVariables.get('quotaTierBytes')));"
+      ] } }]
+    },
+    {
+      "name": "5. User creates request for reject path",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "gate3-reject-create-{{$guid}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"requestedQuotaBytes\":{{rejectQuotaTierBytes}}}" },
+        "url": "{{cloudBaseUrl}}/api/v1/cloud/quota/requests"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(201); const body = pm.response.json(); pm.collectionVariables.set('rejectRequestId', body.id);"
+      ] } }]
+    },
+    {
+      "name": "6. Authorized admin rejects",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{rejectOperationId}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"note\":\"Gate 3 rejected\"}" },
+        "url": "{{adminBaseUrl}}/admin/cloud/quota-requests/{{rejectRequestId}}/reject"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(200); const body = pm.response.json().data; pm.expect(body.status).to.eql('rejected'); pm.expect(body.applied).to.eql(true);"
+      ] } }]
+    },
+    {
+      "name": "7. Duplicate rejection is idempotent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{rejectOperationId}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"note\":\"Gate 3 rejected\"}" },
+        "url": "{{adminBaseUrl}}/admin/cloud/quota-requests/{{rejectRequestId}}/reject"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(200); pm.expect(pm.response.json().data.applied).to.eql(false);"
       ] } }]
     }
   ]

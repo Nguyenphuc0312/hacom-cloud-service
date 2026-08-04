@@ -10,6 +10,11 @@
 3. Admin Service obtains an Auth-issued service token for audience
    `hacom-cloud-service` and scope `cloud.quota.review`.
 4. Cloud verifies token type, signature, issuer, audience, expiry and scope.
+
+Admin Service forwards the verified inbound `X-Request-ID` to Cloud. Cloud stores
+that trace value as `cloud.audit_logs.request_id` in the same transaction as the
+approve/reject decision. The browser cannot provide `X-Admin-Actor-ID`; Admin
+Service derives that header only from its authenticated admin context.
    Only after verification does it trust `X-Admin-Actor-ID`.
 5. Cloud owns the quota transaction and audit. Admin Service and Panel never
    access the Cloud database.

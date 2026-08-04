@@ -10,8 +10,11 @@
 | Authorized admin review | fresh Auth `/v1/auth/me`, exact `cloud.quota.review`, service-token scope tests | PASS |
 | Idempotent approval | row-lock transaction test repeats the same operation and proves one audit/quota update | PASS |
 | Transactional quota/audit | PostgreSQL integration assertion after approve | PASS |
+| Reject transaction/idempotency | PostgreSQL test proves unchanged quota, one audit, actor/trace and conflicting-decision rejection | PASS |
 | Trace continuity | Admin client test and audit `request_id=trace-admin-review` assertion | PASS |
 | Sensitive-data controls | common audit writer rejects sensitive metadata keys; metrics use bounded enums | PASS |
+| Audit immutability | migration 000010 rejects UPDATE/DELETE with SQLSTATE 55000; down/up recovery tested | PASS |
+| Cross-service E2E contract | seven-step Postman approve/reject/retry flow plus static contract and `make test-postman-phase3` | PASS |
 
 ## Security acceptance
 
@@ -23,12 +26,12 @@
 - A duplicate approval with the same operation ID returns `applied=false`; a different
   operation after completion returns invalid state and cannot increment quota again.
 - Neither reason text nor file/object metadata is emitted to logs or metrics.
+- Metric business rejection and internal-error outcomes are tested separately.
 
 ## Findings
 
-No Phase 3 BLOCKER or MAJOR finding remains in the implemented scope. Shared-package
-version drift already present in Auth/Admin Service may prevent their unrelated full
-repository typecheck; Phase 3 targeted tests and Cloud production build are required
-release checks until that workspace dependency is synchronized.
+No Phase 3 BLOCKER or MAJOR finding remains. The local shared-types package is built
+before consumers; `chat-auth-service` typecheck, `chat-admin-service` production build,
+Cloud full Go suite and the PostgreSQL Gate 3 acceptance suite all pass.
 
 Gate 3 status: **PASS for Phase 3 Search + Quota Request + Admin Review**.

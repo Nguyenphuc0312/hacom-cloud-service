@@ -276,3 +276,50 @@ func TestQuotaRequestApproveIsAtomicAuditedAndIdempotent(t *testing.T) {
 		t.Fatalf("quota=%d audit=%d actor=%s", quotaBytes, auditCount, auditActor)
 	}
 }
+
+func TestQuotaRequestRejectIsAtomicAuditedTracedAndIdempotent(t *testing.T) {
+	service, repository := newQuotaRequestIntegrationService(t)
+	ownerID, actorID := uuid.New(), uuid.New()
+	cleanupOwner(t, repository.pool, ownerID)
+	created, err := service.Create(context.Background(), quotarequest.CreateCommand{
+		OwnerUserID: ownerID, RequestedQuotaBytes: 10_000_000_000, IdempotencyKey: "admin-reject-create",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var quotaBefore int64
+	if err := repository.pool.QueryRow(context.Background(), `SELECT quota_bytes FROM cloud.quotas WHERE drive_id=$1`, created.Request.DriveID).Scan(&quotaBefore); err != nil {
+		t.Fatal(err)
+	}
+	note := "capacity policy"
+	command := quotarequest.ReviewCommand{RequestID: created.Request.ID, ActorUserID: actorID, Decision: quotarequest.StatusRejected, OperationID: "admin-reject-op", Note: &note, RequestIDTrace: "trace-admin-reject"}
+	first, err := service.Review(context.Background(), command)
+	if err != nil || !first.Applied || first.Item.Status != quotarequest.StatusRejected {
+		t.Fatalf("first=%+v error=%v", first, err)
+	}
+	retry, err := service.Review(context.Background(), command)
+	if err != nil || retry.Applied {
+		t.Fatalf("retry=%+v error=%v", retry, err)
+	}
+	conflict := command
+	conflict.Decision = quotarequest.StatusApproved
+	if _, err := service.Review(context.Background(), conflict); !errors.Is(err, quotarequest.ErrReviewConflict) {
+		t.Fatalf("conflicting decision error=%v", err)
+	}
+	var quotaAfter int64
+	var auditCount int
+	var auditActor uuid.UUID
+	var trace string
+	if err := repository.pool.QueryRow(context.Background(), `
+		SELECT quota.quota_bytes,
+		 (SELECT count(*) FROM cloud.audit_logs WHERE entity_id=$1 AND action='cloud.quota_request.rejected'),
+		 (SELECT actor_user_id FROM cloud.audit_logs WHERE entity_id=$1 AND action='cloud.quota_request.rejected' LIMIT 1),
+		 (SELECT request_id FROM cloud.audit_logs WHERE entity_id=$1 AND action='cloud.quota_request.rejected' LIMIT 1)
+		FROM cloud.quotas quota WHERE quota.drive_id=$2
+	`, created.Request.ID, created.Request.DriveID).Scan(&quotaAfter, &auditCount, &auditActor, &trace); err != nil {
+		t.Fatal(err)
+	}
+	if quotaAfter != quotaBefore || auditCount != 1 || auditActor != actorID || trace != "trace-admin-reject" {
+		t.Fatalf("quota=%d/%d audit=%d actor=%s trace=%q", quotaBefore, quotaAfter, auditCount, auditActor, trace)
+	}
+}

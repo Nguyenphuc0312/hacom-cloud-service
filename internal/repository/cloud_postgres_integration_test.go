@@ -35,6 +35,23 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 	t.Helper()
 	t.Cleanup(func() {
 		ctx := context.Background()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Errorf("begin audit cleanup: %v", err)
+			return
+		}
+		if _, err = tx.Exec(ctx, `SET LOCAL cloud.audit_maintenance = 'on'`); err == nil {
+			_, err = tx.Exec(ctx, `DELETE FROM cloud.audit_logs WHERE drive_id IN (SELECT id FROM cloud.drives WHERE owner_user_id=$1)`, ownerID)
+		}
+		if err == nil {
+			err = tx.Commit(ctx)
+		} else {
+			_ = tx.Rollback(ctx)
+		}
+		if err != nil {
+			t.Errorf("cleanup owner audit %s: %v", ownerID, err)
+			return
+		}
 		queries := []string{
 			`DELETE FROM cloud.outbox_events WHERE aggregate_id IN (
 				SELECT request.id FROM cloud.quota_requests AS request
@@ -42,9 +59,6 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 				WHERE drive.owner_user_id=$1
 			)`,
 			`DELETE FROM cloud.item_lifecycle_operations WHERE drive_id IN (
-				SELECT id FROM cloud.drives WHERE owner_user_id = $1
-			)`,
-			`DELETE FROM cloud.audit_logs WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,
 			`DELETE FROM cloud.jobs WHERE drive_id IN (

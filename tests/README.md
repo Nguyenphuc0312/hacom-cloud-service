@@ -66,4 +66,11 @@ idempotent retries, async delete responses, and presigned access that never outl
 the Trash `purgeAfter` deadline. The Postman collection is
 `tests/postman/Hacom-Cloud-Phase-2-Trash.postman_collection.json`.
 
+## Phase 3 Gate 3
+
+Run the isolated PostgreSQL, migration rollback/recovery, search/quota/audit and
+static cross-service contract gate with `make test-gate3`. With live Auth, Admin
+Service and Cloud endpoints plus `userToken`/`adminToken` collection variables,
+run the seven-step HTTP flow using `make test-postman-phase3`.
+
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.

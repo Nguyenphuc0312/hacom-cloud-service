@@ -14,6 +14,7 @@ POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postma
 POSTMAN_PROCESS5_COLLECTION ?= tests/postman/Hacom-Cloud-Process-5-Release.postman_collection.json
 POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Auth.postman_collection.json
 POSTMAN_PHASE2_TRASH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Trash.postman_collection.json
+POSTMAN_PHASE3_GATE3_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-3-Gate-3.postman_collection.json
 
 .PHONY: run-api run-worker test fmt vet up down logs ps \
 	infra-up infra-down infra-logs infra-ps \
@@ -24,6 +25,7 @@ POSTMAN_PHASE2_TRASH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Trash.postm
 	test-trash-integration test-trash-api test-trash-gate2 test-postman-phase2-trash \
 	test-release-process5 test-postman-process5 demo-process5 \
 	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
+	test-gate3 test-postman-phase3 \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -82,6 +84,13 @@ test-contract-phase2-auth:
 test-postman-phase2-auth:
 	npx --yes newman run "$(POSTMAN_PHASE2_AUTH_COLLECTION)" --reporters cli --silent
 	@echo "Phase 2 auth Postman acceptance passed (silent mode protects bearer tokens)."
+
+test-gate3:
+	sh scripts/test-phase3-gate3.sh
+
+test-postman-phase3:
+	npx --yes newman run "$(POSTMAN_PHASE3_GATE3_COLLECTION)" --reporters cli --silent
+	@echo "Phase 3 Postman E2E passed (silent mode protects user/admin tokens and request reason)."
 
 demo-process5:
 	sh scripts/demo-process5.sh

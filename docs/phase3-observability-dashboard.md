@@ -27,3 +27,7 @@ Alerts:
 Audit correlation uses `cloud.audit_logs.request_id`, not a metric label. Admin
 Service forwards the verified inbound `X-Request-ID`; Cloud writes that value in
 the same database transaction as the quota decision.
+
+Migration `000010_audit_append_only` rejects audit UPDATE/DELETE. Approved retention
+maintenance must run in one privileged transaction with
+`SET LOCAL cloud.audit_maintenance = 'on'`; application request paths never set it.

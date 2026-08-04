@@ -3,6 +3,7 @@ package cloudapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,15 @@ import (
 type fakeQuotaRequestService struct {
 	create  func(context.Context, quotarequest.CreateCommand) (quotarequest.CreateResult, error)
 	current func(context.Context, uuid.UUID) (quotarequest.Request, error)
+}
+
+func TestQuotaRequestMetricOutcomeSeparatesBusinessAndInternalErrors(t *testing.T) {
+	if got := quotaRequestMetricOutcome(quotarequest.ErrPendingExists); got != "rejected" {
+		t.Fatalf("business outcome=%q", got)
+	}
+	if got := quotaRequestMetricOutcome(errors.New("database unavailable")); got != "error" {
+		t.Fatalf("internal outcome=%q", got)
+	}
 }
 
 func (f fakeQuotaRequestService) Create(ctx context.Context, command quotarequest.CreateCommand) (quotarequest.CreateResult, error) {

@@ -43,7 +43,7 @@ func (h *Handler) createQuotaRequest(writer http.ResponseWriter, request *http.R
 	})
 	if err != nil {
 		if h.metrics != nil {
-			h.metrics.RecordQuotaRequest("create", "rejected")
+			h.metrics.RecordQuotaRequest("create", quotaRequestMetricOutcome(err))
 		}
 		h.writeQuotaRequestError(writer, request, err)
 		return
@@ -73,7 +73,7 @@ func (h *Handler) getCurrentQuotaRequest(writer http.ResponseWriter, request *ht
 	current, err := h.quotaRequests.Current(request.Context(), ownerUserID(request.Context()))
 	if err != nil {
 		if h.metrics != nil {
-			h.metrics.RecordQuotaRequest("current", "rejected")
+			h.metrics.RecordQuotaRequest("current", quotaRequestMetricOutcome(err))
 		}
 		h.writeQuotaRequestError(writer, request, err)
 		return
@@ -83,6 +83,15 @@ func (h *Handler) getCurrentQuotaRequest(writer http.ResponseWriter, request *ht
 	}
 	writer.Header().Set("Cache-Control", "no-store")
 	writeJSON(writer, http.StatusOK, quotaRequestResponseFrom(current))
+}
+
+func quotaRequestMetricOutcome(err error) string {
+	for _, expected := range []error{quotarequest.ErrInvalidTier, quotarequest.ErrInvalidInput, quotarequest.ErrPendingExists, quotarequest.ErrIdempotencyConflict, quotarequest.ErrNotFound, cloud.ErrDriveNotActive} {
+		if errors.Is(err, expected) {
+			return "rejected"
+		}
+	}
+	return "error"
 }
 
 func quotaRequestResponseFrom(request quotarequest.Request) quotaRequestResponse {
