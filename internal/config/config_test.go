@@ -28,6 +28,7 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("AUTH_SERVICE_CLIENT_SECRET", "")
 	t.Setenv("AUTH_SERVICE_TOKEN_AUDIENCE", "")
 	t.Setenv("AUTH_SERVICE_TOKEN_SCOPES", "")
+	t.Setenv("SEARCH_QUERY_TIMEOUT", "")
 	t.Setenv("DATABASE_URL", "postgres://hacom:hacom@localhost:5432/hacom_cloud?sslmode=disable")
 	t.Setenv("MINIO_ENDPOINT", "localhost:9000")
 	t.Setenv("MINIO_ACCESS_KEY", "minioadmin")
@@ -50,6 +51,9 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	}
 	if cfg.HealthTimeout != 3*time.Second {
 		t.Fatalf("expected 3s health timeout, got %s", cfg.HealthTimeout)
+	}
+	if cfg.SearchQueryTimeout != 2*time.Second {
+		t.Fatalf("expected 2s search query timeout, got %s", cfg.SearchQueryTimeout)
 	}
 	if cfg.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("expected 10s shutdown timeout, got %s", cfg.ShutdownTimeout)
@@ -225,6 +229,16 @@ func TestLoadRejectsInvalidHealthTimeout(t *testing.T) {
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "HEALTH_TIMEOUT") {
 		t.Fatalf("expected invalid HEALTH_TIMEOUT error, got %v", err)
+	}
+}
+
+func TestLoadRejectsUnsafeSearchQueryTimeout(t *testing.T) {
+	setRequiredEnvironment(t)
+	for _, value := range []string{"invalid", "11s"} {
+		t.Setenv("SEARCH_QUERY_TIMEOUT", value)
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SEARCH_QUERY_TIMEOUT") {
+			t.Fatalf("value=%q error=%v", value, err)
+		}
 	}
 }
 

@@ -210,6 +210,25 @@ Contract:
 - Frontend dùng URL này cho viewer ảnh, video, audio, text, PDF và các định dạng
   trình duyệt hỗ trợ; định dạng không preview được vẫn có thể tải xuống.
 
+## Search và filter timeline — Phase 3
+
+Hai endpoint `GET /api/v1/cloud/items` và `GET /api/v1/cloud/trash` nhận cùng
+contract query: `q`, `type`, `from`, `to`, `cursor`, `limit`. `q` sau chuẩn hóa
+phải dài 3–200 ký tự; `type` thuộc `text|link|file|image|video|audio`; `from` và
+`to` là RFC3339, bao gồm cả hai biên. Mặc định vẫn sắp xếp
+`createdAt DESC, itemId DESC`.
+
+```http
+GET /api/v1/cloud/items?q=quarterly+report&type=file&from=2026-08-01T00:00:00Z&limit=20
+X-Demo-User-ID: <uuid>
+```
+
+Cursor là opaque và được ký logic bằng fingerprint của scope cùng toàn bộ filter.
+Đổi filter hoặc dùng cursor active cho Trash trả `400 INVALID_CURSOR`. Query lạ,
+lặp tham số, timestamp sai, khoảng ngày đảo hoặc input vượt giới hạn trả
+`400 INVALID_FILTER`. Search luôn được giới hạn owner/drive và timeout bởi
+`SEARCH_QUERY_TIMEOUT` (mặc định 2 giây).
+
 ## Trash, restore và xóa vĩnh viễn — Phase 2
 
 Ba thao tác ghi yêu cầu `Idempotency-Key` dài 1–128 ký tự và body rỗng:

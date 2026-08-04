@@ -36,6 +36,7 @@ var (
 	ErrDriveNotActive = errors.New("cloud drive is not active")
 	ErrInvalidContent = errors.New("invalid cloud content")
 	ErrInvalidCursor  = errors.New("invalid pagination cursor")
+	ErrInvalidFilter  = errors.New("invalid list filter")
 )
 
 type Drive struct {
@@ -89,8 +90,22 @@ func (q Quota) AvailableBytes() int64 {
 }
 
 type Cursor struct {
-	CreatedAt time.Time
-	ID        uuid.UUID
+	CreatedAt         time.Time
+	ID                uuid.UUID
+	FilterFingerprint string
+}
+
+type ListFilter struct {
+	Query string
+	Type  ItemType
+	From  time.Time
+	To    time.Time
+}
+
+type ListRequest struct {
+	Cursor string
+	Limit  int
+	Filter ListFilter
 }
 
 type Page struct {

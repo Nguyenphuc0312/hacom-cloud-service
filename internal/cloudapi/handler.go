@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
-	"strconv"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
@@ -37,8 +36,7 @@ type Service interface {
 	ListItems(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
-		cursor string,
-		limit int,
+		request cloud.ListRequest,
 	) (cloud.Page, error)
 	GetQuota(ctx context.Context, ownerUserID uuid.UUID) (cloud.Quota, error)
 }
@@ -66,7 +64,7 @@ type TrashService interface {
 	MoveToTrash(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
 	Restore(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
 	DeleteImmediately(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
-	List(context.Context, uuid.UUID, string, int) (trashdomain.Page, error)
+	List(context.Context, uuid.UUID, cloud.ListRequest) (trashdomain.Page, error)
 }
 
 type Handler struct {
@@ -380,26 +378,15 @@ func (h *Handler) getItem(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
-	limit := 0
-	if rawLimit := request.URL.Query().Get("limit"); rawLimit != "" {
-		parsed, err := strconv.Atoi(rawLimit)
-		if err != nil || parsed < 1 || parsed > cloud.MaxPageSize {
-			writeError(
-				writer,
-				http.StatusBadRequest,
-				"INVALID_LIMIT",
-				"limit must be an integer between 1 and 100",
-			)
-			return
-		}
-		limit = parsed
+	listRequest, ok := parseListRequest(writer, request)
+	if !ok {
+		return
 	}
 
 	page, err := h.service.ListItems(
 		request.Context(),
 		ownerUserID(request.Context()),
-		request.URL.Query().Get("cursor"),
-		limit,
+		listRequest,
 	)
 	if err != nil {
 		h.writeServiceError(writer, request, err)
@@ -508,6 +495,8 @@ func (h *Handler) writeServiceError(
 		)
 	case errors.Is(err, cloud.ErrInvalidCursor):
 		writeError(writer, http.StatusBadRequest, "INVALID_CURSOR", "pagination cursor is invalid")
+	case errors.Is(err, cloud.ErrInvalidFilter):
+		writeError(writer, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 	case errors.Is(err, cloud.ErrInvalidContent):
 		writeError(writer, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 	default:

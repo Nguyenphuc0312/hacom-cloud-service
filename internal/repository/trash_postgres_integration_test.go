@@ -70,7 +70,7 @@ func TestTrashPostgresMoveRestoreAndRetryAreAtomic(t *testing.T) {
 		move.PurgeAfter.Sub(*move.DeletedAt) != trashdomain.Retention {
 		t.Fatalf("move retention = %+v", move)
 	}
-	page, err := trashService.List(ctx, ownerID, "", 20)
+	page, err := trashService.List(ctx, ownerID, cloud.ListRequest{Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestTrashPostgresMoveRestoreAndRetryAreAtomic(t *testing.T) {
 		page.Items[0].DeletedAt == nil || page.Items[0].PurgeAfter == nil {
 		t.Fatalf("Trash page = %+v", page)
 	}
-	otherPage, err := trashService.List(ctx, otherOwnerID, "", 20)
+	otherPage, err := trashService.List(ctx, otherOwnerID, cloud.ListRequest{Limit: 20})
 	if err != nil || len(otherPage.Items) != 0 {
 		t.Fatalf("cross-owner Trash page=%+v error=%v", otherPage, err)
 	}

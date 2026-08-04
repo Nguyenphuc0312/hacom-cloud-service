@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
-  title: Hacom Cloud Phase 2 API Contract
-  version: 2.0.0-process2-trash
+  title: Hacom Cloud Phase 3 API Contract
+  version: 3.0.0-process1-search
   description: |
-    Frozen HTTP authentication boundary for Phase 2 Process 1. The public
-    gateway exposes /cloud-api and strips that prefix before proxying to the
-    Cloud API. Business endpoint schemas remain owned by docs/api.md.
+    Phase 3 endpoint contract preserving the frozen Phase 2 Process 1 HTTP
+    authentication boundary. The public gateway exposes /cloud-api and strips
+    that prefix before proxying to Cloud API. Details remain in docs/api.md.
 servers:
   - url: /cloud-api
     description: Same-origin Chat gateway
@@ -52,6 +52,10 @@ paths:
       summary: List active Cloud items
       operationId: listCloudItems
       parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/ItemTypeFilter"
+        - $ref: "#/components/parameters/CreatedFrom"
+        - $ref: "#/components/parameters/CreatedTo"
         - in: query
           name: limit
           schema:
@@ -65,6 +69,8 @@ paths:
       responses:
         "200":
           description: Items scoped to the authenticated subject
+        "400":
+          description: Invalid, repeated, unsupported, or cursor-mismatched filter
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -147,6 +153,10 @@ paths:
       summary: List the authenticated owner's Trash items
       operationId: listCloudTrash
       parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/ItemTypeFilter"
+        - $ref: "#/components/parameters/CreatedFrom"
+        - $ref: "#/components/parameters/CreatedTo"
         - in: query
           name: limit
           schema:
@@ -166,7 +176,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/TrashPage"
         "400":
-          description: Invalid limit or cursor
+          description: Invalid, repeated, unsupported, or cursor-mismatched filter
         "401":
           $ref: "#/components/responses/Unauthorized"
   /api/v1/cloud/texts:
@@ -252,6 +262,34 @@ components:
         resolve kid via JWKS, verify iss/aud/exp/typ=access, require
         sub/sid/jti/iat, and enforce auth-owned session/account state.
   parameters:
+    SearchQuery:
+      in: query
+      name: q
+      description: Search title, text content, link URL, or original file name
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 200
+    ItemTypeFilter:
+      in: query
+      name: type
+      schema:
+        type: string
+        enum: [text, link, file, image, video, audio]
+    CreatedFrom:
+      in: query
+      name: from
+      description: Inclusive created-at lower bound
+      schema:
+        type: string
+        format: date-time
+    CreatedTo:
+      in: query
+      name: to
+      description: Inclusive created-at upper bound
+      schema:
+        type: string
+        format: date-time
     ItemId:
       in: path
       name: itemId

@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -15,9 +16,11 @@ import (
 )
 
 const (
-	DefaultPageSize = 20
-	MaxPageSize     = 100
-	MaxTitleRunes   = 512
+	DefaultPageSize     = 20
+	MaxPageSize         = 100
+	MaxTitleRunes       = 512
+	MinSearchQueryRunes = 3
+	MaxSearchQueryRunes = 200
 )
 
 type Store interface {
@@ -40,6 +43,7 @@ type Store interface {
 		ownerUserID uuid.UUID,
 		cursor *Cursor,
 		limit int,
+		filter ListFilter,
 	) ([]Item, bool, error)
 	GetQuota(ctx context.Context, ownerUserID uuid.UUID) (Quota, error)
 }
@@ -141,33 +145,17 @@ func (s *Service) GetItem(
 func (s *Service) ListItems(
 	ctx context.Context,
 	ownerUserID uuid.UUID,
-	cursorValue string,
-	limit int,
+	request ListRequest,
 ) (Page, error) {
 	if ownerUserID == uuid.Nil {
 		return Page{}, fmt.Errorf("%w: owner user ID is required", ErrInvalidContent)
 	}
-	if limit == 0 {
-		limit = DefaultPageSize
-	}
-	if limit < 1 || limit > MaxPageSize {
-		return Page{}, fmt.Errorf(
-			"%w: limit must be between 1 and %d",
-			ErrInvalidContent,
-			MaxPageSize,
-		)
+	filter, cursor, limit, fingerprint, err := PrepareListRequest(request, "active")
+	if err != nil {
+		return Page{}, err
 	}
 
-	var cursor *Cursor
-	if cursorValue != "" {
-		decoded, err := DecodeCursor(cursorValue)
-		if err != nil {
-			return Page{}, err
-		}
-		cursor = &decoded
-	}
-
-	items, hasMore, err := s.store.ListItems(ctx, ownerUserID, cursor, limit)
+	items, hasMore, err := s.store.ListItems(ctx, ownerUserID, cursor, limit, filter)
 	if err != nil {
 		return Page{}, err
 	}
@@ -175,8 +163,9 @@ func (s *Service) ListItems(
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
 		page.NextCursor, err = EncodeCursor(Cursor{
-			CreatedAt: last.CreatedAt,
-			ID:        last.ID,
+			CreatedAt:         last.CreatedAt,
+			ID:                last.ID,
+			FilterFingerprint: fingerprint,
 		})
 		if err != nil {
 			return Page{}, fmt.Errorf("encode next cursor: %w", err)
@@ -200,17 +189,21 @@ func UTF8Bytes(value string) int64 {
 }
 
 type cursorPayload struct {
-	CreatedAt string `json:"created_at"`
-	ID        string `json:"id"`
+	Version           int    `json:"v"`
+	CreatedAt         string `json:"created_at"`
+	ID                string `json:"id"`
+	FilterFingerprint string `json:"filter"`
 }
 
 func EncodeCursor(cursor Cursor) (string, error) {
-	if cursor.CreatedAt.IsZero() || cursor.ID == uuid.Nil {
+	if cursor.CreatedAt.IsZero() || cursor.ID == uuid.Nil || cursor.FilterFingerprint == "" {
 		return "", ErrInvalidCursor
 	}
 	payload, err := json.Marshal(cursorPayload{
-		CreatedAt: cursor.CreatedAt.UTC().Format(time.RFC3339Nano),
-		ID:        cursor.ID.String(),
+		Version:           2,
+		CreatedAt:         cursor.CreatedAt.UTC().Format(time.RFC3339Nano),
+		ID:                cursor.ID.String(),
+		FilterFingerprint: cursor.FilterFingerprint,
 	})
 	if err != nil {
 		return "", err
@@ -224,7 +217,7 @@ func DecodeCursor(value string) (Cursor, error) {
 		return Cursor{}, ErrInvalidCursor
 	}
 	var payload cursorPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.Version != 2 || payload.FilterFingerprint == "" {
 		return Cursor{}, ErrInvalidCursor
 	}
 	createdAt, err := time.Parse(time.RFC3339Nano, payload.CreatedAt)
@@ -235,7 +228,90 @@ func DecodeCursor(value string) (Cursor, error) {
 	if err != nil || id == uuid.Nil {
 		return Cursor{}, ErrInvalidCursor
 	}
-	return Cursor{CreatedAt: createdAt, ID: id}, nil
+	return Cursor{CreatedAt: createdAt, ID: id, FilterFingerprint: payload.FilterFingerprint}, nil
+}
+
+func PrepareListRequest(
+	request ListRequest,
+	scope string,
+) (ListFilter, *Cursor, int, string, error) {
+	filter, err := NormalizeListFilter(request.Filter)
+	if err != nil {
+		return ListFilter{}, nil, 0, "", err
+	}
+	limit := request.Limit
+	if limit == 0 {
+		limit = DefaultPageSize
+	}
+	if limit < 1 || limit > MaxPageSize {
+		return ListFilter{}, nil, 0, "", fmt.Errorf(
+			"%w: limit must be between 1 and %d", ErrInvalidFilter, MaxPageSize,
+		)
+	}
+	fingerprint := ListFilterFingerprint(scope, filter)
+	var cursor *Cursor
+	if request.Cursor != "" {
+		decoded, decodeErr := DecodeCursor(request.Cursor)
+		if decodeErr != nil || decoded.FilterFingerprint != fingerprint {
+			return ListFilter{}, nil, 0, "", ErrInvalidCursor
+		}
+		cursor = &decoded
+	}
+	return filter, cursor, limit, fingerprint, nil
+}
+
+func NormalizeListFilter(filter ListFilter) (ListFilter, error) {
+	filter.Query = strings.Join(strings.Fields(filter.Query), " ")
+	queryRunes := utf8.RuneCountInString(filter.Query)
+	if queryRunes > 0 && (queryRunes < MinSearchQueryRunes || queryRunes > MaxSearchQueryRunes) {
+		return ListFilter{}, fmt.Errorf(
+			"%w: q must contain %d to %d characters",
+			ErrInvalidFilter, MinSearchQueryRunes, MaxSearchQueryRunes,
+		)
+	}
+	if filter.Type != "" && !validItemType(filter.Type) {
+		return ListFilter{}, fmt.Errorf("%w: unsupported item type", ErrInvalidFilter)
+	}
+	filter.From = normalizeOptionalTime(filter.From)
+	filter.To = normalizeOptionalTime(filter.To)
+	if !filter.From.IsZero() && !filter.To.IsZero() && filter.From.After(filter.To) {
+		return ListFilter{}, fmt.Errorf("%w: from must not be after to", ErrInvalidFilter)
+	}
+	return filter, nil
+}
+
+func ListFilterFingerprint(scope string, filter ListFilter) string {
+	canonical := strings.Join([]string{
+		strings.TrimSpace(scope),
+		strings.ToLower(filter.Query),
+		string(filter.Type),
+		formatOptionalTime(filter.From),
+		formatOptionalTime(filter.To),
+	}, "\x1f")
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(canonical)))
+}
+
+func validItemType(itemType ItemType) bool {
+	switch itemType {
+	case ItemTypeText, ItemTypeLink, ItemTypeFile, ItemTypeImage, ItemTypeVideo, ItemTypeAudio:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeOptionalTime(value time.Time) time.Time {
+	if value.IsZero() {
+		return time.Time{}
+	}
+	return value.UTC()
+}
+
+func formatOptionalTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func validateHTTPURL(rawURL string) (string, error) {

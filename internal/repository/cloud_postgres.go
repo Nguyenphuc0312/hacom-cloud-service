@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/google/uuid"
@@ -14,9 +15,18 @@ import (
 )
 
 type CloudPostgres struct {
-	pool              *pgxpool.Pool
-	defaultQuotaBytes int64
-	storageBucket     string
+	pool               *pgxpool.Pool
+	defaultQuotaBytes  int64
+	storageBucket      string
+	searchQueryTimeout time.Duration
+}
+
+func WithSearchQueryTimeout(timeout time.Duration) CloudPostgresOption {
+	return func(repository *CloudPostgres) {
+		if timeout > 0 {
+			repository.searchQueryTimeout = timeout
+		}
+	}
 }
 
 type CloudPostgresOption func(*CloudPostgres)
@@ -41,9 +51,10 @@ func NewCloudPostgres(
 		return nil, errors.New("default quota must be positive")
 	}
 	repository := &CloudPostgres{
-		pool:              pool,
-		defaultQuotaBytes: defaultQuotaBytes,
-		storageBucket:     "hacom-cloud-private",
+		pool:               pool,
+		defaultQuotaBytes:  defaultQuotaBytes,
+		storageBucket:      "hacom-cloud-private",
+		searchQueryTimeout: 2 * time.Second,
 	}
 	for _, option := range options {
 		option(repository)
@@ -117,7 +128,10 @@ func (r *CloudPostgres) ListItems(
 	ownerUserID uuid.UUID,
 	cursor *cloud.Cursor,
 	limit int,
+	filter cloud.ListFilter,
 ) ([]cloud.Item, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.searchQueryTimeout)
+	defer cancel()
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, false, fmt.Errorf("begin list items transaction: %w", err)
@@ -126,6 +140,9 @@ func (r *CloudPostgres) ListItems(
 
 	drive, err := r.ensureDriveAndQuota(ctx, tx, ownerUserID)
 	if err != nil {
+		return nil, false, err
+	}
+	if err := setListStatementTimeout(ctx, tx, r.searchQueryTimeout); err != nil {
 		return nil, false, err
 	}
 
@@ -141,17 +158,21 @@ func (r *CloudPostgres) ListItems(
 			size_bytes,
 			created_at,
 			updated_at
-		FROM cloud.items
-		WHERE drive_id = $1
-		  AND status <> 'trashed'
+		FROM cloud.items AS item
+		WHERE item.drive_id = $1
+		  AND item.status <> 'trashed'
 	`
 	args := []any{drive.ID}
+	query, args = appendListFilters(query, args, filter, "item")
 	if cursor != nil {
-		query += ` AND (created_at, id) < ($2, $3)`
+		query += fmt.Sprintf(
+			" AND (item.created_at, item.id) < ($%d, $%d)",
+			len(args)+1, len(args)+2,
+		)
 		args = append(args, cursor.CreatedAt, cursor.ID)
 	}
 	query += fmt.Sprintf(
-		" ORDER BY created_at DESC, id DESC LIMIT $%d",
+		" ORDER BY item.created_at DESC, item.id DESC LIMIT $%d",
 		len(args)+1,
 	)
 	args = append(args, limit+1)

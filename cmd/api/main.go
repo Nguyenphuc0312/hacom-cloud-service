@@ -83,6 +83,7 @@ func main() {
 		db,
 		cfg.DefaultQuotaBytes,
 		repository.WithStorageBucket(cfg.MinIOBucket),
+		repository.WithSearchQueryTimeout(cfg.SearchQueryTimeout),
 	)
 	if err != nil {
 		logger.Error("create cloud repository", "error", err)
@@ -112,7 +113,10 @@ func main() {
 		logger.Error("create file access service", "error", err)
 		os.Exit(1)
 	}
-	trashStore, err := repository.NewTrashPostgres(db)
+	trashStore, err := repository.NewTrashPostgres(
+		db,
+		repository.WithTrashSearchQueryTimeout(cfg.SearchQueryTimeout),
+	)
 	if err != nil {
 		logger.Error("create Trash repository", "error", err)
 		os.Exit(1)

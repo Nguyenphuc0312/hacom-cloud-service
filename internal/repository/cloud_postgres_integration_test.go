@@ -114,14 +114,14 @@ func TestCloudPostgresPersonalTimelineAndQuota(t *testing.T) {
 		t.Fatal("intentional duplicate content must create separate items")
 	}
 
-	pageOne, err := service.ListItems(ctx, ownerA, "", 2)
+	pageOne, err := service.ListItems(ctx, ownerA, cloud.ListRequest{Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(pageOne.Items) != 2 || pageOne.NextCursor == "" {
 		t.Fatalf("first page = %+v", pageOne)
 	}
-	pageTwo, err := service.ListItems(ctx, ownerA, pageOne.NextCursor, 2)
+	pageTwo, err := service.ListItems(ctx, ownerA, cloud.ListRequest{Cursor: pageOne.NextCursor, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

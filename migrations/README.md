@@ -9,6 +9,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000004_cloud_worker_and_audit
 000005_phase2_quota_baseline
 000006_trash_lifecycle_transactions
+000007_phase3_search_filter
 ```
 
 ## Chạy local
@@ -50,3 +51,4 @@ Thiết kế chi tiết:
 - `docs/database/phase2-erd.md`
 - `docs/database/phase2-design.md`
 - `docs/trash-lifecycle-transaction.md`
+- `docs/database/phase3-search-design.md`

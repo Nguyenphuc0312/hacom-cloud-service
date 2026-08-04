@@ -20,7 +20,7 @@ type fakeTrashService struct {
 	move    func(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
 	restore func(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
 	delete  func(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
-	list    func(context.Context, uuid.UUID, string, int) (trashdomain.Page, error)
+	list    func(context.Context, uuid.UUID, cloud.ListRequest) (trashdomain.Page, error)
 }
 
 func (f fakeTrashService) MoveToTrash(ctx context.Context, owner, item uuid.UUID, key string) (trashdomain.Result, error) {
@@ -32,8 +32,8 @@ func (f fakeTrashService) Restore(ctx context.Context, owner, item uuid.UUID, ke
 func (f fakeTrashService) DeleteImmediately(ctx context.Context, owner, item uuid.UUID, key string) (trashdomain.Result, error) {
 	return f.delete(ctx, owner, item, key)
 }
-func (f fakeTrashService) List(ctx context.Context, owner uuid.UUID, cursor string, limit int) (trashdomain.Page, error) {
-	return f.list(ctx, owner, cursor, limit)
+func (f fakeTrashService) List(ctx context.Context, owner uuid.UUID, request cloud.ListRequest) (trashdomain.Page, error) {
+	return f.list(ctx, owner, request)
 }
 
 func newTrashHandler(t *testing.T, service TrashService) http.Handler {
@@ -91,9 +91,9 @@ func TestTrashListAndDeleteResponsesDoNotExposeStorageInternals(t *testing.T) {
 	ownerID, itemID := uuid.New(), uuid.New()
 	now := time.Now().UTC()
 	service := fakeTrashService{
-		list: func(_ context.Context, owner uuid.UUID, cursor string, limit int) (trashdomain.Page, error) {
-			if owner != ownerID || cursor != "cursor" || limit != 5 {
-				t.Fatalf("unexpected list input: %s %q %d", owner, cursor, limit)
+		list: func(_ context.Context, owner uuid.UUID, request cloud.ListRequest) (trashdomain.Page, error) {
+			if owner != ownerID || request.Cursor != "cursor" || request.Limit != 5 {
+				t.Fatalf("unexpected list input: %s %+v", owner, request)
 			}
 			return trashdomain.Page{Items: []cloud.Item{{ID: itemID, Type: cloud.ItemTypeFile, Status: cloud.ItemStatusTrashed, SizeBytes: 42, DeletedAt: &now, PurgeAfter: timePointerForTest(now.Add(24 * time.Hour))}}, NextCursor: "next"}, nil
 		},
@@ -191,7 +191,7 @@ func TestTrashActionsRejectBodyAndUnsupportedMethod(t *testing.T) {
 }
 
 func TestTrashListMapsInvalidCursor(t *testing.T) {
-	handler := newTrashHandler(t, fakeTrashService{list: func(context.Context, uuid.UUID, string, int) (trashdomain.Page, error) {
+	handler := newTrashHandler(t, fakeTrashService{list: func(context.Context, uuid.UUID, cloud.ListRequest) (trashdomain.Page, error) {
 		return trashdomain.Page{}, cloud.ErrInvalidCursor
 	}})
 	response := httptest.NewRecorder()

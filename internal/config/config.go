@@ -49,6 +49,7 @@ type Config struct {
 	UploadURLTTL                time.Duration
 	DownloadURLTTL              time.Duration
 	HealthTimeout               time.Duration
+	SearchQueryTimeout          time.Duration
 	ShutdownTimeout             time.Duration
 	WorkerID                    string
 	WorkerPollInterval          time.Duration
@@ -153,6 +154,13 @@ func Load() (Config, error) {
 	healthTimeout, err := durationEnv("HEALTH_TIMEOUT", 3*time.Second)
 	if err != nil {
 		return Config{}, err
+	}
+	searchQueryTimeout, err := durationEnv("SEARCH_QUERY_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	if searchQueryTimeout > 10*time.Second {
+		return Config{}, fmt.Errorf("SEARCH_QUERY_TIMEOUT must not exceed 10s")
 	}
 
 	uploadURLTTL, err := durationEnv("UPLOAD_URL_TTL", 15*time.Minute)
@@ -264,6 +272,7 @@ func Load() (Config, error) {
 		UploadURLTTL:                uploadURLTTL,
 		DownloadURLTTL:              downloadURLTTL,
 		HealthTimeout:               healthTimeout,
+		SearchQueryTimeout:          searchQueryTimeout,
 		ShutdownTimeout:             shutdownTimeout,
 		WorkerID:                    workerID,
 		WorkerPollInterval:          workerPollInterval,

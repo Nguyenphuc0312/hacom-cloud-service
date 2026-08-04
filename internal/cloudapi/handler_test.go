@@ -24,7 +24,7 @@ type fakeService struct {
 	createText func(context.Context, uuid.UUID, string) (cloud.Item, error)
 	createLink func(context.Context, uuid.UUID, string, string) (cloud.Item, error)
 	getItem    func(context.Context, uuid.UUID, uuid.UUID) (cloud.Item, error)
-	listItems  func(context.Context, uuid.UUID, string, int) (cloud.Page, error)
+	listItems  func(context.Context, uuid.UUID, cloud.ListRequest) (cloud.Page, error)
 	getQuota   func(context.Context, uuid.UUID) (cloud.Quota, error)
 }
 
@@ -101,10 +101,9 @@ func (s fakeService) GetItem(
 func (s fakeService) ListItems(
 	ctx context.Context,
 	ownerID uuid.UUID,
-	cursor string,
-	limit int,
+	request cloud.ListRequest,
 ) (cloud.Page, error) {
-	return s.listItems(ctx, ownerID, cursor, limit)
+	return s.listItems(ctx, ownerID, request)
 }
 
 func (s fakeService) GetQuota(
@@ -676,8 +675,7 @@ func TestListItemsRejectsExplicitZeroLimit(t *testing.T) {
 		listItems: func(
 			context.Context,
 			uuid.UUID,
-			string,
-			int,
+			cloud.ListRequest,
 		) (cloud.Page, error) {
 			t.Fatal("service must not be called")
 			return cloud.Page{}, nil
@@ -748,11 +746,10 @@ func TestListItemsPassesCursorAndLimit(t *testing.T) {
 		listItems: func(
 			_ context.Context,
 			gotOwnerID uuid.UUID,
-			cursor string,
-			limit int,
+			request cloud.ListRequest,
 		) (cloud.Page, error) {
-			if gotOwnerID != ownerID || cursor != "cursor-value" || limit != 5 {
-				t.Fatalf("owner = %s, cursor = %q, limit = %d", gotOwnerID, cursor, limit)
+			if gotOwnerID != ownerID || request.Cursor != "cursor-value" || request.Limit != 5 {
+				t.Fatalf("owner = %s, request = %+v", gotOwnerID, request)
 			}
 			return cloud.Page{
 				Items: []cloud.Item{{
@@ -784,6 +781,35 @@ func TestListItemsPassesCursorAndLimit(t *testing.T) {
 	}
 	if len(payload.Items) != 1 || payload.NextCursor != "next" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestListItemsParsesSearchFiltersStrictly(t *testing.T) {
+	ownerID := uuid.New()
+	service := fakeService{listItems: func(_ context.Context, owner uuid.UUID, request cloud.ListRequest) (cloud.Page, error) {
+		if owner != ownerID || request.Filter.Query != "quarterly report" || request.Filter.Type != cloud.ItemTypeFile ||
+			request.Filter.From.Format(time.RFC3339) != "2026-08-01T00:00:00Z" ||
+			request.Filter.To.Format(time.RFC3339) != "2026-08-02T00:00:00Z" {
+			t.Fatalf("owner=%s request=%+v", owner, request)
+		}
+		return cloud.Page{}, nil
+	}}
+	handler := newTestHandler(t, service)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithUser(http.MethodGet,
+		"/items?q=quarterly+report&type=file&from=2026-08-01T00%3A00%3A00Z&to=2026-08-02T00%3A00%3A00Z", "", ownerID))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	for _, path := range []string{
+		"/items?unknown=x", "/items?q=one&q=two", "/items?q=+", "/items?type=", "/items?limit=", "/items?from=not-a-time",
+	} {
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, requestWithUser(http.MethodGet, path, "", ownerID))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("path=%s status=%d", path, response.Code)
+		}
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
@@ -89,18 +88,13 @@ func (h *Handler) deleteItemImmediately(writer http.ResponseWriter, request *htt
 }
 
 func (h *Handler) listTrash(writer http.ResponseWriter, request *http.Request) {
-	limit := 0
-	if rawLimit := request.URL.Query().Get("limit"); rawLimit != "" {
-		parsed, err := strconv.Atoi(rawLimit)
-		if err != nil || parsed < 1 || parsed > cloud.MaxPageSize {
-			writeError(writer, http.StatusBadRequest, "INVALID_LIMIT", "limit must be an integer between 1 and 100")
-			return
-		}
-		limit = parsed
+	listRequest, ok := parseListRequest(writer, request)
+	if !ok {
+		return
 	}
 	page, err := h.trash.List(
 		request.Context(), ownerUserID(request.Context()),
-		request.URL.Query().Get("cursor"), limit,
+		listRequest,
 	)
 	if err != nil {
 		h.writeTrashError(writer, request, err)
@@ -147,6 +141,8 @@ func (h *Handler) writeTrashError(
 		writeError(writer, http.StatusNotFound, "ITEM_NOT_FOUND", "cloud item not found")
 	case errors.Is(err, cloud.ErrInvalidCursor):
 		writeError(writer, http.StatusBadRequest, "INVALID_CURSOR", "pagination cursor is invalid")
+	case errors.Is(err, cloud.ErrInvalidFilter):
+		writeError(writer, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 	case errors.Is(err, trashdomain.ErrInvalidState):
 		writeError(writer, http.StatusConflict, "INVALID_ITEM_STATE", "item state does not allow this operation")
 	case errors.Is(err, trashdomain.ErrRestoreExpired):

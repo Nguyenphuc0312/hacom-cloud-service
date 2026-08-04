@@ -106,6 +106,25 @@ func TestTrashOpenAPIAndPostmanContract(t *testing.T) {
 	}
 }
 
+func TestPhase3SearchOpenAPIContract(t *testing.T) {
+	root := repositoryRoot(t)
+	openAPI := readFile(t, filepath.Join(root, "docs", "openapi", "phase2-cloud-auth.openapi.yaml"))
+	for _, required := range []string{
+		"operationId: listCloudItems",
+		"operationId: listCloudTrash",
+		"SearchQuery:",
+		"ItemTypeFilter:",
+		"CreatedFrom:",
+		"CreatedTo:",
+		"minLength: 3",
+		"maxLength: 200",
+	} {
+		if !strings.Contains(openAPI, required) {
+			t.Errorf("Phase 3 search OpenAPI contract is missing %q", required)
+		}
+	}
+}
+
 func TestPhase2AuthContractConfiguration(t *testing.T) {
 	root := repositoryRoot(t)
 	content := readFile(t, filepath.Join(root, ".env.example"))

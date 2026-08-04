@@ -29,6 +29,7 @@ DECLARE
   quota_request_a UUID;
   quota_request_status_values TEXT[];
   quota_event_type_values TEXT[];
+  search_index_count INTEGER;
 BEGIN
   SELECT array_agg(table_name ORDER BY table_name)
   INTO actual_tables
@@ -74,6 +75,26 @@ BEGIN
     RAISE EXCEPTION
       'Unexpected quota request statuses: %',
       quota_request_status_values;
+  END IF;
+
+  SELECT COUNT(*) INTO search_index_count
+  FROM pg_indexes
+  WHERE schemaname = 'cloud'
+    AND indexname IN (
+      'cloud_items_search_vector_idx',
+      'cloud_items_search_trgm_idx',
+      'cloud_items_active_type_timeline_idx',
+      'cloud_items_trash_type_timeline_idx'
+    );
+  IF search_index_count <> 4 THEN
+    RAISE EXCEPTION 'Phase 3 search indexes are incomplete: %/4', search_index_count;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='cloud' AND table_name='items' AND column_name='search_vector'
+  ) THEN
+    RAISE EXCEPTION 'cloud.items.search_vector is missing';
   END IF;
 
   SELECT array_agg(enum_value ORDER BY enum_order)
@@ -310,6 +331,15 @@ BEGIN
     'cloud_upload'
   )
   RETURNING id INTO item_a;
+
+  IF (SELECT search_text FROM cloud.items WHERE id = item_a) NOT ILIKE '%verify.txt%' THEN
+    RAISE EXCEPTION 'File name was not copied into the Item search document';
+  END IF;
+
+  UPDATE cloud.storage_objects SET original_name = 'verify-renamed.pdf' WHERE id = object_a;
+  IF (SELECT search_text FROM cloud.items WHERE id = item_a) NOT ILIKE '%verify-renamed.pdf%' THEN
+    RAISE EXCEPTION 'File name update did not refresh the Item search document';
+  END IF;
 
   BEGIN
     INSERT INTO cloud.upload_sessions (

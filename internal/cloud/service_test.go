@@ -14,7 +14,7 @@ type fakeStore struct {
 	createText func(context.Context, uuid.UUID, string, int64) (Item, error)
 	createLink func(context.Context, uuid.UUID, string, *string, int64) (Item, error)
 	getItem    func(context.Context, uuid.UUID, uuid.UUID) (Item, error)
-	listItems  func(context.Context, uuid.UUID, *Cursor, int) ([]Item, bool, error)
+	listItems  func(context.Context, uuid.UUID, *Cursor, int, ListFilter) ([]Item, bool, error)
 	getQuota   func(context.Context, uuid.UUID) (Quota, error)
 }
 
@@ -49,8 +49,9 @@ func (s fakeStore) ListItems(
 	ownerID uuid.UUID,
 	cursor *Cursor,
 	limit int,
+	filter ListFilter,
 ) ([]Item, bool, error) {
-	return s.listItems(ctx, ownerID, cursor, limit)
+	return s.listItems(ctx, ownerID, cursor, limit, filter)
 }
 
 func (s fakeStore) GetQuota(
@@ -193,6 +194,7 @@ func TestListItemsUsesCursorAndCreatesNextCursor(t *testing.T) {
 			gotOwnerID uuid.UUID,
 			cursor *Cursor,
 			limit int,
+			filter ListFilter,
 		) ([]Item, bool, error) {
 			if gotOwnerID != ownerID || limit != 2 {
 				t.Fatalf("owner = %s, limit = %d", gotOwnerID, limit)
@@ -210,12 +212,13 @@ func TestListItemsUsesCursorAndCreatesNextCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inputCursor, err := EncodeCursor(Cursor{CreatedAt: cursorTime, ID: cursorID})
+	fingerprint := ListFilterFingerprint("active", ListFilter{})
+	inputCursor, err := EncodeCursor(Cursor{CreatedAt: cursorTime, ID: cursorID, FilterFingerprint: fingerprint})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	page, err := service.ListItems(context.Background(), ownerID, inputCursor, 2)
+	page, err := service.ListItems(context.Background(), ownerID, ListRequest{Cursor: inputCursor, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,18 +245,66 @@ func TestListItemsRejectsInvalidCursorAndLimit(t *testing.T) {
 	if _, err := service.ListItems(
 		context.Background(),
 		ownerID,
-		"not-a-cursor",
-		20,
+		ListRequest{Cursor: "not-a-cursor", Limit: 20},
 	); !errors.Is(err, ErrInvalidCursor) {
 		t.Fatalf("invalid cursor error = %v", err)
 	}
 	if _, err := service.ListItems(
 		context.Background(),
 		ownerID,
-		"",
-		MaxPageSize+1,
-	); !errors.Is(err, ErrInvalidContent) {
+		ListRequest{Limit: MaxPageSize + 1},
+	); !errors.Is(err, ErrInvalidFilter) {
 		t.Fatalf("invalid limit error = %v", err)
+	}
+}
+
+func TestListFilterNormalizesAndBindsCursorToEveryFilter(t *testing.T) {
+	from := time.Date(2026, 8, 1, 2, 3, 4, 0, time.FixedZone("ICT", 7*60*60))
+	to := from.Add(48 * time.Hour)
+	filter := ListFilter{Query: "  quarterly   report ", Type: ItemTypeText, From: from, To: to}
+	normalized, cursor, limit, fingerprint, err := PrepareListRequest(ListRequest{Filter: filter}, "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor != nil || limit != DefaultPageSize || normalized.Query != "quarterly report" ||
+		normalized.From.Location() != time.UTC || normalized.To.Location() != time.UTC {
+		t.Fatalf("normalized=%+v cursor=%+v limit=%d", normalized, cursor, limit)
+	}
+	encoded, err := EncodeCursor(Cursor{CreatedAt: to, ID: uuid.New(), FilterFingerprint: fingerprint})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, err := PrepareListRequest(ListRequest{Cursor: encoded, Filter: filter}, "active"); err != nil {
+		t.Fatalf("same filter rejected: %v", err)
+	}
+	changedFilters := []ListFilter{
+		{Query: "different report", Type: filter.Type, From: filter.From, To: filter.To},
+		{Query: filter.Query, Type: ItemTypeLink, From: filter.From, To: filter.To},
+		{Query: filter.Query, Type: filter.Type, From: filter.From.Add(time.Second), To: filter.To},
+		{Query: filter.Query, Type: filter.Type, From: filter.From, To: filter.To.Add(time.Second)},
+	}
+	for index, changed := range changedFilters {
+		if _, _, _, _, err := PrepareListRequest(ListRequest{Cursor: encoded, Filter: changed}, "active"); !errors.Is(err, ErrInvalidCursor) {
+			t.Fatalf("changed filter %d error=%v", index, err)
+		}
+	}
+	if _, _, _, _, err := PrepareListRequest(ListRequest{Cursor: encoded, Filter: filter}, "trash"); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("cross-scope cursor error=%v", err)
+	}
+}
+
+func TestListFilterRejectsUnsafeInputs(t *testing.T) {
+	now := time.Now()
+	tests := []ListFilter{
+		{Query: "ab"},
+		{Query: strings.Repeat("a", MaxSearchQueryRunes+1)},
+		{Type: ItemType("archive")},
+		{From: now.Add(time.Hour), To: now},
+	}
+	for index, filter := range tests {
+		if _, err := NormalizeListFilter(filter); !errors.Is(err, ErrInvalidFilter) {
+			t.Fatalf("case %d error=%v", index, err)
+		}
 	}
 }
 

@@ -14,7 +14,7 @@ type fakeRepository struct {
 	move    func(context.Context, MoveCommand) (Result, error)
 	restore func(context.Context, Command) (Result, error)
 	purge   func(context.Context, PurgeCommand) (Result, error)
-	list    func(context.Context, uuid.UUID, *cloud.Cursor, int) ([]cloud.Item, bool, error)
+	list    func(context.Context, uuid.UUID, *cloud.Cursor, int, cloud.ListFilter) ([]cloud.Item, bool, error)
 }
 
 func (r fakeRepository) MoveToTrash(ctx context.Context, command MoveCommand) (Result, error) {
@@ -34,8 +34,9 @@ func (r fakeRepository) ListTrash(
 	ownerID uuid.UUID,
 	cursor *cloud.Cursor,
 	limit int,
+	filter cloud.ListFilter,
 ) ([]cloud.Item, bool, error) {
-	return r.list(ctx, ownerID, cursor, limit)
+	return r.list(ctx, ownerID, cursor, limit, filter)
 }
 
 func TestMoveToTrashUsesExactlyTwentyFourHourRetention(t *testing.T) {
@@ -137,14 +138,16 @@ func TestDeleteImmediatelyDoesNotTrustClientState(t *testing.T) {
 func TestListUsesOpaqueCursorAndStablePageSize(t *testing.T) {
 	ownerID, itemID := uuid.New(), uuid.New()
 	createdAt := time.Now().UTC().Add(-time.Minute)
-	cursor, err := cloud.EncodeCursor(cloud.Cursor{CreatedAt: createdAt, ID: itemID})
+	filter := cloud.ListFilter{}
+	fingerprint := cloud.ListFilterFingerprint("trash", filter)
+	cursor, err := cloud.EncodeCursor(cloud.Cursor{CreatedAt: createdAt, ID: itemID, FilterFingerprint: fingerprint})
 	if err != nil {
 		t.Fatal(err)
 	}
 	repository := fakeRepository{list: func(
-		_ context.Context, gotOwner uuid.UUID, gotCursor *cloud.Cursor, limit int,
+		_ context.Context, gotOwner uuid.UUID, gotCursor *cloud.Cursor, limit int, gotFilter cloud.ListFilter,
 	) ([]cloud.Item, bool, error) {
-		if gotOwner != ownerID || gotCursor == nil || gotCursor.ID != itemID || limit != 5 {
+		if gotOwner != ownerID || gotCursor == nil || gotCursor.ID != itemID || limit != 5 || gotFilter != filter {
 			t.Fatalf("unexpected list input: %s %+v %d", gotOwner, gotCursor, limit)
 		}
 		return []cloud.Item{{ID: itemID, CreatedAt: createdAt}}, false, nil
@@ -153,7 +156,7 @@ func TestListUsesOpaqueCursorAndStablePageSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.List(context.Background(), ownerID, cursor, 5)
+	page, err := service.List(context.Background(), ownerID, cloud.ListRequest{Cursor: cursor, Limit: 5, Filter: filter})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("page=%+v error=%v", page, err)
 	}

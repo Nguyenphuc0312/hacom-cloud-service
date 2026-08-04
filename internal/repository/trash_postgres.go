@@ -16,14 +16,29 @@ import (
 )
 
 type TrashPostgres struct {
-	pool *pgxpool.Pool
+	pool               *pgxpool.Pool
+	searchQueryTimeout time.Duration
 }
 
-func NewTrashPostgres(pool *pgxpool.Pool) (*TrashPostgres, error) {
+type TrashPostgresOption func(*TrashPostgres)
+
+func WithTrashSearchQueryTimeout(timeout time.Duration) TrashPostgresOption {
+	return func(repository *TrashPostgres) {
+		if timeout > 0 {
+			repository.searchQueryTimeout = timeout
+		}
+	}
+}
+
+func NewTrashPostgres(pool *pgxpool.Pool, options ...TrashPostgresOption) (*TrashPostgres, error) {
 	if pool == nil {
 		return nil, errors.New("PostgreSQL pool is required")
 	}
-	return &TrashPostgres{pool: pool}, nil
+	repository := &TrashPostgres{pool: pool, searchQueryTimeout: 2 * time.Second}
+	for _, option := range options {
+		option(repository)
+	}
+	return repository, nil
 }
 
 func (r *TrashPostgres) ListTrash(
@@ -31,19 +46,43 @@ func (r *TrashPostgres) ListTrash(
 	ownerUserID uuid.UUID,
 	cursor *cloud.Cursor,
 	limit int,
+	filter cloud.ListFilter,
 ) ([]cloud.Item, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.searchQueryTimeout)
+	defer cancel()
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, false, fmt.Errorf("begin list Trash transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := setListStatementTimeout(ctx, tx, r.searchQueryTimeout); err != nil {
+		return nil, false, err
+	}
+	var driveID uuid.UUID
+	err = tx.QueryRow(ctx, `
+		SELECT id FROM cloud.drives WHERE owner_user_id = $1
+	`, ownerUserID).Scan(&driveID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []cloud.Item{}, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("scope Trash owner drive: %w", err)
+	}
 	query := `
 		SELECT
 			item.id, item.drive_id, item.item_type::TEXT, item.status::TEXT,
 			item.title, item.text_content, item.link_url, item.size_bytes,
 			item.deleted_at, item.purge_after, item.created_at, item.updated_at
 		FROM cloud.items AS item
-		JOIN cloud.drives AS drive ON drive.id = item.drive_id
-		WHERE drive.owner_user_id = $1 AND item.status = 'trashed'
+		WHERE item.drive_id = $1 AND item.status = 'trashed'
 	`
-	args := []any{ownerUserID}
+	args := []any{driveID}
+	query, args = appendListFilters(query, args, filter, "item")
 	if cursor != nil {
-		query += ` AND (item.created_at, item.id) < ($2, $3)`
+		query += fmt.Sprintf(
+			" AND (item.created_at, item.id) < ($%d, $%d)",
+			len(args)+1, len(args)+2,
+		)
 		args = append(args, cursor.CreatedAt, cursor.ID)
 	}
 	query += fmt.Sprintf(
@@ -52,7 +91,7 @@ func (r *TrashPostgres) ListTrash(
 	)
 	args = append(args, limit+1)
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("list Trash items: %w", err)
 	}
@@ -92,6 +131,9 @@ func (r *TrashPostgres) ListTrash(
 	hasMore := len(items) > limit
 	if hasMore {
 		items = items[:limit]
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, fmt.Errorf("commit list Trash transaction: %w", err)
 	}
 	return items, hasMore, nil
 }
