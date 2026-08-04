@@ -1,0 +1,48 @@
+/**
+ * Central responsive tokens. Numeric px/rem values on :root are updated at runtime
+ * by ResponsiveProvider (see responsive.ts). Declarative fluid rules use vw/clamp
+ * so layouts stay stable before/after hydration.
+ */
+
+:root {
+  /* Viewport (overwritten in JS for precise layout math) */
+  --rsp-viewport-w: 100vw;
+  --rsp-viewport-h: 100dvh;
+  --rsp-inner-w: 100vw;
+  --rsp-inner-h: 100vh;
+  --rsp-dpr: 1;
+  --rsp-dpr-layout: 1;
+
+  /* Breakpoint labels live on <html data-rsp-bp> (set in JS). */
+
+  /* Adaptive shell gutter — used by pages that opt in via var() */
+  --rsp-shell-gutter: clamp(0.75rem, 0.55rem + 1.1vw, 1.5rem);
+  --rsp-shell-gutter-px: 16px;
+
+  /* Fluid type scale (rem) */
+  --rsp-font-body: clamp(0.875rem, 0.82rem + 0.22vw, 1rem);
+  --rsp-font-body-sm: clamp(0.8125rem, 0.78rem + 0.18vw, 0.875rem);
+  --rsp-font-title-sm: clamp(1rem, 0.92rem + 0.28vw, 1.125rem);
+  --rsp-font-title: clamp(1.0625rem, 0.95rem + 0.42vw, 1.25rem);
+
+  /* Density helpers for chat / side panels */
+  --rsp-chat-lane-pad: clamp(0.5rem, 0.35rem + 1.2vw, 2rem);
+  --rsp-modal-pad-inline: clamp(0.75rem, 2vw, 1.5rem);
+  --rsp-touch-target: max(2.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+html[data-rsp-reduced-motion="true"] {
+  --rsp-resize-duration: 0ms;
+}
+
+html[data-rsp-reduced-motion="false"] {
+  --rsp-resize-duration: 160ms;
+}
+
+/* Optional utility: constrain embedded content inside message bodies */
+.rsp-contain-inline {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

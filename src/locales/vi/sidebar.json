@@ -1,0 +1,123 @@
+﻿{
+  "header": {
+    "workspace": "Không gian",
+    "startNewChat": "Bắt đầu chat mới",
+    "expandSidebar": "Mở rộng thanh bên",
+    "collapseSidebar": "Thu gọn thanh bên",
+    "conversations": "Tin nhắn",
+    "composeLabel": "Tạo chat mới",
+    "notificationsLabel": "Thông báo"
+  },
+  "search": {
+    "placeholder": "Tìm cuộc trò chuyện",
+    "aria": "Tìm kiếm cuộc trò chuyện",
+    "clearAria": "Xóa tìm kiếm"
+  },
+  "globalSearch": {
+    "close": "Đóng",
+    "tabs": {
+      "all": "Tất cả",
+      "contacts": "Liên hệ",
+      "messages": "Tin nhắn",
+      "files": "File"
+    },
+    "sections": {
+      "people": "Cá nhân",
+      "groups": "Nhóm"
+    },
+    "seeAll": {
+      "contacts": "Xem tất cả liên hệ",
+      "groups": "Xem tất cả nhóm",
+      "messages": "Xem tất cả tin nhắn",
+      "files": "Xem tất cả files"
+    },
+    "count": {
+      "contacts": "Liên hệ ({{count}})",
+      "groups": "Nhóm ({{count}})",
+      "messages": "Tin nhắn ({{count}})",
+      "files": "File ({{count}})"
+    },
+    "filter": {
+      "label": "Lọc theo:",
+      "sender": "Người gửi",
+      "date": "Ngày gửi",
+      "searchPlaceholder": "Tìm kiếm",
+      "pickRange": "Chọn khoảng thời gian",
+      "from": "Từ ngày",
+      "to": "Đến ngày",
+      "cancel": "Hủy",
+      "confirm": "Xác nhận",
+      "clear": "Xóa lọc"
+    },
+    "fileType": {
+      "all": "Tất cả",
+      "image": "Ảnh",
+      "video": "Video",
+      "document": "Tài liệu",
+      "audio": "Âm thanh",
+      "other": "Khác"
+    },
+    "empty": {
+      "prompt": "Nhập từ khóa để tìm liên hệ, tin nhắn và file.",
+      "noResults": "Không tìm thấy kết quả cho \"{{query}}\".",
+      "noContacts": "Không có liên hệ phù hợp.",
+      "noMessages": "Không có tin nhắn phù hợp.",
+      "noFiles": "Không có file phù hợp."
+    },
+    "resultAria": "Kết quả tìm kiếm"
+  },
+  "tabs": {
+    "all": "Tất cả",
+    "direct": "Cá nhân",
+    "unread": "Chưa đọc",
+    "groups": "Nhóm",
+    "channels": "Kênh"
+  },
+  "room": {
+    "section": {
+      "unread": "Chưa đọc",
+      "channels": "Kênh",
+      "groups": "Nhóm",
+      "direct": "Tin nhắn trực tiếp"
+    },
+    "type": {
+      "direct": "Cá nhân",
+      "group": "Nhóm"
+    },
+    "mentioned": "Được nhắc đến",
+    "noMessagesYet": "Chưa có tin nhắn",
+    "emptyBySearch": "Không có phòng phù hợp với tìm kiếm.",
+    "empty": "Không có cuộc trò chuyện nào.",
+    "listAria": "Danh sách cuộc trò chuyện",
+    "unreadBadge": "{{count}} tin nhắn chưa đọc"
+  },
+  "sidebar": {
+    "aria": "Thanh bên"
+  },
+  "rail": {
+    "messages": "Tin nhắn",
+    "contacts": "Danh bạ",
+    "tasks": "Công việc",
+    "calendar": "Lịch",
+    "cloud": "Hacom Cloud",
+    "aiAssistant": "AI cá nhân",
+    "notifications": "Thông báo",
+    "help": "Trợ giúp",
+    "settings": "Cài đặt",
+    "profile": "Hồ sơ cá nhân",
+    "navAria": "Điều hướng chính",
+    "logoAria": "Hacom Chat",
+    "moduleNavAria": "Module"
+  },
+  "actions": {
+    "loadMore": "Tải thêm"
+  },
+  "logout": {
+    "button": "Đăng xuất",
+    "loading": "Đang đăng xuất...",
+    "confirmTitle": "Đăng xuất",
+    "confirmMessage": "Bạn cần đăng nhập lại để tiếp tục.",
+    "confirmText": "Đăng xuất",
+    "cancelText": "Hủy"
+  }
+}

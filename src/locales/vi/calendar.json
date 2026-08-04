@@ -1,0 +1,60 @@
+{
+  "calendar": {
+    "title": "Lịch",
+    "search": {
+      "placeholder": "Tìm kiếm sự kiện..."
+    },
+    "myCalendars": "Lịch của tôi",
+    "addCalendar": "Thêm lịch",
+    "today": "Hôm nay",
+    "day": "Ngày",
+    "week": "Tuần",
+    "month": "Tháng",
+    "events": {
+      "more": "+{{count}} sự kiện",
+      "noEvents": "Không có sự kiện"
+    },
+    "eventTypes": {
+      "vietnam_holiday": "Lịch Việt Nam",
+      "international": "Quốc tế",
+      "work": "Công việc",
+      "personal": "Cá nhân"
+    },
+    "eventDetails": {
+      "title": "Chi tiết sự kiện",
+      "date": "Ngày",
+      "type": "Loại",
+      "description": "Mô tả"
+    },
+    "types": {
+      "vietnam": "Việt Nam",
+      "international": "Quốc tế",
+      "work": "Công việc",
+      "personal": "Cá nhân",
+      "other": "Khác"
+    },
+    "viewDevelopment": {
+      "title": "View \"{{view}}\" đang phát triển",
+      "subtitle": "Chuyển sang view \"Tháng\" để xem lịch",
+      "switchButton": "Xem lịch Tháng"
+    },
+    "holidays": {
+      "newYear": "Tết Dương lịch",
+      "vietnamPartyFounding": "Ngày thành lập Đảng Cộng sản Việt Nam",
+      "intlWomenDay": "Ngày Quốc tế Phụ nữ",
+      "liberationDay": "Ngày Giải phóng miền Nam",
+      "intlLaborDay": "Ngày Quốc tế Lao động",
+      "intlChildrensDay": "Ngày Quốc tế Thiếu nhi",
+      "warInvalidsDay": "Ngày Thương binh Liệt sĩ",
+      "nationalDay": "Quốc khánh Việt Nam",
+      "vietnamWomenDay": "Ngày Phụ nữ Việt Nam",
+      "vietnamTeachersDay": "Ngày Nhà giáo Việt Nam",
+      "vnaDay": "Ngày thành lập Quân đội Nhân dân Việt Nam",
+      "valentine": "Valentine",
+      "earthDay": "Ngày Trái Đất",
+      "worldEnvDay": "Ngày Môi trường Thế giới",
+      "halloween": "Halloween",
+      "christmas": "Giáng sinh"
+    }
+  }
+}

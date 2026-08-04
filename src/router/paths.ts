@@ -1,0 +1,33 @@
+/**
+ * Centralized route paths to keep navigation and route config consistent.
+ */
+export const ROUTE_PATHS = {
+  ROOT: "/",
+  LOGIN: "/login",
+  ACTIVATION: "/activation",
+  VERIFY_EMAIL: "/verify-email",
+  FORGOT_PASSWORD: "/forgot-password",
+  RESET_PASSWORD: "/reset-password",
+  FORCE_CHANGE_PASSWORD: "/force-change-password",
+  PENDING_HR_LINK: "/pending-hr-link",
+  CHAT: "/chat",
+  CHAT_DETAIL: "/chat/:conversationId?",
+  FRIENDS: "/friends",
+  FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
+  JOIN_BY_TOKEN: "/join/:token",
+  SETTINGS: "/settings",
+  MAINTENANCE: "/maintenance",
+  TASKS: "/tasks",
+  CALENDAR: "/calendar",
+  AI_ASSISTANT: "/ai-assistant",
+  CLOUD: "/cloud",
+  ARCHIVE: "/archive",
+  NOTIFICATIONS: "/notifications",
+  HELP: "/help",
+  FAQ: "/faq",
+  REPORT_ISSUE: "/report-issue",
+  PRIVACY_POLICY: "/privacy-policy",
+  DATA_DELETION: "/data-deletion",
+  SUPPORT: "/support",
+  TERMS: "/terms",
+} as const;

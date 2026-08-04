@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="%BASE_URL%logo.png" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Hacom chat</title>
+    <script>
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem("ui-storage") || "{}");
+          var st = (s && s.state) || {};
+          var theme = ["light","dark","system"].includes(st.theme) ? st.theme : "system";
+          var brand = ["blue","green","purple"].includes(st.brand) ? st.brand : "blue";
+          var resolved = theme === "system"
+            ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+            : theme;
+          var r = document.documentElement;
+          r.dataset.themePreference = theme;
+          r.dataset.theme = resolved;
+          r.dataset.brand = brand;
+          if (resolved === "dark") r.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

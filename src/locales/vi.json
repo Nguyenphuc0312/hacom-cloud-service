@@ -1,0 +1,742 @@
+{
+  "sidebar": {
+    "header": {
+      "workspace": "Không gian",
+      "startNewChat": "Bắt đầu chat mới",
+      "expandSidebar": "Mở rộng thanh bên",
+      "collapseSidebar": "Thu gọn thanh bên"
+    },
+    "search": {
+      "placeholder": "Tìm kênh hoặc người dùng",
+      "aria": "Tìm kiếm cuộc trò chuyện",
+      "clearAria": "Xóa tìm kiếm"
+    },
+    "tabs": {
+      "all": "Tất cả",
+      "unread": "Chưa đọc",
+      "groups": "Nhóm",
+      "channels": "Kênh"
+    },
+    "room": {
+      "section": {
+        "unread": "Chưa đọc",
+        "channels": "Kênh",
+        "groups": "Nhóm",
+        "direct": "Tin nhắn trực tiếp"
+      },
+      "mentioned": "Được nhắc đến",
+      "noMessagesYet": "Chưa có tin nhắn",
+      "emptyBySearch": "Không có phòng phù hợp với tìm kiếm.",
+      "empty": "Không có cuộc trò chuyện nào.",
+      "listAria": "Danh sách cuộc trò chuyện"
+    },
+    "sidebar": {
+      "aria": "Thanh bên"
+    },
+    "logout": {
+      "button": "Đăng xuất",
+      "loading": "Đang đăng xuất...",
+      "confirmTitle": "Đăng xuất",
+      "confirmMessage": "Bạn cần đăng nhập lại để tiếp tục.",
+      "confirmText": "Đăng xuất",
+      "cancelText": "Hủy"
+    }
+  },
+  "chat": {
+    "header": {
+      "back": "Quay lại",
+      "viewInfo": "Xem thông tin cuộc trò chuyện",
+      "voiceCall": "Gọi thoại",
+      "videoCall": "Gọi video",
+      "searchInChat": "Tìm trong cuộc trò chuyện",
+      "toggleInfoPanel": "Bật/tắt bảng thông tin",
+      "moreActions": "Thêm hành động",
+      "channel": "Kênh",
+      "members": "{{count}} thành viên"
+    },
+    "typing": {
+      "user": "{{name}} đang nhập..."
+    },
+    "message": {
+      "you": "Bạn",
+      "edited": "đã chỉnh sửa",
+      "editedNoHistory": "Tin nhắn đã được chỉnh sửa. Phiên bản trước hiện chưa khả dụng.",
+      "editedAtNoHistory": "Đã chỉnh sửa {{time}}. Phiên bản trước hiện chưa khả dụng.",
+      "forwardedFrom": "Chuyển tiếp từ {{name}}",
+      "bubbleAria": "{{name}} lúc {{time}}",
+      "status": {
+        "uploading": "Đang tải lên",
+        "sending": "Đang gửi",
+        "sent": "Đã gửi",
+        "retry": "Gửi lại",
+        "failedRetry": "Gửi thất bại. Bấm để gửi lại"
+      },
+      "actions": {
+        "reply": "Trả lời",
+        "forward": "Chuyển tiếp",
+        "copy": "Sao chép",
+        "edit": "Chỉnh sửa",
+        "delete": "Xóa",
+        "pin": "Ghim tin nhắn",
+        "unpin": "Bỏ ghim tin nhắn"
+      },
+      "newLabel": "Tin nhắn mới ({{count}})",
+      "newAria": "Tin nhắn mới",
+      "jumpToLatest": "Đi đến mới nhất",
+      "inConversationAria": "Tin nhắn trong cuộc trò chuyện",
+      "loadMore": "Đang tải...",
+      "senderYou": "Bạn:"
+    },
+    "composer": {
+      "replyingTo": "Đang trả lời {{name}}",
+      "editing": "Đang chỉnh sửa tin nhắn",
+      "cancelReply": "Hủy trả lời",
+      "cancelEdit": "Hủy chỉnh sửa",
+      "removeFile": "Xóa tệp",
+      "openEmojiPicker": "Mở bảng emoji",
+      "attachFile": "Đính kèm tệp",
+      "mentionTrigger": "Nhắc người dùng",
+      "mentionList": "Gợi ý người dùng",
+      "noMentionResults": "Không tìm thấy người dùng phù hợp",
+      "placeholder": "Nhập một tin nhắn...",
+      "messageInput": "Ô nhập tin nhắn",
+      "sendMessage": "Gửi tin nhắn",
+      "sending": "Đang gửi tin nhắn",
+      "sentAnnouncement": "Đã gửi tin nhắn",
+      "failedAnnouncement": "Gửi tin nhắn thất bại",
+      "recordVoice": "Ghi âm",
+      "uploading": "Đang tải lên...",
+      "cancelUpload": "Hủy",
+      "retryUpload": "Thử lại",
+      "sendFile": "Gửi tệp",
+      "filePreviewAlt": "Xem trước tệp",
+      "fileSizeLimit": "Giới hạn {{size}}"
+    },
+    "dropZone": {
+      "title": "Thả tệp vào đây",
+      "subtitle": "Thả để đính kèm tệp vào cuộc trò chuyện",
+      "limits": "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB"
+    },
+    "attachmentTray": {
+      "queued": "Đang chờ",
+      "uploading": "Đang tải",
+      "ready": "Sẵn sàng",
+      "failed": "Thất bại",
+      "blocked": "Bị chặn",
+      "cancelUpload": "Hủy tải lên",
+      "remove": "Xóa",
+      "retry": "Thử lại",
+      "retryUpload": "Thử tải lại {{name}}",
+      "uploadProgress": "Tiến trình tải {{name}}: {{progress}}%",
+      "region": "{{count}} tệp đính kèm",
+      "summary": "{{count}} tệp · {{size}}",
+      "uploadingStatus": "Đang tải lên…",
+      "someFailedStatus": "Một số tệp tải thất bại",
+      "allReadyStatus": "Tất cả sẵn sàng",
+      "clearAll": "Xóa tất cả tệp",
+      "clearAllLabel": "Xóa tất cả",
+      "fileList": "Tệp đính kèm",
+      "waitForUploads": "Vui lòng đợi tải lên hoàn tất trước khi gửi"
+    },
+    "attachment": {
+      "types": {
+        "photo": "Ảnh/Video",
+        "document": "Tài liệu",
+        "location": "Vị trí",
+        "contact": "Liên hệ",
+        "audio": "Âm thanh",
+        "poll": "Khảo sát"
+      },
+      "menu": {
+        "searchPlaceholder": "Tìm emoji...",
+        "noEmojiFound": "Không tìm thấy emoji"
+      }
+    },
+    "emoji": {
+      "searchPlaceholder": "Tìm emoji...",
+      "clearSearch": "Xóa tìm emoji",
+      "quickReactions": "Phản ứng nhanh",
+      "category": {
+        "recent": "Gần đây",
+        "smileys": "Mặt cười",
+        "gestures": "Cử chỉ",
+        "hearts": "Trái tim",
+        "nature": "Thiên nhiên",
+        "food": "Đồ ăn",
+        "activities": "Hoạt động",
+        "objects": "Đồ vật",
+        "flags": "Cờ"
+      }
+    },
+    "reaction": {
+      "reactWith": "Thả cảm xúc {{emoji}}",
+      "add": "Thêm phản ứng"
+    },
+    "file": {
+      "unknown": "Tệp không xác định",
+      "download": "Tải tệp"
+    },
+    "filePreview": {
+      "preview": "Xem trước",
+      "playVideo": "Phát video",
+      "deleted": "Tệp này đã bị xóa",
+      "blocked": "Tệp bị chặn — phát hiện mối đe dọa tiềm ẩn",
+      "scanning": "Đang quét…",
+      "loading": "Đang tải xem trước…",
+      "urlError": "Không tải được bản xem trước. Liên kết có thể đã hết hạn.",
+      "retry": "Thử lại",
+      "noPreview": "Không hỗ trợ xem trước loại tệp này.",
+      "videoNotSupported": "Trình duyệt của bạn không hỗ trợ phát video.",
+      "pdfFallback": "Không thấy PDF? Nhấn nút tải xuống ở trên.",
+      "modalLabel": "Xem trước tệp",
+      "zoomIn": "Phóng to",
+      "zoomOut": "Thu nhỏ",
+      "fitToScreen": "Vừa với màn hình",
+      "close": "Đóng xem trước",
+      "previous": "Tệp trước",
+      "next": "Tệp tiếp theo",
+      "instructions": "Cuộn để phóng to · Nhấn đôi để đặt lại · Phím mũi tên để di chuyển"
+    },
+    "voice": {
+      "play": "Phát",
+      "pause": "Tạm dừng",
+      "progress": "Tiến độ âm thanh"
+    },
+    "image": {
+      "failedToLoad": "Không tải được ảnh",
+      "previewAlt": "Xem trước ảnh",
+      "close": "Đóng"
+    },
+    "empty": {
+      "messagesTitle": "Chưa có tin nhắn",
+      "messagesDescription": "Hãy gửi tin nhắn đầu tiên để bắt đầu cuộc trò chuyện.",
+      "noChatTitle": "Chọn một cuộc trò chuyện",
+      "noChatDescription": "Chọn một cuộc chat ở thanh bên hoặc bắt đầu cuộc trò chuyện mới.",
+      "startNewChat": "Bắt đầu chat mới",
+      "searchTitle": "Không tìm thấy kết quả",
+      "searchDescription": "Không có kết quả phù hợp với \"{{query}}\".",
+      "searchDescriptionEmpty": "Không tìm thấy kết quả. Thử từ khóa khác.",
+      "clearSearch": "Xóa tìm kiếm"
+    },
+    "time": {
+      "today": "Hôm nay",
+      "yesterday": "Hôm qua",
+      "justNow": "Vừa xong",
+      "minutesShort": "{{count}}p",
+      "hoursShort": "{{count}}g",
+      "lastSeenRecently": "Vừa truy cập",
+      "onlineNow": "Đang trực tuyến",
+      "lastSeenAt": "Truy cập lúc {{time}}",
+      "lastSeenYesterdayAt": "Truy cập hôm qua lúc {{time}}",
+      "lastSeenDayAt": "Truy cập {{day}} {{time}}",
+      "lastSeenDate": "Truy cập {{date}}"
+    },
+    "toast": {
+      "statusUpdated": "Đã cập nhật trạng thái: {{status}}",
+      "logoutSuccess": "Đăng xuất thành công",
+      "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+      "messageEdited": "Đã chỉnh sửa tin nhắn",
+      "editFailed": "Không thể chỉnh sửa tin nhắn",
+      "messageDeleted": "Đã xóa tin nhắn",
+      "deleteFailed": "Không thể xóa tin nhắn",
+      "resendSuccess": "Gửi lại thành công",
+      "resendFailed": "Gửi lại không thành công",
+      "connectionReconnecting": "Đang kết nối lại...",
+      "pinSuccess": "Đã ghim tin nhắn",
+      "unpinSuccess": "Đã bỏ ghim tin nhắn",
+      "pinFailed": "Không thể ghim tin nhắn"
+    },
+    "search": {
+      "title": "Tìm kiếm tin nhắn",
+      "placeholder": "Tìm kiếm tin nhắn...",
+      "noResults": "Không tìm thấy tin nhắn",
+      "noResultsDescription": "Thử một từ khóa khác.",
+      "resultCount": "Tìm thấy {{count}} kết quả",
+      "error": "Tìm kiếm thất bại. Vui lòng thử lại.",
+      "inConversation": "trong {{name}}"
+    },
+    "pinned": {
+      "title": "Tin nhắn đã ghim",
+      "empty": "Không có tin nhắn ghim",
+      "emptyDescription": "Ghim tin nhắn quan trọng để tìm lại dễ dàng.",
+      "jumpTo": "Đi đến tin nhắn",
+      "count": "{{count}} đã ghim"
+    },
+    "preview": {
+      "photo": "Ảnh",
+      "video": "Video",
+      "file": "Tệp",
+      "voice": "Tin nhắn giọng nói",
+      "location": "Vị trí",
+      "sticker": "Sticker"
+    }
+  },
+  "profile": {
+    "userProfile": {
+      "title": "Thông tin người dùng",
+      "usernameLabel": "Tên người dùng",
+      "notifications": "Thông báo",
+      "media": "Phương tiện, Tệp, Liên kết",
+      "searchInConversation": "Tìm trong cuộc trò chuyện",
+      "blockUser": "Chặn người dùng",
+      "report": "Báo cáo",
+      "deleteConversation": "Xóa cuộc trò chuyện"
+    },
+    "groupInfo": {
+      "title": "Thông tin nhóm",
+      "membersCount": "{{count}} thành viên",
+      "notifications": "Thông báo",
+      "tabs": {
+        "members": "Thành viên",
+        "media": "Phương tiện",
+        "files": "Tệp"
+      },
+      "addMember": "Thêm thành viên",
+      "searchMemberPlaceholder": "Tìm kiếm thành viên...",
+      "addMemberEligibilityHint": "Chỉ bạn bè đã chấp nhận mới có thể được thêm trực tiếp. Hãy dùng liên kết mời nếu cài đặt nhóm cho phép.",
+      "noSearchResult": "Không có kết quả phù hợp",
+      "youSuffix": "(Bạn)",
+      "viewAllMedia": "Xem tất cả phương tiện",
+      "noSharedFiles": "Chưa có tệp được chia sẻ",
+      "reportGroup": "Báo cáo nhóm",
+      "leaveGroup": "Rời nhóm",
+      "leaveConfirm": "Bạn có chắc muốn rời nhóm này?"
+    },
+    "newChatModal": {
+      "title": "Cuộc trò chuyện mới",
+      "descriptionDirect": "Tìm kiếm người dùng để bắt đầu trò chuyện",
+      "descriptionGroup": "Chọn thành viên để tạo nhóm",
+      "directMessage": "Tin nhắn trực tiếp",
+      "createGroup": "Tạo nhóm",
+      "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
+      "groupNamePlaceholder": "Nhập tên nhóm...",
+      "groupEligibilityHint": "Việc thêm trực tiếp thành viên yêu cầu quan hệ bạn bè đã chấp nhận. Hãy dùng liên kết mời nếu cài đặt nhóm cho phép.",
+      "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
+      "createGroupButton": "Tạo nhóm ({{count}} người)"
+    },
+    "editProfileModal": {
+      "title": "Chỉnh sửa hồ sơ",
+      "changeAvatarHint": "Bấm để thay đổi ảnh đại diện",
+      "firstName": "Họ",
+      "lastName": "Tên",
+      "phone": "Số điện thoại",
+      "bio": "Giới thiệu",
+      "bioPlaceholder": "Viết vài dòng về bản thân...",
+      "bioHint": "Tối đa {{count}} ký tự",
+      "cancel": "Hủy",
+      "save": "Lưu thay đổi",
+      "phonePlaceholder": "+84 912 345 678"
+    },
+    "imagePreview": {
+      "defaultAlt": "Xem trước ảnh",
+      "zoomOut": "Thu nhỏ",
+      "zoomIn": "Phóng to",
+      "download": "Tải xuống",
+      "close": "Đóng",
+      "instructions": "Cuộn để zoom • Nhấp đúp để reset • ESC để đóng"
+    },
+    "toast": {
+      "searchUsersFailed": "Không thể tìm kiếm người dùng",
+      "selectAtLeastOneMember": "Chọn ít nhất 1 người để tạo nhóm",
+      "groupNameRequired": "Vui lòng nhập tên nhóm",
+      "avatarFileRequired": "Vui lòng chọn file ảnh",
+      "avatarMaxSize": "Kích thước ảnh không được vượt quá 5MB",
+      "profileUpdateSuccess": "Cập nhật hồ sơ thành công!",
+      "profileUpdateFailed": "Cập nhật thất bại",
+      "memberAdded": "Đã thêm thành viên vào nhóm",
+      "memberAddFailed": "Không thể thêm thành viên",
+      "leftGroup": "Đã rời nhóm",
+      "leaveGroupFailed": "Không thể rời nhóm lúc này"
+    }
+  },
+  "error": {
+    "generic": {
+      "unexpected": "Đã có lỗi xảy ra",
+      "requestFailed": "Yêu cầu thất bại"
+    },
+    "auth": {
+      "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
+      "registerFailed": "Đăng ký thất bại",
+      "logoutFailed": "Đăng xuất thất bại",
+      "statusUpdateFailed": "Cập nhật trạng thái thất bại",
+      "sessionInactive": "Phiên đăng nhập không còn hiệu lực",
+      "missingRefreshToken": "Không tìm thấy refresh token",
+      "refreshMissingToken": "Phản hồi refresh không có access token",
+      "loginTokenMissing": "Phản hồi đăng nhập không có access token",
+      "registerTokenMissing": "Phản hồi đăng ký không có access token"
+    },
+    "chat": {
+      "conversationAccessDenied": "Không thể truy cập cuộc trò chuyện này",
+      "conversationOpenFailed": "Không thể mở cuộc trò chuyện",
+      "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+      "startConversationFailed": "Không thể bắt đầu cuộc trò chuyện",
+      "createGroupFailed": "Không thể tạo nhóm mới",
+      "fetchConversationsFailed": "Không thể tải danh sách hội thoại",
+      "fetchMessagesFailed": "Không thể tải tin nhắn",
+      "conversationIdMissing": "Không nhận được mã hội thoại",
+      "invalidSendResponse": "Phản hồi gửi tin nhắn không hợp lệ",
+      "invalidResendResponse": "Phản hồi gửi lại tin nhắn không hợp lệ"
+    },
+    "upload": {
+      "fileTooLarge": "Tệp vượt quá giới hạn dung lượng",
+      "unsupportedType": "Định dạng tệp không hỗ trợ",
+      "uploadCanceled": "Đã hủy tải lên",
+      "uploadFailed": "Tải lên thất bại, vui lòng thử lại",
+      "noConversation": "Chưa chọn cuộc trò chuyện",
+      "cancelled": "Đã hủy tải lên",
+      "tooLarge": "Tệp quá lớn",
+      "tooManyFiles": "Bạn chỉ có thể gửi tối đa {{max}} tệp trong một tin nhắn.",
+      "fileTooLargeNamed": "{{name}} quá lớn",
+      "fileTooLargeByType": "{{name}} vượt quá giới hạn {{limit}} cho loại {{type}}.",
+      "totalSizeTooLarge": "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
+      "messageSendFailedKeepDraft": "Gửi tin nhắn thất bại, tệp đã tải lên vẫn được giữ để bạn thử lại."
+    }
+  },
+  "settings": {
+    "pageTitle": "Cài đặt",
+    "resetAll": "Đặt lại mặc định",
+    "version": "Cài đặt v{{version}}",
+    "security": {
+      "title": "Bảo mật",
+      "description": "Quản lý mật khẩu và bảo mật tài khoản",
+      "changePassword": "Đổi mật khẩu",
+      "currentPassword": "Mật khẩu hiện tại",
+      "newPassword": "Mật khẩu mới",
+      "confirmPassword": "Xác nhận mật khẩu mới",
+      "changePasswordButton": "Cập nhật mật khẩu",
+      "changePasswordSuccess": "Đổi mật khẩu thành công",
+      "changePasswordFailed": "Đổi mật khẩu thất bại"
+    },
+    "dangerZone": {
+      "title": "Vùng nguy hiểm",
+      "description": "Hành động không thể hoàn tác cho tài khoản của bạn",
+      "deleteAccount": "Xóa tài khoản",
+      "deleteAccountDescription": "Xóa vĩnh viễn tài khoản và tất cả dữ liệu. Hành động này không thể hoàn tác.",
+      "deleteAccountButton": "Xóa tài khoản của tôi",
+      "deleteAccountConfirmTitle": "Xóa tài khoản?",
+      "deleteAccountConfirmMessage": "Hành động này sẽ xóa vĩnh viễn tài khoản, tin nhắn và tất cả dữ liệu liên quan. Nhập mật khẩu để xác nhận.",
+      "deleteAccountPassword": "Nhập mật khẩu của bạn",
+      "deleteAccountSuccess": "Đã xóa tài khoản thành công",
+      "deleteAccountFailed": "Xóa tài khoản thất bại"
+    },
+    "blockedUsers": {
+      "title": "Người dùng bị chặn",
+      "description": "Quản lý người dùng bạn đã chặn",
+      "empty": "Không có người dùng bị chặn",
+      "emptyDescription": "Bạn chưa chặn ai.",
+      "unblock": "Bỏ chặn",
+      "unblockSuccess": "Đã bỏ chặn người dùng",
+      "unblockFailed": "Không thể bỏ chặn người dùng",
+      "blockSuccess": "Đã chặn người dùng",
+      "blockFailed": "Không thể chặn người dùng"
+    },
+    "appearance": {
+      "title": "Giao diện",
+      "description": "Tùy chỉnh giao diện, màu sắc, cỡ chữ và mật độ hiển thị",
+      "themeLabel": "Giao diện",
+      "themeLight": "Sáng",
+      "themeDark": "Tối",
+      "themeSystem": "Theo hệ thống",
+      "accentLabel": "Màu chủ đạo",
+      "accentDesc": "Chọn màu chính cho nút và liên kết",
+      "fontSizeLabel": "Cỡ chữ",
+      "fontSizeDesc": "Áp dụng cho bóng chat tin nhắn",
+      "fontSmall": "Nhỏ",
+      "fontSmallDesc": "Văn bản nhỏ gọn",
+      "fontMedium": "Vừa",
+      "fontMediumDesc": "Kích thước mặc định",
+      "fontLarge": "Lớn",
+      "fontLargeDesc": "Dễ đọc hơn",
+      "densityLabel": "Mật độ hiển thị",
+      "densityCompact": "Chặt",
+      "densityCompactDesc": "Khoảng cách bóng chat hẹp hơn",
+      "densityComfortable": "Thoải mái",
+      "densityComfortableDesc": "Rộng rãi hơn",
+      "preview": "Xem trước"
+    },
+    "notifications": {
+      "title": "Thông báo",
+      "description": "Quản lý cách bạn nhận thông báo",
+      "enabled": "Thông báo tin nhắn",
+      "enabledDesc": "Hiện thông báo khi có tin nhắn mới",
+      "sound": "Âm thanh thông báo",
+      "soundDesc": "Phát âm thanh khi có tin nhắn mới",
+      "messagePreview": "Xem trước tin nhắn",
+      "messagePreviewDesc": "Hiện nội dung tin nhắn trong thông báo"
+    },
+    "privacy": {
+      "title": "Quyền riêng tư",
+      "description": "Quản lý tùy chọn quyền riêng tư",
+      "showOnlineStatus": "Hiện trạng thái trực tuyến",
+      "showOnlineStatusDesc": "Cho phép người khác thấy khi bạn trực tuyến",
+      "readReceipts": "Xác nhận đã đọc",
+      "readReceiptsDesc": "Cho người khác biết khi bạn đã đọc tin nhắn",
+      "allowStrangers": "Cho phép người lạ nhắn tin",
+      "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn"
+    },
+    "chat": {
+      "title": "Chat",
+      "description": "Tùy chỉnh hành vi chat",
+      "autoScroll": "Tự cuộn khi có tin mới",
+      "autoScrollDesc": "Tự động cuộn đến tin nhắn mới nhất",
+      "enterKeyLabel": "Hành vi phím Enter",
+      "enterSend": "Enter để gửi",
+      "enterSendDesc": "Nhấn Enter để gửi, Shift+Enter hoặc Alt+Enter để xuống dòng, Ctrl + K để mở tìm kiếm nhanh",
+      "enterNewline": "Enter để xuống dòng",
+      "enterNewlineDesc": "Nhấn Ctrl+Enter để gửi",
+      "saveSearchHistory": "Lưu lịch sử tìm kiếm",
+      "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây"
+    },
+    "preview": {
+      "contact": "Nguyễn Văn A",
+      "received": "Chào bạn! Khỏe không? 👋",
+      "sent": "Mình khỏe, cảm ơn bạn! 🎉",
+      "receivedTwo": "Tốt quá! Hẹn gặp nhé 😊"
+    }
+  },
+  "theme": {
+    "toggle": {
+      "light": "Sáng",
+      "dark": "Tối",
+      "system": "Theo hệ thống",
+      "switchToLight": "Chuyển sang chế độ sáng",
+      "switchToDark": "Chuyển sang chế độ tối"
+    },
+    "brand": {
+      "blue": "Xanh dương",
+      "green": "Xanh lá",
+      "purple": "Tím"
+    }
+  },
+  "common": {
+    "app": {
+      "name": "Hacom Chat",
+      "shortName": "HC"
+    },
+    "actions": {
+      "cancel": "Hủy",
+      "confirm": "Xác nhận",
+      "retry": "Thử lại",
+      "close": "Đóng",
+      "save": "Lưu",
+      "back": "Quay lại",
+      "clear": "Xóa",
+      "search": "Tìm kiếm",
+      "add": "Thêm",
+      "remove": "Xóa",
+      "download": "Tải xuống",
+      "send": "Gửi",
+      "create": "Tạo",
+      "edit": "Chỉnh sửa",
+      "delete": "Xóa",
+      "copy": "Sao chép",
+      "forward": "Chuyển tiếp",
+      "reply": "Trả lời",
+      "startChat": "Bắt đầu chat",
+      "signOut": "Đăng xuất",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu"
+    },
+    "loading": {
+      "default": "Đang tải...",
+      "page": "Đang tải trang...",
+      "checkingAuth": "Đang kiểm tra đăng nhập...",
+      "processing": "Đang xử lý..."
+    },
+    "labels": {
+      "user": "Người dùng",
+      "conversation": "Cuộc trò chuyện",
+      "channel": "Kênh",
+      "group": "Nhóm"
+    },
+    "statusLabel": "Trạng thái",
+    "status": {
+      "online": "Trực tuyến",
+      "offline": "Ngoại tuyến",
+      "away": "Tạm vắng",
+      "dnd": "Không làm phiền",
+      "busy": "Bận",
+      "invisible": "Ẩn"
+    },
+    "toast": {
+      "featureInDevelopment": "Tính năng đang phát triển"
+    }
+  },
+  "friends": {
+    "tabs": {
+      "received": "Đã nhận",
+      "sent": "Đã gửi"
+    },
+    "sentRequests": {
+      "title": "Yêu cầu đã gửi",
+      "empty": "Không có yêu cầu đã gửi",
+      "emptyDescription": "Bạn chưa gửi yêu cầu kết bạn nào.",
+      "emptyReceived": "Không có yêu cầu kết bạn đến",
+      "emptySent": "Không có yêu cầu kết bạn đã gửi",
+      "cancel": "Hủy yêu cầu",
+      "cancelSuccess": "Đã hủy yêu cầu kết bạn",
+      "cancelFailed": "Không thể hủy yêu cầu"
+    },
+    "pendingBadge": {
+      "ariaLabel": "{{count}} yêu cầu kết bạn chờ xử lý"
+    },
+    "status": {
+      "none": "Kết bạn",
+      "pending": "Đang chờ",
+      "accepted": "Bạn bè",
+      "declined": "Kết bạn",
+      "blocked": "Đã chặn"
+    },
+    "block": "Chặn người dùng",
+    "unblock": "Bỏ chặn người dùng",
+    "accept": "Chấp nhận",
+    "reject": "Từ chối",
+    "requestAccepted": "Đã chấp nhận yêu cầu kết bạn",
+    "requestRejected": "Đã từ chối yêu cầu kết bạn",
+    "requestCancelled": "Đã hủy yêu cầu kết bạn",
+    "actionFailed": "Thao tác thất bại. Vui lòng thử lại."
+  },
+  "auth": {
+    "login": {
+      "aria": {
+        "section": "Đăng nhập"
+      },
+      "title": "Chào mừng trở lại",
+      "subtitle": "Đăng nhập để tiếp tục trò chuyện",
+      "email": "Email",
+      "password": "Mật khẩu",
+      "rememberMe": "Ghi nhớ đăng nhập",
+      "forgotPassword": "Quên mật khẩu?",
+      "submit": "Đăng nhập",
+      "orWith": "Hoặc đăng nhập với",
+      "noAccount": "Chưa có tài khoản?",
+      "signupNow": "Đăng ký ngay",
+      "agreement": "Bằng việc đăng nhập, bạn đồng ý với",
+      "agreementAnd": "và",
+      "terms": "Điều khoản sử dụng",
+      "privacy": "Chính sách bảo mật",
+      "socialAria": "Đăng nhập bằng {{provider}}"
+    },
+    "register": {
+      "aria": {
+        "section": "Đăng ký tài khoản"
+      },
+      "title": "Tạo tài khoản mới",
+      "subtitle": "Tham gia cộng đồng Hacom Chat ngay hôm nay",
+      "firstName": "Họ",
+      "lastName": "Tên",
+      "username": "Tên người dùng",
+      "email": "Email",
+      "password": "Mật khẩu",
+      "confirmPassword": "Xác nhận mật khẩu",
+      "acceptTermsPrefix": "Tôi đồng ý với",
+      "acceptTermsAnd": "và",
+      "terms": "Điều khoản sử dụng",
+      "privacy": "Chính sách bảo mật",
+      "submit": "Đăng ký",
+      "haveAccount": "Đã có tài khoản?",
+      "loginNow": "Đăng nhập ngay",
+      "footerPrivacyPrefix": "Thông tin của bạn được bảo mật theo",
+      "footerPrivacySuffix": "của chúng tôi"
+    },
+    "forgot": {
+      "title": "Quên mật khẩu?",
+      "subtitle": "Nhập email của bạn, chúng tôi sẽ gửi link đặt lại mật khẩu",
+      "submit": "Gửi link đặt lại mật khẩu",
+      "backToLogin": "Quay lại đăng nhập",
+      "successTitle": "Kiểm tra email của bạn",
+      "successDescription": "Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến",
+      "successHint": "Không nhận được email? Kiểm tra thư mục spam hoặc",
+      "tryAnotherEmail": "Thử lại với email khác"
+    },
+    "reset": {
+      "title": "Đặt mật khẩu mới",
+      "subtitle": "Nhập mật khẩu mới của bạn bên dưới",
+      "submit": "Đặt lại mật khẩu",
+      "successTitle": "Đã đặt lại mật khẩu!",
+      "successDescription": "Mật khẩu của bạn đã được đặt lại thành công.",
+      "goToLogin": "Đi đến đăng nhập",
+      "invalidToken": "Liên kết đặt lại không hợp lệ hoặc hết hạn",
+      "invalidTokenDescription": "Liên kết đặt lại này không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.",
+      "requestNewLink": "Yêu cầu liên kết mới"
+    },
+    "username": {
+      "invalid": "Chỉ được dùng chữ cái, số và dấu gạch dưới",
+      "checking": "Đang kiểm tra...",
+      "available": "Tên người dùng khả dụng",
+      "taken": "Tên người dùng đã tồn tại",
+      "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm"
+    },
+    "toast": {
+      "loginSuccess": "Đăng nhập thành công!",
+      "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
+      "registerSuccess": "Đăng ký thành công! Chào mừng bạn đến với Hacom Chat",
+      "registerFailed": "Đăng ký thất bại",
+      "forgotPasswordSent": "Email đặt lại mật khẩu đã được gửi!",
+      "forgotPasswordFallback": "Nếu email tồn tại, bạn sẽ nhận được link đặt lại mật khẩu"
+    },
+    "placeholders": {
+      "email": "you@example.com",
+      "password": "••••••••",
+      "firstName": "Nguyễn",
+      "lastName": "Văn A",
+      "username": "username",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu"
+    }
+  },
+  "validation": {
+    "auth": {
+      "emailRequired": "Email không được để trống",
+      "emailInvalid": "Email không hợp lệ",
+      "passwordRequired": "Mật khẩu không được để trống",
+      "passwordMin": "Mật khẩu phải có tối thiểu {{count}} ký tự",
+      "passwordMax": "Mật khẩu không được quá {{count}} ký tự",
+      "passwordComplexity": "Mật khẩu phải có tối thiểu 8 ký tự",
+      "confirmPasswordRequired": "Xác nhận mật khẩu không được để trống",
+      "confirmPasswordMismatch": "Mật khẩu xác nhận không khớp",
+      "acceptTerms": "Bạn phải đồng ý với điều khoản sử dụng"
+    },
+    "register": {
+      "usernameRequired": "Tên người dùng không được để trống",
+      "usernameMin": "Tên người dùng phải có ít nhất {{count}} ký tự",
+      "usernameMax": "Tên người dùng không được quá {{count}} ký tự",
+      "usernamePattern": "Tên người dùng chỉ được chứa chữ cái, số và dấu gạch dưới"
+    },
+    "profile": {
+      "bioMax": "Bio không được quá {{count}} ký tự",
+      "phoneInvalid": "Số điện thoại không hợp lệ"
+    },
+    "password": {
+      "currentRequired": "Mật khẩu hiện tại không được để trống",
+      "newRequired": "Mật khẩu mới không được để trống",
+      "mustBeDifferent": "Mật khẩu mới phải khác mật khẩu hiện tại"
+    },
+    "room": {
+      "nameRequired": "Tên nhóm không được để trống",
+      "nameMin": "Tên nhóm phải có ít nhất 2 ký tự",
+      "nameMax": "Tên nhóm không được quá 100 ký tự",
+      "descriptionMax": "Mô tả không được quá 500 ký tự",
+      "memberMin": "Phải chọn ít nhất 1 thành viên",
+      "memberMax": "Nhóm không được quá 200 thành viên"
+    },
+    "message": {
+      "contentRequired": "Tin nhắn không được để trống",
+      "contentMax": "Tin nhắn không được quá {{count}} ký tự"
+    },
+    "strength": {
+      "label": "Độ mạnh",
+      "weak": "Yếu",
+      "medium": "Trung bình",
+      "strong": "Mạnh",
+      "requirements": {
+        "length": "Ít nhất 8 ký tự",
+        "lowercase": "Có chữ thường (a-z)",
+        "uppercase": "Có chữ hoa (A-Z)",
+        "number": "Có số (0-9)",
+        "special": "Có ký tự đặc biệt (!@#$...)",
+        "optional": "khuyến khích"
+      }
+    }
+  }
+}

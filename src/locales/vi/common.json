@@ -1,0 +1,119 @@
+{
+  "app": {
+    "name": "Hacom Chat",
+    "shortName": "HC"
+  },
+  "actions": {
+    "title": "Thao tác nhanh",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "approve": "Duyệt",
+    "reject": "Từ chối",
+    "retry": "Thử lại",
+    "loadMore": "Xem thêm",
+    "close": "Đóng",
+    "save": "Lưu",
+    "back": "Quay lại",
+    "clear": "Xóa",
+    "search": "Tìm kiếm",
+    "add": "Thêm",
+    "remove": "Xóa",
+    "download": "Tải xuống",
+    "send": "Gửi",
+    "create": "Tạo",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "copy": "Sao chép",
+    "forward": "Chuyển tiếp",
+    "reply": "Trả lời",
+    "more": "Thêm",
+    "startChat": "Bắt đầu chat",
+    "signOut": "Đăng xuất"
+  },
+  "loading": {
+    "default": "Đang tải...",
+    "page": "Đang tải trang...",
+    "checkingAuth": "Đang kiểm tra đăng nhập...",
+    "processing": "Đang xử lý...",
+    "syncing": "Đang đồng bộ..."
+  },
+  "labels": {
+    "user": "Người dùng",
+    "conversation": "Cuộc trò chuyện",
+    "channel": "Kênh",
+    "group": "Nhóm",
+    "navigation": "Điều hướng",
+    "shortcut": "Phím tắt",
+    "people": "Mọi người"
+  },
+  "statusLabel": "Trạng thái",
+  "status": {
+    "online": "Trực tuyến",
+    "offline": "Ngoại tuyến",
+    "away": "Tạm vắng",
+    "dnd": "Không làm phiền",
+    "busy": "Bận",
+    "invisible": "Ẩn",
+    "idle": "Rảnh",
+    "loading": "Đang tải...",
+    "empty": "Không có kết quả phù hợp",
+    "unknown": "Không xác định",
+    "lastSeen": "Truy cập lần cuối {{time}}",
+    "lastSynced": "Đồng bộ lần cuối: {{time}}",
+    "lastUpdated": "Cập nhật cục bộ lần cuối: {{time}}"
+  },
+  "error": {
+    "syncFailed": "Không thể đồng bộ cài đặt."
+  },
+  "toast": {
+    "featureInDevelopment": "Tính năng đang phát triển"
+  },
+  "notifications": {
+    "panelTitle": "Thông báo",
+    "panelSubtitle": "Nhắc tên, tin nhắn và hoạt động hội thoại",
+    "conversationFallback": "{{count}} tin nhắn chưa đọc",
+    "actions": {
+      "markAllRead": "Đánh dấu đã đọc",
+      "clear": "Xóa"
+    },
+    "filter": {
+      "all": "Tất cả",
+      "unread": "Chưa đọc",
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "groupActivity": "Hoạt động nhóm",
+      "system": "Hệ thống"
+    },
+    "empty": {
+      "title": "Chưa có thông báo",
+      "description": "Các nhắc tên, tin nhắn mới và cập nhật hệ thống sẽ xuất hiện tại đây."
+    }
+  },
+  "commandPalette": {
+    "openChatWorkspace": "Mở không gian trò chuyện",
+    "findFriends": "Tìm bạn bè và danh bạ",
+    "newConversation": "Bắt đầu cuộc trò chuyện mới (cá nhân hoặc nhóm)",
+    "openDirectConversation": "Mở cuộc trò chuyện trực tiếp hiện có",
+    "searchInFriends": "Tìm người này trong trang Bạn bè",
+    "searchPlaceholder": "Tìm cuộc trò chuyện, người dùng hoặc thao tác",
+    "searchAria": "Tìm trong bảng lệnh"
+  },
+  "shortcut": {
+    "esc": "Esc"
+  },
+  "emptyState": {
+    "welcomeTitle": "Xin chào, chào mừng bạn đến với <1>Hacom Chat</1>",
+    "welcomeSubtitle1": "Nền tảng trao đổi nội bộ bảo mật dành riêng cho Hacom Holdings",
+    "welcomeSubtitle2": "Đảm bảo kết nối ổn định, truyền tải nhanh và an toàn dữ liệu doanh nghiệp.",
+    "featureCard": {
+      "startChat": "Bắt đầu trò chuyện",
+      "startChatDesc": "Tìm kiếm đồng nghiệp để nhắn tin hoặc tạo nhóm chat mới cho đội nhóm của bạn.",
+      "shareFile": "Chia sẻ file an toàn",
+      "shareFileDesc": "Kéo thả tài liệu, bài thuyết trình và hình ảnh trực tiếp vào bất kỳ cửa sổ chat nào.",
+      "completeProfile": "Hoàn thiện hồ sơ",
+      "completeProfileDesc": "Cập nhật chức danh, phòng ban và ảnh đại diện chuyên nghiệp để đồng nghiệp dễ nhận diện bạn."
+    },
+    "downloadPC": "Tải Hacom Chat PC cho máy tính",
+    "openProfile": "Mở hồ sơ"
+  }
+}

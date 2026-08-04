@@ -1,0 +1,47 @@
+﻿{
+  "generic": {
+    "unexpected": "Đã có lỗi xảy ra",
+    "requestFailed": "Yêu cầu thất bại"
+  },
+  "auth": {
+    "loginFailed": "Sai thông tin đăng nhập hoặc tài khoản, vui lòng kiểm tra lại",
+    "registerFailed": "Đăng ký thất bại",
+    "logoutFailed": "Đăng xuất thất bại",
+    "statusUpdateFailed": "Cập nhật trạng thái thất bại",
+    "sessionInactive": "Phiên đăng nhập không còn hiệu lực",
+    "missingRefreshToken": "Không tìm thấy refresh token",
+    "refreshMissingToken": "Phản hồi refresh không có access token",
+    "loginTokenMissing": "Phản hồi đăng nhập không có access token",
+    "registerTokenMissing": "Phản hồi đăng ký không có access token",
+    "profileMissing": "Không thể tải hồ sơ của bạn.",
+    "profileRetryHint": "Hãy làm mới hồ sơ hoặc đăng nhập lại."
+  },
+  "chat": {
+    "conversationAccessDenied": "Không thể truy cập cuộc trò chuyện này",
+    "conversationOpenFailed": "Không thể mở cuộc trò chuyện",
+    "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+    "startConversationFailed": "Không thể bắt đầu cuộc trò chuyện",
+    "createGroupFailed": "Không thể tạo nhóm mới",
+    "fetchConversationsFailed": "Không thể tải danh sách hội thoại",
+    "fetchMessagesFailed": "Không thể tải tin nhắn",
+    "conversationIdMissing": "Không nhận được mã hội thoại",
+    "invalidSendResponse": "Phản hồi gửi tin nhắn không hợp lệ",
+    "invalidResendResponse": "Phản hồi gửi lại tin nhắn không hợp lệ"
+  },
+  "upload": {
+    "fileTooLarge": "Tệp vượt quá giới hạn dung lượng",
+    "unsupportedType": "Định dạng tệp không hỗ trợ",
+    "uploadCanceled": "Đã hủy tải lên",
+    "uploadFailed": "Tải lên thất bại, vui lòng thử lại",
+    "noConversation": "Chưa chọn cuộc trò chuyện",
+    "cancelled": "Đã hủy tải lên",
+    "tooLarge": "Tệp quá lớn",
+    "tooManyFiles": "Bạn chỉ có thể gửi tối đa {{max}} tệp trong một tin nhắn.",
+    "fileTooLargeNamed": "{{name}} quá lớn",
+    "fileTooLargeByType": "{{name}} vượt quá giới hạn {{limit}} cho loại {{type}}.",
+    "unsupportedTypeNamed": "{{name}} có định dạng tệp không được hỗ trợ",
+    "totalSizeTooLarge": "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
+    "mimeExtensionMismatch": "Phần mở rộng file không khớp với loại file",
+    "messageSendFailedKeepDraft": "Gửi tin nhắn thất bại, tệp đã tải lên vẫn được giữ để bạn thử lại."
+  }
+}

@@ -1,0 +1,1097 @@
+﻿import React from "react";
+import clsx from "clsx";
+import { useTranslation } from "react-i18next";
+import { Avatar } from "../../common/Avatar";
+import { MediaThumbnail } from "../../common/MediaThumbnail";
+import { createPortal } from "react-dom";
+import { Plus } from "lucide-react";
+import { MessageActions } from "../../message/MessageActions";
+import { ThreadIndicator } from "../../message/ThreadIndicator";
+import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
+import { MessageMeta } from "../message-layout/MessageMeta";
+import { MessageBubble, type MessageBubblePosition } from "./MessageBubble";
+import {
+  DocumentIcon,
+  PhotoIcon,
+  SpeakerWaveIcon,
+  VideoCameraIcon,
+  FaceSmileIcon,
+  MusicalNoteIcon,
+} from "@heroicons/react/24/outline";
+import type { Attachment, ImageClickPayload, Message } from "../../../types";
+import { MessageType } from "../../../types";
+import { resolvePublicResourceUrl } from "../../../config";
+import { useBatchThumbnailUrl } from "../../../hooks";
+import { useChatStore, useAuthStore } from "../../../stores";
+import {
+  type MessageActionId,
+  resolveMessageActions,
+} from "../../../utils/messageActionPolicy";
+import {
+  isFailedMessage,
+  isPendingMessage,
+  getMessageStableKey,
+} from "../../../utils/messageTimeline";
+import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
+import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { enrichUserProfile } from "../../../services/enrichUserProfile";
+import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage";
+import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
+import { splitFileName } from "../../../utils/truncateFilename";
+import { UserProfile } from "../../info/UserProfile";
+import { DraggableProfileModal } from "../../info/DraggableProfileModal";
+import type { ChatDensity } from "../../../stores/uiStore";
+import type {
+  ConversationThreadGroupRow,
+  ConversationThreadMessageItem,
+} from "../../../features/chat/hooks/useConversationThreadRows";
+import { resolveThreadMessageRenderState } from "../messageListShared";
+import { recordChatRenderCount } from "../../../utils/chatPerformance";
+import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
+import { MessageActionBar } from "../MessageActionBar";
+import { QuickReactBar } from "../QuickReactBar";
+import { ReactionBar } from "../ReactionBar";
+import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
+import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
+
+const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
+  [MessageType.IMAGE]: "Hình ảnh",
+  [MessageType.GIF]: "Hình ảnh",
+  [MessageType.VIDEO]: "Video",
+  [MessageType.FILE]: "File",
+  [MessageType.VOICE]: "Tin nhắn thoại",
+  [MessageType.AUDIO]: "Audio",
+  [MessageType.STICKER]: "Sticker",
+};
+
+function getReplyFileExt(fileName?: string, mimeType?: string): string {
+  const name = fileName ?? "";
+  const dot = name.lastIndexOf(".");
+  const fromName = dot >= 0 ? name.slice(dot + 1).toUpperCase() : "";
+  const fromMime = mimeType?.split("/").pop()?.toUpperCase() ?? "";
+  return (fromName || fromMime || "").slice(0, 4);
+}
+
+function replyExtBadgeClass(ext: string): string {
+  const map: Record<string, string> = {
+    PDF: "bg-red-500/20 text-red-600 dark:text-red-400",
+    DOC: "bg-blue-500/20 text-blue-600 dark:text-blue-300",
+    DOCX: "bg-blue-500/20 text-blue-600 dark:text-blue-300",
+    XLS: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    XLSX: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    PPT: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    PPTX: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    ZIP: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+    RAR: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+    TXT: "bg-gray-500/15 text-gray-600 dark:text-gray-400",
+    CSV: "bg-teal-500/20 text-teal-600 dark:text-teal-400",
+  };
+  return map[ext] ?? "bg-gray-500/15 text-gray-600 dark:text-gray-400";
+}
+
+interface MessageGroupProps {
+  row: ConversationThreadGroupRow;
+  onReply: (message: Message) => void;
+  onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
+  onInspect?: (message: Message) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
+  onImageClick?: (payload: ImageClickPayload) => void;
+  onFilePreview?: (attachment: Attachment) => void;
+  density?: ChatDensity;
+  isSelectionMode?: boolean;
+  selectedMessageIds?: Set<string>;
+  onToggleSelect?: (messageId: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
+  currentUsername?: string;
+  viewerCanRecallOthers?: boolean;
+  expandedLongMessageIds: Set<string>;
+  onToggleLongMessageExpand: (messageId: string) => void;
+  insertedMessageKeys: Set<string>;
+  highlightedMessageId: string | null;
+}
+
+const isCoarsePointer = (): boolean =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(pointer: coarse)").matches;
+
+const getThreadCount = (message: Message): number => {
+  const candidate = message as Message & { threadCount?: number };
+  return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
+};
+
+const resolveBubblePosition = (
+  index: number,
+  total: number,
+): MessageBubblePosition => {
+  if (total <= 1) {
+    return "single";
+  }
+
+  if (index === 0) {
+    return "first";
+  }
+
+  if (index === total - 1) {
+    return "last";
+  }
+
+  return "middle";
+};
+
+/** Mobile full-screen emoji overlay — mirrors EmojiReactionPicker but centered */
+const MobileEmojiOverlay: React.FC<{
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+}> = ({ onSelect, onClose }) => {
+  const [showMore, setShowMore] = React.useState(false);
+  const emojis = showMore ? EXTENDED_REACTIONS : QUICK_REACTIONS;
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-4">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label="Đóng"
+      />
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-4 shadow-elev3">
+        <p className="mb-3 text-center text-xs font-semibold text-text-secondary">
+          Chọn biểu cảm
+        </p>
+        <div className={clsx("flex flex-wrap justify-center gap-1", showMore && "max-w-xs mx-auto")}>
+          {emojis.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              aria-label={`Thả reaction ${emoji}`}
+              onClick={() => { onSelect(emoji); onClose(); }}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-100 hover:scale-110 hover:bg-surface-hover active:scale-95"
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label={showMore ? "Thu gọn" : "Thêm"}
+            onClick={() => setShowMore((v) => !v)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-[transform,background-color] duration-100 hover:scale-110 hover:bg-surface-hover"
+          >
+            <Plus
+              size={16}
+              strokeWidth={2.2}
+              className={clsx("transition-transform duration-200 text-text-secondary", showMore && "rotate-45")}
+            />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+interface MessageGroupItemProps {
+  item: ConversationThreadMessageItem;
+  isOwn: boolean;
+  isGroupTail: boolean;
+  bubblePosition: MessageBubblePosition;
+  showSenderName?: boolean;
+  senderDisplayName?: string;
+  onReply: (message: Message) => void;
+  onReact: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
+  onPin?: (messageId: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
+  onImageClick?: (payload: ImageClickPayload) => void;
+  onFilePreview?: (attachment: Attachment) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelect?: (messageId: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
+  currentUsername?: string;
+  viewerCanRecallOthers?: boolean;
+  expandedLongMessageIds: Set<string>;
+  onToggleLongMessageExpand: (messageId: string) => void;
+  insertedMessageKeys: Set<string>;
+  highlightedMessageId: string | null;
+}
+
+const isMessageHighlighted = (
+  highlightedMessageId: string | null,
+  message: Message,
+): boolean =>
+  Boolean(
+    highlightedMessageId &&
+      (highlightedMessageId === message.id ||
+        highlightedMessageId === message.localId ||
+        highlightedMessageId === message.stableId ||
+        highlightedMessageId === message.clientMessageId),
+  );
+
+const isMessageInserted = (
+  insertedMessageKeys: Set<string>,
+  message: Message,
+): boolean => insertedMessageKeys.has(getMessageStableKey(message));
+
+const isLongTextExpanded = (
+  expandedLongMessageIds: Set<string>,
+  message: Message,
+): boolean =>
+  expandedLongMessageIds.has(message.id) ||
+  Boolean(message.localId && expandedLongMessageIds.has(message.localId)) ||
+  Boolean(message.stableId && expandedLongMessageIds.has(message.stableId)) ||
+  Boolean(
+    message.clientMessageId &&
+      expandedLongMessageIds.has(message.clientMessageId),
+  );
+
+const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
+  item,
+  isOwn,
+  isGroupTail,
+  bubblePosition,
+  showSenderName = false,
+  senderDisplayName,
+  onReply,
+  onReact,
+  onForward,
+  onPin,
+  onEdit,
+  onDelete,
+  onImageClick,
+  onFilePreview,
+  isSelectionMode,
+  isSelected,
+  onToggleSelect,
+  onNavigateToMessage,
+  currentUsername,
+  expandedLongMessageIds,
+  onToggleLongMessageExpand,
+  insertedMessageKeys,
+  highlightedMessageId,
+}) => {
+    const { t } = useTranslation();
+    const currentUserId = useAuthStore((s) => s.user?.id);
+    const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
+    const [showReactionPicker, setShowReactionPicker] = React.useState(false);
+    const [showMobileReact, setShowMobileReact] = React.useState(false);
+    const [isHovered, setIsHovered] = React.useState(false);
+    const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const message = item.message;
+    // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
+    // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
+    const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
+    recordChatRenderCount("MessageGroupItem", message.id, {
+      isOwn,
+      isSelectionMode,
+      isSelected,
+      isGroupTail,
+    });
+    const retrySendMessage = useRetrySendMessage();
+    // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
+    // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
+    // tự dựng quote preview từ message gốc đang có trong store.
+    // Tra tin gốc trong store khi: (a) thiếu hẳn `replyToMessage`, hoặc
+    // (b) có `replyToMessage` nhưng thiếu `attachments` (BE chưa populate /
+    // ack ghi đè) — cần `attachments[].id` để mint signed thumbnail.
+    const replyTargetFromStore = useChatStore((state) => {
+      const existingReply = message.replyToMessage;
+      const replyHasAttachments =
+        !!existingReply?.attachments && existingReply.attachments.length > 0;
+      const targetId = message.replyTo ?? existingReply?.id;
+      if (!targetId) return undefined;
+      if (existingReply && replyHasAttachments) return undefined;
+      return state.messageById[targetId];
+    });
+    const resolvedReplyPreview = React.useMemo(() => {
+      const existingReply = message.replyToMessage;
+      if (existingReply) {
+        const replyHasAttachments =
+          !!existingReply.attachments && existingReply.attachments.length > 0;
+        const storeAttachments = replyTargetFromStore?.attachments;
+        if (!replyHasAttachments && storeAttachments && storeAttachments.length > 0) {
+          return {
+            ...existingReply,
+            attachments: storeAttachments,
+          } as Message["replyToMessage"];
+        }
+        return existingReply;
+      }
+      if (!message.replyTo) return undefined;
+      if (replyTargetFromStore) {
+        return {
+          id: replyTargetFromStore.id,
+          senderId: replyTargetFromStore.senderId,
+          senderName: replyTargetFromStore.senderName,
+          senderAvatar: replyTargetFromStore.senderAvatar,
+          content: replyTargetFromStore.content,
+          contentFormat: replyTargetFromStore.contentFormat,
+          type: replyTargetFromStore.type,
+          isDeleted: replyTargetFromStore.isDeleted,
+          createdAt: replyTargetFromStore.createdAt as unknown as Date,
+          attachments: replyTargetFromStore.attachments,
+        } as Message["replyToMessage"];
+      }
+      return undefined;
+    }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
+    // Ảnh/video reply là file private — không có URL dùng trực tiếp; mint
+    // signed thumbnail qua batch-thumbnail-urls (cùng cache với timeline).
+    const replyFirstAttachment = resolvedReplyPreview?.attachments?.[0] as
+      | Attachment
+      | undefined;
+    const replyType = resolvedReplyPreview?.type as string | undefined;
+    const wantsReplyThumb =
+      (replyType === MessageType.IMAGE ||
+        replyType === MessageType.VIDEO ||
+        replyType === MessageType.GIF) &&
+      !resolvedReplyPreview?.isDeleted &&
+      !!replyFirstAttachment?.id;
+    const { urls: replySignedThumbs } = useBatchThumbnailUrl(
+      message.conversationId,
+      wantsReplyThumb ? [replyFirstAttachment!.id] : [],
+      { autoFetch: wantsReplyThumb && !!message.conversationId },
+    );
+    const replySignedThumbUrl = replyFirstAttachment?.id
+      ? replySignedThumbs?.[replyFirstAttachment.id]?.url
+      : undefined;
+    const replyPreviewSenderId = resolvedReplyPreview?.senderId;
+    const enrichedReplySenderName = useEnrichedProfileStore(
+      React.useMemo(
+        () => (s) =>
+          replyPreviewSenderId ? s.nameByUserId[replyPreviewSenderId] : undefined,
+        [replyPreviewSenderId],
+      ),
+    );
+    React.useEffect(() => {
+      if (replyPreviewSenderId) enrichUserProfile(replyPreviewSenderId);
+    }, [replyPreviewSenderId]);
+    const replyPreviewMeta = React.useMemo(() => {
+      if (!resolvedReplyPreview) return null;
+      const type = resolvedReplyPreview.type as string;
+      const label = REPLY_TYPE_LABEL[type];
+      if (!label) return null;
+      const att = resolvedReplyPreview.attachments?.[0];
+      const caption = resolvedReplyPreview.content?.trim();
+      const iconCls = "h-3.5 w-3.5 flex-shrink-0";
+      switch (type) {
+        case MessageType.IMAGE:
+        case MessageType.GIF:
+        case MessageType.VIDEO: {
+          const isVideo = type === MessageType.VIDEO;
+          const resolvedThumb =
+            replySignedThumbUrl ??
+            resolvePublicResourceUrl(att?.thumbnailUrl ?? att?.url);
+          return {
+            label,
+            attachment: att,
+            renderThumbnail: true,
+            thumbnailUrl: resolvedThumb,
+            showPlaceholder: !resolvedThumb,
+            badge: null as { ext: string; className: string } | null,
+            icon: isVideo ? <VideoCameraIcon className={iconCls} /> : <PhotoIcon className={iconCls} />,
+            text: caption ?? "",
+            fullText: caption || label,
+          };
+        }
+        case MessageType.FILE: {
+          const ext = getReplyFileExt(att?.fileName, att?.mimeType);
+          const name = att?.fileName || caption || "Tệp đính kèm";
+          const badge = ext ? { ext, className: replyExtBadgeClass(ext) } : null;
+          return {
+            label,
+            attachment: att,
+            renderThumbnail: false,
+            thumbnailUrl: undefined,
+            showPlaceholder: !badge,
+            badge,
+            icon: <DocumentIcon className={iconCls} />,
+            text: name,
+            fullText: name,
+          };
+        }
+        case MessageType.VOICE:
+          return {
+            label,
+            attachment: att,
+            renderThumbnail: false,
+            thumbnailUrl: undefined,
+            showPlaceholder: true,
+            badge: null,
+            icon: <SpeakerWaveIcon className={iconCls} />,
+            text: "",
+            fullText: label,
+          };
+        case MessageType.AUDIO:
+          return {
+            label,
+            attachment: att,
+            renderThumbnail: false,
+            thumbnailUrl: undefined,
+            showPlaceholder: true,
+            badge: null,
+            icon: <MusicalNoteIcon className={iconCls} />,
+            text: caption ?? "",
+            fullText: caption || label,
+          };
+        case MessageType.STICKER:
+          return {
+            label,
+            attachment: att,
+            renderThumbnail: false,
+            thumbnailUrl: undefined,
+            showPlaceholder: true,
+            badge: null,
+            icon: <FaceSmileIcon className={iconCls} />,
+            text: "",
+            fullText: label,
+          };
+        default:
+          return null;
+      }
+    }, [resolvedReplyPreview, replySignedThumbUrl]);
+    const isHighlighted =
+      highlightedMessageId === message.id ||
+      highlightedMessageId === message.localId ||
+      highlightedMessageId === message.stableId ||
+      highlightedMessageId === message.clientMessageId;
+    const renderState = resolveThreadMessageRenderState(
+      item,
+      expandedLongMessageIds,
+    );
+    const coarsePointer = isCoarsePointer();
+
+    // Get user's current reaction emoji
+    const myReactionEmoji = React.useMemo(() => {
+      if (!currentUserId || !message.reactions) return null;
+      const group = message.reactions.find((r) => r.userIds.includes(currentUserId));
+      return group?.emoji ?? null;
+    }, [message.reactions, currentUserId]);
+
+    const handleReactionSelect = React.useCallback(
+      (emoji: string) => {
+        onReact(message.id, emoji);
+        setShowMobileReact(false);
+      },
+      [message.id, onReact],
+    );
+
+    const handleReactionToggle = React.useCallback(
+      (emoji: string) => {
+        onReact(message.id, emoji);
+      },
+      [message.id, onReact],
+    );
+    const handleToggleTextExpand = React.useCallback(() => {
+      onToggleLongMessageExpand(message.id);
+    }, [message.id, onToggleLongMessageExpand]);
+
+    const actionPolicy = React.useMemo(
+      () =>
+        resolveMessageActions({
+          message,
+          isOwn,
+          isCoarsePointer: coarsePointer,
+          isSelectionMode,
+          canRetry: isFailedMessage(message),
+          canForward: Boolean(onForward),
+        }),
+      [
+        coarsePointer,
+        isOwn,
+        isSelectionMode,
+        message,
+        onForward,
+      ],
+    );
+    const threadCount = getThreadCount(message);
+    const isRichBubble =
+      message.type !== "text" ||
+      Boolean(message.replyToMessage) ||
+      Boolean(message.replyTo) ||
+      Boolean(message.forwardedFrom) ||
+      message.isDeleted ||
+      isFailedMessage(message) ||
+      isPendingMessage(message);
+
+    const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
+
+    const handleItemMouseEnter = React.useCallback(() => {
+      if (leaveTimerRef.current) {
+        clearTimeout(leaveTimerRef.current);
+        leaveTimerRef.current = null;
+      }
+      setIsHovered(true);
+    }, []);
+
+    const handleItemMouseLeave = React.useCallback(() => {
+      leaveTimerRef.current = setTimeout(() => {
+        setIsHovered(false);
+        // Never close showReactionPicker on mouseleave — it self-closes via
+        // click-outside (document mousedown) or ESC. Closing here would make
+        // it impossible to drag the mouse from the action bar into the picker.
+      }, 180);
+    }, []);
+
+    React.useEffect(
+      () => () => {
+        if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+      },
+      [],
+    );
+
+    const handleAction = React.useCallback(
+      (actionId: MessageActionId) => {
+        switch (actionId) {
+          case "react":
+            setIsActionSheetOpen(false);
+            setShowMobileReact((prev) => !prev);
+            return;
+
+          case "reply":
+            onReply(message);
+            break;
+          case "forward":
+            if (onForward) {
+              onForward(message);
+            }
+            break;
+          case "copy":
+            void navigator.clipboard.writeText(message.content || "");
+            break;
+          case "retry":
+            if (message.conversationId) {
+              void retrySendMessage(message).catch(() => undefined);
+            }
+            break;
+          case "more":
+            setIsActionSheetOpen(true);
+            return;
+        }
+
+        setIsActionSheetOpen(false);
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [message, onDelete, onEdit, onForward, onReact, onReply, retrySendMessage, isOwn],
+    );
+
+    const actionRail =
+      inlineActions.length > 0 && !isSelectionMode ? (
+        <div
+          onMouseEnter={handleItemMouseEnter}
+          onMouseLeave={handleItemMouseLeave}
+          className={clsx(
+            "absolute z-20 hidden transition-[opacity,transform] duration-150 md:block",
+            // Tin của mình: thanh công cụ ở trên-trái bubble (giữ nguyên).
+            // Tin người khác: hạ xuống phải-dưới bubble, gần giờ (17:23).
+            isOwn ? "top-1 right-full mr-2" : "bottom-0 left-full ml-2",
+            (isHovered || showReactionPicker)
+              ? "pointer-events-auto translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-0.5 opacity-0",
+          )}
+        >
+          <MessageActionBar
+            onReplyClick={() => onReply(message)}
+            onForwardClick={
+              onForward
+                ? () => {
+                    onForward(message);
+                    setIsHovered(false);
+                  }
+                : undefined
+            }
+            onPinClick={
+              onPin
+                ? () => {
+                    onPin(message.id);
+                    setIsHovered(false);
+                  }
+                : undefined
+            }
+            onReactClick={() => setShowReactionPicker((v) => !v)}
+            reactionPickerNode={
+              showReactionPicker && !isSelectionMode ? (
+                <QuickReactBar
+                  visible={true}
+                  align="center"
+                  currentUserReaction={myReactionEmoji}
+                  onReact={(emoji) => {
+                    handleReactionSelect(emoji);
+                    setShowReactionPicker(false);
+                  }}
+                  onClose={() => setShowReactionPicker(false)}
+                />
+              ) : undefined
+            }
+          />
+        </div>
+      ) : null;
+
+    return (
+      <div
+        className={clsx(
+          "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
+          isPoll ? "self-center" : isOwn ? "self-end" : "self-start",
+          insertedMessageKeys.has(getMessageStableKey(message)) &&
+          isPendingMessage(message) &&
+          "motion-message-insert",
+        )}
+        onMouseEnter={handleItemMouseEnter}
+        onMouseLeave={handleItemMouseLeave}
+        onFocusCapture={handleItemMouseEnter}
+        onBlurCapture={(event) => {
+          const nextFocused = event.relatedTarget as Node | null;
+          if (!event.currentTarget.contains(nextFocused)) {
+            setIsHovered(false);
+          }
+        }}
+        data-testid={`message-item-${message.id}`}
+        data-message-id={message.id}
+        data-render-probe="message-item"
+      >
+        {isSelectionMode && (
+          <div className="flex shrink-0 items-start pt-1.5">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect?.(message.id)}
+              className="h-4 w-4 cursor-pointer rounded border-border text-primary focus:ring-primary/30"
+              aria-label={t("chat:selection.selectMessage", {
+                defaultValue: "Chọn tin nhắn",
+              })}
+            />
+          </div>
+        )}
+
+        <div
+          className={clsx(
+            "flex min-w-0 flex-1 items-start",
+            isPoll ? "justify-center" : isOwn ? "justify-end" : "justify-start",
+          )}
+        >
+          <div className={clsx(
+            "min-w-0 max-w-full flex flex-col",
+            isPoll ? "items-center" : isOwn ? "items-end" : "items-start",
+          )}>
+            <div className="relative">
+              {actionRail}
+              {/* Wrapper inline để pill absolute neo đúng vào bubble */}
+              <div className={clsx("relative inline-block", (message.reactions?.length ?? 0) > 0 && "mb-2")}>
+            <MessageBubble
+              isOwn={isOwn}
+              position={bubblePosition}
+              isRich={isRichBubble}
+              hasError={isFailedMessage(message)}
+              isHighlighted={isHighlighted}
+              bare={isPoll}
+            >
+              {showSenderName && senderDisplayName && !isPoll && (
+                <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
+                  {senderDisplayName}
+                </p>
+              )}
+
+              {message.replyToMessage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId =
+                      message.replyTo || resolvedReplyPreview?.id;
+                    if (targetId) {
+                      onNavigateToMessage?.(targetId);
+                    }
+                  }}
+                  className={clsx(
+                    "mb-2 flex max-w-[260px] items-stretch gap-2 overflow-hidden rounded-lg py-1.5 pl-2 pr-2.5 text-left transition-opacity",
+                    "bg-black/[0.05] dark:bg-white/[0.08]",
+                    onNavigateToMessage ? "cursor-pointer hover:opacity-75 active:opacity-50" : "cursor-default",
+                  )}
+                  title={
+                    replyPreviewMeta?.fullText ??
+                    (resolvedReplyPreview && !resolvedReplyPreview.isDeleted
+                      ? getPreviewFromMessage({
+                        contentFormat: resolvedReplyPreview.contentFormat,
+                        content: resolvedReplyPreview.content,
+                      })
+                      : undefined)
+                  }
+                >
+                  {/* Thumbnail (ảnh/video) hoặc badge loại file */}
+                  {replyPreviewMeta?.renderThumbnail ? (
+                    <div className="h-10 w-10 flex-shrink-0 self-center">
+                      <MediaThumbnail
+                        attachment={replyPreviewMeta.attachment}
+                        src={replyPreviewMeta.thumbnailUrl}
+                        variant="reply"
+                      />
+                    </div>
+                  ) : replyPreviewMeta?.showPlaceholder ? (
+                    <span className={clsx(
+                      "flex h-10 w-10 flex-shrink-0 select-none items-center justify-center self-center rounded-md",
+                      isOwn ? "bg-black/[0.15]" : "bg-black/[0.08] dark:bg-white/[0.10]",
+                    )}>
+                      {replyPreviewMeta.icon}
+                    </span>
+                  ) : replyPreviewMeta?.badge ? (
+                    <span
+                      className={clsx(
+                        "flex h-10 w-10 flex-shrink-0 select-none items-center justify-center self-center rounded-md text-[10px] font-bold leading-none",
+                        replyPreviewMeta.badge.className,
+                      )}
+                    >
+                      {replyPreviewMeta.badge.ext}
+                    </span>
+                  ) : null}
+
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
+                    <div
+                      className={clsx(
+                        "truncate text-[13px] font-semibold leading-4",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.65]" : "text-text-muted",
+                      )}
+                    >
+                      {resolvedReplyPreview
+                        ? (enrichedReplySenderName ??
+                          resolveUserDisplayName({
+                            displayName: resolvedReplyPreview.senderName,
+                            username: resolvedReplyPreview.senderId,
+                          }))
+                        : t("chat:message.replyingTo", {
+                          defaultValue: "Tin nhắn được trả lời",
+                        })}
+                    </div>
+                    <p
+                      className={clsx(
+                        "mt-0.5 flex items-center gap-1 text-[12px] leading-4",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.50]" : "text-text-muted/75",
+                      )}
+                    >
+                      {!resolvedReplyPreview ? (
+                        <span className="truncate">
+                          {t("chat:message.replyLoading", {
+                            defaultValue: "Đang tải tin nhắn...",
+                          })}
+                        </span>
+                      ) : resolvedReplyPreview.isDeleted ? (
+                        <span className="truncate italic opacity-70">
+                          {resolvedReplyPreview.lifecycleStatus === "deleted_admin"
+                            ? t("chat:message.deletedByAdmin", {
+                              defaultValue: "Tin nhắn đã bị xóa bởi quản trị viên",
+                            })
+                            : t("chat:message.recalled", {
+                              defaultValue: "Tin nhắn đã được thu hồi",
+                            })}
+                        </span>
+                      ) : replyPreviewMeta ? (
+                        <>
+                          {!replyPreviewMeta.thumbnailUrl && !replyPreviewMeta.badge && !replyPreviewMeta.showPlaceholder && (
+                            <span className="flex-shrink-0">{replyPreviewMeta.icon}</span>
+                          )}
+                          <span className="flex-shrink-0 font-medium opacity-90">
+                            [{replyPreviewMeta.label}]
+                          </span>
+                          {replyPreviewMeta.text &&
+                            (replyPreviewMeta.badge
+                              ? (() => {
+                                  // File: cắt CUỐI phần tên nhưng ghim đuôi
+                                  // (.docx/.xlsx…) luôn hiện — đuôi không bao giờ mất.
+                                  const { base, ext } = splitFileName(
+                                    replyPreviewMeta.text,
+                                  );
+                                  return (
+                                    <span className="flex min-w-0 items-center">
+                                      <span className="truncate">{base}</span>
+                                      <span className="flex-shrink-0">{ext}</span>
+                                    </span>
+                                  );
+                                })()
+                              : (
+                                <span className="truncate">
+                                  {replyPreviewMeta.text}
+                                </span>
+                              ))}
+                        </>
+                      ) : (
+                        <span className="truncate">
+                          {getPreviewFromMessage({
+                            contentFormat: resolvedReplyPreview.contentFormat,
+                            content: resolvedReplyPreview.content,
+                          })}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              <MessageBodyRenderer
+                message={message}
+                isOwn={isOwn}
+                currentUsername={currentUsername}
+                textRenderMode={renderState.renderMode}
+                isCollapsibleText={renderState.isCollapsible}
+                onToggleTextExpand={handleToggleTextExpand}
+                onImageClick={onImageClick}
+                onFilePreview={onFilePreview}
+              />
+
+              {isGroupTail && (
+                <MessageMeta
+                  message={message}
+                  isOwn={isOwn}
+                  showStatus={item.showStatus}
+                  density="comfortable"
+                  layout="inline"
+                  onRetry={() => {
+                    void retrySendMessage(message).catch(() => undefined);
+                  }}
+                  className={clsx(
+                    "mt-1 justify-end text-[11px]",
+                    isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",
+                  )}
+                />
+              )}
+            </MessageBubble>
+
+            {(message.reactions?.length ?? 0) > 0 && (
+              <div
+                className={clsx(
+                  // Reaction neo góc dưới-phải bubble cho cả hai phía — với tin
+                  // người khác để pill nằm cạnh/dưới giờ (17:23) thay vì góc trái.
+                  "absolute bottom-0 right-0 translate-y-1/2 z-10",
+                )}
+              >
+                <ReactionBar
+                  reactions={message.reactions}
+                  currentUserId={currentUserId}
+                  isOutgoing={isOwn}
+                  onReact={handleReactionSelect}
+                  onToggleReaction={handleReactionToggle}
+                  conversationId={message.conversationId}
+                />
+              </div>
+            )}
+              </div>{/* end bubble inline wrapper */}
+            </div>{/* end actionRail wrapper */}
+
+            {threadCount > 0 && (
+              <ThreadIndicator
+                threadCount={threadCount}
+                isOwn={isOwn}
+                className="mt-1"
+              />
+            )}
+          </div>
+        </div>
+
+        <MessageActions
+          mode="sheet"
+          actions={actionPolicy.menuActions}
+          isOpen={isActionSheetOpen}
+          onAction={handleAction}
+          onClose={() => setIsActionSheetOpen(false)}
+        />
+
+        {/* Mobile emoji picker — full-screen overlay shown via long-press action sheet */}
+        {showMobileReact && coarsePointer && (
+          <MobileEmojiOverlay
+            onSelect={handleReactionSelect}
+            onClose={() => setShowMobileReact(false)}
+          />
+        )}
+      </div>
+    );
+  };
+
+const areEqualMessageGroupItemProps = (
+  previous: MessageGroupItemProps,
+  next: MessageGroupItemProps,
+): boolean => {
+  const previousMessage = previous.item.message;
+  const nextMessage = next.item.message;
+
+  return (
+    previous.item.key === next.item.key &&
+    previous.item.messageId === next.item.messageId &&
+    areMessagesRenderEquivalent(previousMessage, nextMessage) &&
+    previous.isOwn === next.isOwn &&
+    previous.isGroupTail === next.isGroupTail &&
+    previous.bubblePosition === next.bubblePosition &&
+    previous.showSenderName === next.showSenderName &&
+    previous.senderDisplayName === next.senderDisplayName &&
+    previous.onReply === next.onReply &&
+    previous.onReact === next.onReact &&
+    previous.onForward === next.onForward &&
+    previous.onPin === next.onPin &&
+    previous.onEdit === next.onEdit &&
+    previous.onDelete === next.onDelete &&
+    previous.onImageClick === next.onImageClick &&
+    previous.onFilePreview === next.onFilePreview &&
+    previous.isSelectionMode === next.isSelectionMode &&
+    previous.isSelected === next.isSelected &&
+    previous.onToggleSelect === next.onToggleSelect &&
+    previous.onNavigateToMessage === next.onNavigateToMessage &&
+    previous.currentUsername === next.currentUsername &&
+    previous.viewerCanRecallOthers === next.viewerCanRecallOthers &&
+    previous.onToggleLongMessageExpand === next.onToggleLongMessageExpand &&
+    isMessageInserted(previous.insertedMessageKeys, previousMessage) ===
+      isMessageInserted(next.insertedMessageKeys, nextMessage) &&
+    isLongTextExpanded(previous.expandedLongMessageIds, previousMessage) ===
+      isLongTextExpanded(next.expandedLongMessageIds, nextMessage) &&
+    isMessageHighlighted(previous.highlightedMessageId, previousMessage) ===
+      isMessageHighlighted(next.highlightedMessageId, nextMessage)
+  );
+};
+
+const MessageGroupItem = React.memo(
+  MessageGroupItemComponent,
+  areEqualMessageGroupItemProps,
+);
+
+const MessageGroupBase: React.FC<MessageGroupProps> = ({
+  row,
+  onReply,
+  onReact,
+  onForward,
+  onPin,
+  onEdit,
+  onDelete,
+  onImageClick,
+  onFilePreview,
+  isSelectionMode = false,
+  selectedMessageIds = new Set<string>(),
+  onToggleSelect,
+  onNavigateToMessage,
+  currentUsername,
+  viewerCanRecallOthers,
+  expandedLongMessageIds,
+  onToggleLongMessageExpand,
+  insertedMessageKeys,
+  highlightedMessageId,
+}) => {
+  const leadMessage = row.items[0]?.message;
+  const leadSenderId = leadMessage?.senderId;
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const [viewingUserId, setViewingUserId] = React.useState<string | null>(null);
+  // Tên thật (HR) được fetch theo senderId; senderName trong message có thể
+  // rỗng → tránh fallback ra UUID bằng cách enrich giống MessageCluster.
+  const enrichedSenderName = useEnrichedProfileStore(
+    React.useMemo(
+      () => (s) => (leadSenderId ? s.nameByUserId[leadSenderId] : undefined),
+      [leadSenderId],
+    ),
+  );
+  React.useEffect(() => {
+    if (leadSenderId) enrichUserProfile(leadSenderId);
+  }, [leadSenderId]);
+
+  if (!leadMessage) {
+    return null;
+  }
+
+  // ponytail: a poll/reminder group renders centered (Zalo-style) — drop the avatar
+  // column and center the card instead of own/other side alignment.
+  const isPollGroup =
+    leadMessage.type === MessageType.POLL || leadMessage.type === MessageType.REMINDER;
+
+  const senderDisplayName =
+    enrichedSenderName ??
+    resolveUserDisplayName({
+      displayName: leadMessage.senderName,
+      username: leadMessage.senderId,
+    });
+
+  return (
+    <section
+      className={clsx(
+        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5 pb-1.5",
+        (row.isOwn || isPollGroup) && "grid-cols-[minmax(0,1fr)]",
+      )}
+    >
+      {!row.isOwn && !isPollGroup && (
+        <div className="flex justify-center pt-0.5">
+          {row.showAvatar ? (
+            <Avatar
+              src={leadMessage.senderAvatar}
+              alt={senderDisplayName}
+              size="sm"
+              className="thread-message-avatar"
+              onClick={() => setViewingUserId(leadMessage.senderId)}
+            />
+          ) : (
+            <div className="h-8 w-8" aria-hidden="true" />
+          )}
+        </div>
+      )}
+
+      {viewingUserId && (
+        <DraggableProfileModal onClose={() => setViewingUserId(null)}>
+          <UserProfile
+            userId={viewingUserId}
+            currentUserId={currentUserId ?? ""}
+            conversationContext="group"
+            initialUser={{ id: leadMessage.senderId, username: leadMessage.senderId, displayName: leadMessage.senderName ?? undefined, avatar: leadMessage.senderAvatar ?? undefined }}
+            onClose={() => setViewingUserId(null)}
+            onStartConversation={(uid) => {
+              setViewingUserId(null);
+              dispatchStartDirectMessage({ userId: uid });
+            }}
+          />
+        </DraggableProfileModal>
+      )}
+
+      <div
+        className={clsx(
+          "min-w-0",
+          isPollGroup ? "items-center" : row.isOwn ? "items-end" : "items-start",
+          "flex flex-col",
+        )}
+      >
+        <div className={clsx("flex w-full flex-col gap-1", isPollGroup && "items-center")}>
+          {row.items.map((item, index) => (
+            <MessageGroupItem
+              key={item.key}
+              item={item}
+              isOwn={row.isOwn}
+              isGroupTail={index === row.items.length - 1}
+              bubblePosition={resolveBubblePosition(index, row.items.length)}
+              showSenderName={index === 0 && !row.isOwn && row.showSenderName}
+              senderDisplayName={senderDisplayName}
+              onReply={onReply}
+              onReact={onReact}
+              onForward={onForward}
+              onPin={onPin}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onImageClick={onImageClick}
+              onFilePreview={onFilePreview}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedMessageIds.has(item.messageId)}
+              onToggleSelect={onToggleSelect}
+              onNavigateToMessage={onNavigateToMessage}
+              currentUsername={currentUsername}
+              viewerCanRecallOthers={viewerCanRecallOthers}
+              expandedLongMessageIds={expandedLongMessageIds}
+              onToggleLongMessageExpand={onToggleLongMessageExpand}
+              insertedMessageKeys={insertedMessageKeys}
+              highlightedMessageId={highlightedMessageId}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export const MessageGroup = React.memo(MessageGroupBase);
+export default MessageGroup;

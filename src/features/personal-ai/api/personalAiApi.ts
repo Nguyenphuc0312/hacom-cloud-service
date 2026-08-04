@@ -1,0 +1,927 @@
+import type {
+  PersonalDocument,
+  PersonalChatRequest,
+  PersonalChatResponse,
+  UploadDocumentResponse,
+  PersonalCitation,
+  LevelReportUploadResponse,
+  CalendarEventRow,
+} from "../types";
+import type {
+  WorkReportFormRequest,
+  DepartmentSelectionRequest,
+} from "../../ai-assistant/types";
+import type { WeeklyReportFileItem } from "../../ai-assistant/services/aiChatApi";
+import { getAccessToken } from "../../../services/tokenService";
+
+const BASE_URL =
+  (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
+  "https://ai.hacomholdings.com.vn";
+
+const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
+const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;
+const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
+/** Báo cáo theo CẤP (TBP / LĐĐV / TCT) — nộp file + xuất Excel bảng gộp. */
+const LEVEL_REPORT_UPLOAD_URL = `${BASE_URL}/api/level-reports/upload`;
+const TIMEOUT_MS = 60_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * Ba tag báo cáo theo CẤP (thay #tongcvtuan/#tongcvthang cũ). Gõ không kèm file
+ * → stream markdown như tag thường; gõ KÈM file Excel → nộp qua endpoint riêng
+ * `/api/level-reports/upload`. Quyền + phạm vi BE tự suy từ JWT.
+ */
+export const LEVEL_REPORT_TAGS = ["#TBP_baocao", "#LDDV_baocao", "#TCT_tonghop"] as const;
+
+/** Câu hỏi có chứa đúng MỘT tag báo cáo cấp không (dùng để định tuyến upload). */
+export function containsLevelReportTag(question: string): boolean {
+  const lower = question.toLowerCase();
+  return LEVEL_REPORT_TAGS.some((tag) => lower.includes(tag.toLowerCase()));
+}
+
+function buildAuthHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}`, "x-api-contract": "3" } : { "x-api-contract": "3" };
+}
+
+export class PersonalAiError extends Error {
+  readonly status: number;
+  readonly kind: "timeout" | "network" | "http";
+
+  constructor(
+    status: number,
+    kind: "timeout" | "network" | "http" = "http",
+    message?: string,
+  ) {
+    super(message ?? `PersonalAI error [${kind}]: ${status}`);
+    this.name = "PersonalAiError";
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
+function extractHttpErrorMessage(rawText: string): string | undefined {
+  if (!rawText.trim()) return undefined;
+
+  try {
+    const payload = JSON.parse(rawText) as Record<string, unknown>;
+    const message = payload.detail ?? payload.message ?? payload.error ?? payload.title;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  } catch {
+    return rawText.trim();
+  }
+
+  return rawText.trim();
+}
+
+function formatHttpErrorMessage(rawText: string, fallbackStatus: number): string {
+  const detail = extractHttpErrorMessage(rawText);
+  return detail ?? `PersonalAI error [http]: ${fallbackStatus}`;
+}
+
+function isJsonResponse(rawText: string): boolean {
+  const trimmed = rawText.trim();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+
+function parseHttpErrorMessage(rawText: string): string | undefined {
+  if (!rawText.trim()) return undefined;
+
+  if (isJsonResponse(rawText)) {
+    try {
+      return extractHttpErrorMessage(rawText);
+    } catch {
+      // Fall through to return the raw text below.
+    }
+  }
+
+  return rawText.trim();
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+async function aiRequest(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const authHeaders = buildAuthHeaders();
+  const mergedHeaders = { ...authHeaders, ...(init.headers as Record<string, string> | undefined) };
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers: mergedHeaders,
+      signal: init.signal ?? controller.signal,
+    });
+    if (!response.ok) throw new PersonalAiError(response.status, "http");
+    return response;
+  } catch (err) {
+    if (err instanceof PersonalAiError) throw err;
+    if (err instanceof Error && err.name === "AbortError")
+      throw new PersonalAiError(0, "timeout");
+    throw new PersonalAiError(0, "network");
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function normalizeDocument(raw: unknown): PersonalDocument | null {
+  const obj = asRecord(raw);
+  if (!obj) return null;
+
+  const nestedDocument = asRecord(obj.document);
+  const selectedIds = Array.isArray(obj.selected_document_ids)
+    ? obj.selected_document_ids
+    : [];
+  const currentDocuments = Array.isArray(obj.current_documents)
+    ? obj.current_documents
+    : [];
+  const firstCurrentDocument = asRecord(currentDocuments[0]);
+
+  const documentId = pickString(
+    nestedDocument?.document_id,
+    obj.document_id,
+    firstCurrentDocument?.document_id,
+    selectedIds[0],
+    nestedDocument?.id,
+    obj.id,
+    firstCurrentDocument?.id,
+  );
+  if (!documentId) return null;
+
+  const documentSource = nestedDocument ?? obj;
+  return {
+    document_id: documentId,
+    id: documentId,
+    name: String(
+      documentSource.name ??
+        documentSource.filename ??
+        documentSource.file_name ??
+        obj.name ??
+        obj.filename ??
+        obj.file_name ??
+        "Untitled.pdf",
+    ),
+    page_count:
+      typeof documentSource.page_count === "number"
+        ? documentSource.page_count
+        : typeof obj.page_count === "number"
+          ? obj.page_count
+          : undefined,
+    size_bytes:
+      typeof documentSource.size_bytes === "number"
+        ? documentSource.size_bytes
+        : typeof documentSource.size === "number"
+          ? documentSource.size
+          : typeof obj.size_bytes === "number"
+            ? obj.size_bytes
+            : typeof obj.size === "number"
+              ? obj.size
+              : undefined,
+    uploaded_at: String(
+      documentSource.uploaded_at ??
+        documentSource.created_at ??
+        obj.uploaded_at ??
+        obj.created_at ??
+        new Date().toISOString(),
+    ),
+    status: (["uploading", "indexed", "error"].includes(
+      String(documentSource.status ?? obj.status),
+    )
+      ? documentSource.status ?? obj.status
+      : "indexed") as PersonalDocument["status"],
+  };
+}
+
+function normalizeUploadedDocumentPayload(
+  data: Record<string, unknown>,
+  fallbackName: string,
+): UploadDocumentResponse | null {
+  const doc = normalizeDocument(data);
+  if (!doc) return null;
+  const resolvedName =
+    doc.name && doc.name !== "Untitled.pdf" ? doc.name : fallbackName;
+  return { ...doc, name: resolvedName };
+}
+
+function invalidUploadResponseError(): PersonalAiError {
+  return new PersonalAiError(
+    0,
+    "http",
+    "Upload response did not include a backend document_id.",
+  );
+}
+function normalizeDocumentList(payload: unknown): PersonalDocument[] {
+  if (Array.isArray(payload)) {
+    return payload.map(normalizeDocument).filter((d): d is PersonalDocument => d !== null);
+  }
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ["documents", "items", "data", "results", "current_documents"]) {
+      if (Array.isArray(obj[key])) return normalizeDocumentList(obj[key]);
+    }
+  }
+  return [];
+}
+
+/**
+ * GET /api/chat/personal/documents
+ *
+ * BE đọc employee_code + session_id qua query string.
+ */
+export async function listPersonalDocuments(options?: {
+  employeeCode?: string;
+  sessionId?: string;
+  signal?: AbortSignal;
+}): Promise<PersonalDocument[]> {
+  const params = new URLSearchParams();
+  if (options?.employeeCode) params.set("employee_code", options.employeeCode);
+  if (options?.sessionId) params.set("session_id", options.sessionId);
+  const qs = params.toString();
+  const url = qs ? `${DOCS_BASE}?${qs}` : DOCS_BASE;
+  const response = await aiRequest(url, { signal: options?.signal });
+  const payload = await response.json();
+  return normalizeDocumentList(payload);
+}
+
+/** POST /api/chat/personal/documents/upload */
+export function uploadPersonalDocument(
+  file: File,
+  options?: {
+    employeeCode?: string;
+    sessionId?: string;
+    onProgress?: (pct: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<UploadDocumentResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    // BE đọc employee_code + session_id qua FormData field (cùng giá trị
+    // employee_code đang gửi ở chat endpoint).
+    const url = `${DOCS_BASE}/upload`;
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new PersonalAiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new PersonalAiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    form.append("file", file, file.name);
+    if (options?.employeeCode) form.append("employee_code", options.employeeCode);
+    if (options?.sessionId) form.append("session_id", options.sessionId);
+
+    xhr.open("POST", url, true);
+    xhr.responseType = "text";
+
+    const authHeaders = buildAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      xhr.setRequestHeader(key, value);
+    }
+
+    if (options?.onProgress) {
+      xhr.upload.addEventListener("progress", (evt) => {
+        if (evt.lengthComputable && evt.total > 0) {
+          options.onProgress!(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      const status = xhr.status;
+      if (status >= 200 && status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText) as Record<string, unknown>;
+          const doc = normalizeUploadedDocumentPayload(data, file.name);
+          if (doc) {
+            resolve(doc);
+          } else {
+            reject(invalidUploadResponseError());
+          }
+        } catch (err) {
+          reject(err instanceof PersonalAiError ? err : invalidUploadResponseError());
+        }
+      } else {
+        reject(
+          new PersonalAiError(
+            status,
+            "http",
+            parseHttpErrorMessage(xhr.responseText) ??
+              formatHttpErrorMessage(xhr.responseText, status),
+          ),
+        );
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "network"));
+    });
+    xhr.addEventListener("abort", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    });
+
+    xhr.send(form);
+  });
+}
+
+/**
+ * POST /api/level-reports/upload — nộp file bản cấp (TBP / LĐĐV).
+ *
+ * multipart/form-data: `question` (đúng một tag #TBP_baocao|#LDDV_baocao),
+ * `file` (.xlsx ≤ 25MB), tùy chọn `week_start`/`week_end` (nộp muộn). Quyền +
+ * phạm vi BE tự suy từ JWT — FE KHÔNG gửi. Nộp lại cùng tuần = thay bản cũ (BE
+ * tự xử lý). Lỗi: 400 (file/tag hỏng), 403 (sai vai), 413 (>25MB).
+ */
+export function uploadLevelReport(
+  file: File,
+  params: { question: string; weekStart?: string; weekEnd?: string },
+  options?: { signal?: AbortSignal },
+): Promise<LevelReportUploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new PersonalAiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new PersonalAiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    form.append("question", params.question);
+    form.append("file", file, file.name);
+    if (params.weekStart) form.append("week_start", params.weekStart);
+    if (params.weekEnd) form.append("week_end", params.weekEnd);
+
+    xhr.open("POST", LEVEL_REPORT_UPLOAD_URL, true);
+    xhr.responseType = "text";
+    const authHeaders = buildAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      xhr.setRequestHeader(key, value);
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      const status = xhr.status;
+      if (status >= 200 && status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText) as Record<string, unknown>;
+          resolve({
+            ok: data.ok !== false,
+            message:
+              typeof data.message === "string" && data.message.trim()
+                ? data.message.trim()
+                : "Đã nhận báo cáo.",
+            report: asRecord(data.report) ?? undefined,
+          });
+        } catch {
+          reject(new PersonalAiError(status, "http", "Phản hồi máy chủ không hợp lệ."));
+        }
+      } else {
+        reject(
+          new PersonalAiError(
+            status,
+            "http",
+            parseHttpErrorMessage(xhr.responseText) ??
+              formatHttpErrorMessage(xhr.responseText, status),
+          ),
+        );
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "network"));
+    });
+    xhr.addEventListener("abort", () => {
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    });
+
+    xhr.send(form);
+  });
+}
+
+/** POST /api/chat/personal/documents/source — set active sources */
+export async function selectPersonalSources(
+  documentIds: string[],
+  options?: {
+    employeeCode?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  const body: Record<string, unknown> = { document_ids: documentIds };
+  if (options?.employeeCode) body.employee_code = options.employeeCode;
+  if (options?.sessionId) body.session_id = options.sessionId;
+
+  // BE lấy employee_code từ JWT Bearer token (đã có trong buildAuthHeaders) để
+  // biết session nào cần cập nhật — không gửi header X-Employee-Code nữa.
+  await aiRequest(`${DOCS_BASE}/source`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  });
+}
+
+/**
+ * DELETE /api/chat/personal/documents/{id}
+ *
+ * Document xoá là thao tác cấp user (theo employee_code, qua query string),
+ * KHÔNG kèm session_id. Nếu kèm session_id thì BE chỉ tìm doc trong phạm vi
+ * 1 conversation và sẽ báo "không tìm thấy" khi user đã chuyển conversation.
+ */
+export async function deletePersonalDocument(
+  documentId: string,
+  options?: {
+    employeeCode?: string;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.employeeCode) params.set("employee_code", options.employeeCode);
+  const qs = params.toString();
+  const url = qs
+    ? `${DOCS_BASE}/${documentId}?${qs}`
+    : `${DOCS_BASE}/${documentId}`;
+  await aiRequest(url, {
+    method: "DELETE",
+    signal: options?.signal,
+  });
+}
+
+/**
+ * GET /api/chat/personal/weekly-report/files/{fileId}       → download
+ * GET /api/chat/personal/weekly-report/files/{fileId}/view  → xem
+ *
+ * viewTab: tab đã mở sẵn từ click handler (tránh popup bị chặn vì gọi
+ * window.open sau await). Với mode="download" không cần truyền.
+ */
+export async function openWeeklyReportFile(
+  fileId: number,
+  mode: "view" | "download",
+  viewTab?: Window | null,
+): Promise<void> {
+  // BE lấy mã nhân viên từ JWT Bearer token — không gửi header X-Employee-Code.
+  const url =
+    mode === "view"
+      ? `${WEEKLY_REPORT_FILES_BASE}/${fileId}/view`
+      : `${WEEKLY_REPORT_FILES_BASE}/${fileId}`;
+
+  const response = await aiRequest(url);
+  const contentType = response.headers.get("content-type") ?? "";
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = `bao-cao-tuan-${fileId}`;
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  // Đọc body một lần duy nhất
+  let resolvedUrl: string | null = null;
+  let blob: Blob | null = null;
+
+  if (contentType.includes("application/json") || contentType.includes("text/")) {
+    const text = await response.text();
+    let candidate = text.trim().replace(/^"|"$/g, "");
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (typeof parsed === "string") candidate = parsed;
+    } catch { /* not JSON — use raw text */ }
+
+    if (candidate.startsWith("http")) {
+      resolvedUrl = candidate;
+    } else {
+      blob = new Blob([text], { type: contentType || "application/octet-stream" });
+    }
+  } else {
+    blob = await response.blob();
+  }
+
+  if (resolvedUrl) {
+    if (mode === "view") {
+      if (viewTab) viewTab.location.href = resolvedUrl;
+      else window.open(resolvedUrl, "_blank");
+    } else {
+      const a = document.createElement("a");
+      a.href = resolvedUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    return;
+  }
+
+  if (!blob) return;
+
+  const objectUrl = URL.createObjectURL(blob);
+  if (mode === "view") {
+    if (viewTab) viewTab.location.href = objectUrl;
+    else window.open(objectUrl, "_blank");
+  } else {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+/**
+ * Nhận diện link xuất Excel bảng gộp báo cáo cấp trong markdown BE trả
+ * (#LDDV_baocao / #TCT_tonghop): `/api/level-reports/export?week_start=...`.
+ * Trả về URL đầy đủ (đã ghép BASE_URL nếu là path tương đối) để tải kèm auth.
+ */
+export function parseLevelReportExportHref(href: string | undefined): string | null {
+  if (!href) return null;
+  const trimmed = href.trim();
+  try {
+    const url = trimmed.startsWith("http")
+      ? new URL(trimmed)
+      : new URL(trimmed, BASE_URL);
+    if (/\/api\/level-reports\/export\/?$/i.test(url.pathname)) {
+      return url.toString();
+    }
+  } catch {
+    /* href không hợp lệ */
+  }
+  return null;
+}
+
+/**
+ * GET /api/level-reports/export?week_start=... → tải .xlsx bảng gộp.
+ *
+ * Cần auth Bearer như mọi API (anchor thường không gửi token → 403), nên phải
+ * fetch blob rồi trigger download thủ công.
+ */
+export async function downloadLevelReportExport(url: string): Promise<void> {
+  const response = await aiRequest(url, {}, UPLOAD_TIMEOUT_MS);
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = "bao-cao-tong-hop.xlsx";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function normalizeWeeklyReportFile(raw: unknown): WeeklyReportFileItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const fileIdRaw = obj.file_id ?? obj.id;
+  const file_id =
+    typeof fileIdRaw === "number"
+      ? fileIdRaw
+      : Number.parseInt(String(fileIdRaw), 10);
+  if (!Number.isFinite(file_id)) return null;
+  return {
+    ...obj,
+    file_id,
+    filename:
+      typeof obj.filename === "string"
+        ? obj.filename
+        : typeof obj.original_filename === "string"
+          ? obj.original_filename
+          : typeof obj.file_name === "string"
+            ? obj.file_name
+            : undefined,
+  };
+}
+
+function normalizeWeeklyReportFileList(payload: unknown): WeeklyReportFileItem[] {
+  if (Array.isArray(payload)) {
+    return payload
+      .map(normalizeWeeklyReportFile)
+      .filter((f): f is WeeklyReportFileItem => f !== null);
+  }
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ["files", "items", "data", "results"]) {
+      if (Array.isArray(obj[key])) return normalizeWeeklyReportFileList(obj[key]);
+    }
+  }
+  return [];
+}
+
+/**
+ * GET /api/chat/personal/weekly-report/files
+ *
+ * BE scope danh sách theo mã nhân viên lấy từ JWT Bearer token — không gửi
+ * header `X-Employee-Code` nữa. Query chỉ nhận week_start / week_end / company /
+ * limit. Field `employeeCode` trong options được giữ để tương thích (không dùng).
+ */
+export async function listPersonalWeeklyReportFiles(options?: {
+  employeeCode?: string;
+  weekStart?: string;
+  weekEnd?: string;
+  company?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<WeeklyReportFileItem[]> {
+  const params = new URLSearchParams();
+  if (options?.weekStart) params.set("week_start", options.weekStart);
+  if (options?.weekEnd) params.set("week_end", options.weekEnd);
+  if (options?.company) params.set("company", options.company);
+  params.set("limit", String(Math.min(500, Math.max(1, options?.limit ?? 200))));
+  const url = `${WEEKLY_REPORT_FILES_BASE}?${params.toString()}`;
+  const response = await aiRequest(url, {
+    signal: options?.signal,
+  });
+  const text = await response.text();
+  let payload: unknown = text;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    /* không phải JSON — giữ nguyên text */
+  }
+  return normalizeWeeklyReportFileList(payload);
+}
+
+function normalizeCitation(raw: unknown): PersonalCitation | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  return {
+    document_id: String(
+      obj.document_id ?? obj.dms_document_id ?? obj.source_file ?? "",
+    ),
+    document_name: String(
+      obj.document_name ?? obj.source_name ?? obj.display_label ?? "Document",
+    ),
+    page:
+      typeof obj.page_number === "number"
+        ? obj.page_number
+        : typeof obj.page_start === "number"
+          ? obj.page_start
+          : undefined,
+    excerpt: typeof obj.excerpt === "string" ? obj.excerpt : undefined,
+    citation_index:
+      typeof obj.citation_index === "number" ? obj.citation_index : undefined,
+  };
+}
+
+/**
+ * Chuẩn hoá `calendar_events` từ SSE `done`. Chỉ giữ dòng có `event_id` (bắt
+ * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì
+ * bỏ, khi đó bubble không hiện nút chi tiết cho dòng đó (theo spec).
+ */
+export function normalizeCalendarEvents(raw: unknown): CalendarEventRow[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const rows = raw
+    .map((item): CalendarEventRow | null => {
+      const obj = asRecord(item);
+      const eventId = pickString(obj?.event_id);
+      if (!obj || !eventId) return null;
+
+      const action = asRecord(obj.detail_action);
+      const actionEventId = pickString(action?.event_id, eventId);
+      const detail_action =
+        action?.type === "calendar_event_detail" && actionEventId
+          ? { type: "calendar_event_detail" as const, event_id: actionEventId }
+          : undefined;
+
+      return {
+        event_id: eventId,
+        title: pickString(obj.title),
+        time: pickString(obj.time),
+        day: pickString(obj.day),
+        event_type: pickString(obj.event_type),
+        location: pickString(obj.location),
+        chair: pickString(obj.chair),
+        detail_action,
+      };
+    })
+    .filter((r): r is CalendarEventRow => r !== null);
+  return rows.length > 0 ? rows : undefined;
+}
+
+/** POST /api/chat/personal/stream — SSE streaming chat */
+export async function streamPersonalChat(
+  request: PersonalChatRequest,
+  options?: {
+    onToken?: (token: string) => void;
+    onThinking?: (phase: "searching" | "reasoning", text?: string) => void;
+    onFormRequest?: (data: WorkReportFormRequest) => void;
+    onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
+    signal?: AbortSignal;
+  },
+): Promise<PersonalChatResponse> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      window.clearTimeout(timeoutId);
+      throw new PersonalAiError(0, "timeout");
+    }
+    options.signal.addEventListener("abort", onAbort);
+  }
+
+  try {
+    const response = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
+      body: JSON.stringify(request),
+      signal: options?.signal ?? controller.signal,
+    });
+
+    if (!response.ok) throw new PersonalAiError(response.status, "http");
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Response body is null");
+
+    const decoder = new TextDecoder();
+    let accumulated = "";
+    let finalResponse: PersonalChatResponse | null = null;
+
+    // Buffer SSE để ghép event bị cắt ngang giữa 2 chunk mạng. Nếu parse từng
+    // chunk độc lập (chunk.split("\n\n")), JSON của selection_request/done có thể
+    // bị tách đôi qua 2 lần reader.read() → JSON.parse fail → MẤT event. Đây là
+    // nguyên nhân #baocaocv "lúc hiện lúc không" (mất selection_request → rơi vào
+    // ReportTextBox rỗng). Chỉ xử lý event đã đủ (kết bằng "\n\n"), giữ phần dư.
+    let buffer = "";
+
+    const processEvent = (event: string) => {
+      if (!event.trim()) return;
+      const lines = event.split("\n");
+      let eventType = "";
+      let data = "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+        else if (line.startsWith("data: ")) data = line.slice(6).trim();
+      }
+
+      if (eventType === "token" && options?.onToken) {
+        try {
+          const parsed = JSON.parse(data);
+          options.onToken(
+            typeof parsed === "object" && "token" in parsed
+              ? String(parsed.token)
+              : data,
+          );
+        } catch {
+          options.onToken(data);
+        }
+      } else if (eventType === "thinking" && options?.onThinking) {
+        options.onThinking("reasoning", data);
+      } else if (
+        (eventType === "searching" || eventType === "retrieving") &&
+        options?.onThinking
+      ) {
+        options.onThinking("searching");
+      } else if (eventType === "form_request" && options?.onFormRequest) {
+        try {
+          const parsed = JSON.parse(data) as WorkReportFormRequest;
+          if (parsed.form_type === "daily_work_report") {
+            options.onFormRequest(parsed);
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "selection_request" && options?.onSelectionRequest) {
+        try {
+          const parsed = JSON.parse(data) as DepartmentSelectionRequest;
+          if (
+            parsed.selection_type === "department_report" ||
+            parsed.selection_type === "company_department_report"
+          ) {
+            options.onSelectionRequest(parsed);
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "done") {
+        try {
+          const parsed = JSON.parse(data);
+          finalResponse = {
+            session_id: String(parsed.session_id ?? ""),
+            answer: String(parsed.answer ?? ""),
+            sources: Array.isArray(parsed.sources)
+              ? parsed.sources
+                  .map(normalizeCitation)
+                  .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
+              : undefined,
+            exportable_table: parsed.exportable_table === true,
+            export_id:
+              typeof parsed.export_id === "string" && parsed.export_id
+                ? parsed.export_id
+                : undefined,
+            calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+          };
+        } catch {
+          /* malformed done payload — recover below */
+        }
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      accumulated += chunk;
+      buffer += chunk.replace(/\r\n/g, "\n");
+
+      // Tách các event hoàn chỉnh; phần dư (event chưa kết thúc) giữ lại buffer.
+      let sepIndex: number;
+      while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+        processEvent(buffer.slice(0, sepIndex));
+        buffer = buffer.slice(sepIndex + 2);
+      }
+    }
+
+    // Flush event cuối nếu server không gửi "\n\n" kết thúc.
+    if (buffer.trim()) processEvent(buffer);
+
+    // Fallback: parse from accumulated text
+    if (!finalResponse) {
+      const match = accumulated.match(/event:\s*done\s*\ndata:\s*(.+)/);
+      if (match?.[1]) {
+        try {
+          const parsed = JSON.parse(match[1]);
+          finalResponse = {
+            session_id: String(parsed.session_id ?? ""),
+            answer: String(parsed.answer ?? ""),
+            sources: Array.isArray(parsed.sources)
+              ? parsed.sources
+                  .map(normalizeCitation)
+                  .filter((c: PersonalCitation | null): c is PersonalCitation => c !== null)
+              : undefined,
+            exportable_table: parsed.exportable_table === true,
+            export_id:
+              typeof parsed.export_id === "string" && parsed.export_id
+                ? parsed.export_id
+                : undefined,
+            calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+          };
+        } catch {
+          /* unrecoverable */
+        }
+      }
+    }
+
+    if (!finalResponse) throw new Error("No final response received from AI stream");
+    return finalResponse;
+  } catch (err) {
+    if (err instanceof PersonalAiError) throw err;
+    if (err instanceof Error && err.name === "AbortError")
+      throw new PersonalAiError(0, "timeout");
+    throw new PersonalAiError(0, "network");
+  } finally {
+    window.clearTimeout(timeoutId);
+    options?.signal?.removeEventListener("abort", onAbort);
+  }
+}

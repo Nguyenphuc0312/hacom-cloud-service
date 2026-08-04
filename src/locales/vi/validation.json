@@ -1,0 +1,58 @@
+{
+  "auth": {
+    "emailRequired": "Email không được để trống",
+    "emailInvalid": "Email không hợp lệ",
+    "loginIdentifierRequired": "Email hoặc mã nhân viên không được để trống",
+    "loginIdentifierMax": "Email hoặc mã nhân viên không được vượt quá 255 ký tự",
+    "passwordRequired": "Mật khẩu không được để trống",
+    "passwordMin": "Mật khẩu phải có tối thiểu {{count}} ký tự",
+    "passwordMax": "Mật khẩu không được quá {{count}} ký tự",
+    "passwordComplexity": "Mật khẩu phải có tối thiểu 8 ký tự",
+    "confirmPasswordRequired": "Xác nhận mật khẩu không được để trống",
+    "confirmPasswordMismatch": "Mật khẩu xác nhận không khớp",
+    "acceptTerms": "Bạn phải đồng ý với điều khoản sử dụng"
+  },
+  "register": {
+    "usernameRequired": "Tên người dùng không được để trống",
+    "usernameMin": "Tên người dùng phải có ít nhất {{count}} ký tự",
+    "usernameMax": "Tên người dùng không được quá {{count}} ký tự",
+    "usernamePattern": "Tên người dùng chỉ được chứa chữ cái, số và dấu gạch dưới"
+  },
+  "profile": {
+    "bioMax": "Tiểu sử không được quá {{count}} ký tự",
+    "phoneInvalid": "Số điện thoại không hợp lệ"
+  },
+  "password": {
+    "currentRequired": "Mật khẩu hiện tại không được để trống",
+    "newRequired": "Mật khẩu mới không được để trống",
+    "mustBeDifferent": "Mật khẩu mới phải khác mật khẩu hiện tại"
+  },
+  "room": {
+    "nameRequired": "Tên nhóm không được để trống",
+    "nameMin": "Tên nhóm phải có ít nhất 2 ký tự",
+    "nameMax": "Tên nhóm không được quá 100 ký tự",
+    "descriptionMax": "Mô tả không được quá 500 ký tự",
+    "memberMin": "Phải chọn ít nhất 1 thành viên",
+    "memberMax": "Nhóm không được quá 200 thành viên"
+  },
+  "message": {
+    "contentRequired": "Tin nhắn không được để trống",
+    "contentMax": "Tin nhắn không được quá {{count}} ký tự"
+  },
+  "strength": {
+    "label": "Độ mạnh",
+    "weak": "Yếu",
+    "medium": "Trung bình",
+    "strong": "Mạnh",
+    "requirements": {
+      "length": "Ít nhất 8 ký tự",
+      "lowercase": "Có chữ thường (a-z)",
+      "uppercase": "Có chữ hoa (A-Z)",
+      "number": "Có số (0-9)",
+      "special": "Có ký tự đặc biệt (!@#$...)",
+      "optional": "khuyến khích"
+    }
+  },
+  "showPassword": "Hiện mật khẩu",
+  "hidePassword": "Ẩn mật khẩu"
+}

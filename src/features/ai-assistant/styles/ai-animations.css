@@ -1,0 +1,222 @@
+/* AI Assistant – ChatGPT-style Animations */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes scan {
+  0%, 100% { transform: translateY(-100%); }
+  50% { transform: translateY(100%); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typing-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-scan {
+  animation: scan 3s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.animate-typing-cursor {
+  animation: typing-cursor 0.8s ease-in-out infinite;
+}
+
+.animate-dot-bounce {
+  animation: dot-bounce 1.4s infinite ease-in-out;
+}
+
+/* ── ChatGPT-style Prose Overrides ── */
+.prose-chatgpt,
+.prose-chatgpt * {
+  line-height: 1.4;
+  text-align: justify;
+}
+.prose-chatgpt {
+  font-family: 'Söhne', 'Inter', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  color: hsl(var(--color-text-primary));
+}
+
+.prose-chatgpt p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+.prose-chatgpt p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chatgpt h1,
+.prose-chatgpt h2,
+.prose-chatgpt h3,
+.prose-chatgpt h4 {
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.prose-chatgpt h1 { font-size: 1.5rem; }
+.prose-chatgpt h2 { font-size: 1.25rem; }
+.prose-chatgpt h3 { font-size: 1.1rem; }
+
+.prose-chatgpt ul,
+.prose-chatgpt ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+.prose-chatgpt li {
+  margin: 0.35rem 0;
+}
+
+.prose-chatgpt code {
+  font-family: 'Söhne Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875em;
+  background: hsl(var(--color-surface-active));
+  color: hsl(var(--color-text-primary));
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.prose-chatgpt pre {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: #1e1e1e;
+  border-radius: 12px;
+  overflow-x: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.prose-chatgpt pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #e5e7eb;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+
+.prose-chatgpt blockquote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid hsl(var(--color-border-strong));
+  background: hsl(var(--color-surface-overlay));
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: hsl(var(--color-text-muted));
+}
+
+.prose-chatgpt strong {
+  font-weight: 700;
+}
+
+.prose-chatgpt table {
+  margin: 1rem 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.prose-chatgpt th,
+.prose-chatgpt td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid hsl(var(--color-border));
+  text-align: left;
+}
+.prose-chatgpt th {
+  background: hsl(var(--color-surface-overlay));
+  color: hsl(var(--color-text-primary));
+  font-weight: 600;
+}
+
+/* ── Bảng báo cáo: độ rộng cột theo NHÃN header (rehypeReportTableCols) ── */
+/* Bảng rộng (phòng ban/công ty) cuộn ngang TRONG container bảng (component bọc
+   overflow-x-auto), không để cả message body cuộn ngang → tránh co dãn lệch. */
+.prose-chatgpt {
+  overflow-wrap: anywhere;
+}
+.prose-chatgpt table.chat-report-table {
+  table-layout: auto;
+  margin: 0; /* container .my-4 lo khoảng cách; tránh full-border generic ở trên */
+  font-size: inherit;
+  /* Đủ rộng cho mọi cột giãn tự nhiên → tràn khung thì container cuộn ngang,
+     KHÔNG ép dồn cột (gây vỡ chữ dọc). Container .overflow-x-auto lo cuộn. */
+  min-width: max-content;
+}
+/* Report table dùng style Tailwind của component (divider ngang, header gradient,
+   bo góc). Vô hiệu full-border + padding generic .prose-chatgpt td/th ở trên để
+   không ra lưới ô vuông đè lên. */
+.chat-report-table th,
+.chat-report-table td {
+  border: 0;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: break-word; /* chỉ xuống dòng ở ranh giới TỪ, không cắt giữa từ */
+}
+.chat-report-table .col--date { min-width: 96px;  white-space: nowrap; }
+.chat-report-table .col--org  { min-width: 116px; max-width: 150px; }
+.chat-report-table .col--mid  { min-width: 150px; max-width: 260px; }
+.chat-report-table .col--wide { min-width: 240px; max-width: 380px; } /* Công việc / Đã làm được / Đánh giá */
+
+.prose-chatgpt a {
+  color: hsl(var(--color-primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-chatgpt a:hover {
+  color: hsl(var(--color-primary-hover));
+}
+
+/* ── Citation chip – inline [N] link trong nội dung AI ── */
+.citation-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  margin: 0 1px;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #2563eb;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  text-decoration: none;
+  vertical-align: baseline;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+.citation-link:hover {
+  color: #1d4ed8;
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+  text-decoration: none;
+}
+
+/* ── Scrollbar ── */
+.ai-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.ai-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ai-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--color-border-strong) / 0.5);
+  border-radius: 99px;
+}
+.ai-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--color-border-strong) / 0.8);
+}

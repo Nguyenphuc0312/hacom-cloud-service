@@ -1,0 +1,118 @@
+﻿{
+  "app": {
+    "name": "Hacom Chat",
+    "shortName": "HC"
+  },
+  "actions": {
+    "title": "Quick actions",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "approve": "Approve",
+    "reject": "Reject",
+    "retry": "Retry",
+    "loadMore": "Load more",
+    "close": "Close",
+    "save": "Save",
+    "back": "Back",
+    "clear": "Clear",
+    "search": "Search",
+    "add": "Add",
+    "remove": "Remove",
+    "download": "Download",
+    "send": "Send",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "copy": "Copy",
+    "forward": "Forward",
+    "reply": "Reply",
+    "more": "More",
+    "startChat": "Start chat",
+    "signOut": "Sign out"
+  },
+  "loading": {
+    "default": "Loading...",
+    "page": "Loading page...",
+    "checkingAuth": "Checking authentication...",
+    "processing": "Processing...",
+    "syncing": "Syncing..."
+  },
+  "labels": {
+    "user": "User",
+    "conversation": "Conversation",
+    "channel": "Channel",
+    "group": "Group",
+    "navigation": "Navigate",
+    "shortcut": "Shortcut",
+    "people": "People"
+  },
+  "statusLabel": "Status",
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "away": "Away",
+    "dnd": "Do not disturb",
+    "busy": "Busy",
+    "invisible": "Invisible",
+    "idle": "Idle",
+    "loading": "Loading...",
+    "empty": "No matching results",
+    "unknown": "Unknown",
+    "lastSeen": "Last seen {{time}}",
+    "lastSynced": "Last synced: {{time}}",
+    "lastUpdated": "Last updated locally: {{time}}"
+  },
+  "error": {
+    "syncFailed": "Could not sync settings."
+  },
+  "toast": {
+    "featureInDevelopment": "This feature is in development"
+  },
+  "notifications": {
+    "panelTitle": "Notifications",
+    "panelSubtitle": "Mentions, messages and conversation activity",
+    "conversationFallback": "{{count}} unread message(s)",
+    "actions": {
+      "markAllRead": "Mark read",
+      "clear": "Clear"
+    },
+    "filter": {
+      "all": "All",
+      "unread": "Unread",
+      "message": "Messages",
+      "mention": "Mentions",
+      "groupActivity": "Group activity",
+      "system": "System"
+    },
+    "empty": {
+      "title": "No notifications yet",
+      "description": "New mentions, messages, and system updates will appear here."
+    }
+  },
+  "commandPalette": {
+    "openChatWorkspace": "Open your chat workspace",
+    "findFriends": "Find friends and contacts",
+    "newConversation": "Start a new direct or group conversation",
+    "openDirectConversation": "Open existing direct conversation",
+    "searchInFriends": "Search this user in Friends",
+    "searchPlaceholder": "Search chats, people, or actions",
+    "searchAria": "Search command palette"
+  },
+  "shortcut": {
+    "esc": "Esc"
+  },
+  "emptyState": {
+    "welcomeTitle": "Welcome to <1>Hacom Chat</1>",
+    "welcomeSubtitle1": "A secure, high-speed internal chat platform for Hacom Holdings staff.",
+    "welcomeSubtitle2": "Connect, collaborate, and coordinate work efficiently.",
+    "featureCard": {
+      "startChat": "Start a conversation",
+      "startChatDesc": "Search for colleagues to message or create a new group chat for your team.",
+      "shareFile": "Secure file sharing",
+      "shareFileDesc": "Drag and drop documents, presentations, and images directly into any chat window.",
+      "completeProfile": "Complete your profile",
+      "completeProfileDesc": "Update your title, department, and professional avatar so colleagues can easily recognize you."
+    },
+    "openProfile": "Open profile"
+  }
+}
