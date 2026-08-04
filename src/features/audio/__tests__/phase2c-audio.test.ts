@@ -1,5 +1,8 @@
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as AudioRecorderState from "../AudioRecorderState";
+
 /**
- * Phase 2C — Audio Message Test Suite (Web + Mobile)
+ * Phase 2C â€” Audio Message Test Suite (Web + Mobile)
  *
  * 20 test scenarios covering the full lifecycle.
  * Run Web tests: cd chat-web-client && npm test -- --testPathPattern="phase2c-audio"
@@ -9,56 +12,56 @@
 // WEB TESTS
 // ===========================================================================
 
-describe("Phase 2C — Web Audio Recording", () => {
+describe("Phase 2C â€” Web Audio Recording", () => {
   // Mock MediaRecorder + getUserMedia
   let mockMediaRecorder: any;
   let mockStream: any;
 
   beforeEach(() => {
     mockStream = {
-      getTracks: () => [{ stop: jest.fn() }],
+      getTracks: () => [{ stop: vi.fn() }],
     };
     mockMediaRecorder = {
-      start: jest.fn(),
-      stop: jest.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
       state: "inactive",
       mimeType: "audio/webm;codecs=opus",
       ondataavailable: null,
       onstop: null,
       onerror: null,
-      requestData: jest.fn(),
+      requestData: vi.fn(),
     };
 
-    (global as any).MediaRecorder = jest.fn(() => mockMediaRecorder);
-    (global as any).MediaRecorder.isTypeSupported = jest.fn(
+    (global as any).MediaRecorder = vi.fn(() => mockMediaRecorder);
+    (global as any).MediaRecorder.isTypeSupported = vi.fn(
       (mime: string) => mime === "audio/webm;codecs=opus" || mime === "audio/webm",
     );
     Object.defineProperty(navigator, "mediaDevices", {
       value: {
-        getUserMedia: jest.fn().mockResolvedValue(mockStream),
+        getUserMedia: vi.fn().mockResolvedValue(mockStream),
       },
       writable: true,
     });
-    (global as any).AudioContext = jest.fn(() => ({
-      createMediaStreamSource: jest.fn(() => ({
-        connect: jest.fn(),
+    (global as any).AudioContext = vi.fn(() => ({
+      createMediaStreamSource: vi.fn(() => ({
+        connect: vi.fn(),
       })),
-      createAnalyser: jest.fn(() => ({
+      createAnalyser: vi.fn(() => ({
         fftSize: 256,
         frequencyBinCount: 128,
         smoothingTimeConstant: 0.3,
-        getByteFrequencyData: jest.fn(),
+        getByteFrequencyData: vi.fn(),
       })),
-      close: jest.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
       state: "running",
     }));
   });
 
   // ---- Test 1: Start recording ----
-  it("1. should transition IDLE → REQUESTING_PERMISSION → READY → RECORDING", async () => {
-    const { useAudioRecorder } = await import("../features/audio/useAudioRecorder");
+  it("1. should transition IDLE â†’ REQUESTING_PERMISSION â†’ READY â†’ RECORDING", async () => {
+    const { useAudioRecorder } = await import("../useAudioRecorder");
     // Test the state machine transitions
-    const { canTransition } = await import("../features/audio/AudioRecorderState");
+    const { canTransition } = await import("../AudioRecorderState");
     expect(canTransition("IDLE", "REQUESTING_PERMISSION")).toBe(true);
     expect(canTransition("REQUESTING_PERMISSION", "READY")).toBe(true);
     expect(canTransition("READY", "RECORDING")).toBe(true);
@@ -69,15 +72,15 @@ describe("Phase 2C — Web Audio Recording", () => {
   });
 
   // ---- Test 2: Cancel ----
-  it("2. RECORDING → CANCELLED should be allowed", () => {
-    const { canTransition } = require("../features/audio/AudioRecorderState");
+  it("2. RECORDING â†’ CANCELLED should be allowed", () => {
+    const { canTransition } = AudioRecorderState;
     expect(canTransition("RECORDING", "CANCELLED")).toBe(true);
     expect(canTransition("CANCELLED", "IDLE")).toBe(true);
   });
 
   // ---- Test 3: Send ----
-  it("3. STOPPING → UPLOADING → FINALIZING_UPLOAD → CREATING_MESSAGE → SENT", () => {
-    const { canTransition } = require("../features/audio/AudioRecorderState");
+  it("3. STOPPING â†’ UPLOADING â†’ FINALIZING_UPLOAD â†’ CREATING_MESSAGE â†’ SENT", () => {
+    const { canTransition } = AudioRecorderState;
     expect(canTransition("STOPPING", "UPLOADING")).toBe(true);
     expect(canTransition("UPLOADING", "FINALIZING_UPLOAD")).toBe(true);
     expect(canTransition("FINALIZING_UPLOAD", "CREATING_MESSAGE")).toBe(true);
@@ -86,7 +89,7 @@ describe("Phase 2C — Web Audio Recording", () => {
 
   // ---- Test 4: Double tap Send ----
   it("4. should prevent double-send via guards", () => {
-    const { getGuards } = require("../features/audio/AudioRecorderState");
+    const { getGuards } = AudioRecorderState;
     const uploadingGuards = getGuards("UPLOADING");
     expect(uploadingGuards.canSendMessage).toBe(false);
 
@@ -106,7 +109,7 @@ describe("Phase 2C — Web Audio Recording", () => {
     // - All MediaStream tracks
     // - AudioContext
     // - Blob URLs
-    expect(true).toBe(true); // Architecture test — hook lifecycle
+    expect(true).toBe(true); // Architecture test â€” hook lifecycle
   });
 
   // ---- Test 6: Logout while recording ----
@@ -115,12 +118,12 @@ describe("Phase 2C — Web Audio Recording", () => {
     // It checks for null refs before operating.
     // Calling fullCleanup from IDLE should be a no-op.
     // Calling fullCleanup during RECORDING should stop everything.
-    expect(true).toBe(true); // Architecture test — defensive cleanup
+    expect(true).toBe(true); // Architecture test â€” defensive cleanup
   });
 
   // ---- Test 7: Permission denied ----
   it("7. should set PERMISSION_DENIED error when getUserMedia rejects", () => {
-    const { AudioRecorderErrorCode } = require("../features/audio/AudioRecorderState");
+    const { AudioRecorderErrorCode } = AudioRecorderState;
     expect(AudioRecorderErrorCode).toBeDefined();
     // Error codes are distinct:
     const codes = Object.values(AudioRecorderErrorCode || {});
@@ -131,22 +134,22 @@ describe("Phase 2C — Web Audio Recording", () => {
 
   // ---- Test 8: Duration below minimum ----
   it("8. should reject clips shorter than MIN_DURATION_MS", () => {
-    const { AUDIO_DURATION_LIMITS } = require("../features/audio/AudioRecorderState");
+    const { AUDIO_DURATION_LIMITS } = AudioRecorderState;
     expect(AUDIO_DURATION_LIMITS.MIN_DURATION_MS).toBeGreaterThanOrEqual(500);
     expect(AUDIO_DURATION_LIMITS.MAX_DURATION_MS).toBe(300000); // 5 min
   });
 
   // ---- Test 9: Auto-stop at max duration ----
   it("9. MAX_DURATION_MS should trigger auto-stop", () => {
-    const { AUDIO_DURATION_LIMITS } = require("../features/audio/AudioRecorderState");
+    const { AUDIO_DURATION_LIMITS } = AudioRecorderState;
     // The hook sets a setTimeout for MAX_DURATION_MS that calls stopRecording
     expect(AUDIO_DURATION_LIMITS.MAX_DURATION_MS).toBe(300000);
     expect(AUDIO_DURATION_LIMITS.WARNING_THRESHOLD_MS).toBe(270000);
   });
 
   // ---- Test 10: Upload fail then retry ----
-  it("10. FAILED → UPLOADING transition should be allowed (retry)", () => {
-    const { canTransition } = require("../features/audio/AudioRecorderState");
+  it("10. FAILED â†’ UPLOADING transition should be allowed (retry)", () => {
+    const { canTransition } = AudioRecorderState;
     expect(canTransition("FAILED", "UPLOADING")).toBe(true);
   });
 
@@ -159,8 +162,8 @@ describe("Phase 2C — Web Audio Recording", () => {
   });
 
   // ---- Test 12: Finalize success but create message timeout ----
-  it("12. FINALIZING_UPLOAD → CREATING_MESSAGE → FAILED on timeout", () => {
-    const { canTransition } = require("../features/audio/AudioRecorderState");
+  it("12. FINALIZING_UPLOAD â†’ CREATING_MESSAGE â†’ FAILED on timeout", () => {
+    const { canTransition } = AudioRecorderState;
     expect(canTransition("FINALIZING_UPLOAD", "CREATING_MESSAGE")).toBe(true);
     expect(canTransition("CREATING_MESSAGE", "FAILED")).toBe(true);
     // FAILED can retry to UPLOADING
@@ -199,7 +202,7 @@ describe("Phase 2C — Web Audio Recording", () => {
   it("17. should handle audio formats from other platforms", () => {
     // Web Audio element can play audio/mp4 (AAC) from iOS
     // Web Audio element may fail on audio/webm;codecs=opus from Chrome if on Safari
-    // This is expected — transcode in Phase 3 fixes this
+    // This is expected â€” transcode in Phase 3 fixes this
     expect(true).toBe(true);
   });
 
@@ -234,10 +237,10 @@ describe("Phase 2C — Web Audio Recording", () => {
 // STATE MACHINE COMPLETENESS TEST
 // ===========================================================================
 
-describe("Phase 2C — State Machine Completeness", () => {
+describe("Phase 2C â€” State Machine Completeness", () => {
   it("should forbid all reverse transitions", () => {
-    const { ALLOWED_TRANSITIONS } = require("../features/audio/AudioRecorderState");
-    const { canTransition } = require("../features/audio/AudioRecorderState");
+    const { ALLOWED_TRANSITIONS } = AudioRecorderState;
+    const { canTransition } = AudioRecorderState;
 
     // SENT should not go back to RECORDING
     expect(canTransition("SENT", "RECORDING")).toBe(false);
@@ -247,7 +250,7 @@ describe("Phase 2C — State Machine Completeness", () => {
   });
 
   it("should guard against double recording", () => {
-    const { getGuards } = require("../features/audio/AudioRecorderState");
+    const { getGuards } = AudioRecorderState;
     expect(getGuards("RECORDING").canStartRecording).toBe(false);
     expect(getGuards("STOPPING").canStartRecording).toBe(false);
     expect(getGuards("IDLE").canStartRecording).toBe(true);
@@ -258,7 +261,7 @@ describe("Phase 2C — State Machine Completeness", () => {
 // ERROR HANDLING DISTINCTNESS TEST
 // ===========================================================================
 
-describe("Phase 2C — Error Handling", () => {
+describe("Phase 2C â€” Error Handling", () => {
   it("should have distinct error codes for all error scenarios", () => {
     const errorCodes = [
       "PERMISSION_DENIED",
@@ -285,3 +288,7 @@ describe("Phase 2C — Error Handling", () => {
     expect(errorCodes.length).toBeGreaterThanOrEqual(13);
   });
 });
+
+
+
+

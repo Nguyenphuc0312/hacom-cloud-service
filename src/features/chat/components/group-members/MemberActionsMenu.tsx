@@ -75,11 +75,6 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
     labels,
   );
 
-  // Don't render kebab if no actions available
-  if (actions.length === 0) {
-    return null;
-  }
-
   const handleToggle = () => {
     if (!isOpen) updatePos();
     setIsOpen((prev) => !prev);
@@ -161,6 +156,11 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
       window.removeEventListener("resize", updatePos);
     };
   }, [isOpen, activeAction, handleClose, updatePos]);
+
+  // Don't render kebab if no actions available
+  if (actions.length === 0) {
+    return null;
+  }
 
   // Keyboard navigation
   const handleKeyDown = (event: React.KeyboardEvent) => {

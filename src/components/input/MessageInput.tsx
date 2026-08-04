@@ -1355,7 +1355,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
         {locationFlowState !== "idle" && (
           <div
-            className="absolute bottom-full right-3 z-30 mb-2 w-[min(340px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-2xl shadow-black/25 ring-1 ring-black/5"
+            className="absolute bottom-full right-3 z-30 mb-2 w-[min(340px,calc(100vw-24px))] max-w-[440px] sm:w-[min(440px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-2xl shadow-black/25 ring-1 ring-black/5"
             role="dialog"
             aria-modal="false"
             aria-labelledby="composer-location-title"
@@ -1439,7 +1439,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   </button>
                   <button
                     type="button"
-                    className="h-9 flex-[1.4] rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-9 min-w-[108px] flex-[1.4] whitespace-nowrap rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
                     aria-label="Gửi vị trí"
                   >
@@ -1454,7 +1454,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 <span className="h-4 w-4 shrink-0 rounded-full border-2 border-[#1565C0] border-t-transparent animate-spin" />
                 <div className="min-w-0 flex-1">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                    Đang gửi vị trí…
+                    Đang gửi...
                   </p>
                   <p id="composer-location-description" className="text-xs text-text-muted">
                     Vui lòng đợi trong giây lát

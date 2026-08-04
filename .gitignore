@@ -8,3 +8,5 @@ coverage.out
 *.log
 node_modules/
 dist/
+lint-current.json
+test-current.json
