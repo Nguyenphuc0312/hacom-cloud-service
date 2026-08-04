@@ -39,6 +39,18 @@ export interface MessageInputHandle {
   /** Focus the editor — e.g. after selecting a new conversation.
    *  Pass scrollIntoView:false to focus without scrolling ancestors. */
   focus: (options?: { scrollIntoView?: boolean }) => void;
+  /**
+   * Vị trí các tag `@` trong nội dung sắp gửi (code point, gồm cả '@').
+   *
+   * ChatWindow đọc NGAY TRƯỚC khi gửi, lúc editor còn nguyên nội dung — đọc sau
+   * `clearContent()` thì rỗng. Đi qua ref thay vì thêm tham số cho `onSend` để
+   * khỏi phải nới cùng lúc 5 signature trên đường xuống API.
+   */
+  getMentionRanges: () => {
+    userId: string;
+    offset: number;
+    length: number;
+  }[];
 }
 
 export interface MessageInputProps {

@@ -426,6 +426,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       focus: (options?: { scrollIntoView?: boolean }) => {
         tipTapRef.current?.focus(options);
       },
+      getMentionRanges: () => tipTapRef.current?.getMentionRanges() ?? [],
     }),
     [onAddFiles],
   );

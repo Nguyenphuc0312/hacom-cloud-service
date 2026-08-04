@@ -56,7 +56,10 @@ import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state/chatUiStore";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
-import { chatApi as rtkChatApi } from "../../features/api/chatApi";
+import {
+  chatApi as rtkChatApi,
+  type MentionSendInput,
+} from "../../features/api/chatApi";
 import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { FeatureErrorBoundary } from "../error";
@@ -96,6 +99,11 @@ const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 /** Extract mentions with full display name info for optimistic message rendering.
  * Returns array of { userId, displayName } objects to be passed to the send mutation.
  * Uses the same smart regex matching as extractMentionUserIds to handle @fullName with spaces.
+ *
+ * ⚠️ Đây là đường DỰ PHÒNG (dò tên bằng regex), chỉ chạy khi editor không cho được
+ * range — dán chữ "@Tên" thô, hoặc draft khôi phục lại thành text phẳng. Có chip
+ * thật thì `handleSend` dùng `getMentionRanges()`, chính xác tuyệt đối.
+ * Vì sao không bỏ hẳn: bỏ đi thì hai ca trên mất tag hoàn toàn.
  */
 function extractMentionDetails(
   content: string,
@@ -172,8 +180,9 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
-    /** Array of mention objects with userId and displayName for optimistic rendering */
-    mentions?: { userId: string; displayName: string }[],
+    /** Array of mention objects with userId and displayName for optimistic rendering.
+     *  `offset`/`length` (code point, gồm '@') có khi editor cho được range. */
+    mentions?: MentionSendInput[],
     contentFormat?: "plain_text" | "rich_text",
     contentJson?: Record<string, unknown>,
     plainText?: string,
@@ -568,7 +577,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      const mentionDetails = extractMentionDetails(outgoingContent, mentionCandidatesRef.current);
+      // Đường CHUẨN: editor biết chính xác chip nằm ở đâu → gửi kèm offset/length,
+      // BE lưu lại, mọi client render theo range thay vì dò tên. Hết hẳn ca "tag
+      // mất highlight vì FE/BE resolve tên khác nhau".
+      // Rỗng (dán chữ thô / draft phẳng) → lùi về dò tên như cũ.
+      const mentionRanges = messageInputRef.current?.getMentionRanges() ?? [];
+      const nameByUserId = new Map(
+        mentionCandidatesRef.current.map((c) => [
+          c.id,
+          c.mentionInsertName || c.resolvedName || c.displayName || c.username,
+        ]),
+      );
+      const mentionDetails = mentionRanges.length
+        ? mentionRanges.map((range) => ({
+            userId: range.userId,
+            displayName: nameByUserId.get(range.userId) || range.userId,
+            offset: range.offset,
+            length: range.length,
+          }))
+        : extractMentionDetails(outgoingContent, mentionCandidatesRef.current);
 
       logMessageDebug("ChatWindow", "send_requested", {
         conversationId: conversation.id,
