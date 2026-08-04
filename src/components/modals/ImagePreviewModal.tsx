@@ -285,7 +285,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      if (current?.url) window.open(current.url, "_blank");
+      if (current?.url) window.open(current.url, "_blank", "noopener,noreferrer");
     }
   }, [current]);
 
