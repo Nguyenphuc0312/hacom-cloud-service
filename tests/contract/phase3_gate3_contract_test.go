@@ -19,6 +19,9 @@ func TestPhase3Gate3CrossServiceContract(t *testing.T) {
 			t.Fatalf("Postman contract missing %q", expected)
 		}
 	}
+	for _, tier := range []string{`"quotaTierBytes", "value": "10000000000"`, `"rejectQuotaTierBytes", "value": "25000000000"`} {
+		if !strings.Contains(content, tier) { t.Fatalf("Postman default tier does not match Cloud defaults: %s", tier) }
+	}
 	if strings.Contains(content, "X-Admin-Actor-ID") {
 		t.Fatal("browser collection must not choose the admin actor")
 	}

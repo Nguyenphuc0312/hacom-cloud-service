@@ -13,6 +13,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000008_quota_request_outbox
 000009_quota_admin_review
 000010_audit_append_only
+000011_audit_maintenance_role
 ```
 
 ## Chạy local

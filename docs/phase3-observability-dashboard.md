@@ -28,6 +28,12 @@ Audit correlation uses `cloud.audit_logs.request_id`, not a metric label. Admin
 Service forwards the verified inbound `X-Request-ID`; Cloud writes that value in
 the same database transaction as the quota decision.
 
-Migration `000010_audit_append_only` rejects audit UPDATE/DELETE. Approved retention
-maintenance must run in one privileged transaction with
-`SET LOCAL cloud.audit_maintenance = 'on'`; application request paths never set it.
+Migrations `000010` and `000011` reject audit UPDATE/DELETE and prevent an
+application role from bypassing the trigger with a custom GUC. Only a DBA-approved
+identity granted membership in the NOLOGIN role `cloud_audit_maintainer` may execute:
+
+```sql
+SELECT cloud.purge_audit_logs_before(TIMESTAMPTZ '2025-01-01T00:00:00Z');
+```
+
+Never grant that role to the Cloud API or Worker database identity.

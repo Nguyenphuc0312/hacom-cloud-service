@@ -40,7 +40,6 @@ func cleanupWorkerDrive(t *testing.T, pool *pgxpool.Pool, driveID uuid.UUID) {
 		ctx := context.Background()
 		queries := []string{
 			`DELETE FROM cloud.jobs WHERE drive_id = $1`,
-			`DELETE FROM cloud.drives WHERE id = $1`,
 		}
 		for _, query := range queries {
 			if _, err := pool.Exec(ctx, query, driveID); err != nil {

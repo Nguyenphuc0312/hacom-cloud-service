@@ -28,4 +28,17 @@ func TestAuditLogRejectsUpdateAndDeleteWithoutMaintenanceGuard(t *testing.T) {
 			t.Fatalf("statement %q error=%v", statement, err)
 		}
 	}
+	tx, err := repository.pool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err = tx.Exec(context.Background(), `SET LOCAL cloud.audit_maintenance='on'`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(context.Background(), `UPDATE cloud.audit_logs SET action='guc-bypass' WHERE entity_id=$1`, created.Request.ID)
+	var postgresError *pgconn.PgError
+	if err == nil || !errors.As(err, &postgresError) || postgresError.Code != "55000" {
+		t.Fatalf("application role bypassed audit guard: %v", err)
+	}
 }

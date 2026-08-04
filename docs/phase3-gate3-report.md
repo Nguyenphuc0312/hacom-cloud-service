@@ -13,8 +13,8 @@
 | Reject transaction/idempotency | PostgreSQL test proves unchanged quota, one audit, actor/trace and conflicting-decision rejection | PASS |
 | Trace continuity | Admin client test and audit `request_id=trace-admin-review` assertion | PASS |
 | Sensitive-data controls | common audit writer rejects sensitive metadata keys; metrics use bounded enums | PASS |
-| Audit immutability | migration 000010 rejects UPDATE/DELETE with SQLSTATE 55000; down/up recovery tested | PASS |
-| Cross-service E2E contract | seven-step Postman approve/reject/retry flow plus static contract and `make test-postman-phase3` | PASS |
+| Audit immutability | migrations 000010/000011 reject UPDATE/DELETE and GUC bypass; maintenance is isolated behind a NOLOGIN role | PASS |
+| Cross-service E2E contract | seven-step Postman approve/reject/retry flow, default tiers and token/URL-injected runner | PASS |
 
 ## Security acceptance
 
@@ -30,8 +30,10 @@
 
 ## Findings
 
-No Phase 3 BLOCKER or MAJOR finding remains. The local shared-types package is built
-before consumers; `chat-auth-service` typecheck, `chat-admin-service` production build,
-Cloud full Go suite and the PostgreSQL Gate 3 acceptance suite all pass.
+No Phase 3 implementation BLOCKER or MAJOR finding remains. Shared-types now builds
+on local package preparation; the Gate builds Auth, Admin Service and Admin Panel after
+the shared contract. Cloud full Go suite and PostgreSQL acceptance/reconciliation pass
+with non-empty approve/reject evidence.
 
-Gate 3 status: **PASS for Phase 3 Search + Quota Request + Admin Review**.
+Gate 3 status: **PASS for code/data gates**. Run `make test-postman-phase3` with
+environment-specific user/admin tokens as the deployment smoke test.

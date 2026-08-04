@@ -309,23 +309,6 @@ func cleanupProcess4Owner(
 	t.Helper()
 	t.Cleanup(func() {
 		ctx := context.Background()
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			t.Errorf("begin audit cleanup: %v", err)
-			return
-		}
-		if _, err = tx.Exec(ctx, `SET LOCAL cloud.audit_maintenance = 'on'`); err == nil {
-			_, err = tx.Exec(ctx, `DELETE FROM cloud.audit_logs WHERE drive_id IN (SELECT id FROM cloud.drives WHERE owner_user_id=$1)`, ownerID)
-		}
-		if err == nil {
-			err = tx.Commit(ctx)
-		} else {
-			_ = tx.Rollback(ctx)
-		}
-		if err != nil {
-			t.Errorf("cleanup Process 4 audit: %v", err)
-			return
-		}
 		queries := []string{
 			`DELETE FROM cloud.item_lifecycle_operations WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
@@ -345,10 +328,6 @@ func cleanupProcess4Owner(
 			`DELETE FROM cloud.storage_objects WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,
-			`DELETE FROM cloud.quotas WHERE drive_id IN (
-				SELECT id FROM cloud.drives WHERE owner_user_id = $1
-			)`,
-			`DELETE FROM cloud.drives WHERE owner_user_id = $1`,
 		}
 		for _, query := range queries {
 			if _, err := pool.Exec(ctx, query, ownerID); err != nil {

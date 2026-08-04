@@ -8,12 +8,20 @@
     { "key": "adminBaseUrl", "value": "http://localhost:3102" },
     { "key": "userToken", "value": "" },
     { "key": "adminToken", "value": "" },
-    { "key": "quotaTierBytes", "value": "21474836480" },
-    { "key": "rejectQuotaTierBytes", "value": "53687091200" },
-    { "key": "traceId", "value": "gate3-trace-{{$guid}}" },
-    { "key": "operationId", "value": "gate3-review-{{$guid}}" },
-    { "key": "rejectOperationId", "value": "gate3-reject-{{$guid}}" }
+    { "key": "quotaTierBytes", "value": "10000000000" },
+    { "key": "rejectQuotaTierBytes", "value": "25000000000" },
+    { "key": "traceId", "value": "" },
+    { "key": "operationId", "value": "" },
+    { "key": "rejectOperationId", "value": "" }
   ],
+  "event": [{
+    "listen": "prerequest",
+    "script": { "exec": [
+      "if (!pm.collectionVariables.get('traceId')) pm.collectionVariables.set('traceId', 'gate3-trace-' + pm.variables.replaceIn('{{$guid}}'));",
+      "if (!pm.collectionVariables.get('operationId')) pm.collectionVariables.set('operationId', 'gate3-review-' + pm.variables.replaceIn('{{$guid}}'));",
+      "if (!pm.collectionVariables.get('rejectOperationId')) pm.collectionVariables.set('rejectOperationId', 'gate3-reject-' + pm.variables.replaceIn('{{$guid}}'));"
+    ] }
+  }],
   "item": [
     {
       "name": "1. User creates quota request",
@@ -80,7 +88,7 @@
         "url": "{{cloudBaseUrl}}/api/v1/cloud/quota"
       },
       "event": [{ "listen": "test", "script": { "exec": [
-        "pm.response.to.have.status(200); pm.expect(pm.response.json().limitBytes).to.eql(Number(pm.collectionVariables.get('quotaTierBytes')));"
+        "pm.response.to.have.status(200); pm.expect(pm.response.json().limitBytes).to.eql(Number(pm.variables.get('quotaTierBytes')));"
       ] } }]
     },
     {

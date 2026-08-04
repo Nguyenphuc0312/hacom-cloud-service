@@ -35,28 +35,25 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 	t.Helper()
 	t.Cleanup(func() {
 		ctx := context.Background()
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			t.Errorf("begin audit cleanup: %v", err)
-			return
-		}
-		if _, err = tx.Exec(ctx, `SET LOCAL cloud.audit_maintenance = 'on'`); err == nil {
-			_, err = tx.Exec(ctx, `DELETE FROM cloud.audit_logs WHERE drive_id IN (SELECT id FROM cloud.drives WHERE owner_user_id=$1)`, ownerID)
-		}
-		if err == nil {
-			err = tx.Commit(ctx)
-		} else {
-			_ = tx.Rollback(ctx)
-		}
-		if err != nil {
-			t.Errorf("cleanup owner audit %s: %v", ownerID, err)
-			return
+		if os.Getenv("GATE3_PRESERVE_EVIDENCE") == "true" {
+			var terminalAudit int
+			err := pool.QueryRow(ctx, `SELECT count(*) FROM cloud.audit_logs AS audit JOIN cloud.drives AS drive ON drive.id=audit.drive_id WHERE drive.owner_user_id=$1 AND audit.action IN ('cloud.quota_request.approved','cloud.quota_request.rejected')`, ownerID).Scan(&terminalAudit)
+			if err != nil {
+				t.Errorf("inspect Gate 3 evidence: %v", err)
+				return
+			}
+			if terminalAudit > 0 {
+				return
+			}
 		}
 		queries := []string{
 			`DELETE FROM cloud.outbox_events WHERE aggregate_id IN (
 				SELECT request.id FROM cloud.quota_requests AS request
 				JOIN cloud.drives AS drive ON drive.id=request.drive_id
 				WHERE drive.owner_user_id=$1
+			)`,
+			`DELETE FROM cloud.quota_requests WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,
 			`DELETE FROM cloud.item_lifecycle_operations WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
@@ -82,10 +79,6 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 			`DELETE FROM cloud.storage_objects WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,
-			`DELETE FROM cloud.quotas WHERE drive_id IN (
-				SELECT id FROM cloud.drives WHERE owner_user_id = $1
-			)`,
-			`DELETE FROM cloud.drives WHERE owner_user_id = $1`,
 		}
 		for _, query := range queries {
 			if _, err := pool.Exec(ctx, query, ownerID); err != nil {

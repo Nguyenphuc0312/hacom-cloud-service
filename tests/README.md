@@ -73,4 +73,9 @@ static cross-service contract gate with `make test-gate3`. With live Auth, Admin
 Service and Cloud endpoints plus `userToken`/`adminToken` collection variables,
 run the seven-step HTTP flow using `make test-postman-phase3`.
 
+The live command requires `PHASE3_USER_TOKEN` and `PHASE3_ADMIN_TOKEN`; optional
+overrides are `PHASE3_CLOUD_BASE_URL`, `PHASE3_ADMIN_BASE_URL`,
+`PHASE3_QUOTA_TIER_BYTES` and `PHASE3_REJECT_QUOTA_TIER_BYTES`. Use a fresh test
+account or choose two configured tiers above its current quota.
+
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.

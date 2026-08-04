@@ -89,8 +89,7 @@ test-gate3:
 	sh scripts/test-phase3-gate3.sh
 
 test-postman-phase3:
-	npx --yes newman run "$(POSTMAN_PHASE3_GATE3_COLLECTION)" --reporters cli --silent
-	@echo "Phase 3 Postman E2E passed (silent mode protects user/admin tokens and request reason)."
+	sh scripts/test-phase3-postman-e2e.sh
 
 demo-process5:
 	sh scripts/demo-process5.sh
