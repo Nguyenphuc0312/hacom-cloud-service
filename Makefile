@@ -20,6 +20,7 @@ POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Au
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
 	test-migration-phase2 \
+	test-trash-integration \
 	test-release-process5 test-postman-process5 demo-process5 \
 	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
@@ -46,6 +47,10 @@ test-integration-process4:
 
 test-migration-phase2:
 	sh scripts/test-phase2-migration.sh
+
+test-trash-integration:
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" \
+	go test -race -count=1 -run TrashPostgres -v ./internal/repository
 
 test-release-process5:
 	sh scripts/test-process5-release.sh

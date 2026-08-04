@@ -47,7 +47,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/9] Starting PostgreSQL"
+echo "[1/11] Starting PostgreSQL"
 compose up -d postgres
 
 ready=false
@@ -64,40 +64,49 @@ if [ "$ready" != true ]; then
   exit 1
 fi
 
-echo "[2/9] Testing migration 000005 on an empty database"
+echo "[2/11] Testing all Phase 2 migrations on an empty database"
 cleanup
 compose exec -T postgres createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 migrate -path migrations -database "$TEST_DATABASE_URL" up
 psql_file scripts/verify-schema.sql
 
-echo "[3/9] Recreating a Phase 1 database"
+echo "[3/11] Recreating a Phase 1 database"
 cleanup
 compose exec -T postgres createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 migrate -path migrations -database "$TEST_DATABASE_URL" up 4
 psql_file tests/sql/phase2-backfill-fixture.sql
 
-echo "[4/9] Upgrading populated Phase 1 data and checking backfill/invariants"
+echo "[4/11] Upgrading populated Phase 1 data and checking backfill/invariants"
 migrate -path migrations -database "$TEST_DATABASE_URL" up 1
 psql_file tests/sql/phase2-migration-assertions.sql
 
-echo "[5/9] Rolling migration 000005 down"
+echo "[5/11] Rolling migration 000005 down"
 migrate -path migrations -database "$TEST_DATABASE_URL" down 1
 psql_file tests/sql/phase2-down-assertions.sql
 
-echo "[6/9] Reapplying migration 000005 after rollback"
+echo "[6/11] Reapplying migration 000005 after rollback"
 migrate -path migrations -database "$TEST_DATABASE_URL" up 1
 psql_file tests/sql/phase2-migration-assertions.sql
 
-echo "[7/9] Running the complete schema contract"
+echo "[7/11] Applying migration 000006"
+migrate -path migrations -database "$TEST_DATABASE_URL" up 1
+
+echo "[8/11] Running the complete schema contract"
 psql_file scripts/verify-schema.sql
 
-echo "[8/9] Recreating corrupt Phase 1 data for fail-safe validation"
+echo "[9/11] Proving 000006 data rollback/reapply reconciliation"
+psql_file tests/sql/trash-lifecycle-rollback-fixture.sql
+migrate -path migrations -database "$TEST_DATABASE_URL" down 1
+migrate -path migrations -database "$TEST_DATABASE_URL" up 1
+psql_file tests/sql/trash-lifecycle-rollback-assertions.sql
+
+echo "[10/11] Recreating corrupt Phase 1 data for fail-safe validation"
 cleanup
 compose exec -T postgres createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 migrate -path migrations -database "$TEST_DATABASE_URL" up 4
 psql_file tests/sql/phase2-invalid-backfill-fixture.sql
 
-echo "[9/9] Proving unsafe backfill is rejected atomically"
+echo "[11/11] Proving unsafe backfill is rejected atomically"
 if migrate -path migrations -database "$TEST_DATABASE_URL" up 1; then
   echo "Migration 000005 incorrectly accepted trash_bytes greater than used_bytes." >&2
   exit 1

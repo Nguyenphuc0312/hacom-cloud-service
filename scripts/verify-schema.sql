@@ -7,6 +7,7 @@ DECLARE
   expected_tables TEXT[] := ARRAY[
     'audit_logs',
     'drives',
+    'item_lifecycle_operations',
     'items',
     'jobs',
     'quota_requests',
@@ -27,6 +28,7 @@ DECLARE
   ledger_a UUID;
   quota_request_a UUID;
   quota_request_status_values TEXT[];
+  quota_event_type_values TEXT[];
 BEGIN
   SELECT array_agg(table_name ORDER BY table_name)
   INTO actual_tables
@@ -72,6 +74,21 @@ BEGIN
     RAISE EXCEPTION
       'Unexpected quota request statuses: %',
       quota_request_status_values;
+  END IF;
+
+  SELECT array_agg(enum_value ORDER BY enum_order)
+  INTO quota_event_type_values
+  FROM (
+    SELECT enumlabel::TEXT AS enum_value, enumsortorder AS enum_order
+    FROM pg_enum
+    WHERE enumtypid = 'cloud.quota_event_type'::regtype
+  ) AS event_values;
+
+  IF quota_event_type_values IS DISTINCT FROM ARRAY[
+    'reserve', 'commit', 'release', 'consume',
+    'trash', 'restore', 'purge', 'reconcile'
+  ] THEN
+    RAISE EXCEPTION 'Unexpected quota event types: %', quota_event_type_values;
   END IF;
 
   INSERT INTO cloud.drives (owner_user_id, name)

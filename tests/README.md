@@ -39,9 +39,19 @@ baseUrl=http://localhost:8080
 make test-migration-phase2
 ```
 
-Suite creates a dedicated temporary database and verifies migration `000005` on
+Suite creates a dedicated temporary database and verifies Phase 2 migrations on
 an empty database and on populated Phase 1 data. It covers backfill/invariants,
 down/reapply, and atomic rejection of an unsafe legacy quota snapshot. The test
 database is removed when the script exits.
+
+## Trash lifecycle transaction
+
+```bash
+make test-trash-integration
+```
+
+Suite covers move/restore, 24-hour expiry, cross-owner access, permanent delete,
+binary delete job, same-operation retry, full transaction rollback and concurrent
+restore-versus-purge. It also proves quota snapshots match used/Trash ledger deltas.
 
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.

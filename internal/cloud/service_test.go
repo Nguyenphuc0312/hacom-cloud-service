@@ -258,8 +258,11 @@ func TestListItemsRejectsInvalidCursorAndLimit(t *testing.T) {
 }
 
 func TestQuotaAvailableBytesNeverReturnsNegative(t *testing.T) {
-	quota := Quota{LimitBytes: 10, UsedBytes: 8, ReservedBytes: 4}
+	quota := Quota{LimitBytes: 10, UsedBytes: 8, TrashBytes: 3, ReservedBytes: 4}
 	if quota.AvailableBytes() != 0 {
 		t.Fatalf("available bytes = %d, want 0", quota.AvailableBytes())
+	}
+	if quota.ActiveBytes() != 5 {
+		t.Fatalf("active bytes = %d, want 5", quota.ActiveBytes())
 	}
 }

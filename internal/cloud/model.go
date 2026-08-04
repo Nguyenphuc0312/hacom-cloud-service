@@ -25,6 +25,7 @@ const (
 	ItemStatusProcessing ItemStatus = "processing"
 	ItemStatusReady      ItemStatus = "ready"
 	ItemStatusFailed     ItemStatus = "failed"
+	ItemStatusTrashed    ItemStatus = "trashed"
 )
 
 const DriveStatusActive = "active"
@@ -64,8 +65,17 @@ type Quota struct {
 	DriveID       uuid.UUID
 	LimitBytes    int64
 	UsedBytes     int64
+	TrashBytes    int64
 	ReservedBytes int64
 	UpdatedAt     time.Time
+}
+
+func (q Quota) ActiveBytes() int64 {
+	active := q.UsedBytes - q.TrashBytes
+	if active < 0 {
+		return 0
+	}
+	return active
 }
 
 func (q Quota) AvailableBytes() int64 {

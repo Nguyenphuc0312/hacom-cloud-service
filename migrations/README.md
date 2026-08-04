@@ -8,6 +8,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000003_cloud_upload_and_quota
 000004_cloud_worker_and_audit
 000005_phase2_quota_baseline
+000006_trash_lifecycle_transactions
 ```
 
 ## Chạy local
@@ -48,3 +49,4 @@ Thiết kế chi tiết:
 - `docs/database/phase1-design.md`
 - `docs/database/phase2-erd.md`
 - `docs/database/phase2-design.md`
+- `docs/trash-lifecycle-transaction.md`

@@ -34,7 +34,7 @@ func (r *CloudPostgres) Initiate(
 	}
 
 	quota, err := scanQuota(tx.QueryRow(ctx, `
-		SELECT drive_id, quota_bytes, used_bytes, reserved_bytes, updated_at
+		SELECT drive_id, quota_bytes, used_bytes, trash_bytes, reserved_bytes, updated_at
 		FROM cloud.quotas
 		WHERE drive_id = $1
 		FOR UPDATE
@@ -333,7 +333,7 @@ func (r *CloudPostgres) Finalize(
 	}
 
 	_, err = scanQuota(tx.QueryRow(ctx, `
-		SELECT drive_id, quota_bytes, used_bytes, reserved_bytes, updated_at
+		SELECT drive_id, quota_bytes, used_bytes, trash_bytes, reserved_bytes, updated_at
 		FROM cloud.quotas
 		WHERE drive_id = $1
 		FOR UPDATE
@@ -517,7 +517,7 @@ func (r *CloudPostgres) Reject(
 	}
 
 	_, err = scanQuota(tx.QueryRow(ctx, `
-		SELECT drive_id, quota_bytes, used_bytes, reserved_bytes, updated_at
+		SELECT drive_id, quota_bytes, used_bytes, trash_bytes, reserved_bytes, updated_at
 		FROM cloud.quotas
 		WHERE drive_id = $1
 		FOR UPDATE

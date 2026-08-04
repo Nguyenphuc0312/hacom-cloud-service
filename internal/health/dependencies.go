@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const minimumSchemaVersion int64 = 5
+const minimumSchemaVersion int64 = 6
 
 type PostgresReadinessClient interface {
 	Ping(ctx context.Context) error
@@ -44,6 +44,7 @@ func (c *PostgresChecker) Check(ctx context.Context) error {
 			to_regclass('cloud.drives') IS NOT NULL
 				AND to_regclass('cloud.quotas') IS NOT NULL
 				AND to_regclass('cloud.items') IS NOT NULL
+				AND to_regclass('cloud.item_lifecycle_operations') IS NOT NULL
 				AND to_regclass('cloud.quota_requests') IS NOT NULL
 				AND to_regclass('cloud.usage_ledger') IS NOT NULL
 		FROM public.schema_migrations

@@ -17,7 +17,8 @@ ledger_totals AS (
   SELECT
     drive_id,
     COALESCE(SUM(delta_used_bytes), 0) AS ledger_used_bytes,
-    COALESCE(SUM(delta_reserved_bytes), 0) AS ledger_reserved_bytes
+    COALESCE(SUM(delta_reserved_bytes), 0) AS ledger_reserved_bytes,
+    COALESCE(SUM(delta_trash_bytes), 0) AS ledger_trash_bytes
   FROM cloud.usage_ledger
   GROUP BY drive_id
 )
@@ -33,6 +34,7 @@ SELECT
   COALESCE(item.item_trash_bytes, 0) AS item_trash_bytes,
   COALESCE(ledger.ledger_used_bytes, 0) AS ledger_used_bytes,
   COALESCE(ledger.ledger_reserved_bytes, 0) AS ledger_reserved_bytes,
+  COALESCE(ledger.ledger_trash_bytes, 0) AS ledger_trash_bytes,
   ARRAY_REMOVE(ARRAY[
     CASE WHEN quota.drive_id IS NULL THEN 'missing_quota' END,
     CASE WHEN quota.trash_bytes <> COALESCE(item.item_trash_bytes, 0)
@@ -43,6 +45,8 @@ SELECT
       THEN 'used_vs_ledger' END,
     CASE WHEN quota.reserved_bytes <> COALESCE(ledger.ledger_reserved_bytes, 0)
       THEN 'reserved_vs_ledger' END,
+    CASE WHEN quota.trash_bytes <> COALESCE(ledger.ledger_trash_bytes, 0)
+      THEN 'trash_vs_ledger' END,
     CASE WHEN quota.trash_bytes < 0 OR quota.trash_bytes > quota.used_bytes
       THEN 'trash_invariant' END,
     CASE WHEN quota.used_bytes + quota.reserved_bytes > quota.quota_bytes
@@ -57,6 +61,7 @@ WHERE quota.drive_id IS NULL
    OR quota.used_bytes <> COALESCE(item.item_used_bytes, 0)
    OR quota.used_bytes <> COALESCE(ledger.ledger_used_bytes, 0)
    OR quota.reserved_bytes <> COALESCE(ledger.ledger_reserved_bytes, 0)
+   OR quota.trash_bytes <> COALESCE(ledger.ledger_trash_bytes, 0)
    OR quota.trash_bytes < 0
    OR quota.trash_bytes > quota.used_bytes
    OR quota.used_bytes + quota.reserved_bytes > quota.quota_bytes

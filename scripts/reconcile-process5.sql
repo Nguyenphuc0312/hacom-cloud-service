@@ -15,12 +15,16 @@ BEGIN
     SELECT
       drive_id,
       COALESCE(SUM(delta_used_bytes), 0) AS used_bytes,
-      COALESCE(SUM(delta_reserved_bytes), 0) AS reserved_bytes
+      COALESCE(SUM(delta_reserved_bytes), 0) AS reserved_bytes,
+      COALESCE(SUM(delta_trash_bytes), 0) AS trash_bytes
     FROM cloud.usage_ledger
     GROUP BY drive_id
   ) AS ledger ON ledger.drive_id = quota.drive_id
   WHERE quota.used_bytes <> COALESCE(ledger.used_bytes, 0)
      OR quota.reserved_bytes <> COALESCE(ledger.reserved_bytes, 0)
+     OR quota.trash_bytes <> COALESCE(ledger.trash_bytes, 0)
+     OR quota.trash_bytes < 0
+     OR quota.trash_bytes > quota.used_bytes
      OR quota.used_bytes < 0
      OR quota.reserved_bytes < 0
      OR quota.used_bytes + quota.reserved_bytes > quota.quota_bytes;
