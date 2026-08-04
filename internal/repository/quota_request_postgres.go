@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cloudaudit "github.com/Nguyenphuc0312/hacom-cloud-service/internal/audit"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/quotarequest"
 	"github.com/google/uuid"
@@ -149,9 +150,7 @@ func (r *QuotaRequestPostgres) Review(ctx context.Context, command quotarequest.
 	if err != nil {
 		return quotarequest.ReviewResult{}, fmt.Errorf("finalize quota review: %w", err)
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO cloud.audit_logs(actor_user_id,actor_type,request_id,action,entity_type,entity_id,drive_id,metadata)
-		VALUES($1,'admin',NULLIF($2,''),$3,'quota_request',$4,$5,jsonb_build_object('decision',$6::text,'previousQuotaBytes',$7::bigint,'resultingQuotaBytes',$8::bigint,'usedBytes',$9::bigint,'reservedBytes',$10::bigint,'notePresent',$11::boolean,'operationId',$12::text))`,
-		command.ActorUserID, command.RequestIDTrace, "cloud.quota_request."+string(command.Decision), command.RequestID, driveID, command.Decision, previousQuotaBytes, quotaBytes, usedBytes, reservedBytes, command.Note != nil, command.OperationID); err != nil {
+	if err = cloudaudit.Append(ctx, tx, cloudaudit.Entry{ActorUserID: &command.ActorUserID, ActorType: "admin", RequestID: command.RequestIDTrace, Action: "cloud.quota_request." + string(command.Decision), EntityType: "quota_request", EntityID: command.RequestID, DriveID: driveID, Metadata: map[string]any{"decision": command.Decision, "previousQuotaBytes": previousQuotaBytes, "resultingQuotaBytes": quotaBytes, "usedBytes": usedBytes, "reservedBytes": reservedBytes, "notePresent": command.Note != nil, "operationId": command.OperationID}}); err != nil {
 		return quotarequest.ReviewResult{}, fmt.Errorf("audit quota review: %w", err)
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -315,19 +314,7 @@ func (r *QuotaRequestPostgres) Create(
 		}
 		return quotarequest.CreateResult{}, fmt.Errorf("insert quota request: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO cloud.audit_logs (
-			actor_user_id, actor_type, action, entity_type, entity_id, drive_id, metadata
-		)
-		VALUES ($1,'user','cloud.quota_request.created','quota_request',$2,$3,
-			jsonb_build_object(
-				'currentQuotaBytes',$4::bigint,
-				'requestedQuotaBytes',$5::bigint,
-				'reasonPresent',$6::boolean
-			)
-		)
-	`, command.OwnerUserID, request.ID, driveID, currentQuotaBytes,
-		command.RequestedQuotaBytes, command.Reason != nil); err != nil {
+	if err := cloudaudit.Append(ctx, tx, cloudaudit.Entry{ActorUserID: &command.OwnerUserID, ActorType: "user", Action: "cloud.quota_request.created", EntityType: "quota_request", EntityID: request.ID, DriveID: driveID, Metadata: map[string]any{"currentQuotaBytes": currentQuotaBytes, "requestedQuotaBytes": command.RequestedQuotaBytes, "reasonPresent": command.Reason != nil}}); err != nil {
 		return quotarequest.CreateResult{}, fmt.Errorf("audit quota request: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `

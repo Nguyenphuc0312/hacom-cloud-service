@@ -27,6 +27,7 @@ type adminQuotaHandler struct {
 	service       adminQuotaService
 	authenticator auth.Authenticator
 	logger        *slog.Logger
+	metrics       APIMetrics
 }
 
 type quotaReviewBody struct {
@@ -52,11 +53,14 @@ type adminQuotaResponse struct {
 	Applied             *bool               `json:"applied,omitempty"`
 }
 
-func NewAdminQuotaHandler(service adminQuotaService, authenticator auth.Authenticator, logger *slog.Logger) (http.Handler, error) {
+func NewAdminQuotaHandler(service adminQuotaService, authenticator auth.Authenticator, logger *slog.Logger, metrics ...APIMetrics) (http.Handler, error) {
 	if service == nil || authenticator == nil || logger == nil {
 		return nil, errors.New("admin quota service, authenticator and logger are required")
 	}
 	h := &adminQuotaHandler{service: service, authenticator: authenticator, logger: logger}
+	if len(metrics) > 0 {
+		h.metrics = metrics[0]
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/quota/requests", h.list)
 	mux.HandleFunc("/admin/quota/requests", methodNotAllowed(http.MethodGet))
@@ -135,13 +139,32 @@ func (h *adminQuotaHandler) review(w http.ResponseWriter, r *http.Request, decis
 	}
 	result, err := h.service.Review(r.Context(), quotarequest.ReviewCommand{RequestID: id, ActorUserID: actor, Decision: decision, OperationID: r.Header.Get(idempotencyKeyHeader), Note: body.Note, RequestIDTrace: r.Header.Get(requestIDHeader)})
 	if err != nil {
+		if h.metrics != nil {
+			h.metrics.RecordAdminReview(reviewDecisionLabel(decision), "rejected")
+		}
 		h.writeError(w, r, err)
 		return
+	}
+	if h.metrics != nil {
+		outcome := "idempotent"
+		if result.Applied {
+			outcome = "applied"
+		}
+		h.metrics.RecordAdminReview(reviewDecisionLabel(decision), outcome)
 	}
 	response := adminQuotaResponseFrom(result.Item)
 	response.Applied = &result.Applied
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, response)
+}
+func reviewDecisionLabel(decision quotarequest.Status) string {
+	if decision == quotarequest.StatusApproved {
+		return "approve"
+	}
+	if decision == quotarequest.StatusRejected {
+		return "reject"
+	}
+	return "unknown"
 }
 func adminQuotaResponseFrom(item quotarequest.AdminListItem) adminQuotaResponse {
 	var reviewer *string

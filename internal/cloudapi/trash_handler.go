@@ -88,8 +88,16 @@ func (h *Handler) deleteItemImmediately(writer http.ResponseWriter, request *htt
 }
 
 func (h *Handler) listTrash(writer http.ResponseWriter, request *http.Request) {
+	started := time.Now()
+	outcome := "success"
+	defer func() {
+		if h.metrics != nil {
+			h.metrics.RecordSearch("trash", outcome, time.Since(started))
+		}
+	}()
 	listRequest, ok := parseListRequest(writer, request)
 	if !ok {
+		outcome = "error"
 		return
 	}
 	page, err := h.trash.List(
@@ -97,6 +105,7 @@ func (h *Handler) listTrash(writer http.ResponseWriter, request *http.Request) {
 		listRequest,
 	)
 	if err != nil {
+		outcome = "error"
 		h.writeTrashError(writer, request, err)
 		return
 	}

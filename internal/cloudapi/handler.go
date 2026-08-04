@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
@@ -73,6 +74,12 @@ type QuotaRequestService interface {
 	Current(context.Context, uuid.UUID) (quotarequest.Request, error)
 }
 
+type APIMetrics interface {
+	RecordSearch(string, string, time.Duration)
+	RecordQuotaRequest(string, string)
+	RecordAdminReview(string, string)
+}
+
 type Handler struct {
 	service       Service
 	uploads       UploadService
@@ -82,6 +89,17 @@ type Handler struct {
 	maxBodyBytes  int64
 	logger        *slog.Logger
 	authenticator auth.Authenticator
+	metrics       APIMetrics
+}
+
+func WithMetrics(metrics APIMetrics) Option {
+	return func(handler *Handler) error {
+		if metrics == nil {
+			return errors.New("API metrics are required")
+		}
+		handler.metrics = metrics
+		return nil
+	}
 }
 
 func WithTrashService(service TrashService) Option {
@@ -401,8 +419,16 @@ func (h *Handler) getItem(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
+	started := time.Now()
+	outcome := "success"
+	defer func() {
+		if h.metrics != nil {
+			h.metrics.RecordSearch("active", outcome, time.Since(started))
+		}
+	}()
 	listRequest, ok := parseListRequest(writer, request)
 	if !ok {
+		outcome = "error"
 		return
 	}
 
@@ -412,6 +438,7 @@ func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
 		listRequest,
 	)
 	if err != nil {
+		outcome = "error"
 		h.writeServiceError(writer, request, err)
 		return
 	}

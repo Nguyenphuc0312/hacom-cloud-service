@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	cloudaudit "github.com/Nguyenphuc0312/hacom-cloud-service/internal/audit"
 	trashdomain "github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/worker/handlers"
 	"github.com/google/uuid"
@@ -226,23 +227,7 @@ func (r *PermanentDeletePostgres) FinalizePermanentDelete(
 	if command.RowsAffected() != 1 {
 		return false, handlers.ErrPermanentDeleteTargetState
 	}
-	_, err = tx.Exec(ctx, `
-		INSERT INTO cloud.audit_logs (
-			actor_type, request_id, action, entity_type, entity_id, drive_id, metadata
-		)
-		SELECT
-			'worker', $1::varchar, 'cloud.object.permanent_delete.completed',
-			'storage_object', $2::uuid, $3::uuid,
-			jsonb_build_object(
-				'object_missing', $4::boolean,
-				'recovery_safe', true
-			)
-		WHERE NOT EXISTS (
-			SELECT 1 FROM cloud.audit_logs
-			WHERE request_id = $1::varchar
-			  AND action = 'cloud.object.permanent_delete.completed'
-		)
-	`, jobID.String(), objectID, driveID, missingObject)
+	err = cloudaudit.Append(ctx, tx, cloudaudit.Entry{ActorType: "worker", RequestID: jobID.String(), Action: "cloud.object.permanent_delete.completed", EntityType: "storage_object", EntityID: objectID, DriveID: driveID, Metadata: map[string]any{"object_missing": missingObject, "recovery_safe": true}, AppendOnce: true})
 	if err != nil {
 		return false, fmt.Errorf("append permanent delete audit: %w", err)
 	}

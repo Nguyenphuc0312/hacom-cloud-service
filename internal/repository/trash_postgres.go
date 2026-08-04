@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	cloudaudit "github.com/Nguyenphuc0312/hacom-cloud-service/internal/audit"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/google/uuid"
@@ -628,34 +629,7 @@ func appendLifecycleEvidence(
 	if result.Action == trash.ActionPurge {
 		auditAction = "cloud.item.purged"
 	}
-	_, err = tx.Exec(ctx, `
-		INSERT INTO cloud.audit_logs (
-			occurred_at, actor_user_id, actor_type, request_id,
-			action, entity_type, entity_id, drive_id, metadata
-		)
-		VALUES (
-			$1, $2, 'user', $3, $4, 'cloud_item', $5, $6,
-			jsonb_build_object(
-				'from_status', $7::text,
-				'to_status', $8::text,
-				'billable_bytes', $9::bigint,
-				'delta_used_bytes', $10::bigint,
-				'delta_trash_bytes', $11::bigint
-			)
-		)
-	`,
-		command.OccurredAt,
-		command.OwnerUserID,
-		command.OperationID,
-		auditAction,
-		result.ItemID,
-		result.DriveID,
-		result.PreviousState,
-		nullableState(result.CurrentState),
-		result.BillableBytes,
-		deltaUsed,
-		deltaTrash,
-	)
+	err = cloudaudit.Append(ctx, tx, cloudaudit.Entry{OccurredAt: command.OccurredAt, ActorUserID: &command.OwnerUserID, ActorType: "user", RequestID: command.OperationID, Action: auditAction, EntityType: "cloud_item", EntityID: result.ItemID, DriveID: result.DriveID, Metadata: map[string]any{"from_status": result.PreviousState, "to_status": nullableState(result.CurrentState), "billable_bytes": result.BillableBytes, "delta_used_bytes": deltaUsed, "delta_trash_bytes": deltaTrash}})
 	if err != nil {
 		return fmt.Errorf("append lifecycle audit: %w", err)
 	}

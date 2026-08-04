@@ -15,6 +15,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/observability"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/quotarequest"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
@@ -145,6 +146,7 @@ func main() {
 		logger.Error("create quota-request service", "error", err)
 		os.Exit(1)
 	}
+	apiMetrics := observability.NewMetrics()
 	cloudHandler, err := cloudapi.New(
 		cloudService,
 		cfg.MaxContentBytes,
@@ -154,12 +156,13 @@ func main() {
 		cloudapi.WithTrashService(trashService),
 		cloudapi.WithQuotaRequestService(quotaRequestService),
 		cloudapi.WithAuthenticator(authenticator),
+		cloudapi.WithMetrics(apiMetrics),
 	)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)
 		os.Exit(1)
 	}
-	adminQuotaHandler, err := cloudapi.NewAdminQuotaHandler(quotaRequestService, adminServiceAuthenticator, logger)
+	adminQuotaHandler, err := cloudapi.NewAdminQuotaHandler(quotaRequestService, adminServiceAuthenticator, logger, apiMetrics)
 	if err != nil {
 		logger.Error("create Cloud admin quota handler", "error", err)
 		os.Exit(1)
@@ -167,7 +170,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router.New(healthService, cloudHandler, adminQuotaHandler),
+		Handler:           router.New(healthService, cloudHandler, adminQuotaHandler, apiMetrics.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -1,0 +1,85 @@
+{
+  "info": {
+    "name": "Hacom Cloud Phase 3 Gate 3",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "cloudBaseUrl", "value": "http://localhost:8080" },
+    { "key": "adminBaseUrl", "value": "http://localhost:3102" },
+    { "key": "userToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "quotaTierBytes", "value": "21474836480" },
+    { "key": "traceId", "value": "gate3-trace-{{$guid}}" },
+    { "key": "operationId", "value": "gate3-review-{{$guid}}" }
+  ],
+  "item": [
+    {
+      "name": "1. User creates quota request",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "gate3-create-{{$guid}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"requestedQuotaBytes\":{{quotaTierBytes}},\"reason\":\"Gate 3 acceptance\"}" },
+        "url": "{{cloudBaseUrl}}/api/v1/cloud/quota/requests"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+        "const body = pm.response.json(); pm.collectionVariables.set('quotaRequestId', body.id);",
+        "pm.expect(body.status).to.eql('pending');"
+      ] } }]
+    },
+    {
+      "name": "2. Authorized admin approves",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{operationId}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"note\":\"Gate 3 approved\"}" },
+        "url": "{{adminBaseUrl}}/admin/cloud/quota-requests/{{quotaRequestId}}/approve"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(200);",
+        "const body = pm.response.json().data; pm.expect(body.status).to.eql('approved'); pm.expect(body.applied).to.eql(true);"
+      ] } }]
+    },
+    {
+      "name": "3. Duplicate approval is idempotent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{operationId}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"note\":\"Gate 3 approved\"}" },
+        "url": "{{adminBaseUrl}}/admin/cloud/quota-requests/{{quotaRequestId}}/approve"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(200); pm.expect(pm.response.json().data.applied).to.eql(false);"
+      ] } }]
+    },
+    {
+      "name": "4. User quota reflects approval",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{userToken}}" },
+          { "key": "X-Request-ID", "value": "{{traceId}}" }
+        ],
+        "url": "{{cloudBaseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.response.to.have.status(200); pm.expect(pm.response.json().limitBytes).to.eql(Number(pm.collectionVariables.get('quotaTierBytes')));"
+      ] } }]
+    }
+  ]
+}

@@ -42,8 +42,18 @@ func (h *Handler) createQuotaRequest(writer http.ResponseWriter, request *http.R
 		Reason:              input.Reason,
 	})
 	if err != nil {
+		if h.metrics != nil {
+			h.metrics.RecordQuotaRequest("create", "rejected")
+		}
 		h.writeQuotaRequestError(writer, request, err)
 		return
+	}
+	if h.metrics != nil {
+		if result.Applied {
+			h.metrics.RecordQuotaRequest("create", "applied")
+		} else {
+			h.metrics.RecordQuotaRequest("create", "idempotent")
+		}
 	}
 	status := http.StatusCreated
 	if !result.Applied {
@@ -62,8 +72,14 @@ func (h *Handler) getCurrentQuotaRequest(writer http.ResponseWriter, request *ht
 	}
 	current, err := h.quotaRequests.Current(request.Context(), ownerUserID(request.Context()))
 	if err != nil {
+		if h.metrics != nil {
+			h.metrics.RecordQuotaRequest("current", "rejected")
+		}
 		h.writeQuotaRequestError(writer, request, err)
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.RecordQuotaRequest("current", "applied")
 	}
 	writer.Header().Set("Cache-Control", "no-store")
 	writeJSON(writer, http.StatusOK, quotaRequestResponseFrom(current))
