@@ -36,6 +36,11 @@ func cleanupOwner(t *testing.T, pool *pgxpool.Pool, ownerID uuid.UUID) {
 	t.Cleanup(func() {
 		ctx := context.Background()
 		queries := []string{
+			`DELETE FROM cloud.outbox_events WHERE aggregate_id IN (
+				SELECT request.id FROM cloud.quota_requests AS request
+				JOIN cloud.drives AS drive ON drive.id=request.drive_id
+				WHERE drive.owner_user_id=$1
+			)`,
 			`DELETE FROM cloud.item_lifecycle_operations WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,

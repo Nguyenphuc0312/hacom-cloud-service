@@ -29,6 +29,7 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("AUTH_SERVICE_TOKEN_AUDIENCE", "")
 	t.Setenv("AUTH_SERVICE_TOKEN_SCOPES", "")
 	t.Setenv("SEARCH_QUERY_TIMEOUT", "")
+	t.Setenv("QUOTA_REQUEST_TIERS_BYTES", "")
 	t.Setenv("DATABASE_URL", "postgres://hacom:hacom@localhost:5432/hacom_cloud?sslmode=disable")
 	t.Setenv("MINIO_ENDPOINT", "localhost:9000")
 	t.Setenv("MINIO_ACCESS_KEY", "minioadmin")
@@ -60,6 +61,10 @@ func TestLoadUsesHealthDefaults(t *testing.T) {
 	}
 	if cfg.DefaultQuotaBytes != 5_000_000_000 {
 		t.Fatalf("expected proposed 5 decimal GB quota, got %d", cfg.DefaultQuotaBytes)
+	}
+	if len(cfg.QuotaRequestTiersBytes) != 3 || cfg.QuotaRequestTiersBytes[0] != 10_000_000_000 ||
+		cfg.QuotaRequestTiersBytes[2] != 50_000_000_000 {
+		t.Fatalf("quota request tiers=%v", cfg.QuotaRequestTiersBytes)
 	}
 	if cfg.MaxUploadBytes != 100_000_000 {
 		t.Fatalf("expected proposed 100 decimal MB upload limit, got %d", cfg.MaxUploadBytes)
@@ -237,6 +242,16 @@ func TestLoadRejectsUnsafeSearchQueryTimeout(t *testing.T) {
 	for _, value := range []string{"invalid", "11s"} {
 		t.Setenv("SEARCH_QUERY_TIMEOUT", value)
 		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SEARCH_QUERY_TIMEOUT") {
+			t.Fatalf("value=%q error=%v", value, err)
+		}
+	}
+}
+
+func TestLoadValidatesIntegerQuotaRequestTiers(t *testing.T) {
+	for _, value := range []string{"10.5", "0,10000000000", "10000000000,10000000000", "1000000000"} {
+		setRequiredEnvironment(t)
+		t.Setenv("QUOTA_REQUEST_TIERS_BYTES", value)
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "QUOTA_REQUEST_TIERS_BYTES") {
 			t.Fatalf("value=%q error=%v", value, err)
 		}
 	}

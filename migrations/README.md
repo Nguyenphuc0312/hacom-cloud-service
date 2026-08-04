@@ -10,6 +10,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000005_phase2_quota_baseline
 000006_trash_lifecycle_transactions
 000007_phase3_search_filter
+000008_quota_request_outbox
 ```
 
 ## Chạy local
@@ -52,3 +53,4 @@ Thiết kế chi tiết:
 - `docs/database/phase2-design.md`
 - `docs/trash-lifecycle-transaction.md`
 - `docs/database/phase3-search-design.md`
+- `docs/database/phase3-quota-request-design.md`

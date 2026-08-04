@@ -46,6 +46,7 @@ type Config struct {
 	MaxUploadBytes              int64
 	MaxContentBytes             int64
 	DefaultQuotaBytes           int64
+	QuotaRequestTiersBytes      []int64
 	UploadURLTTL                time.Duration
 	DownloadURLTTL              time.Duration
 	HealthTimeout               time.Duration
@@ -144,6 +145,23 @@ func Load() (Config, error) {
 	defaultQuotaBytes, err := int64Env("DEFAULT_QUOTA_BYTES", defaultQuotaLimitBytes)
 	if err != nil {
 		return Config{}, err
+	}
+	quotaRequestTiers, err := int64CSVEnv(
+		"QUOTA_REQUEST_TIERS_BYTES",
+		[]int64{10_000_000_000, 25_000_000_000, 50_000_000_000},
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	hasIncreaseTier := false
+	for _, tier := range quotaRequestTiers {
+		if tier > defaultQuotaBytes {
+			hasIncreaseTier = true
+			break
+		}
+	}
+	if !hasIncreaseTier {
+		return Config{}, fmt.Errorf("QUOTA_REQUEST_TIERS_BYTES must include a tier above DEFAULT_QUOTA_BYTES")
 	}
 
 	useSSL, err := boolEnv("MINIO_USE_SSL", false)
@@ -269,6 +287,7 @@ func Load() (Config, error) {
 		MaxUploadBytes:              maxUploadBytes,
 		MaxContentBytes:             maxContentBytes,
 		DefaultQuotaBytes:           defaultQuotaBytes,
+		QuotaRequestTiersBytes:      quotaRequestTiers,
 		UploadURLTTL:                uploadURLTTL,
 		DownloadURLTTL:              downloadURLTTL,
 		HealthTimeout:               healthTimeout,
@@ -460,6 +479,28 @@ func durationEnv(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a positive duration", key)
 	}
 	return parsed, nil
+}
+
+func int64CSVEnv(key string, fallback []int64) ([]int64, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return append([]int64(nil), fallback...), nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]int64, 0, len(parts))
+	seen := make(map[int64]struct{}, len(parts))
+	for _, part := range parts {
+		value, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+		if err != nil || value <= 0 {
+			return nil, fmt.Errorf("%s must contain positive integer byte tiers", key)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return nil, fmt.Errorf("%s must not contain duplicate tiers", key)
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 func loadWorkerID() (string, error) {

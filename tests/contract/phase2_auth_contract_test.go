@@ -125,6 +125,26 @@ func TestPhase3SearchOpenAPIContract(t *testing.T) {
 	}
 }
 
+func TestPhase3QuotaRequestOpenAPIContract(t *testing.T) {
+	root := repositoryRoot(t)
+	openAPI := readFile(t, filepath.Join(root, "docs", "openapi", "phase2-cloud-auth.openapi.yaml"))
+	for _, required := range []string{
+		"/api/v1/cloud/quota/requests:",
+		"/api/v1/cloud/quota/requests/current:",
+		"operationId: createCloudQuotaRequest",
+		"operationId: getCurrentCloudQuotaRequest",
+		"requestedQuotaBytes:",
+		"format: int64",
+		"INVALID_QUOTA_TIER",
+		"QUOTA_REQUEST_PENDING",
+		"QUOTA_REQUEST_NOT_FOUND",
+	} {
+		if !strings.Contains(openAPI, required) {
+			t.Errorf("Phase 3 quota-request OpenAPI contract is missing %q", required)
+		}
+	}
+}
+
 func TestPhase2AuthContractConfiguration(t *testing.T) {
 	root := repositoryRoot(t)
 	content := readFile(t, filepath.Join(root, ".env.example"))

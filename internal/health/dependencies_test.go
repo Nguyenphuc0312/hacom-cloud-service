@@ -59,7 +59,8 @@ func TestPostgresCheckerRequiresHealthyMigratedSchema(t *testing.T) {
 	}
 	if !strings.Contains(client.query, "schema_migrations") ||
 		!strings.Contains(client.query, "cloud.items") ||
-		!strings.Contains(client.query, "cloud.quota_requests") {
+		!strings.Contains(client.query, "cloud.quota_requests") ||
+		!strings.Contains(client.query, "cloud.outbox_events") {
 		t.Fatalf("readiness query does not validate migration and cloud schema: %s", client.query)
 	}
 }

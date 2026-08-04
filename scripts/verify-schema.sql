@@ -10,6 +10,7 @@ DECLARE
     'item_lifecycle_operations',
     'items',
     'jobs',
+    'outbox_events',
     'quota_requests',
     'quotas',
     'storage_objects',
@@ -88,6 +89,10 @@ BEGIN
     );
   IF search_index_count <> 4 THEN
     RAISE EXCEPTION 'Phase 3 search indexes are incomplete: %/4', search_index_count;
+  END IF;
+
+  IF to_regclass('cloud.cloud_outbox_pending_idx') IS NULL THEN
+    RAISE EXCEPTION 'Quota-request outbox pending index is missing';
   END IF;
 
   IF NOT EXISTS (
@@ -177,6 +182,12 @@ BEGIN
     'Schema verification'
   )
   RETURNING id INTO quota_request_a;
+
+  INSERT INTO cloud.outbox_events (aggregate_type, aggregate_id, event_type, payload)
+  VALUES (
+    'quota_request', quota_request_a, 'cloud.quota_request.created',
+    jsonb_build_object('requestId', quota_request_a, 'requestedQuotaBytes', 10000000000::BIGINT)
+  );
 
   BEGIN
     INSERT INTO cloud.quota_requests (

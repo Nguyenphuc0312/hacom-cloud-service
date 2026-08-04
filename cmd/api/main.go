@@ -15,6 +15,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/health"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/quotarequest"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/storage"
@@ -126,6 +127,19 @@ func main() {
 		logger.Error("create Trash service", "error", err)
 		os.Exit(1)
 	}
+	quotaRequestStore, err := repository.NewQuotaRequestPostgres(db, cfg.DefaultQuotaBytes)
+	if err != nil {
+		logger.Error("create quota-request repository", "error", err)
+		os.Exit(1)
+	}
+	quotaRequestService, err := quotarequest.NewService(
+		quotaRequestStore,
+		cfg.QuotaRequestTiersBytes,
+	)
+	if err != nil {
+		logger.Error("create quota-request service", "error", err)
+		os.Exit(1)
+	}
 	cloudHandler, err := cloudapi.New(
 		cloudService,
 		cfg.MaxContentBytes,
@@ -133,6 +147,7 @@ func main() {
 		cloudapi.WithUploadService(uploadService),
 		cloudapi.WithFileAccessService(fileAccessService),
 		cloudapi.WithTrashService(trashService),
+		cloudapi.WithQuotaRequestService(quotaRequestService),
 		cloudapi.WithAuthenticator(authenticator),
 	)
 	if err != nil {

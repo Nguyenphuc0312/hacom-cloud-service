@@ -13,6 +13,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/quotarequest"
 	trashdomain "github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
@@ -67,11 +68,17 @@ type TrashService interface {
 	List(context.Context, uuid.UUID, cloud.ListRequest) (trashdomain.Page, error)
 }
 
+type QuotaRequestService interface {
+	Create(context.Context, quotarequest.CreateCommand) (quotarequest.CreateResult, error)
+	Current(context.Context, uuid.UUID) (quotarequest.Request, error)
+}
+
 type Handler struct {
 	service       Service
 	uploads       UploadService
 	fileAccess    FileAccessService
 	trash         TrashService
+	quotaRequests QuotaRequestService
 	maxBodyBytes  int64
 	logger        *slog.Logger
 	authenticator auth.Authenticator
@@ -83,6 +90,16 @@ func WithTrashService(service TrashService) Option {
 			return errors.New("Trash service is required")
 		}
 		handler.trash = service
+		return nil
+	}
+}
+
+func WithQuotaRequestService(service QuotaRequestService) Option {
+	return func(handler *Handler) error {
+		if service == nil {
+			return errors.New("quota-request service is required")
+		}
+		handler.quotaRequests = service
 		return nil
 	}
 }
@@ -175,6 +192,12 @@ func New(
 	}
 	mux.HandleFunc("GET /quota", handler.getQuota)
 	mux.HandleFunc("/quota", methodNotAllowed(http.MethodGet))
+	if handler.quotaRequests != nil {
+		mux.HandleFunc("POST /quota/requests", handler.createQuotaRequest)
+		mux.HandleFunc("/quota/requests", methodNotAllowed(http.MethodPost))
+		mux.HandleFunc("GET /quota/requests/current", handler.getCurrentQuotaRequest)
+		mux.HandleFunc("/quota/requests/current", methodNotAllowed(http.MethodGet))
+	}
 	if handler.uploads != nil {
 		mux.HandleFunc("POST /uploads", handler.initiateUpload)
 		mux.HandleFunc("/uploads", methodNotAllowed(http.MethodPost))

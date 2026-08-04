@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Hacom Cloud Phase 3 API Contract
-  version: 3.0.0-process1-search
+  version: 3.0.0-process2-quota-request
   description: |
     Phase 3 endpoint contract preserving the frozen Phase 2 Process 1 HTTP
     authentication boundary. The public gateway exposes /cloud-api and strips
@@ -41,6 +41,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Quota"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/cloud/quota/requests:
+    post:
+      summary: Create an idempotent quota increase request
+      operationId: createCloudQuotaRequest
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuotaRequest"
+      responses:
+        "201":
+          description: Pending request created with audit and outbox event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaRequest"
+        "200":
+          description: Identical idempotent retry; no duplicate side effects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaRequest"
+        "400":
+          description: Invalid integer bytes, reason, key, or unconfigured tier
+        "409":
+          description: A pending request exists or the idempotency payload conflicts
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/AuthUnavailable"
+  /api/v1/cloud/quota/requests/current:
+    get:
+      summary: Read the authenticated owner's latest quota request
+      operationId: getCurrentCloudQuotaRequest
+      responses:
+        "200":
+          description: Latest request, including its current review state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaRequest"
+        "404":
+          description: The owner has never created a quota request
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -358,6 +412,34 @@ components:
         reservedBytes: { type: integer, format: int64 }
         availableBytes: { type: integer, format: int64 }
         updatedAt: { type: string, format: date-time }
+    CreateQuotaRequest:
+      type: object
+      additionalProperties: false
+      required: [requestedQuotaBytes]
+      properties:
+        requestedQuotaBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Must exactly match a server-configured integer byte tier
+          examples: [10000000000, 25000000000, 50000000000]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    QuotaRequest:
+      type: object
+      additionalProperties: false
+      required: [id, status, currentQuotaBytes, requestedQuotaBytes, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, approved, rejected] }
+        currentQuotaBytes: { type: integer, format: int64 }
+        requestedQuotaBytes: { type: integer, format: int64 }
+        reason: { type: string, maxLength: 1000 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        applied: { type: boolean }
     TrashLifecycle:
       type: object
       additionalProperties: false
@@ -426,5 +508,9 @@ components:
                 - RESTORE_EXPIRED
                 - DELETE_PENDING
                 - IDEMPOTENCY_CONFLICT
+                - INVALID_QUOTA_REQUEST
+                - INVALID_QUOTA_TIER
+                - QUOTA_REQUEST_PENDING
+                - QUOTA_REQUEST_NOT_FOUND
             message:
               type: string

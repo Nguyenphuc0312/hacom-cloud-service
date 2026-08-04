@@ -271,6 +271,35 @@ Owner có thể gọi endpoint `/items/{itemID}/access` cho file trong Trash khi
 `now < purgeAfter`. TTL URL được rút ngắn để không vượt quá `purgeAfter`. Item
 không tồn tại và Item của owner khác luôn có cùng response `404 ITEM_NOT_FOUND`.
 
+## Quota request — Phase 3
+
+User chỉ có thể gửi yêu cầu tăng quota; không có API ghi trực tiếp
+`cloud.quotas`. Contract hiện tại gồm:
+
+```http
+POST /api/v1/cloud/quota/requests
+Content-Type: application/json
+Idempotency-Key: quota-request-2026-08-04
+
+{"requestedQuotaBytes":10000000000,"reason":"Dung lượng cho dự án"}
+```
+
+```http
+GET /api/v1/cloud/quota/requests/current
+```
+
+`requestedQuotaBytes` bắt buộc là số nguyên byte và phải trùng một tier trong
+`QUOTA_REQUEST_TIERS_BYTES` (mặc định 10/25/50 GB decimal). Request mới phải lớn
+hơn quota hiện tại. Mỗi drive chỉ có một request `pending`; retry cùng key và
+cùng payload trả `200` với `applied=false`, lần tạo đầu trả `201`.
+
+`current` trả request mới nhất để user tiếp tục thấy kết quả `approved` hoặc
+`rejected`. Contract đã chốt chưa có trạng thái `cancelled`, vì vậy không expose
+endpoint cancel và không sửa enum Phase 2. Mỗi lần tạo ghi request, audit và
+outbox event trong cùng transaction; chưa có publisher gửi notification. Reason
+chỉ nằm trong request/response của owner, không được đưa vào audit metadata,
+outbox payload hoặc metric.
+
 ## Error response
 
 ```json
@@ -292,6 +321,8 @@ không tồn tại và Item của owner khác luôn có cùng response `404 ITEM
 | 400 | `INVALID_LIMIT` | `limit` không phải số nguyên từ 1 đến 100 |
 | 400 | `VALIDATION_ERROR` | Text/link không hợp lệ |
 | 400 | `INVALID_CURSOR` | Cursor không hợp lệ |
+| 400 | `INVALID_QUOTA_REQUEST` | Body, integer byte, reason hoặc `Idempotency-Key` không hợp lệ |
+| 400 | `INVALID_QUOTA_TIER` | Mức quota không thuộc tier được cấu hình |
 | 400 | `INVALID_UPLOAD` | Metadata upload hoặc Idempotency-Key không hợp lệ |
 | 400 | `INVALID_UPLOAD_SESSION_ID` | Upload session ID không phải UUID |
 | 400 | `INVALID_ITEM_ID` | Item ID của endpoint access không phải UUID |
@@ -303,10 +334,12 @@ không tồn tại và Item của owner khác luôn có cùng response `404 ITEM
 | 503 | `AUTH_AUTHORITY_UNAVAILABLE` | JWKS, Redis revocation hoặc Auth account authority không khả dụng; request fail closed |
 | 403 | `DRIVE_NOT_ACTIVE` | Drive bị suspended/archived nên không được ghi mới |
 | 404 | `ITEM_NOT_FOUND` | Không có Item thuộc user hiện tại |
+| 404 | `QUOTA_REQUEST_NOT_FOUND` | User chưa từng tạo quota request |
 | 404 | `UPLOAD_SESSION_NOT_FOUND` | Session không tồn tại hoặc không thuộc user |
 | 405 | `METHOD_NOT_ALLOWED` | HTTP method không được hỗ trợ |
 | 409 | `QUOTA_EXCEEDED` | Không đủ quota |
 | 409 | `IDEMPOTENCY_CONFLICT` | Key đã dùng với metadata khác |
+| 409 | `QUOTA_REQUEST_PENDING` | Drive đã có một request pending |
 | 409 | `UPLOAD_OBJECT_NOT_FOUND` | Client chưa PUT binary lên MinIO |
 | 409 | `UPLOAD_SESSION_EXPIRED` | Upload session đã hết hạn |
 | 409 | `ITEM_NOT_FILE` | Item không phải file/image/video/audio |
