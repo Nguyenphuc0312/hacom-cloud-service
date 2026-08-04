@@ -91,6 +91,7 @@ PHASE2_ACCESS_TOKEN_USER_B='<redacted>' \
 PHASE2_EXPIRED_TOKEN='<redacted>' \
 PHASE2_REFRESH_TOKEN='<redacted>' \
 PHASE2_REVOKED_TOKEN='<redacted>' \
+PHASE2_INACTIVE_TOKEN='<redacted>' \
 make test-contract-phase2-auth
 ```
 

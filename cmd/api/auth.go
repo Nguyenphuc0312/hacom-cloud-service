@@ -86,7 +86,33 @@ func buildJWTAuthenticator(cfg config.Config) (auth.Authenticator, io.Closer, er
 		_ = redisClient.Close()
 		return nil, nil, fmt.Errorf("create revocation checker: %w", err)
 	}
-	authenticator, err := auth.NewJWTAuthenticator(verifier, revocation)
+	authorityHTTPClient := &http.Client{
+		Timeout: cfg.AuthHTTPTimeout,
+	}
+	authority, err := auth.NewAuthorityClient(auth.AuthorityClientConfig{
+		ServiceTokenURL:         cfg.AuthServiceTokenURL,
+		AccountStateURL:         cfg.AuthAccountStateURL,
+		VerificationContractURL: cfg.AuthVerificationContractURL,
+		ClientID:                cfg.AuthServiceClientID,
+		ClientSecret:            cfg.AuthServiceClientSecret,
+		Audience:                cfg.AuthServiceTokenAudience,
+		Scopes:                  cfg.AuthServiceTokenScopes,
+		ExpectedJWKSURL:         cfg.AuthJWKSURL,
+		ExpectedIssuer:          cfg.AuthIssuer,
+		ExpectedAudiences:       cfg.AuthAudiences,
+	}, authorityHTTPClient)
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, nil, fmt.Errorf("create Auth account authority: %w", err)
+	}
+	contractCtx, cancelContract := context.WithTimeout(context.Background(), cfg.AuthHTTPTimeout)
+	err = authority.ValidateVerificationContract(contractCtx)
+	cancelContract()
+	if err != nil {
+		_ = redisClient.Close()
+		return nil, nil, errors.New("Auth verification contract is unavailable or does not match Cloud configuration")
+	}
+	authenticator, err := auth.NewJWTAuthenticator(verifier, revocation, authority)
 	if err != nil {
 		_ = redisClient.Close()
 		return nil, nil, fmt.Errorf("create JWT authenticator: %w", err)

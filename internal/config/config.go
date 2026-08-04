@@ -18,40 +18,47 @@ const (
 )
 
 type Config struct {
-	AppEnv                    string
-	APIAddr                   string
-	AuthMode                  string
-	AuthJWKSURL               string
-	AuthIssuer                string
-	AuthAudiences             []string
-	AuthJWKSCacheTTL          time.Duration
-	AuthHTTPTimeout           time.Duration
-	AuthRedisURL              string
-	AuthRevocationTimeout     time.Duration
-	AuthLegacyHS256Enabled    bool
-	AuthLegacyHS256Secret     string
-	DatabaseURL               string
-	MinIOEndpoint             string
-	MinIOAccessKey            string
-	MinIOSecretKey            string
-	MinIOUseSSL               bool
-	MinIOBucket               string
-	MaxUploadBytes            int64
-	MaxContentBytes           int64
-	DefaultQuotaBytes         int64
-	UploadURLTTL              time.Duration
-	DownloadURLTTL            time.Duration
-	HealthTimeout             time.Duration
-	ShutdownTimeout           time.Duration
-	WorkerID                  string
-	WorkerPollInterval        time.Duration
-	WorkerJobTimeout          time.Duration
-	WorkerLockTimeout         time.Duration
-	WorkerMaxAttempts         int
-	WorkerBaseBackoff         time.Duration
-	WorkerMaxBackoff          time.Duration
-	WorkerCleanupScanInterval time.Duration
-	WorkerCleanupBatchSize    int
+	AppEnv                      string
+	APIAddr                     string
+	AuthMode                    string
+	AuthJWKSURL                 string
+	AuthIssuer                  string
+	AuthAudiences               []string
+	AuthJWKSCacheTTL            time.Duration
+	AuthHTTPTimeout             time.Duration
+	AuthRedisURL                string
+	AuthRevocationTimeout       time.Duration
+	AuthLegacyHS256Enabled      bool
+	AuthLegacyHS256Secret       string
+	AuthVerificationContractURL string
+	AuthAccountStateURL         string
+	AuthServiceTokenURL         string
+	AuthServiceClientID         string
+	AuthServiceClientSecret     string
+	AuthServiceTokenAudience    string
+	AuthServiceTokenScopes      []string
+	DatabaseURL                 string
+	MinIOEndpoint               string
+	MinIOAccessKey              string
+	MinIOSecretKey              string
+	MinIOUseSSL                 bool
+	MinIOBucket                 string
+	MaxUploadBytes              int64
+	MaxContentBytes             int64
+	DefaultQuotaBytes           int64
+	UploadURLTTL                time.Duration
+	DownloadURLTTL              time.Duration
+	HealthTimeout               time.Duration
+	ShutdownTimeout             time.Duration
+	WorkerID                    string
+	WorkerPollInterval          time.Duration
+	WorkerJobTimeout            time.Duration
+	WorkerLockTimeout           time.Duration
+	WorkerMaxAttempts           int
+	WorkerBaseBackoff           time.Duration
+	WorkerMaxBackoff            time.Duration
+	WorkerCleanupScanInterval   time.Duration
+	WorkerCleanupBatchSize      int
 }
 
 func Load() (Config, error) {
@@ -81,6 +88,13 @@ func Load() (Config, error) {
 	authAudiences := splitCSV(os.Getenv("AUTH_AUDIENCE"))
 	authRedisURL := strings.TrimSpace(os.Getenv("AUTH_REDIS_URL"))
 	authLegacyHS256Secret := os.Getenv("AUTH_LEGACY_HS256_SECRET")
+	authVerificationContractURL := strings.TrimSpace(os.Getenv("AUTH_VERIFICATION_CONTRACT_URL"))
+	authAccountStateURL := strings.TrimSpace(os.Getenv("AUTH_ACCOUNT_STATE_URL"))
+	authServiceTokenURL := strings.TrimSpace(os.Getenv("AUTH_SERVICE_TOKEN_URL"))
+	authServiceClientID := strings.TrimSpace(os.Getenv("AUTH_SERVICE_CLIENT_ID"))
+	authServiceClientSecret := os.Getenv("AUTH_SERVICE_CLIENT_SECRET")
+	authServiceTokenAudience := strings.TrimSpace(os.Getenv("AUTH_SERVICE_TOKEN_AUDIENCE"))
+	authServiceTokenScopes := splitCSV(os.Getenv("AUTH_SERVICE_TOKEN_SCOPES"))
 	if authMode == "jwt" {
 		if err := validateJWTAuthConfig(
 			authJWKSURL,
@@ -89,6 +103,12 @@ func Load() (Config, error) {
 			authRedisURL,
 			authLegacyHS256Enabled,
 			authLegacyHS256Secret,
+			authVerificationContractURL,
+			authAccountStateURL,
+			authServiceTokenURL,
+			authServiceClientID,
+			authServiceClientSecret,
+			authServiceTokenAudience,
 		); err != nil {
 			return Config{}, err
 		}
@@ -191,40 +211,47 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:                    appEnv,
-		APIAddr:                   env("API_ADDR", ":8080"),
-		AuthMode:                  authMode,
-		AuthJWKSURL:               authJWKSURL,
-		AuthIssuer:                authIssuer,
-		AuthAudiences:             authAudiences,
-		AuthJWKSCacheTTL:          authJWKSCacheTTL,
-		AuthHTTPTimeout:           authHTTPTimeout,
-		AuthRedisURL:              authRedisURL,
-		AuthRevocationTimeout:     authRevocationTimeout,
-		AuthLegacyHS256Enabled:    authLegacyHS256Enabled,
-		AuthLegacyHS256Secret:     authLegacyHS256Secret,
-		DatabaseURL:               os.Getenv("DATABASE_URL"),
-		MinIOEndpoint:             os.Getenv("MINIO_ENDPOINT"),
-		MinIOAccessKey:            os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey:            os.Getenv("MINIO_SECRET_KEY"),
-		MinIOUseSSL:               useSSL,
-		MinIOBucket:               env("MINIO_BUCKET", "hacom-cloud-private"),
-		MaxUploadBytes:            maxUploadBytes,
-		MaxContentBytes:           maxContentBytes,
-		DefaultQuotaBytes:         defaultQuotaBytes,
-		UploadURLTTL:              uploadURLTTL,
-		DownloadURLTTL:            downloadURLTTL,
-		HealthTimeout:             healthTimeout,
-		ShutdownTimeout:           shutdownTimeout,
-		WorkerID:                  workerID,
-		WorkerPollInterval:        workerPollInterval,
-		WorkerJobTimeout:          workerJobTimeout,
-		WorkerLockTimeout:         workerLockTimeout,
-		WorkerMaxAttempts:         workerMaxAttempts,
-		WorkerBaseBackoff:         workerBaseBackoff,
-		WorkerMaxBackoff:          workerMaxBackoff,
-		WorkerCleanupScanInterval: workerCleanupScanInterval,
-		WorkerCleanupBatchSize:    workerCleanupBatchSize,
+		AppEnv:                      appEnv,
+		APIAddr:                     env("API_ADDR", ":8080"),
+		AuthMode:                    authMode,
+		AuthJWKSURL:                 authJWKSURL,
+		AuthIssuer:                  authIssuer,
+		AuthAudiences:               authAudiences,
+		AuthJWKSCacheTTL:            authJWKSCacheTTL,
+		AuthHTTPTimeout:             authHTTPTimeout,
+		AuthRedisURL:                authRedisURL,
+		AuthRevocationTimeout:       authRevocationTimeout,
+		AuthLegacyHS256Enabled:      authLegacyHS256Enabled,
+		AuthLegacyHS256Secret:       authLegacyHS256Secret,
+		AuthVerificationContractURL: authVerificationContractURL,
+		AuthAccountStateURL:         authAccountStateURL,
+		AuthServiceTokenURL:         authServiceTokenURL,
+		AuthServiceClientID:         authServiceClientID,
+		AuthServiceClientSecret:     authServiceClientSecret,
+		AuthServiceTokenAudience:    authServiceTokenAudience,
+		AuthServiceTokenScopes:      authServiceTokenScopes,
+		DatabaseURL:                 os.Getenv("DATABASE_URL"),
+		MinIOEndpoint:               os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:              os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:              os.Getenv("MINIO_SECRET_KEY"),
+		MinIOUseSSL:                 useSSL,
+		MinIOBucket:                 env("MINIO_BUCKET", "hacom-cloud-private"),
+		MaxUploadBytes:              maxUploadBytes,
+		MaxContentBytes:             maxContentBytes,
+		DefaultQuotaBytes:           defaultQuotaBytes,
+		UploadURLTTL:                uploadURLTTL,
+		DownloadURLTTL:              downloadURLTTL,
+		HealthTimeout:               healthTimeout,
+		ShutdownTimeout:             shutdownTimeout,
+		WorkerID:                    workerID,
+		WorkerPollInterval:          workerPollInterval,
+		WorkerJobTimeout:            workerJobTimeout,
+		WorkerLockTimeout:           workerLockTimeout,
+		WorkerMaxAttempts:           workerMaxAttempts,
+		WorkerBaseBackoff:           workerBaseBackoff,
+		WorkerMaxBackoff:            workerMaxBackoff,
+		WorkerCleanupScanInterval:   workerCleanupScanInterval,
+		WorkerCleanupBatchSize:      workerCleanupBatchSize,
 	}
 
 	required := []struct {
@@ -269,6 +296,12 @@ func validateJWTAuthConfig(
 	redisURL string,
 	legacyHS256Enabled bool,
 	legacyHS256Secret string,
+	verificationContractURL string,
+	accountStateURL string,
+	serviceTokenURL string,
+	serviceClientID string,
+	serviceClientSecret string,
+	serviceTokenAudience string,
 ) error {
 	if jwksURL == "" {
 		return fmt.Errorf("AUTH_JWKS_URL is required when AUTH_MODE=jwt")
@@ -292,6 +325,31 @@ func validateJWTAuthConfig(
 	}
 	if legacyHS256Enabled && len(legacyHS256Secret) < 32 {
 		return fmt.Errorf("AUTH_LEGACY_HS256_SECRET must contain at least 32 bytes when legacy verification is enabled")
+	}
+	for _, endpoint := range []struct {
+		key   string
+		value string
+	}{
+		{key: "AUTH_VERIFICATION_CONTRACT_URL", value: verificationContractURL},
+		{key: "AUTH_ACCOUNT_STATE_URL", value: accountStateURL},
+		{key: "AUTH_SERVICE_TOKEN_URL", value: serviceTokenURL},
+	} {
+		if endpoint.value == "" {
+			return fmt.Errorf("%s is required when AUTH_MODE=jwt", endpoint.key)
+		}
+		parsed, err := url.Parse(endpoint.value)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return fmt.Errorf("%s must be an absolute http or https URL", endpoint.key)
+		}
+	}
+	if serviceClientID == "" {
+		return fmt.Errorf("AUTH_SERVICE_CLIENT_ID is required when AUTH_MODE=jwt")
+	}
+	if serviceClientSecret == "" {
+		return fmt.Errorf("AUTH_SERVICE_CLIENT_SECRET is required when AUTH_MODE=jwt")
+	}
+	if serviceTokenAudience == "" {
+		return fmt.Errorf("AUTH_SERVICE_TOKEN_AUDIENCE is required when AUTH_MODE=jwt")
 	}
 	return nil
 }

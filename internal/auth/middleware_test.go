@@ -29,6 +29,17 @@ type fakeRevocationChecker struct {
 	principal Principal
 }
 
+type fakeAccountStateChecker struct {
+	decision  AuthorityDecision
+	err       error
+	principal Principal
+}
+
+func (checker *fakeAccountStateChecker) Check(_ context.Context, principal Principal) (AuthorityDecision, error) {
+	checker.principal = principal
+	return checker.decision, checker.err
+}
+
 func (checker *fakeRevocationChecker) IsRevoked(_ context.Context, principal Principal) (bool, error) {
 	checker.principal = principal
 	return checker.revoked, checker.err
@@ -41,6 +52,7 @@ func responseCode(response *httptest.ResponseRecorder) string {
 		"AUTH_REQUIRED",
 		"INVALID_ACCESS_TOKEN",
 		"SESSION_REVOKED",
+		"ACCOUNT_NOT_ACTIVE",
 		"AUTH_AUTHORITY_UNAVAILABLE",
 	} {
 		if strings.Contains(body, `"code":"`+code+`"`) {
@@ -78,7 +90,8 @@ func TestJWTAuthenticatorIgnoresForgedDemoHeader(t *testing.T) {
 	}
 	verifier := &fakeVerifier{principal: principal}
 	checker := &fakeRevocationChecker{}
-	authenticator, err := NewJWTAuthenticator(verifier, checker)
+	accountState := &fakeAccountStateChecker{decision: AuthorityAllowed}
+	authenticator, err := NewJWTAuthenticator(verifier, checker, accountState)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +106,7 @@ func TestJWTAuthenticatorIgnoresForgedDemoHeader(t *testing.T) {
 	request.Header.Set(DemoUserHeader, forgedUserID.String())
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || verifier.token != "signed-token" || checker.principal.Subject != verifiedUserID {
+	if response.Code != http.StatusOK || verifier.token != "signed-token" || checker.principal.Subject != verifiedUserID || accountState.principal.Subject != verifiedUserID {
 		t.Fatalf("status=%d token=%q checked=%+v", response.Code, verifier.token, checker.principal)
 	}
 }
@@ -101,13 +114,15 @@ func TestJWTAuthenticatorIgnoresForgedDemoHeader(t *testing.T) {
 func TestJWTAuthenticatorRejectsUnsafeRequests(t *testing.T) {
 	principal := revocationPrincipal()
 	tests := []struct {
-		name       string
-		header     string
-		verifyErr  error
-		revoked    bool
-		revokeErr  error
-		wantStatus int
-		wantCode   string
+		name            string
+		header          string
+		verifyErr       error
+		revoked         bool
+		revokeErr       error
+		accountDecision AuthorityDecision
+		accountErr      error
+		wantStatus      int
+		wantCode        string
 	}{
 		{name: "missing bearer", wantStatus: http.StatusUnauthorized, wantCode: "AUTH_REQUIRED"},
 		{name: "malformed bearer", header: "Basic token", wantStatus: http.StatusUnauthorized, wantCode: "AUTH_REQUIRED"},
@@ -116,13 +131,17 @@ func TestJWTAuthenticatorRejectsUnsafeRequests(t *testing.T) {
 		{name: "JWKS unavailable", header: "Bearer token", verifyErr: ErrAuthAuthorityUnready, wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_AUTHORITY_UNAVAILABLE"},
 		{name: "revoked token", header: "Bearer token", revoked: true, wantStatus: http.StatusUnauthorized, wantCode: "SESSION_REVOKED"},
 		{name: "revocation unavailable", header: "Bearer token", revokeErr: errors.New("redis down"), wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_AUTHORITY_UNAVAILABLE"},
+		{name: "session rejected by account authority", header: "Bearer token", accountDecision: AuthoritySessionRevoked, wantStatus: http.StatusUnauthorized, wantCode: "SESSION_REVOKED"},
+		{name: "account inactive", header: "Bearer token", accountDecision: AuthorityAccountNotActive, wantStatus: http.StatusForbidden, wantCode: "ACCOUNT_NOT_ACTIVE"},
+		{name: "account authority unavailable", header: "Bearer token", accountErr: errors.New("Auth down"), wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_AUTHORITY_UNAVAILABLE"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			verifier := &fakeVerifier{principal: principal, err: test.verifyErr}
 			checker := &fakeRevocationChecker{revoked: test.revoked, err: test.revokeErr}
-			authenticator, err := NewJWTAuthenticator(verifier, checker)
+			accountState := &fakeAccountStateChecker{decision: test.accountDecision, err: test.accountErr}
+			authenticator, err := NewJWTAuthenticator(verifier, checker, accountState)
 			if err != nil {
 				t.Fatal(err)
 			}

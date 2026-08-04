@@ -12,6 +12,13 @@
 - Owner repository chỉ lấy từ `auth.Principal`, không lấy từ client.
 - Revocation kiểm tra JTI, session invalid-before và user invalid-before trên Redis.
 - Redis/revocation lỗi trả `503` và fail closed.
+- Auth verification contract được đối chiếu lúc khởi động; sai JWKS URL,
+  issuer, audience, algorithm hoặc JWKS chưa sẵn sàng thì Cloud không khởi động.
+- Trạng thái account/session được kiểm tra qua Auth bằng service token ngắn hạn;
+  account inactive trả `403`, session bị thu hồi trả `401`, dependency lỗi trả
+  `503` và không chạy business handler.
+- Service token cache có refresh skew, singleflight và chỉ retry đúng một lần
+  khi Auth từ chối token cũ; redirect khác origin và response quá giới hạn bị từ chối.
 - `AUTH_MODE=demo` bị từ chối khi `APP_ENV` không phải `local|test`.
 - Không log access token, Redis URL, secret hoặc nội dung JWKS private.
 
@@ -46,6 +53,8 @@ Test bao phủ:
 - Concurrent JWKS fetch được coalesce; unknown `kid` kích hoạt refresh.
 - Token blacklist, session/user invalid-before và Redis failure.
 - Header demo giả không thể thay principal trong JWT mode.
+- Service-token issuance/cache/concurrency/refresh và account-state active,
+  inactive, session revoked, malformed/failure fail-closed.
 
 ## Lưu ý cutover
 
@@ -55,4 +64,6 @@ khởi động thay vì chạy ở trạng thái xác thực không an toàn.
 
 Tại thời điểm kiểm tra 04/08/2026, endpoint JWKS production của Hacom Auth trả
 key set rỗng. Đây là điều kiện cần xử lý ở Auth Service trước cutover production;
-không bật demo mode để né điều kiện này.
+không bật demo mode để né điều kiện này. Auth cũng phải đăng ký service client
+`hacom-cloud-service` với audience `chat-auth-service`; secret chỉ được cấp qua
+secret manager/deployment environment và không commit vào repository.

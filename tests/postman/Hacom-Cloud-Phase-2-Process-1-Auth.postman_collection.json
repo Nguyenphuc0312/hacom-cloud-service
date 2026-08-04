@@ -11,6 +11,7 @@
     { "key": "expiredToken", "value": "" },
     { "key": "refreshToken", "value": "" },
     { "key": "revokedToken", "value": "" },
+    { "key": "inactiveToken", "value": "" },
     { "key": "createdItemId", "value": "" }
   ],
   "item": [
@@ -85,7 +86,15 @@
       ]}}]
     },
     {
-      "name": "07 - User B Cannot Spoof User A",
+      "name": "07 - Inactive Account Rejected",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{inactiveToken}}" }], "url": "{{baseUrl}}/api/v1/cloud/quota" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('inactive account is forbidden', () => pm.response.to.have.status(403));",
+        "pm.test('account state has stable error', () => pm.expect(pm.response.json().error.code).to.eql('ACCOUNT_NOT_ACTIVE'));"
+      ]}}]
+    },
+    {
+      "name": "08 - User B Cannot Spoof User A",
       "request": {
         "method": "GET",
         "header": [

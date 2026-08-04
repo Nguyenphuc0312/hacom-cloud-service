@@ -41,18 +41,22 @@ func (DemoAuthenticator) Middleware(next http.Handler) http.Handler {
 }
 
 type JWTAuthenticator struct {
-	verifier   Verifier
-	revocation RevocationChecker
+	verifier     Verifier
+	revocation   RevocationChecker
+	accountState AccountStateChecker
 }
 
-func NewJWTAuthenticator(verifier Verifier, revocation RevocationChecker) (*JWTAuthenticator, error) {
+func NewJWTAuthenticator(verifier Verifier, revocation RevocationChecker, accountState AccountStateChecker) (*JWTAuthenticator, error) {
 	if verifier == nil {
 		return nil, errors.New("token verifier is required")
 	}
 	if revocation == nil {
 		return nil, errors.New("revocation checker is required")
 	}
-	return &JWTAuthenticator{verifier: verifier, revocation: revocation}, nil
+	if accountState == nil {
+		return nil, errors.New("account-state checker is required")
+	}
+	return &JWTAuthenticator{verifier: verifier, revocation: revocation, accountState: accountState}, nil
 }
 
 func (authenticator *JWTAuthenticator) Middleware(next http.Handler) http.Handler {
@@ -93,6 +97,24 @@ func (authenticator *JWTAuthenticator) Middleware(next http.Handler) http.Handle
 		}
 		if revoked {
 			writeAuthError(writer, http.StatusUnauthorized, "SESSION_REVOKED", "access token session has been revoked")
+			return
+		}
+
+		decision, err := authenticator.accountState.Check(request.Context(), principal)
+		if err != nil {
+			writeAuthError(writer, http.StatusServiceUnavailable, "AUTH_AUTHORITY_UNAVAILABLE", "authentication account authority is temporarily unavailable")
+			return
+		}
+		switch decision {
+		case AuthorityAllowed:
+		case AuthoritySessionRevoked:
+			writeAuthError(writer, http.StatusUnauthorized, "SESSION_REVOKED", "access token session has been revoked")
+			return
+		case AuthorityAccountNotActive:
+			writeAuthError(writer, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "account is not active")
+			return
+		default:
+			writeAuthError(writer, http.StatusServiceUnavailable, "AUTH_AUTHORITY_UNAVAILABLE", "authentication account authority returned an invalid decision")
 			return
 		}
 

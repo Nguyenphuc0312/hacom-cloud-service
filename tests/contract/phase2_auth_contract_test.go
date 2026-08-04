@@ -86,8 +86,10 @@ func TestPhase2AuthContractConfiguration(t *testing.T) {
 		"AUTH_JWKS_URL=",
 		"AUTH_VERIFICATION_CONTRACT_URL=",
 		"AUTH_ACCOUNT_STATE_URL=",
+		"AUTH_SERVICE_TOKEN_URL=",
 		"AUTH_SERVICE_CLIENT_ID=",
 		"AUTH_SERVICE_CLIENT_SECRET=",
+		"AUTH_SERVICE_TOKEN_AUDIENCE=",
 	} {
 		if !strings.Contains(content, key) {
 			t.Errorf(".env.example is missing %q", key)
@@ -143,6 +145,16 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 		}
 	})
 
+	t.Run("inactive account is forbidden", func(t *testing.T) {
+		response := doRequest(t, client, configuration.baseURL, http.MethodGet,
+			"/api/v1/cloud/quota", configuration.inactiveToken, nil, nil)
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403", response.StatusCode)
+		}
+		assertErrorCode(t, response.Body, "ACCOUNT_NOT_ACTIVE")
+	})
+
 	t.Run("owner comes only from token subject", func(t *testing.T) {
 		body := bytes.NewBufferString(fmt.Sprintf(`{"content":"phase2-owner-contract-%d"}`, time.Now().UnixNano()))
 		created := doRequest(t, client, configuration.baseURL, http.MethodPost,
@@ -184,29 +196,36 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 }
 
 type liveConfiguration struct {
-	baseURL      string
-	userAToken   string
-	userBToken   string
-	expiredToken string
-	refreshToken string
-	revokedToken string
+	baseURL       string
+	userAToken    string
+	userBToken    string
+	expiredToken  string
+	refreshToken  string
+	revokedToken  string
+	inactiveToken string
 }
 
 func loadLiveConfiguration(t *testing.T) liveConfiguration {
 	t.Helper()
 	required := strings.EqualFold(os.Getenv("PHASE2_CONTRACT_REQUIRED"), "true")
-	values := map[string]string{
-		"PHASE2_BASE_URL":            strings.TrimRight(os.Getenv("PHASE2_BASE_URL"), "/"),
-		"PHASE2_ACCESS_TOKEN_USER_A": os.Getenv("PHASE2_ACCESS_TOKEN_USER_A"),
-		"PHASE2_ACCESS_TOKEN_USER_B": os.Getenv("PHASE2_ACCESS_TOKEN_USER_B"),
-		"PHASE2_EXPIRED_TOKEN":       os.Getenv("PHASE2_EXPIRED_TOKEN"),
-		"PHASE2_REFRESH_TOKEN":       os.Getenv("PHASE2_REFRESH_TOKEN"),
-		"PHASE2_REVOKED_TOKEN":       os.Getenv("PHASE2_REVOKED_TOKEN"),
+	values := []struct {
+		key   string
+		value string
+	}{
+		{key: "PHASE2_BASE_URL", value: strings.TrimRight(os.Getenv("PHASE2_BASE_URL"), "/")},
+		{key: "PHASE2_ACCESS_TOKEN_USER_A", value: os.Getenv("PHASE2_ACCESS_TOKEN_USER_A")},
+		{key: "PHASE2_ACCESS_TOKEN_USER_B", value: os.Getenv("PHASE2_ACCESS_TOKEN_USER_B")},
+		{key: "PHASE2_EXPIRED_TOKEN", value: os.Getenv("PHASE2_EXPIRED_TOKEN")},
+		{key: "PHASE2_REFRESH_TOKEN", value: os.Getenv("PHASE2_REFRESH_TOKEN")},
+		{key: "PHASE2_REVOKED_TOKEN", value: os.Getenv("PHASE2_REVOKED_TOKEN")},
+		{key: "PHASE2_INACTIVE_TOKEN", value: os.Getenv("PHASE2_INACTIVE_TOKEN")},
 	}
+	valueByKey := make(map[string]string, len(values))
 	var missing []string
-	for key, value := range values {
-		if value == "" {
-			missing = append(missing, key)
+	for _, item := range values {
+		valueByKey[item.key] = item.value
+		if item.value == "" {
+			missing = append(missing, item.key)
 		}
 	}
 	if len(missing) > 0 {
@@ -216,9 +235,10 @@ func loadLiveConfiguration(t *testing.T) liveConfiguration {
 		t.Skip("live Auth contract requires environment-issued test tokens")
 	}
 	return liveConfiguration{
-		baseURL: values["PHASE2_BASE_URL"], userAToken: values["PHASE2_ACCESS_TOKEN_USER_A"],
-		userBToken: values["PHASE2_ACCESS_TOKEN_USER_B"], expiredToken: values["PHASE2_EXPIRED_TOKEN"],
-		refreshToken: values["PHASE2_REFRESH_TOKEN"], revokedToken: values["PHASE2_REVOKED_TOKEN"],
+		baseURL: valueByKey["PHASE2_BASE_URL"], userAToken: valueByKey["PHASE2_ACCESS_TOKEN_USER_A"],
+		userBToken: valueByKey["PHASE2_ACCESS_TOKEN_USER_B"], expiredToken: valueByKey["PHASE2_EXPIRED_TOKEN"],
+		refreshToken: valueByKey["PHASE2_REFRESH_TOKEN"], revokedToken: valueByKey["PHASE2_REVOKED_TOKEN"],
+		inactiveToken: valueByKey["PHASE2_INACTIVE_TOKEN"],
 	}
 }
 

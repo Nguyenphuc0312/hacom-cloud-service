@@ -39,8 +39,13 @@ auth_session_invalid_before:<sid>
 auth_invalid_before:<sub>
 ```
 
-Redis/JWKS không khả dụng làm protected request fail closed; API không tự decode
-token hoặc fallback sang UUID do client cung cấp.
+Sau bước JWT và Redis revocation, Cloud dùng service token ngắn hạn của
+`hacom-cloud-service` để gọi Auth `check-account-state` bằng `sub` và `sid`.
+Service token được cache trước hạn, request đồng thời được coalesce và chỉ refresh
+một lần khi Auth trả `401`. Tài khoản không active trả
+`403 ACCOUNT_NOT_ACTIVE`; session không còn hợp lệ trả `401 SESSION_REVOKED`.
+Redis/JWKS/Auth account authority không khả dụng làm protected request fail
+closed; API không tự decode token hoặc fallback sang UUID do client cung cấp.
 
 Trong local demo, header tương thích dưới đây chỉ được bật ở `local|test` và
 không được xuất hiện trong môi trường triển khai:
@@ -225,11 +230,10 @@ Contract:
 | 400 | `INVALID_ITEM_ID` | Item ID của endpoint access không phải UUID |
 | 401 | `DEMO_USER_REQUIRED` | Thiếu hoặc sai UUID ở local demo mode |
 | 401 | `AUTH_REQUIRED` | Thiếu/sai định dạng Bearer token ở JWT mode |
-| 401 | `AUTH_INVALID_TOKEN` | Token sai signature/contract/issuer/audience/type |
-| 401 | `AUTH_TOKEN_EXPIRED` | Access token đã hết hạn |
-| 401 | `AUTH_TOKEN_REVOKED` | JTI/session/user đã bị Auth thu hồi |
-| 503 | `AUTH_AUTHORITY_UNAVAILABLE` | Không thể lấy signing key JWKS cần thiết |
-| 503 | `AUTH_REVOCATION_UNAVAILABLE` | Không thể xác minh revocation; request fail closed |
+| 401 | `INVALID_ACCESS_TOKEN` | Token sai signature/contract/issuer/audience/type hoặc hết hạn |
+| 401 | `SESSION_REVOKED` | JTI/session/user đã bị Auth thu hồi hoặc session không còn tồn tại |
+| 403 | `ACCOUNT_NOT_ACTIVE` | Tài khoản bị khóa, vô hiệu hóa, chưa xác minh hoặc đã xóa |
+| 503 | `AUTH_AUTHORITY_UNAVAILABLE` | JWKS, Redis revocation hoặc Auth account authority không khả dụng; request fail closed |
 | 403 | `DRIVE_NOT_ACTIVE` | Drive bị suspended/archived nên không được ghi mới |
 | 404 | `ITEM_NOT_FOUND` | Không có Item thuộc user hiện tại |
 | 404 | `UPLOAD_SESSION_NOT_FOUND` | Session không tồn tại hoặc không thuộc user |

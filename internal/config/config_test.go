@@ -21,6 +21,13 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("AUTH_REVOCATION_TIMEOUT", "")
 	t.Setenv("AUTH_LEGACY_HS256_VERIFY_ENABLED", "")
 	t.Setenv("AUTH_LEGACY_HS256_SECRET", "")
+	t.Setenv("AUTH_VERIFICATION_CONTRACT_URL", "")
+	t.Setenv("AUTH_ACCOUNT_STATE_URL", "")
+	t.Setenv("AUTH_SERVICE_TOKEN_URL", "")
+	t.Setenv("AUTH_SERVICE_CLIENT_ID", "")
+	t.Setenv("AUTH_SERVICE_CLIENT_SECRET", "")
+	t.Setenv("AUTH_SERVICE_TOKEN_AUDIENCE", "")
+	t.Setenv("AUTH_SERVICE_TOKEN_SCOPES", "")
 	t.Setenv("DATABASE_URL", "postgres://hacom:hacom@localhost:5432/hacom_cloud?sslmode=disable")
 	t.Setenv("MINIO_ENDPOINT", "localhost:9000")
 	t.Setenv("MINIO_ACCESS_KEY", "minioadmin")
@@ -128,6 +135,13 @@ func TestLoadReadsJWTAuthConfiguration(t *testing.T) {
 	t.Setenv("AUTH_JWKS_CACHE_TTL", "10m")
 	t.Setenv("AUTH_HTTP_TIMEOUT", "4s")
 	t.Setenv("AUTH_REVOCATION_TIMEOUT", "750ms")
+	t.Setenv("AUTH_VERIFICATION_CONTRACT_URL", "https://auth.example.test/internal/v1/auth/verification-contract")
+	t.Setenv("AUTH_ACCOUNT_STATE_URL", "https://auth.example.test/internal/v1/auth/check-account-state")
+	t.Setenv("AUTH_SERVICE_TOKEN_URL", "https://auth.example.test/internal/v1/auth/service-token")
+	t.Setenv("AUTH_SERVICE_CLIENT_ID", "hacom-cloud-service")
+	t.Setenv("AUTH_SERVICE_CLIENT_SECRET", "test-service-secret")
+	t.Setenv("AUTH_SERVICE_TOKEN_AUDIENCE", "chat-auth-service")
+	t.Setenv("AUTH_SERVICE_TOKEN_SCOPES", "auth.user.read, auth.user.read")
 
 	cfg, err := Load()
 	if err != nil {
@@ -141,6 +155,24 @@ func TestLoadReadsJWTAuthConfiguration(t *testing.T) {
 	}
 	if cfg.AuthJWKSCacheTTL != 10*time.Minute || cfg.AuthHTTPTimeout != 4*time.Second || cfg.AuthRevocationTimeout != 750*time.Millisecond {
 		t.Fatalf("unexpected auth durations: cache=%s http=%s revocation=%s", cfg.AuthJWKSCacheTTL, cfg.AuthHTTPTimeout, cfg.AuthRevocationTimeout)
+	}
+	if cfg.AuthServiceTokenURL != "https://auth.example.test/internal/v1/auth/service-token" ||
+		cfg.AuthServiceClientID != "hacom-cloud-service" || len(cfg.AuthServiceTokenScopes) != 1 {
+		t.Fatalf("unexpected Auth authority config: %+v", cfg)
+	}
+}
+
+func TestLoadRejectsJWTWithoutAccountAuthority(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AUTH_MODE", "jwt")
+	t.Setenv("AUTH_JWKS_URL", "https://auth.example.test/.well-known/jwks.json")
+	t.Setenv("AUTH_ISSUER", "chat-service")
+	t.Setenv("AUTH_AUDIENCE", "chat-service")
+	t.Setenv("AUTH_REDIS_URL", "redis://localhost:6379/0")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "AUTH_VERIFICATION_CONTRACT_URL") {
+		t.Fatalf("expected account authority configuration error, got %v", err)
 	}
 }
 
