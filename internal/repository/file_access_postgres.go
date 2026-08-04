@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ func (r *CloudPostgres) GetFileAccessTarget(
 		objectKey    sql.NullString
 		originalName sql.NullString
 		contentType  sql.NullString
+		purgeAfter   sql.NullTime
 	)
 	err := r.pool.QueryRow(ctx, `
 		SELECT
@@ -35,7 +37,8 @@ func (r *CloudPostgres) GetFileAccessTarget(
 			object.object_key,
 			object.original_name,
 			object.content_type,
-			item.size_bytes
+			item.size_bytes,
+			item.purge_after
 		FROM cloud.items AS item
 		JOIN cloud.drives AS drive
 		  ON drive.id = item.drive_id
@@ -53,6 +56,7 @@ func (r *CloudPostgres) GetFileAccessTarget(
 		&originalName,
 		&contentType,
 		&target.SizeBytes,
+		&purgeAfter,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fileaccess.Target{}, fileaccess.ErrNotFound
@@ -66,8 +70,16 @@ func (r *CloudPostgres) GetFileAccessTarget(
 	default:
 		return fileaccess.Target{}, fileaccess.ErrNotFile
 	}
-	if itemStatus != "ready" ||
-		!objectStatus.Valid ||
+	if itemStatus == "trashed" {
+		if !purgeAfter.Valid || !time.Now().UTC().Before(purgeAfter.Time) {
+			return fileaccess.Target{}, fileaccess.ErrDeletePending
+		}
+		value := purgeAfter.Time.UTC()
+		target.PurgeAfter = &value
+	} else if itemStatus != "ready" {
+		return fileaccess.Target{}, fileaccess.ErrNotReady
+	}
+	if !objectStatus.Valid ||
 		objectStatus.String != "ready" {
 		return fileaccess.Target{}, fileaccess.ErrNotReady
 	}

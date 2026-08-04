@@ -14,6 +14,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
+	trashdomain "github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
 )
@@ -61,13 +62,31 @@ type FileAccessService interface {
 	) (fileaccess.Access, error)
 }
 
+type TrashService interface {
+	MoveToTrash(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
+	Restore(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
+	DeleteImmediately(context.Context, uuid.UUID, uuid.UUID, string) (trashdomain.Result, error)
+	List(context.Context, uuid.UUID, string, int) (trashdomain.Page, error)
+}
+
 type Handler struct {
 	service       Service
 	uploads       UploadService
 	fileAccess    FileAccessService
+	trash         TrashService
 	maxBodyBytes  int64
 	logger        *slog.Logger
 	authenticator auth.Authenticator
+}
+
+func WithTrashService(service TrashService) Option {
+	return func(handler *Handler) error {
+		if service == nil {
+			return errors.New("Trash service is required")
+		}
+		handler.trash = service
+		return nil
+	}
 }
 
 type Option func(*Handler) error
@@ -137,7 +156,18 @@ func New(
 	mux.HandleFunc("GET /items", handler.listItems)
 	mux.HandleFunc("/items", methodNotAllowed(http.MethodGet))
 	mux.HandleFunc("GET /items/{itemID}", handler.getItem)
-	mux.HandleFunc("/items/{itemID}", methodNotAllowed(http.MethodGet))
+	if handler.trash != nil {
+		mux.HandleFunc("POST /items/{itemID}/trash", handler.moveToTrash)
+		mux.HandleFunc("/items/{itemID}/trash", methodNotAllowed(http.MethodPost))
+		mux.HandleFunc("POST /items/{itemID}/restore", handler.restoreTrashItem)
+		mux.HandleFunc("/items/{itemID}/restore", methodNotAllowed(http.MethodPost))
+		mux.HandleFunc("DELETE /items/{itemID}", handler.deleteItemImmediately)
+		mux.HandleFunc("GET /trash", handler.listTrash)
+		mux.HandleFunc("/trash", methodNotAllowed(http.MethodGet))
+		mux.HandleFunc("/items/{itemID}", methodNotAllowed(http.MethodGet+", "+http.MethodDelete))
+	} else {
+		mux.HandleFunc("/items/{itemID}", methodNotAllowed(http.MethodGet))
+	}
 	if handler.fileAccess != nil {
 		mux.HandleFunc("GET /items/{itemID}/access", handler.getFileAccess)
 		mux.HandleFunc(
@@ -398,6 +428,8 @@ func (h *Handler) getQuota(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, quotaResponse{
 		LimitBytes:     quota.LimitBytes,
 		UsedBytes:      quota.UsedBytes,
+		ActiveBytes:    quota.ActiveBytes(),
+		TrashBytes:     quota.TrashBytes,
 		ReservedBytes:  quota.ReservedBytes,
 		AvailableBytes: quota.AvailableBytes(),
 		UpdatedAt:      quota.UpdatedAt,
@@ -602,6 +634,13 @@ func (h *Handler) writeFileAccessError(
 			http.StatusConflict,
 			"ITEM_NOT_READY",
 			"cloud file is not ready",
+		)
+	case errors.Is(err, fileaccess.ErrDeletePending):
+		writeError(
+			writer,
+			http.StatusConflict,
+			"DELETE_PENDING",
+			"cloud file permanent delete is pending",
 		)
 	case errors.Is(err, fileaccess.ErrObjectUnavailable):
 		writeError(

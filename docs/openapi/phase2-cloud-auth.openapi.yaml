@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Hacom Cloud Phase 2 Auth Contract
-  version: 2.0.0-process1
+  title: Hacom Cloud Phase 2 API Contract
+  version: 2.0.0-process2-trash
   description: |
     Frozen HTTP authentication boundary for Phase 2 Process 1. The public
     gateway exposes /cloud-api and strips that prefix before proxying to the
@@ -14,6 +14,7 @@ security:
 paths:
   /health/live:
     get:
+      summary: Check whether the API process is alive
       security: []
       operationId: cloudLiveness
       responses:
@@ -21,6 +22,7 @@ paths:
           description: API process is alive
   /health/ready:
     get:
+      summary: Check whether required dependencies are ready
       security: []
       operationId: cloudReadiness
       responses:
@@ -30,10 +32,15 @@ paths:
           description: A required dependency is unavailable
   /api/v1/cloud/quota:
     get:
+      summary: Get the authenticated owner's quota breakdown
       operationId: getCloudQuota
       responses:
         "200":
           description: Quota owned by the authenticated subject
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quota"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -42,6 +49,7 @@ paths:
           $ref: "#/components/responses/AuthUnavailable"
   /api/v1/cloud/items:
     get:
+      summary: List active Cloud items
       operationId: listCloudItems
       parameters:
         - in: query
@@ -63,6 +71,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
   /api/v1/cloud/items/{itemId}:
     get:
+      summary: Get an owned active Cloud item
       operationId: getCloudItem
       parameters:
         - $ref: "#/components/parameters/ItemId"
@@ -80,8 +89,89 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      summary: Permanently delete an owned active or Trash item
+      operationId: permanentlyDeleteCloudItem
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Logical delete committed; async says whether binary cleanup remains
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PermanentDelete"
+        "404":
+          description: Item is missing or belongs to another subject
+        "409":
+          description: Invalid state, idempotency conflict, or delete already pending
+  /api/v1/cloud/items/{itemId}/trash:
+    post:
+      summary: Move an owned ready item to Trash
+      operationId: moveCloudItemToTrash
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Item is in Trash for exactly 24 hours
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashLifecycle"
+        "404":
+          description: Item is missing or belongs to another subject
+        "409":
+          description: Invalid state or idempotency conflict
+  /api/v1/cloud/items/{itemId}/restore:
+    post:
+      summary: Restore an owned Trash item before expiry
+      operationId: restoreCloudTrashItem
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Trash item restored before purgeAfter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashLifecycle"
+        "404":
+          description: Item is missing or belongs to another subject
+        "409":
+          description: Invalid state, expired restore, or idempotency conflict
+  /api/v1/cloud/trash:
+    get:
+      summary: List the authenticated owner's Trash items
+      operationId: listCloudTrash
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trash items scoped to the authenticated subject
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashPage"
+        "400":
+          description: Invalid limit or cursor
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/v1/cloud/texts:
     post:
+      summary: Create a text item
       operationId: createCloudText
       requestBody:
         required: true
@@ -105,6 +195,7 @@ paths:
           $ref: "#/components/responses/AuthUnavailable"
   /api/v1/cloud/links:
     post:
+      summary: Create a link item
       operationId: createCloudLink
       requestBody:
         required: true
@@ -131,6 +222,7 @@ paths:
           $ref: "#/components/responses/AuthUnavailable"
   /api/v1/cloud/uploads:
     post:
+      summary: Initiate a direct-to-object-storage upload
       operationId: initiateCloudUpload
       parameters:
         - in: header
@@ -167,6 +259,14 @@ components:
       schema:
         type: string
         format: uuid
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
   headers:
     RequestId:
       description: Correlation identifier generated by the trusted gateway or API
@@ -208,6 +308,62 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+    Quota:
+      type: object
+      additionalProperties: false
+      required: [limitBytes, usedBytes, activeBytes, trashBytes, reservedBytes, availableBytes, updatedAt]
+      properties:
+        limitBytes: { type: integer, format: int64 }
+        usedBytes: { type: integer, format: int64 }
+        activeBytes: { type: integer, format: int64 }
+        trashBytes: { type: integer, format: int64 }
+        reservedBytes: { type: integer, format: int64 }
+        availableBytes: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
+    TrashLifecycle:
+      type: object
+      additionalProperties: false
+      required: [itemId, status, applied]
+      properties:
+        itemId: { type: string, format: uuid }
+        status: { type: string, enum: [ready, trashed] }
+        deletedAt: { type: string, format: date-time }
+        purgeAfter: { type: string, format: date-time }
+        applied: { type: boolean }
+    PermanentDelete:
+      type: object
+      additionalProperties: false
+      required: [itemId, status, async]
+      properties:
+        itemId: { type: string, format: uuid }
+        status: { type: string, enum: [deleted, delete_pending] }
+        async: { type: boolean }
+    TrashItem:
+      type: object
+      additionalProperties: false
+      required: [id, type, status, sizeBytes, deletedAt, purgeAfter, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [text, link, file, image, video, audio] }
+        status: { type: string, const: trashed }
+        title: { type: string }
+        content: { type: string }
+        url: { type: string, format: uri }
+        sizeBytes: { type: integer, format: int64 }
+        deletedAt: { type: string, format: date-time }
+        purgeAfter: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TrashPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashItem"
+        nextCursor: { type: string }
     ErrorEnvelope:
       type: object
       additionalProperties: false
@@ -227,5 +383,10 @@ components:
                 - ACCOUNT_NOT_ACTIVE
                 - AUTH_AUTHORITY_UNAVAILABLE
                 - ITEM_NOT_FOUND
+                - INVALID_TRASH_REQUEST
+                - INVALID_ITEM_STATE
+                - RESTORE_EXPIRED
+                - DELETE_PENDING
+                - IDEMPOTENCY_CONFLICT
             message:
               type: string

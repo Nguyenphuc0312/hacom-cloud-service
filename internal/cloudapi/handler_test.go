@@ -548,6 +548,28 @@ func TestCloudAPIUsesVerifiedPrincipalInsteadOfDemoHeader(t *testing.T) {
 	}
 }
 
+func TestQuotaResponseIncludesActiveAndTrashBreakdown(t *testing.T) {
+	service := fakeService{getQuota: func(context.Context, uuid.UUID) (cloud.Quota, error) {
+		return cloud.Quota{
+			LimitBytes: 100, UsedBytes: 70, TrashBytes: 20, ReservedBytes: 5,
+		}, nil
+	}}
+	handler := newTestHandler(t, service)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithUser(http.MethodGet, "/quota", "", uuid.New()))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload quotaResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.UsedBytes != 70 || payload.ActiveBytes != 50 ||
+		payload.TrashBytes != 20 || payload.AvailableBytes != 25 {
+		t.Fatalf("quota response=%+v", payload)
+	}
+}
+
 func TestCreateTextRejectsUnknownJSONField(t *testing.T) {
 	service := fakeService{
 		createText: func(context.Context, uuid.UUID, string) (cloud.Item, error) {

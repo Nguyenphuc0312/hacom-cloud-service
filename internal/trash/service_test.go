@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/google/uuid"
 )
 
@@ -13,6 +14,7 @@ type fakeRepository struct {
 	move    func(context.Context, MoveCommand) (Result, error)
 	restore func(context.Context, Command) (Result, error)
 	purge   func(context.Context, PurgeCommand) (Result, error)
+	list    func(context.Context, uuid.UUID, *cloud.Cursor, int) ([]cloud.Item, bool, error)
 }
 
 func (r fakeRepository) MoveToTrash(ctx context.Context, command MoveCommand) (Result, error) {
@@ -25,6 +27,15 @@ func (r fakeRepository) Restore(ctx context.Context, command Command) (Result, e
 
 func (r fakeRepository) LogicalPurge(ctx context.Context, command PurgeCommand) (Result, error) {
 	return r.purge(ctx, command)
+}
+
+func (r fakeRepository) ListTrash(
+	ctx context.Context,
+	ownerID uuid.UUID,
+	cursor *cloud.Cursor,
+	limit int,
+) ([]cloud.Item, bool, error) {
+	return r.list(ctx, ownerID, cursor, limit)
 }
 
 func TestMoveToTrashUsesExactlyTwentyFourHourRetention(t *testing.T) {
@@ -100,5 +111,50 @@ func TestServiceRejectsInvalidLifecycleInput(t *testing.T) {
 func TestNewServiceRequiresRepository(t *testing.T) {
 	if _, err := NewService(nil, nil); err == nil {
 		t.Fatal("expected missing repository error")
+	}
+}
+
+func TestDeleteImmediatelyDoesNotTrustClientState(t *testing.T) {
+	ownerID, itemID := uuid.New(), uuid.New()
+	repository := fakeRepository{purge: func(_ context.Context, command PurgeCommand) (Result, error) {
+		if command.OwnerUserID != ownerID || command.ItemID != itemID ||
+			command.ExpectedState != "" || command.RequireExpired {
+			t.Fatalf("unexpected command: %+v", command)
+		}
+		return Result{Action: ActionPurge, ItemID: itemID}, nil
+	}}
+	service, err := NewService(repository, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DeleteImmediately(
+		context.Background(), ownerID, itemID, "delete-1",
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestListUsesOpaqueCursorAndStablePageSize(t *testing.T) {
+	ownerID, itemID := uuid.New(), uuid.New()
+	createdAt := time.Now().UTC().Add(-time.Minute)
+	cursor, err := cloud.EncodeCursor(cloud.Cursor{CreatedAt: createdAt, ID: itemID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := fakeRepository{list: func(
+		_ context.Context, gotOwner uuid.UUID, gotCursor *cloud.Cursor, limit int,
+	) ([]cloud.Item, bool, error) {
+		if gotOwner != ownerID || gotCursor == nil || gotCursor.ID != itemID || limit != 5 {
+			t.Fatalf("unexpected list input: %s %+v %d", gotOwner, gotCursor, limit)
+		}
+		return []cloud.Item{{ID: itemID, CreatedAt: createdAt}}, false, nil
+	}}
+	service, err := NewService(repository, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.List(context.Background(), ownerID, cursor, 5)
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("page=%+v error=%v", page, err)
 	}
 }

@@ -132,3 +132,68 @@ func TestCreateAccessRejectsMetadataSizeMismatch(t *testing.T) {
 		t.Fatalf("error = %v, want ErrObjectUnavailable", err)
 	}
 }
+
+func TestCreateAccessInTrashNeverSignsPastPurgeDeadline(t *testing.T) {
+	now := time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC)
+	purgeAfter := now.Add(2 * time.Minute)
+	objects := &fakeObjectStore{
+		info:      storage.ObjectInfo{SizeBytes: 7},
+		signedURL: "http://minio.local/short-lived",
+	}
+	service, err := NewService(fakeRepository{target: Target{
+		ItemID: uuid.New(), ObjectKey: "uploads/owner/file", FileName: "file.txt",
+		ContentType: "text/plain", SizeBytes: 7, PurgeAfter: &purgeAfter,
+	}}, objects, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return now }
+	access, err := service.CreateAccess(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access.ExpiresAt != purgeAfter || objects.signedTTL != 2*time.Minute {
+		t.Fatalf("access expiry=%s signed TTL=%s", access.ExpiresAt, objects.signedTTL)
+	}
+}
+
+func TestCreateAccessRejectsExpiredTrashTarget(t *testing.T) {
+	now := time.Now().UTC()
+	purgeAfter := now.Add(-time.Second)
+	service, err := NewService(fakeRepository{target: Target{
+		ItemID: uuid.New(), ObjectKey: "uploads/owner/file", FileName: "file.txt",
+		ContentType: "text/plain", SizeBytes: 7, PurgeAfter: &purgeAfter,
+	}}, &fakeObjectStore{}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return now }
+	_, err = service.CreateAccess(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, ErrDeletePending) {
+		t.Fatalf("error=%v, want ErrDeletePending", err)
+	}
+}
+
+func TestCreateAccessRejectsDeadlineCrossedDuringObjectCheck(t *testing.T) {
+	start := time.Now().UTC()
+	purgeAfter := start.Add(500 * time.Millisecond)
+	service, err := NewService(fakeRepository{target: Target{
+		ItemID: uuid.New(), ObjectKey: "uploads/owner/file", FileName: "file.txt",
+		ContentType: "text/plain", SizeBytes: 7, PurgeAfter: &purgeAfter,
+	}}, &fakeObjectStore{info: storage.ObjectInfo{SizeBytes: 7}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clockCalls := 0
+	service.now = func() time.Time {
+		clockCalls++
+		if clockCalls == 1 {
+			return start
+		}
+		return start.Add(time.Second)
+	}
+	_, err = service.CreateAccess(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, ErrDeletePending) {
+		t.Fatalf("error=%v, want ErrDeletePending", err)
+	}
+}

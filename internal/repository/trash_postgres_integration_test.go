@@ -70,6 +70,18 @@ func TestTrashPostgresMoveRestoreAndRetryAreAtomic(t *testing.T) {
 		move.PurgeAfter.Sub(*move.DeletedAt) != trashdomain.Retention {
 		t.Fatalf("move retention = %+v", move)
 	}
+	page, err := trashService.List(ctx, ownerID, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != item.ID ||
+		page.Items[0].DeletedAt == nil || page.Items[0].PurgeAfter == nil {
+		t.Fatalf("Trash page = %+v", page)
+	}
+	otherPage, err := trashService.List(ctx, otherOwnerID, "", 20)
+	if err != nil || len(otherPage.Items) != 0 {
+		t.Fatalf("cross-owner Trash page=%+v error=%v", otherPage, err)
+	}
 
 	retry, err := trashService.MoveToTrash(ctx, ownerID, item.ID, "move-1")
 	if err != nil {
@@ -374,6 +386,15 @@ func TestTrashPostgresActiveFilePurgeQueuesObjectDeletion(t *testing.T) {
 	}
 	if !result.Applied || !result.StorageDeletion {
 		t.Fatalf("file purge result = %+v", result)
+	}
+	retry, err := trashService.DeleteImmediately(ctx, ownerID, itemID, "purge-active-file")
+	if err != nil || retry.Applied || !retry.StorageDeletion {
+		t.Fatalf("idempotent file purge retry=%+v error=%v", retry, err)
+	}
+	if _, err := trashService.DeleteImmediately(
+		ctx, ownerID, itemID, "different-delete-operation",
+	); !errors.Is(err, trashdomain.ErrDeletePending) {
+		t.Fatalf("different delete while Worker is pending error=%v", err)
 	}
 
 	var objectStatus, jobStatus string

@@ -10,15 +10,17 @@ import (
 )
 
 type itemResponse struct {
-	ID        string           `json:"id"`
-	Type      cloud.ItemType   `json:"type"`
-	Status    cloud.ItemStatus `json:"status"`
-	Title     *string          `json:"title,omitempty"`
-	Content   *string          `json:"content,omitempty"`
-	URL       *string          `json:"url,omitempty"`
-	SizeBytes int64            `json:"sizeBytes"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	ID         string           `json:"id"`
+	Type       cloud.ItemType   `json:"type"`
+	Status     cloud.ItemStatus `json:"status"`
+	Title      *string          `json:"title,omitempty"`
+	Content    *string          `json:"content,omitempty"`
+	URL        *string          `json:"url,omitempty"`
+	SizeBytes  int64            `json:"sizeBytes"`
+	DeletedAt  *time.Time       `json:"deletedAt,omitempty"`
+	PurgeAfter *time.Time       `json:"purgeAfter,omitempty"`
+	CreatedAt  time.Time        `json:"createdAt"`
+	UpdatedAt  time.Time        `json:"updatedAt"`
 }
 
 type listItemsResponse struct {
@@ -29,6 +31,8 @@ type listItemsResponse struct {
 type quotaResponse struct {
 	LimitBytes     int64     `json:"limitBytes"`
 	UsedBytes      int64     `json:"usedBytes"`
+	ActiveBytes    int64     `json:"activeBytes"`
+	TrashBytes     int64     `json:"trashBytes"`
 	ReservedBytes  int64     `json:"reservedBytes"`
 	AvailableBytes int64     `json:"availableBytes"`
 	UpdatedAt      time.Time `json:"updatedAt"`
@@ -76,15 +80,17 @@ type apiError struct {
 
 func itemResponseFrom(item cloud.Item) itemResponse {
 	return itemResponse{
-		ID:        item.ID.String(),
-		Type:      item.Type,
-		Status:    item.Status,
-		Title:     item.Title,
-		Content:   item.TextContent,
-		URL:       item.LinkURL,
-		SizeBytes: item.SizeBytes,
-		CreatedAt: item.CreatedAt,
-		UpdatedAt: item.UpdatedAt,
+		ID:         item.ID.String(),
+		Type:       item.Type,
+		Status:     item.Status,
+		Title:      item.Title,
+		Content:    item.TextContent,
+		URL:        item.LinkURL,
+		SizeBytes:  item.SizeBytes,
+		DeletedAt:  item.DeletedAt,
+		PurgeAfter: item.PurgeAfter,
+		CreatedAt:  item.CreatedAt,
+		UpdatedAt:  item.UpdatedAt,
 	}
 }
 

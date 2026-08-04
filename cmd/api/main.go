@@ -18,6 +18,7 @@ import (
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/repository"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/router"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/storage"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -111,12 +112,23 @@ func main() {
 		logger.Error("create file access service", "error", err)
 		os.Exit(1)
 	}
+	trashStore, err := repository.NewTrashPostgres(db)
+	if err != nil {
+		logger.Error("create Trash repository", "error", err)
+		os.Exit(1)
+	}
+	trashService, err := trash.NewService(trashStore, nil)
+	if err != nil {
+		logger.Error("create Trash service", "error", err)
+		os.Exit(1)
+	}
 	cloudHandler, err := cloudapi.New(
 		cloudService,
 		cfg.MaxContentBytes,
 		logger,
 		cloudapi.WithUploadService(uploadService),
 		cloudapi.WithFileAccessService(fileAccessService),
+		cloudapi.WithTrashService(trashService),
 		cloudapi.WithAuthenticator(authenticator),
 	)
 	if err != nil {

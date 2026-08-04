@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/trash"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,76 @@ func NewTrashPostgres(pool *pgxpool.Pool) (*TrashPostgres, error) {
 		return nil, errors.New("PostgreSQL pool is required")
 	}
 	return &TrashPostgres{pool: pool}, nil
+}
+
+func (r *TrashPostgres) ListTrash(
+	ctx context.Context,
+	ownerUserID uuid.UUID,
+	cursor *cloud.Cursor,
+	limit int,
+) ([]cloud.Item, bool, error) {
+	query := `
+		SELECT
+			item.id, item.drive_id, item.item_type::TEXT, item.status::TEXT,
+			item.title, item.text_content, item.link_url, item.size_bytes,
+			item.deleted_at, item.purge_after, item.created_at, item.updated_at
+		FROM cloud.items AS item
+		JOIN cloud.drives AS drive ON drive.id = item.drive_id
+		WHERE drive.owner_user_id = $1 AND item.status = 'trashed'
+	`
+	args := []any{ownerUserID}
+	if cursor != nil {
+		query += ` AND (item.created_at, item.id) < ($2, $3)`
+		args = append(args, cursor.CreatedAt, cursor.ID)
+	}
+	query += fmt.Sprintf(
+		" ORDER BY item.created_at DESC, item.id DESC LIMIT $%d",
+		len(args)+1,
+	)
+	args = append(args, limit+1)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, false, fmt.Errorf("list Trash items: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]cloud.Item, 0, limit+1)
+	for rows.Next() {
+		var (
+			item                    cloud.Item
+			itemType, status        string
+			title, content, linkURL pgtype.Text
+			deletedAt, purgeAfter   pgtype.Timestamptz
+		)
+		if err := rows.Scan(
+			&item.ID, &item.DriveID, &itemType, &status,
+			&title, &content, &linkURL, &item.SizeBytes,
+			&deletedAt, &purgeAfter, &item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
+			return nil, false, fmt.Errorf("scan Trash item: %w", err)
+		}
+		item.Type = cloud.ItemType(itemType)
+		item.Status = cloud.ItemStatus(status)
+		item.Title = optionalString(title)
+		item.TextContent = optionalString(content)
+		item.LinkURL = optionalString(linkURL)
+		if deletedAt.Valid {
+			item.DeletedAt = timePointer(deletedAt.Time)
+		}
+		if purgeAfter.Valid {
+			item.PurgeAfter = timePointer(purgeAfter.Time)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("iterate Trash items: %w", err)
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	return items, hasMore, nil
 }
 
 type lockedLifecycleItem struct {
@@ -239,6 +310,15 @@ func (r *TrashPostgres) LogicalPurge(
 		} else if found {
 			return commitLifecycleResult(ctx, tx, result)
 		}
+		pending, pendingErr := hasPendingObjectDelete(
+			ctx, tx, command.OwnerUserID, command.ItemID,
+		)
+		if pendingErr != nil {
+			return trash.Result{}, pendingErr
+		}
+		if pending {
+			return trash.Result{}, trash.ErrDeletePending
+		}
 		return trash.Result{}, trash.ErrNotFound
 	}
 	if err != nil {
@@ -249,11 +329,18 @@ func (r *TrashPostgres) LogicalPurge(
 		return trash.Result{}, err
 	}
 
-	if item.status != command.ExpectedState {
+	if command.ExpectedState != "" && item.status != command.ExpectedState {
 		return trash.Result{}, fmt.Errorf(
 			"%w: expected %q, found %q",
 			trash.ErrInvalidState,
 			command.ExpectedState,
+			item.status,
+		)
+	}
+	if item.status != trash.ItemStateReady && item.status != trash.ItemStateTrashed {
+		return trash.Result{}, fmt.Errorf(
+			"%w: cannot permanently delete item in state %q",
+			trash.ErrInvalidState,
 			item.status,
 		)
 	}
@@ -354,6 +441,32 @@ func (r *TrashPostgres) LogicalPurge(
 		return trash.Result{}, fmt.Errorf("delete purged item metadata: %w", err)
 	}
 	return commitLifecycleResult(ctx, tx, result)
+}
+
+func hasPendingObjectDelete(
+	ctx context.Context,
+	tx pgx.Tx,
+	ownerUserID, itemID uuid.UUID,
+) (bool, error) {
+	var pending bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM cloud.item_lifecycle_operations AS operation
+			JOIN cloud.drives AS drive ON drive.id = operation.drive_id
+			JOIN cloud.jobs AS job
+			  ON job.job_type = 'permanent_delete'
+			 AND job.dedupe_key = 'permanent-delete:item:' || operation.item_id::TEXT
+			WHERE drive.owner_user_id = $1
+			  AND operation.item_id = $2
+			  AND operation.action = 'purge'
+			  AND job.status <> 'completed'
+		)
+	`, ownerUserID, itemID).Scan(&pending)
+	if err != nil {
+		return false, fmt.Errorf("check pending permanent delete: %w", err)
+	}
+	return pending, nil
 }
 
 func lockLifecycleItem(

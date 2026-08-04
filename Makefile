@@ -13,6 +13,7 @@ POSTMAN_ENVIRONMENT ?= tests/postman/Hacom-Cloud-Local.postman_environment.json
 POSTMAN_PROCESS3_COLLECTION ?= tests/postman/Hacom-Cloud-Process-3-Upload.postman_collection.json
 POSTMAN_PROCESS5_COLLECTION ?= tests/postman/Hacom-Cloud-Process-5-Release.postman_collection.json
 POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Auth.postman_collection.json
+POSTMAN_PHASE2_TRASH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Trash.postman_collection.json
 
 .PHONY: run-api run-worker test fmt vet up down logs ps \
 	infra-up infra-down infra-logs infra-ps \
@@ -20,7 +21,7 @@ POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Au
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
 	test-migration-phase2 \
-	test-trash-integration \
+	test-trash-integration test-trash-api test-postman-phase2-trash \
 	test-release-process5 test-postman-process5 demo-process5 \
 	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
@@ -51,6 +52,13 @@ test-migration-phase2:
 test-trash-integration:
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" \
 	go test -race -count=1 -run TrashPostgres -v ./internal/repository
+
+test-trash-api:
+	go test -race -count=1 ./internal/trash ./internal/fileaccess ./internal/cloudapi ./tests/contract
+
+test-postman-phase2-trash:
+	npx --yes newman run "$(POSTMAN_PHASE2_TRASH_COLLECTION)" --reporters cli --silent
+	@echo "Phase 2 Trash Postman acceptance passed (silent mode protects access URLs)."
 
 test-release-process5:
 	sh scripts/test-process5-release.sh

@@ -57,6 +57,8 @@ type Item struct {
 	LinkURL         *string
 	StorageObjectID uuid.UUID
 	SizeBytes       int64
+	DeletedAt       *time.Time
+	PurgeAfter      *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

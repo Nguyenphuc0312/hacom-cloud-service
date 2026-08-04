@@ -54,4 +54,16 @@ Suite covers move/restore, 24-hour expiry, cross-owner access, permanent delete,
 binary delete job, same-operation retry, full transaction rollback and concurrent
 restore-versus-purge. It also proves quota snapshots match used/Trash ledger deltas.
 
+## Trash API contract
+
+```bash
+make test-trash-api
+```
+
+The API suite covers all four Trash routes, strict empty action bodies and methods,
+quota `activeBytes`/`trashBytes`, stable lifecycle error codes, owner-only access,
+idempotent retries, async delete responses, and presigned access that never outlives
+the Trash `purgeAfter` deadline. The Postman collection is
+`tests/postman/Hacom-Cloud-Phase-2-Trash.postman_collection.json`.
+
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.

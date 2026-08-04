@@ -119,6 +119,8 @@ X-Demo-User-ID: <uuid>
 {
   "limitBytes": 5000000000,
   "usedBytes": 75,
+  "activeBytes": 50,
+  "trashBytes": 25,
   "reservedBytes": 0,
   "availableBytes": 4999999925,
   "updatedAt": "2026-07-28T06:24:29.692583+07:00"
@@ -208,6 +210,48 @@ Contract:
 - Frontend dùng URL này cho viewer ảnh, video, audio, text, PDF và các định dạng
   trình duyệt hỗ trợ; định dạng không preview được vẫn có thể tải xuống.
 
+## Trash, restore và xóa vĩnh viễn — Phase 2
+
+Ba thao tác ghi yêu cầu `Idempotency-Key` dài 1–128 ký tự và body rỗng:
+
+```http
+POST   /api/v1/cloud/items/{itemID}/trash
+POST   /api/v1/cloud/items/{itemID}/restore
+DELETE /api/v1/cloud/items/{itemID}
+Idempotency-Key: <unique-operation-key>
+X-Demo-User-ID: <uuid>
+```
+
+Move-to-trash trả trạng thái `trashed`, `deletedAt` và `purgeAfter`; restore trả
+`ready`. Retry cùng key và cùng Item/action trả lại kết quả cũ với `applied=false`,
+không tạo thêm ledger/audit. Dùng lại key cho action hoặc Item khác trong cùng
+drive trả `409 IDEMPOTENCY_CONFLICT`.
+
+DELETE luôn trả `202 Accepted` theo một schema thống nhất:
+
+```json
+{
+  "itemId": "12c14a68-902f-4c84-b74e-c420f0660f44",
+  "status": "delete_pending",
+  "async": true
+}
+```
+
+`async=true` nghĩa là quota/metadata đã commit nhưng Worker còn phải xóa binary.
+Text/link trả `status=deleted`, `async=false`. Response không chứa bucket, object
+key, job ID hoặc chi tiết purge nội bộ.
+
+Danh sách Trash dùng cursor opaque và cùng giới hạn 1–100:
+
+```http
+GET /api/v1/cloud/trash?limit=20&cursor=<opaque-cursor>
+X-Demo-User-ID: <uuid>
+```
+
+Owner có thể gọi endpoint `/items/{itemID}/access` cho file trong Trash khi
+`now < purgeAfter`. TTL URL được rút ngắn để không vượt quá `purgeAfter`. Item
+không tồn tại và Item của owner khác luôn có cùng response `404 ITEM_NOT_FOUND`.
+
 ## Error response
 
 ```json
@@ -221,6 +265,10 @@ Contract:
 
 | HTTP | Code | Ý nghĩa |
 |---:|---|---|
+| 400 | `INVALID_TRASH_REQUEST` | Thiếu/sai `Idempotency-Key` hoặc input Trash không hợp lệ |
+| 409 | `INVALID_ITEM_STATE` | Trạng thái Item không cho phép thao tác Trash hiện tại |
+| 409 | `RESTORE_EXPIRED` | Đã hết thời hạn khôi phục 24 giờ |
+| 409 | `DELETE_PENDING` | Binary đang chờ Worker xóa vĩnh viễn |
 | 400 | `INVALID_JSON` | JSON sai hoặc có field không hỗ trợ |
 | 400 | `INVALID_LIMIT` | `limit` không phải số nguyên từ 1 đến 100 |
 | 400 | `VALIDATION_ERROR` | Text/link không hợp lệ |
@@ -275,11 +323,11 @@ upload, quota hoặc lifecycle đã đóng băng của Gate 5.
 ## Phạm vi chưa triển khai
 
 - Không dedup nội dung; lưu cùng text/link hai lần tạo hai Item.
-- Không nhận `Idempotency-Key` ở API Quy trình 2.
+- API tạo text/link không nhận `Idempotency-Key`; API lifecycle Trash bắt buộc header này.
 - Backend đã có JWT/JWKS/revocation middleware; frontend/gateway production cutover
   thuộc nhiệm vụ tiếp theo của Quy trình 1.
 - Worker đã chạy SHA-256; chưa có virus scan hoặc sinh thumbnail phía server.
 - Preview hiện phụ thuộc khả năng phát nội dung của trình duyệt; chưa chuyển mã
   video/audio và chưa render bộ Office phía server.
-- Chưa Multipart, share hoặc xóa/restore.
+- Chưa Multipart hoặc share.
 - Cleanup upload hết hạn đã có; chưa có dashboard quản trị job.

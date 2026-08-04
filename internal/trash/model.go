@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/google/uuid"
 )
 
@@ -30,9 +31,15 @@ var (
 	ErrInvalidInput        = errors.New("invalid trash lifecycle input")
 	ErrInvalidState        = errors.New("invalid trash lifecycle state")
 	ErrRestoreExpired      = errors.New("trash restore window has expired")
+	ErrDeletePending       = errors.New("permanent delete is already pending")
 	ErrIdempotencyConflict = errors.New("trash lifecycle idempotency conflict")
 	ErrQuotaInvariant      = errors.New("trash quota invariant violated")
 )
+
+type Page struct {
+	Items      []cloud.Item
+	NextCursor string
+}
 
 type Command struct {
 	OwnerUserID uuid.UUID

@@ -76,6 +76,36 @@ func TestOpenAPIContract(t *testing.T) {
 	}
 }
 
+func TestTrashOpenAPIAndPostmanContract(t *testing.T) {
+	root := repositoryRoot(t)
+	openAPI := readFile(t, filepath.Join(root, "docs", "openapi", "phase2-cloud-auth.openapi.yaml"))
+	for _, required := range []string{
+		"/api/v1/cloud/items/{itemId}/trash:",
+		"/api/v1/cloud/items/{itemId}/restore:",
+		"/api/v1/cloud/trash:",
+		"operationId: permanentlyDeleteCloudItem",
+		"activeBytes:",
+		"trashBytes:",
+		"INVALID_ITEM_STATE",
+		"RESTORE_EXPIRED",
+		"DELETE_PENDING",
+	} {
+		if !strings.Contains(openAPI, required) {
+			t.Errorf("Trash OpenAPI contract is missing %q", required)
+		}
+	}
+
+	postmanPath := filepath.Join(root, "tests", "postman", "Hacom-Cloud-Phase-2-Trash.postman_collection.json")
+	var collection map[string]any
+	if err := json.Unmarshal([]byte(readFile(t, postmanPath)), &collection); err != nil {
+		t.Fatalf("Trash Postman collection is invalid JSON: %v", err)
+	}
+	items, ok := collection["item"].([]any)
+	if !ok || len(items) < 5 {
+		t.Fatalf("Trash Postman collection has %d requests, want at least 5", len(items))
+	}
+}
+
 func TestPhase2AuthContractConfiguration(t *testing.T) {
 	root := repositoryRoot(t)
 	content := readFile(t, filepath.Join(root, ".env.example"))

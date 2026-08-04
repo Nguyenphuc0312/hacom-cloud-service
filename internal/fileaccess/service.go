@@ -16,6 +16,7 @@ var (
 	ErrNotFound          = errors.New("cloud file not found")
 	ErrNotFile           = errors.New("cloud item is not a file")
 	ErrNotReady          = errors.New("cloud file is not ready")
+	ErrDeletePending     = errors.New("cloud file permanent delete is pending")
 	ErrObjectUnavailable = errors.New("cloud file object is unavailable")
 )
 
@@ -25,6 +26,7 @@ type Target struct {
 	FileName    string
 	ContentType string
 	SizeBytes   int64
+	PurgeAfter  *time.Time
 }
 
 type Access struct {
@@ -101,6 +103,10 @@ func (s *Service) CreateAccess(
 		target.SizeBytes <= 0 {
 		return Access{}, ErrObjectUnavailable
 	}
+	now := s.now().UTC()
+	if target.PurgeAfter != nil && !now.Before(*target.PurgeAfter) {
+		return Access{}, ErrDeletePending
+	}
 
 	info, err := s.objects.StatObject(ctx, target.ObjectKey)
 	if errors.Is(err, storage.ErrObjectNotFound) {
@@ -118,10 +124,23 @@ func (s *Service) CreateAccess(
 		)
 	}
 
+	// StatObject can consume part of the remaining restore window. Re-read the
+	// clock so the signed URL can never outlive purgeAfter because of that I/O.
+	now = s.now().UTC()
+	if target.PurgeAfter != nil && !now.Before(*target.PurgeAfter) {
+		return Access{}, ErrDeletePending
+	}
+	accessTTL := s.urlTTL
+	if target.PurgeAfter != nil && target.PurgeAfter.Sub(now) < accessTTL {
+		accessTTL = target.PurgeAfter.Sub(now)
+	}
+	if accessTTL < time.Second {
+		return Access{}, ErrDeletePending
+	}
 	signedURL, err := s.objects.PresignDownload(
 		ctx,
 		target.ObjectKey,
-		s.urlTTL,
+		accessTTL,
 	)
 	if err != nil {
 		return Access{}, fmt.Errorf("presign cloud file download: %w", err)
@@ -129,7 +148,7 @@ func (s *Service) CreateAccess(
 	return Access{
 		ItemID:      target.ItemID,
 		URL:         signedURL,
-		ExpiresAt:   s.now().UTC().Add(s.urlTTL),
+		ExpiresAt:   now.Add(accessTTL),
 		FileName:    target.FileName,
 		ContentType: target.ContentType,
 		SizeBytes:   target.SizeBytes,
