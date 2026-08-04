@@ -196,6 +196,17 @@ export const API_BASE_URL = resolveHttpBaseUrl(
   "/api/v1",
 );
 
+/** Hacom Cloud API, proxied locally during development. */
+export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_API_BASE_URL,
+  "/cloud-api/api/v1/cloud",
+);
+
+export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_HEALTH_URL,
+  "/cloud-api/health/ready",
+);
+
 /**
  * Auth service base URL (Stage 1 – body mode).
  * When USE_AUTH_SERVICE is true, auth calls (login/refresh/logout/me/…) go
@@ -213,21 +224,6 @@ export const AUTH_BASE_URL = resolveHttpBaseUrl(
 export const HR_API_BASE_URL = resolveHttpBaseUrl(
   import.meta.env.VITE_HR_API_BASE_URL,
   import.meta.env.DEV ? "/hr-api" : "",
-);
-
-/**
- * Hacom Cloud Phase 1 runs as an independent Go service. The local web preview
- * uses a dedicated Vite proxy so Cloud traffic never gets mixed with Chat API
- * routes and the browser does not need an unsafe CORS workaround.
- */
-export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
-  import.meta.env.VITE_CLOUD_API_BASE_URL,
-  "/cloud-api/api/v1/cloud",
-);
-
-export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
-  import.meta.env.VITE_CLOUD_HEALTH_URL,
-  "/cloud-api/health/ready",
 );
 
 /**

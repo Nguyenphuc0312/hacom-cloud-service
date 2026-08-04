@@ -1,14 +1,11 @@
 {
   "title": "My Documents",
   "subtitle": "Kho nội dung cá nhân",
-  "common": {
-    "soon": "Sắp có",
-    "close": "Đóng"
-  },
+  "common": { "soon": "Sắp có", "close": "Đóng" },
   "workspace": {
     "title": "My Documents",
     "description": "Nội dung tại đây chỉ hiển thị với bạn và được đồng bộ qua tài khoản Hacom.",
-    "introTitle": "Cuộc trò chuyện riêng của bạn",
+    "introTitle": "Không gian riêng của bạn",
     "onlyYou": "Chỉ mình bạn có thể xem",
     "sidebarPreview": "Lưu nội dung cho chính bạn",
     "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của My Documents.",
@@ -16,153 +13,54 @@
     "private": "Riêng tư",
     "refresh": "Làm mới"
   },
-  "search": {
-    "placeholder": "Tìm trong My Documents",
-    "aria": "Tìm kiếm trong My Documents"
-  },
+  "search": { "placeholder": "Tìm trong My Documents", "aria": "Tìm kiếm trong My Documents" },
   "navigation": {
-    "aria": "Lọc nội dung My Documents",
-    "all": "Tất cả",
-    "text": "Văn bản",
-    "image": "Ảnh",
-    "file": "File",
-    "link": "Liên kết",
-    "folders": "Thư mục",
-    "shared": "Được chia sẻ",
-    "trash": "Thùng rác"
+    "aria": "Lọc nội dung My Documents", "all": "Tất cả", "text": "Văn bản", "image": "Ảnh",
+    "file": "Tệp", "link": "Liên kết", "folders": "Thư mục", "shared": "Được chia sẻ", "trash": "Thùng rác"
   },
   "quota": {
-    "aria": "Dung lượng Hacom Cloud",
-    "title": "Dung lượng",
-    "loading": "Đang đọc dung lượng...",
-    "usage": "Đã dùng {{used}} / {{limit}}",
-    "usageCompact": "{{used}} / {{limit}} đã dùng",
+    "aria": "Dung lượng Hacom Cloud", "title": "Dung lượng", "loading": "Đang đọc dung lượng...",
+    "usage": "Đã dùng {{used}} / {{limit}}", "usageCompact": "{{used}} / {{limit}} đã dùng",
     "reserved": "{{value}} đang được giữ cho tệp tải lên"
   },
-  "service": {
-    "checking": "Đang kiểm tra dịch vụ Cloud",
-    "ready": "Dịch vụ Cloud sẵn sàng",
-    "offline": "Không kết nối được Cloud"
-  },
+  "service": { "checking": "Đang kiểm tra dịch vụ Cloud", "ready": "Dịch vụ Cloud sẵn sàng", "offline": "Không kết nối được Cloud" },
   "composer": {
     "aria": "Chọn nội dung muốn lưu",
-    "tabs": {
-      "upload": "Tải tệp",
-      "text": "Ghi nhanh",
-      "link": "Liên kết"
-    },
+    "tabs": { "upload": "Tải tệp", "text": "Ghi nhanh", "link": "Liên kết" },
     "text": {
-      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...",
-      "aria": "Nội dung ghi chú",
-      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy",
-      "action": "Gửi"
+      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...", "aria": "Nội dung ghi chú",
+      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy", "action": "Gửi"
     },
-    "link": {
-      "urlLabel": "Địa chỉ liên kết",
-      "titleLabel": "Tên gợi nhớ",
-      "titlePlaceholder": "Không bắt buộc",
-      "action": "Lưu liên kết"
-    },
-    "upload": {
-      "drop": "Kéo thả tệp vào đây",
-      "limit": "Tối đa 100 MB mỗi tệp",
-      "pick": "Chọn tệp",
-      "remove": "Bỏ tệp đã chọn",
-      "action": "Tải lên"
-    },
+    "link": { "urlLabel": "Địa chỉ liên kết", "titleLabel": "Tên gợi nhớ", "titlePlaceholder": "Không bắt buộc", "action": "Lưu liên kết" },
+    "upload": { "drop": "Kéo thả tệp vào đây", "limit": "Tối đa 100 MB mỗi tệp", "pick": "Chọn tệp", "remove": "Bỏ tệp đã chọn", "action": "Tải lên" },
     "errors": {
-      "emptyFile": "Không thể tải lên tệp rỗng.",
-      "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
-      "fileRequired": "Hãy chọn một tệp trước.",
-      "textRequired": "Nội dung ghi chú không được để trống.",
+      "emptyFile": "Không thể tải lên tệp rỗng.", "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
+      "fileRequired": "Hãy chọn một tệp trước.", "textRequired": "Nội dung ghi chú không được để trống.",
       "linkInvalid": "Hãy nhập liên kết HTTP hoặc HTTPS hợp lệ."
     }
   },
-  "upload": {
-    "stage": {
-      "reserving": "Đang kiểm tra dung lượng...",
-      "uploading": "Đang tải lên kho lưu trữ...",
-      "finalizing": "Đang xác nhận tệp...",
-      "processing": "Đang xử lý và kiểm tra tệp..."
-    }
-  },
+  "upload": { "stage": { "reserving": "Đang kiểm tra dung lượng...", "uploading": "Đang tải lên kho lưu trữ...", "finalizing": "Đang xác nhận tệp...", "processing": "Đang xử lý và kiểm tra tệp..." } },
   "feed": {
-    "all": "Hoạt động gần đây",
-    "image": "Ảnh đã lưu",
-    "file": "Tệp của tôi",
-    "text": "Ghi chú",
-    "link": "Liên kết đã lưu",
-    "count": "{{count}} mục đang hiển thị",
-    "count_one": "{{count}} mục đang hiển thị",
-    "count_other": "{{count}} mục đang hiển thị",
-    "loadedOnly": "Tìm trong dữ liệu đã tải"
+    "all": "Hoạt động gần đây", "image": "Ảnh đã lưu", "file": "Tệp của tôi", "text": "Ghi chú", "link": "Liên kết đã lưu",
+    "count": "{{count}} mục đang hiển thị", "count_one": "{{count}} mục đang hiển thị", "count_other": "{{count}} mục đang hiển thị", "loadedOnly": "Tạm ẩn dữ liệu đã tải"
   },
-  "timeline": {
-    "unknownDate": "Không rõ thời gian",
-    "loadMore": "Tải thêm",
-    "empty": {
-      "title": "Chưa có nội dung",
-      "description": "Gửi một ghi chú, ảnh, file hoặc liên kết cho chính bạn để bắt đầu."
-    }
-  },
-  "item": {
-    "untitledText": "Ghi chú không tiêu đề",
-    "untitledLink": "Liên kết đã lưu",
-    "untitledFile": "Tệp không tên",
-    "fileMetadata": "Tệp · {{size}}"
-  },
-  "type": {
-    "text": "Ghi chú",
-    "link": "Liên kết",
-    "file": "Tệp",
-    "image": "Hình ảnh",
-    "video": "Video",
-    "audio": "Âm thanh"
-  },
-  "status": {
-    "pending": "Đang chờ",
-    "processing": "Đang xử lý",
-    "ready": "Sẵn sàng",
-    "failed": "Thất bại",
-    "trashed": "Đã xóa"
-  },
+  "timeline": { "unknownDate": "Không rõ thời gian", "loadMore": "Tải thêm", "empty": { "title": "Chưa có nội dung", "description": "Gửi một ghi chú, ảnh, tệp hoặc liên kết cho chính bạn để bắt đầu." } },
+  "item": { "untitledText": "Ghi chú không tiêu đề", "untitledLink": "Liên kết đã lưu", "untitledFile": "Tệp không tên", "fileMetadata": "Tệp · {{size}}" },
+  "type": { "text": "Ghi chú", "link": "Liên kết", "file": "Tệp", "image": "Hình ảnh", "video": "Video", "audio": "Âm thanh" },
+  "status": { "pending": "Đang chờ", "processing": "Đang xử lý", "ready": "Sẵn sàng", "failed": "Thất bại", "trashed": "Đã xóa" },
   "inspector": {
-    "title": "Hacom Cloud",
-    "details": "Chi tiết mục",
-    "empty": {
-      "title": "Kho lưu trữ cá nhân",
-      "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng."
-    },
-    "capabilities": {
-      "private": "Tách biệt dữ liệu theo người dùng",
-      "hash": "Kiểm tra toàn vẹn tệp nền",
-      "quota": "Kiểm soát dung lượng phía máy chủ"
-    },
-    "metadata": {
-      "status": "Trạng thái",
-      "size": "Kích thước",
-      "created": "Ngày tạo",
-      "updated": "Cập nhật",
-      "id": "Mã mục"
-    },
-    "actions": {
-      "download": "Tải xuống",
-      "share": "Chia sẻ"
-    },
+    "title": "Hacom Cloud", "details": "Chi tiết mục",
+    "empty": { "title": "Kho lưu trữ cá nhân", "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng." },
+    "capabilities": { "private": "Tách biệt dữ liệu theo người dùng", "hash": "Kiểm tra toàn vẹn tệp nén", "quota": "Kiểm soát dung lượng phía máy chủ" },
+    "metadata": { "status": "Trạng thái", "size": "Kích thước", "created": "Ngày tạo", "updated": "Cập nhật", "id": "Mã mục" },
+    "actions": { "download": "Tải xuống", "share": "Chia sẻ" },
     "phaseLater": "Tính năng thuộc giai đoạn tiếp theo",
     "phaseNote": "Tải xuống, chia sẻ, thư mục và thùng rác chưa có API trong Phase 1 nên đang được khóa rõ ràng."
   },
-  "toast": {
-    "textCreated": "Đã lưu ghi chú.",
-    "linkCreated": "Đã lưu liên kết.",
-    "uploadStarted": "Tệp đã tải lên và đang được xử lý."
-  },
+  "toast": { "textCreated": "Đã lưu ghi chú.", "linkCreated": "Đã lưu liên kết.", "uploadStarted": "Tệp đã tải lên và đang được xử lý." },
   "errors": {
-    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.",
-    "quota": "Dung lượng Cloud không đủ cho thao tác này.",
-    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.",
-    "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
-    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.",
-    "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
+    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.", "quota": "Dung lượng Cloud không đủ cho thao tác này.",
+    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.", "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
+    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.", "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
   }
 }

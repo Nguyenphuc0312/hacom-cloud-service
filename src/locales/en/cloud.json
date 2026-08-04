@@ -54,7 +54,7 @@
     "text": {
       "placeholder": "Write something you want to remember...",
       "aria": "Note content",
-      "hint": "Press Enter for a new line · visible only to you",
+      "hint": "Press Enter for a new line ? visible only to you",
       "action": "Send"
     },
     "link": {
@@ -109,7 +109,7 @@
     "untitledText": "Untitled note",
     "untitledLink": "Saved link",
     "untitledFile": "Untitled file",
-    "fileMetadata": "File · {{size}}"
+    "fileMetadata": "File ? {{size}}"
   },
   "type": {
     "text": "Note",

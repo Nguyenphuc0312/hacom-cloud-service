@@ -1,4 +1,6 @@
 import { CLOUD_API_BASE_URL, CLOUD_HEALTH_URL } from "../../../config";
+import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
+import { getAccessToken } from "../../../services/tokenService";
 import type {
   CloudHealth,
   CloudItem,
@@ -41,6 +43,11 @@ export class CloudApiError extends Error {
 const joinPath = (base: string, path: string): string =>
   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
+const isCloudDemoMode = (): boolean => {
+  const env = import.meta.env as Record<string, string | boolean | undefined>;
+  return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
+};
+
 const parseJson = async <T,>(response: Response): Promise<T> => {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
@@ -58,14 +65,32 @@ const cloudRequest = async <T,>(
   path: string,
   { userId, headers, ...options }: CloudRequestOptions,
 ): Promise<T> => {
-  const response = await fetch(joinPath(CLOUD_API_BASE_URL, path), {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      "X-Demo-User-ID": userId,
-      ...headers,
-    },
-  });
+  const request = (accessToken?: string): Promise<Response> => {
+    const requestHeaders = new Headers(headers);
+    requestHeaders.set("Accept", "application/json");
+    if (accessToken) {
+      requestHeaders.set("Authorization", `Bearer ${accessToken}`);
+    }
+    if (isCloudDemoMode() && userId) {
+      requestHeaders.set("X-Demo-User-ID", userId);
+    } else {
+      requestHeaders.delete("X-Demo-User-ID");
+    }
+    return fetch(joinPath(CLOUD_API_BASE_URL, path), {
+      ...options,
+      headers: requestHeaders,
+    });
+  };
+
+  let response = await request(getAccessToken() ?? undefined);
+  if ((response.status === 401 || response.status === 403) && !isCloudDemoMode()) {
+    try {
+      const refreshedToken = await refreshAccessTokenShared("http_401");
+      response = await request(refreshedToken);
+    } catch {
+      // Preserve the original auth response and stable backend error code.
+    }
+  }
 
   if (!response.ok) {
     const payload = await parseJson<CloudErrorEnvelope>(response).catch(
