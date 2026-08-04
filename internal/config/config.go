@@ -18,53 +18,56 @@ const (
 )
 
 type Config struct {
-	AppEnv                      string
-	APIAddr                     string
-	AuthMode                    string
-	AuthJWKSURL                 string
-	AuthIssuer                  string
-	AuthAudiences               []string
-	AuthJWKSCacheTTL            time.Duration
-	AuthHTTPTimeout             time.Duration
-	AuthRedisURL                string
-	AuthRevocationTimeout       time.Duration
-	AuthLegacyHS256Enabled      bool
-	AuthLegacyHS256Secret       string
-	AuthVerificationContractURL string
-	AuthAccountStateURL         string
-	AuthServiceTokenURL         string
-	AuthServiceClientID         string
-	AuthServiceClientSecret     string
-	AuthServiceTokenAudience    string
-	AuthServiceTokenScopes      []string
-	DatabaseURL                 string
-	MinIOEndpoint               string
-	MinIOAccessKey              string
-	MinIOSecretKey              string
-	MinIOUseSSL                 bool
-	MinIOBucket                 string
-	MaxUploadBytes              int64
-	MaxContentBytes             int64
-	DefaultQuotaBytes           int64
-	QuotaRequestTiersBytes      []int64
-	UploadURLTTL                time.Duration
-	DownloadURLTTL              time.Duration
-	HealthTimeout               time.Duration
-	SearchQueryTimeout          time.Duration
-	ShutdownTimeout             time.Duration
-	WorkerID                    string
-	WorkerPollInterval          time.Duration
-	WorkerJobTimeout            time.Duration
-	WorkerLockTimeout           time.Duration
-	WorkerMaxAttempts           int
-	WorkerBaseBackoff           time.Duration
-	WorkerMaxBackoff            time.Duration
-	WorkerCleanupScanInterval   time.Duration
-	WorkerCleanupBatchSize      int
-	TrashRetention              time.Duration
-	WorkerTrashScanInterval     time.Duration
-	WorkerTrashBatchSize        int
-	WorkerMetricsAddr           string
+	AppEnv                       string
+	APIAddr                      string
+	AuthMode                     string
+	AuthJWKSURL                  string
+	AuthIssuer                   string
+	AuthAudiences                []string
+	AuthJWKSCacheTTL             time.Duration
+	AuthHTTPTimeout              time.Duration
+	AuthRedisURL                 string
+	AuthRevocationTimeout        time.Duration
+	AuthLegacyHS256Enabled       bool
+	AuthLegacyHS256Secret        string
+	AuthVerificationContractURL  string
+	AuthAccountStateURL          string
+	AuthServiceTokenURL          string
+	AuthServiceClientID          string
+	AuthServiceClientSecret      string
+	AuthServiceTokenAudience     string
+	AuthServiceTokenScopes       []string
+	InternalServiceTokenAudience string
+	InternalServiceTokenScope    string
+	DemoAdminServiceToken        string
+	DatabaseURL                  string
+	MinIOEndpoint                string
+	MinIOAccessKey               string
+	MinIOSecretKey               string
+	MinIOUseSSL                  bool
+	MinIOBucket                  string
+	MaxUploadBytes               int64
+	MaxContentBytes              int64
+	DefaultQuotaBytes            int64
+	QuotaRequestTiersBytes       []int64
+	UploadURLTTL                 time.Duration
+	DownloadURLTTL               time.Duration
+	HealthTimeout                time.Duration
+	SearchQueryTimeout           time.Duration
+	ShutdownTimeout              time.Duration
+	WorkerID                     string
+	WorkerPollInterval           time.Duration
+	WorkerJobTimeout             time.Duration
+	WorkerLockTimeout            time.Duration
+	WorkerMaxAttempts            int
+	WorkerBaseBackoff            time.Duration
+	WorkerMaxBackoff             time.Duration
+	WorkerCleanupScanInterval    time.Duration
+	WorkerCleanupBatchSize       int
+	TrashRetention               time.Duration
+	WorkerTrashScanInterval      time.Duration
+	WorkerTrashBatchSize         int
+	WorkerMetricsAddr            string
 }
 
 func Load() (Config, error) {
@@ -101,6 +104,9 @@ func Load() (Config, error) {
 	authServiceClientSecret := os.Getenv("AUTH_SERVICE_CLIENT_SECRET")
 	authServiceTokenAudience := strings.TrimSpace(os.Getenv("AUTH_SERVICE_TOKEN_AUDIENCE"))
 	authServiceTokenScopes := splitCSV(os.Getenv("AUTH_SERVICE_TOKEN_SCOPES"))
+	internalServiceTokenAudience := strings.TrimSpace(env("INTERNAL_SERVICE_TOKEN_AUDIENCE", "hacom-cloud-service"))
+	internalServiceTokenScope := strings.TrimSpace(env("INTERNAL_SERVICE_TOKEN_SCOPE", "cloud.quota.review"))
+	demoAdminServiceToken := strings.TrimSpace(env("DEMO_ADMIN_SERVICE_TOKEN", "local-cloud-admin-service-token"))
 	if authMode == "jwt" {
 		if err := validateJWTAuthConfig(
 			authJWKSURL,
@@ -259,53 +265,56 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:                      appEnv,
-		APIAddr:                     env("API_ADDR", ":8080"),
-		AuthMode:                    authMode,
-		AuthJWKSURL:                 authJWKSURL,
-		AuthIssuer:                  authIssuer,
-		AuthAudiences:               authAudiences,
-		AuthJWKSCacheTTL:            authJWKSCacheTTL,
-		AuthHTTPTimeout:             authHTTPTimeout,
-		AuthRedisURL:                authRedisURL,
-		AuthRevocationTimeout:       authRevocationTimeout,
-		AuthLegacyHS256Enabled:      authLegacyHS256Enabled,
-		AuthLegacyHS256Secret:       authLegacyHS256Secret,
-		AuthVerificationContractURL: authVerificationContractURL,
-		AuthAccountStateURL:         authAccountStateURL,
-		AuthServiceTokenURL:         authServiceTokenURL,
-		AuthServiceClientID:         authServiceClientID,
-		AuthServiceClientSecret:     authServiceClientSecret,
-		AuthServiceTokenAudience:    authServiceTokenAudience,
-		AuthServiceTokenScopes:      authServiceTokenScopes,
-		DatabaseURL:                 os.Getenv("DATABASE_URL"),
-		MinIOEndpoint:               os.Getenv("MINIO_ENDPOINT"),
-		MinIOAccessKey:              os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey:              os.Getenv("MINIO_SECRET_KEY"),
-		MinIOUseSSL:                 useSSL,
-		MinIOBucket:                 env("MINIO_BUCKET", "hacom-cloud-private"),
-		MaxUploadBytes:              maxUploadBytes,
-		MaxContentBytes:             maxContentBytes,
-		DefaultQuotaBytes:           defaultQuotaBytes,
-		QuotaRequestTiersBytes:      quotaRequestTiers,
-		UploadURLTTL:                uploadURLTTL,
-		DownloadURLTTL:              downloadURLTTL,
-		HealthTimeout:               healthTimeout,
-		SearchQueryTimeout:          searchQueryTimeout,
-		ShutdownTimeout:             shutdownTimeout,
-		WorkerID:                    workerID,
-		WorkerPollInterval:          workerPollInterval,
-		WorkerJobTimeout:            workerJobTimeout,
-		WorkerLockTimeout:           workerLockTimeout,
-		WorkerMaxAttempts:           workerMaxAttempts,
-		WorkerBaseBackoff:           workerBaseBackoff,
-		WorkerMaxBackoff:            workerMaxBackoff,
-		WorkerCleanupScanInterval:   workerCleanupScanInterval,
-		WorkerCleanupBatchSize:      workerCleanupBatchSize,
-		TrashRetention:              trashRetention,
-		WorkerTrashScanInterval:     workerTrashScanInterval,
-		WorkerTrashBatchSize:        workerTrashBatchSize,
-		WorkerMetricsAddr:           strings.TrimSpace(env("WORKER_METRICS_ADDR", ":9091")),
+		AppEnv:                       appEnv,
+		APIAddr:                      env("API_ADDR", ":8080"),
+		AuthMode:                     authMode,
+		AuthJWKSURL:                  authJWKSURL,
+		AuthIssuer:                   authIssuer,
+		AuthAudiences:                authAudiences,
+		AuthJWKSCacheTTL:             authJWKSCacheTTL,
+		AuthHTTPTimeout:              authHTTPTimeout,
+		AuthRedisURL:                 authRedisURL,
+		AuthRevocationTimeout:        authRevocationTimeout,
+		AuthLegacyHS256Enabled:       authLegacyHS256Enabled,
+		AuthLegacyHS256Secret:        authLegacyHS256Secret,
+		AuthVerificationContractURL:  authVerificationContractURL,
+		AuthAccountStateURL:          authAccountStateURL,
+		AuthServiceTokenURL:          authServiceTokenURL,
+		AuthServiceClientID:          authServiceClientID,
+		AuthServiceClientSecret:      authServiceClientSecret,
+		AuthServiceTokenAudience:     authServiceTokenAudience,
+		AuthServiceTokenScopes:       authServiceTokenScopes,
+		InternalServiceTokenAudience: internalServiceTokenAudience,
+		InternalServiceTokenScope:    internalServiceTokenScope,
+		DemoAdminServiceToken:        demoAdminServiceToken,
+		DatabaseURL:                  os.Getenv("DATABASE_URL"),
+		MinIOEndpoint:                os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:               os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:               os.Getenv("MINIO_SECRET_KEY"),
+		MinIOUseSSL:                  useSSL,
+		MinIOBucket:                  env("MINIO_BUCKET", "hacom-cloud-private"),
+		MaxUploadBytes:               maxUploadBytes,
+		MaxContentBytes:              maxContentBytes,
+		DefaultQuotaBytes:            defaultQuotaBytes,
+		QuotaRequestTiersBytes:       quotaRequestTiers,
+		UploadURLTTL:                 uploadURLTTL,
+		DownloadURLTTL:               downloadURLTTL,
+		HealthTimeout:                healthTimeout,
+		SearchQueryTimeout:           searchQueryTimeout,
+		ShutdownTimeout:              shutdownTimeout,
+		WorkerID:                     workerID,
+		WorkerPollInterval:           workerPollInterval,
+		WorkerJobTimeout:             workerJobTimeout,
+		WorkerLockTimeout:            workerLockTimeout,
+		WorkerMaxAttempts:            workerMaxAttempts,
+		WorkerBaseBackoff:            workerBaseBackoff,
+		WorkerMaxBackoff:             workerMaxBackoff,
+		WorkerCleanupScanInterval:    workerCleanupScanInterval,
+		WorkerCleanupBatchSize:       workerCleanupBatchSize,
+		TrashRetention:               trashRetention,
+		WorkerTrashScanInterval:      workerTrashScanInterval,
+		WorkerTrashBatchSize:         workerTrashBatchSize,
+		WorkerMetricsAddr:            strings.TrimSpace(env("WORKER_METRICS_ADDR", ":9091")),
 	}
 
 	required := []struct {

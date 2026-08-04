@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: Hacom Cloud Admin Quota Review API
+  version: 1.0.0
+  description: Internal contract consumed only by chat-admin-service.
+paths:
+  /internal/v1/cloud/admin/quota/requests:
+    get:
+      summary: List quota requests with their current quota consumption
+      security: [{ serviceBearer: [cloud.quota.review] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, approved, rejected] }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: cursor
+          schema: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: Cursor page ordered by createdAt and id descending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminQuotaRequest" }
+                  nextCursor: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/v1/cloud/admin/quota/requests/{requestId}/approve:
+    post:
+      summary: Approve once and set the quota to requestedQuotaBytes
+      security: [{ serviceBearer: [cloud.quota.review] }]
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+        - $ref: "#/components/parameters/AdminActor"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody: { $ref: "#/components/requestBodies/ReviewBody" }
+      responses:
+        "200": { $ref: "#/components/responses/ReviewResult" }
+        "409": { description: Invalid state, idempotency conflict, or quota below consumption }
+  /internal/v1/cloud/admin/quota/requests/{requestId}/reject:
+    post:
+      summary: Reject a pending quota request
+      security: [{ serviceBearer: [cloud.quota.review] }]
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+        - $ref: "#/components/parameters/AdminActor"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody: { $ref: "#/components/requestBodies/ReviewBody" }
+      responses:
+        "200": { $ref: "#/components/responses/ReviewResult" }
+        "409": { description: Invalid state or idempotency conflict }
+components:
+  securitySchemes:
+    serviceBearer:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /internal/v1/auth/service-token
+          scopes:
+            cloud.quota.review: Review Cloud quota requests
+  parameters:
+    RequestId: { in: path, name: requestId, required: true, schema: { type: string, format: uuid } }
+    AdminActor: { in: header, name: X-Admin-Actor-ID, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey: { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+  requestBodies:
+    ReviewBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              note: { type: string, minLength: 1, maxLength: 1000 }
+  responses:
+    Unauthorized: { description: Missing or invalid service token }
+    Forbidden: { description: Service token lacks cloud.quota.review scope }
+    ReviewResult:
+      description: Decision result; applied=false means an idempotent retry
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AdminQuotaRequest" }
+  schemas:
+    AdminQuotaRequest:
+      type: object
+      required: [id, ownerUserId, status, currentQuotaBytes, requestedQuotaBytes, quotaBytes, usedBytes, reservedBytes, trashBytes, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        ownerUserId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, approved, rejected] }
+        currentQuotaBytes: { type: integer, format: int64 }
+        requestedQuotaBytes: { type: integer, format: int64 }
+        quotaBytes: { type: integer, format: int64 }
+        usedBytes: { type: integer, format: int64 }
+        reservedBytes: { type: integer, format: int64 }
+        trashBytes: { type: integer, format: int64 }
+        reason: { type: string }
+        reviewedByUserId: { type: string, format: uuid }
+        reviewedAt: { type: string, format: date-time }
+        reviewNote: { type: string }
+        applied: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

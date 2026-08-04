@@ -215,7 +215,7 @@ func TestQuotaRequestCurrentIsOwnerScopedAndReturnsLatestState(t *testing.T) {
 	}
 	if _, err := tx.Exec(context.Background(), `
 		UPDATE cloud.quota_requests
-		SET status='rejected', reviewed_by_user_id=$2, reviewed_at=NOW()
+		SET status='rejected', reviewed_by_user_id=$2, reviewed_at=NOW(), review_operation_id='legacy-test-review'
 		WHERE id=$1
 	`, result.Request.ID, reviewerID); err != nil {
 		t.Fatal(err)
@@ -235,5 +235,44 @@ func TestQuotaRequestCurrentIsOwnerScopedAndReturnsLatestState(t *testing.T) {
 	})
 	if err != nil || second.Request.Status != quotarequest.StatusPending {
 		t.Fatalf("new request after rejected=%+v error=%v", second, err)
+	}
+}
+
+func TestQuotaRequestApproveIsAtomicAuditedAndIdempotent(t *testing.T) {
+	service, repository := newQuotaRequestIntegrationService(t)
+	ownerID, actorID := uuid.New(), uuid.New()
+	cleanupOwner(t, repository.pool, ownerID)
+	created, err := service.Create(context.Background(), quotarequest.CreateCommand{
+		OwnerUserID: ownerID, RequestedQuotaBytes: 10_000_000_000, IdempotencyKey: "admin-review-create",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note := "capacity verified"
+	command := quotarequest.ReviewCommand{RequestID: created.Request.ID, ActorUserID: actorID, Decision: quotarequest.StatusApproved, OperationID: "admin-review-op", Note: &note, RequestIDTrace: "trace-admin-review"}
+	first, err := service.Review(context.Background(), command)
+	if err != nil || !first.Applied || first.Item.QuotaBytes != 10_000_000_000 {
+		t.Fatalf("first=%+v error=%v", first, err)
+	}
+	retry, err := service.Review(context.Background(), command)
+	if err != nil || retry.Applied || retry.Item.QuotaBytes != first.Item.QuotaBytes {
+		t.Fatalf("retry=%+v error=%v", retry, err)
+	}
+	if _, err := service.Review(context.Background(), quotarequest.ReviewCommand{RequestID: created.Request.ID, ActorUserID: actorID, Decision: quotarequest.StatusApproved, OperationID: "different-op", Note: &note}); !errors.Is(err, quotarequest.ErrInvalidState) {
+		t.Fatalf("different retry error=%v", err)
+	}
+	var quotaBytes int64
+	var auditCount int
+	var auditActor uuid.UUID
+	if err := repository.pool.QueryRow(context.Background(), `
+		SELECT quota.quota_bytes,
+		 (SELECT count(*) FROM cloud.audit_logs WHERE entity_id=$1 AND action='cloud.quota_request.approved'),
+		 (SELECT actor_user_id FROM cloud.audit_logs WHERE entity_id=$1 AND action='cloud.quota_request.approved' LIMIT 1)
+		FROM cloud.quotas quota WHERE quota.drive_id=$2
+	`, created.Request.ID, created.Request.DriveID).Scan(&quotaBytes, &auditCount, &auditActor); err != nil {
+		t.Fatal(err)
+	}
+	if quotaBytes != 10_000_000_000 || auditCount != 1 || auditActor != actorID {
+		t.Fatalf("quota=%d audit=%d actor=%s", quotaBytes, auditCount, auditActor)
 	}
 }

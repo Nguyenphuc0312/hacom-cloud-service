@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const minimumSchemaVersion int64 = 8
+const minimumSchemaVersion int64 = 9
 
 type PostgresReadinessClient interface {
 	Ping(ctx context.Context) error

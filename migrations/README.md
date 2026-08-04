@@ -11,6 +11,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000006_trash_lifecycle_transactions
 000007_phase3_search_filter
 000008_quota_request_outbox
+000009_quota_admin_review
 ```
 
 ## Chạy local

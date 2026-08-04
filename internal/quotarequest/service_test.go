@@ -10,8 +10,10 @@ import (
 )
 
 type fakeRepository struct {
-	create  func(context.Context, CreateCommand) (CreateResult, error)
-	current func(context.Context, uuid.UUID) (Request, error)
+	create    func(context.Context, CreateCommand) (CreateResult, error)
+	current   func(context.Context, uuid.UUID) (Request, error)
+	adminList func(context.Context, AdminListFilter) (AdminPage, error)
+	review    func(context.Context, ReviewCommand) (ReviewResult, error)
 }
 
 func (f fakeRepository) Create(ctx context.Context, command CreateCommand) (CreateResult, error) {
@@ -20,6 +22,14 @@ func (f fakeRepository) Create(ctx context.Context, command CreateCommand) (Crea
 
 func (f fakeRepository) Current(ctx context.Context, owner uuid.UUID) (Request, error) {
 	return f.current(ctx, owner)
+}
+
+func (f fakeRepository) AdminList(ctx context.Context, filter AdminListFilter) (AdminPage, error) {
+	return f.adminList(ctx, filter)
+}
+
+func (f fakeRepository) Review(ctx context.Context, command ReviewCommand) (ReviewResult, error) {
+	return f.review(ctx, command)
 }
 
 func TestCreateValidatesTierAndNormalizesSensitiveReason(t *testing.T) {
@@ -77,6 +87,46 @@ func TestNewServiceRejectsUnsafeTierConfiguration(t *testing.T) {
 	for _, tiers := range [][]int64{nil, {0}, {10, 10}} {
 		if _, err := NewService(fakeRepository{}, tiers); err == nil {
 			t.Fatalf("tiers=%v accepted", tiers)
+		}
+	}
+}
+
+func TestReviewValidatesActorDecisionIdempotencyAndNote(t *testing.T) {
+	actorID, requestID := uuid.New(), uuid.New()
+	note := "  approved after capacity review  "
+	repository := fakeRepository{review: func(_ context.Context, command ReviewCommand) (ReviewResult, error) {
+		if command.ActorUserID != actorID || command.RequestID != requestID || command.Decision != StatusApproved ||
+			command.OperationID != "review-1" || command.Note == nil || *command.Note != "approved after capacity review" {
+			t.Fatalf("command=%+v", command)
+		}
+		return ReviewResult{Applied: true}, nil
+	}}
+	service, err := NewService(repository, []int64{10_000_000_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Review(context.Background(), ReviewCommand{RequestID: requestID, ActorUserID: actorID, Decision: StatusApproved, OperationID: " review-1 ", Note: &note})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAdminReviewRejectsInvalidInputBeforeRepository(t *testing.T) {
+	repository := fakeRepository{review: func(context.Context, ReviewCommand) (ReviewResult, error) {
+		t.Fatal("repository must not be called")
+		return ReviewResult{}, nil
+	}}
+	service, err := NewService(repository, []int64{10_000_000_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []ReviewCommand{
+		{RequestID: uuid.New(), ActorUserID: uuid.New(), Decision: StatusPending, OperationID: "key"},
+		{RequestID: uuid.New(), ActorUserID: uuid.Nil, Decision: StatusApproved, OperationID: "key"},
+		{RequestID: uuid.New(), ActorUserID: uuid.New(), Decision: StatusRejected},
+	} {
+		if _, err := service.Review(context.Background(), command); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("error=%v", err)
 		}
 	}
 }

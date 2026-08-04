@@ -25,6 +25,23 @@ func buildAuthenticator(cfg config.Config) (auth.Authenticator, io.Closer, error
 	}
 }
 
+func buildAdminServiceAuthenticator(cfg config.Config) (auth.Authenticator, error) {
+	if cfg.AuthMode == "demo" {
+		return auth.DemoServiceAuthenticator{Token: cfg.DemoAdminServiceToken}, nil
+	}
+	httpClient := &http.Client{Timeout: cfg.AuthHTTPTimeout}
+	jwks, err := auth.NewRemoteJWKS(cfg.AuthJWKSURL, httpClient, cfg.AuthJWKSCacheTTL)
+	if err != nil {
+		return nil, fmt.Errorf("create admin service-token JWKS client: %w", err)
+	}
+	warmCtx, cancel := context.WithTimeout(context.Background(), cfg.AuthHTTPTimeout)
+	defer cancel()
+	if err = jwks.Warm(warmCtx); err != nil {
+		return nil, errors.New("Auth JWKS is unavailable for admin service-token verification")
+	}
+	return auth.NewServiceTokenAuthenticator(jwks, cfg.AuthIssuer, cfg.InternalServiceTokenAudience, cfg.InternalServiceTokenScope)
+}
+
 func buildJWTAuthenticator(cfg config.Config) (auth.Authenticator, io.Closer, error) {
 	httpClient := &http.Client{
 		Timeout: cfg.AuthHTTPTimeout,

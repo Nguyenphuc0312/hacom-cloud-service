@@ -43,6 +43,11 @@ func main() {
 	if authCloser != nil {
 		defer authCloser.Close()
 	}
+	adminServiceAuthenticator, err := buildAdminServiceAuthenticator(cfg)
+	if err != nil {
+		logger.Error("initialize Cloud admin service authentication", "error", err)
+		os.Exit(1)
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
@@ -154,10 +159,15 @@ func main() {
 		logger.Error("create cloud API handler", "error", err)
 		os.Exit(1)
 	}
+	adminQuotaHandler, err := cloudapi.NewAdminQuotaHandler(quotaRequestService, adminServiceAuthenticator, logger)
+	if err != nil {
+		logger.Error("create Cloud admin quota handler", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router.New(healthService, cloudHandler),
+		Handler:           router.New(healthService, cloudHandler, adminQuotaHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

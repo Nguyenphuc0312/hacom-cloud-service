@@ -14,11 +14,48 @@ import (
 const (
 	MaxIdempotencyKeyBytes = 128
 	MaxReasonRunes         = 1000
+	MaxReviewNoteRunes     = 1000
+	MaxAdminListLimit      = 100
 )
 
 type Repository interface {
 	Create(context.Context, CreateCommand) (CreateResult, error)
 	Current(context.Context, uuid.UUID) (Request, error)
+	AdminList(context.Context, AdminListFilter) (AdminPage, error)
+	Review(context.Context, ReviewCommand) (ReviewResult, error)
+}
+
+func (s *Service) AdminList(ctx context.Context, filter AdminListFilter) (AdminPage, error) {
+	if filter.Status != "" && filter.Status != StatusPending && filter.Status != StatusApproved && filter.Status != StatusRejected {
+		return AdminPage{}, ErrInvalidInput
+	}
+	if filter.Limit == 0 {
+		filter.Limit = 25
+	}
+	if filter.Limit < 1 || filter.Limit > MaxAdminListLimit || len(filter.Cursor) > 512 {
+		return AdminPage{}, ErrInvalidInput
+	}
+	return s.repository.AdminList(ctx, filter)
+}
+
+func (s *Service) Review(ctx context.Context, command ReviewCommand) (ReviewResult, error) {
+	if command.RequestID == uuid.Nil || command.ActorUserID == uuid.Nil ||
+		(command.Decision != StatusApproved && command.Decision != StatusRejected) {
+		return ReviewResult{}, ErrInvalidInput
+	}
+	command.OperationID = strings.TrimSpace(command.OperationID)
+	if command.OperationID == "" || len(command.OperationID) > MaxIdempotencyKeyBytes {
+		return ReviewResult{}, fmt.Errorf("%w: Idempotency-Key must contain 1 to %d bytes", ErrInvalidInput, MaxIdempotencyKeyBytes)
+	}
+	command.RequestIDTrace = strings.TrimSpace(command.RequestIDTrace)
+	if command.Note != nil {
+		note := strings.TrimSpace(*command.Note)
+		if note == "" || utf8.RuneCountInString(note) > MaxReviewNoteRunes {
+			return ReviewResult{}, fmt.Errorf("%w: note must contain 1 to %d characters", ErrInvalidInput, MaxReviewNoteRunes)
+		}
+		command.Note = &note
+	}
+	return s.repository.Review(ctx, command)
 }
 
 type Service struct {
