@@ -27,7 +27,6 @@ interface SidebarProps {
   currentUser: UserSummary;
   selectedId: string | null;
   leadingContent?: React.ReactNode;
-  hideConversationList?: boolean;
 
   isLoadingMoreConversations?: boolean;
   hasMoreConversations?: boolean;
@@ -45,7 +44,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   selectedId,
   leadingContent,
-  hideConversationList = false,
 
   isLoadingMoreConversations = false,
   hasMoreConversations = false,
@@ -152,24 +150,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         >
           {leadingContent}
-          {!hideConversationList ? (
-            <div className="min-h-0 flex-1">
-              <RoomList
-                layoutState={layoutState}
-                conversationIds={conversationIds}
-                currentUser={currentUser}
-                selectedId={selectedId}
-                searchQuery={deferredSearchQuery}
-                showLoadingSkeleton={showConversationSkeleton}
-                error={conversationsError}
-                onRetry={onRetryConversations}
-                hasMore={hasMoreConversations}
-                isLoadingMore={isLoadingMoreConversations}
-                onLoadMore={onLoadMoreConversations}
-                onSelect={handleSelectRoom}
-              />
-            </div>
-          ) : null}
+          <RoomList
+            layoutState={layoutState}
+            conversationIds={conversationIds}
+            currentUser={currentUser}
+            selectedId={selectedId}
+            searchQuery={deferredSearchQuery}
+            showLoadingSkeleton={showConversationSkeleton}
+            error={conversationsError}
+            onRetry={onRetryConversations}
+            hasMore={hasMoreConversations}
+            isLoadingMore={isLoadingMoreConversations}
+            onLoadMore={onLoadMoreConversations}
+            onSelect={handleSelectRoom}
+          />
         </div>
 
         {isSearchOpen ? (
