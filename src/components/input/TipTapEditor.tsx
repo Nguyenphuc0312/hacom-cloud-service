@@ -6,7 +6,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 import type { Editor } from "@tiptap/react";
-import { MentionChip } from "./mentionNode";
+import { MentionChip, collectMentionRanges } from "./mentionNode";
 
 /**
  * How TipTap's `getText()` joins block nodes. Any offset computed with
@@ -43,6 +43,18 @@ export interface TipTapEditorHandle {
   /** Ids of every mention chip currently in the document (to hide already-tagged
    *  people from the suggestion list, Zalo-style). */
   getMentionedIds: () => string[];
+  /**
+   * Vị trí từng chip trong chuỗi `getText()` sẽ trả về — đơn vị **code point**,
+   * tính cả ký tự '@' (contract `FE__mention-structured-ranges__contract__30-07-26`).
+   *
+   * Đây là đường DUY NHẤT lấy được vị trí chắc chắn: editor biết chính xác chip
+   * nằm đâu, không phải dò tên ngược trong chữ như trước.
+   */
+  getMentionRanges: () => {
+    userId: string;
+    offset: number;
+    length: number;
+  }[];
   getEditor: () => Editor | null;
 }
 
@@ -283,6 +295,8 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           ])
           .run();
       },
+      getMentionRanges: () =>
+        editor ? collectMentionRanges(editor, GET_TEXT_BLOCK_SEPARATOR) : [],
       getMentionedIds: () => {
         if (!editor) return [];
         const ids: string[] = [];
