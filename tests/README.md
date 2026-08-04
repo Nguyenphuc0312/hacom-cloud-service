@@ -33,4 +33,15 @@ Environment local chỉ chứa:
 baseUrl=http://localhost:8080
 ```
 
+## Phase 2 migration baseline
+
+```bash
+make test-migration-phase2
+```
+
+Suite creates a dedicated temporary database and verifies migration `000005` on
+an empty database and on populated Phase 1 data. It covers backfill/invariants,
+down/reapply, and atomic rejection of an unsafe legacy quota snapshot. The test
+database is removed when the script exits.
+
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.

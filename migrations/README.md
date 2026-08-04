@@ -7,6 +7,7 @@ Migration sử dụng định dạng của `golang-migrate`:
 000002_cloud_content
 000003_cloud_upload_and_quota
 000004_cloud_worker_and_audit
+000005_phase2_quota_baseline
 ```
 
 ## Chạy local
@@ -45,3 +46,5 @@ Thiết kế chi tiết:
 - `docs/database/phase1-database-review.md`
 - `docs/database/phase1-erd.md`
 - `docs/database/phase1-design.md`
+- `docs/database/phase2-erd.md`
+- `docs/database/phase2-design.md`

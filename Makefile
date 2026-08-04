@@ -19,6 +19,7 @@ POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Au
 	migrate-up migrate-down migrate-version db-verify \
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
+	test-migration-phase2 \
 	test-release-process5 test-postman-process5 demo-process5 \
 	test-gate1-person4 test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
@@ -42,6 +43,9 @@ test-integration-clean:
 
 test-integration-process4:
 	sh scripts/test-process4-integration.sh
+
+test-migration-phase2:
+	sh scripts/test-phase2-migration.sh
 
 test-release-process5:
 	sh scripts/test-process5-release.sh

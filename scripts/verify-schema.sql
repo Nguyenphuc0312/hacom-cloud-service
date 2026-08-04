@@ -9,6 +9,7 @@ DECLARE
     'drives',
     'items',
     'jobs',
+    'quota_requests',
     'quotas',
     'storage_objects',
     'upload_parts',
@@ -24,6 +25,8 @@ DECLARE
   item_a UUID;
   session_a UUID;
   ledger_a UUID;
+  quota_request_a UUID;
+  quota_request_status_values TEXT[];
 BEGIN
   SELECT array_agg(table_name ORDER BY table_name)
   INTO actual_tables
@@ -57,6 +60,20 @@ BEGIN
     RAISE EXCEPTION 'Cloud schema contains cross-service foreign keys';
   END IF;
 
+  SELECT array_agg(enum_value ORDER BY enum_order)
+  INTO quota_request_status_values
+  FROM (
+    SELECT enumlabel::TEXT AS enum_value, enumsortorder AS enum_order
+    FROM pg_enum
+    WHERE enumtypid = 'cloud.quota_request_status'::regtype
+  ) AS status_values;
+
+  IF quota_request_status_values IS DISTINCT FROM ARRAY['pending', 'approved', 'rejected'] THEN
+    RAISE EXCEPTION
+      'Unexpected quota request statuses: %',
+      quota_request_status_values;
+  END IF;
+
   INSERT INTO cloud.drives (owner_user_id, name)
   VALUES (owner_a, 'Schema verification A')
   RETURNING id INTO drive_a;
@@ -85,6 +102,94 @@ BEGIN
   ) <> 5000000000 THEN
     RAISE EXCEPTION 'Default quota is not 5 decimal GB';
   END IF;
+
+  IF (
+    SELECT trash_bytes
+    FROM cloud.quotas
+    WHERE drive_id = drive_a
+  ) <> 0 THEN
+    RAISE EXCEPTION 'Default trash usage is not zero';
+  END IF;
+
+  BEGIN
+    UPDATE cloud.quotas
+    SET trash_bytes = used_bytes + 1
+    WHERE drive_id = drive_a;
+
+    RAISE EXCEPTION 'trash_bytes greater than used_bytes was incorrectly accepted';
+  EXCEPTION
+    WHEN check_violation THEN
+      NULL;
+  END;
+
+  INSERT INTO cloud.quota_requests (
+    drive_id,
+    requested_by_user_id,
+    current_quota_bytes,
+    requested_quota_bytes,
+    idempotency_key,
+    reason
+  )
+  VALUES (
+    drive_a,
+    owner_a,
+    5000000000,
+    10000000000,
+    'verify-quota-request',
+    'Schema verification'
+  )
+  RETURNING id INTO quota_request_a;
+
+  BEGIN
+    INSERT INTO cloud.quota_requests (
+      drive_id,
+      requested_by_user_id,
+      current_quota_bytes,
+      requested_quota_bytes,
+      idempotency_key
+    )
+    VALUES (
+      drive_a,
+      owner_a,
+      5000000000,
+      15000000000,
+      'verify-second-pending-request'
+    );
+
+    RAISE EXCEPTION 'A second pending quota request was incorrectly accepted';
+  EXCEPTION
+    WHEN unique_violation THEN
+      NULL;
+  END;
+
+  BEGIN
+    INSERT INTO cloud.quota_requests (
+      drive_id,
+      requested_by_user_id,
+      current_quota_bytes,
+      requested_quota_bytes,
+      idempotency_key
+    )
+    VALUES (
+      drive_b,
+      owner_a,
+      5000000000,
+      5000000000,
+      'verify-invalid-increase'
+    );
+
+    RAISE EXCEPTION 'A non-increasing quota request was incorrectly accepted';
+  EXCEPTION
+    WHEN check_violation THEN
+      NULL;
+  END;
+
+  UPDATE cloud.quota_requests
+  SET
+    status = 'approved',
+    reviewed_by_user_id = gen_random_uuid(),
+    reviewed_at = NOW()
+  WHERE id = quota_request_a;
 
   INSERT INTO cloud.items (
     drive_id,
