@@ -1,8 +1,8 @@
 # Phase 2 Process 1 — Auth, API and gateway contract
 
-Status: frozen for Process 1. Owner: the four-person Process 1 team. This document
-records the Person 4 contract boundary; `chat-auth-service` remains the identity,
-session and account-state source of truth.
+Status: implemented for Process 1. Owner: the four-person Process 1 team. This
+document records the Person 4 contract boundary; `chat-auth-service` remains the
+identity, session and account-state source of truth.
 
 ## Public and upstream routes
 
@@ -81,11 +81,13 @@ secret headers are transition-only and are not the Phase 2 target contract.
 
 ## Acceptance evidence
 
-Static contract checks run with `make test-gate1-person4`. Live verification uses
+Static contract checks run with `make test-gate1-person4-static`. The actual
+Gate 1 target is `make test-gate1-person4`; it also runs the required live suite
+and fails instead of skipping when any integration input is missing. Live verification uses
 tokens issued by the Auth integration environment/test signing key:
 
 ```bash
-PHASE2_BASE_URL=http://localhost:8080 \
+PHASE2_BASE_URL=http://localhost:8080/cloud-api \
 PHASE2_ACCESS_TOKEN_USER_A='<redacted>' \
 PHASE2_ACCESS_TOKEN_USER_B='<redacted>' \
 PHASE2_EXPIRED_TOKEN='<redacted>' \

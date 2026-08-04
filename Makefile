@@ -21,7 +21,7 @@ POSTMAN_PHASE2_AUTH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Process-1-Au
 	test-integration-process4 \
 	test-migration-phase2 \
 	test-release-process5 test-postman-process5 demo-process5 \
-	test-gate1-person4 test-contract-phase2-auth test-postman-phase2-auth \
+	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
 
 run-api:
@@ -55,7 +55,9 @@ test-postman-process5:
 		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli --silent
 	@echo "Process 5 Postman acceptance passed (silent mode protects presigned URLs)."
 
-test-gate1-person4:
+test-gate1-person4: test-gate1-person4-static test-contract-phase2-auth
+
+test-gate1-person4-static:
 	go test ./internal/router ./tests/contract -run 'TestGatewayContract|TestOpenAPIContract|TestPhase2AuthContractConfiguration' -count=1
 
 test-contract-phase2-auth:
