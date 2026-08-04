@@ -73,10 +73,10 @@ func (authenticator *JWTAuthenticator) Middleware(next http.Handler) http.Handle
 					"AUTH_AUTHORITY_UNAVAILABLE",
 					"authentication authority is temporarily unavailable",
 				)
-			case errors.Is(err, ErrTokenExpired):
-				writeAuthError(writer, http.StatusUnauthorized, "AUTH_TOKEN_EXPIRED", "access token has expired")
 			default:
-				writeAuthError(writer, http.StatusUnauthorized, "AUTH_INVALID_TOKEN", "access token is invalid")
+				// All cryptographic/claim failures share one public code so the
+				// endpoint cannot be used as a token-validation oracle.
+				writeAuthError(writer, http.StatusUnauthorized, "INVALID_ACCESS_TOKEN", "access token is invalid")
 			}
 			return
 		}
@@ -86,13 +86,13 @@ func (authenticator *JWTAuthenticator) Middleware(next http.Handler) http.Handle
 			writeAuthError(
 				writer,
 				http.StatusServiceUnavailable,
-				"AUTH_REVOCATION_UNAVAILABLE",
+				"AUTH_AUTHORITY_UNAVAILABLE",
 				"authentication revocation authority is temporarily unavailable",
 			)
 			return
 		}
 		if revoked {
-			writeAuthError(writer, http.StatusUnauthorized, "AUTH_TOKEN_REVOKED", "access token has been revoked")
+			writeAuthError(writer, http.StatusUnauthorized, "SESSION_REVOKED", "access token session has been revoked")
 			return
 		}
 
@@ -112,6 +112,9 @@ func readBearerToken(header string) (string, error) {
 func writeAuthError(writer http.ResponseWriter, status int, code, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if status == http.StatusUnauthorized {
+		writer.Header().Set("WWW-Authenticate", "Bearer")
+	}
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(map[string]any{
 		"error": map[string]string{

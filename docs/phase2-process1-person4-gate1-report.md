@@ -6,7 +6,7 @@ Branch: `integration/phase-2-process-1-baseline-auth`
 
 Baseline commit: `74b220334871e73edc4525334867e9ed643244ee`
 
-Delivery commit: `4f6385986d2d083f7bcd7135f56a1ece702dc47b`
+Delivery commit after remote integration: `94ace995aec2848a49c3bb8f223deb7d8a93e7af`
 
 ## Scope completed
 

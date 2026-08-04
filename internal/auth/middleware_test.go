@@ -39,11 +39,9 @@ func responseCode(response *httptest.ResponseRecorder) string {
 	for _, code := range []string{
 		"DEMO_USER_REQUIRED",
 		"AUTH_REQUIRED",
-		"AUTH_INVALID_TOKEN",
-		"AUTH_TOKEN_EXPIRED",
-		"AUTH_TOKEN_REVOKED",
+		"INVALID_ACCESS_TOKEN",
+		"SESSION_REVOKED",
 		"AUTH_AUTHORITY_UNAVAILABLE",
-		"AUTH_REVOCATION_UNAVAILABLE",
 	} {
 		if strings.Contains(body, `"code":"`+code+`"`) {
 			return code
@@ -113,11 +111,11 @@ func TestJWTAuthenticatorRejectsUnsafeRequests(t *testing.T) {
 	}{
 		{name: "missing bearer", wantStatus: http.StatusUnauthorized, wantCode: "AUTH_REQUIRED"},
 		{name: "malformed bearer", header: "Basic token", wantStatus: http.StatusUnauthorized, wantCode: "AUTH_REQUIRED"},
-		{name: "invalid token", header: "Bearer token", verifyErr: ErrTokenInvalid, wantStatus: http.StatusUnauthorized, wantCode: "AUTH_INVALID_TOKEN"},
-		{name: "expired token", header: "Bearer token", verifyErr: ErrTokenExpired, wantStatus: http.StatusUnauthorized, wantCode: "AUTH_TOKEN_EXPIRED"},
+		{name: "invalid token", header: "Bearer token", verifyErr: ErrTokenInvalid, wantStatus: http.StatusUnauthorized, wantCode: "INVALID_ACCESS_TOKEN"},
+		{name: "expired token", header: "Bearer token", verifyErr: ErrTokenExpired, wantStatus: http.StatusUnauthorized, wantCode: "INVALID_ACCESS_TOKEN"},
 		{name: "JWKS unavailable", header: "Bearer token", verifyErr: ErrAuthAuthorityUnready, wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_AUTHORITY_UNAVAILABLE"},
-		{name: "revoked token", header: "Bearer token", revoked: true, wantStatus: http.StatusUnauthorized, wantCode: "AUTH_TOKEN_REVOKED"},
-		{name: "revocation unavailable", header: "Bearer token", revokeErr: errors.New("redis down"), wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_REVOCATION_UNAVAILABLE"},
+		{name: "revoked token", header: "Bearer token", revoked: true, wantStatus: http.StatusUnauthorized, wantCode: "SESSION_REVOKED"},
+		{name: "revocation unavailable", header: "Bearer token", revokeErr: errors.New("redis down"), wantStatus: http.StatusServiceUnavailable, wantCode: "AUTH_AUTHORITY_UNAVAILABLE"},
 	}
 
 	for _, test := range tests {
@@ -140,6 +138,9 @@ func TestJWTAuthenticatorRejectsUnsafeRequests(t *testing.T) {
 			handler.ServeHTTP(response, request)
 			if called || response.Code != test.wantStatus || responseCode(response) != test.wantCode {
 				t.Fatalf("called=%v status=%d code=%q body=%s", called, response.Code, responseCode(response), response.Body.String())
+			}
+			if response.Code == http.StatusUnauthorized && response.Header().Get("WWW-Authenticate") != "Bearer" {
+				t.Fatalf("WWW-Authenticate = %q, want Bearer", response.Header().Get("WWW-Authenticate"))
 			}
 		})
 	}
