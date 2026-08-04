@@ -57,10 +57,7 @@ test-trash-api:
 	go test -race -count=1 ./internal/trash ./internal/fileaccess ./internal/cloudapi ./tests/contract
 
 test-trash-gate2:
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" \
-	TEST_MINIO_ENDPOINT="$(TEST_MINIO_ENDPOINT)" \
-	go test -race -count=1 -run 'TestGate2|TestTrashPostgres|TestJobPostgres' -v \
-		./internal/repository ./internal/worker
+	sh scripts/test-trash-gate2.sh
 
 test-postman-phase2-trash:
 	npx --yes newman run "$(POSTMAN_PHASE2_TRASH_COLLECTION)" --reporters cli --silent

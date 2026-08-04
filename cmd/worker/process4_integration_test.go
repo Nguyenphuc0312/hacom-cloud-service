@@ -310,6 +310,12 @@ func cleanupProcess4Owner(
 	t.Cleanup(func() {
 		ctx := context.Background()
 		queries := []string{
+			`DELETE FROM cloud.item_lifecycle_operations WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
+			`DELETE FROM cloud.audit_logs WHERE drive_id IN (
+				SELECT id FROM cloud.drives WHERE owner_user_id = $1
+			)`,
 			`DELETE FROM cloud.jobs WHERE drive_id IN (
 				SELECT id FROM cloud.drives WHERE owner_user_id = $1
 			)`,

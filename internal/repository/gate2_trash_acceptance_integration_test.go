@@ -204,6 +204,7 @@ func TestGate2AutoPurgeRecoversCrashAndReconcilesQuota(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	assertGate2QuotaCheckpoint(t, pool, ownerID, 3, 0, false)
 
 	permanentDelete, err := NewPermanentDeletePostgres(pool)
 	if err != nil {
@@ -213,6 +214,7 @@ func TestGate2AutoPurgeRecoversCrashAndReconcilesQuota(t *testing.T) {
 	if err != nil || purged != 3 {
 		t.Fatalf("purged=%d error=%v", purged, err)
 	}
+	assertGate2QuotaCheckpoint(t, pool, ownerID, 0, 1, true)
 
 	var jobID uuid.UUID
 	var payload []byte
@@ -240,9 +242,13 @@ func TestGate2AutoPurgeRecoversCrashAndReconcilesQuota(t *testing.T) {
 	if _, err := objects.StatObject(ctx, "gate2/permanent-delete/"+objectID.String()); !errors.Is(err, storage.ErrObjectNotFound) {
 		t.Fatalf("object survived injected crash: %v", err)
 	}
+	assertGate2QuotaCheckpoint(t, pool, ownerID, 0, 1, true)
+	assertGate2PermanentDeleteState(t, pool, jobID, objectID, "processing", "delete_pending", 0)
 	if err := handler.Handle(ctx, job); err != nil {
 		t.Fatal(err)
 	}
+	assertGate2QuotaCheckpoint(t, pool, ownerID, 0, 1, true)
+	assertGate2PermanentDeleteState(t, pool, jobID, objectID, "processing", "deleted", 1)
 
 	jobs, err := NewJobPostgres(pool, "gate2-worker", worker.RetryPolicy{
 		MaxAttempts: 5, BaseBackoff: time.Second, MaxBackoff: time.Minute, LockTimeout: time.Minute,
@@ -253,9 +259,84 @@ func TestGate2AutoPurgeRecoversCrashAndReconcilesQuota(t *testing.T) {
 	if err := jobs.Complete(ctx, jobID.String()); err != nil {
 		t.Fatal(err)
 	}
+	assertGate2PermanentDeleteState(t, pool, jobID, objectID, "completed", "deleted", 1)
 	assertGate2Reconciled(t, pool, ownerID, 1, 1)
 	if snapshot := metrics.Snapshot(); snapshot.PurgeCompleted != 1 || snapshot.PurgeMissingObject != 1 {
 		t.Fatalf("metrics=%+v", snapshot)
+	}
+}
+
+func assertGate2QuotaCheckpoint(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	ownerID uuid.UUID,
+	wantItems, wantJobs int,
+	wantZero bool,
+) {
+	t.Helper()
+	var (
+		used, trashBytes, reserved              int64
+		ledgerUsed, ledgerTrash, ledgerReserved int64
+		itemCount, jobCount                     int
+	)
+	if err := pool.QueryRow(context.Background(), `
+		SELECT
+			quota.used_bytes, quota.trash_bytes, quota.reserved_bytes,
+			COALESCE(SUM(ledger.delta_used_bytes), 0),
+			COALESCE(SUM(ledger.delta_trash_bytes), 0),
+			COALESCE(SUM(ledger.delta_reserved_bytes), 0),
+			(SELECT COUNT(*) FROM cloud.items WHERE drive_id = drive.id),
+			(SELECT COUNT(*) FROM cloud.jobs WHERE drive_id = drive.id AND job_type = 'permanent_delete')
+		FROM cloud.drives AS drive
+		JOIN cloud.quotas AS quota ON quota.drive_id = drive.id
+		LEFT JOIN cloud.usage_ledger AS ledger ON ledger.drive_id = drive.id
+		WHERE drive.owner_user_id = $1
+		GROUP BY drive.id, quota.drive_id
+	`, ownerID).Scan(
+		&used, &trashBytes, &reserved,
+		&ledgerUsed, &ledgerTrash, &ledgerReserved,
+		&itemCount, &jobCount,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if used != ledgerUsed || trashBytes != ledgerTrash || reserved != ledgerReserved ||
+		reserved != 0 || itemCount != wantItems || jobCount != wantJobs ||
+		(wantZero && (used != 0 || trashBytes != 0)) ||
+		(!wantZero && (used <= 0 || trashBytes != used)) {
+		t.Fatalf(
+			"checkpoint quota=%d/%d/%d ledger=%d/%d/%d items=%d jobs=%d",
+			used, trashBytes, reserved, ledgerUsed, ledgerTrash, ledgerReserved,
+			itemCount, jobCount,
+		)
+	}
+}
+
+func assertGate2PermanentDeleteState(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	jobID, objectID uuid.UUID,
+	wantJobStatus, wantObjectStatus string,
+	wantCompletionAudits int,
+) {
+	t.Helper()
+	var jobStatus, objectStatus string
+	var auditCount int
+	if err := pool.QueryRow(context.Background(), `
+		SELECT job.status::TEXT, object.status::TEXT,
+		       (SELECT COUNT(*) FROM cloud.audit_logs
+		        WHERE request_id = job.id::TEXT
+		          AND action = 'cloud.object.permanent_delete.completed')
+		FROM cloud.jobs AS job
+		JOIN cloud.storage_objects AS object ON object.id = job.storage_object_id
+		WHERE job.id = $1 AND object.id = $2
+	`, jobID, objectID).Scan(&jobStatus, &objectStatus, &auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if jobStatus != wantJobStatus || objectStatus != wantObjectStatus || auditCount != wantCompletionAudits {
+		t.Fatalf(
+			"permanent delete state job=%s object=%s audits=%d",
+			jobStatus, objectStatus, auditCount,
+		)
 	}
 }
 

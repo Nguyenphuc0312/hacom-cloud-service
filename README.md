@@ -123,6 +123,12 @@ Quy trình 3 đã bổ sung upload trực tiếp bằng MinIO presigned URL, quo
 Worker Quy trình 4 đã xử lý `hash_file` và cleanup upload hết hạn. File sau
 complete chuyển `processing`, rồi thành `ready` sau khi Worker tính SHA-256.
 
+Phase 2 Quy trình 2 đã hoàn thiện Trash 24 giờ, restore, xóa ngay và Worker
+permanent-delete. Chạy Gate 2 trên database cô lập bằng
+`make test-trash-gate2`; xem ma trận kết quả và runbook tại
+[`docs/phase2-trash-gate2-report.md`](docs/phase2-trash-gate2-report.md) và
+[`docs/trash-permanent-delete-recovery-runbook.md`](docs/trash-permanent-delete-recovery-runbook.md).
+
 ## 1. Cách tổ chức chung
 
 Cả bốn người cùng làm một quy trình. Chỉ khi đạt Gate chung, cả nhóm mới chuyển sang quy trình tiếp theo.
