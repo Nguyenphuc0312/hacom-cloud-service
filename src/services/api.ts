@@ -1238,7 +1238,8 @@ export const messageApi = {
       clientMessageId?: string;
       tempId?: string;
       localId?: string;
-      mentions?: string[];
+      /** userId thuần (tin cũ) hoặc kèm range (contract mention-ranges). */
+      mentions?: (string | { userId: string; offset: number; length: number })[];
       poll?: { question: string; options: string[]; allowMultiple?: boolean; anonymous?: boolean; endsAt?: Date; allowAddOption?: boolean; hideResultsBeforeVote?: boolean };
       reminder?: { content: string; remindAt: string; repeat?: "none" | "daily" | "weekly" | "monthly"; participantIds?: string[] };
       linkPreview?: {

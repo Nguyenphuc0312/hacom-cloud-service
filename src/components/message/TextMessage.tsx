@@ -92,7 +92,6 @@ interface MentionTokenProps {
   /** The tag exactly as it appears in the message body, including '@'. */
   rawText: string;
   mention?: Mention;
-  isOwn: boolean;
   isSelfMention: boolean;
   isMentionAll: boolean;
 }
@@ -109,7 +108,6 @@ interface MentionTokenProps {
 const MentionToken: React.FC<MentionTokenProps> = ({
   rawText,
   mention,
-  isOwn,
   isSelfMention,
   isMentionAll,
 }) => {
@@ -126,12 +124,15 @@ const MentionToken: React.FC<MentionTokenProps> = ({
         isMentionAll
           ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
           : isSelfMention
-            ? isOwn
-              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
-              : "bg-[#1976D2]/10 text-[#1565C0]"
-            : isOwn
-              ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
-              : "text-[#1565C0]/80",
+            ? // Bị tag chính mình: cùng hệ xanh, nhưng nền đậm hơn tag thường để
+              // liếc qua là thấy. Không phân biệt gửi/nhận nữa — cùng lý do bên dưới.
+              "bg-[#1976D2]/20 text-[#1565C0] dark:bg-[#60A5FA]/25 dark:text-[#BFDBFE]"
+            : // Tag thường: bong bóng GỬI và NHẬN nổi BẰNG NHAU, cùng một màu xanh
+              // brand. Trước đây bên gửi ăn theo `--chat-bubble-sent-text` (light
+              // mode là gray-900 → tag ra ĐEN) và còn bị hạ alpha nên chìm hẳn vào
+              // nền bong bóng. Dark mode nền bong bóng tối nên phải dùng xanh sáng
+              // hơn, không thì chữ chìm ngược lại.
+              "bg-[#1976D2]/10 text-[#1565C0] dark:bg-[#60A5FA]/15 dark:text-[#93C5FD]",
         isClickable && "cursor-pointer hover:underline",
       )}
       title={mention?.employeeCode || undefined}
@@ -153,9 +154,9 @@ const MentionToken: React.FC<MentionTokenProps> = ({
   );
 };
 
+// isOwn đã bỏ: tag nay dùng CHUNG một bảng màu cho cả bong bóng gửi và nhận.
 const renderWithMentions = (
   text: string,
-  isOwn: boolean,
   options: {
     currentUserId?: string;
     mentions?: Mention[];
@@ -187,7 +188,6 @@ const renderWithMentions = (
         <MentionToken
           key={`m-${key++}`}
           rawText={token}
-          isOwn={isOwn}
           isSelfMention={
             candidate.toLowerCase() === currentUsername.toLowerCase()
           }
@@ -221,7 +221,6 @@ const renderWithMentions = (
         key={`m-${index}`}
         rawText={segment.text}
         mention={mention}
-        isOwn={isOwn}
         isSelfMention={Boolean(
           currentUserId && segment.userId === currentUserId,
         )}
@@ -405,7 +404,7 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
 
             return (
               <React.Fragment key={index}>
-                {renderWithMentions(part, isOwn, {
+                {renderWithMentions(part, {
                   currentUserId,
                   currentUsername,
                   mentions,
