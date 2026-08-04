@@ -1,0 +1,275 @@
+# Hacom Cloud API
+
+## Health
+
+| Method | Path | Mục đích |
+|---|---|---|
+| `GET` | `/health/live` | Liveness của API process |
+| `GET` | `/health` | Readiness của PostgreSQL, migration/schema Cloud và bucket MinIO |
+| `GET` | `/health/ready` | Alias readiness cho deployment |
+
+## Xác thực
+
+Cloud API hỗ trợ hai mode tách biệt:
+
+- `AUTH_MODE=demo`: chỉ được phép khi `APP_ENV=local|test`; nhận UUID qua
+  `X-Demo-User-ID` để chạy Postman/demo Phase 1.
+- `AUTH_MODE=jwt`: production mode; nhận access token Hacom qua:
+
+```http
+Authorization: Bearer <access-token>
+```
+
+JWT mode xác minh signature bằng JWKS, pin `RS256|ES256`, kiểm tra `kid`, issuer,
+audience, `exp`, `iat`, `typ=access`, `sub`, `sid` và `jti`. `sub` là UUID owner
+duy nhất dùng cho mọi repository query; `X-Demo-User-ID` bị bỏ qua trong mode
+này. Token refresh/service, token sai contract, hết hạn hoặc revoked đều bị từ
+chối.
+
+Revocation dùng cùng contract với Auth/Chat:
+
+```text
+blacklist:<jti>
+auth_session_invalid_before:<sid>
+auth_invalid_before:<sub>
+```
+
+Redis/JWKS không khả dụng làm protected request fail closed; API không tự decode
+token hoặc fallback sang UUID do client cung cấp.
+
+Trong local demo:
+
+```http
+X-Demo-User-ID: 11111111-1111-4111-8111-111111111111
+```
+
+Middleware của cả hai mode đều tạo cùng `auth.Principal` trong request context,
+vì vậy handler/repository không hard-code hoặc tự đọc owner từ body/header.
+
+Mỗi response Cloud API có `X-Request-ID` để đối chiếu với log server. Header này do API sinh, chưa phải distributed tracing hoàn chỉnh.
+
+## Personal Cloud — Quy trình 2
+
+### Tạo text
+
+```http
+POST /api/v1/cloud/texts
+Content-Type: application/json
+X-Demo-User-ID: <uuid>
+
+{
+  "content": "Báo cáo nghiên cứu Hacom Cloud"
+}
+```
+
+### Tạo link
+
+```http
+POST /api/v1/cloud/links
+Content-Type: application/json
+X-Demo-User-ID: <uuid>
+
+{
+  "url": "https://hacom.vn/cloud",
+  "title": "Tài liệu Hacom Cloud"
+}
+```
+
+Chỉ chấp nhận URL tuyệt đối dùng `http` hoặc `https`.
+
+### Timeline
+
+```http
+GET /api/v1/cloud/items?limit=20&cursor=<opaque-cursor>
+X-Demo-User-ID: <uuid>
+```
+
+- Nếu không truyền `limit`, giá trị mặc định là 20; nếu có thì phải từ 1 đến 100.
+- Cursor là giá trị opaque kết hợp `created_at` và `id`.
+- Không tự chỉnh sửa hoặc suy luận nội dung cursor.
+
+### Chi tiết Item
+
+```http
+GET /api/v1/cloud/items/{itemID}
+X-Demo-User-ID: <uuid>
+```
+
+Item của user khác cũng trả `404 ITEM_NOT_FOUND` để không làm lộ sự tồn tại của dữ liệu.
+
+### Quota
+
+```http
+GET /api/v1/cloud/quota
+X-Demo-User-ID: <uuid>
+```
+
+```json
+{
+  "limitBytes": 5000000000,
+  "usedBytes": 75,
+  "reservedBytes": 0,
+  "availableBytes": 4999999925,
+  "updatedAt": "2026-07-28T06:24:29.692583+07:00"
+}
+```
+
+Quota được đọc từ `DEFAULT_QUOTA_BYTES`; giới hạn text/link được đọc từ `MAX_CONTENT_BYTES`. Giá trị 5 GB và 100 MB decimal chỉ là cấu hình demo hiện tại.
+
+Drive `suspended` hoặc `archived` vẫn được đọc dữ liệu đã lưu nhưng không được tạo nội dung mới. API ghi trả `403 DRIVE_NOT_ACTIVE`.
+
+## Upload file — Quy trình 3
+
+Cloud API không nhận binary. Client chỉ gửi metadata để giữ quota và nhận presigned URL:
+
+```http
+POST /api/v1/cloud/uploads
+Content-Type: application/json
+X-Demo-User-ID: <uuid>
+Idempotency-Key: <unique-key>
+
+{
+  "fileName": "bao-cao.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 12345
+}
+```
+
+Lần đầu trả `201`; retry cùng key và cùng metadata trả `200` với cùng session/Item. Dùng cùng key cho metadata khác trả `409 IDEMPOTENCY_CONFLICT`.
+
+```json
+{
+  "uploadSessionId": "4ba79db0-2492-45e5-92c1-178e80421220",
+  "itemId": "12c14a68-902f-4c84-b74e-c420f0660f44",
+  "status": "initiated",
+  "uploadUrl": "http://localhost:9000/...",
+  "method": "PUT",
+  "requiredHeaders": {
+    "Content-Type": "application/pdf",
+    "If-None-Match": "*"
+  },
+  "sizeBytes": 12345,
+  "expiresAt": "2026-07-28T08:15:00Z"
+}
+```
+
+Client PUT binary trực tiếp tới `uploadUrl`, dùng đầy đủ header được trả về. `If-None-Match: *` được ký vào URL để object chỉ được tạo một lần và không thể bị ghi đè bằng cách dùng lại URL. Không lưu hoặc ghi log URL này.
+
+Sau khi PUT thành công:
+
+```http
+POST /api/v1/cloud/uploads/{uploadSessionId}/complete
+X-Demo-User-ID: <uuid>
+```
+
+Complete kiểm tra object tồn tại và size thực tế bằng size khai báo. Thành công chuyển quota `reserved → used`, Item/Object sang `processing`, tạo một job `hash_file/pending`. Retry complete trả lại đúng Item/Job cũ.
+
+Giới hạn hiện tại là `100,000,000` byte decimal. File lớn hơn phải lưu ở hệ thống khác và chỉ lưu link trong Hacom Cloud.
+
+## Truy cập nội dung file để preview/download
+
+Chỉ Item dạng file đã được Worker đưa sang `ready` mới được cấp URL truy cập:
+
+```http
+GET /api/v1/cloud/items/{itemID}/access
+X-Demo-User-ID: <uuid>
+```
+
+```json
+{
+  "itemId": "12c14a68-902f-4c84-b74e-c420f0660f44",
+  "url": "http://localhost:9000/...",
+  "expiresAt": "2026-07-31T09:15:00Z",
+  "fileName": "bao-cao.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 12345
+}
+```
+
+Contract:
+
+- Client chỉ gửi `itemID`; không được tự gửi hoặc suy luận bucket/object key.
+- Backend kiểm tra Item thuộc user hiện tại, Item và Storage Object cùng ở trạng
+  thái `ready`, object thật sự tồn tại trong MinIO và size khớp metadata.
+- Item của user khác trả `404 ITEM_NOT_FOUND`, giống Item không tồn tại.
+- URL là presigned GET có TTL cấu hình bằng `DOWNLOAD_URL_TTL` (mặc định 15
+  phút). Response JSON có `Cache-Control: no-store`; không lưu hoặc ghi log URL.
+- Frontend dùng URL này cho viewer ảnh, video, audio, text, PDF và các định dạng
+  trình duyệt hỗ trợ; định dạng không preview được vẫn có thể tải xuống.
+
+## Error response
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "invalid cloud content: text content must not be blank"
+  }
+}
+```
+
+| HTTP | Code | Ý nghĩa |
+|---:|---|---|
+| 400 | `INVALID_JSON` | JSON sai hoặc có field không hỗ trợ |
+| 400 | `INVALID_LIMIT` | `limit` không phải số nguyên từ 1 đến 100 |
+| 400 | `VALIDATION_ERROR` | Text/link không hợp lệ |
+| 400 | `INVALID_CURSOR` | Cursor không hợp lệ |
+| 400 | `INVALID_UPLOAD` | Metadata upload hoặc Idempotency-Key không hợp lệ |
+| 400 | `INVALID_UPLOAD_SESSION_ID` | Upload session ID không phải UUID |
+| 400 | `INVALID_ITEM_ID` | Item ID của endpoint access không phải UUID |
+| 401 | `DEMO_USER_REQUIRED` | Thiếu hoặc sai UUID ở local demo mode |
+| 401 | `AUTH_REQUIRED` | Thiếu/sai định dạng Bearer token ở JWT mode |
+| 401 | `AUTH_INVALID_TOKEN` | Token sai signature/contract/issuer/audience/type |
+| 401 | `AUTH_TOKEN_EXPIRED` | Access token đã hết hạn |
+| 401 | `AUTH_TOKEN_REVOKED` | JTI/session/user đã bị Auth thu hồi |
+| 503 | `AUTH_AUTHORITY_UNAVAILABLE` | Không thể lấy signing key JWKS cần thiết |
+| 503 | `AUTH_REVOCATION_UNAVAILABLE` | Không thể xác minh revocation; request fail closed |
+| 403 | `DRIVE_NOT_ACTIVE` | Drive bị suspended/archived nên không được ghi mới |
+| 404 | `ITEM_NOT_FOUND` | Không có Item thuộc user hiện tại |
+| 404 | `UPLOAD_SESSION_NOT_FOUND` | Session không tồn tại hoặc không thuộc user |
+| 405 | `METHOD_NOT_ALLOWED` | HTTP method không được hỗ trợ |
+| 409 | `QUOTA_EXCEEDED` | Không đủ quota |
+| 409 | `IDEMPOTENCY_CONFLICT` | Key đã dùng với metadata khác |
+| 409 | `UPLOAD_OBJECT_NOT_FOUND` | Client chưa PUT binary lên MinIO |
+| 409 | `UPLOAD_SESSION_EXPIRED` | Upload session đã hết hạn |
+| 409 | `ITEM_NOT_FILE` | Item không phải file/image/video/audio |
+| 409 | `ITEM_NOT_READY` | File hoặc Storage Object chưa ở trạng thái `ready` |
+| 409 | `FILE_OBJECT_UNAVAILABLE` | Object MinIO thiếu hoặc không khớp metadata |
+| 413 | `BODY_TOO_LARGE` | HTTP request body vượt giới hạn |
+| 413 | `FILE_TOO_LARGE` | File khai báo hoặc thực tế vượt 100 MB decimal |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | POST body không dùng `application/json` |
+| 422 | `UPLOAD_SIZE_MISMATCH` | Size thực tế khác size khai báo |
+| 422 | `UPLOAD_CONTENT_TYPE_MISMATCH` | MIME type thực tế khác khai báo |
+| 500 | `INTERNAL_ERROR` | Lỗi nội bộ không làm lộ chi tiết database |
+
+## Quy tắc an toàn Gate 5
+
+- Local demo yêu cầu UUID hợp lệ trong `X-Demo-User-ID`; production bắt buộc JWT
+  đã verify và tuyệt đối không tin owner UUID do client gửi.
+- JSON có field lạ, JSON nối đuôi, body quá lớn và media type sai đều bị từ
+  chối trước khi gọi service.
+- Item/session của user khác trả cùng `404` như dữ liệu không tồn tại.
+- Object key do server sinh theo `uploads/{owner_uuid}/{object_uuid}`; tên file
+  client không đi vào key.
+- Presigned upload URL ký `Content-Type` cùng `If-None-Match: *`; presigned
+  access URL chỉ được cấp sau khi kiểm tra ownership/readiness/object, cả hai có
+  TTL ngắn.
+- Internal error response chỉ trả `INTERNAL_ERROR`; logger chỉ giữ request ID,
+  method, path, owner và loại lỗi, không serialize lỗi dependency.
+- Không ghi binary, presigned URL, access key, secret key, SQL hay object key
+  vào log/báo cáo kiểm thử.
+
+Endpoint access là phần bổ sung phục vụ preview UI, không thay đổi contract
+upload, quota hoặc lifecycle đã đóng băng của Gate 5.
+
+## Phạm vi chưa triển khai
+
+- Không dedup nội dung; lưu cùng text/link hai lần tạo hai Item.
+- Không nhận `Idempotency-Key` ở API Quy trình 2.
+- Backend đã có JWT/JWKS/revocation middleware; frontend/gateway production cutover
+  thuộc nhiệm vụ tiếp theo của Quy trình 1.
+- Worker đã chạy SHA-256; chưa có virus scan hoặc sinh thumbnail phía server.
+- Preview hiện phụ thuộc khả năng phát nội dung của trình duyệt; chưa chuyển mã
+  video/audio và chưa render bộ Office phía server.
+- Chưa Multipart, share hoặc xóa/restore.
+- Cleanup upload hết hạn đã có; chưa có dashboard quản trị job.

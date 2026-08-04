@@ -1,0 +1,422 @@
+{
+  "info": {
+    "_postman_id": "8e532fc2-b69e-4984-b8d0-d65fd1cdaf9e",
+    "name": "Hacom Cloud - Process 3 Upload",
+    "description": "Gate 3: reserve quota, presigned PUT to MinIO, complete upload and idempotent retry.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "userA",
+      "value": ""
+    },
+    {
+      "key": "userB",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "uploadSessionId",
+      "value": ""
+    },
+    {
+      "key": "itemId",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "uploadUrl",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "if (!pm.collectionVariables.get('runInitialized')) {",
+          "  pm.collectionVariables.set('userA', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('userB', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('runInitialized', 'true');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Readiness",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health/ready"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('API, database and MinIO are ready', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('UP');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Initiate Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"gate3-demo.txt\",\"contentType\":\"text/plain\",\"sizeBytes\":5}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Upload reservation and presigned URL are created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.status).to.eql('initiated');",
+              "  pm.expect(body.method).to.eql('PUT');",
+              "  pm.expect(body.requiredHeaders['Content-Type']).to.eql('text/plain');",
+              "  pm.expect(body.requiredHeaders['If-None-Match']).to.eql('*');",
+              "  pm.collectionVariables.set('uploadSessionId', body.uploadSessionId);",
+              "  pm.collectionVariables.set('itemId', body.itemId);",
+              "  pm.collectionVariables.set('uploadUrl', body.uploadUrl);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Retry Initiate (Idempotent)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"gate3-demo.txt\",\"contentType\":\"text/plain\",\"sizeBytes\":5}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Retry returns the same upload session', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.uploadSessionId).to.eql(pm.collectionVariables.get('uploadSessionId'));",
+              "  pm.expect(body.itemId).to.eql(pm.collectionVariables.get('itemId'));",
+              "  pm.collectionVariables.set('uploadUrl', body.uploadUrl);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Reuse Key with Different Metadata",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"different.txt\",\"contentType\":\"text/plain\",\"sizeBytes\":5}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Idempotency conflict is rejected', function () {",
+              "  pm.response.to.have.status(409);",
+              "  pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_CONFLICT');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - PUT Binary Directly to MinIO",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain"
+          },
+          {
+            "key": "If-None-Match",
+            "value": "*"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "hello"
+        },
+        "url": "{{uploadUrl}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Binary is uploaded directly to MinIO', function () {",
+              "  pm.expect(pm.response.code).to.be.within(200, 299);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Reject Reusing Upload URL",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain"
+          },
+          {
+            "key": "If-None-Match",
+            "value": "*"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "hello"
+        },
+        "url": "{{uploadUrl}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('A signed URL cannot overwrite an existing object', function () {",
+              "  pm.response.to.have.status(412);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Complete Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/uploads/{{uploadSessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Completion creates processing item and pending hash job', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.item.id).to.eql(pm.collectionVariables.get('itemId'));",
+              "  pm.expect(body.item.status).to.eql('processing');",
+              "  pm.expect(body.item.sizeBytes).to.eql(5);",
+              "  pm.expect(body.job.type).to.eql('hash_file');",
+              "  pm.expect(body.job.status).to.eql('pending');",
+              "  pm.collectionVariables.set('jobId', body.job.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Retry Complete (Idempotent)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/uploads/{{uploadSessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Complete retry returns the same item and job', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.item.id).to.eql(pm.collectionVariables.get('itemId'));",
+              "  pm.expect(body.job.id).to.eql(pm.collectionVariables.get('jobId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Other User Cannot Complete",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userB}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/uploads/{{uploadSessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Cross-owner session is hidden', function () {",
+              "  pm.response.to.have.status(404);",
+              "  pm.expect(pm.response.json().error.code).to.eql('UPLOAD_SESSION_NOT_FOUND');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Quota after Complete",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Reserved quota moved to used exactly once', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.usedBytes).to.eql(5);",
+              "  pm.expect(body.reservedBytes).to.eql(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Reject File over 100 MB Decimal",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "oversized-{{idempotencyKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fileName\":\"too-large.bin\",\"contentType\":\"application/octet-stream\",\"sizeBytes\":100000001}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/uploads"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('100,000,001-byte declaration is rejected', function () {",
+              "  pm.response.to.have.status(413);",
+              "  pm.expect(pm.response.json().error.code).to.eql('FILE_TOO_LARGE');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

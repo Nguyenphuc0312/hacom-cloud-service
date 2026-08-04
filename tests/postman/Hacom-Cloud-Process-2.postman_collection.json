@@ -1,0 +1,346 @@
+{
+  "info": {
+    "_postman_id": "c574edb2-2f68-4c71-95db-7e27fbc649aa",
+    "name": "Hacom Cloud - Process 2",
+    "description": "Gate 2 demo: Personal Cloud, text, link, timeline, ownership and quota. Saving the same content twice intentionally creates two items.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "userA",
+      "value": "11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "key": "userB",
+      "value": "22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "key": "textItemId",
+      "value": ""
+    },
+    {
+      "key": "duplicateTextItemId",
+      "value": ""
+    },
+    {
+      "key": "nextCursor",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "if (!pm.collectionVariables.get('runInitialized')) {",
+          "  pm.collectionVariables.set('userA', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('userB', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('runInitialized', 'true');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('API and dependencies are ready', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.status).to.eql('UP');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Ensure Personal Cloud and Read Initial Quota",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Personal Cloud quota exists', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.limitBytes).to.be.above(0);",
+              "  pm.expect(body.availableBytes).to.eql(body.limitBytes - body.usedBytes - body.reservedBytes);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Create Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"Báo cáo nghiên cứu Hacom Cloud\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/texts"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Text is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.type).to.eql('text');",
+              "  pm.expect(body.status).to.eql('ready');",
+              "  pm.expect(body.sizeBytes).to.be.above(0);",
+              "  pm.collectionVariables.set('textItemId', body.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Save Same Text Again (No Dedup)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"Báo cáo nghiên cứu Hacom Cloud\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/texts"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Intentional duplicate remains a separate item', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.id).to.not.eql(pm.collectionVariables.get('textItemId'));",
+              "  pm.collectionVariables.set('duplicateTextItemId', body.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Create Link",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://hacom.vn/cloud\",\n  \"title\": \"Tài liệu Hacom Cloud\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/cloud/links"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Link is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.type).to.eql('link');",
+              "  pm.expect(body.url).to.eql('https://hacom.vn/cloud');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Timeline Page 1",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items?limit=2"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('First timeline page has a cursor', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.items).to.have.length(2);",
+              "  pm.expect(body.nextCursor).to.be.a('string').and.not.empty;",
+              "  pm.collectionVariables.set('nextCursor', body.nextCursor);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Timeline Page 2",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items?limit=2&cursor={{nextCursor}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Second timeline page is readable', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.items.length).to.be.at.least(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Owner Reads Item",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items/{{textItemId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Owner can read item', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('textItemId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Other User Cannot Read Item",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userB}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/items/{{textItemId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Cross-owner item is hidden', function () {",
+              "  pm.response.to.have.status(404);",
+              "  pm.expect(pm.response.json().error.code).to.eql('ITEM_NOT_FOUND');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Read Final Quota",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Demo-User-ID",
+            "value": "{{userA}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/cloud/quota"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Quota reflects all saved content', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.usedBytes).to.be.above(0);",
+              "  pm.expect(body.availableBytes).to.eql(body.limitBytes - body.usedBytes - body.reservedBytes);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
