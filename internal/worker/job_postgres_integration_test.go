@@ -303,12 +303,13 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 		map[string]string{"name": "retry"},
 	)
 
+	metrics := NewMetrics()
 	worker, err := NewJobPostgres(pool, "worker-a", RetryPolicy{
 		MaxAttempts: 2,
 		BaseBackoff: 2 * time.Second,
 		MaxBackoff:  8 * time.Second,
 		LockTimeout: 30 * time.Second,
-	})
+	}, WithJobMetrics(metrics))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,6 +372,9 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 	}
 	if status != string(JobDead) || attempts != 2 || lastError != "permanent failure" {
 		t.Fatalf("dead row = status:%s attempts:%d last_error:%q", status, attempts, lastError)
+	}
+	if metrics.Snapshot().DeadJobs != 1 {
+		t.Fatalf("dead job metrics=%+v", metrics.Snapshot())
 	}
 	if _, err := worker.Claim(context.Background()); !errors.Is(err, ErrNoJob) {
 		t.Fatalf("claim dead job error = %v, want ErrNoJob", err)
@@ -580,12 +584,13 @@ func TestJobPostgresMovesExhaustedStaleJobToDead(t *testing.T) {
 		&lockedAt,
 		map[string]string{"name": "exhausted-stale"},
 	)
+	metrics := NewMetrics()
 	repository, err := NewJobPostgres(pool, "worker-b", RetryPolicy{
 		MaxAttempts: 3,
 		BaseBackoff: time.Second,
 		MaxBackoff:  time.Minute,
 		LockTimeout: time.Minute,
-	})
+	}, WithJobMetrics(metrics))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,6 +609,9 @@ func TestJobPostgresMovesExhaustedStaleJobToDead(t *testing.T) {
 	}
 	if status != string(JobDead) || lockedBy.Valid {
 		t.Fatalf("exhausted stale row status=%q locked_by=%v", status, lockedBy)
+	}
+	if metrics.Snapshot().DeadJobs != 1 {
+		t.Fatalf("stale dead job metrics=%+v", metrics.Snapshot())
 	}
 }
 

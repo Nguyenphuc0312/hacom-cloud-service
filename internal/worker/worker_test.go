@@ -52,6 +52,12 @@ func (fn cleanupScannerFunc) EnqueueExpiredUploadJobs(ctx context.Context, limit
 	return fn(ctx, limit)
 }
 
+type trashScannerFunc func(context.Context, int) (int, error)
+
+func (fn trashScannerFunc) EnqueueExpiredTrashJobs(ctx context.Context, limit int) (int, error) {
+	return fn(ctx, limit)
+}
+
 func TestWorkerProcessesAndCompletesJob(t *testing.T) {
 	repository := &recordingRepository{
 		jobs: []Job{{ID: "job-1", Type: JobDemo}},
@@ -283,6 +289,73 @@ func TestWorkerRejectsInvalidCleanupScannerConfiguration(t *testing.T) {
 		WithCleanupScanner(scanner, time.Second, 0),
 	); err == nil {
 		t.Fatal("New() with zero cleanup batch size error = nil")
+	}
+}
+
+func TestWorkerScansExpiredTrashUsingConfiguredBatchAndRecordsMetric(t *testing.T) {
+	metrics := NewMetrics()
+	scanned := make(chan int, 1)
+	runner, err := New(
+		&recordingRepository{},
+		WithPollInterval(time.Minute),
+		WithMetrics(metrics),
+		WithTrashScanner(trashScannerFunc(func(_ context.Context, limit int) (int, error) {
+			scanned <- limit
+			return 3, nil
+		}), time.Minute, 37),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runner.Run(ctx) }()
+	select {
+	case limit := <-scanned:
+		if limit != 37 {
+			t.Fatalf("Trash scan limit=%d", limit)
+		}
+		cancel()
+	case <-time.After(time.Second):
+		t.Fatal("Trash scanner was not called")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if metrics.Snapshot().PurgeScanned != 3 {
+		t.Fatalf("metrics=%+v", metrics.Snapshot())
+	}
+}
+
+func TestWorkerRejectsInvalidTrashScannerConfiguration(t *testing.T) {
+	scanner := trashScannerFunc(func(context.Context, int) (int, error) { return 0, nil })
+	if _, err := New(&recordingRepository{}, WithTrashScanner(scanner, 0, 1)); err == nil {
+		t.Fatal("zero Trash interval error=nil")
+	}
+	if _, err := New(&recordingRepository{}, WithTrashScanner(scanner, time.Second, 0)); err == nil {
+		t.Fatal("zero Trash batch error=nil")
+	}
+}
+
+func TestWorkerRecordsTrashScannerFailure(t *testing.T) {
+	metrics := NewMetrics()
+	runner, err := New(
+		&recordingRepository{},
+		WithMetrics(metrics),
+		WithTrashScanner(
+			trashScannerFunc(func(context.Context, int) (int, error) {
+				return 0, errors.New("scanner unavailable")
+			}),
+			time.Second,
+			1,
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.scanExpiredTrash(context.Background())
+	if metrics.Snapshot().PurgeFailed != 1 {
+		t.Fatalf("metrics=%+v", metrics.Snapshot())
 	}
 }
 

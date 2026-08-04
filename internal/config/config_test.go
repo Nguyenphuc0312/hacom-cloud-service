@@ -270,6 +270,10 @@ func TestLoadReadsWorkerConfiguration(t *testing.T) {
 	t.Setenv("WORKER_MAX_BACKOFF", "30s")
 	t.Setenv("WORKER_CLEANUP_SCAN_INTERVAL", "5s")
 	t.Setenv("WORKER_CLEANUP_BATCH_SIZE", "25")
+	t.Setenv("TRASH_RETENTION", "24h")
+	t.Setenv("WORKER_TRASH_SCAN_INTERVAL", "7s")
+	t.Setenv("WORKER_TRASH_BATCH_SIZE", "40")
+	t.Setenv("WORKER_METRICS_ADDR", "127.0.0.1:19091")
 
 	cfg, err := Load()
 	if err != nil {
@@ -301,6 +305,30 @@ func TestLoadReadsWorkerConfiguration(t *testing.T) {
 	}
 	if cfg.WorkerCleanupBatchSize != 25 {
 		t.Fatalf("worker cleanup batch size = %d", cfg.WorkerCleanupBatchSize)
+	}
+	if cfg.TrashRetention != 24*time.Hour ||
+		cfg.WorkerTrashScanInterval != 7*time.Second ||
+		cfg.WorkerTrashBatchSize != 40 ||
+		cfg.WorkerMetricsAddr != "127.0.0.1:19091" {
+		t.Fatalf("Trash Worker config=%+v", cfg)
+	}
+}
+
+func TestLoadRejectsTrashRetentionOtherThanTwentyFourHours(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("TRASH_RETENTION", "23h")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "exactly 24h") {
+		t.Fatalf("expected retention contract error, got %v", err)
+	}
+}
+
+func TestLoadRejectsTrashBatchAboveSafetyLimit(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("WORKER_TRASH_BATCH_SIZE", "1001")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_TRASH_BATCH_SIZE") {
+		t.Fatalf("expected Trash batch error, got %v", err)
 	}
 }
 

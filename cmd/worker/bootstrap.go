@@ -18,9 +18,12 @@ import (
 )
 
 type lifecycleHandlers struct {
-	HashFile       worker.JobHandler
-	CleanupExpired worker.JobHandler
-	CleanupScanner worker.CleanupScanner
+	HashFile        worker.JobHandler
+	CleanupExpired  worker.JobHandler
+	CleanupScanner  worker.CleanupScanner
+	PermanentDelete worker.JobHandler
+	TrashScanner    worker.TrashScanner
+	Metrics         *worker.Metrics
 }
 
 func retryPolicyFromConfig(cfg config.Config) worker.RetryPolicy {
@@ -54,16 +57,31 @@ func newLifecycleWorker(
 	if handlers.CleanupScanner == nil {
 		return nil, errors.New("expired upload scanner is required")
 	}
+	if handlers.PermanentDelete == nil {
+		return nil, errors.New("permanent_delete handler is required")
+	}
+	if handlers.TrashScanner == nil {
+		return nil, errors.New("expired Trash scanner is required")
+	}
+	if handlers.Metrics == nil {
+		return nil, errors.New("worker metrics are required")
+	}
 
 	runner, err := worker.New(
 		jobs,
 		worker.WithLogger(logger),
 		worker.WithPollInterval(cfg.WorkerPollInterval),
 		worker.WithJobTimeout(cfg.WorkerJobTimeout),
+		worker.WithMetrics(handlers.Metrics),
 		worker.WithCleanupScanner(
 			handlers.CleanupScanner,
 			cfg.WorkerCleanupScanInterval,
 			cfg.WorkerCleanupBatchSize,
+		),
+		worker.WithTrashScanner(
+			handlers.TrashScanner,
+			cfg.WorkerTrashScanInterval,
+			cfg.WorkerTrashBatchSize,
 		),
 	)
 	if err != nil {
@@ -74,6 +92,9 @@ func newLifecycleWorker(
 	}
 	if err := runner.Register(worker.JobCleanupExpired, handlers.CleanupExpired); err != nil {
 		return nil, fmt.Errorf("register cleanup_expired_upload handler: %w", err)
+	}
+	if err := runner.Register(worker.JobPermanentDelete, handlers.PermanentDelete); err != nil {
+		return nil, fmt.Errorf("register permanent_delete handler: %w", err)
 	}
 	return runner, nil
 }
@@ -113,10 +134,12 @@ func newProductionLifecycleWorker(
 	if err != nil {
 		return fail(fmt.Errorf("create MinIO object store: %w", err))
 	}
+	metrics := worker.NewMetrics()
 	jobs, err := repository.NewJobPostgres(
 		pool,
 		cfg.WorkerID,
 		retryPolicyFromConfig(cfg),
+		worker.WithJobMetrics(metrics),
 	)
 	if err != nil {
 		return fail(fmt.Errorf("create PostgreSQL job repository: %w", err))
@@ -133,6 +156,10 @@ func newProductionLifecycleWorker(
 	if err != nil {
 		return fail(fmt.Errorf("create upload cleanup repository: %w", err))
 	}
+	permanentDelete, err := repository.NewPermanentDeletePostgres(pool)
+	if err != nil {
+		return fail(fmt.Errorf("create permanent delete repository: %w", err))
+	}
 	hashHandler, err := workerhandlers.NewHashFileHandler(
 		hashService,
 		fileLifecycle,
@@ -147,14 +174,25 @@ func newProductionLifecycleWorker(
 	if err != nil {
 		return fail(fmt.Errorf("create cleanup_expired_upload handler: %w", err))
 	}
+	permanentDeleteHandler, err := workerhandlers.NewPermanentDeleteHandler(
+		permanentDelete,
+		objects,
+		metrics,
+	)
+	if err != nil {
+		return fail(fmt.Errorf("create permanent_delete handler: %w", err))
+	}
 	runner, err := newLifecycleWorker(
 		cfg,
 		logger,
 		jobs,
 		lifecycleHandlers{
-			HashFile:       hashHandler,
-			CleanupExpired: cleanupHandler,
-			CleanupScanner: uploadCleanup,
+			HashFile:        hashHandler,
+			CleanupExpired:  cleanupHandler,
+			CleanupScanner:  uploadCleanup,
+			PermanentDelete: permanentDeleteHandler,
+			TrashScanner:    permanentDelete,
+			Metrics:         metrics,
 		},
 	)
 	if err != nil {

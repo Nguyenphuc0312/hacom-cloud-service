@@ -21,7 +21,7 @@ POSTMAN_PHASE2_TRASH_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-2-Trash.postm
 	test-integration test-integration-clean test-postman test-postman-process3 \
 	test-integration-process4 \
 	test-migration-phase2 \
-	test-trash-integration test-trash-api test-postman-phase2-trash \
+	test-trash-integration test-trash-api test-trash-gate2 test-postman-phase2-trash \
 	test-release-process5 test-postman-process5 demo-process5 \
 	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
 	win-up win-down win-logs win-ps
@@ -55,6 +55,12 @@ test-trash-integration:
 
 test-trash-api:
 	go test -race -count=1 ./internal/trash ./internal/fileaccess ./internal/cloudapi ./tests/contract
+
+test-trash-gate2:
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" \
+	TEST_MINIO_ENDPOINT="$(TEST_MINIO_ENDPOINT)" \
+	go test -race -count=1 -run 'TestGate2|TestTrashPostgres|TestJobPostgres' -v \
+		./internal/repository ./internal/worker
 
 test-postman-phase2-trash:
 	npx --yes newman run "$(POSTMAN_PHASE2_TRASH_COLLECTION)" --reporters cli --silent

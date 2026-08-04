@@ -24,9 +24,21 @@ type JobPostgres struct {
 	pool     *pgxpool.Pool
 	workerID string
 	policy   RetryPolicy
+	metrics  *Metrics
 }
 
-func NewJobPostgres(pool *pgxpool.Pool, workerID string, policy RetryPolicy) (*JobPostgres, error) {
+type JobPostgresOption func(*JobPostgres)
+
+func WithJobMetrics(metrics *Metrics) JobPostgresOption {
+	return func(repository *JobPostgres) { repository.metrics = metrics }
+}
+
+func NewJobPostgres(
+	pool *pgxpool.Pool,
+	workerID string,
+	policy RetryPolicy,
+	options ...JobPostgresOption,
+) (*JobPostgres, error) {
 	if pool == nil {
 		return nil, errors.New("job PostgreSQL pool is required")
 	}
@@ -39,11 +51,15 @@ func NewJobPostgres(pool *pgxpool.Pool, workerID string, policy RetryPolicy) (*J
 		return nil, errors.New("worker ID must not exceed 128 characters")
 	}
 
-	return &JobPostgres{
+	repository := &JobPostgres{
 		pool:     pool,
 		workerID: trimmedWorkerID,
 		policy:   normalizeRetryPolicy(policy),
-	}, nil
+	}
+	for _, option := range options {
+		option(repository)
+	}
+	return repository, nil
 }
 
 func (r *JobPostgres) Claim(ctx context.Context) (Job, error) {
@@ -54,7 +70,7 @@ func (r *JobPostgres) Claim(ctx context.Context) (Job, error) {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	lockTimeoutMicros := r.policy.LockTimeout.Microseconds()
-	_, err = tx.Exec(ctx, `
+	deadTag, err := tx.Exec(ctx, `
 		UPDATE cloud.jobs
 		SET status = 'dead',
 		    locked_by = NULL,
@@ -113,6 +129,9 @@ RETURNING job.id, job.job_type::text, job.payload
 				err,
 			)
 		}
+		if r.metrics != nil {
+			r.metrics.RecordDeadJobs(deadTag.RowsAffected())
+		}
 		return Job{}, ErrNoJob
 	}
 	if err != nil {
@@ -120,6 +139,9 @@ RETURNING job.id, job.job_type::text, job.payload
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Job{}, fmt.Errorf("commit claim transaction: %w", err)
+	}
+	if r.metrics != nil {
+		r.metrics.RecordDeadJobs(deadTag.RowsAffected())
 	}
 
 	job.Type = JobType(jobType)
@@ -286,6 +308,9 @@ func (r *JobPostgres) Fail(ctx context.Context, jobID string, cause error) error
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit fail transaction: %w", err)
+	}
+	if nextStatus == string(JobDead) && r.metrics != nil {
+		r.metrics.RecordDeadJobs(1)
 	}
 	return nil
 }

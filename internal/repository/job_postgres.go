@@ -11,6 +11,7 @@ type JobRepository = worker.JobRepository
 type Job = worker.Job
 type JobType = worker.JobType
 type JobStatus = worker.JobStatus
+type JobPostgresOption = worker.JobPostgresOption
 
 const (
 	JobDemo            = worker.JobDemo
@@ -19,6 +20,7 @@ const (
 	JobCreateThumbnail = worker.JobCreateThumbnail
 	JobCleanupExpired  = worker.JobCleanupExpired
 	JobReconcileQuota  = worker.JobReconcileQuota
+	JobPermanentDelete = worker.JobPermanentDelete
 	JobPending         = worker.JobPending
 	JobProcessing      = worker.JobProcessing
 	JobCompleted       = worker.JobCompleted
@@ -28,6 +30,11 @@ const (
 
 var ErrNoJob = worker.ErrNoJob
 
-func NewJobPostgres(pool *pgxpool.Pool, workerID string, policy RetryPolicy) (*JobPostgres, error) {
-	return worker.NewJobPostgres(pool, workerID, policy)
+func NewJobPostgres(
+	pool *pgxpool.Pool,
+	workerID string,
+	policy RetryPolicy,
+	options ...JobPostgresOption,
+) (*JobPostgres, error) {
+	return worker.NewJobPostgres(pool, workerID, policy, options...)
 }

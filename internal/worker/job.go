@@ -16,6 +16,7 @@ const (
 	JobCreateThumbnail JobType = "create_thumbnail"
 	JobCleanupExpired  JobType = "cleanup_expired_upload"
 	JobReconcileQuota  JobType = "reconcile_quota"
+	JobPermanentDelete JobType = "permanent_delete"
 )
 
 type Job struct {

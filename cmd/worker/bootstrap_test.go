@@ -50,7 +50,8 @@ func (h bootstrapHandler) Handle(_ context.Context, job worker.Job) error {
 }
 
 type bootstrapScanner struct {
-	scanned chan int
+	scanned      chan int
+	trashScanned chan int
 }
 
 func (s bootstrapScanner) EnqueueExpiredUploadJobs(_ context.Context, limit int) (int, error) {
@@ -58,26 +59,41 @@ func (s bootstrapScanner) EnqueueExpiredUploadJobs(_ context.Context, limit int)
 	return 0, nil
 }
 
-func TestLifecycleBootstrapRegistersBothGate4Handlers(t *testing.T) {
+func (s bootstrapScanner) EnqueueExpiredTrashJobs(_ context.Context, limit int) (int, error) {
+	s.trashScanned <- limit
+	return 0, nil
+}
+
+func TestLifecycleBootstrapRegistersAllLifecycleHandlers(t *testing.T) {
 	repository := &bootstrapRepository{jobs: []worker.Job{
 		{ID: "hash-job", Type: worker.JobHashFile},
 		{ID: "cleanup-job", Type: worker.JobCleanupExpired},
+		{ID: "permanent-delete-job", Type: worker.JobPermanentDelete},
 	}}
-	handled := make(chan worker.JobType, 2)
+	handled := make(chan worker.JobType, 3)
 	scanned := make(chan int, 1)
+	trashScanned := make(chan int, 1)
+	metrics := worker.NewMetrics()
 	runner, err := newLifecycleWorker(
 		config.Config{
 			WorkerPollInterval:        time.Millisecond,
 			WorkerJobTimeout:          time.Second,
 			WorkerCleanupScanInterval: time.Minute,
 			WorkerCleanupBatchSize:    100,
+			WorkerTrashScanInterval:   time.Minute,
+			WorkerTrashBatchSize:      37,
 		},
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		repository,
 		lifecycleHandlers{
-			HashFile:       bootstrapHandler{handled: handled},
-			CleanupExpired: bootstrapHandler{handled: handled},
-			CleanupScanner: bootstrapScanner{scanned: scanned},
+			HashFile:        bootstrapHandler{handled: handled},
+			CleanupExpired:  bootstrapHandler{handled: handled},
+			CleanupScanner:  bootstrapScanner{scanned: scanned},
+			PermanentDelete: bootstrapHandler{handled: handled},
+			TrashScanner: bootstrapScanner{
+				scanned: scanned, trashScanned: trashScanned,
+			},
+			Metrics: metrics,
 		},
 	)
 	if err != nil {
@@ -89,13 +105,21 @@ func TestLifecycleBootstrapRegistersBothGate4Handlers(t *testing.T) {
 	go func() { done <- runner.Run(ctx) }()
 
 	seen := make(map[worker.JobType]bool)
-	for len(seen) < 2 {
+	for len(seen) < 3 {
 		select {
 		case jobType := <-handled:
 			seen[jobType] = true
 		case <-time.After(time.Second):
 			t.Fatalf("handled job types = %v", seen)
 		}
+	}
+	select {
+	case limit := <-trashScanned:
+		if limit != 37 {
+			t.Fatalf("Trash scan limit = %d", limit)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Trash scanner was not called")
 	}
 	select {
 	case limit := <-scanned:
@@ -112,7 +136,7 @@ func TestLifecycleBootstrapRegistersBothGate4Handlers(t *testing.T) {
 
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	if len(repository.completed) != 2 {
+	if len(repository.completed) != 3 {
 		t.Fatalf("completed jobs = %v", repository.completed)
 	}
 }
@@ -123,11 +147,16 @@ func TestLifecycleBootstrapRejectsMissingDependencies(t *testing.T) {
 		WorkerJobTimeout:          time.Second,
 		WorkerCleanupScanInterval: time.Minute,
 		WorkerCleanupBatchSize:    100,
+		WorkerTrashScanInterval:   time.Minute,
+		WorkerTrashBatchSize:      100,
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := bootstrapHandler{handled: make(chan worker.JobType, 1)}
 	repository := &bootstrapRepository{}
-	scanner := bootstrapScanner{scanned: make(chan int, 1)}
+	scanner := bootstrapScanner{
+		scanned: make(chan int, 1), trashScanned: make(chan int, 1),
+	}
+	metrics := worker.NewMetrics()
 
 	tests := []struct {
 		name     string
@@ -137,33 +166,69 @@ func TestLifecycleBootstrapRejectsMissingDependencies(t *testing.T) {
 		{
 			name: "job repository",
 			handlers: lifecycleHandlers{
-				HashFile:       handler,
-				CleanupExpired: handler,
-				CleanupScanner: scanner,
+				HashFile:        handler,
+				CleanupExpired:  handler,
+				CleanupScanner:  scanner,
+				PermanentDelete: handler,
+				TrashScanner:    scanner,
+				Metrics:         metrics,
 			},
 		},
 		{
 			name: "hash handler",
 			jobs: repository,
 			handlers: lifecycleHandlers{
-				CleanupExpired: handler,
-				CleanupScanner: scanner,
+				CleanupExpired:  handler,
+				CleanupScanner:  scanner,
+				PermanentDelete: handler,
+				TrashScanner:    scanner,
+				Metrics:         metrics,
 			},
 		},
 		{
 			name: "cleanup handler",
 			jobs: repository,
 			handlers: lifecycleHandlers{
-				HashFile:       handler,
-				CleanupScanner: scanner,
+				HashFile:        handler,
+				CleanupScanner:  scanner,
+				PermanentDelete: handler,
+				TrashScanner:    scanner,
+				Metrics:         metrics,
 			},
 		},
 		{
 			name: "cleanup scanner",
 			jobs: repository,
 			handlers: lifecycleHandlers{
-				HashFile:       handler,
-				CleanupExpired: handler,
+				HashFile:        handler,
+				CleanupExpired:  handler,
+				PermanentDelete: handler,
+				TrashScanner:    scanner,
+				Metrics:         metrics,
+			},
+		},
+		{
+			name: "permanent delete handler",
+			jobs: repository,
+			handlers: lifecycleHandlers{
+				HashFile: handler, CleanupExpired: handler, CleanupScanner: scanner,
+				TrashScanner: scanner, Metrics: metrics,
+			},
+		},
+		{
+			name: "Trash scanner",
+			jobs: repository,
+			handlers: lifecycleHandlers{
+				HashFile: handler, CleanupExpired: handler, CleanupScanner: scanner,
+				PermanentDelete: handler, Metrics: metrics,
+			},
+		},
+		{
+			name: "metrics",
+			jobs: repository,
+			handlers: lifecycleHandlers{
+				HashFile: handler, CleanupExpired: handler, CleanupScanner: scanner,
+				PermanentDelete: handler, TrashScanner: scanner,
 			},
 		},
 	}

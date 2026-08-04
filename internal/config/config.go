@@ -59,6 +59,10 @@ type Config struct {
 	WorkerMaxBackoff            time.Duration
 	WorkerCleanupScanInterval   time.Duration
 	WorkerCleanupBatchSize      int
+	TrashRetention              time.Duration
+	WorkerTrashScanInterval     time.Duration
+	WorkerTrashBatchSize        int
+	WorkerMetricsAddr           string
 }
 
 func Load() (Config, error) {
@@ -205,6 +209,24 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	trashRetention, err := durationEnv("TRASH_RETENTION", 24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	if trashRetention != 24*time.Hour {
+		return Config{}, fmt.Errorf("TRASH_RETENTION must be exactly 24h")
+	}
+	workerTrashScanInterval, err := durationEnv("WORKER_TRASH_SCAN_INTERVAL", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	workerTrashBatchSize, err := intEnv("WORKER_TRASH_BATCH_SIZE", 100)
+	if err != nil {
+		return Config{}, err
+	}
+	if workerTrashBatchSize > 1000 {
+		return Config{}, fmt.Errorf("WORKER_TRASH_BATCH_SIZE must not exceed 1000")
+	}
 	workerID, err := loadWorkerID()
 	if err != nil {
 		return Config{}, err
@@ -252,6 +274,10 @@ func Load() (Config, error) {
 		WorkerMaxBackoff:            workerMaxBackoff,
 		WorkerCleanupScanInterval:   workerCleanupScanInterval,
 		WorkerCleanupBatchSize:      workerCleanupBatchSize,
+		TrashRetention:              trashRetention,
+		WorkerTrashScanInterval:     workerTrashScanInterval,
+		WorkerTrashBatchSize:        workerTrashBatchSize,
+		WorkerMetricsAddr:           strings.TrimSpace(env("WORKER_METRICS_ADDR", ":9091")),
 	}
 
 	required := []struct {

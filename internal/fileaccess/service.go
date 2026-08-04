@@ -21,12 +21,13 @@ var (
 )
 
 type Target struct {
-	ItemID      uuid.UUID
-	ObjectKey   string
-	FileName    string
-	ContentType string
-	SizeBytes   int64
-	PurgeAfter  *time.Time
+	ItemID          uuid.UUID
+	StorageObjectID uuid.UUID
+	ObjectKey       string
+	FileName        string
+	ContentType     string
+	SizeBytes       int64
+	PurgeAfter      *time.Time
 }
 
 type Access struct {
@@ -44,6 +45,11 @@ type Repository interface {
 		ownerUserID uuid.UUID,
 		itemID uuid.UUID,
 	) (Target, error)
+	ValidateFileAccessTarget(
+		ctx context.Context,
+		ownerUserID, itemID, storageObjectID uuid.UUID,
+		accessedAt time.Time,
+	) error
 }
 
 type ObjectStore interface {
@@ -144,6 +150,11 @@ func (s *Service) CreateAccess(
 	)
 	if err != nil {
 		return Access{}, fmt.Errorf("presign cloud file download: %w", err)
+	}
+	if err := s.repository.ValidateFileAccessTarget(
+		ctx, ownerUserID, itemID, target.StorageObjectID, s.now().UTC(),
+	); err != nil {
+		return Access{}, err
 	}
 	return Access{
 		ItemID:      target.ItemID,

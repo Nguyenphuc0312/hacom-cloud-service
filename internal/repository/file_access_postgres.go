@@ -31,6 +31,7 @@ func (r *CloudPostgres) GetFileAccessTarget(
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			item.id,
+			item.storage_object_id,
 			item.item_type::text,
 			item.status::text,
 			object.status::text,
@@ -49,6 +50,7 @@ func (r *CloudPostgres) GetFileAccessTarget(
 		  AND drive.owner_user_id = $2
 	`, itemID, ownerUserID).Scan(
 		&target.ItemID,
+		&target.StorageObjectID,
 		&itemType,
 		&itemStatus,
 		&objectStatus,
@@ -96,4 +98,57 @@ func (r *CloudPostgres) GetFileAccessTarget(
 	target.FileName = originalName.String
 	target.ContentType = contentType.String
 	return target, nil
+}
+
+func (r *CloudPostgres) ValidateFileAccessTarget(
+	ctx context.Context,
+	ownerUserID, itemID, storageObjectID uuid.UUID,
+	accessedAt time.Time,
+) error {
+	var itemStatus, objectStatus string
+	var purgeAfter sql.NullTime
+	err := r.pool.QueryRow(ctx, `
+		SELECT item.status::TEXT, object.status::TEXT, item.purge_after
+		FROM cloud.items AS item
+		JOIN cloud.drives AS drive ON drive.id = item.drive_id
+		JOIN cloud.storage_objects AS object
+		  ON object.id = item.storage_object_id
+		 AND object.drive_id = item.drive_id
+		WHERE item.id = $1
+		  AND item.storage_object_id = $2
+		  AND drive.owner_user_id = $3
+	`, itemID, storageObjectID, ownerUserID).Scan(&itemStatus, &objectStatus, &purgeAfter)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var deletePending bool
+		checkErr := r.pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM cloud.jobs AS job
+				JOIN cloud.drives AS drive ON drive.id = job.drive_id
+				WHERE job.storage_object_id = $1
+				  AND drive.owner_user_id = $2
+				  AND job.job_type = 'permanent_delete'
+				  AND job.status IN ('pending', 'processing', 'failed')
+			)
+		`, storageObjectID, ownerUserID).Scan(&deletePending)
+		if checkErr != nil {
+			return fmt.Errorf("check file delete race: %w", checkErr)
+		}
+		if deletePending {
+			return fileaccess.ErrDeletePending
+		}
+		return fileaccess.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("revalidate file access target: %w", err)
+	}
+	if objectStatus != "ready" {
+		return fileaccess.ErrDeletePending
+	}
+	if itemStatus == "ready" {
+		return nil
+	}
+	if itemStatus == "trashed" && purgeAfter.Valid && accessedAt.UTC().Before(purgeAfter.Time) {
+		return nil
+	}
+	return fileaccess.ErrDeletePending
 }

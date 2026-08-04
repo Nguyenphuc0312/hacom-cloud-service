@@ -141,6 +141,9 @@ func TestProcess4ProductionWorkerHashAndCleanupLifecycle(t *testing.T) {
 		WorkerMaxBackoff:          100 * time.Millisecond,
 		WorkerCleanupScanInterval: 10 * time.Millisecond,
 		WorkerCleanupBatchSize:    10,
+		TrashRetention:            24 * time.Hour,
+		WorkerTrashScanInterval:   10 * time.Millisecond,
+		WorkerTrashBatchSize:      10,
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runner, closeDependencies, err := newProductionLifecycleWorker(

@@ -11,8 +11,19 @@ import (
 )
 
 type fakeRepository struct {
-	target Target
-	err    error
+	target      Target
+	err         error
+	validateErr error
+}
+
+func (f fakeRepository) ValidateFileAccessTarget(
+	context.Context,
+	uuid.UUID,
+	uuid.UUID,
+	uuid.UUID,
+	time.Time,
+) error {
+	return f.validateErr
 }
 
 func (f fakeRepository) GetFileAccessTarget(
@@ -195,5 +206,28 @@ func TestCreateAccessRejectsDeadlineCrossedDuringObjectCheck(t *testing.T) {
 	_, err = service.CreateAccess(context.Background(), uuid.New(), uuid.New())
 	if !errors.Is(err, ErrDeletePending) {
 		t.Fatalf("error=%v, want ErrDeletePending", err)
+	}
+}
+
+func TestCreateAccessDropsSignedURLWhenDeleteWinsRevalidation(t *testing.T) {
+	objects := &fakeObjectStore{
+		info: storage.ObjectInfo{SizeBytes: 7}, signedURL: "http://minio.local/discarded",
+	}
+	service, err := NewService(fakeRepository{
+		target: Target{
+			ItemID: uuid.New(), StorageObjectID: uuid.New(), ObjectKey: "uploads/owner/file",
+			FileName: "file.txt", ContentType: "text/plain", SizeBytes: 7,
+		},
+		validateErr: ErrDeletePending,
+	}, objects, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.CreateAccess(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, ErrDeletePending) {
+		t.Fatalf("error=%v, want ErrDeletePending", err)
+	}
+	if objects.signedKey == "" {
+		t.Fatal("test did not reach signing before revalidation")
 	}
 }
