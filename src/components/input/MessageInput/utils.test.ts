@@ -37,10 +37,18 @@ describe("buildMentionMatch", () => {
     expect(atEnd("@ho.va-ten_1")?.query).toBe("ho.va-ten_1");
   });
 
-  it("stops matching once the query runs past a space or newline", () => {
-    // Otherwise the panel would stay latched for the rest of the sentence.
-    expect(atEnd("@Minh Quốc")).toBeNull();
+  // Tên người Việt gần như luôn có dấu cách. Chặn dấu cách (hành vi cũ) làm
+  // panel đóng ngay sau từ đầu tiên: người gõ "@Huy Hoàng" tưởng đã tag, thực
+  // ra chỉ là chữ thường — không highlight, người được nhắc không nhận báo.
+  it("vẫn mở panel khi tên có dấu cách", () => {
+    expect(atEnd("@Minh Quốc")?.query).toBe("Minh Quốc");
+    expect(atEnd("@Nguyễn Thế Huy Hoàng")?.query).toBe("Nguyễn Thế Huy Hoàng");
+  });
+
+  it("đóng panel khi qua xuống dòng hoặc quá dài để còn là một cái tên", () => {
     expect(atEnd("@Minh\nQuốc")).toBeNull();
+    // "@" giữa câu: phần còn lại của câu không được biến thành query.
+    expect(atEnd("@gửi các bạn xem giúp mình nhé")).toBeNull();
   });
 
   it("matches against the caret, not the end of the text", () => {

@@ -128,7 +128,37 @@ const buildNameLookup = (
       register(variant, mention.userId);
     }
   }
+
+  // Lượt 2 — gọi bằng phần đuôi tên là chuyện thường ("Nguyễn Thế Huy Hoàng" →
+  // "@Huy Hoàng"). BE lưu tên đầy đủ vào `displayName`, nên chỉ dò đúng chuỗi
+  // đó thì tag gõ tay mất hẳn highlight. Chạy SAU nên tên chính của người khác
+  // luôn thắng hậu tố. Hậu tố ≥ 2 từ, và hậu tố nào hai người cùng sinh ra thì
+  // huỷ hẳn — thà trượt highlight còn hơn tag nhầm sang người khác.
+  const suffixOwner = new Map<string, string | null>();
+  for (const mention of mentions) {
+    if (isMentionAllId(mention.userId)) continue;
+    for (const name of nameSuffixes(mention.displayName)) {
+      const key = name.toLowerCase();
+      if (lookup.has(key)) continue; // tên chính của ai đó — không đụng vào
+      const owner = suffixOwner.get(key);
+      suffixOwner.set(
+        key,
+        owner === undefined || owner === mention.userId ? mention.userId : null,
+      );
+    }
+  }
+  for (const [key, userId] of suffixOwner) {
+    lookup.set(key, userId);
+  }
   return lookup;
+};
+
+/** Các hậu tố ≥ 2 từ của một tên đầy đủ, dài trước ngắn sau. */
+const nameSuffixes = (fullName: string | undefined): string[] => {
+  const words = (fullName || "").trim().split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  for (let i = 1; i <= words.length - 2; i++) out.push(words.slice(i).join(" "));
+  return out;
 };
 
 const segmentByNames = (
