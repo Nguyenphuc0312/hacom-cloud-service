@@ -6,6 +6,10 @@ export const shouldRenderCompactStatusBar = (composerMode: ComposerMode): boolea
   composerMode === "offline" ||
   composerMode === "unauthenticated";
 
+/** Tên dài nhất còn hợp lý ("Nguyễn Thế Huy Hoàng" = 4 từ). Quá số này thì "@"
+ *  đó là chữ trong câu, không phải người đang gõ tag. */
+const MENTION_QUERY_MAX_WORDS = 5;
+
 export const buildMentionMatch = (
   text: string,
   caret: number,
@@ -25,11 +29,16 @@ export const buildMentionMatch = (
   // space/bracket before it, which silently killed tagging mid-word and was
   // impossible for users to guess.
   const mentionQuery = beforeCaret.slice(mentionStart + 1);
-  if (
-    mentionQuery.includes(" ") ||
-    mentionQuery.includes("\n") ||
-    mentionQuery.includes("\t")
-  ) {
+  if (mentionQuery.includes("\n") || mentionQuery.includes("\t")) {
+    return null;
+  }
+
+  // Khoảng trắng ĐƯỢC phép: tên người Việt gần như luôn có dấu cách ("@Huy
+  // Hoàng"). Chặn dấu cách như trước làm panel đóng ngay sau từ đầu tiên, người
+  // gõ tưởng đã tag nhưng thực ra chỉ là chữ thường — không highlight, người
+  // được nhắc không nhận thông báo. Giới hạn số từ để "@" giữa câu không biến
+  // cả phần còn lại thành query.
+  if (mentionQuery.split(" ").length > MENTION_QUERY_MAX_WORDS) {
     return null;
   }
 
@@ -37,7 +46,7 @@ export const buildMentionMatch = (
   // be typed/searched after "@". The previous ASCII-only pattern dropped the
   // match the moment a diacritic (e.g. "ậ" in "nhật") was typed, closing the
   // mention panel and making it impossible to mention Vietnamese names.
-  if (!/^[\p{L}\p{N}._-]*$/u.test(mentionQuery)) {
+  if (!/^[\p{L}\p{N}._ -]*$/u.test(mentionQuery)) {
     return null;
   }
 

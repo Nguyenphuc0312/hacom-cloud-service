@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { sanitizeTableHtml } from "../../utils/sanitizeTableHtml";
 
 interface ExcelPreviewProps {
   url: string;
@@ -25,6 +26,23 @@ interface ParsedWorkbook {
 // xlsx nặng (~1MB) → lazy import để không phình bundle chính.
 async function loadXlsx(): Promise<typeof import("xlsx")> {
   return import("xlsx");
+}
+
+/**
+ * SheetJS 0.18.5 dính GHSA-4r6h-8v6p-xvw6 (prototype pollution) và npm KHÔNG
+ * có bản vá — bản vá chỉ phát hành trên cdn.sheetjs.com. Vì XLSX.read() chạy
+ * trên file do người dùng KHÁC gửi, đây là đường vào có thật.
+ *
+ * Đóng băng Object.prototype trước khi parse: mọi phép ghi vào prototype thành
+ * no-op (sloppy mode) hoặc TypeError (strict) — đằng nào cũng không nhiễm được.
+ * Freeze là vĩnh viễn và app không bao giờ ghi lên Object.prototype trong luồng
+ * bình thường, nên không cần khôi phục.
+ */
+let prototypeFrozen = false;
+function freezeObjectPrototypeOnce(): void {
+  if (prototypeFrozen) return;
+  Object.freeze(Object.prototype);
+  prototypeFrozen = true;
 }
 
 export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
@@ -50,9 +68,13 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
         const buf = await res.arrayBuffer();
         if (cancelled) return;
 
+        freezeObjectPrototypeOnce();
         const wb = XLSX.read(buf, { type: "array" });
         const htmlBySheet = wb.SheetNames.map((name) =>
-          XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+          // sheet_to_html KHÔNG escape nội dung ô → bắt buộc lọc trước khi render.
+          sanitizeTableHtml(
+            XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+          ),
         );
         if (cancelled) return;
         setParsed({ sheetNames: wb.SheetNames, htmlBySheet });
