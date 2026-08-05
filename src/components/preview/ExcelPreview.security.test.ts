@@ -55,12 +55,22 @@ describe("ExcelPreview — payload trong ô Excel không sống sót", () => {
     expect(countLiveThreats(safeHtml)).toBe(0);
   });
 
-  it("HTML THÔ của SheetJS quả thật tạo được thẻ sống — chứng minh bước lọc là bắt buộc", () => {
+  /**
+   * Từ 05-08-26 nâng SheetJS 0.18.5 → 0.20.3 (bản vá chỉ có trên cdn.sheetjs.com),
+   * bản mới đã tự escape `data-v` nên HTML thô KHÔNG còn sinh thẻ sống nữa.
+   *
+   * Test này trước đây khẳng định điều ngược lại và đã đỏ sau khi nâng — đó là
+   * dấu hiệu bản vá ăn, không phải hồi quy. Nay đảo lại thành chốt chặn: nếu ai
+   * hạ version hoặc đổi sang bản chưa vá, test đỏ ngay.
+   *
+   * sanitizeTableHtml vẫn giữ nguyên và vẫn được kiểm ở các case trên — phòng thủ
+   * nhiều lớp, không dựa mỗi vào thư viện.
+   */
+  it("bản SheetJS đang dùng đã tự escape data-v — HTML thô không còn sinh thẻ sống", () => {
     const raw = buildSheetHtml('"><img src=x onerror=alert(1)><td x="');
     const rawDoc = new DOMParser().parseFromString(raw, "text/html");
-    // Đây chính là lỗ hổng: HTML chưa lọc sinh ra <img> THẬT.
-    expect(rawDoc.querySelectorAll("img").length).toBeGreaterThan(0);
-    // Và bước lọc dập tắt nó.
+    expect(rawDoc.querySelectorAll("img").length).toBe(0);
+    // Bước lọc vẫn phải sạch — đây mới là lớp bảo vệ ta tự kiểm soát.
     expect(countLiveThreats(sanitizeTableHtml(raw))).toBe(0);
   });
 

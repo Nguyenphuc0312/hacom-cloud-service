@@ -29,12 +29,17 @@ async function loadXlsx(): Promise<typeof import("xlsx")> {
 }
 
 /**
- * SheetJS 0.18.5 dính GHSA-4r6h-8v6p-xvw6 (prototype pollution) và npm KHÔNG
- * có bản vá — bản vá chỉ phát hành trên cdn.sheetjs.com. Vì XLSX.read() chạy
- * trên file do người dùng KHÁC gửi, đây là đường vào có thật.
+ * Đóng băng Object.prototype trước khi parse file người dùng gửi.
  *
- * Đóng băng Object.prototype trước khi parse: mọi phép ghi vào prototype thành
- * no-op (sloppy mode) hoặc TypeError (strict) — đằng nào cũng không nhiễm được.
+ * Bối cảnh: 0.18.5 (bản duy nhất trên npm) dính GHSA-4r6h-8v6p-xvw6 (prototype
+ * pollution) + GHSA-5pgg-2g8v-p4x9 (ReDoS). Từ 05-08-26 đã nâng lên 0.20.3 lấy
+ * thẳng từ cdn.sheetjs.com — nơi duy nhất phát hành bản vá — nên cả hai CVE
+ * không còn.
+ *
+ * Vẫn GIỮ lớp freeze này: XLSX.read() chạy trên file do người dùng KHÁC gửi,
+ * và ta không muốn an toàn phụ thuộc hoàn toàn vào một version cụ thể. Chi phí
+ * gần như bằng 0.
+ *
  * Freeze là vĩnh viễn và app không bao giờ ghi lên Object.prototype trong luồng
  * bình thường, nên không cần khôi phục.
  */
