@@ -5,10 +5,27 @@ const isBrowser = (): boolean =>
   typeof localStorage !== "undefined" &&
   typeof sessionStorage !== "undefined";
 
-const REFRESH_TOKEN_STORAGE_MODE =
-  import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "cookie"
-    ? "cookie"
-    : "session";
+// Production LUÔN dùng HttpOnly cookie, bất kể env truyền vào. Refresh token
+// nằm trong localStorage biến một XSS đơn lẻ thành chiếm tài khoản lâu dài:
+// kẻ tấn công đổi lấy access token mới mãi mãi từ máy của chính họ.
+// Chế độ "session" chỉ còn dùng được ở dev, cho backend local chưa bật
+// AUTH_REFRESH_COOKIE_ENABLED.
+const REFRESH_TOKEN_STORAGE_MODE: "cookie" | "session" = import.meta.env.PROD
+  ? "cookie"
+  : import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "session"
+    ? "session"
+    : "cookie";
+
+if (
+  import.meta.env.PROD &&
+  import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "session"
+) {
+  // Build prod với cấu hình sai phải thấy ngay, không im lặng nuốt.
+  console.error(
+    "[security] VITE_REFRESH_TOKEN_STORAGE_MODE=session bị bỏ qua trong " +
+      "production build. Refresh token luôn dùng HttpOnly cookie.",
+  );
+}
 
 let inMemoryAccessToken: string | null = null;
 

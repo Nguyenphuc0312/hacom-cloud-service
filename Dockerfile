@@ -72,6 +72,9 @@ RUN npm run build && node scripts/verify-dist-assets.mjs
 
 FROM nginx:1.27-alpine AS production
 COPY chat-web-client/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# Snippet security header — default.conf.template include vào từng location.
+# Thiếu file này nginx sẽ KHÔNG khởi động được (include trỏ vào file không có).
+COPY chat-web-client/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /workspace/chat-web-client/dist /usr/share/nginx/html
 
 EXPOSE 80

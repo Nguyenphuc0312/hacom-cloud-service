@@ -136,6 +136,39 @@ function extractMentionDetails(
     register(candidate.username);
   }
 
+  // Người Việt gọi nhau bằng phần ĐUÔI của tên đầy đủ: "Nguyễn Thế Huy Hoàng" →
+  // gõ tay "@Huy Hoàng". Thiếu các hậu tố này thì tag gõ tay không resolve ra
+  // ai: không highlight, và người được nhắc KHÔNG nhận thông báo.
+  //
+  // Đăng ký sau tên chính (tên chính luôn thắng) và bỏ hẳn hậu tố nào trỏ về
+  // hai người — thà trượt highlight còn hơn tag nhầm sang người khác. Chỉ nhận
+  // hậu tố ≥ 2 từ: một từ ("@Hoàng") trùng quá dễ.
+  const suffixToId = new Map<string, string | null>();
+  for (const candidate of candidates) {
+    const seenHere = new Set<string>();
+    for (const surface of [candidate.mentionInsertName, candidate.resolvedName]) {
+      const words = (surface || "").trim().split(/\s+/).filter(Boolean);
+      for (let i = 1; i <= words.length - 2; i++) {
+        const suffix = words.slice(i).join(" ");
+        const token = suffix.toLowerCase();
+        if (tokenToInfo.has(token) || seenHere.has(token)) continue;
+        seenHere.add(token);
+        suffixToId.set(
+          token,
+          suffixToId.has(token) && suffixToId.get(token) !== candidate.id
+            ? null
+            : candidate.id,
+        );
+        if (suffixToId.get(token)) {
+          tokenToInfo.set(token, { id: candidate.id, displayName: suffix });
+        }
+      }
+    }
+  }
+  for (const [token, id] of suffixToId) {
+    if (id === null) tokenToInfo.delete(token);
+  }
+
   if (tokenToInfo.size === 0) return [];
 
   // Strip HTML tags for rich-text content

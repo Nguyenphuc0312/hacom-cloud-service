@@ -60,7 +60,10 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
             : "[&_a]:text-primary [&_a]:hover:text-secondary",
           className,
         )}
-        // DOMPurify already sanitized — safe to use dangerouslySetInnerHTML
+        // Đã qua sanitizeMessageHtml() (utils/messageContent.utils.ts): whitelist
+        // thẻ + thuộc tính, và kiểm tra scheme của href (chặn javascript:/data:).
+        // KHÔNG dùng DOMPurify — dependency đã gỡ. Sửa hàm sanitize phải chạy
+        // kèm messageContent.utils.test.ts.
         dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     );

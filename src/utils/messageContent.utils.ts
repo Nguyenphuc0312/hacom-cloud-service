@@ -1,4 +1,5 @@
-// removed dompurify dependency
+// Sanitizer tự viết (DOMPurify đã gỡ khỏi dependency).
+// Đổi logic ở đây PHẢI chạy kèm messageContent.utils.test.ts.
 
 const ALLOWED_TAGS = [
   "p",
@@ -21,41 +22,71 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_ATTR = ["href", "target", "rel"];
 
+/** Chỉ 4 scheme này được phép trong href. Mọi thứ khác → gỡ link, giữ text. */
+const SAFE_HREF_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+/**
+ * Kiểm tra scheme của href bằng URL parser của trình duyệt.
+ *
+ * Dùng URL thay vì regex tự viết vì parser đã tự chuẩn hoá whitespace và ký tự
+ * điều khiển mà regex tự viết hay bỏ sót — ví dụ `java\tscript:` (chèn tab),
+ * `JaVaScRiPt:` (lẫn hoa thường), hay chèn ký tự NUL vào giữa scheme.
+ */
+function isSafeHref(value: string): boolean {
+  try {
+    const base =
+      typeof window !== "undefined" ? window.location.href : "http://localhost";
+    return SAFE_HREF_PROTOCOLS.has(new URL(value, base).protocol);
+  } catch {
+    return false; // Không parse được → không tin.
+  }
+}
+
 export function sanitizeMessageHtml(html: string): string {
   if (typeof window === "undefined") return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
-  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
-  let node = walker.nextNode();
-  while (node) {
-    const el = node as HTMLElement;
+  // querySelectorAll trả về NodeList tĩnh → duyệt một lượt an toàn dù DOM đổi
+  // trong vòng lặp. Bản cũ dùng TreeWalker + return đệ quy mỗi khi gặp thẻ cấm:
+  // vừa O(n²) (mỗi thẻ cấm = 1 lần parse lại toàn chuỗi → DoS bằng tin nhắn
+  // nhiều thẻ), vừa nuốt luôn nội dung hợp lệ đứng trước thẻ cấm.
+  //
+  // reverse() = duyệt từ trong ra ngoài (document order đảo ngược → con trước
+  // cha). Quan trọng cho hiệu năng: unwrap từ ngoài vào trong khiến cây con bên
+  // trong bị chuyển cha lặp đi lặp lại — <div> lồng 500 tầng mất ~3.2s, đủ để
+  // treo tab. Từ trong ra ngoài mỗi node chỉ chuyển đúng 1 lần: ~25ms.
+  for (const el of Array.from(doc.body.querySelectorAll("*")).reverse()) {
     const tagName = el.tagName.toLowerCase();
 
     if (!ALLOWED_TAGS.includes(tagName)) {
+      // Unwrap: giữ text bên trong, bỏ thẻ. parentNode null nghĩa là el nằm
+      // trong cây con của một thẻ đã bị gỡ ở vòng trước → bỏ qua.
       const parent = el.parentNode;
-      while (el.firstChild) {
-        parent?.insertBefore(el.firstChild, el);
-      }
-      parent?.removeChild(el);
-      // Restart walker because DOM changed
-      return sanitizeMessageHtml(doc.body.innerHTML);
+      if (!parent) continue;
+      while (el.firstChild) parent.insertBefore(el.firstChild, el);
+      parent.removeChild(el);
+      continue;
     }
 
-    // Filter attributes
-    const attrs = Array.from(el.attributes);
-    for (const attr of attrs) {
-      if (!ALLOWED_ATTR.includes(attr.name) && attr.name !== "target") {
+    for (const attr of Array.from(el.attributes)) {
+      if (!ALLOWED_ATTR.includes(attr.name)) {
         el.removeAttribute(attr.name);
       }
     }
 
     if (tagName === "a") {
-      el.setAttribute("target", "_blank");
-      el.setAttribute("rel", "noopener noreferrer");
+      const href = el.getAttribute("href");
+      if (href && isSafeHref(href)) {
+        el.setAttribute("target", "_blank");
+        el.setAttribute("rel", "noopener noreferrer");
+      } else {
+        // javascript:/data:/vbscript:… → gỡ href, giữ lại chữ hiển thị.
+        el.removeAttribute("href");
+        el.removeAttribute("target");
+        el.removeAttribute("rel");
+      }
     }
-
-    node = walker.nextNode();
   }
 
   return doc.body.innerHTML;

@@ -1,0 +1,3 @@
+# Hook chạy trên cả Linux/macOS: CRLF làm shebang chết với "bad interpreter".
+# Ép LF bất kể core.autocrlf của từng máy.
+.githooks/* text eol=lf
