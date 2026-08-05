@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCurrentUser } from '@/app/useCurrentUser/useCurrentUser';
+import { authClient } from '@/api/clients/authClient/authClient';
 import {
   getConnectionStatus,
   onConnectionStatusChange,
@@ -176,9 +177,16 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
     [currentRole, navigate],
   );
 
-  const handleLogout = () => {
-    clearAuth();
-    navigate('/login', { replace: true });
+  const handleLogout = async () => {
+    try {
+      await authClient.logout();
+    } catch {
+      // Local credentials still need clearing if the network is unavailable.
+      // The server retains its fail-closed refresh/session policy.
+    } finally {
+      clearAuth();
+      navigate('/login', { replace: true });
+    }
   };
 
   const sidebarToggleLabel = mobile

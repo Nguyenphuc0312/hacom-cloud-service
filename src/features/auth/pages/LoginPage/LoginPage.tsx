@@ -144,7 +144,7 @@ export const LoginPage = () => {
     clearAuth();
     queryClient.removeQueries({ queryKey: queryKeys.currentAdmin });
     loginInFlight.current = true;
-    loginMutation.mutate(parsed.data);
+    loginMutation.mutate({ ...parsed.data, rememberMe });
   };
 
   const handleRememberMeChange = (e: { target: { checked: boolean } }) => {
