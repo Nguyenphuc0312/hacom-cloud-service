@@ -1,0 +1,4742 @@
+From 7fbc9a7d33dc97577d9d571f5b6500a5ecc2fbf6 Mon Sep 17 00:00:00 2001
+From: HarryBurger <harryburger@MacBook-Air-cua-NXP.local>
+Date: Thu, 30 Jul 2026 10:55:52 +0700
+Subject: [PATCH 1/6] feat(cloud): integrate My Documents into chat shell
+
+---
+ .env.example                                  |    5 +
+ src/components/chat/ChatHeader.tsx            |   22 +-
+ src/components/layout/Sidebar.tsx             |   39 +-
+ src/config/index.ts                           |   15 +
+ src/features/cloud/api/cloudApi.test.ts       |  100 ++
+ src/features/cloud/api/cloudApi.ts            |  220 +++
+ .../cloud/components/CloudComposer.tsx        |  328 ++++
+ .../components/CloudConversationEntry.tsx     |   98 ++
+ .../cloud/components/CloudInspector.tsx       |  171 +++
+ .../cloud/components/CloudItemIcon.tsx        |   41 +
+ .../cloud/components/CloudSidebar.tsx         |  201 +++
+ .../cloud/components/CloudTimeline.tsx        |  211 +++
+ src/features/cloud/constants.ts               |    3 +
+ src/features/cloud/hooks/useCloudWorkspace.ts |  395 +++++
+ src/features/cloud/pages/CloudPage.tsx        |  448 ++++++
+ src/features/cloud/styles/cloud.css           | 1315 +++++++++++++++++
+ src/features/cloud/types.ts                   |   78 +
+ src/features/cloud/utils/cloudFormat.test.ts  |   44 +
+ src/features/cloud/utils/cloudFormat.ts       |   69 +
+ .../cloud/utils/cloudMessageAdapter.test.ts   |   70 +
+ .../cloud/utils/cloudMessageAdapter.ts        |  110 ++
+ src/i18n/index.ts                             |    1 +
+ src/locales/en/cloud.json                     |  168 +++
+ src/locales/en/sidebar.json                   |    1 +
+ src/locales/vi/cloud.json                     |  168 +++
+ src/locales/vi/sidebar.json                   |    1 +
+ src/pages/ChatPage.tsx                        |    7 +
+ src/router/config/privateRoutes.ts            |    2 +
+ src/router/paths.ts                           |    1 +
+ src/shared/layout/SideRail.tsx                |    3 +-
+ vite.config.ts                                |    9 +
+ 31 files changed, 4322 insertions(+), 22 deletions(-)
+ create mode 100644 src/features/cloud/api/cloudApi.test.ts
+ create mode 100644 src/features/cloud/api/cloudApi.ts
+ create mode 100644 src/features/cloud/components/CloudComposer.tsx
+ create mode 100644 src/features/cloud/components/CloudConversationEntry.tsx
+ create mode 100644 src/features/cloud/components/CloudInspector.tsx
+ create mode 100644 src/features/cloud/components/CloudItemIcon.tsx
+ create mode 100644 src/features/cloud/components/CloudSidebar.tsx
+ create mode 100644 src/features/cloud/components/CloudTimeline.tsx
+ create mode 100644 src/features/cloud/constants.ts
+ create mode 100644 src/features/cloud/hooks/useCloudWorkspace.ts
+ create mode 100644 src/features/cloud/pages/CloudPage.tsx
+ create mode 100644 src/features/cloud/styles/cloud.css
+ create mode 100644 src/features/cloud/types.ts
+ create mode 100644 src/features/cloud/utils/cloudFormat.test.ts
+ create mode 100644 src/features/cloud/utils/cloudFormat.ts
+ create mode 100644 src/features/cloud/utils/cloudMessageAdapter.test.ts
+ create mode 100644 src/features/cloud/utils/cloudMessageAdapter.ts
+ create mode 100644 src/locales/en/cloud.json
+ create mode 100644 src/locales/vi/cloud.json
+
+diff --git a/.env.example b/.env.example
+index 6d1fe2d0..64de5554 100644
+--- a/.env.example
++++ b/.env.example
+@@ -16,6 +16,10 @@ VITE_WS_BASE_URL=/ws
+ # Optional when media URLs are relative. Usually not required for local profile.
+ VITE_FILE_BASE_URL=
+ 
++# Hacom Cloud Phase 1 (independent Go service)
++VITE_CLOUD_API_BASE_URL=/cloud-api/api/v1/cloud
++VITE_CLOUD_HEALTH_URL=/cloud-api/health/ready
++
+ # Profile B: local frontend + public dev backend (uncomment and replace values)
+ # VITE_API_BASE_URL=https://hacom-chat.fitora.id.vn/api/v1
+ # VITE_AUTH_BASE_URL=https://hacom-chat.fitora.id.vn/api/v1/auth
+@@ -65,6 +69,7 @@ VITE_DISABLE_PRESENCE_ANIMATION=false
+ VITE_DEV_API_PROXY_TARGET=http://localhost:3001
+ VITE_DEV_AUTH_PROXY_TARGET=http://localhost:3101
+ VITE_DEV_WS_PROXY_TARGET=ws://localhost:8001
++VITE_DEV_CLOUD_PROXY_TARGET=http://localhost:8080
+ 
+ # ============================================
+ # AI CHAT SERVICE
+diff --git a/src/components/chat/ChatHeader.tsx b/src/components/chat/ChatHeader.tsx
+index 4134a6de..f679df1a 100644
+--- a/src/components/chat/ChatHeader.tsx
++++ b/src/components/chat/ChatHeader.tsx
+@@ -32,6 +32,9 @@ import { formatCalendarDateTime } from "../../utils/formatTime";
+ interface ChatHeaderProps {
+   conversation: Conversation;
+   currentUserId: string;
++  titleOverride?: string;
++  subtitleOverride?: string;
++  avatarOverride?: React.ReactNode;
+   typingStatus?: TypingStatus;
+   typingStatuses?: TypingStatus[];
+   onBack?: () => void;
+@@ -55,6 +58,9 @@ const iconButtonClass = clsx(
+ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+   conversation,
+   currentUserId,
++  titleOverride,
++  subtitleOverride,
++  avatarOverride,
+   typingStatus,
+   typingStatuses,
+   onBack,
+@@ -141,6 +147,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+ 
+   const displayName = alias ?? enrichedName ?? rawDisplayName;
+   const avatarSrc = getConversationAvatar(conversation, currentUserId);
++  const resolvedDisplayName = titleOverride ?? displayName;
++  const resolvedStatusText = subtitleOverride ?? statusText;
+ 
+   return (
+     <header
+@@ -171,10 +179,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+             )}
+             aria-label={t("chat:header.viewInfo")}
+           >
+-            {isDirect ? (
++            {avatarOverride ?? (isDirect ? (
+               <Avatar
+                 src={avatarSrc}
+-                alt={displayName}
++                alt={resolvedDisplayName}
+                 size="md"
+                 status={liveStatus}
+                 showStatus={isDirect}
+@@ -189,7 +197,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+                 alt={displayName}
+                 className="chat-header-avatar"
+               />
+-            )}
++            ))}
+           </button>
+ 
+           <button
+@@ -201,7 +209,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+             )}
+           >
+             <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
+-              {displayName}
++              {resolvedDisplayName}
+             </h2>
+ 
+             {isTyping ? (
+@@ -217,10 +225,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+               <p
+                 className={clsx(
+                   "chat-header-subtitle truncate text-[12px] leading-4",
+-                  isOnline ? "text-text-secondary" : "text-text-muted",
++                  subtitleOverride || isOnline
++                    ? "text-text-secondary"
++                    : "text-text-muted",
+                 )}
+               >
+-                {statusText}
++                {resolvedStatusText}
+               </p>
+             )}
+           </button>
+diff --git a/src/components/layout/Sidebar.tsx b/src/components/layout/Sidebar.tsx
+index 66069b0a..e6bd1c24 100644
+--- a/src/components/layout/Sidebar.tsx
++++ b/src/components/layout/Sidebar.tsx
+@@ -26,6 +26,8 @@ interface SidebarProps {
+   layoutState: ChatLayoutState;
+   currentUser: UserSummary;
+   selectedId: string | null;
++  leadingContent?: React.ReactNode;
++  hideConversationList?: boolean;
+ 
+   isLoadingMoreConversations?: boolean;
+   hasMoreConversations?: boolean;
+@@ -42,6 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
+   layoutState,
+   currentUser,
+   selectedId,
++  leadingContent,
++  hideConversationList = false,
+ 
+   isLoadingMoreConversations = false,
+   hasMoreConversations = false,
+@@ -143,24 +147,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
+ 
+         <div
+           className={clsx(
+-            "flex min-h-0 flex-1",
++            "flex min-h-0 flex-1 flex-col",
+             layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
+           )}
+         >
+-          <RoomList
+-            layoutState={layoutState}
+-            conversationIds={conversationIds}
+-            currentUser={currentUser}
+-            selectedId={selectedId}
+-            searchQuery={deferredSearchQuery}
+-            showLoadingSkeleton={showConversationSkeleton}
+-            error={conversationsError}
+-            onRetry={onRetryConversations}
+-            hasMore={hasMoreConversations}
+-            isLoadingMore={isLoadingMoreConversations}
+-            onLoadMore={onLoadMoreConversations}
+-            onSelect={handleSelectRoom}
+-          />
++          {leadingContent}
++          {!hideConversationList ? (
++            <div className="min-h-0 flex-1">
++              <RoomList
++                layoutState={layoutState}
++                conversationIds={conversationIds}
++                currentUser={currentUser}
++                selectedId={selectedId}
++                searchQuery={deferredSearchQuery}
++                showLoadingSkeleton={showConversationSkeleton}
++                error={conversationsError}
++                onRetry={onRetryConversations}
++                hasMore={hasMoreConversations}
++                isLoadingMore={isLoadingMoreConversations}
++                onLoadMore={onLoadMoreConversations}
++                onSelect={handleSelectRoom}
++              />
++            </div>
++          ) : null}
+         </div>
+ 
+         {isSearchOpen ? (
+diff --git a/src/config/index.ts b/src/config/index.ts
+index 93e684b9..8442b970 100644
+--- a/src/config/index.ts
++++ b/src/config/index.ts
+@@ -215,6 +215,21 @@ export const HR_API_BASE_URL = resolveHttpBaseUrl(
+   import.meta.env.DEV ? "/hr-api" : "",
+ );
+ 
++/**
++ * Hacom Cloud Phase 1 runs as an independent Go service. The local web preview
++ * uses a dedicated Vite proxy so Cloud traffic never gets mixed with Chat API
++ * routes and the browser does not need an unsafe CORS workaround.
++ */
++export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
++  import.meta.env.VITE_CLOUD_API_BASE_URL,
++  "/cloud-api/api/v1/cloud",
++);
++
++export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
++  import.meta.env.VITE_CLOUD_HEALTH_URL,
++  "/cloud-api/health/ready",
++);
++
+ /**
+  * Feature flag: redirect auth traffic to the dedicated auth-service.
+  * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
+diff --git a/src/features/cloud/api/cloudApi.test.ts b/src/features/cloud/api/cloudApi.test.ts
+new file mode 100644
+index 00000000..cbf63546
+--- /dev/null
++++ b/src/features/cloud/api/cloudApi.test.ts
+@@ -0,0 +1,100 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { cloudApi, CloudApiError } from "./cloudApi";
++
++const userId = "11111111-1111-4111-8111-111111111111";
++
++const jsonResponse = (
++  payload: unknown,
++  init: ResponseInit = {},
++): Response =>
++  new Response(JSON.stringify(payload), {
++    ...init,
++    headers: {
++      "Content-Type": "application/json",
++      ...init.headers,
++    },
++  });
++
++describe("cloudApi", () => {
++  const fetchMock = vi.fn<typeof fetch>();
++
++  beforeEach(() => {
++    vi.stubGlobal("fetch", fetchMock);
++  });
++
++  afterEach(() => {
++    vi.unstubAllGlobals();
++    vi.clearAllMocks();
++  });
++
++  it("sends the local user contract and exact text payload", async () => {
++    fetchMock.mockResolvedValueOnce(
++      jsonResponse({
++        id: "item-1",
++        type: "text",
++        status: "ready",
++        content: "Báo cáo",
++        sizeBytes: 7,
++        createdAt: "2026-07-30T08:00:00Z",
++        updatedAt: "2026-07-30T08:00:00Z",
++      }),
++    );
++
++    await cloudApi.createText(userId, "Báo cáo");
++
++    expect(fetchMock).toHaveBeenCalledWith(
++      "/cloud-api/api/v1/cloud/texts",
++      expect.objectContaining({
++        method: "POST",
++        body: JSON.stringify({ content: "Báo cáo" }),
++        headers: expect.objectContaining({
++          "Content-Type": "application/json",
++          "X-Demo-User-ID": userId,
++        }),
++      }),
++    );
++  });
++
++  it("keeps cursors opaque when requesting the next page", async () => {
++    fetchMock.mockResolvedValueOnce(
++      jsonResponse({ items: [], nextCursor: "opaque+cursor/value==" }),
++    );
++
++    await cloudApi.listItems(userId, {
++      cursor: "opaque+cursor/value==",
++      limit: 30,
++    });
++
++    const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
++    expect(requestedUrl).toContain("limit=30");
++    expect(requestedUrl).toContain("cursor=opaque%2Bcursor%2Fvalue%3D%3D");
++  });
++
++  it("preserves backend error codes and request IDs", async () => {
++    fetchMock.mockResolvedValueOnce(
++      jsonResponse(
++        {
++          error: {
++            code: "QUOTA_EXCEEDED",
++            message: "quota reservation exceeds available bytes",
++          },
++        },
++        {
++          status: 409,
++          headers: { "X-Request-ID": "request-123" },
++        },
++      ),
++    );
++
++    const error = await cloudApi
++      .createLink(userId, "https://hacom.vn", "Hacom")
++      .catch((reason: unknown) => reason);
++
++    expect(error).toBeInstanceOf(CloudApiError);
++    expect(error).toMatchObject({
++      status: 409,
++      code: "QUOTA_EXCEEDED",
++      requestId: "request-123",
++    });
++  });
++});
+diff --git a/src/features/cloud/api/cloudApi.ts b/src/features/cloud/api/cloudApi.ts
+new file mode 100644
+index 00000000..656be650
+--- /dev/null
++++ b/src/features/cloud/api/cloudApi.ts
+@@ -0,0 +1,220 @@
++import { CLOUD_API_BASE_URL, CLOUD_HEALTH_URL } from "../../../config";
++import type {
++  CloudHealth,
++  CloudItem,
++  CloudPage,
++  CloudQuota,
++  CloudUploadComplete,
++  CloudUploadSession,
++} from "../types";
++
++interface CloudErrorEnvelope {
++  error?: {
++    code?: string;
++    message?: string;
++  };
++}
++
++interface CloudRequestOptions extends RequestInit {
++  userId: string;
++}
++
++export class CloudApiError extends Error {
++  readonly status: number;
++  readonly code: string;
++  readonly requestId?: string;
++
++  constructor(input: {
++    status: number;
++    code: string;
++    message: string;
++    requestId?: string;
++  }) {
++    super(input.message);
++    this.name = "CloudApiError";
++    this.status = input.status;
++    this.code = input.code;
++    this.requestId = input.requestId;
++  }
++}
++
++const joinPath = (base: string, path: string): string =>
++  `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
++
++const parseJson = async <T,>(response: Response): Promise<T> => {
++  const contentType = response.headers.get("content-type") ?? "";
++  if (!contentType.toLowerCase().includes("application/json")) {
++    throw new CloudApiError({
++      status: response.status,
++      code: "INVALID_RESPONSE",
++      message: "Cloud API returned a non-JSON response",
++      requestId: response.headers.get("x-request-id") ?? undefined,
++    });
++  }
++  return (await response.json()) as T;
++};
++
++const cloudRequest = async <T,>(
++  path: string,
++  { userId, headers, ...options }: CloudRequestOptions,
++): Promise<T> => {
++  const response = await fetch(joinPath(CLOUD_API_BASE_URL, path), {
++    ...options,
++    headers: {
++      Accept: "application/json",
++      "X-Demo-User-ID": userId,
++      ...headers,
++    },
++  });
++
++  if (!response.ok) {
++    const payload = await parseJson<CloudErrorEnvelope>(response).catch(
++      (): CloudErrorEnvelope => ({}),
++    );
++    throw new CloudApiError({
++      status: response.status,
++      code: payload.error?.code ?? "CLOUD_REQUEST_FAILED",
++      message: payload.error?.message ?? "Cloud request failed",
++      requestId: response.headers.get("x-request-id") ?? undefined,
++    });
++  }
++
++  return parseJson<T>(response);
++};
++
++export const cloudApi = {
++  async health(signal?: AbortSignal): Promise<CloudHealth> {
++    const response = await fetch(CLOUD_HEALTH_URL, {
++      headers: { Accept: "application/json" },
++      signal,
++    });
++    if (!response.ok) {
++      throw new CloudApiError({
++        status: response.status,
++        code: "CLOUD_UNAVAILABLE",
++        message: "Cloud service is unavailable",
++      });
++    }
++    return parseJson<CloudHealth>(response);
++  },
++
++  listItems(
++    userId: string,
++    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
++  ): Promise<CloudPage> {
++    const query = new URLSearchParams();
++    query.set("limit", String(options.limit ?? 30));
++    if (options.cursor) query.set("cursor", options.cursor);
++    return cloudRequest<CloudPage>(`items?${query.toString()}`, {
++      userId,
++      signal: options.signal,
++    });
++  },
++
++  getItem(userId: string, itemId: string, signal?: AbortSignal): Promise<CloudItem> {
++    return cloudRequest<CloudItem>(`items/${encodeURIComponent(itemId)}`, {
++      userId,
++      signal,
++    });
++  },
++
++  getQuota(userId: string, signal?: AbortSignal): Promise<CloudQuota> {
++    return cloudRequest<CloudQuota>("quota", { userId, signal });
++  },
++
++  createText(userId: string, content: string): Promise<CloudItem> {
++    return cloudRequest<CloudItem>("texts", {
++      userId,
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ content }),
++    });
++  },
++
++  createLink(userId: string, url: string, title: string): Promise<CloudItem> {
++    return cloudRequest<CloudItem>("links", {
++      userId,
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ url, title }),
++    });
++  },
++
++  initiateUpload(userId: string, file: File): Promise<CloudUploadSession> {
++    return cloudRequest<CloudUploadSession>("uploads", {
++      userId,
++      method: "POST",
++      headers: {
++        "Content-Type": "application/json",
++        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
++      },
++      body: JSON.stringify({
++        fileName: file.name,
++        contentType: file.type || "application/octet-stream",
++        sizeBytes: file.size,
++      }),
++    });
++  },
++
++  uploadObject(
++    session: CloudUploadSession,
++    file: File,
++    onProgress: (percent: number) => void,
++  ): Promise<void> {
++    return new Promise((resolve, reject) => {
++      const request = new XMLHttpRequest();
++      request.open(session.method, session.uploadUrl);
++      Object.entries(session.requiredHeaders).forEach(([name, value]) => {
++        request.setRequestHeader(name, value);
++      });
++      request.upload.addEventListener("progress", (event) => {
++        if (event.lengthComputable && event.total > 0) {
++          onProgress(Math.round((event.loaded / event.total) * 100));
++        }
++      });
++      request.addEventListener("load", () => {
++        if (request.status >= 200 && request.status < 300) {
++          onProgress(100);
++          resolve();
++          return;
++        }
++        reject(
++          new CloudApiError({
++            status: request.status,
++            code: "OBJECT_UPLOAD_FAILED",
++            message: "Object storage rejected the upload",
++          }),
++        );
++      });
++      request.addEventListener("error", () => {
++        reject(
++          new CloudApiError({
++            status: 0,
++            code: "OBJECT_UPLOAD_NETWORK_ERROR",
++            message: "Could not reach object storage",
++          }),
++        );
++      });
++      request.addEventListener("abort", () => {
++        reject(
++          new CloudApiError({
++            status: 0,
++            code: "OBJECT_UPLOAD_ABORTED",
++            message: "Upload was cancelled",
++          }),
++        );
++      });
++      request.send(file);
++    });
++  },
++
++  completeUpload(userId: string, sessionId: string): Promise<CloudUploadComplete> {
++    return cloudRequest<CloudUploadComplete>(
++      `uploads/${encodeURIComponent(sessionId)}/complete`,
++      {
++        userId,
++        method: "POST",
++      },
++    );
++  },
++};
+diff --git a/src/features/cloud/components/CloudComposer.tsx b/src/features/cloud/components/CloudComposer.tsx
+new file mode 100644
+index 00000000..514f4d04
+--- /dev/null
++++ b/src/features/cloud/components/CloudComposer.tsx
+@@ -0,0 +1,328 @@
++import React, { useRef, useState } from "react";
++import clsx from "clsx";
++import { useTranslation } from "react-i18next";
++import {
++  FileUp,
++  Link2,
++  Paperclip,
++  SendHorizontal,
++  StickyNote,
++  UploadCloud,
++  X,
++} from "lucide-react";
++import { Button, Input, Textarea } from "../../../components/ui";
++import type { CloudComposerMode, CloudUploadProgress } from "../types";
++import { formatBytes } from "../utils/cloudFormat";
++
++const MAX_UPLOAD_BYTES = 100_000_000;
++
++interface CloudComposerProps {
++  isMutating: boolean;
++  uploadProgress: CloudUploadProgress | null;
++  onCreateText: (content: string) => Promise<boolean>;
++  onCreateLink: (url: string, title: string) => Promise<boolean>;
++  onUpload: (file: File) => Promise<boolean>;
++}
++
++export const CloudComposer: React.FC<CloudComposerProps> = ({
++  isMutating,
++  uploadProgress,
++  onCreateText,
++  onCreateLink,
++  onUpload,
++}) => {
++  const { t } = useTranslation("cloud");
++  const fileInputRef = useRef<HTMLInputElement | null>(null);
++  const [mode, setMode] = useState<CloudComposerMode>("text");
++  const [text, setText] = useState("");
++  const [linkUrl, setLinkUrl] = useState("");
++  const [linkTitle, setLinkTitle] = useState("");
++  const [file, setFile] = useState<File | null>(null);
++  const [isDragging, setIsDragging] = useState(false);
++  const [validationError, setValidationError] = useState<string | null>(null);
++
++  const chooseFile = (nextFile: File | undefined) => {
++    setValidationError(null);
++    if (!nextFile) return;
++    if (nextFile.size <= 0) {
++      setValidationError(t("composer.errors.emptyFile"));
++      return;
++    }
++    if (nextFile.size > MAX_UPLOAD_BYTES) {
++      setValidationError(t("composer.errors.fileTooLarge"));
++      return;
++    }
++    setFile(nextFile);
++  };
++
++  const submitText = async () => {
++    const normalized = text.trim();
++    if (!normalized) {
++      setValidationError(t("composer.errors.textRequired"));
++      return;
++    }
++    setValidationError(null);
++    const succeeded = await onCreateText(normalized);
++    if (succeeded) setText("");
++  };
++
++  const submitLink = async () => {
++    const normalizedUrl = linkUrl.trim();
++    try {
++      const parsed = new URL(normalizedUrl);
++      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
++    } catch {
++      setValidationError(t("composer.errors.linkInvalid"));
++      return;
++    }
++    setValidationError(null);
++    const succeeded = await onCreateLink(normalizedUrl, linkTitle.trim());
++    if (succeeded) {
++      setLinkUrl("");
++      setLinkTitle("");
++    }
++  };
++
++  const submitFile = async () => {
++    if (!file) {
++      setValidationError(t("composer.errors.fileRequired"));
++      return;
++    }
++    setValidationError(null);
++    const succeeded = await onUpload(file);
++    if (succeeded) {
++      setFile(null);
++      if (fileInputRef.current) fileInputRef.current.value = "";
++    }
++  };
++
++  const stageLabel = uploadProgress
++    ? t(`upload.stage.${uploadProgress.stage}`)
++    : null;
++
++  return (
++    <section className="cloud-composer">
++      <div className="cloud-composer__tabs" role="tablist" aria-label={t("composer.aria")}>
++        {(
++          [
++            ["text", StickyNote],
++            ["upload", UploadCloud],
++            ["link", Link2],
++          ] as const
++        ).map(([key, Icon]) => (
++          <button
++            key={key}
++            type="button"
++            role="tab"
++            aria-selected={mode === key}
++            onClick={() => {
++              setMode(key);
++              setValidationError(null);
++            }}
++            className={clsx(
++              "cloud-composer__tab",
++              mode === key && "cloud-composer__tab--active",
++            )}
++          >
++            <Icon className="h-4 w-4" aria-hidden />
++            {t(`composer.tabs.${key}`)}
++          </button>
++        ))}
++      </div>
++
++      <div className="cloud-composer__body">
++        {mode === "text" ? (
++          <div className="space-y-3">
++            <Textarea
++              value={text}
++              onChange={(event) => setText(event.target.value)}
++              placeholder={t("composer.text.placeholder")}
++              rows={2}
++              disabled={isMutating}
++              maxLength={100_000}
++              aria-label={t("composer.text.aria")}
++            />
++            <div className="flex items-center justify-between gap-3">
++              <span className="text-xs text-text-muted">
++                {t("composer.text.hint")}
++              </span>
++              <Button
++                size="sm"
++                variant="brand"
++                isLoading={isMutating}
++                disabled={isMutating}
++                onClick={() => void submitText()}
++                leftIcon={<SendHorizontal className="h-4 w-4" />}
++              >
++                {t("composer.text.action")}
++              </Button>
++            </div>
++          </div>
++        ) : null}
++
++        {mode === "link" ? (
++          <div className="grid gap-3 sm:grid-cols-[1fr_0.8fr_auto] sm:items-end">
++            <Input
++              label={t("composer.link.urlLabel")}
++              value={linkUrl}
++              onChange={(event) => setLinkUrl(event.target.value)}
++              placeholder="https://"
++              disabled={isMutating}
++            />
++            <Input
++              label={t("composer.link.titleLabel")}
++              value={linkTitle}
++              onChange={(event) => setLinkTitle(event.target.value)}
++              placeholder={t("composer.link.titlePlaceholder")}
++              disabled={isMutating}
++            />
++            <Button
++              size="md"
++              variant="brand"
++              isLoading={isMutating}
++              disabled={isMutating}
++              onClick={() => void submitLink()}
++              className="sm:mb-0"
++            >
++              {t("composer.link.action")}
++            </Button>
++          </div>
++        ) : null}
++
++        {mode === "upload" ? (
++          <div className="space-y-3">
++            <input
++              ref={fileInputRef}
++              type="file"
++              className="sr-only"
++              onChange={(event) => chooseFile(event.target.files?.[0])}
++              aria-label={t("composer.upload.pick")}
++            />
++            {uploadProgress ? (
++              <div className="cloud-upload-progress" role="status" aria-live="polite">
++                <div className="flex min-w-0 items-center gap-3">
++                  <span className="cloud-upload-progress__icon">
++                    <FileUp className="h-5 w-5" aria-hidden />
++                  </span>
++                  <div className="min-w-0 flex-1">
++                    <div className="flex items-center justify-between gap-3">
++                      <p className="truncate text-sm font-medium text-text-primary">
++                        {uploadProgress.fileName}
++                      </p>
++                      <span className="text-xs font-semibold text-primary">
++                        {uploadProgress.stage === "uploading"
++                          ? `${uploadProgress.percent}%`
++                          : stageLabel}
++                      </span>
++                    </div>
++                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-active">
++                      <span
++                        className={clsx(
++                          "block h-full rounded-full bg-primary transition-[width] duration-200",
++                          uploadProgress.stage === "processing" && "animate-pulse",
++                        )}
++                        style={{
++                          width:
++                            uploadProgress.stage === "reserving"
++                              ? "8%"
++                              : uploadProgress.stage === "processing"
++                                ? "100%"
++                                : `${uploadProgress.percent}%`,
++                        }}
++                      />
++                    </div>
++                    <p className="mt-1.5 text-xs text-text-muted">{stageLabel}</p>
++                  </div>
++                </div>
++              </div>
++            ) : (
++              <div
++                className={clsx(
++                  "cloud-dropzone",
++                  isDragging && "cloud-dropzone--active",
++                  file && "cloud-dropzone--selected",
++                )}
++                onDragEnter={(event) => {
++                  event.preventDefault();
++                  setIsDragging(true);
++                }}
++                onDragOver={(event) => event.preventDefault()}
++                onDragLeave={(event) => {
++                  event.preventDefault();
++                  if (event.currentTarget === event.target) setIsDragging(false);
++                }}
++                onDrop={(event) => {
++                  event.preventDefault();
++                  setIsDragging(false);
++                  chooseFile(event.dataTransfer.files[0]);
++                }}
++              >
++                {file ? (
++                  <>
++                    <span className="cloud-dropzone__icon">
++                      <Paperclip className="h-5 w-5" aria-hidden />
++                    </span>
++                    <div className="min-w-0 flex-1">
++                      <p className="truncate text-sm font-medium text-text-primary">
++                        {file.name}
++                      </p>
++                      <p className="text-xs text-text-muted">{formatBytes(file.size)}</p>
++                    </div>
++                    <button
++                      type="button"
++                      onClick={() => {
++                        setFile(null);
++                        if (fileInputRef.current) fileInputRef.current.value = "";
++                      }}
++                      className="cloud-dropzone__remove"
++                      aria-label={t("composer.upload.remove")}
++                    >
++                      <X className="h-4 w-4" />
++                    </button>
++                    <Button
++                      size="sm"
++                      variant="brand"
++                      isLoading={isMutating}
++                      disabled={isMutating}
++                      onClick={() => void submitFile()}
++                    >
++                      {t("composer.upload.action")}
++                    </Button>
++                  </>
++                ) : (
++                  <>
++                    <span className="cloud-dropzone__icon">
++                      <UploadCloud className="h-5 w-5" aria-hidden />
++                    </span>
++                    <div className="min-w-0 flex-1">
++                      <p className="text-sm font-medium text-text-primary">
++                        {t("composer.upload.drop")}
++                      </p>
++                      <p className="mt-0.5 text-xs text-text-muted">
++                        {t("composer.upload.limit")}
++                      </p>
++                    </div>
++                    <Button
++                      size="sm"
++                      variant="brand-outline"
++                      disabled={isMutating}
++                      onClick={() => fileInputRef.current?.click()}
++                    >
++                      {t("composer.upload.pick")}
++                    </Button>
++                  </>
++                )}
++              </div>
++            )}
++          </div>
++        ) : null}
++
++        {validationError ? (
++          <p className="mt-3 text-xs font-medium text-danger" role="alert">
++            {validationError}
++          </p>
++        ) : null}
++      </div>
++    </section>
++  );
++};
+diff --git a/src/features/cloud/components/CloudConversationEntry.tsx b/src/features/cloud/components/CloudConversationEntry.tsx
+new file mode 100644
+index 00000000..e69f0da6
+--- /dev/null
++++ b/src/features/cloud/components/CloudConversationEntry.tsx
+@@ -0,0 +1,98 @@
++import React from "react";
++import clsx from "clsx";
++import { Cloud } from "lucide-react";
++import { useTranslation } from "react-i18next";
++import { formatRelativeTime } from "../../../utils/formatTime";
++import type { CloudItem } from "../types";
++import {
++  getCloudItemPreview,
++  getCloudItemTitle,
++} from "../utils/cloudFormat";
++
++interface CloudConversationEntryProps {
++  items?: CloudItem[];
++  isActive?: boolean;
++  onSelect: () => void;
++}
++
++export const CloudConversationAvatar: React.FC<{
++  size?: "sm" | "md";
++}> = ({ size = "md" }) => (
++  <span
++    className={clsx(
++      "inline-flex shrink-0 items-center justify-center rounded-full border border-[#1976D2]/20 bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE] text-[#1565C0] shadow-sm",
++      size === "sm" ? "h-[34px] w-[34px]" : "h-10 w-10",
++    )}
++    aria-hidden
++  >
++    <Cloud className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
++  </span>
++);
++
++export const CloudConversationEntry: React.FC<
++  CloudConversationEntryProps
++> = ({ items = [], isActive = false, onSelect }) => {
++  const { t } = useTranslation("cloud");
++  const latestItem = items[0];
++  const preview = latestItem
++    ? getCloudItemPreview(latestItem) ||
++      getCloudItemTitle(latestItem, {
++        text: t("item.untitledText"),
++        link: t("item.untitledLink"),
++        file: t("item.untitledFile"),
++      })
++    : t("workspace.sidebarPreview");
++  const timeLabel = latestItem
++    ? formatRelativeTime(new Date(latestItem.createdAt))
++    : "";
++
++  return (
++    <div className="shrink-0 pb-0.5">
++      <button
++        type="button"
++        role="option"
++        aria-selected={isActive}
++        onClick={onSelect}
++        className={clsx(
++          "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center rounded-lg px-2.5 text-left",
++          "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
++          isActive
++            ? "bg-[#1565C0]/20 ring-1 ring-inset ring-[#1976D2]/40"
++            : "hover:bg-surface-hover/70",
++        )}
++        aria-label={t("workspace.title")}
++      >
++        <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
++          <CloudConversationAvatar />
++          <div className="min-w-0">
++            <p
++              className={clsx(
++                "truncate text-[14px] font-medium leading-[1.1rem]",
++                isActive ? "font-bold text-[#0D3F7A]" : "text-text-primary",
++              )}
++            >
++              {t("workspace.title")}
++            </p>
++            <p
++              className={clsx(
++                "mt-0.5 truncate pr-1 text-[12px] leading-[1rem]",
++                isActive
++                  ? "font-medium text-text-primary"
++                  : "text-text-muted",
++              )}
++              title={preview}
++            >
++              {preview}
++            </p>
++          </div>
++          <span className="min-w-room-meta text-right text-[11px] font-medium text-text-muted">
++            {timeLabel}
++          </span>
++        </div>
++      </button>
++      <div className="mx-3 h-px bg-border/45" aria-hidden />
++    </div>
++  );
++};
++
++export default CloudConversationEntry;
+diff --git a/src/features/cloud/components/CloudInspector.tsx b/src/features/cloud/components/CloudInspector.tsx
+new file mode 100644
+index 00000000..8eb4d316
+--- /dev/null
++++ b/src/features/cloud/components/CloudInspector.tsx
+@@ -0,0 +1,171 @@
++import React from "react";
++import { useTranslation } from "react-i18next";
++import {
++  CalendarClock,
++  Download,
++  ExternalLink,
++  FileCheck2,
++  Fingerprint,
++  LockKeyhole,
++  Share2,
++} from "lucide-react";
++import { Button } from "../../../components/ui";
++import type { CloudItem } from "../types";
++import {
++  formatBytes,
++  formatCloudDateTime,
++  getCloudItemTitle,
++  isSafeExternalUrl,
++} from "../utils/cloudFormat";
++import { CloudItemIcon } from "./CloudItemIcon";
++
++interface CloudInspectorProps {
++  item: CloudItem | null;
++  onClose: () => void;
++}
++
++export const CloudInspector: React.FC<CloudInspectorProps> = ({
++  item,
++  onClose,
++}) => {
++  const { t, i18n } = useTranslation("cloud");
++  const locale = i18n.resolvedLanguage === "en" ? "en-US" : "vi-VN";
++
++  if (!item) {
++    return (
++      <aside className="cloud-inspector cloud-inspector--empty">
++        <div className="cloud-inspector__empty-icon">
++          <FileCheck2 className="h-7 w-7" aria-hidden />
++        </div>
++        <h2>{t("inspector.empty.title")}</h2>
++        <p>{t("inspector.empty.description")}</p>
++        <div className="cloud-capability-list">
++          <div>
++            <LockKeyhole className="h-4 w-4" aria-hidden />
++            <span>{t("inspector.capabilities.private")}</span>
++          </div>
++          <div>
++            <Fingerprint className="h-4 w-4" aria-hidden />
++            <span>{t("inspector.capabilities.hash")}</span>
++          </div>
++          <div>
++            <FileCheck2 className="h-4 w-4" aria-hidden />
++            <span>{t("inspector.capabilities.quota")}</span>
++          </div>
++        </div>
++      </aside>
++    );
++  }
++
++  const title = getCloudItemTitle(item, {
++    text: t("item.untitledText"),
++    link: t("item.untitledLink"),
++    file: t("item.untitledFile"),
++  });
++
++  return (
++    <aside className="cloud-inspector">
++      <div className="cloud-inspector__header">
++        <div>
++          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
++            {t("inspector.title")}
++          </p>
++          <h2 className="mt-1 text-base font-semibold text-text-primary">
++            {t("inspector.details")}
++          </h2>
++        </div>
++        <button
++          type="button"
++          onClick={onClose}
++          className="cloud-inspector__close"
++          aria-label={t("common.close")}
++        >
++          ×
++        </button>
++      </div>
++
++      <div className="cloud-inspector__content">
++        <div className="cloud-inspector__identity">
++          <CloudItemIcon type={item.type} className="!h-12 !w-12" />
++          <div className="min-w-0">
++            <h3 className="break-words text-sm font-semibold text-text-primary">
++              {title}
++            </h3>
++            <p className="mt-1 text-xs text-text-muted">
++              {t(`type.${item.type}`)}
++            </p>
++          </div>
++        </div>
++
++        {item.type === "text" && item.content ? (
++          <div className="cloud-inspector__preview">
++            <p>{item.content}</p>
++          </div>
++        ) : null}
++
++        {item.type === "link" && item.url && isSafeExternalUrl(item.url) ? (
++          <a
++            href={item.url}
++            target="_blank"
++            rel="noopener noreferrer"
++            className="cloud-inspector__link"
++          >
++            <span className="truncate">{item.url}</span>
++            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
++          </a>
++        ) : null}
++
++        <dl className="cloud-inspector__metadata">
++          <div>
++            <dt>{t("inspector.metadata.status")}</dt>
++            <dd>{t(`status.${item.status}`)}</dd>
++          </div>
++          <div>
++            <dt>{t("inspector.metadata.size")}</dt>
++            <dd>{formatBytes(item.sizeBytes)}</dd>
++          </div>
++          <div>
++            <dt>{t("inspector.metadata.created")}</dt>
++            <dd>{formatCloudDateTime(item.createdAt, locale)}</dd>
++          </div>
++          <div>
++            <dt>{t("inspector.metadata.updated")}</dt>
++            <dd>{formatCloudDateTime(item.updatedAt, locale)}</dd>
++          </div>
++          <div>
++            <dt>{t("inspector.metadata.id")}</dt>
++            <dd className="font-mono text-[11px]">{item.id}</dd>
++          </div>
++        </dl>
++
++        <div className="cloud-inspector__actions">
++          <Button
++            fullWidth
++            size="sm"
++            variant="secondary"
++            disabled
++            leftIcon={<Download className="h-4 w-4" />}
++            title={t("inspector.phaseLater")}
++          >
++            {t("inspector.actions.download")}
++          </Button>
++          <Button
++            fullWidth
++            size="sm"
++            variant="secondary"
++            disabled
++            leftIcon={<Share2 className="h-4 w-4" />}
++            title={t("inspector.phaseLater")}
++          >
++            {t("inspector.actions.share")}
++          </Button>
++        </div>
++
++        <div className="cloud-inspector__phase-note">
++          <CalendarClock className="h-4 w-4 shrink-0" aria-hidden />
++          <p>{t("inspector.phaseNote")}</p>
++        </div>
++      </div>
++    </aside>
++  );
++};
+diff --git a/src/features/cloud/components/CloudItemIcon.tsx b/src/features/cloud/components/CloudItemIcon.tsx
+new file mode 100644
+index 00000000..90a499fa
+--- /dev/null
++++ b/src/features/cloud/components/CloudItemIcon.tsx
+@@ -0,0 +1,41 @@
++import React from "react";
++import clsx from "clsx";
++import {
++  FileArchive,
++  FileAudio,
++  FileImage,
++  FileText,
++  FileVideo,
++  Link2,
++  StickyNote,
++} from "lucide-react";
++import type { CloudItemType } from "../types";
++
++interface CloudItemIconProps {
++  type: CloudItemType;
++  className?: string;
++}
++
++const iconByType: Record<
++  CloudItemType,
++  React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>
++> = {
++  text: StickyNote,
++  link: Link2,
++  file: FileText,
++  image: FileImage,
++  video: FileVideo,
++  audio: FileAudio,
++};
++
++export const CloudItemIcon: React.FC<CloudItemIconProps> = ({
++  type,
++  className,
++}) => {
++  const Icon = iconByType[type] ?? FileArchive;
++  return (
++    <span className={clsx("cloud-item-icon", `cloud-item-icon--${type}`, className)}>
++      <Icon className="h-5 w-5" aria-hidden />
++    </span>
++  );
++};
+diff --git a/src/features/cloud/components/CloudSidebar.tsx b/src/features/cloud/components/CloudSidebar.tsx
+new file mode 100644
+index 00000000..29e37c7e
+--- /dev/null
++++ b/src/features/cloud/components/CloudSidebar.tsx
+@@ -0,0 +1,201 @@
++import React from "react";
++import clsx from "clsx";
++import { useTranslation } from "react-i18next";
++import {
++  Clock3,
++  FileText,
++  FolderOpen,
++  HardDrive,
++  Image,
++  Link2,
++  LoaderCircle,
++  Search,
++  Share2,
++  StickyNote,
++  Trash2,
++  Wifi,
++  WifiOff,
++} from "lucide-react";
++import { Input } from "../../../components/ui";
++import type {
++  CloudFilter,
++  CloudHealth,
++  CloudItem,
++  CloudQuota,
++} from "../types";
++import { formatBytes } from "../utils/cloudFormat";
++
++interface CloudSidebarProps {
++  filter: CloudFilter;
++  onFilterChange: (filter: CloudFilter) => void;
++  search: string;
++  onSearchChange: (value: string) => void;
++  items: CloudItem[];
++  quota: CloudQuota | null;
++  health: CloudHealth | null;
++}
++
++const filterIcons = {
++  all: Clock3,
++  text: StickyNote,
++  image: Image,
++  file: FileText,
++  link: Link2,
++} satisfies Record<CloudFilter, React.ComponentType<{ className?: string }>>;
++
++export const CloudSidebar: React.FC<CloudSidebarProps> = ({
++  filter,
++  onFilterChange,
++  search,
++  onSearchChange,
++  items,
++  quota,
++  health,
++}) => {
++  const { t } = useTranslation("cloud");
++  const usedPercent = quota
++    ? Math.min(100, ((quota.usedBytes + quota.reservedBytes) / quota.limitBytes) * 100)
++    : 0;
++  const countByFilter: Record<CloudFilter, number> = {
++    all: items.length,
++    text: items.filter((item) => item.type === "text").length,
++    image: items.filter((item) => item.type === "image").length,
++    file: items.filter((item) =>
++      ["file", "video", "audio"].includes(item.type),
++    ).length,
++    link: items.filter((item) => item.type === "link").length,
++  };
++
++  return (
++    <aside className="cloud-sidebar">
++      <div className="cloud-sidebar__header">
++        <div className="flex min-w-0 items-center gap-3">
++          <div className="cloud-sidebar__brand-mark">
++            <HardDrive className="h-5 w-5" aria-hidden />
++          </div>
++          <div className="min-w-0">
++            <h1 className="truncate text-lg font-semibold text-text-primary">
++              {t("title")}
++            </h1>
++            <p className="truncate text-xs text-text-muted">{t("subtitle")}</p>
++          </div>
++        </div>
++      </div>
++
++      <div className="px-3 pb-3 pt-4">
++        <Input
++          value={search}
++          onChange={(event) => onSearchChange(event.target.value)}
++          placeholder={t("search.placeholder")}
++          aria-label={t("search.aria")}
++          leftIcon={<Search className="h-4 w-4" />}
++          className="!h-9"
++        />
++      </div>
++
++      <nav className="cloud-sidebar__nav" aria-label={t("navigation.aria")}>
++        {(Object.keys(filterIcons) as CloudFilter[]).map((key) => {
++          const Icon = filterIcons[key];
++          const active = filter === key;
++          return (
++            <button
++              key={key}
++              type="button"
++              onClick={() => onFilterChange(key)}
++              className={clsx(
++                "cloud-sidebar__nav-item",
++                active && "cloud-sidebar__nav-item--active",
++              )}
++              aria-current={active ? "page" : undefined}
++            >
++              <Icon className="h-[18px] w-[18px]" aria-hidden />
++              <span className="min-w-0 flex-1 truncate text-left">
++                {t(`navigation.${key}`)}
++              </span>
++              <span className="cloud-sidebar__count">{countByFilter[key]}</span>
++            </button>
++          );
++        })}
++
++        <div className="cloud-sidebar__divider" />
++        <button type="button" className="cloud-sidebar__nav-item" disabled>
++          <FolderOpen className="h-[18px] w-[18px]" aria-hidden />
++          <span className="min-w-0 flex-1 truncate text-left">
++            {t("navigation.folders")}
++          </span>
++          <span className="cloud-sidebar__soon">{t("common.soon")}</span>
++        </button>
++        <button type="button" className="cloud-sidebar__nav-item" disabled>
++          <Share2 className="h-[18px] w-[18px]" aria-hidden />
++          <span className="min-w-0 flex-1 truncate text-left">
++            {t("navigation.shared")}
++          </span>
++          <span className="cloud-sidebar__soon">{t("common.soon")}</span>
++        </button>
++        <button type="button" className="cloud-sidebar__nav-item" disabled>
++          <Trash2 className="h-[18px] w-[18px]" aria-hidden />
++          <span className="min-w-0 flex-1 truncate text-left">
++            {t("navigation.trash")}
++          </span>
++          <span className="cloud-sidebar__soon">{t("common.soon")}</span>
++        </button>
++      </nav>
++
++      <div className="mt-auto space-y-3 p-3">
++        <section className="cloud-quota-card" aria-label={t("quota.aria")}>
++          <div className="flex items-center justify-between gap-3">
++            <div className="flex items-center gap-2">
++              <HardDrive className="h-4 w-4 text-primary" aria-hidden />
++              <span className="text-xs font-semibold text-text-primary">
++                {t("quota.title")}
++              </span>
++            </div>
++            <span className="text-[11px] font-medium text-text-muted">
++              {quota ? `${usedPercent.toFixed(usedPercent < 1 ? 1 : 0)}%` : "—"}
++            </span>
++          </div>
++          <div className="cloud-quota-card__track" aria-hidden="true">
++            <span style={{ width: `${usedPercent}%` }} />
++          </div>
++          <p className="text-[11px] leading-4 text-text-secondary">
++            {quota
++              ? t("quota.usage", {
++                  used: formatBytes(quota.usedBytes),
++                  limit: formatBytes(quota.limitBytes),
++                })
++              : t("quota.loading")}
++          </p>
++          {quota && quota.reservedBytes > 0 ? (
++            <p className="mt-1 text-[11px] text-warning">
++              {t("quota.reserved", {
++                value: formatBytes(quota.reservedBytes),
++              })}
++            </p>
++          ) : null}
++        </section>
++
++        <div className="cloud-service-state" role="status">
++          {health === null ? (
++            <LoaderCircle
++              className="h-3.5 w-3.5 animate-spin text-text-muted"
++              aria-hidden
++            />
++          ) : health.status === "UP" ? (
++            <Wifi className="h-3.5 w-3.5 text-success" aria-hidden />
++          ) : (
++            <WifiOff className="h-3.5 w-3.5 text-danger" aria-hidden />
++          )}
++          <span>
++            {t(
++              health === null
++                ? "service.checking"
++                : health.status === "UP"
++                  ? "service.ready"
++                  : "service.offline",
++            )}
++          </span>
++        </div>
++      </div>
++    </aside>
++  );
++};
+diff --git a/src/features/cloud/components/CloudTimeline.tsx b/src/features/cloud/components/CloudTimeline.tsx
+new file mode 100644
+index 00000000..834be9a9
+--- /dev/null
++++ b/src/features/cloud/components/CloudTimeline.tsx
+@@ -0,0 +1,211 @@
++import React, { useMemo } from "react";
++import clsx from "clsx";
++import { useTranslation } from "react-i18next";
++import { ExternalLink, Files, LoaderCircle } from "lucide-react";
++import { Button } from "../../../components/ui";
++import type { CloudItem } from "../types";
++import {
++  formatBytes,
++  formatCloudTime,
++  getCloudItemPreview,
++  getCloudItemTitle,
++  isSafeExternalUrl,
++} from "../utils/cloudFormat";
++import { CloudItemIcon } from "./CloudItemIcon";
++
++interface CloudTimelineProps {
++  items: CloudItem[];
++  isLoading: boolean;
++  isLoadingMore: boolean;
++  hasMore: boolean;
++  onLoadMore: () => void;
++}
++
++interface TimelineGroup {
++  key: string;
++  label: string;
++  items: CloudItem[];
++}
++
++const statusTone: Record<CloudItem["status"], string> = {
++  ready: "cloud-status--ready",
++  processing: "cloud-status--processing",
++  pending: "cloud-status--pending",
++  failed: "cloud-status--failed",
++  trashed: "cloud-status--muted",
++};
++
++const TimelineSkeleton = () => (
++  <div className="space-y-3 px-5 py-4" aria-hidden="true">
++    {Array.from({ length: 5 }, (_, index) => (
++      <div key={index} className="cloud-timeline-skeleton">
++        <span className="h-10 w-10 shrink-0 rounded-xl bg-surface-active" />
++        <div className="min-w-0 flex-1 space-y-2">
++          <span className="block h-3.5 w-2/5 rounded bg-surface-active" />
++          <span className="block h-3 w-3/5 rounded bg-surface-active" />
++        </div>
++        <span className="h-3 w-14 rounded bg-surface-active" />
++      </div>
++    ))}
++  </div>
++);
++
++export const CloudTimeline: React.FC<CloudTimelineProps> = ({
++  items,
++  isLoading,
++  isLoadingMore,
++  hasMore,
++  onLoadMore,
++}) => {
++  const { t, i18n } = useTranslation("cloud");
++  const locale = i18n.resolvedLanguage === "en" ? "en-US" : "vi-VN";
++
++  const groups = useMemo<TimelineGroup[]>(() => {
++    const formatter = new Intl.DateTimeFormat(locale, {
++      weekday: "long",
++      day: "2-digit",
++      month: "long",
++    });
++    const map = new Map<string, TimelineGroup>();
++    items.forEach((item) => {
++      const date = new Date(item.createdAt);
++      const key = Number.isNaN(date.getTime())
++        ? "unknown"
++        : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
++      const existing = map.get(key);
++      if (existing) {
++        existing.items.push(item);
++      } else {
++        map.set(key, {
++          key,
++          label: Number.isNaN(date.getTime())
++            ? t("timeline.unknownDate")
++            : formatter.format(date),
++          items: [item],
++        });
++      }
++    });
++    return Array.from(map.values());
++  }, [items, locale, t]);
++
++  if (isLoading) return <TimelineSkeleton />;
++
++  if (items.length === 0) {
++    return (
++      <div className="cloud-empty-state">
++        <span className="cloud-empty-state__icon">
++          <Files className="h-6 w-6" aria-hidden />
++        </span>
++        <h3>{t("timeline.empty.title")}</h3>
++        <p>{t("timeline.empty.description")}</p>
++      </div>
++    );
++  }
++
++  return (
++    <div className="cloud-timeline" data-testid="cloud-timeline">
++      {groups.map((group) => (
++        <section key={group.key} className="cloud-timeline__group">
++          <div className="cloud-timeline__date">
++            <span>{group.label}</span>
++            <span className="cloud-timeline__date-line" />
++          </div>
++          <div className="cloud-timeline__rows">
++            {group.items.map((item) => {
++              const title = getCloudItemTitle(item, {
++                text: t("item.untitledText"),
++                link: t("item.untitledLink"),
++                file: t("item.untitledFile"),
++              });
++              const preview = getCloudItemPreview(item);
++              const isText = item.type === "text";
++              return (
++                <article
++                  key={item.id}
++                  className={clsx(
++                    "cloud-timeline-row",
++                    `cloud-timeline-row--${item.type}`,
++                  )}
++                >
++                  {!isText ? <CloudItemIcon type={item.type} /> : null}
++                  <span className="cloud-timeline-row__content">
++                    <span className="cloud-timeline-row__heading">
++                      {item.type === "link" &&
++                      item.url &&
++                      isSafeExternalUrl(item.url) ? (
++                        <a
++                          href={item.url}
++                          target="_blank"
++                          rel="noopener noreferrer"
++                          className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-primary hover:underline"
++                        >
++                          <span className="truncate">{title}</span>
++                          <ExternalLink
++                            className="h-3.5 w-3.5 shrink-0"
++                            aria-hidden
++                          />
++                        </a>
++                      ) : (
++                        <span
++                          className={clsx(
++                            "text-sm text-text-primary",
++                            isText ? "font-normal" : "truncate font-semibold",
++                          )}
++                        >
++                          {isText ? preview || title : title}
++                        </span>
++                      )}
++                    </span>
++                    {!isText ? (
++                      <span className="cloud-timeline-row__preview">
++                        {preview ||
++                          t("item.fileMetadata", {
++                            size: formatBytes(item.sizeBytes),
++                          })}
++                      </span>
++                    ) : null}
++                    <span className="cloud-timeline-row__meta">
++                      <span>{formatCloudTime(item.createdAt, locale)}</span>
++                      {!isText && item.sizeBytes > 0 ? (
++                        <span>{formatBytes(item.sizeBytes)}</span>
++                      ) : null}
++                      {item.status !== "ready" ? (
++                        <span
++                          className={clsx(
++                            "cloud-status",
++                            statusTone[item.status],
++                          )}
++                        >
++                          {item.status === "processing" ? (
++                            <LoaderCircle
++                              className="h-3 w-3 animate-spin"
++                              aria-hidden
++                            />
++                          ) : null}
++                          {t(`status.${item.status}`)}
++                        </span>
++                      ) : null}
++                    </span>
++                  </span>
++                </article>
++              );
++            })}
++          </div>
++        </section>
++      ))}
++
++      {hasMore ? (
++        <div className="flex justify-center py-5">
++          <Button
++            size="sm"
++            variant="secondary"
++            isLoading={isLoadingMore}
++            onClick={onLoadMore}
++          >
++            {t("timeline.loadMore")}
++          </Button>
++        </div>
++      ) : null}
++    </div>
++  );
++};
+diff --git a/src/features/cloud/constants.ts b/src/features/cloud/constants.ts
+new file mode 100644
+index 00000000..14f510c0
+--- /dev/null
++++ b/src/features/cloud/constants.ts
+@@ -0,0 +1,3 @@
++export const CLOUD_CONVERSATION_ID = "my-documents";
++
++export const CLOUD_MAX_UPLOAD_BYTES = 100_000_000;
+diff --git a/src/features/cloud/hooks/useCloudWorkspace.ts b/src/features/cloud/hooks/useCloudWorkspace.ts
+new file mode 100644
+index 00000000..8d78a038
+--- /dev/null
++++ b/src/features/cloud/hooks/useCloudWorkspace.ts
+@@ -0,0 +1,395 @@
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { cloudApi, CloudApiError } from "../api/cloudApi";
++import type {
++  CloudHealth,
++  CloudItem,
++  CloudPage,
++  CloudQuota,
++  CloudUploadProgress,
++} from "../types";
++
++const PROCESSING_REFRESH_MS = 2_000;
++
++interface CloudWorkspaceState {
++  items: CloudItem[];
++  quota: CloudQuota | null;
++  health: CloudHealth | null;
++  isLoading: boolean;
++  isRefreshing: boolean;
++  isLoadingMore: boolean;
++  isMutating: boolean;
++  error: CloudApiError | null;
++  nextCursor?: string;
++  uploadProgress: CloudUploadProgress | null;
++}
++
++const initialState: CloudWorkspaceState = {
++  items: [],
++  quota: null,
++  health: null,
++  isLoading: true,
++  isRefreshing: false,
++  isLoadingMore: false,
++  isMutating: false,
++  error: null,
++  uploadProgress: null,
++};
++
++const asCloudError = (error: unknown): CloudApiError => {
++  if (error instanceof CloudApiError) return error;
++  return new CloudApiError({
++    status: 0,
++    code: "CLOUD_NETWORK_ERROR",
++    message: error instanceof Error ? error.message : "Cloud request failed",
++  });
++};
++
++const createMissingUserError = (): CloudApiError =>
++  new CloudApiError({
++    status: 401,
++    code: "CLOUD_USER_MISSING",
++    message: "Current user ID is unavailable",
++  });
++
++const mergeItems = (current: CloudItem[], incoming: CloudItem[]): CloudItem[] => {
++  const byId = new Map(current.map((item) => [item.id, item]));
++  incoming.forEach((item) => byId.set(item.id, item));
++  return Array.from(byId.values()).sort(
++    (left, right) =>
++      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
++  );
++};
++
++export const useCloudWorkspace = (userId: string | undefined) => {
++  const [state, setState] = useState<CloudWorkspaceState>(initialState);
++  const mountedRef = useRef(true);
++
++  useEffect(() => {
++    mountedRef.current = true;
++    return () => {
++      mountedRef.current = false;
++    };
++  }, []);
++
++  const loadInitial = useCallback(
++    async (signal?: AbortSignal, background = false) => {
++      if (!userId) {
++        setState((current) => ({
++          ...current,
++          isLoading: false,
++          isRefreshing: false,
++          error: createMissingUserError(),
++        }));
++        return;
++      }
++
++      setState((current) => ({
++        ...current,
++        isLoading: background ? current.isLoading : true,
++        isRefreshing: background,
++        error: null,
++      }));
++
++      try {
++        const [page, quota, health] = await Promise.all([
++          cloudApi.listItems(userId, { signal }),
++          cloudApi.getQuota(userId, signal),
++          cloudApi.health(signal).catch(
++            (): CloudHealth => ({
++              status: "DOWN",
++              service: "hacom-cloud-api",
++            }),
++          ),
++        ]);
++        if (!mountedRef.current || signal?.aborted) return;
++        setState((current) => ({
++          ...current,
++          items: page.items,
++          quota,
++          health,
++          nextCursor: page.nextCursor,
++          isLoading: false,
++          isRefreshing: false,
++          error: null,
++        }));
++      } catch (error) {
++        if (signal?.aborted || !mountedRef.current) return;
++        setState((current) => ({
++          ...current,
++          isLoading: false,
++          isRefreshing: false,
++          error: asCloudError(error),
++        }));
++      }
++    },
++    [userId],
++  );
++
++  useEffect(() => {
++    const controller = new AbortController();
++    void loadInitial(controller.signal);
++    return () => controller.abort();
++  }, [loadInitial]);
++
++  const refresh = useCallback(async () => {
++    await loadInitial(undefined, true);
++  }, [loadInitial]);
++
++  const loadMore = useCallback(async () => {
++    if (!userId || !state.nextCursor || state.isLoadingMore) return;
++    setState((current) => ({ ...current, isLoadingMore: true }));
++    try {
++      const page: CloudPage = await cloudApi.listItems(userId, {
++        cursor: state.nextCursor,
++      });
++      if (!mountedRef.current) return;
++      setState((current) => ({
++        ...current,
++        items: mergeItems(current.items, page.items),
++        nextCursor: page.nextCursor,
++        isLoadingMore: false,
++      }));
++    } catch (error) {
++      if (!mountedRef.current) return;
++      setState((current) => ({
++        ...current,
++        isLoadingMore: false,
++        error: asCloudError(error),
++      }));
++    }
++  }, [state.isLoadingMore, state.nextCursor, userId]);
++
++  const refreshQuota = useCallback(async () => {
++    if (!userId) return;
++    try {
++      const quota = await cloudApi.getQuota(userId);
++      if (mountedRef.current) {
++        setState((current) => ({ ...current, quota }));
++      }
++    } catch (error) {
++      if (mountedRef.current) {
++        setState((current) => ({
++          ...current,
++          error: asCloudError(error),
++        }));
++      }
++    }
++  }, [userId]);
++
++  const createText = useCallback(
++    async (content: string) => {
++      if (!userId) {
++        const error = createMissingUserError();
++        setState((current) => ({ ...current, error }));
++        throw error;
++      }
++      setState((current) => ({ ...current, isMutating: true, error: null }));
++      try {
++        const item = await cloudApi.createText(userId, content);
++        await refreshQuota();
++        if (!mountedRef.current) return;
++        setState((current) => ({
++          ...current,
++          items: mergeItems(current.items, [item]),
++          isMutating: false,
++        }));
++      } catch (error) {
++        if (!mountedRef.current) return;
++        const cloudError = asCloudError(error);
++        setState((current) => ({
++          ...current,
++          isMutating: false,
++          error: cloudError,
++        }));
++        throw cloudError;
++      }
++    },
++    [refreshQuota, userId],
++  );
++
++  const createLink = useCallback(
++    async (url: string, title: string) => {
++      if (!userId) {
++        const error = createMissingUserError();
++        setState((current) => ({ ...current, error }));
++        throw error;
++      }
++      setState((current) => ({ ...current, isMutating: true, error: null }));
++      try {
++        const item = await cloudApi.createLink(userId, url, title);
++        await refreshQuota();
++        if (!mountedRef.current) return;
++        setState((current) => ({
++          ...current,
++          items: mergeItems(current.items, [item]),
++          isMutating: false,
++        }));
++      } catch (error) {
++        if (!mountedRef.current) return;
++        const cloudError = asCloudError(error);
++        setState((current) => ({
++          ...current,
++          isMutating: false,
++          error: cloudError,
++        }));
++        throw cloudError;
++      }
++    },
++    [refreshQuota, userId],
++  );
++
++  const uploadFile = useCallback(
++    async (file: File) => {
++      if (!userId) {
++        const error = createMissingUserError();
++        setState((current) => ({ ...current, error }));
++        throw error;
++      }
++      setState((current) => ({
++        ...current,
++        isMutating: true,
++        error: null,
++        uploadProgress: {
++          fileName: file.name,
++          percent: 0,
++          stage: "reserving",
++        },
++      }));
++      try {
++        const session = await cloudApi.initiateUpload(userId, file);
++        if (mountedRef.current) {
++          setState((current) => ({
++            ...current,
++            uploadProgress: {
++              fileName: file.name,
++              percent: 2,
++              stage: "uploading",
++            },
++          }));
++        }
++        await cloudApi.uploadObject(session, file, (percent) => {
++          if (!mountedRef.current) return;
++          setState((current) => ({
++            ...current,
++            uploadProgress: {
++              fileName: file.name,
++              percent,
++              stage: "uploading",
++            },
++          }));
++        });
++        if (mountedRef.current) {
++          setState((current) => ({
++            ...current,
++            uploadProgress: {
++              fileName: file.name,
++              percent: 100,
++              stage: "finalizing",
++            },
++          }));
++        }
++        const completed = await cloudApi.completeUpload(
++          userId,
++          session.uploadSessionId,
++        );
++        await refreshQuota();
++        if (!mountedRef.current) return;
++        setState((current) => ({
++          ...current,
++          items: mergeItems(current.items, [completed.item]),
++          isMutating: false,
++          uploadProgress: {
++            fileName: file.name,
++            percent: 100,
++            stage: "processing",
++          },
++        }));
++      } catch (error) {
++        if (!mountedRef.current) return;
++        const cloudError = asCloudError(error);
++        setState((current) => ({
++          ...current,
++          isMutating: false,
++          uploadProgress: null,
++          error: cloudError,
++        }));
++        throw cloudError;
++      }
++    },
++    [refreshQuota, userId],
++  );
++
++  const hasProcessingItems = useMemo(
++    () => state.items.some((item) => item.status === "processing"),
++    [state.items],
++  );
++
++  useEffect(() => {
++    if (!userId || !hasProcessingItems) {
++      if (state.uploadProgress?.stage === "processing") {
++        setState((current) => ({ ...current, uploadProgress: null }));
++      }
++      return undefined;
++    }
++
++    let cancelled = false;
++    const refreshProcessingItems = async () => {
++      try {
++        const page = await cloudApi.listItems(userId);
++        if (cancelled || !mountedRef.current) return;
++        const stillProcessing = page.items.some(
++          (item) => item.status === "processing",
++        );
++        setState((current) => ({
++          ...current,
++          items: mergeItems(current.items, page.items),
++          nextCursor:
++            current.items.length > page.items.length
++              ? current.nextCursor
++              : page.nextCursor,
++          uploadProgress: stillProcessing ? current.uploadProgress : null,
++          error:
++            current.error?.code === "CLOUD_PROCESSING_REFRESH_FAILED"
++              ? null
++              : current.error,
++        }));
++      } catch (error) {
++        if (!cancelled && mountedRef.current) {
++          const cloudError = asCloudError(error);
++          setState((current) => ({
++            ...current,
++            error: new CloudApiError({
++              status: cloudError.status,
++              code: "CLOUD_PROCESSING_REFRESH_FAILED",
++              message: cloudError.message,
++              requestId: cloudError.requestId,
++            }),
++          }));
++        }
++      }
++    };
++
++    const intervalId = window.setInterval(
++      () => void refreshProcessingItems(),
++      PROCESSING_REFRESH_MS,
++    );
++    return () => {
++      cancelled = true;
++      window.clearInterval(intervalId);
++    };
++  }, [hasProcessingItems, state.uploadProgress?.stage, userId]);
++
++  const clearError = useCallback(() => {
++    setState((current) => ({ ...current, error: null }));
++  }, []);
++
++  return {
++    ...state,
++    refresh,
++    loadMore,
++    createText,
++    createLink,
++    uploadFile,
++    clearError,
++  };
++};
+diff --git a/src/features/cloud/pages/CloudPage.tsx b/src/features/cloud/pages/CloudPage.tsx
+new file mode 100644
+index 00000000..65a0ce45
+--- /dev/null
++++ b/src/features/cloud/pages/CloudPage.tsx
+@@ -0,0 +1,448 @@
++import {
++  useCallback,
++  useEffect,
++  useLayoutEffect,
++  useMemo,
++  useState,
++} from "react";
++import { LoaderCircle, Search, X } from "lucide-react";
++import { useTranslation } from "react-i18next";
++import { useNavigate } from "react-router-dom";
++import { ChatHeader } from "../../../components/chat/ChatHeader";
++import { MessageInput } from "../../../components/input/MessageInput";
++import { ConversationLane } from "../../../components/layout/ConversationLane";
++import { Sidebar } from "../../../components/layout/Sidebar";
++import { InlineNotice, toast } from "../../../components/ui";
++import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
++import { useResponsive } from "../../../responsive/responsive";
++import { AppShell, ModuleSidebar } from "../../../shared/layout";
++import { useAuthStore } from "../../../stores/authStore";
++import { useChatStore } from "../../../stores/chatStore";
++import {
++  RoomType,
++  UserStatus,
++  type Conversation,
++  type Message,
++  type UserSummary,
++} from "../../../types";
++import { resolveChatLayoutProfile } from "../../../utils/densityPolicy";
++import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
++import {
++  CLOUD_CONVERSATION_ID,
++  CLOUD_MAX_UPLOAD_BYTES,
++} from "../constants";
++import {
++  CloudConversationAvatar,
++  CloudConversationEntry,
++} from "../components/CloudConversationEntry";
++import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
++import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
++import { formatBytes } from "../utils/cloudFormat";
++import "../styles/cloud.css";
++
++const getErrorTranslationKey = (code: string): string => {
++  switch (code) {
++    case "DEMO_USER_REQUIRED":
++    case "CLOUD_USER_MISSING":
++      return "errors.user";
++    case "QUOTA_EXCEEDED":
++      return "errors.quota";
++    case "FILE_TOO_LARGE":
++      return "errors.fileTooLarge";
++    case "DRIVE_NOT_ACTIVE":
++      return "errors.driveInactive";
++    case "OBJECT_UPLOAD_NETWORK_ERROR":
++    case "CLOUD_NETWORK_ERROR":
++    case "CLOUD_UNAVAILABLE":
++      return "errors.offline";
++    default:
++      return "errors.generic";
++  }
++};
++
++const stripRichText = (value: string): string =>
++  value
++    .replace(/<br\s*\/?>/gi, "\n")
++    .replace(/<\/p>/gi, "\n")
++    .replace(/<[^>]+>/g, "")
++    .replace(/&nbsp;/g, " ")
++    .trim();
++
++const isStandaloneHttpUrl = (value: string): boolean => {
++  try {
++    const parsed = new URL(value);
++    return (
++      ["http:", "https:"].includes(parsed.protocol) &&
++      parsed.toString().length > 0
++    );
++  } catch {
++    return false;
++  }
++};
++
++export default function CloudPage() {
++  const { t } = useTranslation("cloud");
++  const navigate = useNavigate();
++  const authUser = useAuthStore((state) => state.user);
++  const { width, chatLayoutBreakpoint } = useResponsive();
++  const [draft, setDraft] = useState("");
++  const [draftResetKey, setDraftResetKey] = useState(0);
++  const [search, setSearch] = useState("");
++  const [isSearchOpen, setIsSearchOpen] = useState(false);
++  const workspace = useCloudWorkspace(authUser?.id);
++  const fetchConversations = useChatStore((state) => state.fetchConversations);
++  const hasFetchedConversationsOnce = useChatStore(
++    (state) => state.hasFetchedConversationsOnce,
++  );
++  const isLoadingConversations = useChatStore(
++    (state) => state.isLoadingConversations,
++  );
++  const conversationsError = useChatStore(
++    (state) => state.conversationsError,
++  );
++
++  const currentUser = useMemo<UserSummary>(() => {
++    if (authUser) {
++      return {
++        id: authUser.id,
++        username: authUser.username,
++        displayName:
++          authUser.displayName ||
++          authUser.effectiveDisplayName ||
++          authUser.username,
++        avatar: authUser.avatar,
++        status: authUser.status as UserStatus,
++        isBot: false,
++      };
++    }
++
++    return {
++      id: "auth-pending",
++      username: "user",
++      displayName: "Người dùng",
++      avatar: "",
++      status: UserStatus.ONLINE,
++      isBot: false,
++    };
++  }, [authUser]);
++
++  useLayoutEffect(() => {
++    useEnrichedProfileStore
++      .getState()
++      .setEnrichedName(
++        currentUser.id,
++        currentUser.displayName || currentUser.username,
++      );
++  }, [currentUser.displayName, currentUser.id, currentUser.username]);
++
++  useEffect(() => {
++    if (
++      !authUser ||
++      hasFetchedConversationsOnce ||
++      isLoadingConversations
++    ) {
++      return;
++    }
++    void fetchConversations();
++  }, [
++    authUser,
++    fetchConversations,
++    hasFetchedConversationsOnce,
++    isLoadingConversations,
++  ]);
++
++  const layoutState =
++    chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
++  const layoutProfile = resolveChatLayoutProfile(width, layoutState);
++
++  const conversation = useMemo<Conversation>(
++    () => ({
++      id: CLOUD_CONVERSATION_ID,
++      type: RoomType.GROUP,
++      name: t("workspace.title"),
++      avatar: null,
++      unreadCount: 0,
++      isPinned: true,
++      isMuted: false,
++      isArchived: false,
++      isBlocked: false,
++      participants: [currentUser],
++      participantCount: 1,
++      createdBy: currentUser.id,
++      currentUserId: currentUser.id,
++      canCurrentUserSend: true,
++      createdAt: new Date(0),
++      updatedAt: new Date(),
++    }),
++    [currentUser, t],
++  );
++
++  const messages = useMemo(
++    () =>
++      cloudItemsToMessages(workspace.items, currentUser, {
++        link: t("item.untitledLink"),
++        file: t("item.untitledFile"),
++      }),
++    [currentUser, t, workspace.items],
++  );
++
++  const visibleMessages = useMemo(() => {
++    const query = search.trim().toLocaleLowerCase();
++    if (!query) return messages;
++    return messages.filter((message) => {
++      const attachmentNames =
++        message.attachments
++          ?.map((attachment) => attachment.fileName ?? "")
++          .join(" ") ?? "";
++      return `${message.plainText ?? message.content} ${attachmentNames}`
++        .toLocaleLowerCase()
++        .includes(query);
++    });
++  }, [messages, search]);
++
++  const showPhaseNotice = useCallback(() => {
++    toast.info(t("workspace.phaseAction"));
++  }, [t]);
++
++  const handleSend = useCallback(
++    async (rawContent?: string) => {
++      const content = stripRichText(rawContent ?? "");
++      if (!content) return;
++      if (isStandaloneHttpUrl(content)) {
++        await workspace.createLink(content, "");
++        toast.success(t("toast.linkCreated"));
++      } else {
++        await workspace.createText(content);
++        toast.success(t("toast.textCreated"));
++      }
++      setDraft("");
++      setDraftResetKey((value) => value + 1);
++    },
++    [t, workspace],
++  );
++
++  const handleAddFiles = useCallback(
++    (files: File[]) => {
++      const accepted: File[] = [];
++      const errors: string[] = [];
++      files.forEach((file) => {
++        if (file.size <= 0) {
++          errors.push(t("composer.errors.emptyFile"));
++        } else if (file.size > CLOUD_MAX_UPLOAD_BYTES) {
++          errors.push(t("composer.errors.fileTooLarge"));
++        } else {
++          accepted.push(file);
++        }
++      });
++
++      if (accepted.length > 0) {
++        void (async () => {
++          for (const file of accepted) {
++            try {
++              await workspace.uploadFile(file);
++              toast.success(t("toast.uploadStarted"));
++            } catch {
++              // The canonical API error is rendered above the composer.
++              break;
++            }
++          }
++        })();
++      }
++      return { errors };
++    },
++    [t, workspace],
++  );
++
++  const handleSelectConversation = useCallback(
++    (conversationId: string) => {
++      navigate(`/chat/${conversationId}`);
++    },
++    [navigate],
++  );
++
++  const noopMessageAction = useCallback((_message: Message) => {
++    void _message;
++    showPhaseNotice();
++  }, [showPhaseNotice]);
++
++  const noopMessageIdAction = useCallback((_messageId: string) => {
++    void _messageId;
++    showPhaseNotice();
++  }, [showPhaseNotice]);
++
++  return (
++    <AppShell
++      className="chat-page-shell cloud-chat-page"
++      data-chat-layout-state={layoutState}
++      moduleSidebar={
++        <ModuleSidebar
++          className="chat-page-module-sidebar cloud-chat-module-sidebar"
++          contentClassName="min-h-0"
++        >
++          <div className="h-full min-h-0 w-full">
++            <Sidebar
++              layoutState={layoutState}
++              currentUser={currentUser}
++              selectedId={CLOUD_CONVERSATION_ID}
++              leadingContent={
++                <CloudConversationEntry
++                  items={workspace.items}
++                  isActive
++                  onSelect={() => undefined}
++                />
++              }
++              showConversationSkeleton={
++                isLoadingConversations &&
++                !hasFetchedConversationsOnce
++              }
++              conversationsError={conversationsError}
++              onSelectConversation={handleSelectConversation}
++              onRetryConversations={() => void fetchConversations()}
++              onCurrentUserClick={() => navigate("/settings")}
++            />
++          </div>
++        </ModuleSidebar>
++      }
++    >
++      <section className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
++        <div
++          className="chat-background chat-shell relative flex min-w-0 flex-1 flex-col overflow-hidden"
++          data-chat-layout-profile={layoutProfile}
++          data-chat-layout-state={layoutState}
++        >
++          <ChatHeader
++            conversation={conversation}
++            currentUserId={currentUser.id}
++            titleOverride={t("workspace.title")}
++            subtitleOverride={t("workspace.onlyYou")}
++            avatarOverride={<CloudConversationAvatar size="sm" />}
++            onBack={() => navigate("/chat")}
++            onInfoClick={showPhaseNotice}
++            onSearchClick={() => setIsSearchOpen((value) => !value)}
++            onPinnedClick={showPhaseNotice}
++          />
++
++          {isSearchOpen ? (
++            <div className="border-b border-border/60 bg-surface py-2">
++              <ConversationLane>
++                <label className="relative block">
++                  <Search
++                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
++                    aria-hidden
++                  />
++                  <input
++                    autoFocus
++                    value={search}
++                    onChange={(event) => setSearch(event.target.value)}
++                    placeholder={t("search.placeholder")}
++                    aria-label={t("search.aria")}
++                    className="input-surface h-9 w-full pl-9 pr-9 text-sm"
++                  />
++                  <button
++                    type="button"
++                    onClick={() => {
++                      setSearch("");
++                      setIsSearchOpen(false);
++                    }}
++                    className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover"
++                    aria-label={t("common.close")}
++                  >
++                    <X className="h-4 w-4" />
++                  </button>
++                </label>
++              </ConversationLane>
++            </div>
++          ) : null}
++
++          {workspace.error ? (
++            <ConversationLane className="pt-3">
++              <InlineNotice
++                tone="error"
++                message={t(getErrorTranslationKey(workspace.error.code))}
++                dismissible
++                onDismiss={workspace.clearError}
++                action={
++                  workspace.error.requestId ? (
++                    <span className="font-mono text-[10px] opacity-75">
++                      {workspace.error.requestId.slice(0, 8)}
++                    </span>
++                  ) : undefined
++                }
++              />
++            </ConversationLane>
++          ) : null}
++
++          <SimpleVirtualizedChatTimeline
++            conversationId={CLOUD_CONVERSATION_ID}
++            conversationType={conversation.type}
++            currentUserId={currentUser.id}
++            messages={visibleMessages}
++            onReply={noopMessageAction}
++            onReact={noopMessageIdAction}
++            onForward={noopMessageAction}
++            onPin={noopMessageIdAction}
++            onEdit={noopMessageAction}
++            onDelete={noopMessageIdAction}
++            hasMore={Boolean(workspace.nextCursor)}
++            isLoadingMore={workspace.isLoadingMore}
++            isInitialLoading={workspace.isLoading}
++            onLoadMore={() => workspace.loadMore()}
++            density="comfortable"
++            layoutState={layoutState}
++            selectedMessageIds={new Set()}
++            className="min-h-0 flex-1"
++          />
++
++          {workspace.uploadProgress ? (
++            <div className="cloud-chat-upload" role="status" aria-live="polite">
++              <ConversationLane>
++                <div className="cloud-chat-upload__pill">
++                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
++                  <span className="min-w-0 flex-1 truncate">
++                    {workspace.uploadProgress.fileName}
++                  </span>
++                  <span className="shrink-0 font-semibold text-[#1565C0]">
++                    {workspace.uploadProgress.stage === "uploading"
++                      ? `${workspace.uploadProgress.percent}%`
++                      : t(`upload.stage.${workspace.uploadProgress.stage}`)}
++                  </span>
++                </div>
++              </ConversationLane>
++            </div>
++          ) : null}
++
++          <div className="sticky bottom-0 z-sticky shrink-0">
++            <MessageInput
++              value={draft}
++              valueResetKey={draftResetKey}
++              onChange={setDraft}
++              onSend={handleSend}
++              mode="normal"
++              conversationId={CLOUD_CONVERSATION_ID}
++              conversationType="direct"
++              currentUserId={currentUser.id}
++              sendOnEnter
++              disabled={workspace.isMutating}
++              submitDisabled={workspace.isMutating}
++              attachmentsDisabled={workspace.isMutating}
++              disabledReason={
++                workspace.isMutating
++                  ? t("workspace.saving", {
++                      size: workspace.uploadProgress
++                        ? formatBytes(
++                            workspace.quota?.reservedBytes ?? 0,
++                          )
++                        : "",
++                    })
++                  : undefined
++              }
++              composerMode="online"
++              conversationName={t("workspace.title")}
++              onAddFiles={handleAddFiles}
++            />
++          </div>
++        </div>
++      </section>
++    </AppShell>
++  );
++}
+diff --git a/src/features/cloud/styles/cloud.css b/src/features/cloud/styles/cloud.css
+new file mode 100644
+index 00000000..d481fe98
+--- /dev/null
++++ b/src/features/cloud/styles/cloud.css
+@@ -0,0 +1,1315 @@
++.cloud-workspace {
++  display: flex;
++  width: 100%;
++  height: 100%;
++  min-width: 0;
++  min-height: 0;
++  overflow: hidden;
++  background: hsl(var(--color-background));
++  color: hsl(var(--color-text-primary));
++}
++
++.cloud-sidebar {
++  display: flex;
++  width: 272px;
++  min-width: 272px;
++  min-height: 0;
++  flex-direction: column;
++  overflow: hidden;
++  border-right: 1px solid hsl(var(--color-border));
++  background: hsl(var(--color-sidebar-bg));
++}
++
++.cloud-sidebar__header {
++  display: flex;
++  min-height: 72px;
++  align-items: center;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.75);
++  padding: 0 16px;
++}
++
++.cloud-sidebar__brand-mark {
++  display: inline-flex;
++  width: 38px;
++  height: 38px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border: 1px solid hsl(var(--color-primary) / 0.18);
++  border-radius: 12px;
++  background: hsl(var(--color-primary) / 0.1);
++  color: hsl(var(--color-primary));
++}
++
++.cloud-sidebar__nav {
++  display: flex;
++  min-height: 0;
++  flex-direction: column;
++  gap: 3px;
++  padding: 0 10px;
++}
++
++.cloud-sidebar__nav-item {
++  display: flex;
++  min-height: 40px;
++  width: 100%;
++  align-items: center;
++  gap: 10px;
++  border-radius: 9px;
++  padding: 0 10px;
++  color: hsl(var(--color-text-secondary));
++  font-size: 13px;
++  font-weight: 500;
++  transition:
++    background-color 120ms ease,
++    color 120ms ease;
++}
++
++.cloud-sidebar__nav-item:hover:not(:disabled) {
++  background: hsl(var(--color-sidebar-hover-bg));
++  color: hsl(var(--color-text-primary));
++}
++
++.cloud-sidebar__nav-item--active {
++  background: hsl(var(--color-sidebar-active-bg));
++  color: hsl(var(--color-sidebar-text-strong));
++  font-weight: 600;
++}
++
++.cloud-sidebar__nav-item:disabled {
++  cursor: not-allowed;
++  color: hsl(var(--color-text-muted) / 0.72);
++}
++
++.cloud-sidebar__count {
++  min-width: 22px;
++  color: hsl(var(--color-text-muted));
++  font-size: 11px;
++  font-variant-numeric: tabular-nums;
++  text-align: right;
++}
++
++.cloud-sidebar__soon {
++  border: 1px solid hsl(var(--color-border));
++  border-radius: 999px;
++  padding: 1px 6px;
++  background: hsl(var(--color-surface));
++  color: hsl(var(--color-text-muted));
++  font-size: 9px;
++  font-weight: 600;
++  line-height: 15px;
++}
++
++.cloud-sidebar__divider {
++  height: 1px;
++  margin: 8px 10px;
++  background: hsl(var(--color-border) / 0.8);
++}
++
++.cloud-quota-card {
++  border: 1px solid hsl(var(--color-border));
++  border-radius: 12px;
++  padding: 12px;
++  background: hsl(var(--color-surface));
++  box-shadow: var(--shadow-xs);
++}
++
++.cloud-quota-card__track {
++  height: 5px;
++  margin: 10px 0 8px;
++  overflow: hidden;
++  border-radius: 999px;
++  background: hsl(var(--color-surface-active));
++}
++
++.cloud-quota-card__track > span {
++  display: block;
++  height: 100%;
++  border-radius: inherit;
++  background: hsl(var(--color-primary));
++  transition: width 180ms ease;
++}
++
++.cloud-service-state {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  gap: 6px;
++  color: hsl(var(--color-text-muted));
++  font-size: 10px;
++  font-weight: 500;
++}
++
++.cloud-main {
++  display: flex;
++  min-width: 0;
++  min-height: 0;
++  flex: 1 1 auto;
++  flex-direction: column;
++  background: hsl(var(--color-background));
++}
++
++.cloud-main__header {
++  display: flex;
++  min-height: 72px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: space-between;
++  gap: 20px;
++  border-bottom: 1px solid hsl(var(--color-border));
++  padding: 0 24px;
++  background: hsl(var(--color-surface) / 0.96);
++}
++
++.cloud-main__scroll {
++  min-height: 0;
++  flex: 1 1 auto;
++  overflow-y: auto;
++}
++
++.cloud-main__content {
++  width: min(100%, 920px);
++  margin: 0 auto;
++  padding: 22px 24px 40px;
++}
++
++.cloud-private-badge {
++  display: inline-flex;
++  height: 26px;
++  align-items: center;
++  gap: 5px;
++  border: 1px solid hsl(var(--color-success) / 0.22);
++  border-radius: 999px;
++  padding: 0 9px;
++  background: hsl(var(--color-success) / 0.08);
++  color: hsl(var(--color-success));
++  font-size: 10px;
++  font-weight: 600;
++  white-space: nowrap;
++}
++
++.cloud-mobile-controls {
++  display: none;
++}
++
++.cloud-composer,
++.cloud-feed {
++  overflow: hidden;
++  border: 1px solid hsl(var(--color-border));
++  border-radius: 14px;
++  background: hsl(var(--color-surface));
++  box-shadow: var(--shadow-xs);
++}
++
++.cloud-composer__tabs {
++  display: flex;
++  height: 46px;
++  align-items: stretch;
++  gap: 4px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.8);
++  padding: 0 14px;
++}
++
++.cloud-composer__tab {
++  position: relative;
++  display: inline-flex;
++  align-items: center;
++  gap: 7px;
++  padding: 0 11px;
++  color: hsl(var(--color-text-muted));
++  font-size: 12px;
++  font-weight: 600;
++  transition: color 120ms ease;
++}
++
++.cloud-composer__tab::after {
++  position: absolute;
++  right: 9px;
++  bottom: -1px;
++  left: 9px;
++  height: 2px;
++  border-radius: 2px 2px 0 0;
++  background: hsl(var(--color-primary));
++  content: "";
++  opacity: 0;
++  transform: scaleX(0.7);
++  transition:
++    opacity 120ms ease,
++    transform 120ms ease;
++}
++
++.cloud-composer__tab:hover,
++.cloud-composer__tab--active {
++  color: hsl(var(--color-primary));
++}
++
++.cloud-composer__tab--active::after {
++  opacity: 1;
++  transform: scaleX(1);
++}
++
++.cloud-composer__body {
++  padding: 16px;
++}
++
++.cloud-dropzone,
++.cloud-upload-progress {
++  display: flex;
++  min-height: 78px;
++  align-items: center;
++  gap: 12px;
++  border: 1px dashed hsl(var(--color-border-strong));
++  border-radius: 11px;
++  padding: 13px 14px;
++  background: hsl(var(--color-background) / 0.6);
++}
++
++.cloud-dropzone--active {
++  border-color: hsl(var(--color-primary));
++  background: hsl(var(--color-primary) / 0.06);
++}
++
++.cloud-dropzone--selected,
++.cloud-upload-progress {
++  border-style: solid;
++}
++
++.cloud-dropzone__icon,
++.cloud-upload-progress__icon {
++  display: inline-flex;
++  width: 38px;
++  height: 38px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border-radius: 10px;
++  background: hsl(var(--color-primary) / 0.1);
++  color: hsl(var(--color-primary));
++}
++
++.cloud-dropzone__remove,
++.cloud-inspector__close {
++  display: inline-flex;
++  width: 30px;
++  height: 30px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border-radius: 8px;
++  color: hsl(var(--color-text-muted));
++  transition:
++    background-color 120ms ease,
++    color 120ms ease;
++}
++
++.cloud-dropzone__remove:hover,
++.cloud-inspector__close:hover {
++  background: hsl(var(--color-surface-hover));
++  color: hsl(var(--color-text-primary));
++}
++
++.cloud-feed {
++  margin-top: 16px;
++}
++
++.cloud-feed__header {
++  display: flex;
++  min-height: 62px;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.8);
++  padding: 0 18px;
++}
++
++.cloud-feed__filter-note {
++  border-radius: 999px;
++  padding: 4px 8px;
++  background: hsl(var(--color-surface-hover));
++  color: hsl(var(--color-text-muted));
++  font-size: 10px;
++}
++
++.cloud-timeline {
++  min-width: 0;
++}
++
++.cloud-timeline__group {
++  padding: 15px 14px 0;
++}
++
++.cloud-timeline__date {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 0 5px 9px;
++  color: hsl(var(--color-text-muted));
++  font-size: 10px;
++  font-weight: 600;
++  letter-spacing: 0.035em;
++  text-transform: uppercase;
++}
++
++.cloud-timeline__date-line {
++  height: 1px;
++  flex: 1 1 auto;
++  background: hsl(var(--color-border) / 0.72);
++}
++
++.cloud-timeline__rows {
++  overflow: hidden;
++  border: 1px solid hsl(var(--color-border) / 0.88);
++  border-radius: 11px;
++}
++
++.cloud-timeline-row {
++  display: flex;
++  min-height: 68px;
++  width: 100%;
++  align-items: center;
++  gap: 12px;
++  padding: 10px 12px;
++  background: hsl(var(--color-surface));
++  transition: background-color 120ms ease;
++}
++
++.cloud-timeline-row + .cloud-timeline-row {
++  border-top: 1px solid hsl(var(--color-border) / 0.72);
++}
++
++.cloud-timeline-row:hover {
++  background: hsl(var(--color-surface-hover) / 0.72);
++}
++
++.cloud-timeline-row--selected {
++  background: hsl(var(--color-primary) / 0.07);
++  box-shadow: inset 3px 0 0 hsl(var(--color-primary));
++}
++
++.cloud-item-icon {
++  display: inline-flex;
++  width: 40px;
++  height: 40px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border: 1px solid hsl(var(--color-primary) / 0.14);
++  border-radius: 11px;
++  background: hsl(var(--color-primary) / 0.08);
++  color: hsl(var(--color-primary));
++}
++
++.cloud-item-icon--text {
++  border-color: hsl(var(--color-warning) / 0.22);
++  background: hsl(var(--color-warning) / 0.1);
++  color: hsl(var(--color-warning-hover));
++}
++
++.cloud-item-icon--link {
++  border-color: hsl(var(--color-success) / 0.2);
++  background: hsl(var(--color-success) / 0.08);
++  color: hsl(var(--color-success));
++}
++
++.cloud-status {
++  display: inline-flex;
++  height: 20px;
++  flex: 0 0 auto;
++  align-items: center;
++  gap: 4px;
++  border-radius: 999px;
++  padding: 0 7px;
++  font-size: 9px;
++  font-weight: 600;
++}
++
++.cloud-status--ready {
++  background: hsl(var(--color-success) / 0.1);
++  color: hsl(var(--color-success));
++}
++
++.cloud-status--processing,
++.cloud-status--pending {
++  background: hsl(var(--color-warning) / 0.12);
++  color: hsl(var(--color-warning-hover));
++}
++
++.cloud-status--failed {
++  background: hsl(var(--color-danger) / 0.1);
++  color: hsl(var(--color-danger));
++}
++
++.cloud-status--muted {
++  background: hsl(var(--color-surface-active));
++  color: hsl(var(--color-text-muted));
++}
++
++.cloud-timeline-skeleton {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  opacity: 0.75;
++  animation: cloud-pulse 1.4s ease-in-out infinite;
++}
++
++.cloud-empty-state {
++  display: flex;
++  min-height: 280px;
++  align-items: center;
++  justify-content: center;
++  flex-direction: column;
++  padding: 30px;
++  text-align: center;
++}
++
++.cloud-empty-state__icon,
++.cloud-inspector__empty-icon {
++  display: inline-flex;
++  width: 52px;
++  height: 52px;
++  align-items: center;
++  justify-content: center;
++  border-radius: 15px;
++  background: hsl(var(--color-primary) / 0.09);
++  color: hsl(var(--color-primary));
++}
++
++.cloud-empty-state h3,
++.cloud-inspector--empty h2 {
++  margin-top: 14px;
++  color: hsl(var(--color-text-primary));
++  font-size: 14px;
++  font-weight: 600;
++}
++
++.cloud-empty-state p,
++.cloud-inspector--empty > p {
++  max-width: 260px;
++  margin-top: 5px;
++  color: hsl(var(--color-text-muted));
++  font-size: 12px;
++  line-height: 1.55;
++}
++
++.cloud-inspector {
++  display: flex;
++  width: 320px;
++  min-width: 320px;
++  min-height: 0;
++  flex-direction: column;
++  overflow: hidden;
++  border-left: 1px solid hsl(var(--color-border));
++  background: hsl(var(--color-surface));
++}
++
++.cloud-inspector--empty {
++  align-items: center;
++  justify-content: center;
++  padding: 28px;
++  text-align: center;
++}
++
++.cloud-inspector__header {
++  display: flex;
++  min-height: 72px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  border-bottom: 1px solid hsl(var(--color-border));
++  padding: 0 18px;
++}
++
++.cloud-inspector__content {
++  min-height: 0;
++  overflow-y: auto;
++  padding: 20px 18px 28px;
++}
++
++.cloud-inspector__identity {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++}
++
++.cloud-inspector__preview {
++  max-height: 220px;
++  margin-top: 18px;
++  overflow-y: auto;
++  border: 1px solid hsl(var(--color-border));
++  border-radius: 10px;
++  padding: 12px;
++  background: hsl(var(--color-background) / 0.7);
++  color: hsl(var(--color-text-secondary));
++  font-size: 12px;
++  line-height: 1.55;
++  white-space: pre-wrap;
++  overflow-wrap: anywhere;
++}
++
++.cloud-inspector__link {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  margin-top: 18px;
++  border: 1px solid hsl(var(--color-border));
++  border-radius: 10px;
++  padding: 10px 11px;
++  color: hsl(var(--color-primary));
++  font-size: 12px;
++  transition: background-color 120ms ease;
++}
++
++.cloud-inspector__link:hover {
++  background: hsl(var(--color-primary) / 0.05);
++}
++
++.cloud-inspector__metadata {
++  margin-top: 20px;
++  border-top: 1px solid hsl(var(--color-border));
++}
++
++.cloud-inspector__metadata > div {
++  display: grid;
++  grid-template-columns: 90px minmax(0, 1fr);
++  gap: 12px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.75);
++  padding: 10px 0;
++  font-size: 11px;
++}
++
++.cloud-inspector__metadata dt {
++  color: hsl(var(--color-text-muted));
++}
++
++.cloud-inspector__metadata dd {
++  min-width: 0;
++  overflow-wrap: anywhere;
++  color: hsl(var(--color-text-secondary));
++  font-weight: 500;
++  text-align: right;
++}
++
++.cloud-inspector__actions {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 8px;
++  margin-top: 18px;
++}
++
++.cloud-inspector__phase-note {
++  display: flex;
++  gap: 8px;
++  margin-top: 14px;
++  border-radius: 9px;
++  padding: 10px;
++  background: hsl(var(--color-warning) / 0.09);
++  color: hsl(var(--color-text-secondary));
++  font-size: 10px;
++  line-height: 1.5;
++}
++
++.cloud-capability-list {
++  display: grid;
++  width: 100%;
++  gap: 8px;
++  margin-top: 24px;
++}
++
++.cloud-capability-list > div {
++  display: flex;
++  align-items: center;
++  gap: 9px;
++  border-radius: 9px;
++  padding: 9px 10px;
++  background: hsl(var(--color-background));
++  color: hsl(var(--color-text-secondary));
++  font-size: 11px;
++  text-align: left;
++}
++
++@keyframes cloud-pulse {
++  0%,
++  100% {
++    opacity: 0.48;
++  }
++
++  50% {
++    opacity: 0.9;
++  }
++}
++
++@media (max-width: 1320px) {
++  .cloud-sidebar {
++    width: 248px;
++    min-width: 248px;
++  }
++
++  .cloud-inspector {
++    width: 288px;
++    min-width: 288px;
++  }
++
++  .cloud-main__content {
++    padding-inline: 18px;
++  }
++}
++
++@media (max-width: 1120px) {
++  .cloud-inspector {
++    display: none;
++  }
++}
++
++@media (max-width: 820px) {
++  .cloud-sidebar {
++    display: none;
++  }
++
++  .cloud-main__header {
++    min-height: 62px;
++    padding: 0 16px;
++  }
++
++  .cloud-mobile-controls {
++    display: grid;
++    flex: 0 0 auto;
++    gap: 8px;
++    border-bottom: 1px solid hsl(var(--color-border));
++    padding: 10px 16px;
++    background: hsl(var(--color-surface));
++  }
++
++  .cloud-mobile-filter {
++    flex: 0 0 auto;
++    border: 1px solid hsl(var(--color-border));
++    border-radius: 999px;
++    padding: 6px 11px;
++    background: hsl(var(--color-surface));
++    color: hsl(var(--color-text-secondary));
++    font-size: 11px;
++    font-weight: 600;
++  }
++
++  .cloud-mobile-filter--active {
++    border-color: hsl(var(--color-primary));
++    background: hsl(var(--color-primary));
++    color: hsl(var(--color-text-inverse));
++  }
++
++  .cloud-main__content {
++    padding: 14px 14px 30px;
++  }
++}
++
++@media (max-width: 560px) {
++  .cloud-private-badge {
++    display: none;
++  }
++
++  .cloud-composer__tabs {
++    padding-inline: 8px;
++  }
++
++  .cloud-composer__tab {
++    flex: 1 1 0;
++    justify-content: center;
++    padding-inline: 6px;
++  }
++
++  .cloud-composer__body {
++    padding: 12px;
++  }
++
++  .cloud-dropzone {
++    align-items: flex-start;
++    flex-wrap: wrap;
++  }
++
++  .cloud-dropzone > :last-child {
++    margin-left: 50px;
++  }
++
++  .cloud-timeline__group {
++    padding-inline: 9px;
++  }
++
++  .cloud-timeline-row {
++    gap: 9px;
++    padding-inline: 9px;
++  }
++
++  .cloud-status {
++    display: none;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .cloud-timeline-skeleton {
++    animation: none;
++  }
++}
++
++/*
++ * My Documents surface
++ * The Cloud API is presented as a private conversation, not a drive dashboard.
++ */
++.cloud-documents {
++  display: flex;
++  width: 100%;
++  height: 100%;
++  min-width: 0;
++  min-height: 0;
++  overflow: hidden;
++  background:
++    radial-gradient(
++      circle at 18% 8%,
++      hsl(var(--color-primary) / 0.035),
++      transparent 26rem
++    ),
++    hsl(var(--color-background));
++  color: hsl(var(--color-text-primary));
++}
++
++.cloud-documents__main {
++  display: flex;
++  min-width: 0;
++  min-height: 0;
++  flex: 1 1 auto;
++  flex-direction: column;
++}
++
++.cloud-documents__header {
++  display: flex;
++  min-height: 66px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: space-between;
++  gap: 20px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.82);
++  padding: 0 22px;
++  background: hsl(var(--color-surface) / 0.96);
++  backdrop-filter: blur(12px);
++}
++
++.cloud-documents__identity {
++  display: flex;
++  min-width: 0;
++  align-items: center;
++  gap: 11px;
++}
++
++.cloud-documents__avatar {
++  display: inline-flex;
++  width: 40px;
++  height: 40px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border: 1px solid hsl(var(--color-primary) / 0.18);
++  border-radius: 50%;
++  background:
++    linear-gradient(
++      145deg,
++      hsl(var(--color-primary) / 0.18),
++      hsl(var(--color-primary) / 0.07)
++    ),
++    hsl(var(--color-surface));
++  color: hsl(var(--color-primary));
++  box-shadow: 0 5px 16px hsl(var(--color-primary) / 0.09);
++}
++
++.cloud-documents__verified {
++  display: inline-flex;
++  width: 18px;
++  height: 18px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border-radius: 50%;
++  background: hsl(var(--color-primary));
++  color: hsl(var(--color-text-inverse));
++}
++
++.cloud-documents__refresh {
++  flex: 0 0 auto;
++}
++
++.cloud-documents__tools {
++  display: flex;
++  min-height: 52px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: space-between;
++  gap: 20px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.72);
++  padding: 0 22px;
++  background: hsl(var(--color-surface));
++}
++
++.cloud-filter-tabs {
++  display: flex;
++  min-width: 0;
++  height: 52px;
++  align-items: stretch;
++  gap: 3px;
++  overflow-x: auto;
++  scrollbar-width: none;
++}
++
++.cloud-filter-tabs::-webkit-scrollbar {
++  display: none;
++}
++
++.cloud-filter-tab {
++  position: relative;
++  flex: 0 0 auto;
++  padding: 0 13px;
++  color: hsl(var(--color-text-muted));
++  font-size: 12px;
++  font-weight: 600;
++  white-space: nowrap;
++  transition:
++    color 140ms ease,
++    background-color 140ms ease;
++}
++
++.cloud-filter-tab::after {
++  position: absolute;
++  right: 12px;
++  bottom: 0;
++  left: 12px;
++  height: 2px;
++  border-radius: 999px 999px 0 0;
++  background: hsl(var(--color-primary));
++  content: "";
++  opacity: 0;
++  transform: scaleX(0.6);
++  transition:
++    opacity 140ms ease,
++    transform 140ms ease;
++}
++
++.cloud-filter-tab:hover,
++.cloud-filter-tab--active {
++  color: hsl(var(--color-primary));
++}
++
++.cloud-filter-tab--active::after {
++  opacity: 1;
++  transform: scaleX(1);
++}
++
++.cloud-documents__search {
++  width: min(260px, 28vw);
++  flex: 0 0 auto;
++}
++
++.cloud-documents__storage {
++  display: flex;
++  min-height: 32px;
++  flex: 0 0 auto;
++  align-items: center;
++  gap: 7px;
++  border-bottom: 1px solid hsl(var(--color-border) / 0.54);
++  padding: 0 24px;
++  background: hsl(var(--color-background) / 0.92);
++  color: hsl(var(--color-text-muted));
++  font-size: 10px;
++}
++
++.cloud-service-dot {
++  width: 6px;
++  height: 6px;
++  flex: 0 0 auto;
++  border-radius: 50%;
++  background: hsl(var(--color-success));
++  box-shadow: 0 0 0 3px hsl(var(--color-success) / 0.1);
++}
++
++.cloud-service-dot--down {
++  background: hsl(var(--color-danger));
++  box-shadow: 0 0 0 3px hsl(var(--color-danger) / 0.1);
++}
++
++.cloud-documents__storage-track {
++  width: 72px;
++  height: 3px;
++  flex: 0 0 auto;
++  overflow: hidden;
++  border-radius: 999px;
++  background: hsl(var(--color-surface-active));
++}
++
++.cloud-documents__storage-track > span {
++  display: block;
++  height: 100%;
++  border-radius: inherit;
++  background: hsl(var(--color-primary));
++}
++
++.cloud-documents__scroll {
++  min-height: 0;
++  flex: 1 1 auto;
++  overflow-y: auto;
++  overscroll-behavior: contain;
++  scroll-behavior: smooth;
++}
++
++.cloud-documents__lane {
++  width: min(100%, 780px);
++  margin: 0 auto;
++}
++
++.cloud-documents__scroll > .cloud-documents__lane {
++  min-height: 100%;
++  padding: 20px 24px 30px;
++}
++
++.cloud-documents__intro {
++  display: flex;
++  max-width: 560px;
++  align-items: flex-start;
++  gap: 10px;
++  margin: 0 auto 22px;
++  border: 1px solid hsl(var(--color-border) / 0.72);
++  border-radius: 12px;
++  padding: 11px 13px;
++  background: hsl(var(--color-surface) / 0.8);
++  color: hsl(var(--color-text-muted));
++  font-size: 11px;
++  line-height: 1.5;
++  text-align: left;
++  box-shadow: var(--shadow-xs);
++}
++
++.cloud-documents__intro-icon {
++  display: inline-flex;
++  width: 30px;
++  height: 30px;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: center;
++  border-radius: 9px;
++  background: hsl(var(--color-primary) / 0.08);
++  color: hsl(var(--color-primary));
++}
++
++.cloud-documents__result-note {
++  width: fit-content;
++  margin: 0 auto 12px;
++  border-radius: 999px;
++  padding: 4px 10px;
++  background: hsl(var(--color-surface));
++  color: hsl(var(--color-text-muted));
++  font-size: 10px;
++  box-shadow: var(--shadow-xs);
++}
++
++.cloud-documents__composer {
++  position: relative;
++  z-index: 3;
++  flex: 0 0 auto;
++  border-top: 1px solid hsl(var(--color-border) / 0.82);
++  padding: 10px 20px 12px;
++  background: hsl(var(--color-surface) / 0.96);
++  box-shadow: 0 -10px 28px hsl(var(--color-text-primary) / 0.035);
++  backdrop-filter: blur(14px);
++}
++
++.cloud-documents__composer .cloud-composer {
++  border-radius: 13px;
++  box-shadow: 0 3px 16px hsl(var(--color-text-primary) / 0.055);
++}
++
++.cloud-documents__composer .cloud-composer__tabs {
++  height: 36px;
++  padding: 0 10px;
++}
++
++.cloud-documents__composer .cloud-composer__tab {
++  padding: 0 9px;
++  font-size: 11px;
++}
++
++.cloud-documents__composer .cloud-composer__body {
++  padding: 10px 12px 12px;
++}
++
++.cloud-documents__composer textarea {
++  min-height: 58px;
++  resize: none;
++}
++
++.cloud-documents__composer .cloud-dropzone,
++.cloud-documents__composer .cloud-upload-progress {
++  min-height: 64px;
++  padding-block: 10px;
++}
++
++.cloud-timeline__group {
++  padding: 0 0 18px;
++}
++
++.cloud-timeline__date {
++  justify-content: center;
++  gap: 10px;
++  padding: 0 8px 10px;
++  color: hsl(var(--color-text-muted));
++  font-size: 9px;
++  letter-spacing: 0.02em;
++}
++
++.cloud-timeline__date::before,
++.cloud-timeline__date-line {
++  width: 56px;
++  height: 1px;
++  flex: 0 0 auto;
++  background:
++    linear-gradient(
++      90deg,
++      transparent,
++      hsl(var(--color-border) / 0.78)
++    );
++  content: "";
++}
++
++.cloud-timeline__date-line {
++  background:
++    linear-gradient(
++      90deg,
++      hsl(var(--color-border) / 0.78),
++      transparent
++    );
++}
++
++.cloud-timeline__rows {
++  display: flex;
++  overflow: visible;
++  border: 0;
++  border-radius: 0;
++  flex-direction: column;
++  gap: 8px;
++}
++
++.cloud-timeline-row {
++  display: flex;
++  width: min(84%, 620px);
++  min-height: 64px;
++  align-items: center;
++  gap: 11px;
++  border: 1px solid hsl(var(--color-border) / 0.8);
++  border-radius: 5px 15px 15px 15px;
++  padding: 10px 12px;
++  background: hsl(var(--color-surface));
++  box-shadow: 0 3px 13px hsl(var(--color-text-primary) / 0.045);
++  transition:
++    border-color 140ms ease,
++    box-shadow 140ms ease,
++    transform 140ms ease;
++}
++
++.cloud-timeline-row + .cloud-timeline-row {
++  border-top: 1px solid hsl(var(--color-border) / 0.8);
++}
++
++.cloud-timeline-row:hover {
++  border-color: hsl(var(--color-primary) / 0.18);
++  background: hsl(var(--color-surface));
++  box-shadow: 0 6px 18px hsl(var(--color-text-primary) / 0.075);
++  transform: translateY(-1px);
++}
++
++.cloud-timeline-row--text {
++  min-height: auto;
++  margin-left: auto;
++  align-items: flex-start;
++  border-color: hsl(var(--color-primary) / 0.13);
++  border-radius: 15px 5px 15px 15px;
++  background:
++    linear-gradient(
++      145deg,
++      hsl(var(--color-primary) / 0.075),
++      hsl(var(--color-primary) / 0.035)
++    ),
++    hsl(var(--color-surface));
++}
++
++.cloud-timeline-row--text:hover {
++  background:
++    linear-gradient(
++      145deg,
++      hsl(var(--color-primary) / 0.09),
++      hsl(var(--color-primary) / 0.045)
++    ),
++    hsl(var(--color-surface));
++}
++
++.cloud-timeline-row__content {
++  display: flex;
++  min-width: 0;
++  flex: 1 1 auto;
++  flex-direction: column;
++  text-align: left;
++}
++
++.cloud-timeline-row__heading {
++  display: flex;
++  min-width: 0;
++  align-items: flex-start;
++  gap: 7px;
++  line-height: 1.5;
++  overflow-wrap: anywhere;
++  white-space: pre-wrap;
++}
++
++.cloud-timeline-row__preview {
++  display: block;
++  margin-top: 3px;
++  overflow: hidden;
++  color: hsl(var(--color-text-secondary));
++  font-size: 11px;
++  line-height: 1.45;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.cloud-timeline-row__meta {
++  display: flex;
++  min-height: 16px;
++  align-items: center;
++  gap: 8px;
++  margin-top: 5px;
++  color: hsl(var(--color-text-muted));
++  font-size: 9px;
++  line-height: 1;
++}
++
++.cloud-timeline-row--text .cloud-timeline-row__meta {
++  justify-content: flex-end;
++}
++
++.cloud-timeline-row .cloud-item-icon {
++  width: 38px;
++  height: 38px;
++  border-radius: 10px;
++}
++
++.cloud-empty-state {
++  min-height: 220px;
++}
++
++@media (max-width: 720px) {
++  .cloud-documents__header {
++    min-height: 62px;
++    padding-inline: 14px;
++  }
++
++  .cloud-documents__tools {
++    display: block;
++    min-height: auto;
++    padding: 0 14px 10px;
++  }
++
++  .cloud-filter-tabs {
++    height: 46px;
++    margin-inline: -6px;
++  }
++
++  .cloud-filter-tab {
++    padding-inline: 11px;
++  }
++
++  .cloud-documents__search {
++    width: 100%;
++  }
++
++  .cloud-documents__storage {
++    padding-inline: 15px;
++  }
++
++  .cloud-documents__storage-track {
++    display: none;
++  }
++
++  .cloud-documents__scroll > .cloud-documents__lane {
++    padding: 15px 12px 24px;
++  }
++
++  .cloud-documents__intro {
++    margin-bottom: 17px;
++  }
++
++  .cloud-documents__composer {
++    padding: 8px 10px 10px;
++  }
++
++  .cloud-timeline-row {
++    width: 92%;
++  }
++}
++
++@media (max-width: 480px) {
++  .cloud-documents__avatar {
++    width: 36px;
++    height: 36px;
++  }
++
++  .cloud-documents__intro {
++    display: none;
++  }
++
++  .cloud-documents__storage {
++    min-height: 29px;
++  }
++
++  .cloud-documents__composer .cloud-composer__tab {
++    gap: 5px;
++  }
++
++  .cloud-documents__composer .cloud-composer__body {
++    padding-inline: 10px;
++  }
++
++  .cloud-documents__composer textarea {
++    min-height: 52px;
++  }
++
++  .cloud-documents__composer .cloud-dropzone > :last-child {
++    margin-left: 46px;
++  }
++
++  .cloud-timeline-row {
++    width: 94%;
++  }
++}
++
++.cloud-chat-upload {
++  flex: 0 0 auto;
++  padding: 6px 0 0;
++  background: hsl(var(--chat-panel-bg) / 0.94);
++}
++
++.cloud-chat-upload__pill {
++  display: flex;
++  min-height: 34px;
++  align-items: center;
++  gap: 8px;
++  border: 1px solid rgb(25 118 210 / 18%);
++  border-radius: 10px;
++  padding: 6px 10px;
++  background: hsl(var(--color-surface) / 0.96);
++  color: hsl(var(--color-text-secondary));
++  font-size: 11px;
++  box-shadow: var(--shadow-xs);
++}
++
++@media (max-width: 767px) {
++  .cloud-chat-page .cloud-chat-module-sidebar {
++    display: none;
++  }
++
++  .cloud-chat-page .hc-app-shell__main {
++    width: 100%;
++  }
++}
+diff --git a/src/features/cloud/types.ts b/src/features/cloud/types.ts
+new file mode 100644
+index 00000000..c4686933
+--- /dev/null
++++ b/src/features/cloud/types.ts
+@@ -0,0 +1,78 @@
++export type CloudItemType = "text" | "link" | "file" | "image" | "video" | "audio";
++
++export type CloudItemStatus =
++  | "pending"
++  | "processing"
++  | "ready"
++  | "failed"
++  | "trashed";
++
++export interface CloudItem {
++  id: string;
++  type: CloudItemType;
++  status: CloudItemStatus;
++  title?: string;
++  content?: string;
++  url?: string;
++  sizeBytes: number;
++  createdAt: string;
++  updatedAt: string;
++}
++
++export interface CloudPage {
++  items: CloudItem[];
++  nextCursor?: string;
++}
++
++export interface CloudQuota {
++  limitBytes: number;
++  usedBytes: number;
++  reservedBytes: number;
++  availableBytes: number;
++  updatedAt: string;
++}
++
++export interface CloudUploadSession {
++  uploadSessionId: string;
++  itemId: string;
++  status: "initiated";
++  uploadUrl: string;
++  method: "PUT";
++  requiredHeaders: Record<string, string>;
++  sizeBytes: number;
++  expiresAt: string;
++}
++
++export interface CloudUploadJob {
++  id: string;
++  type: "hash_file";
++  status: "pending" | "processing" | "completed" | "failed" | "dead";
++}
++
++export interface CloudUploadComplete {
++  item: CloudItem;
++  job: CloudUploadJob;
++}
++
++export interface CloudHealth {
++  status: "UP" | "DOWN";
++  service: string;
++  checks?: Record<
++    string,
++    {
++      status: "UP" | "DOWN";
++      latencyMs: number;
++      error?: string;
++    }
++  >;
++}
++
++export type CloudFilter = "all" | "text" | "image" | "file" | "link";
++
++export type CloudComposerMode = "upload" | "text" | "link";
++
++export interface CloudUploadProgress {
++  fileName: string;
++  percent: number;
++  stage: "reserving" | "uploading" | "finalizing" | "processing";
++}
+diff --git a/src/features/cloud/utils/cloudFormat.test.ts b/src/features/cloud/utils/cloudFormat.test.ts
+new file mode 100644
+index 00000000..e7523a79
+--- /dev/null
++++ b/src/features/cloud/utils/cloudFormat.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, it } from "vitest";
++import type { CloudItem } from "../types";
++import {
++  formatBytes,
++  getCloudItemPreview,
++  getCloudItemTitle,
++  isSafeExternalUrl,
++} from "./cloudFormat";
++
++const baseItem: CloudItem = {
++  id: "item-1",
++  type: "text",
++  status: "ready",
++  sizeBytes: 12,
++  createdAt: "2026-07-30T08:00:00Z",
++  updatedAt: "2026-07-30T08:00:00Z",
++};
++
++describe("cloudFormat", () => {
++  it("formats decimal storage units used by the backend contract", () => {
++    expect(formatBytes(0)).toBe("0 B");
++    expect(formatBytes(1_500)).toBe("1.5 KB");
++    expect(formatBytes(5_000_000_000)).toBe("5 GB");
++  });
++
++  it("derives note titles without inventing durable data", () => {
++    const item = { ...baseItem, content: "  Nội dung ghi chú  " };
++    expect(
++      getCloudItemTitle(item, {
++        text: "Ghi chú",
++        link: "Liên kết",
++        file: "Tệp",
++      }),
++    ).toBe("Nội dung ghi chú");
++    expect(getCloudItemPreview(item)).toBe("Nội dung ghi chú");
++  });
++
++  it("allows only safe HTTP(S) external links", () => {
++    expect(isSafeExternalUrl("https://hacom.vn/cloud")).toBe(true);
++    expect(isSafeExternalUrl("http://localhost:8080")).toBe(true);
++    expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false);
++    expect(isSafeExternalUrl("not-a-url")).toBe(false);
++  });
++});
+diff --git a/src/features/cloud/utils/cloudFormat.ts b/src/features/cloud/utils/cloudFormat.ts
+new file mode 100644
+index 00000000..a85e5f69
+--- /dev/null
++++ b/src/features/cloud/utils/cloudFormat.ts
+@@ -0,0 +1,69 @@
++import type { CloudItem } from "../types";
++
++const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
++
++export const formatBytes = (bytes: number): string => {
++  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
++  const unitIndex = Math.min(
++    Math.floor(Math.log(bytes) / Math.log(1000)),
++    BYTE_UNITS.length - 1,
++  );
++  const value = bytes / 1000 ** unitIndex;
++  const precision =
++    unitIndex === 0 || value >= 10 || Number.isInteger(value) ? 0 : 1;
++  return `${value.toFixed(precision)} ${BYTE_UNITS[unitIndex]}`;
++};
++
++export const formatCloudDateTime = (
++  value: string,
++  locale: string,
++): string => {
++  const date = new Date(value);
++  if (Number.isNaN(date.getTime())) return "";
++  return new Intl.DateTimeFormat(locale, {
++    dateStyle: "medium",
++    timeStyle: "short",
++  }).format(date);
++};
++
++export const formatCloudTime = (value: string, locale: string): string => {
++  const date = new Date(value);
++  if (Number.isNaN(date.getTime())) return "";
++  return new Intl.DateTimeFormat(locale, {
++    hour: "2-digit",
++    minute: "2-digit",
++  }).format(date);
++};
++
++export const getCloudItemTitle = (
++  item: CloudItem,
++  fallback: {
++    text: string;
++    link: string;
++    file: string;
++  },
++): string => {
++  if (item.title?.trim()) return item.title.trim();
++  if (item.type === "text") {
++    const content = item.content?.trim();
++    return content ? content.slice(0, 72) : fallback.text;
++  }
++  if (item.type === "link") return fallback.link;
++  return fallback.file;
++};
++
++export const getCloudItemPreview = (item: CloudItem): string => {
++  if (item.type === "text") return item.content?.trim() ?? "";
++  if (item.type === "link") return item.url?.trim() ?? "";
++  return "";
++};
++
++export const isSafeExternalUrl = (value: string | undefined): boolean => {
++  if (!value) return false;
++  try {
++    const url = new URL(value);
++    return url.protocol === "http:" || url.protocol === "https:";
++  } catch {
++    return false;
++  }
++};
+diff --git a/src/features/cloud/utils/cloudMessageAdapter.test.ts b/src/features/cloud/utils/cloudMessageAdapter.test.ts
+new file mode 100644
+index 00000000..333d8304
+--- /dev/null
++++ b/src/features/cloud/utils/cloudMessageAdapter.test.ts
+@@ -0,0 +1,70 @@
++import { describe, expect, it } from "vitest";
++import { MessageType, UserStatus, type UserSummary } from "../../../types";
++import type { CloudItem } from "../types";
++import {
++  cloudItemToMessage,
++  cloudItemsToMessages,
++} from "./cloudMessageAdapter";
++
++const currentUser: UserSummary = {
++  id: "11111111-1111-4111-8111-111111111111",
++  username: "cloud.demo",
++  displayName: "Cloud Demo",
++  avatar: "",
++  status: UserStatus.ONLINE,
++  isBot: false,
++};
++
++const createItem = (updates: Partial<CloudItem>): CloudItem => ({
++  id: "22222222-2222-4222-8222-222222222222",
++  type: "text",
++  status: "ready",
++  content: "Ghi chú",
++  sizeBytes: 8,
++  createdAt: "2026-07-30T01:00:00.000Z",
++  updatedAt: "2026-07-30T01:00:00.000Z",
++  ...updates,
++});
++
++describe("cloud message adapter", () => {
++  it("maps links without calling Chat's link-preview API", () => {
++    const message = cloudItemToMessage(
++      createItem({
++        type: "link",
++        title: "Hacom",
++        url: "https://hacom.vn",
++      }),
++      currentUser,
++      { link: "Liên kết", file: "Tệp" },
++    );
++
++    expect(message.type).toBe(MessageType.TEXT);
++    expect(message.content).toBe("https://hacom.vn");
++    expect(message.metadata?.linkPreview).toMatchObject({
++      url: "https://hacom.vn",
++      title: "Hacom",
++    });
++    expect(message.senderId).toBe(currentUser.id);
++  });
++
++  it("orders Cloud items chronologically for the native chat timeline", () => {
++    const newer = createItem({
++      id: "33333333-3333-4333-8333-333333333333",
++      createdAt: "2026-07-30T02:00:00.000Z",
++    });
++    const older = createItem({
++      id: "44444444-4444-4444-8444-444444444444",
++      createdAt: "2026-07-30T00:00:00.000Z",
++    });
++
++    const messages = cloudItemsToMessages([newer, older], currentUser, {
++      link: "Liên kết",
++      file: "Tệp",
++    });
++
++    expect(messages.map((message) => message.id)).toEqual([
++      older.id,
++      newer.id,
++    ]);
++  });
++});
+diff --git a/src/features/cloud/utils/cloudMessageAdapter.ts b/src/features/cloud/utils/cloudMessageAdapter.ts
+new file mode 100644
+index 00000000..18ad163e
+--- /dev/null
++++ b/src/features/cloud/utils/cloudMessageAdapter.ts
+@@ -0,0 +1,110 @@
++import {
++  FileType,
++  MessageStatus,
++  MessageType,
++  type Attachment,
++  type Message,
++  type UserSummary,
++} from "../../../types";
++import { CLOUD_CONVERSATION_ID } from "../constants";
++import type { CloudItem } from "../types";
++
++const resolveMessageStatus = (item: CloudItem): Message["status"] => {
++  switch (item.status) {
++    case "failed":
++      return MessageStatus.FAILED;
++    case "pending":
++    case "processing":
++      return "uploading";
++    default:
++      return MessageStatus.SENT;
++  }
++};
++
++const createAttachment = (item: CloudItem, fallbackName: string): Attachment => ({
++  id: item.id,
++  objectKey: `cloud:${item.id}`,
++  type: FileType.DOCUMENT,
++  fileName: item.title?.trim() || fallbackName,
++  fileSize: item.sizeBytes,
++  // Phase 1 does not expose a download/thumbnail URL. Keep the native chat
++  // file card without triggering Chat's private attachment-preview endpoint.
++  mimeType: "application/octet-stream",
++});
++
++export const cloudItemToMessage = (
++  item: CloudItem,
++  currentUser: UserSummary,
++  fallbacks: {
++    link: string;
++    file: string;
++  },
++): Message => {
++  const createdAt = new Date(item.createdAt);
++  const safeCreatedAt = Number.isNaN(createdAt.getTime())
++    ? new Date()
++    : createdAt;
++  const isFile = !["text", "link"].includes(item.type);
++  const linkTitle = item.title?.trim();
++  const linkUrl = item.url?.trim() ?? "";
++  const content =
++    item.type === "text"
++      ? item.content?.trim() ?? ""
++      : item.type === "link"
++        ? linkUrl || linkTitle || fallbacks.link
++        : "";
++
++  return {
++    id: item.id,
++    conversationId: CLOUD_CONVERSATION_ID,
++    senderId: currentUser.id,
++    senderName:
++      currentUser.displayName?.trim() ||
++      currentUser.username?.trim() ||
++      "Hacom",
++    senderAvatar: currentUser.avatar || undefined,
++    content,
++    plainText: content,
++    contentFormat: "plain_text",
++    type: isFile ? MessageType.FILE : MessageType.TEXT,
++    metadata:
++      item.type === "link" && linkUrl
++        ? {
++            linkPreview: {
++              url: linkUrl,
++              title: linkTitle || undefined,
++            },
++          }
++        : undefined,
++    attachments: isFile
++      ? [createAttachment(item, item.title?.trim() || fallbacks.file)]
++      : undefined,
++    status: resolveMessageStatus(item),
++    isEdited: false,
++    isPinned: false,
++    isDeleted: false,
++    lifecycleStatus: "active",
++    isSystem: false,
++    reactions: [],
++    createdAt: safeCreatedAt,
++    serverTs: safeCreatedAt,
++    updatedAt: new Date(item.updatedAt || item.createdAt),
++    readBy: [currentUser.id],
++  };
++};
++
++export const cloudItemsToMessages = (
++  items: CloudItem[],
++  currentUser: UserSummary,
++  fallbacks: {
++    link: string;
++    file: string;
++  },
++): Message[] =>
++  [...items]
++    .sort(
++      (left, right) =>
++        new Date(left.createdAt).getTime() -
++        new Date(right.createdAt).getTime(),
++    )
++    .map((item) => cloudItemToMessage(item, currentUser, fallbacks));
+diff --git a/src/i18n/index.ts b/src/i18n/index.ts
+index 7a1e295d..2ce55fea 100644
+--- a/src/i18n/index.ts
++++ b/src/i18n/index.ts
+@@ -19,6 +19,7 @@ export const appNamespaces = [
+   "friends",
+   "group",
+   "calendar",
++  "cloud",
+   "aiAssistant",
+   "tasks",
+ ] as const;
+diff --git a/src/locales/en/cloud.json b/src/locales/en/cloud.json
+new file mode 100644
+index 00000000..2f3870de
+--- /dev/null
++++ b/src/locales/en/cloud.json
+@@ -0,0 +1,168 @@
++{
++  "title": "My Documents",
++  "subtitle": "Personal content",
++  "common": {
++    "soon": "Soon",
++    "close": "Close"
++  },
++  "workspace": {
++    "title": "My Documents",
++    "description": "Content here is visible only to you and synced through your Hacom account.",
++    "introTitle": "Your private conversation",
++    "onlyYou": "Only you can see this",
++    "sidebarPreview": "Save content for yourself",
++    "phaseAction": "This action is planned for the next My Documents phase.",
++    "saving": "Saving content {{size}}",
++    "private": "Private",
++    "refresh": "Refresh"
++  },
++  "search": {
++    "placeholder": "Search My Documents",
++    "aria": "Search My Documents"
++  },
++  "navigation": {
++    "aria": "Filter My Documents content",
++    "all": "All",
++    "text": "Text",
++    "image": "Images",
++    "file": "Files",
++    "link": "Links",
++    "folders": "Folders",
++    "shared": "Shared",
++    "trash": "Trash"
++  },
++  "quota": {
++    "aria": "Hacom Cloud storage",
++    "title": "Storage",
++    "loading": "Loading storage...",
++    "usage": "{{used}} of {{limit}} used",
++    "usageCompact": "{{used}} / {{limit}} used",
++    "reserved": "{{value}} reserved for uploads"
++  },
++  "service": {
++    "checking": "Checking Cloud service",
++    "ready": "Cloud service is ready",
++    "offline": "Cloud service is unreachable"
++  },
++  "composer": {
++    "aria": "Choose content to save",
++    "tabs": {
++      "upload": "Upload",
++      "text": "Quick note",
++      "link": "Link"
++    },
++    "text": {
++      "placeholder": "Write something you want to remember...",
++      "aria": "Note content",
++      "hint": "Press Enter for a new line · visible only to you",
++      "action": "Send"
++    },
++    "link": {
++      "urlLabel": "Link address",
++      "titleLabel": "Display name",
++      "titlePlaceholder": "Optional",
++      "action": "Save link"
++    },
++    "upload": {
++      "drop": "Drop a file here",
++      "limit": "Up to 100 MB per file",
++      "pick": "Choose file",
++      "remove": "Remove selected file",
++      "action": "Upload"
++    },
++    "errors": {
++      "emptyFile": "An empty file cannot be uploaded.",
++      "fileTooLarge": "This file exceeds the 100 MB limit.",
++      "fileRequired": "Choose a file first.",
++      "textRequired": "The note cannot be empty.",
++      "linkInvalid": "Enter a valid HTTP or HTTPS link."
++    }
++  },
++  "upload": {
++    "stage": {
++      "reserving": "Checking available storage...",
++      "uploading": "Uploading to object storage...",
++      "finalizing": "Confirming the upload...",
++      "processing": "Processing and verifying the file..."
++    }
++  },
++  "feed": {
++    "all": "Recent activity",
++    "image": "Saved images",
++    "file": "My files",
++    "text": "Notes",
++    "link": "Saved links",
++    "count": "{{count}} items shown",
++    "count_one": "{{count}} item shown",
++    "count_other": "{{count}} items shown",
++    "loadedOnly": "Searching loaded items"
++  },
++  "timeline": {
++    "unknownDate": "Unknown date",
++    "loadMore": "Load more",
++    "empty": {
++      "title": "Nothing here yet",
++      "description": "Send yourself a note, image, file, or link to get started."
++    }
++  },
++  "item": {
++    "untitledText": "Untitled note",
++    "untitledLink": "Saved link",
++    "untitledFile": "Untitled file",
++    "fileMetadata": "File · {{size}}"
++  },
++  "type": {
++    "text": "Note",
++    "link": "Link",
++    "file": "File",
++    "image": "Image",
++    "video": "Video",
++    "audio": "Audio"
++  },
++  "status": {
++    "pending": "Pending",
++    "processing": "Processing",
++    "ready": "Ready",
++    "failed": "Failed",
++    "trashed": "Trashed"
++  },
++  "inspector": {
++    "title": "Hacom Cloud",
++    "details": "Item details",
++    "empty": {
++      "title": "Your private storage",
++      "description": "Select an item to inspect it. Data is currently isolated by user."
++    },
++    "capabilities": {
++      "private": "Per-user data isolation",
++      "hash": "Background file integrity checks",
++      "quota": "Server-controlled storage quota"
++    },
++    "metadata": {
++      "status": "Status",
++      "size": "Size",
++      "created": "Created",
++      "updated": "Updated",
++      "id": "Item ID"
++    },
++    "actions": {
++      "download": "Download",
++      "share": "Share"
++    },
++    "phaseLater": "Available in a later phase",
++    "phaseNote": "Download, sharing, folders, and trash have no Phase 1 API, so they are explicitly disabled."
++  },
++  "toast": {
++    "textCreated": "Note saved.",
++    "linkCreated": "Link saved.",
++    "uploadStarted": "File uploaded and processing started."
++  },
++  "errors": {
++    "user": "The current user could not be identified. Sign in again.",
++    "quota": "There is not enough Cloud storage for this action.",
++    "fileTooLarge": "This file exceeds the allowed limit.",
++    "driveInactive": "Your Cloud workspace is not active.",
++    "offline": "The Cloud service is unreachable. Check the local backend.",
++    "generic": "The Cloud action could not be completed. Please try again."
++  }
++}
+diff --git a/src/locales/en/sidebar.json b/src/locales/en/sidebar.json
+index fba89282..c57b6ccc 100644
+--- a/src/locales/en/sidebar.json
++++ b/src/locales/en/sidebar.json
+@@ -100,6 +100,7 @@
+     "contacts": "Contacts",
+     "tasks": "Tasks",
+     "calendar": "Calendar",
++    "cloud": "Hacom Cloud",
+     "aiAssistant": "Personal AI",
+     "notifications": "Notifications",
+     "help": "Help",
+diff --git a/src/locales/vi/cloud.json b/src/locales/vi/cloud.json
+new file mode 100644
+index 00000000..6e28b449
+--- /dev/null
++++ b/src/locales/vi/cloud.json
+@@ -0,0 +1,168 @@
++{
++  "title": "My Documents",
++  "subtitle": "Kho nội dung cá nhân",
++  "common": {
++    "soon": "Sắp có",
++    "close": "Đóng"
++  },
++  "workspace": {
++    "title": "My Documents",
++    "description": "Nội dung tại đây chỉ hiển thị với bạn và được đồng bộ qua tài khoản Hacom.",
++    "introTitle": "Cuộc trò chuyện riêng của bạn",
++    "onlyYou": "Chỉ mình bạn có thể xem",
++    "sidebarPreview": "Lưu nội dung cho chính bạn",
++    "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của My Documents.",
++    "saving": "Đang lưu nội dung {{size}}",
++    "private": "Riêng tư",
++    "refresh": "Làm mới"
++  },
++  "search": {
++    "placeholder": "Tìm trong My Documents",
++    "aria": "Tìm kiếm trong My Documents"
++  },
++  "navigation": {
++    "aria": "Lọc nội dung My Documents",
++    "all": "Tất cả",
++    "text": "Văn bản",
++    "image": "Ảnh",
++    "file": "File",
++    "link": "Liên kết",
++    "folders": "Thư mục",
++    "shared": "Được chia sẻ",
++    "trash": "Thùng rác"
++  },
++  "quota": {
++    "aria": "Dung lượng Hacom Cloud",
++    "title": "Dung lượng",
++    "loading": "Đang đọc dung lượng...",
++    "usage": "Đã dùng {{used}} / {{limit}}",
++    "usageCompact": "{{used}} / {{limit}} đã dùng",
++    "reserved": "{{value}} đang được giữ cho tệp tải lên"
++  },
++  "service": {
++    "checking": "Đang kiểm tra dịch vụ Cloud",
++    "ready": "Dịch vụ Cloud sẵn sàng",
++    "offline": "Không kết nối được Cloud"
++  },
++  "composer": {
++    "aria": "Chọn nội dung muốn lưu",
++    "tabs": {
++      "upload": "Tải tệp",
++      "text": "Ghi nhanh",
++      "link": "Liên kết"
++    },
++    "text": {
++      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...",
++      "aria": "Nội dung ghi chú",
++      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy",
++      "action": "Gửi"
++    },
++    "link": {
++      "urlLabel": "Địa chỉ liên kết",
++      "titleLabel": "Tên gợi nhớ",
++      "titlePlaceholder": "Không bắt buộc",
++      "action": "Lưu liên kết"
++    },
++    "upload": {
++      "drop": "Kéo thả tệp vào đây",
++      "limit": "Tối đa 100 MB mỗi tệp",
++      "pick": "Chọn tệp",
++      "remove": "Bỏ tệp đã chọn",
++      "action": "Tải lên"
++    },
++    "errors": {
++      "emptyFile": "Không thể tải lên tệp rỗng.",
++      "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
++      "fileRequired": "Hãy chọn một tệp trước.",
++      "textRequired": "Nội dung ghi chú không được để trống.",
++      "linkInvalid": "Hãy nhập liên kết HTTP hoặc HTTPS hợp lệ."
++    }
++  },
++  "upload": {
++    "stage": {
++      "reserving": "Đang kiểm tra dung lượng...",
++      "uploading": "Đang tải lên kho lưu trữ...",
++      "finalizing": "Đang xác nhận tệp...",
++      "processing": "Đang xử lý và kiểm tra tệp..."
++    }
++  },
++  "feed": {
++    "all": "Hoạt động gần đây",
++    "image": "Ảnh đã lưu",
++    "file": "Tệp của tôi",
++    "text": "Ghi chú",
++    "link": "Liên kết đã lưu",
++    "count": "{{count}} mục đang hiển thị",
++    "count_one": "{{count}} mục đang hiển thị",
++    "count_other": "{{count}} mục đang hiển thị",
++    "loadedOnly": "Tìm trong dữ liệu đã tải"
++  },
++  "timeline": {
++    "unknownDate": "Không rõ thời gian",
++    "loadMore": "Tải thêm",
++    "empty": {
++      "title": "Chưa có nội dung",
++      "description": "Gửi một ghi chú, ảnh, file hoặc liên kết cho chính bạn để bắt đầu."
++    }
++  },
++  "item": {
++    "untitledText": "Ghi chú không tiêu đề",
++    "untitledLink": "Liên kết đã lưu",
++    "untitledFile": "Tệp không tên",
++    "fileMetadata": "Tệp · {{size}}"
++  },
++  "type": {
++    "text": "Ghi chú",
++    "link": "Liên kết",
++    "file": "Tệp",
++    "image": "Hình ảnh",
++    "video": "Video",
++    "audio": "Âm thanh"
++  },
++  "status": {
++    "pending": "Đang chờ",
++    "processing": "Đang xử lý",
++    "ready": "Sẵn sàng",
++    "failed": "Thất bại",
++    "trashed": "Đã xóa"
++  },
++  "inspector": {
++    "title": "Hacom Cloud",
++    "details": "Chi tiết mục",
++    "empty": {
++      "title": "Kho lưu trữ cá nhân",
++      "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng."
++    },
++    "capabilities": {
++      "private": "Tách biệt dữ liệu theo người dùng",
++      "hash": "Kiểm tra toàn vẹn tệp nền",
++      "quota": "Kiểm soát dung lượng phía máy chủ"
++    },
++    "metadata": {
++      "status": "Trạng thái",
++      "size": "Kích thước",
++      "created": "Ngày tạo",
++      "updated": "Cập nhật",
++      "id": "Mã mục"
++    },
++    "actions": {
++      "download": "Tải xuống",
++      "share": "Chia sẻ"
++    },
++    "phaseLater": "Tính năng thuộc giai đoạn tiếp theo",
++    "phaseNote": "Tải xuống, chia sẻ, thư mục và thùng rác chưa có API trong Phase 1 nên đang được khóa rõ ràng."
++  },
++  "toast": {
++    "textCreated": "Đã lưu ghi chú.",
++    "linkCreated": "Đã lưu liên kết.",
++    "uploadStarted": "Tệp đã tải lên và đang được xử lý."
++  },
++  "errors": {
++    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.",
++    "quota": "Dung lượng Cloud không đủ cho thao tác này.",
++    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.",
++    "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
++    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.",
++    "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
++  }
++}
+diff --git a/src/locales/vi/sidebar.json b/src/locales/vi/sidebar.json
+index fe4d4429..1d233509 100644
+--- a/src/locales/vi/sidebar.json
++++ b/src/locales/vi/sidebar.json
+@@ -100,6 +100,7 @@
+     "contacts": "Danh bạ",
+     "tasks": "Công việc",
+     "calendar": "Lịch",
++    "cloud": "Hacom Cloud",
+     "aiAssistant": "AI cá nhân",
+     "notifications": "Thông báo",
+     "help": "Trợ giúp",
+diff --git a/src/pages/ChatPage.tsx b/src/pages/ChatPage.tsx
+index b2e46dea..74d05471 100644
+--- a/src/pages/ChatPage.tsx
++++ b/src/pages/ChatPage.tsx
+@@ -83,6 +83,8 @@ import { getCachedUserProfile } from "../services/userProfileCache";
+ import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
+ import { fileApi } from "../services/api";
+ import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
++import { CloudConversationEntry } from "../features/cloud/components/CloudConversationEntry";
++import { ROUTE_PATHS } from "../router/paths";
+ 
+ const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
+ const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+@@ -1317,6 +1319,11 @@ export const ChatPage: React.FC = () => {
+                 layoutState={sidebarLayoutState}
+                 currentUser={currentUserSummary}
+                 selectedId={routeConversationId}
++                leadingContent={
++                  <CloudConversationEntry
++                    onSelect={() => navigate(ROUTE_PATHS.CLOUD)}
++                  />
++                }
+                 isLoadingMoreConversations={isLoadingMoreConversations}
+                 hasMoreConversations={hasMoreConversations}
+                 showConversationSkeleton={showConversationSkeleton}
+diff --git a/src/router/config/privateRoutes.ts b/src/router/config/privateRoutes.ts
+index f76af122..1edc0f22 100644
+--- a/src/router/config/privateRoutes.ts
++++ b/src/router/config/privateRoutes.ts
+@@ -17,6 +17,7 @@ const TipsPage = lazy(() => import("../../pages/TipsPage"));
+ const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
+ const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
+ const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
++const CloudPage = lazy(() => import("../../features/cloud/pages/CloudPage"));
+ const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
+ 
+ /**
+@@ -33,6 +34,7 @@ export const privateRoutes: AppRouteConfig[] = [
+   { path: ROUTE_PATHS.TASKS, component: TasksPage },
+   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
+   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
++  { path: ROUTE_PATHS.CLOUD, component: CloudPage },
+   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },
+   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
+   { path: ROUTE_PATHS.HELP, component: HelpPage },
+diff --git a/src/router/paths.ts b/src/router/paths.ts
+index b14e675d..63d146f3 100644
+--- a/src/router/paths.ts
++++ b/src/router/paths.ts
+@@ -21,6 +21,7 @@ export const ROUTE_PATHS = {
+   TASKS: "/tasks",
+   CALENDAR: "/calendar",
+   AI_ASSISTANT: "/ai-assistant",
++  CLOUD: "/cloud",
+   ARCHIVE: "/archive",
+   NOTIFICATIONS: "/notifications",
+   HELP: "/help",
+diff --git a/src/shared/layout/SideRail.tsx b/src/shared/layout/SideRail.tsx
+index 64890251..e2e0ad61 100644
+--- a/src/shared/layout/SideRail.tsx
++++ b/src/shared/layout/SideRail.tsx
+@@ -51,7 +51,8 @@ const railItems: SideRailItem[] = [
+     to: ROUTE_PATHS.CHAT,
+     activeWhen: (pathname) =>
+       pathname === ROUTE_PATHS.CHAT ||
+-      pathname.startsWith(`${ROUTE_PATHS.CHAT}/`),
++      pathname.startsWith(`${ROUTE_PATHS.CHAT}/`) ||
++      pathname === ROUTE_PATHS.CLOUD,
+   },
+   {
+     id: "contacts",
+diff --git a/vite.config.ts b/vite.config.ts
+index b2ed6040..c38b58bc 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -142,6 +142,10 @@ export default defineConfig(({ mode }) => {
+   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
+   const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
+   const aiTarget   = resolveHttpTarget(env.VITE_DEV_AI_PROXY_TARGET,   "https://ai.hacomholdings.com.vn");
++  const cloudTarget = resolveHttpTarget(
++    env.VITE_DEV_CLOUD_PROXY_TARGET,
++    "http://localhost:8080",
++  );
+ 
+   const shouldAnalyzeBundle = mode === "analyze";
+ 
+@@ -312,6 +316,11 @@ export default defineConfig(({ mode }) => {
+       port: 5100,
+       strictPort: true,
+       proxy: {
++        // Cloud is an independent service. Keep this prefix out of Chat API.
++        "/cloud-api": {
++          ...httpProxy(cloudTarget),
++          rewrite: (path: string) => path.replace(/^\/cloud-api/, ""),
++        },
+         // Auth must be listed before the generic /api/v1 rule
+         "/api/v1/auth": httpProxy(authTarget),
+         "/api/v1":      httpProxy(apiTarget),
+-- 
+2.55.0
+

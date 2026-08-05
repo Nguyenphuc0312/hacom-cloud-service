@@ -33,7 +33,8 @@ The following checks passed from a clean release database on 2026-08-04:
 |---|---|
 | `make test-release-process5` | Pass — 9/9 migration/schema/race/reconciliation/vet/build steps |
 | `make test-migration-phase2` | Pass — empty DB, populated Phase 1 upgrade, rollback/reapply, invariants and atomic unsafe-backfill rejection |
-| `make test-gate1-person4` | Pass — gateway, OpenAPI and environment contract |
+| `make test-gate1-person4-static` | Pass — gateway, OpenAPI and environment contract |
+| `make test-gate1-person4` | Pending — requires live JWKS and environment-issued token fixtures |
 | `go test -race -count=10 ./internal/config ./internal/auth` | Pass — repeated config/auth concurrency and security tests |
 
 New tests cover active/inactive accounts, revoked/missing sessions, malformed
@@ -45,7 +46,8 @@ refresh, split-origin rejection and Auth audience drift.
 The implementation and hermetic test suite are complete, but production
 cutover must not be marked passed until the external Auth environment provides:
 
-1. At least one usable `RS256` or `ES256` public key in the production JWKS.
+1. At least one usable `RS256` or `ES256` public key in the integration JWKS;
+   production cutover separately requires the same property in production.
 2. An active `hacom-cloud-service` service-client registration with the
    `chat-auth-service` audience and a secret supplied through deployment secret
    storage.

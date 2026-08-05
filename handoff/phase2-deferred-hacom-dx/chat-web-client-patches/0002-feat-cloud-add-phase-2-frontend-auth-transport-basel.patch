@@ -1,0 +1,728 @@
+From 07abe23099be9eadc22f10874653a811ec7fd127 Mon Sep 17 00:00:00 2001
+From: WuagThag <WuagThag@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 10:22:11 +0700
+Subject: [PATCH 2/6] feat(cloud): add phase 2 frontend auth transport baseline
+
+---
+ src/components/chat/ChatHeader.tsx            |  24 ++-
+ src/components/layout/Sidebar.tsx             |  34 ++--
+ src/config/index.ts                           |  26 ++-
+ src/features/cloud/api/cloudApi.test.ts       |  17 +-
+ src/features/cloud/api/cloudApi.ts            |  41 ++++-
+ .../cloud/components/CloudInspector.tsx       |   2 +-
+ .../cloud/components/CloudSidebar.tsx         |   2 +-
+ src/features/cloud/pages/CloudPage.tsx        |   2 +-
+ src/features/cloud/utils/cloudFormat.test.ts  |  12 +-
+ .../cloud/utils/cloudMessageAdapter.test.ts   |   8 +-
+ src/locales/en/cloud.json                     |   4 +-
+ src/locales/en/sidebar.json                   |   2 +-
+ src/locales/vi/cloud.json                     | 164 ++++--------------
+ src/locales/vi/sidebar.json                   |   2 +-
+ src/router/config/privateRoutes.ts            |   6 +-
+ src/router/paths.ts                           |   4 +-
+ 16 files changed, 134 insertions(+), 216 deletions(-)
+
+diff --git a/src/components/chat/ChatHeader.tsx b/src/components/chat/ChatHeader.tsx
+index f679df1a..b2ff2595 100644
+--- a/src/components/chat/ChatHeader.tsx
++++ b/src/components/chat/ChatHeader.tsx
+@@ -32,9 +32,6 @@ import { formatCalendarDateTime } from "../../utils/formatTime";
+ interface ChatHeaderProps {
+   conversation: Conversation;
+   currentUserId: string;
+-  titleOverride?: string;
+-  subtitleOverride?: string;
+-  avatarOverride?: React.ReactNode;
+   typingStatus?: TypingStatus;
+   typingStatuses?: TypingStatus[];
+   onBack?: () => void;
+@@ -43,6 +40,9 @@ interface ChatHeaderProps {
+   onVideoCallClick?: () => void;
+   onSearchClick?: () => void;
+   onPinnedClick?: () => void;
++  titleOverride?: string;
++  subtitleOverride?: string;
++  avatarOverride?: React.ReactNode;
+   onSelectionMode?: () => void;
+   className?: string;
+ }
+@@ -58,9 +58,6 @@ const iconButtonClass = clsx(
+ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+   conversation,
+   currentUserId,
+-  titleOverride,
+-  subtitleOverride,
+-  avatarOverride,
+   typingStatus,
+   typingStatuses,
+   onBack,
+@@ -69,6 +66,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+   onVideoCallClick,
+   onSearchClick,
+   onPinnedClick,
++  titleOverride,
++  subtitleOverride,
++  avatarOverride,
+   className,
+ }) => {
+   const { t } = useTranslation();
+@@ -147,8 +147,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+ 
+   const displayName = alias ?? enrichedName ?? rawDisplayName;
+   const avatarSrc = getConversationAvatar(conversation, currentUserId);
+-  const resolvedDisplayName = titleOverride ?? displayName;
+-  const resolvedStatusText = subtitleOverride ?? statusText;
+ 
+   return (
+     <header
+@@ -182,7 +180,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+             {avatarOverride ?? (isDirect ? (
+               <Avatar
+                 src={avatarSrc}
+-                alt={resolvedDisplayName}
++                alt={displayName}
+                 size="md"
+                 status={liveStatus}
+                 showStatus={isDirect}
+@@ -209,7 +207,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+             )}
+           >
+             <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
+-              {resolvedDisplayName}
++              {titleOverride ?? displayName}
+             </h2>
+ 
+             {isTyping ? (
+@@ -225,12 +223,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
+               <p
+                 className={clsx(
+                   "chat-header-subtitle truncate text-[12px] leading-4",
+-                  subtitleOverride || isOnline
+-                    ? "text-text-secondary"
+-                    : "text-text-muted",
++                  isOnline ? "text-text-secondary" : "text-text-muted",
+                 )}
+               >
+-                {resolvedStatusText}
++                {subtitleOverride ?? statusText}
+               </p>
+             )}
+           </button>
+diff --git a/src/components/layout/Sidebar.tsx b/src/components/layout/Sidebar.tsx
+index e6bd1c24..da130278 100644
+--- a/src/components/layout/Sidebar.tsx
++++ b/src/components/layout/Sidebar.tsx
+@@ -27,7 +27,6 @@ interface SidebarProps {
+   currentUser: UserSummary;
+   selectedId: string | null;
+   leadingContent?: React.ReactNode;
+-  hideConversationList?: boolean;
+ 
+   isLoadingMoreConversations?: boolean;
+   hasMoreConversations?: boolean;
+@@ -45,7 +44,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
+   currentUser,
+   selectedId,
+   leadingContent,
+-  hideConversationList = false,
+ 
+   isLoadingMoreConversations = false,
+   hasMoreConversations = false,
+@@ -152,24 +150,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
+           )}
+         >
+           {leadingContent}
+-          {!hideConversationList ? (
+-            <div className="min-h-0 flex-1">
+-              <RoomList
+-                layoutState={layoutState}
+-                conversationIds={conversationIds}
+-                currentUser={currentUser}
+-                selectedId={selectedId}
+-                searchQuery={deferredSearchQuery}
+-                showLoadingSkeleton={showConversationSkeleton}
+-                error={conversationsError}
+-                onRetry={onRetryConversations}
+-                hasMore={hasMoreConversations}
+-                isLoadingMore={isLoadingMoreConversations}
+-                onLoadMore={onLoadMoreConversations}
+-                onSelect={handleSelectRoom}
+-              />
+-            </div>
+-          ) : null}
++          <RoomList
++            layoutState={layoutState}
++            conversationIds={conversationIds}
++            currentUser={currentUser}
++            selectedId={selectedId}
++            searchQuery={deferredSearchQuery}
++            showLoadingSkeleton={showConversationSkeleton}
++            error={conversationsError}
++            onRetry={onRetryConversations}
++            hasMore={hasMoreConversations}
++            isLoadingMore={isLoadingMoreConversations}
++            onLoadMore={onLoadMoreConversations}
++            onSelect={handleSelectRoom}
++          />
+         </div>
+ 
+         {isSearchOpen ? (
+diff --git a/src/config/index.ts b/src/config/index.ts
+index 8442b970..04d07c15 100644
+--- a/src/config/index.ts
++++ b/src/config/index.ts
+@@ -196,6 +196,17 @@ export const API_BASE_URL = resolveHttpBaseUrl(
+   "/api/v1",
+ );
+ 
++/** Hacom Cloud API, proxied locally during development. */
++export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
++  import.meta.env.VITE_CLOUD_API_BASE_URL,
++  "/cloud-api/api/v1/cloud",
++);
++
++export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
++  import.meta.env.VITE_CLOUD_HEALTH_URL,
++  "/cloud-api/health/ready",
++);
++
+ /**
+  * Auth service base URL (Stage 1 – body mode).
+  * When USE_AUTH_SERVICE is true, auth calls (login/refresh/logout/me/…) go
+@@ -215,21 +226,6 @@ export const HR_API_BASE_URL = resolveHttpBaseUrl(
+   import.meta.env.DEV ? "/hr-api" : "",
+ );
+ 
+-/**
+- * Hacom Cloud Phase 1 runs as an independent Go service. The local web preview
+- * uses a dedicated Vite proxy so Cloud traffic never gets mixed with Chat API
+- * routes and the browser does not need an unsafe CORS workaround.
+- */
+-export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
+-  import.meta.env.VITE_CLOUD_API_BASE_URL,
+-  "/cloud-api/api/v1/cloud",
+-);
+-
+-export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
+-  import.meta.env.VITE_CLOUD_HEALTH_URL,
+-  "/cloud-api/health/ready",
+-);
+-
+ /**
+  * Feature flag: redirect auth traffic to the dedicated auth-service.
+  * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
+diff --git a/src/features/cloud/api/cloudApi.test.ts b/src/features/cloud/api/cloudApi.test.ts
+index cbf63546..ce56bc32 100644
+--- a/src/features/cloud/api/cloudApi.test.ts
++++ b/src/features/cloud/api/cloudApi.test.ts
+@@ -19,11 +19,13 @@ describe("cloudApi", () => {
+   const fetchMock = vi.fn<typeof fetch>();
+ 
+   beforeEach(() => {
++    vi.stubEnv("VITE_CLOUD_DEMO_MODE", "true");
+     vi.stubGlobal("fetch", fetchMock);
+   });
+ 
+   afterEach(() => {
+     vi.unstubAllGlobals();
++    vi.unstubAllEnvs();
+     vi.clearAllMocks();
+   });
+ 
+@@ -33,26 +35,27 @@ describe("cloudApi", () => {
+         id: "item-1",
+         type: "text",
+         status: "ready",
+-        content: "Báo cáo",
++        content: "B?o c?o",
+         sizeBytes: 7,
+         createdAt: "2026-07-30T08:00:00Z",
+         updatedAt: "2026-07-30T08:00:00Z",
+       }),
+     );
+ 
+-    await cloudApi.createText(userId, "Báo cáo");
++    await cloudApi.createText(userId, "B?o c?o");
+ 
+     expect(fetchMock).toHaveBeenCalledWith(
+       "/cloud-api/api/v1/cloud/texts",
+       expect.objectContaining({
+         method: "POST",
+-        body: JSON.stringify({ content: "Báo cáo" }),
+-        headers: expect.objectContaining({
+-          "Content-Type": "application/json",
+-          "X-Demo-User-ID": userId,
+-        }),
++        body: JSON.stringify({ content: "B?o c?o" }),
+       }),
+     );
++    const requestHeaders = fetchMock.mock.calls[0]?.[1]?.headers;
++    expect(requestHeaders).toBeInstanceOf(Headers);
++    expect((requestHeaders as Headers).get("Content-Type")).toBe("application/json");
++    expect((requestHeaders as Headers).get("Accept")).toBe("application/json");
++    expect((requestHeaders as Headers).get("X-Demo-User-ID")).toBe(userId);
+   });
+ 
+   it("keeps cursors opaque when requesting the next page", async () => {
+diff --git a/src/features/cloud/api/cloudApi.ts b/src/features/cloud/api/cloudApi.ts
+index 656be650..c016ccd9 100644
+--- a/src/features/cloud/api/cloudApi.ts
++++ b/src/features/cloud/api/cloudApi.ts
+@@ -1,4 +1,6 @@
+ import { CLOUD_API_BASE_URL, CLOUD_HEALTH_URL } from "../../../config";
++import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
++import { getAccessToken } from "../../../services/tokenService";
+ import type {
+   CloudHealth,
+   CloudItem,
+@@ -41,6 +43,11 @@ export class CloudApiError extends Error {
+ const joinPath = (base: string, path: string): string =>
+   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+ 
++const isCloudDemoMode = (): boolean => {
++  const env = import.meta.env as Record<string, string | boolean | undefined>;
++  return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
++};
++
+ const parseJson = async <T,>(response: Response): Promise<T> => {
+   const contentType = response.headers.get("content-type") ?? "";
+   if (!contentType.toLowerCase().includes("application/json")) {
+@@ -58,14 +65,32 @@ const cloudRequest = async <T,>(
+   path: string,
+   { userId, headers, ...options }: CloudRequestOptions,
+ ): Promise<T> => {
+-  const response = await fetch(joinPath(CLOUD_API_BASE_URL, path), {
+-    ...options,
+-    headers: {
+-      Accept: "application/json",
+-      "X-Demo-User-ID": userId,
+-      ...headers,
+-    },
+-  });
++  const request = (accessToken?: string): Promise<Response> => {
++    const requestHeaders = new Headers(headers);
++    requestHeaders.set("Accept", "application/json");
++    if (accessToken) {
++      requestHeaders.set("Authorization", `Bearer ${accessToken}`);
++    }
++    if (isCloudDemoMode() && userId) {
++      requestHeaders.set("X-Demo-User-ID", userId);
++    } else {
++      requestHeaders.delete("X-Demo-User-ID");
++    }
++    return fetch(joinPath(CLOUD_API_BASE_URL, path), {
++      ...options,
++      headers: requestHeaders,
++    });
++  };
++
++  let response = await request(getAccessToken() ?? undefined);
++  if ((response.status === 401 || response.status === 403) && !isCloudDemoMode()) {
++    try {
++      const refreshedToken = await refreshAccessTokenShared("http_401");
++      response = await request(refreshedToken);
++    } catch {
++      // Preserve the original auth response and stable backend error code.
++    }
++  }
+ 
+   if (!response.ok) {
+     const payload = await parseJson<CloudErrorEnvelope>(response).catch(
+diff --git a/src/features/cloud/components/CloudInspector.tsx b/src/features/cloud/components/CloudInspector.tsx
+index 8eb4d316..426cffc2 100644
+--- a/src/features/cloud/components/CloudInspector.tsx
++++ b/src/features/cloud/components/CloudInspector.tsx
+@@ -80,7 +80,7 @@ export const CloudInspector: React.FC<CloudInspectorProps> = ({
+           className="cloud-inspector__close"
+           aria-label={t("common.close")}
+         >
+-          ×
++          ?
+         </button>
+       </div>
+ 
+diff --git a/src/features/cloud/components/CloudSidebar.tsx b/src/features/cloud/components/CloudSidebar.tsx
+index 29e37c7e..de4c183e 100644
+--- a/src/features/cloud/components/CloudSidebar.tsx
++++ b/src/features/cloud/components/CloudSidebar.tsx
+@@ -151,7 +151,7 @@ export const CloudSidebar: React.FC<CloudSidebarProps> = ({
+               </span>
+             </div>
+             <span className="text-[11px] font-medium text-text-muted">
+-              {quota ? `${usedPercent.toFixed(usedPercent < 1 ? 1 : 0)}%` : "—"}
++              {quota ? `${usedPercent.toFixed(usedPercent < 1 ? 1 : 0)}%` : "?"}
+             </span>
+           </div>
+           <div className="cloud-quota-card__track" aria-hidden="true">
+diff --git a/src/features/cloud/pages/CloudPage.tsx b/src/features/cloud/pages/CloudPage.tsx
+index 65a0ce45..447ee297 100644
+--- a/src/features/cloud/pages/CloudPage.tsx
++++ b/src/features/cloud/pages/CloudPage.tsx
+@@ -119,7 +119,7 @@ export default function CloudPage() {
+     return {
+       id: "auth-pending",
+       username: "user",
+-      displayName: "Người dùng",
++      displayName: "Ng??i d?ng",
+       avatar: "",
+       status: UserStatus.ONLINE,
+       isBot: false,
+diff --git a/src/features/cloud/utils/cloudFormat.test.ts b/src/features/cloud/utils/cloudFormat.test.ts
+index e7523a79..7dc9af68 100644
+--- a/src/features/cloud/utils/cloudFormat.test.ts
++++ b/src/features/cloud/utils/cloudFormat.test.ts
+@@ -24,15 +24,15 @@ describe("cloudFormat", () => {
+   });
+ 
+   it("derives note titles without inventing durable data", () => {
+-    const item = { ...baseItem, content: "  Nội dung ghi chú  " };
++    const item = { ...baseItem, content: "  N?i dung ghi ch?  " };
+     expect(
+       getCloudItemTitle(item, {
+-        text: "Ghi chú",
+-        link: "Liên kết",
+-        file: "Tệp",
++        text: "Ghi ch?",
++        link: "Li?n k?t",
++        file: "T?p",
+       }),
+-    ).toBe("Nội dung ghi chú");
+-    expect(getCloudItemPreview(item)).toBe("Nội dung ghi chú");
++    ).toBe("N?i dung ghi ch?");
++    expect(getCloudItemPreview(item)).toBe("N?i dung ghi ch?");
+   });
+ 
+   it("allows only safe HTTP(S) external links", () => {
+diff --git a/src/features/cloud/utils/cloudMessageAdapter.test.ts b/src/features/cloud/utils/cloudMessageAdapter.test.ts
+index 333d8304..1b6b7fd3 100644
+--- a/src/features/cloud/utils/cloudMessageAdapter.test.ts
++++ b/src/features/cloud/utils/cloudMessageAdapter.test.ts
+@@ -19,7 +19,7 @@ const createItem = (updates: Partial<CloudItem>): CloudItem => ({
+   id: "22222222-2222-4222-8222-222222222222",
+   type: "text",
+   status: "ready",
+-  content: "Ghi chú",
++  content: "Ghi ch?",
+   sizeBytes: 8,
+   createdAt: "2026-07-30T01:00:00.000Z",
+   updatedAt: "2026-07-30T01:00:00.000Z",
+@@ -35,7 +35,7 @@ describe("cloud message adapter", () => {
+         url: "https://hacom.vn",
+       }),
+       currentUser,
+-      { link: "Liên kết", file: "Tệp" },
++      { link: "Li?n k?t", file: "T?p" },
+     );
+ 
+     expect(message.type).toBe(MessageType.TEXT);
+@@ -58,8 +58,8 @@ describe("cloud message adapter", () => {
+     });
+ 
+     const messages = cloudItemsToMessages([newer, older], currentUser, {
+-      link: "Liên kết",
+-      file: "Tệp",
++      link: "Li?n k?t",
++      file: "T?p",
+     });
+ 
+     expect(messages.map((message) => message.id)).toEqual([
+diff --git a/src/locales/en/cloud.json b/src/locales/en/cloud.json
+index 2f3870de..6418a0e5 100644
+--- a/src/locales/en/cloud.json
++++ b/src/locales/en/cloud.json
+@@ -54,7 +54,7 @@
+     "text": {
+       "placeholder": "Write something you want to remember...",
+       "aria": "Note content",
+-      "hint": "Press Enter for a new line · visible only to you",
++      "hint": "Press Enter for a new line ? visible only to you",
+       "action": "Send"
+     },
+     "link": {
+@@ -109,7 +109,7 @@
+     "untitledText": "Untitled note",
+     "untitledLink": "Saved link",
+     "untitledFile": "Untitled file",
+-    "fileMetadata": "File · {{size}}"
++    "fileMetadata": "File ? {{size}}"
+   },
+   "type": {
+     "text": "Note",
+diff --git a/src/locales/en/sidebar.json b/src/locales/en/sidebar.json
+index c57b6ccc..6063e230 100644
+--- a/src/locales/en/sidebar.json
++++ b/src/locales/en/sidebar.json
+@@ -100,8 +100,8 @@
+     "contacts": "Contacts",
+     "tasks": "Tasks",
+     "calendar": "Calendar",
+-    "cloud": "Hacom Cloud",
+     "aiAssistant": "Personal AI",
++    "cloud": "Hacom Cloud",
+     "notifications": "Notifications",
+     "help": "Help",
+     "settings": "Settings",
+diff --git a/src/locales/vi/cloud.json b/src/locales/vi/cloud.json
+index 6e28b449..561e8a1a 100644
+--- a/src/locales/vi/cloud.json
++++ b/src/locales/vi/cloud.json
+@@ -1,14 +1,11 @@
+ {
+   "title": "My Documents",
+   "subtitle": "Kho nội dung cá nhân",
+-  "common": {
+-    "soon": "Sắp có",
+-    "close": "Đóng"
+-  },
++  "common": { "soon": "Sắp có", "close": "Đóng" },
+   "workspace": {
+     "title": "My Documents",
+     "description": "Nội dung tại đây chỉ hiển thị với bạn và được đồng bộ qua tài khoản Hacom.",
+-    "introTitle": "Cuộc trò chuyện riêng của bạn",
++    "introTitle": "Không gian riêng của bạn",
+     "onlyYou": "Chỉ mình bạn có thể xem",
+     "sidebarPreview": "Lưu nội dung cho chính bạn",
+     "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của My Documents.",
+@@ -16,153 +13,54 @@
+     "private": "Riêng tư",
+     "refresh": "Làm mới"
+   },
+-  "search": {
+-    "placeholder": "Tìm trong My Documents",
+-    "aria": "Tìm kiếm trong My Documents"
+-  },
++  "search": { "placeholder": "Tìm trong My Documents", "aria": "Tìm kiếm trong My Documents" },
+   "navigation": {
+-    "aria": "Lọc nội dung My Documents",
+-    "all": "Tất cả",
+-    "text": "Văn bản",
+-    "image": "Ảnh",
+-    "file": "File",
+-    "link": "Liên kết",
+-    "folders": "Thư mục",
+-    "shared": "Được chia sẻ",
+-    "trash": "Thùng rác"
++    "aria": "Lọc nội dung My Documents", "all": "Tất cả", "text": "Văn bản", "image": "Ảnh",
++    "file": "Tệp", "link": "Liên kết", "folders": "Thư mục", "shared": "Được chia sẻ", "trash": "Thùng rác"
+   },
+   "quota": {
+-    "aria": "Dung lượng Hacom Cloud",
+-    "title": "Dung lượng",
+-    "loading": "Đang đọc dung lượng...",
+-    "usage": "Đã dùng {{used}} / {{limit}}",
+-    "usageCompact": "{{used}} / {{limit}} đã dùng",
++    "aria": "Dung lượng Hacom Cloud", "title": "Dung lượng", "loading": "Đang đọc dung lượng...",
++    "usage": "Đã dùng {{used}} / {{limit}}", "usageCompact": "{{used}} / {{limit}} đã dùng",
+     "reserved": "{{value}} đang được giữ cho tệp tải lên"
+   },
+-  "service": {
+-    "checking": "Đang kiểm tra dịch vụ Cloud",
+-    "ready": "Dịch vụ Cloud sẵn sàng",
+-    "offline": "Không kết nối được Cloud"
+-  },
++  "service": { "checking": "Đang kiểm tra dịch vụ Cloud", "ready": "Dịch vụ Cloud sẵn sàng", "offline": "Không kết nối được Cloud" },
+   "composer": {
+     "aria": "Chọn nội dung muốn lưu",
+-    "tabs": {
+-      "upload": "Tải tệp",
+-      "text": "Ghi nhanh",
+-      "link": "Liên kết"
+-    },
++    "tabs": { "upload": "Tải tệp", "text": "Ghi nhanh", "link": "Liên kết" },
+     "text": {
+-      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...",
+-      "aria": "Nội dung ghi chú",
+-      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy",
+-      "action": "Gửi"
+-    },
+-    "link": {
+-      "urlLabel": "Địa chỉ liên kết",
+-      "titleLabel": "Tên gợi nhớ",
+-      "titlePlaceholder": "Không bắt buộc",
+-      "action": "Lưu liên kết"
+-    },
+-    "upload": {
+-      "drop": "Kéo thả tệp vào đây",
+-      "limit": "Tối đa 100 MB mỗi tệp",
+-      "pick": "Chọn tệp",
+-      "remove": "Bỏ tệp đã chọn",
+-      "action": "Tải lên"
++      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...", "aria": "Nội dung ghi chú",
++      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy", "action": "Gửi"
+     },
++    "link": { "urlLabel": "Địa chỉ liên kết", "titleLabel": "Tên gợi nhớ", "titlePlaceholder": "Không bắt buộc", "action": "Lưu liên kết" },
++    "upload": { "drop": "Kéo thả tệp vào đây", "limit": "Tối đa 100 MB mỗi tệp", "pick": "Chọn tệp", "remove": "Bỏ tệp đã chọn", "action": "Tải lên" },
+     "errors": {
+-      "emptyFile": "Không thể tải lên tệp rỗng.",
+-      "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
+-      "fileRequired": "Hãy chọn một tệp trước.",
+-      "textRequired": "Nội dung ghi chú không được để trống.",
++      "emptyFile": "Không thể tải lên tệp rỗng.", "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
++      "fileRequired": "Hãy chọn một tệp trước.", "textRequired": "Nội dung ghi chú không được để trống.",
+       "linkInvalid": "Hãy nhập liên kết HTTP hoặc HTTPS hợp lệ."
+     }
+   },
+-  "upload": {
+-    "stage": {
+-      "reserving": "Đang kiểm tra dung lượng...",
+-      "uploading": "Đang tải lên kho lưu trữ...",
+-      "finalizing": "Đang xác nhận tệp...",
+-      "processing": "Đang xử lý và kiểm tra tệp..."
+-    }
+-  },
++  "upload": { "stage": { "reserving": "Đang kiểm tra dung lượng...", "uploading": "Đang tải lên kho lưu trữ...", "finalizing": "Đang xác nhận tệp...", "processing": "Đang xử lý và kiểm tra tệp..." } },
+   "feed": {
+-    "all": "Hoạt động gần đây",
+-    "image": "Ảnh đã lưu",
+-    "file": "Tệp của tôi",
+-    "text": "Ghi chú",
+-    "link": "Liên kết đã lưu",
+-    "count": "{{count}} mục đang hiển thị",
+-    "count_one": "{{count}} mục đang hiển thị",
+-    "count_other": "{{count}} mục đang hiển thị",
+-    "loadedOnly": "Tìm trong dữ liệu đã tải"
+-  },
+-  "timeline": {
+-    "unknownDate": "Không rõ thời gian",
+-    "loadMore": "Tải thêm",
+-    "empty": {
+-      "title": "Chưa có nội dung",
+-      "description": "Gửi một ghi chú, ảnh, file hoặc liên kết cho chính bạn để bắt đầu."
+-    }
+-  },
+-  "item": {
+-    "untitledText": "Ghi chú không tiêu đề",
+-    "untitledLink": "Liên kết đã lưu",
+-    "untitledFile": "Tệp không tên",
+-    "fileMetadata": "Tệp · {{size}}"
+-  },
+-  "type": {
+-    "text": "Ghi chú",
+-    "link": "Liên kết",
+-    "file": "Tệp",
+-    "image": "Hình ảnh",
+-    "video": "Video",
+-    "audio": "Âm thanh"
+-  },
+-  "status": {
+-    "pending": "Đang chờ",
+-    "processing": "Đang xử lý",
+-    "ready": "Sẵn sàng",
+-    "failed": "Thất bại",
+-    "trashed": "Đã xóa"
++    "all": "Hoạt động gần đây", "image": "Ảnh đã lưu", "file": "Tệp của tôi", "text": "Ghi chú", "link": "Liên kết đã lưu",
++    "count": "{{count}} mục đang hiển thị", "count_one": "{{count}} mục đang hiển thị", "count_other": "{{count}} mục đang hiển thị", "loadedOnly": "Tạm ẩn dữ liệu đã tải"
+   },
++  "timeline": { "unknownDate": "Không rõ thời gian", "loadMore": "Tải thêm", "empty": { "title": "Chưa có nội dung", "description": "Gửi một ghi chú, ảnh, tệp hoặc liên kết cho chính bạn để bắt đầu." } },
++  "item": { "untitledText": "Ghi chú không tiêu đề", "untitledLink": "Liên kết đã lưu", "untitledFile": "Tệp không tên", "fileMetadata": "Tệp · {{size}}" },
++  "type": { "text": "Ghi chú", "link": "Liên kết", "file": "Tệp", "image": "Hình ảnh", "video": "Video", "audio": "Âm thanh" },
++  "status": { "pending": "Đang chờ", "processing": "Đang xử lý", "ready": "Sẵn sàng", "failed": "Thất bại", "trashed": "Đã xóa" },
+   "inspector": {
+-    "title": "Hacom Cloud",
+-    "details": "Chi tiết mục",
+-    "empty": {
+-      "title": "Kho lưu trữ cá nhân",
+-      "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng."
+-    },
+-    "capabilities": {
+-      "private": "Tách biệt dữ liệu theo người dùng",
+-      "hash": "Kiểm tra toàn vẹn tệp nền",
+-      "quota": "Kiểm soát dung lượng phía máy chủ"
+-    },
+-    "metadata": {
+-      "status": "Trạng thái",
+-      "size": "Kích thước",
+-      "created": "Ngày tạo",
+-      "updated": "Cập nhật",
+-      "id": "Mã mục"
+-    },
+-    "actions": {
+-      "download": "Tải xuống",
+-      "share": "Chia sẻ"
+-    },
++    "title": "Hacom Cloud", "details": "Chi tiết mục",
++    "empty": { "title": "Kho lưu trữ cá nhân", "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng." },
++    "capabilities": { "private": "Tách biệt dữ liệu theo người dùng", "hash": "Kiểm tra toàn vẹn tệp nén", "quota": "Kiểm soát dung lượng phía máy chủ" },
++    "metadata": { "status": "Trạng thái", "size": "Kích thước", "created": "Ngày tạo", "updated": "Cập nhật", "id": "Mã mục" },
++    "actions": { "download": "Tải xuống", "share": "Chia sẻ" },
+     "phaseLater": "Tính năng thuộc giai đoạn tiếp theo",
+     "phaseNote": "Tải xuống, chia sẻ, thư mục và thùng rác chưa có API trong Phase 1 nên đang được khóa rõ ràng."
+   },
+-  "toast": {
+-    "textCreated": "Đã lưu ghi chú.",
+-    "linkCreated": "Đã lưu liên kết.",
+-    "uploadStarted": "Tệp đã tải lên và đang được xử lý."
+-  },
++  "toast": { "textCreated": "Đã lưu ghi chú.", "linkCreated": "Đã lưu liên kết.", "uploadStarted": "Tệp đã tải lên và đang được xử lý." },
+   "errors": {
+-    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.",
+-    "quota": "Dung lượng Cloud không đủ cho thao tác này.",
+-    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.",
+-    "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
+-    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.",
+-    "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
++    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.", "quota": "Dung lượng Cloud không đủ cho thao tác này.",
++    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.", "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
++    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.", "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
+   }
+ }
+diff --git a/src/locales/vi/sidebar.json b/src/locales/vi/sidebar.json
+index 1d233509..c18e5cf0 100644
+--- a/src/locales/vi/sidebar.json
++++ b/src/locales/vi/sidebar.json
+@@ -100,8 +100,8 @@
+     "contacts": "Danh bạ",
+     "tasks": "Công việc",
+     "calendar": "Lịch",
+-    "cloud": "Hacom Cloud",
+     "aiAssistant": "AI cá nhân",
++    "cloud": "Hacom Cloud",
+     "notifications": "Thông báo",
+     "help": "Trợ giúp",
+     "settings": "Cài đặt",
+diff --git a/src/router/config/privateRoutes.ts b/src/router/config/privateRoutes.ts
+index 1edc0f22..19580c6d 100644
+--- a/src/router/config/privateRoutes.ts
++++ b/src/router/config/privateRoutes.ts
+@@ -1,4 +1,5 @@
+-import { lazy } from "react";
++import { createElement, lazy } from "react";
++import { Navigate } from "react-router-dom";
+ import type { AppRouteConfig } from "../types";
+ import { ROUTE_PATHS } from "../paths";
+ 
+@@ -18,6 +19,8 @@ const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
+ const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
+ const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
+ const CloudPage = lazy(() => import("../../features/cloud/pages/CloudPage"));
++const CloudLegacyRedirect = () =>
++  createElement(Navigate, { to: ROUTE_PATHS.CLOUD, replace: true });
+ const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
+ 
+ /**
+@@ -35,6 +38,7 @@ export const privateRoutes: AppRouteConfig[] = [
+   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
+   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
+   { path: ROUTE_PATHS.CLOUD, component: CloudPage },
++  { path: ROUTE_PATHS.CLOUD_LEGACY, component: CloudLegacyRedirect },
+   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },
+   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
+   { path: ROUTE_PATHS.HELP, component: HelpPage },
+diff --git a/src/router/paths.ts b/src/router/paths.ts
+index 63d146f3..1f1c0e01 100644
+--- a/src/router/paths.ts
++++ b/src/router/paths.ts
+@@ -21,7 +21,9 @@ export const ROUTE_PATHS = {
+   TASKS: "/tasks",
+   CALENDAR: "/calendar",
+   AI_ASSISTANT: "/ai-assistant",
+-  CLOUD: "/cloud",
++  // My Documents is a first-class chat conversation, not a separate module.
++  CLOUD: "/chat/my-documents",
++  CLOUD_LEGACY: "/cloud",
+   ARCHIVE: "/archive",
+   NOTIFICATIONS: "/notifications",
+   HELP: "/help",
+-- 
+2.55.0
+

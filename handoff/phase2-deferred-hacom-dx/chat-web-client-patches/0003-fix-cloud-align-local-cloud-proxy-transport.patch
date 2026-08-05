@@ -1,0 +1,47 @@
+From ee3396f056762873710b26f5458620e0abb20e03 Mon Sep 17 00:00:00 2001
+From: WuagThag <WuagThag@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 10:22:36 +0700
+Subject: [PATCH 3/6] fix(cloud): align local cloud proxy transport
+
+---
+ vite.config.ts | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/vite.config.ts b/vite.config.ts
+index c38b58bc..6b10f9e5 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -142,10 +142,7 @@ export default defineConfig(({ mode }) => {
+   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
+   const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
+   const aiTarget   = resolveHttpTarget(env.VITE_DEV_AI_PROXY_TARGET,   "https://ai.hacomholdings.com.vn");
+-  const cloudTarget = resolveHttpTarget(
+-    env.VITE_DEV_CLOUD_PROXY_TARGET,
+-    "http://localhost:8080",
+-  );
++  const cloudTarget = resolveHttpTarget(env.VITE_DEV_CLOUD_PROXY_TARGET, "http://localhost:8080");
+ 
+   const shouldAnalyzeBundle = mode === "analyze";
+ 
+@@ -316,14 +313,13 @@ export default defineConfig(({ mode }) => {
+       port: 5100,
+       strictPort: true,
+       proxy: {
+-        // Cloud is an independent service. Keep this prefix out of Chat API.
+-        "/cloud-api": {
+-          ...httpProxy(cloudTarget),
+-          rewrite: (path: string) => path.replace(/^\/cloud-api/, ""),
+-        },
+         // Auth must be listed before the generic /api/v1 rule
+         "/api/v1/auth": httpProxy(authTarget),
+         "/api/v1":      httpProxy(apiTarget),
++        "/cloud-api": {
++          ...httpProxy(cloudTarget),
++          rewrite: (requestPath: string) => requestPath.replace(/^\/cloud-api/, ""),
++        },
+         "/ws":          wsProxy(wsTarget),
+         // HR API proxy — rewrites /hr-api/* → /api/* on the HR service host
+         "/hr-api": {
+-- 
+2.55.0
+

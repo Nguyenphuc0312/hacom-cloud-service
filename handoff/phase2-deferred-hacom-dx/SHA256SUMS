@@ -1,0 +1,6 @@
+05a23c9adca3556479943913487aff0ba96091ded89dd6a86a3ccbf4c2db5594  chat-web-client-patches/0001-feat-cloud-integrate-My-Documents-into-chat-shell.patch
+37678f0e949e0ac2d17b7a3df0ab0cbeeac3bfef93a3336f4e87a01fa9acccc7  chat-web-client-patches/0002-feat-cloud-add-phase-2-frontend-auth-transport-basel.patch
+61fba1b6d4c0de09d66b2f5c435e49e7e2c0c28681a1448c51409a3dbc9e0935  chat-web-client-patches/0003-fix-cloud-align-local-cloud-proxy-transport.patch
+fb3a8d9383ca1151714bb7740a1b5893a6afa75d56de0de9282935148c78874d  chat-web-client-patches/0004-test-cloud-cover-auth-transport-retry-and-demo-contr.patch
+c9fb7fb29658f2653ac42262d503ea670b122e415adb852033181a66d5caae29  chat-web-client-patches/0005-fix-phase2-make-dev3-frontend-baseline-gates-green.patch
+6bf87dd9d52eb62a419cfe00a63c704589456750818ba90f4a4d7ccc0801c530  chat-web-client-patches/0006-fix-phase2-close-frontend-readiness-regressions.patch

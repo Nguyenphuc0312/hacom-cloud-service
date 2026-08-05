@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -164,11 +165,36 @@ func TestPhase2AuthContractConfiguration(t *testing.T) {
 			t.Errorf(".env.example is missing %q", key)
 		}
 	}
+
+	liveTemplate := readFile(t, filepath.Join(root, "tests", "env", "phase2-gate1.env.example"))
+	for _, key := range []string{
+		"PHASE2_BASE_URL=",
+		"PHASE2_JWKS_URL=",
+		"PHASE2_ACCESS_TOKEN_USER_A=",
+		"PHASE2_ACCESS_TOKEN_USER_B=",
+		"PHASE2_EXPIRED_TOKEN=",
+		"PHASE2_REFRESH_TOKEN=",
+		"PHASE2_REVOKED_TOKEN=",
+		"PHASE2_INACTIVE_TOKEN=",
+	} {
+		if !strings.Contains(liveTemplate, key) {
+			t.Errorf("Gate 1 live environment template is missing %q", key)
+		}
+	}
 }
 
 func TestPhase2AuthHTTPContract(t *testing.T) {
 	configuration := loadLiveConfiguration(t)
 	client := &http.Client{Timeout: 10 * time.Second}
+
+	t.Run("JWKS publishes a usable public key", func(t *testing.T) {
+		response := doRequest(t, client, configuration.jwksURL, http.MethodGet, "", "", nil, nil)
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("JWKS status = %d, want 200", response.StatusCode)
+		}
+		assertUsableJWKS(t, response.Body)
+	})
 
 	t.Run("valid access token and spoofed headers", func(t *testing.T) {
 		response := doRequest(t, client, configuration.baseURL, http.MethodGet,
@@ -194,6 +220,7 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 			wantCode string
 		}{
 			{name: "missing", wantCode: "AUTH_REQUIRED"},
+			{name: "malformed", token: "not-a-jwt", wantCode: "INVALID_ACCESS_TOKEN"},
 			{name: "expired", token: configuration.expiredToken, wantCode: "INVALID_ACCESS_TOKEN"},
 			{name: "refresh", token: configuration.refreshToken, wantCode: "INVALID_ACCESS_TOKEN"},
 			{name: "revoked", token: configuration.revokedToken, wantCode: "SESSION_REVOKED"},
@@ -242,6 +269,13 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 			t.Fatalf("decode created item: %v", err)
 		}
 
+		sameOwner := doRequest(t, client, configuration.baseURL, http.MethodGet,
+			"/api/v1/cloud/items/"+item.ID, configuration.userAToken, nil, nil)
+		defer sameOwner.Body.Close()
+		if sameOwner.StatusCode != http.StatusOK {
+			t.Fatalf("same-owner status = %d, want 200", sameOwner.StatusCode)
+		}
+
 		otherOwner := doRequest(t, client, configuration.baseURL, http.MethodGet,
 			"/api/v1/cloud/items/"+item.ID, configuration.userBToken, nil,
 			map[string]string{demoUserHeader: "00000000-0000-4000-8000-000000000099"})
@@ -250,6 +284,36 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 			t.Fatalf("cross-owner status = %d, want 404", otherOwner.StatusCode)
 		}
 		assertErrorCode(t, otherOwner.Body, "ITEM_NOT_FOUND")
+
+		body = bytes.NewBufferString(fmt.Sprintf(`{"content":"phase2-owner-b-contract-%d"}`, time.Now().UnixNano()))
+		createdByB := doRequest(t, client, configuration.baseURL, http.MethodPost,
+			"/api/v1/cloud/texts", configuration.userBToken, body, map[string]string{
+				"Content-Type": "application/json",
+				demoUserHeader: "00000000-0000-4000-8000-000000000099",
+			})
+		defer createdByB.Body.Close()
+		if createdByB.StatusCode != http.StatusCreated {
+			t.Fatalf("User B create status = %d, want 201", createdByB.StatusCode)
+		}
+		var itemB struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(createdByB.Body).Decode(&itemB); err != nil || itemB.ID == "" {
+			t.Fatalf("decode User B item: %v", err)
+		}
+		userBReadsOwn := doRequest(t, client, configuration.baseURL, http.MethodGet,
+			"/api/v1/cloud/items/"+itemB.ID, configuration.userBToken, nil, nil)
+		defer userBReadsOwn.Body.Close()
+		if userBReadsOwn.StatusCode != http.StatusOK {
+			t.Fatalf("User B reading own item status = %d, want 200", userBReadsOwn.StatusCode)
+		}
+		userAReadsB := doRequest(t, client, configuration.baseURL, http.MethodGet,
+			"/api/v1/cloud/items/"+itemB.ID, configuration.userAToken, nil, nil)
+		defer userAReadsB.Body.Close()
+		if userAReadsB.StatusCode != http.StatusNotFound {
+			t.Fatalf("User A reading User B item status = %d, want 404", userAReadsB.StatusCode)
+		}
+		assertErrorCode(t, userAReadsB.Body, "ITEM_NOT_FOUND")
 	})
 
 	t.Run("untrusted origin is not granted credentialed CORS", func(t *testing.T) {
@@ -266,6 +330,7 @@ func TestPhase2AuthHTTPContract(t *testing.T) {
 
 type liveConfiguration struct {
 	baseURL       string
+	jwksURL       string
 	userAToken    string
 	userBToken    string
 	expiredToken  string
@@ -282,6 +347,7 @@ func loadLiveConfiguration(t *testing.T) liveConfiguration {
 		value string
 	}{
 		{key: "PHASE2_BASE_URL", value: strings.TrimRight(os.Getenv("PHASE2_BASE_URL"), "/")},
+		{key: "PHASE2_JWKS_URL", value: os.Getenv("PHASE2_JWKS_URL")},
 		{key: "PHASE2_ACCESS_TOKEN_USER_A", value: os.Getenv("PHASE2_ACCESS_TOKEN_USER_A")},
 		{key: "PHASE2_ACCESS_TOKEN_USER_B", value: os.Getenv("PHASE2_ACCESS_TOKEN_USER_B")},
 		{key: "PHASE2_EXPIRED_TOKEN", value: os.Getenv("PHASE2_EXPIRED_TOKEN")},
@@ -303,12 +369,92 @@ func loadLiveConfiguration(t *testing.T) liveConfiguration {
 		}
 		t.Skip("live Auth contract requires environment-issued test tokens")
 	}
+	for _, key := range []string{"PHASE2_BASE_URL", "PHASE2_JWKS_URL"} {
+		parsed, err := url.ParseRequestURI(valueByKey[key])
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			t.Fatalf("%s must be an absolute HTTP(S) URL", key)
+		}
+	}
+	if valueByKey["PHASE2_ACCESS_TOKEN_USER_A"] == valueByKey["PHASE2_ACCESS_TOKEN_USER_B"] {
+		t.Fatal("User A and User B tokens must represent different users")
+	}
 	return liveConfiguration{
-		baseURL: valueByKey["PHASE2_BASE_URL"], userAToken: valueByKey["PHASE2_ACCESS_TOKEN_USER_A"],
+		baseURL: valueByKey["PHASE2_BASE_URL"], jwksURL: valueByKey["PHASE2_JWKS_URL"], userAToken: valueByKey["PHASE2_ACCESS_TOKEN_USER_A"],
 		userBToken: valueByKey["PHASE2_ACCESS_TOKEN_USER_B"], expiredToken: valueByKey["PHASE2_EXPIRED_TOKEN"],
 		refreshToken: valueByKey["PHASE2_REFRESH_TOKEN"], revokedToken: valueByKey["PHASE2_REVOKED_TOKEN"],
 		inactiveToken: valueByKey["PHASE2_INACTIVE_TOKEN"],
 	}
+}
+
+func TestPhase2JWKSValidation(t *testing.T) {
+	t.Run("accepts public RSA and EC keys", func(t *testing.T) {
+		assertUsableJWKS(t, strings.NewReader(`{"keys":[{"kid":"rsa-1","kty":"RSA","alg":"RS256","n":"abc","e":"AQAB"},{"kid":"ec-1","kty":"EC","alg":"ES256","x":"abc","y":"def"}]}`))
+	})
+
+	for name, document := range map[string]string{
+		"empty key set":      `{"keys":[]}`,
+		"private key leaked": `{"keys":[{"kid":"rsa-1","kty":"RSA","alg":"RS256","n":"abc","e":"AQAB","d":"secret"}]}`,
+		"unsupported key":    `{"keys":[{"kid":"oct-1","kty":"oct","alg":"HS256"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if validateJWKS(strings.NewReader(document)) == nil {
+				t.Fatalf("JWKS %s unexpectedly passed", name)
+			}
+		})
+	}
+}
+
+func assertUsableJWKS(t *testing.T, body io.Reader) {
+	t.Helper()
+	if err := validateJWKS(io.LimitReader(body, 1<<20)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func validateJWKS(body io.Reader) error {
+	var document struct {
+		Keys []struct {
+			KeyID string `json:"kid"`
+			Type  string `json:"kty"`
+			Alg   string `json:"alg"`
+			N     string `json:"n"`
+			E     string `json:"e"`
+			X     string `json:"x"`
+			Y     string `json:"y"`
+			D     string `json:"d"`
+			P     string `json:"p"`
+			Q     string `json:"q"`
+			DP    string `json:"dp"`
+			DQ    string `json:"dq"`
+			QI    string `json:"qi"`
+		} `json:"keys"`
+	}
+	if err := json.NewDecoder(body).Decode(&document); err != nil {
+		return fmt.Errorf("decode JWKS: %w", err)
+	}
+	usable := 0
+	for _, key := range document.Keys {
+		if key.D != "" || key.P != "" || key.Q != "" || key.DP != "" || key.DQ != "" || key.QI != "" {
+			return fmt.Errorf("JWKS key %q exposes private key material", key.KeyID)
+		}
+		if key.KeyID == "" {
+			continue
+		}
+		switch key.Type {
+		case "RSA":
+			if (key.Alg == "" || key.Alg == "RS256") && key.N != "" && key.E != "" {
+				usable++
+			}
+		case "EC":
+			if (key.Alg == "" || key.Alg == "ES256") && key.X != "" && key.Y != "" {
+				usable++
+			}
+		}
+	}
+	if usable == 0 {
+		return fmt.Errorf("JWKS contains no usable RS256 or ES256 public key")
+	}
+	return nil
 }
 
 func doRequest(t *testing.T, client *http.Client, baseURL, method, path, token string, body io.Reader, headers map[string]string) *http.Response {

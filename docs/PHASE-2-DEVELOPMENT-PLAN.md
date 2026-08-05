@@ -1,5 +1,12 @@
 # Hacom Cloud — Báo cáo review Phase 1 và kế hoạch phát triển Phase 2
 
+> **Giới hạn phạm vi từ 05/08/2026:** hiện chỉ được thay đổi
+> `hacom-cloud-service`. Các hạng mục cần Auth/Web/Infrastructure/Shared
+> Types/Admin của Hacom Holding DX đã tạm hoãn và đóng gói tại
+> [`PHASE2-HACOM-DX-DEFERRED-SCOPE.md`](PHASE2-HACOM-DX-DEFERRED-SCOPE.md) và
+> `handoff/phase2-deferred-hacom-dx/`. Các Gate liên service phải giữ trạng thái
+> `DEFERRED/PENDING` cho tới khi phạm vi được mở lại.
+
 > Ngày lập: 04/08/2026  
 > Trạng thái đầu vào: Phase 1 đã qua Gate 5; Cloud Web và file preview đang ở nhánh tính năng  
 > Phạm vi đề xuất: Productization Web-first cho Personal Cloud  
@@ -925,4 +932,3 @@ song song sau khi Gate 2/3 khóa OpenAPI, nhưng chỉ merge khi contract test �
 3. Tạo nhánh `integration/phase-2-process-1-baseline-auth` từ baseline đã xác nhận.
 4. Bốn người công bố file ownership và bắt đầu đúng nhiệm vụ Quy trình 1.
 5. Không code Trash/UI mới trước khi JWT và migration contract được review.
-

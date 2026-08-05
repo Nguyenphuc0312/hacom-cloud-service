@@ -88,6 +88,7 @@ tokens issued by the Auth integration environment/test signing key:
 
 ```bash
 PHASE2_BASE_URL=http://localhost:8080/cloud-api \
+PHASE2_JWKS_URL=http://localhost:3001/.well-known/jwks.json \
 PHASE2_ACCESS_TOKEN_USER_A='<redacted>' \
 PHASE2_ACCESS_TOKEN_USER_B='<redacted>' \
 PHASE2_EXPIRED_TOKEN='<redacted>' \
@@ -98,4 +99,5 @@ make test-contract-phase2-auth
 ```
 
 Tokens are environment-only. The runner never prints them and no private test
-key is committed.
+key is committed. Use `make test-gate1` and `docs/phase2-gate1-runbook.md` for
+the strict cross-repository acceptance flow.

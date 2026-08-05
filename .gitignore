@@ -5,3 +5,5 @@
 bin/
 coverage.out
 *.log
+tests/env/*.env
+!tests/env/*.env.example

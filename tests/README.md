@@ -79,3 +79,16 @@ overrides are `PHASE3_CLOUD_BASE_URL`, `PHASE3_ADMIN_BASE_URL`,
 account or choose two configured tiers above its current quota.
 
 Hai UUID demo nằm ở collection variable và không phải credential/Auth thật.
+
+## Phase 2 Gate 1
+
+Gate tổng hợp production identity chạy bằng:
+
+```bash
+PHASE2_GATE1_ENV_FILE=/path/to/untracked/phase2-gate1.env make test-gate1
+```
+
+Gate này kiểm tra Cloud regression, migration `000005`, Auth, Shared Types,
+Web Client, canonical Infrastructure và live JWKS/two-owner contract. Xem
+`docs/phase2-gate1-runbook.md` để chuẩn bị clean worktree và token fixture.
+Thiếu live input hoặc một test bị skip không được tính là bằng chứng PASS.

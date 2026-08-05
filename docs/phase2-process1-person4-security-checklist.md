@@ -29,9 +29,21 @@
 ## Test and evidence
 
 - [x] Static gateway/OpenAPI/env tests are included in `make test-gate1-person4`.
+- [x] `make test-gate1` now aggregates Cloud, migration, Auth, Shared Types,
+  Web, Infrastructure and mandatory live evidence without accepting skips.
+- [x] Live acceptance rejects an empty/private/unsupported JWKS and checks
+  ownership isolation in both User A -> User B and User B -> User A directions.
 - [x] Live Go contract tests accept only environment-issued Auth/test-key tokens.
 - [x] Postman covers valid, missing, expired, wrong-type, revoked and owner-spoof cases.
 - [x] Test output does not print bearer tokens, private keys or presigned URLs.
+
+## External backend boundary — 2026-08-05
+
+- [x] Cloud/Web gate is executable without changing or building external DX backends.
+- [x] Production verifier remains fail-closed; no HS256 compatibility bypass exists.
+- [ ] **DEFERRED — Auth owner:** asymmetric tokens/JWKS and live lifecycle fixtures.
+- [ ] **DEFERRED — Infrastructure owner:** production edge/header/CORS smoke evidence.
+- [ ] **DEFERRED — cross-service:** live two-owner and revocation E2E acceptance.
 - [ ] Live Auth/JWKS suite passes after Person 1 wires the production verifier.
 - [ ] User A/User B integration fixtures are issued by `chat-auth-service` test authority.
 - [ ] Infrastructure owner has merged the reviewed gateway snippet into canonical edge config.

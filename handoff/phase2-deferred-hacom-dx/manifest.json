@@ -1,0 +1,18 @@
+{
+  "packageVersion": 1,
+  "createdAt": "2026-08-05",
+  "scope": "external-backends-deferred-frontend-authorized",
+  "status": "mixed",
+  "items": [
+    {"id":"DX-AUTH-01","owner":"chat-auth-service","summary":"RS256/ES256 token and non-empty JWKS cutover","resumeWhen":"Auth integration publishes asymmetric keys and kid"},
+    {"id":"DX-AUTH-02","owner":"chat-auth-service","summary":"Live revocation and account-state authority","resumeWhen":"Cloud service client and internal contracts are provisioned"},
+    {"id":"DX-AUTH-03","owner":"auth-integration-authority","summary":"Live Gate 1 token fixtures","resumeWhen":"Two-user, expired, refresh, revoked and inactive fixtures exist"},
+    {"id":"DX-INFRA-01","owner":"chat-infrastructure","summary":"Cloud edge route and runtime security controls","resumeWhen":"Infrastructure changes and deployment smoke are authorized"},
+    {"id":"DX-TYPES-01","owner":"chat-shared-types","summary":"Published Phase 2 Cloud contract types","resumeWhen":"OpenAPI is frozen and Shared Types release is authorized"},
+    {"id":"DX-ADMIN-01","owner":"chat-admin-service-panel","summary":"Quota review permission and admin workflow","resumeWhen":"Permission and service-token governance are approved"},
+    {"id":"DX-NOTIFY-01","owner":"chat-notification-services","summary":"Quota workflow notifications","resumeWhen":"Event contract and delivery ownership are approved"},
+    {"id":"DX-E2E-01","owner":"cross-service","summary":"Hacom login to Cloud full E2E and release gate","resumeWhen":"Auth, Web, Infra and Admin prerequisites are complete"}
+  ],
+  "frontendPatchBase": "8ccd36a2",
+  "frontendPatchCommits": ["7fbc9a7d","07abe230","ee3396f0","153758ec","7bd9d38a","211f072a"]
+}

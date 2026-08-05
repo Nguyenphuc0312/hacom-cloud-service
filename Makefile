@@ -24,7 +24,7 @@ POSTMAN_PHASE3_GATE3_COLLECTION ?= tests/postman/Hacom-Cloud-Phase-3-Gate-3.post
 	test-migration-phase2 \
 	test-trash-integration test-trash-api test-trash-gate2 test-postman-phase2-trash \
 	test-release-process5 test-postman-process5 demo-process5 \
-	test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
+	test-gate1 test-gate1-person4 test-gate1-person4-static test-contract-phase2-auth test-postman-phase2-auth \
 	test-gate3 test-postman-phase3 \
 	win-up win-down win-logs win-ps
 
@@ -68,6 +68,9 @@ test-postman-phase2-trash:
 test-release-process5:
 	sh scripts/test-process5-release.sh
 
+test-gate1:
+	sh scripts/test-phase2-gate1.sh
+
 test-postman-process5:
 	npx --yes newman run "$(POSTMAN_PROCESS5_COLLECTION)" \
 		-e "$(POSTMAN_ENVIRONMENT)" --reporters cli --silent
@@ -76,7 +79,7 @@ test-postman-process5:
 test-gate1-person4: test-gate1-person4-static test-contract-phase2-auth
 
 test-gate1-person4-static:
-	go test ./internal/router ./tests/contract -run 'TestGatewayContract|TestOpenAPIContract|TestPhase2AuthContractConfiguration' -count=1
+	go test ./internal/router ./tests/contract -run 'TestGatewayContract|TestOpenAPIContract|TestPhase2AuthContractConfiguration|TestPhase2JWKSValidation' -count=1
 
 test-contract-phase2-auth:
 	PHASE2_CONTRACT_REQUIRED=true go test ./tests/contract -run '^TestPhase2AuthHTTPContract$$' -count=1 -v
