@@ -91,8 +91,8 @@ psql_file tests/sql/phase2-migration-assertions.sql
 echo "[7/11] Applying migration 000006"
 migrate -path migrations -database "$TEST_DATABASE_URL" up 1
 
-echo "[8/11] Running the complete schema contract"
-psql_file scripts/verify-schema.sql
+echo "[8/11] Running the migration 000001..000006 schema contract"
+psql_file scripts/verify-trash-gate2-schema.sql
 
 echo "[9/11] Proving 000006 data rollback/reapply reconciliation"
 psql_file tests/sql/trash-lifecycle-rollback-fixture.sql

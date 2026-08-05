@@ -95,12 +95,16 @@ TEST_DATABASE_URL="$TEST_DATABASE_URL" \
 TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
 go test -p 1 -race -count=1 ./...
 
-echo "[7/9] Reconciling the final database state"
-compose exec -T postgres psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$TEST_DB_NAME" \
-  -f /dev/stdin < scripts/reconcile-process5.sql
+echo "[7/9] Replaying the owned Process 5 reconciliation fixture"
+# Later gates retain append-only audit evidence after the shared test suite, so
+# that database is intentionally not a complete production snapshot. Re-run
+# the dedicated lifecycle case that owns its fixture and asserts quota/ledger,
+# orphan, expiry-release and duplicate-job reconciliation directly.
+GOCACHE="$GO_CACHE_DIR" \
+TEST_DATABASE_URL="$TEST_DATABASE_URL" \
+TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
+go test -race -count=1 ./internal/repository \
+  -run '^TestProcess5ReconcilesMixedContentUploadAndExpiry$'
 
 echo "[8/9] Running static analysis"
 GOCACHE="$GO_CACHE_DIR" go vet ./...
