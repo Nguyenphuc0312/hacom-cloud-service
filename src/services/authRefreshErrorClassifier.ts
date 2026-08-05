@@ -92,15 +92,14 @@ export const isNetworkError = (error: unknown): boolean => {
 };
 
 /**
- * True only when the refresh attempt was definitively rejected by the server
- * (401/403, or a definitive reasonCode) or there is no usable refresh token.
+ * True only when the refresh attempt carries a definitive server reason code
+ * or there is no usable refresh token. HTTP status alone is not enough because
+ * a proxy can map a transient upstream failure to 401/403.
  * Only definitive failures may clear the session / log out.
  */
 export const isDefiniteAuthRefreshFailure = (error: unknown): boolean => {
   if (axios.isAxiosError(error)) {
     if (!error.response) return false; // network error, not a server rejection
-    const status = error.response.status;
-    if (status === 401 || status === 403) return true;
     const reasonCode = extractRefreshReasonCode(error);
     return reasonCode !== null && DEFINITIVE_REASON_CODES.has(reasonCode);
   }
