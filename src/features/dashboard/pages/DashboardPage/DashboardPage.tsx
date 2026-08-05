@@ -50,14 +50,17 @@ export const DashboardPage = () => {
     incidents,
   } = useDashboardOverview(range);
 
-  const totalUsers = totalUsersQuery.data?.pagination.total ?? 0;
-  const activeUsers = activeUsersQuery.data?.pagination.total ?? 0;
-  const pendingUsers = pendingUsersQuery.data?.pagination.total ?? 0;
+  // An unavailable aggregate is not the same thing as an empty aggregate.
+  // Preserve null so the dashboard never presents a failed API as a real zero.
+  const totalUsers = totalUsersQuery.data?.pagination.total ?? null;
+  const activeUsers = activeUsersQuery.data?.pagination.total ?? null;
+  const pendingUsers = pendingUsersQuery.data?.pagination.total ?? null;
   const pendingAdminAccess = pendingAdminAccessQuery.data?.pagination.total ?? null;
   const overview = monitoringQuery.data;
   const serviceHealth = serviceHealthQuery.data;
   const servicesSummary = serviceHealth?.summary;
-  const activationRate = totalUsers > 0 ? activeUsers / totalUsers : 0;
+  const activationRate =
+    totalUsers !== null && activeUsers !== null && totalUsers > 0 ? activeUsers / totalUsers : null;
 
   const refetchDashboard = () => {
     void monitoringQuery.refetch();
@@ -175,8 +178,8 @@ export const DashboardPage = () => {
       id: 'active-users',
       label: 'Người dùng hoạt động',
       value: formatNumber(activeUsers),
-      meta: `${formatPercent(activationRate * 100, 0)} tổng tài khoản`,
-      tone: pendingUsers > 0 ? ('warning' as const) : ('success' as const),
+      meta: `${activationRate === null ? '-' : formatPercent(activationRate * 100, 0)} tổng tài khoản`,
+      tone: pendingUsers === null ? ('default' as const) : pendingUsers > 0 ? ('warning' as const) : ('success' as const),
       route: '/users',
       icon: 'check' as const,
     },
@@ -216,9 +219,9 @@ export const DashboardPage = () => {
     Boolean(overview) ||
     Boolean(serviceHealth) ||
     incidents.length > 0 ||
-    totalUsers > 0 ||
-    activeUsers > 0 ||
-    pendingUsers > 0 ||
+    totalUsers !== null ||
+    activeUsers !== null ||
+    pendingUsers !== null ||
     pendingAdminAccess !== null;
 
   // Count critical insights for alerts badge
@@ -479,7 +482,7 @@ export const DashboardPage = () => {
           <DashboardCard title="Hàng đợi xử lý">
             <div className={styles.opsList}>
               {[
-                ...(pendingUsers > 0
+                ...(pendingUsers !== null && pendingUsers > 0
                   ? [
                       {
                         id: 'pending-users',
@@ -516,7 +519,7 @@ export const DashboardPage = () => {
                   <StatusBadge status={item.status} />
                 </button>
               ))}
-              {pendingUsers === 0 && insights.length === 0 ? (
+              {pendingUsers !== null && pendingUsers === 0 && insights.length === 0 ? (
                 <EmptyState description="Không có mục nào cần xử lý." compact />
               ) : null}
             </div>
