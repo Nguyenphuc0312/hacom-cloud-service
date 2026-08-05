@@ -88,6 +88,34 @@ const mergeTrashItems = (
   });
 };
 
+const hydrateMediaAccess = async (
+  items: CloudItem[],
+  userId: string,
+  signal?: AbortSignal,
+): Promise<CloudItem[]> =>
+  Promise.all(
+    items.map(async (item) => {
+      if (
+        !(["image", "video", "audio", "file"] as CloudItem["type"][]).includes(
+          item.type,
+        ) || item.status !== "ready"
+      ) {
+        return item;
+      }
+      try {
+        const access = await cloudApi.getFileAccess(userId, item.id, signal);
+        return {
+          ...item,
+          accessUrl: access.url,
+          contentType: access.contentType,
+        };
+      } catch {
+        // Keep the timeline usable if a single preview URL cannot be minted.
+        return item;
+      }
+    }),
+  );
+
 export const useCloudWorkspace = (
   userId: string | undefined,
   searchQuery = "",
@@ -140,10 +168,15 @@ export const useCloudWorkspace = (
               service: "hacom-cloud-api",
             })),
           ]);
+        const hydratedItems = await hydrateMediaAccess(
+          page.items,
+          userId,
+          signal,
+        );
         if (!mountedRef.current || signal?.aborted) return;
         setState((current) => ({
           ...current,
-          items: page.items,
+          items: hydratedItems,
           trashItems: trashPage.items,
           quota,
           quotaRequest,
@@ -187,10 +220,11 @@ export const useCloudWorkspace = (
         cursor: state.nextCursor,
         q: searchQuery.trim() || undefined,
       });
+      const hydratedItems = await hydrateMediaAccess(page.items, userId);
       if (!mountedRef.current) return;
       setState((current) => ({
         ...current,
-        items: mergeItems(current.items, page.items),
+        items: mergeItems(current.items, hydratedItems),
         nextCursor: page.nextCursor,
         isLoadingMore: false,
       }));
@@ -520,13 +554,14 @@ export const useCloudWorkspace = (
         const page = await cloudApi.listItems(userId, {
           q: searchQuery.trim() || undefined,
         });
+        const hydratedItems = await hydrateMediaAccess(page.items, userId);
         if (cancelled || !mountedRef.current) return;
-        const stillProcessing = page.items.some(
+        const stillProcessing = hydratedItems.some(
           (item) => item.status === "processing",
         );
         setState((current) => ({
           ...current,
-          items: mergeItems(current.items, page.items),
+          items: mergeItems(current.items, hydratedItems),
           nextCursor:
             current.items.length > page.items.length
               ? current.nextCursor

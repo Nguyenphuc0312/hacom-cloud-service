@@ -21,15 +21,43 @@ const resolveMessageStatus = (item: CloudItem): Message["status"] => {
   }
 };
 
+const attachmentType = (item: CloudItem): FileType => {
+  switch (item.type) {
+    case "image":
+      return FileType.IMAGE;
+    case "video":
+      return FileType.VIDEO;
+    case "audio":
+      return FileType.AUDIO;
+    default:
+      return FileType.DOCUMENT;
+  }
+};
+
+const messageType = (item: CloudItem): MessageType => {
+  switch (item.type) {
+    case "image":
+      return MessageType.IMAGE;
+    case "video":
+      return MessageType.VIDEO;
+    case "audio":
+      return MessageType.AUDIO;
+    case "file":
+      return MessageType.FILE;
+    default:
+      return MessageType.TEXT;
+  }
+};
+
 const createAttachment = (item: CloudItem, fallbackName: string): Attachment => ({
   id: item.id,
   objectKey: `cloud:${item.id}`,
-  type: FileType.DOCUMENT,
+  type: attachmentType(item),
   fileName: item.title?.trim() || fallbackName,
   fileSize: item.sizeBytes,
-  // Phase 1 does not expose a download/thumbnail URL. Keep the native chat
-  // file card without triggering Chat's private attachment-preview endpoint.
-  mimeType: "application/octet-stream",
+  mimeType: item.contentType || "application/octet-stream",
+  url: item.accessUrl,
+  thumbnailUrl: item.type === "image" ? item.accessUrl : undefined,
 });
 
 export const cloudItemToMessage = (
@@ -66,7 +94,7 @@ export const cloudItemToMessage = (
     content,
     plainText: content,
     contentFormat: "plain_text",
-    type: isFile ? MessageType.FILE : MessageType.TEXT,
+    type: messageType(item),
     metadata:
       item.type === "link" && linkUrl
         ? {

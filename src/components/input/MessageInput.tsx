@@ -175,6 +175,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     // Multi-file upload queue
     uploadDrafts,
     onAddFiles,
+    onSendAudio,
     onRemoveDraft,
     onCancelUpload: onCancelQueueUpload,
     onRetryUpload: onRetryQueueUpload,
@@ -290,6 +291,27 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         toast.warning(t("chat:audio.tooShort", { defaultValue: "Recording too short" }));
         return;
       }
+      const originalFileName = `voice-recording.${
+        clip.mimeType.includes("webm")
+          ? "webm"
+          : clip.mimeType.includes("mp4")
+            ? "m4a"
+            : "ogg"
+      }`;
+      if (onSendAudio) {
+        audioBeginUpload();
+        await onSendAudio(
+          new File([clip.blob], originalFileName, {
+            type: clip.mimeType,
+            lastModified: Date.now(),
+          }),
+        );
+        audioBeginFinalizingUpload();
+        audioBeginSending();
+        audioMarkSent();
+        toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
+        return;
+      }
       const clientMessageId = (typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`) || `voice-${Date.now()}`;
@@ -300,13 +322,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         clientMessageId,
         durationMs: clip.durationMs,
       });
-      const originalFileName = `voice-recording.${
-        clip.mimeType.includes("webm")
-          ? "webm"
-          : clip.mimeType.includes("mp4")
-            ? "m4a"
-            : "ogg"
-      }`;
       audioBeginFinalizingUpload();
       audioBeginSending();
       await sendVoiceMessage({
@@ -349,7 +364,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioSendLockedRef.current = false;
     }
-  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, sendVoiceMessage, t]);
+  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();

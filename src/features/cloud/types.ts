@@ -22,6 +22,18 @@ export interface CloudItem {
   purgeAfter?: string;
   createdAt: string;
   updatedAt: string;
+  /** Short-lived, owner-scoped URL resolved client-side for media preview. */
+  accessUrl?: string;
+  contentType?: string;
+}
+
+export interface CloudFileAccess {
+  itemId: string;
+  url: string;
+  expiresAt: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
 }
 
 export interface CloudPage {

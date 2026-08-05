@@ -47,6 +47,48 @@ describe("cloud message adapter", () => {
     expect(message.senderId).toBe(currentUser.id);
   });
 
+  it("maps ready Cloud images to native inline image messages", () => {
+    const message = cloudItemToMessage(
+      createItem({
+        type: "image",
+        title: "photo.png",
+        accessUrl: "/cloud-object/bucket/photo.png?signed=1",
+        contentType: "image/png",
+      }),
+      currentUser,
+      { link: "Liên kết", file: "Tệp" },
+    );
+
+    expect(message.type).toBe(MessageType.IMAGE);
+    expect(message.attachments?.[0]).toMatchObject({
+      type: "image",
+      fileName: "photo.png",
+      mimeType: "image/png",
+      url: "/cloud-object/bucket/photo.png?signed=1",
+      thumbnailUrl: "/cloud-object/bucket/photo.png?signed=1",
+    });
+  });
+
+  it("maps Cloud recordings to native voice/audio bubbles instead of files", () => {
+    const message = cloudItemToMessage(
+      createItem({
+        type: "audio",
+        title: "voice-recording.webm",
+        accessUrl: "http://localhost:5100/cloud-object/voice.webm?signed=1",
+        contentType: "audio/webm",
+      }),
+      currentUser,
+      { link: "Liên kết", file: "Tệp" },
+    );
+
+    expect(message.type).toBe(MessageType.AUDIO);
+    expect(message.attachments?.[0]).toMatchObject({
+      type: "audio",
+      mimeType: "audio/webm",
+      url: "http://localhost:5100/cloud-object/voice.webm?signed=1",
+    });
+  });
+
   it("orders Cloud items chronologically for the native chat timeline", () => {
     const newer = createItem({
       id: "33333333-3333-4333-8333-333333333333",

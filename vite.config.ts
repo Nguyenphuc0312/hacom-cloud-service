@@ -320,6 +320,29 @@ export default defineConfig(({ mode }) => {
           ...httpProxy(cloudTarget),
           rewrite: (requestPath: string) => requestPath.replace(/^\/cloud-api/, ""),
         },
+        // The Cloud API runs in Docker and signs MinIO URLs with
+        // host.docker.internal. That hostname is container-facing and is not
+        // reachable from every Windows browser. Keep the signed Host header,
+        // but carry the object PUT through Vite to the host's MinIO port.
+        "/cloud-object": {
+          target: "http://localhost:9000",
+          changeOrigin: false,
+          secure: false,
+          rewrite: (requestPath: string) => requestPath.replace(/^\/cloud-object/, ""),
+          configure: (proxy: AnyProxy) => {
+            proxy.on(
+              "proxyReq",
+              (proxyReq: {
+                removeHeader: (name: string) => void;
+                setHeader: (name: string, value: string) => void;
+              }) => {
+                proxyReq.removeHeader("origin");
+                proxyReq.removeHeader("referer");
+                proxyReq.setHeader("host", "host.docker.internal:9000");
+              },
+            );
+          },
+        },
         "/ws":          wsProxy(wsTarget),
         // HR API proxy — rewrites /hr-api/* → /api/* on the HR service host
         "/hr-api": {

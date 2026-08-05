@@ -7,20 +7,18 @@ import {
   useState,
 } from "react";
 import {
-  CirclePlus,
-  Files,
   LoaderCircle,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
+import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
-import { Button, InlineNotice, toast } from "../../../components/ui";
+import { InlineNotice, toast } from "../../../components/ui";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useResponsive } from "../../../responsive/responsive";
 import { AppShell, ModuleSidebar } from "../../../shared/layout";
@@ -41,9 +39,8 @@ import {
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
-import { CloudQuotaSummary } from "../components/CloudQuotaSummary";
-import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
+import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
 import type { CloudItem, CloudViewMode } from "../types";
 import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
@@ -52,6 +49,7 @@ import {
   getCloudItemPreview,
   getCloudItemTitle,
 } from "../utils/cloudFormat";
+import { resolveCloudUserId } from "../utils/cloudIdentity";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
@@ -116,8 +114,9 @@ export default function CloudPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
-  const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
-  const workspace = useCloudWorkspace(authUser?.id, deferredSearch);
+  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
+  const cloudUserId = resolveCloudUserId(authUser?.id);
+  const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
   const fetchConversations = useChatStore((state) => state.fetchConversations);
   const hasFetchedConversationsOnce = useChatStore(
     (state) => state.hasFetchedConversationsOnce,
@@ -143,14 +142,14 @@ export default function CloudPage() {
     }
 
     return {
-      id: "auth-pending",
+      id: cloudUserId ?? "auth-pending",
       username: "user",
       displayName: "Ng??i d?ng",
       avatar: "",
       status: UserStatus.ONLINE,
       isBot: false,
     };
-  }, [authUser]);
+  }, [authUser, cloudUserId]);
 
   useLayoutEffect(() => {
     useEnrichedProfileStore
@@ -173,7 +172,12 @@ export default function CloudPage() {
     isLoadingConversations,
   ]);
 
-  const layoutState = chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
+  const layoutState =
+    chatLayoutBreakpoint === "compact"
+      ? "mobile"
+      : isInfoPanelOpen && chatLayoutBreakpoint === "wide"
+        ? "with-panel"
+        : "normal";
   const layoutProfile = resolveChatLayoutProfile(width, layoutState);
 
   const conversation = useMemo<Conversation>(
@@ -289,6 +293,13 @@ export default function CloudPage() {
     [t, workspace],
   );
 
+  const handleSendAudio = useCallback(
+    async (file: File) => {
+      await workspace.uploadFile(file);
+    },
+    [workspace],
+  );
+
   const handleSelectConversation = useCallback(
     (conversationId: string) => {
       navigate(`/chat/${conversationId}`);
@@ -396,43 +407,10 @@ export default function CloudPage() {
             }
             avatarOverride={<CloudConversationAvatar size="sm" />}
             onBack={() => navigate("/chat")}
-            onInfoClick={showPhaseNotice}
+            onInfoClick={() => setIsInfoPanelOpen((isOpen) => !isOpen)}
             onSearchClick={() => setIsSearchOpen((value) => !value)}
             onPinnedClick={showPhaseNotice}
           />
-
-          <div className="cloud-mode-bar">
-            <ConversationLane className="flex items-center gap-2">
-              <button
-                type="button"
-                className={viewMode === "active" ? "is-active" : undefined}
-                onClick={() => setViewMode("active")}
-              >
-                <Files className="h-4 w-4" aria-hidden />
-                {t("navigation.all")}
-                <span>{workspace.items.length}</span>
-              </button>
-              <button
-                type="button"
-                className={viewMode === "trash" ? "is-active" : undefined}
-                onClick={() => setViewMode("trash")}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden />
-                {t("navigation.trash")}
-                <span>{workspace.trashItems.length}</span>
-              </button>
-              <CloudQuotaSummary quota={workspace.quota} />
-              <Button
-                variant="secondary"
-                size="sm"
-                className="ml-auto"
-                onClick={() => setIsQuotaRequestOpen(true)}
-              >
-                <CirclePlus className="h-4 w-4" aria-hidden />
-                {t("quotaRequest.action")}
-              </Button>
-            </ConversationLane>
-          </div>
 
           {isSearchOpen ? (
             <div className="border-b border-border/60 bg-surface py-2">
@@ -563,6 +541,7 @@ export default function CloudPage() {
                 composerMode="online"
                 conversationName={t("workspace.title")}
                 onAddFiles={handleAddFiles}
+                onSendAudio={handleSendAudio}
               />
             ) : (
               <div className="cloud-trash-retention-note">
@@ -573,6 +552,42 @@ export default function CloudPage() {
             )}
           </div>
         </div>
+        <div
+          className={clsx(
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
+            isInfoPanelOpen
+              ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
+              : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
+          )}
+          aria-hidden={!isInfoPanelOpen}
+        >
+          <div
+            className={clsx(
+              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+              isInfoPanelOpen
+                ? "translate-x-0 opacity-100"
+                : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
+            )}
+            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          >
+            <CloudConversationInfoPanel
+              items={workspace.items}
+              trashItems={workspace.trashItems}
+              quota={workspace.quota}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onClose={() => setIsInfoPanelOpen(false)}
+            />
+          </div>
+        </div>
+        {isInfoPanelOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-30 bg-text-primary/50 xl:hidden"
+            onClick={() => setIsInfoPanelOpen(false)}
+            aria-label={t("common.close")}
+          />
+        ) : null}
       </section>
       <CloudDeleteDialog
         key={`${deleteTarget?.id ?? "closed"}-${viewMode}`}
@@ -582,17 +597,6 @@ export default function CloudPage() {
         onClose={() => setDeleteTarget(null)}
         onTrash={handleTrash}
         onPermanentDelete={handlePermanentDelete}
-      />
-      <CloudQuotaRequestDialog
-        isOpen={isQuotaRequestOpen}
-        quota={workspace.quota}
-        currentRequest={workspace.quotaRequest}
-        isLoading={workspace.isRequestingQuota}
-        onClose={() => setIsQuotaRequestOpen(false)}
-        onSubmit={async (requestedQuotaBytes, reason) => {
-          await workspace.requestQuota(requestedQuotaBytes, reason);
-          toast.success(t("quotaRequest.submitted"));
-        }}
       />
     </AppShell>
   );

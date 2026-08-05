@@ -16,16 +16,24 @@ interface CloudConversationEntryProps {
 }
 
 export const CloudConversationAvatar: React.FC<{
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }> = ({ size = "md" }) => (
   <span
     className={clsx(
       "inline-flex shrink-0 items-center justify-center rounded-full border border-[#1976D2]/20 bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE] text-[#1565C0] shadow-sm",
-      size === "sm" ? "h-[34px] w-[34px]" : "h-10 w-10",
+      size === "sm"
+        ? "h-[34px] w-[34px]"
+        : size === "lg"
+          ? "h-20 w-20"
+          : "h-10 w-10",
     )}
     aria-hidden
   >
-    <Cloud className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
+    <Cloud
+      className={
+        size === "sm" ? "h-4 w-4" : size === "lg" ? "h-9 w-9" : "h-5 w-5"
+      }
+    />
   </span>
 );
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAccessToken } from "../../../services/tokenService";
 import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
-import { cloudApi, CloudApiError } from "./cloudApi";
+import { cloudApi, CloudApiError, resolveCloudObjectUrl } from "./cloudApi";
 
 vi.mock("../../../services/tokenService", () => ({
   getAccessToken: vi.fn(),
@@ -36,6 +36,19 @@ describe("cloudApi", () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+  });
+
+  it("routes Docker-facing MinIO URLs through the local object proxy", () => {
+    expect(
+      resolveCloudObjectUrl(
+        "http://host.docker.internal:9000/bucket/image.png?X-Amz-Signature=abc",
+      ),
+    ).toBe(
+      `${window.location.origin}/cloud-object/bucket/image.png?X-Amz-Signature=abc`,
+    );
+    expect(
+      resolveCloudObjectUrl("https://objects.example.com/bucket/image.png"),
+    ).toBe("https://objects.example.com/bucket/image.png");
   });
 
   it("sends the local user contract and exact text payload", async () => {

@@ -4,6 +4,7 @@ import { getAccessToken } from "../../../services/tokenService";
 import type {
   CloudHealth,
   CloudDeleteResult,
+  CloudFileAccess,
   CloudItem,
   CloudPage,
   CloudQuota,
@@ -49,6 +50,23 @@ const joinPath = (base: string, path: string): string =>
 const isCloudDemoMode = (): boolean => {
   const env = import.meta.env as Record<string, string | boolean | undefined>;
   return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
+};
+
+export const resolveCloudObjectUrl = (presignedUrl: string): string => {
+  if (!import.meta.env.DEV) return presignedUrl;
+
+  try {
+    const parsed = new URL(presignedUrl);
+    if (parsed.hostname.toLowerCase() !== "host.docker.internal") {
+      return presignedUrl;
+    }
+    const localPath = `/cloud-object${parsed.pathname}${parsed.search}`;
+    return typeof window === "undefined"
+      ? localPath
+      : new URL(localPath, window.location.origin).toString();
+  } catch {
+    return presignedUrl;
+  }
 };
 
 const parseJson = async <T>(response: Response): Promise<T> => {
@@ -182,6 +200,18 @@ export const cloudApi = {
     });
   },
 
+  async getFileAccess(
+    userId: string,
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<CloudFileAccess> {
+    const access = await cloudRequest<CloudFileAccess>(
+      `items/${encodeURIComponent(itemId)}/access`,
+      { userId, signal },
+    );
+    return { ...access, url: resolveCloudObjectUrl(access.url) };
+  },
+
   getQuota(userId: string, signal?: AbortSignal): Promise<CloudQuota> {
     return cloudRequest<CloudQuota>("quota", { userId, signal });
   },
@@ -292,7 +322,7 @@ export const cloudApi = {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();
-      request.open(session.method, session.uploadUrl);
+      request.open(session.method, resolveCloudObjectUrl(session.uploadUrl));
       Object.entries(session.requiredHeaders).forEach(([name, value]) => {
         request.setRequestHeader(name, value);
       });
