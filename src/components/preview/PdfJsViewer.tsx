@@ -2,6 +2,10 @@
  * @fileoverview PDF.js viewer component for rendering PDFs in the browser.
  * Fetches PDF via XHR to bypass cross-origin iframe restrictions.
  * Renders pages on canvas for full control over the viewing experience.
+ *
+ * Hiệu năng: mỗi trang là 1 <PdfPage/> tự vẽ khi lọt vào viewport
+ * (IntersectionObserver) và tự bỏ canvas khi cuộn ra xa, nên file 50+ trang
+ * chỉ giữ vài canvas trong bộ nhớ thay vì dựng hết ngay từ đầu.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -72,11 +76,9 @@ const PdfPage: React.FC<{
   scale: number;
   doc: PDFDocumentWrapper;
   onVisible: (pageNumber: number) => void;
-}> = ({ pageNumber, totalPages, scale, doc, onVisible }) => {
+}> = React.memo(({ pageNumber, totalPages, scale, doc, onVisible }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [isNear, setIsNear] = useState(false);
-  // Giữ tỉ lệ trang sau lần đo đầu để placeholder không nhảy layout khi cuộn lại.
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
 
   // Theo dõi vị trí: gần viewport → cho phép vẽ; đúng giữa màn hình → báo lên header.
   useEffect(() => {
@@ -129,7 +131,10 @@ const PdfPage: React.FC<{
         await task.promise;
         if (cancelled) return;
 
-        setSize({ width: canvas.width, height: canvas.height });
+        // Đặt kích thước qua ref, KHÔNG qua state: state → re-render → React
+        // ghi đè node này và xoá mất canvas vừa gắn (trang trắng tinh).
+        host.style.width = `${canvas.width}px`;
+        host.style.height = `${canvas.height}px`;
         host.replaceChildren(canvas);
       } catch (err) {
         // Huỷ render khi cuộn nhanh là chuyện bình thường, không phải lỗi.
@@ -143,7 +148,8 @@ const PdfPage: React.FC<{
     };
   }, [isNear, pageNumber, scale, doc]);
 
-  // Rời xa viewport thì bỏ canvas để giải phóng bộ nhớ, giữ lại chỗ trống đúng kích thước.
+  // Rời xa viewport thì bỏ canvas để giải phóng bộ nhớ. Giữ nguyên width/height
+  // đã đặt ở trên nên chỗ trống vẫn đúng cỡ, cuộn lại không nhảy layout.
   useEffect(() => {
     if (isNear) return;
     hostRef.current?.replaceChildren();
@@ -151,9 +157,11 @@ const PdfPage: React.FC<{
 
   return (
     <div data-page={pageNumber} className="relative bg-white shadow-lg">
+      {/* Nội dung div này do effect ở trên tự quản qua ref — React không render
+          con nào vào đây, nếu không sẽ xoá mất canvas. */}
       <div
         ref={hostRef}
-        style={size ?? { width: 600, height: 800 }}
+        style={{ width: 600, height: 800 }}
         className="flex items-center justify-center"
       />
       <div className="absolute bottom-2 right-2 rounded bg-black/50 px-2 py-0.5 text-xs text-white">
@@ -161,7 +169,8 @@ const PdfPage: React.FC<{
       </div>
     </div>
   );
-};
+});
+PdfPage.displayName = "PdfPage";
 
 export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   url,
@@ -197,8 +206,18 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
         const pdfjs = await loadPdfJs();
         if (cancelled) return;
 
-        // Streaming: pdf.js tải dần theo range request, không chờ hết 32MB mới hiện trang 1.
-        const loadingTask = pdfjs.getDocument({ url });
+        // Phải tự fetch rồi đưa ArrayBuffer cho pdf.js. KHÔNG đưa thẳng { url }:
+        // pdf.js tự request bằng XHR không kèm credentials nên file có xác thực
+        // sẽ tải hụt phần thân → trang trắng tinh dù vẫn đọc được số trang.
+        const response = await fetch(url, { signal: abortControllerRef.current.signal });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        if (cancelled) return;
+
+        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
         if (cancelled) return;
 
