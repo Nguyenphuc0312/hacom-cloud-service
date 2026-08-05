@@ -47,6 +47,26 @@ const PRELOAD_MARGIN = "100% 0px";
 // Kích thước mỗi lần pdf.js xin thêm dữ liệu khi tải dần (mặc định của pdf.js).
 const RANGE_CHUNK_SIZE = 65536;
 
+/**
+ * File PDF là nội dung người dùng gửi lên → coi như KHÔNG tin cậy.
+ *
+ * Hai tuỳ chọn dưới đúng bằng mặc định hiện tại của pdf.js; khai báo tường minh
+ * để nâng version sau này không âm thầm nới lỏng chúng.
+ *
+ * KHÔNG có `enableScripting` ở đây: tuỳ chọn đó thuộc annotation layer, mà
+ * viewer này chỉ vẽ canvas chứ không dựng annotation layer — nghĩa là
+ * JavaScript nhúng trong PDF vốn đã không có đường chạy.
+ *
+ * Lớp phòng thủ chính vẫn là CSP ở nginx/security-headers.conf:
+ * connect-src khoá đúng 3 backend, object-src 'none'.
+ */
+const PDF_SECURITY_OPTIONS = {
+  // XFA form = một engine render riêng, bề mặt tấn công rộng và ta không dùng.
+  enableXfa: false,
+  // Chỉ dùng font nhúng trong file, không để file chỉ định font hệ thống.
+  useSystemFonts: false,
+} as const;
+
 // PDF.js worker configuration - loaded dynamically.
 // Use Vite's `?worker` import so the worker is bundled and instantiated by Vite
 // (via workerPort) instead of being fetched at runtime as a dynamically-imported
@@ -261,8 +281,12 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               disableAutoFetch: true,
               disableStream: false,
               rangeChunkSize: RANGE_CHUNK_SIZE,
+              ...PDF_SECURITY_OPTIONS,
             })
-          : pdfjs.getDocument({ data: await fetchWholeFile(url, signal) });
+          : pdfjs.getDocument({
+              data: await fetchWholeFile(url, signal),
+              ...PDF_SECURITY_OPTIONS,
+            });
 
         const pdf = await loadingTask.promise;
         if (cancelled) return;

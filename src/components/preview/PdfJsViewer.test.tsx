@@ -137,6 +137,21 @@ describe("PdfJsViewer", () => {
     expect(getDocumentArgs[0]).toHaveProperty("data");
   });
 
+  it("luôn tắt XFA và font hệ thống — PDF là nội dung không tin cậy", async () => {
+    getDocumentArgs.length = 0;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new ArrayBuffer(8), { status: 200 }) as Response,
+    );
+
+    render(<PdfJsViewer url="https://example.test/x.pdf" fileName="x.pdf" />);
+    await screen.findByText(/3 pages/);
+
+    expect(getDocumentArgs[0]).toMatchObject({
+      enableXfa: false,
+      useSystemFonts: false,
+    });
+  });
+
   it("vẽ canvas cho các trang lọt vào viewport", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(new ArrayBuffer(8), { status: 200 }) as Response,
