@@ -414,8 +414,9 @@ jobs:
       - name: Verify pushed manifest
         run: |
           set -Eeuo pipefail
-          docker buildx imagetools inspect "${IMAGE_REF}"
-          DIGEST="$(docker buildx imagetools inspect "${IMAGE_REF}" | awk '/Digest:/ {print $2; exit}')"
+          manifest_output="$(docker buildx imagetools inspect "${IMAGE_REF}")"
+          printf '%s\n' "${manifest_output}"
+          DIGEST="$(printf '%s\n' "${manifest_output}" | awk '/^Digest:/ {print $2; exit}')"
           test -n "${DIGEST}"
           echo "IMAGE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
