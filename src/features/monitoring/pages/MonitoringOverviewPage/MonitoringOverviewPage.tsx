@@ -1,8 +1,10 @@
-import { Button } from 'antd';
-import { useState } from 'react';
+import { Button, Drawer, Input, Segmented, Select } from 'antd';
+import { lazy, Suspense, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error/error';
 import type { TimeRange } from '@/api/types/metrics/metrics';
+import type { MonitoringServiceItem } from '@/api/types/monitoring/monitoring';
 import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
@@ -13,7 +15,6 @@ import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
 import { formatDateTime } from '@/utils/date/date';
 import './MonitoringOverviewPage.css';
 import {
-  formatBytes,
   formatMs,
   formatNumber,
   formatPercent,
@@ -22,14 +23,24 @@ import {
 import { MonitoringAvailabilityBanner } from '../../components/MonitoringAvailabilityBanner/MonitoringAvailabilityBanner';
 import { useMonitoringOverview } from '../../hooks/useMonitoringOverview/useMonitoringOverview';
 
+const MonitoringTrendChart = lazy(async () => {
+  const module = await import('../../components/MonitoringTrendChart/MonitoringTrendChart');
+  return { default: module.MonitoringTrendChart };
+});
+
 const formatOptional = (
   value: number | null | undefined,
   formatter: (input: number) => string,
-  fallback = '-',
+  fallback = 'Chưa có dữ liệu',
 ) => (typeof value === 'number' ? formatter(value) : fallback);
 
 export const MonitoringOverviewPage = () => {
   const [range, setRange] = useState<TimeRange>('1h');
+  const [trendMetric, setTrendMetric] = useState<'connections' | 'latency' | 'reliability'>('connections');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceStatus, setServiceStatus] = useState<'all' | MonitoringServiceItem['status']>('all');
+  const [selectedService, setSelectedService] = useState<MonitoringServiceItem | null>(null);
+  const navigate = useNavigate();
   const overviewQuery = useMonitoringOverview(range);
 
   // No data yet - show loading
@@ -70,16 +81,31 @@ export const MonitoringOverviewPage = () => {
     ].slice(0, 6);
 
     const healthyServiceRate = services.total > 0 ? (services.healthy / services.total) * 100 : null;
+    const overallStatus = services.down > 0 ? 'down' : services.degraded > 0 ? 'warning' : 'healthy';
+    const selectedSeries = trendMetric === 'connections'
+      ? overview.realtimeHealth.connectionsTrend
+      : trendMetric === 'latency'
+        ? overview.realtimeHealth.latencyTrend
+        : overview.realtimeHealth.reliabilityTrend;
+    const bottlenecks = [
+      { label: 'API latency', value: overview.dependencySnapshot.api.latencyMs, format: formatMs, status: overview.dependencySnapshot.api.status },
+      { label: 'Redis blocked clients', value: overview.dependencySnapshot.redis.blockedClients, format: formatNumber, status: overview.dependencySnapshot.redis.status },
+      { label: 'WebSocket → API p95', value: overview.realtimeHealth.wsToApiP95Ms, format: formatMs, status: overview.realtimeHealth.wsToApiP95Ms === null ? 'unknown' : overview.realtimeHealth.wsToApiP95Ms > 900 ? 'down' : 'up' },
+      { label: 'Projection missing', value: overview.messageCorrectness.projectionMissingCurrent, format: formatNumber, status: (overview.messageCorrectness.projectionMissingCurrent ?? 0) > 0 ? 'degraded' : 'up' },
+      { label: 'Reconcile required', value: overview.messageCorrectness.reconcileRequiredCurrent, format: formatNumber, status: (overview.messageCorrectness.reconcileRequiredCurrent ?? 0) > 0 ? 'degraded' : 'up' },
+    ];
+    const visibleServices = overview.dependencySnapshot.services
+      .filter((service) => serviceStatus === 'all' || service.status === serviceStatus)
+      .filter((service) => service.name.toLocaleLowerCase().includes(serviceSearch.trim().toLocaleLowerCase()))
+      .sort((left, right) => left.name.localeCompare(right.name));
 
     return (
       <PageShell
         title="Giám sát vận hành"
-        description="Giữ trọng tâm vào sức khỏe runtime, phụ thuộc và các tín hiệu buộc operator phải quyết định."
+        description="Sức khỏe runtime, điểm nghẽn và tác động cần operator xử lý ngay."
         headerExtra={
           <div className="ds-page-toolbar-stack">
-            <div className="ds-page-toolbar-group">
-              <TimeRangePicker value={range} onChange={setRange} />
-            </div>
+            <div className="ds-page-toolbar-group"><TimeRangePicker value={range} onChange={setRange} /></div>
             <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
               <Button
                 onClick={() => {
@@ -97,6 +123,11 @@ export const MonitoringOverviewPage = () => {
           </div>
         }
       >
+        <div className="ds-operations-page-status">
+          <StatusBadge status={overallStatus} />
+          <span>{services.healthy} healthy · {services.degraded} degraded · {services.down} down</span>
+          <span>Freshness: <StatusBadge status={overview.freshness} /></span>
+        </div>
         <MonitoringAvailabilityBanner
           freshness={overview.freshness}
           warnings={overview.warnings}
@@ -104,21 +135,41 @@ export const MonitoringOverviewPage = () => {
           lokiStatus={overview.sources.loki?.status}
         />
         <div className="ds-monitoring-stack">
-          <div className="ds-monitoring-kpi-grid">
+          <div className="ds-monitoring-kpi-grid ds-monitoring-kpi-grid--compact">
             <MetricCard
-              label="Người dùng trực tuyến"
+              label="Overall health"
+              value={`${services.healthy} healthy`}
+              changeLabel={`${services.degraded} degraded · ${services.down} down`}
+              trendCaption="service health"
+              tone={services.down > 0 ? 'danger' : services.degraded > 0 ? 'warning' : 'success'}
+              onClick={() => navigate('/services/health')}
+              compact
+            />
+            <MetricCard
+              label="Người dùng online"
               value={formatOptional(overview.systemOverview.onlineUsers, formatNumber)}
               changeLabel={formatOptional(overview.systemOverview.activeConnections, formatNumber)}
               trendCaption="kết nối đang mở"
               tone="default"
+              compact
             />
             <MetricCard
-              label="Sender ACK p95"
-              value={formatOptional(overview.systemOverview.senderAckP95Ms, formatMs)}
+              label="WebSocket connections"
+              value={formatOptional(overview.systemOverview.activeConnections, formatNumber)}
+              changeLabel={formatOptional(overview.realtimeHealth.resyncsPerMinute, (value) => formatRate(value, '/min'))}
+              trendCaption="resync mỗi phút"
+              tone={
+                (overview.realtimeHealth.resyncsPerMinute ?? 0) > 0 ? 'warning' : 'success'
+              }
+              compact
+            />
+            <MetricCard
+              label="Traffic chat"
+              value={formatOptional(overview.systemOverview.messagesPerSecond, (value) => formatRate(value, '/s'))}
               changeLabel={formatOptional(overview.systemOverview.messagesPerSecond, (value) =>
                 formatRate(value, '/s'),
               )}
-              trendCaption="throughput hiện tại"
+              trendCaption="tin nhắn / giây"
               tone={
                 (overview.systemOverview.senderAckP95Ms ?? 0) > 900
                   ? 'danger'
@@ -126,10 +177,11 @@ export const MonitoringOverviewPage = () => {
                     ? 'warning'
                     : 'success'
               }
+              compact
             />
             <MetricCard
-              label="Lỗi gửi tin"
-              value={formatOptional(overview.realtimeHealth.deliveryFailuresPerMinute, (value) =>
+              label="Lỗi một phần"
+              value={formatOptional(overview.systemOverview.partialFailuresPerMinute, (value) =>
                 formatRate(value, '/min'),
               )}
               changeLabel={formatOptional(overview.realtimeHealth.resyncsPerMinute, (value) =>
@@ -137,117 +189,61 @@ export const MonitoringOverviewPage = () => {
               )}
               trendCaption="resync mỗi phút"
               tone={
-                (overview.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success'
+                (overview.systemOverview.partialFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success'
               }
+              compact
             />
             <MetricCard
-              label="Dịch vụ ổn định"
-              value={`${services.healthy}/${services.total}`}
+              label="P95 API latency"
+              value={formatOptional(overview.dependencySnapshot.api.latencyMs, formatMs)}
               changeLabel={
-                healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate, 0)
+                overview.dependencySnapshot.api.summary || 'Chưa có dữ liệu canonical'
               }
-              trendCaption="tỷ lệ dịch vụ khỏe"
-              tone={services.down > 0 ? 'danger' : services.degraded > 0 ? 'warning' : 'success'}
+              trendCaption={healthyServiceRate === null ? 'service health chưa có dữ liệu' : `${formatPercent(healthyServiceRate, 0)} healthy`}
+              tone={overview.dependencySnapshot.api.status === 'down' ? 'danger' : overview.dependencySnapshot.api.status === 'degraded' ? 'warning' : 'success'}
+              compact
+            />
+            <MetricCard
+              label="Queue / consumer lag"
+              value="Chưa có dữ liệu"
+              changeLabel="Backend chưa có contract lag canonical"
+              trendCaption="không suy diễn từ metric khác"
+              tone="default"
+              compact
+            />
+            <MetricCard
+              label="Incident đang mở"
+              value={topSignals.length > 0 ? formatNumber(topSignals.length) : 'Không có'}
+              changeLabel={topSignals.length > 0 ? 'Cần điều tra' : 'Không có cảnh báo mở'}
+              trendCaption="signals từ nguồn canonical"
+              tone={topSignals.some((signal) => signal.level === 'error') ? 'danger' : topSignals.length ? 'warning' : 'success'}
+              onClick={() => navigate('/logs')}
+              compact
             />
           </div>
 
           <div className="ds-ops-grid ds-ops-grid--two-column">
             <SurfaceCard
-              eyebrow="Runtime"
-              title="Tín hiệu cần theo dõi"
-              description="Chỉ giữ những số liệu trực tiếp ảnh hưởng quyết định vận hành."
+              eyebrow="Traffic và hiệu năng"
+              title="Xu hướng runtime"
+              description="Chuyển metric để so sánh trong cùng time window; dữ liệu không có không được suy diễn."
               status={<StatusBadge status={overview.freshness} />}
               className="ds-ops-panel"
             >
-              <div className="ds-detail-list">
-                <div className="ds-detail-list-item">
-                  <span>WebSocket tới API p95</span>
-                  <strong>{formatOptional(overview.realtimeHealth.wsToApiP95Ms, formatMs)}</strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Lỗi một phần</span>
-                  <strong>
-                    {formatOptional(overview.systemOverview.partialFailuresPerMinute, (value) =>
-                      formatRate(value, '/min'),
-                    )}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Khôi phục yêu cầu</span>
-                  <strong>
-                    {formatOptional(overview.messageCorrectness.reconcileRequiredCurrent, formatNumber)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Thiếu projection</span>
-                  <strong>
-                    {formatOptional(overview.messageCorrectness.projectionMissingCurrent, formatNumber)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Bản ghi mồ côi</span>
-                  <strong>
-                    {formatOptional(overview.messageCorrectness.orphanMongoCurrent, formatNumber)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Rủi ro tải hiện tại</span>
-                  <strong>
-                    <StatusBadge status={overview.capacityBaseline.currentRiskState} />
-                  </strong>
-                </div>
-              </div>
+              <Segmented value={trendMetric} onChange={(value) => setTrendMetric(value as typeof trendMetric)} options={[{ label: 'Connections', value: 'connections' }, { label: 'Latency', value: 'latency' }, { label: 'Reliability', value: 'reliability' }]} />
+              <Suspense fallback={<QueryStateView kind="loading" title="Đang tải biểu đồ xu hướng" />}>
+                <MonitoringTrendChart series={selectedSeries} availability={overview.dataQuality.realtimeHealth.status} formatter={trendMetric === 'latency' ? (value) => formatMs(value ?? 0) : (value) => formatNumber(value ?? 0)} />
+              </Suspense>
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Phụ thuộc"
-              title="API, Redis và hạ tầng"
-              description="Giữ đủ ngữ cảnh để xác định nghẽn chính mà không biến page thành analytics dashboard."
+              eyebrow="Sự cố cần xử lý"
+              title="Incident và tín hiệu ưu tiên"
+              description="System health và monitoring gap được hiển thị riêng; một datasource lỗi không đồng nghĩa system down."
               status={<StatusBadge status={overview.dependencySnapshot.redis.status} />}
               className="ds-ops-panel"
             >
-              <div className="ds-detail-list">
-                <div className="ds-detail-list-item">
-                  <span>API latency</span>
-                  <strong>{formatOptional(overview.dependencySnapshot.api.latencyMs, formatMs)}</strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Redis ops/s</span>
-                  <strong>
-                    {formatOptional(overview.dependencySnapshot.redis.opsPerSecond, formatNumber)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Redis blocked clients</span>
-                  <strong>
-                    {formatOptional(overview.dependencySnapshot.redis.blockedClients, formatNumber)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Bộ nhớ Redis</span>
-                  <strong>
-                    {formatOptional(overview.dependencySnapshot.redis.memoryUsedBytes, formatBytes)}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>CPU hạ tầng</span>
-                  <strong>
-                    {formatOptional(
-                      overview.dependencySnapshot.infrastructure.aggregateCpuPercent,
-                      (value) => formatPercent(value, 0),
-                    )}
-                  </strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>Bộ nhớ hạ tầng</span>
-                  <strong>
-                    {formatOptional(
-                      overview.dependencySnapshot.infrastructure.aggregateMemoryPercent,
-                      (value) => formatPercent(value, 0),
-                    )}
-                  </strong>
-                </div>
-              </div>
+              {topSignals.length > 0 ? <div className="ds-monitoring-signal-list">{topSignals.map((signal) => <button type="button" key={signal.key} className="ds-ops-list-row ds-ops-list-row--action" onClick={() => navigate('/logs')}><div><strong>{signal.title}</strong><p>{signal.meta}</p></div><StatusBadge status={signal.level} /></button>)}</div> : <QueryStateView kind="empty" description="Không có sự cố đang mở. Monitoring source có thể vẫn có gap riêng." />}
               <div className="ds-monitoring-inline-meta">
                 <span className="ds-shell-chip ds-shell-chip--ghost">
                   {problematicServices.length > 0
@@ -264,31 +260,41 @@ export const MonitoringOverviewPage = () => {
             </SurfaceCard>
           </div>
 
-          <SurfaceCard
-            eyebrow="Ưu tiên xử lý"
-            title="Cảnh báo và lỗi nổi bật"
-            description="Danh sách này thay cho nhiều block rời rạc. Nếu một tín hiệu không dẫn tới hành động, nó không ở đây."
-            className="ds-ops-panel"
-          >
-            {topSignals.length > 0 ? (
+          <div className="ds-ops-grid ds-ops-grid--two-column">
+            <SurfaceCard eyebrow="Điểm nghẽn" title="Top tín hiệu hiện tại" className="ds-ops-panel">
               <div className="ds-monitoring-signal-list">
-                {topSignals.map((signal) => (
-                  <div key={signal.key} className="ds-ops-list-row">
-                    <div>
-                      <strong>{signal.title}</strong>
-                      <p>{signal.meta}</p>
-                    </div>
-                    <StatusBadge status={signal.level} />
-                  </div>
+                {bottlenecks.map((item) => (
+                  <button type="button" key={item.label} className="ds-ops-list-row ds-ops-list-row--action" onClick={() => navigate('/monitoring')}>
+                    <div><strong>{item.label}</strong><p>{formatOptional(item.value, item.format)}</p></div>
+                    <StatusBadge status={item.status} />
+                  </button>
                 ))}
               </div>
-            ) : (
-              <QueryStateView
-                kind="empty"
-                description="Không có cảnh báo hoặc failure hotspot nào cần xử lý trong khoảng thời gian này."
-              />
-            )}
+            </SurfaceCard>
+            <SurfaceCard eyebrow="Logs cần chú ý" title="Điều tra theo request context" className="ds-ops-panel">
+              {topSignals.length > 0 ? <p>Các incident phía trên có thể mở Log Explorer đã filter theo service hoặc request context.</p> : <QueryStateView kind="empty" description="Chưa có signal canonical để tạo log preview trong range này." />}
+              <Button type="link" onClick={() => navigate('/logs')}>Mở Log Explorer</Button>
+            </SurfaceCard>
+          </div>
+
+          <SurfaceCard eyebrow="Service health" title="Dịch vụ và readiness" className="ds-ops-panel">
+            <div className="ds-monitoring-service-tools">
+              <Input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Tìm service" aria-label="Tìm service" />
+              <Select value={serviceStatus} onChange={(value) => setServiceStatus(value)} aria-label="Lọc trạng thái service" options={[{ value: 'all', label: 'Tất cả trạng thái' }, { value: 'up', label: 'Healthy' }, { value: 'degraded', label: 'Degraded' }, { value: 'down', label: 'Unavailable' }, { value: 'unknown', label: 'Unknown' }]} />
+            </div>
+            <div className="ds-monitoring-service-table" role="table" aria-label="Service health overview">
+              <div className="ds-monitoring-service-row ds-monitoring-service-row--header" role="row"><span>Service</span><span>Status</span><span>Latency</span><span>Version</span><span>Last check</span><span>Action</span></div>
+              {visibleServices.map((service) => (
+                <div className="ds-monitoring-service-row" role="row" key={service.name}>
+                  <strong>{service.name}</strong><StatusBadge status={service.status} /><span>{formatOptional(service.latencyMs, formatMs)}</span><span>{service.version ?? 'Chưa có dữ liệu'}</span><span>{formatDateTime(service.checkedAt)}</span><Button type="link" onClick={() => setSelectedService(service)}>Chi tiết</Button>
+                </div>
+              ))}
+            </div>
+            {visibleServices.length === 0 ? <QueryStateView kind="empty" description="Không có service phù hợp với bộ lọc hiện tại." /> : null}
           </SurfaceCard>
+          <Drawer title={selectedService ? `Service: ${selectedService.name}` : 'Service health'} open={selectedService !== null} onClose={() => setSelectedService(null)}>
+            {selectedService ? <div className="ds-monitoring-service-diagnostics"><p><strong>Status:</strong> {selectedService.status}</p><p><strong>Readiness:</strong> {selectedService.summary || 'Chưa có dữ liệu canonical'}</p><p><strong>P95 latency:</strong> {formatOptional(selectedService.latencyMs, formatMs)}</p><p><strong>Version:</strong> {selectedService.version ?? 'Chưa có dữ liệu'}</p><p><strong>Last check:</strong> {formatDateTime(selectedService.checkedAt)}</p><p><strong>Metrics:</strong> {selectedService.metricsStatus ?? 'Chưa có dữ liệu'}</p>{selectedService.degradedReason?.length ? <><strong>Signals:</strong><ul>{selectedService.degradedReason.map((reason) => <li key={reason}>{reason}</li>)}</ul></> : <p>Chưa có error hoặc dependency detail trong response canonical.</p>}<Button type="link" onClick={() => navigate(`/services/health?service=${encodeURIComponent(selectedService.name)}`)}>Mở trang service đầy đủ</Button></div> : null}
+          </Drawer>
         </div>
       </PageShell>
     );

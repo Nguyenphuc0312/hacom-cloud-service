@@ -19,6 +19,7 @@ interface MetricCardProps {
   loading?: boolean;
   onClick?: () => void;
   sparkline?: Array<number | null>;
+  compact?: boolean;
 }
 
 const buildSparklinePath = (values: Array<number | null>) => {
@@ -65,6 +66,7 @@ export const MetricCard = ({
   loading = false,
   onClick,
   sparkline,
+  compact = false,
 }: MetricCardProps) => {
   const sparklinePath = sparkline ? buildSparklinePath(sparkline) : null;
   const content = loading ? (
@@ -105,7 +107,7 @@ export const MetricCard = ({
     return (
       <button
         type="button"
-        className={clsx('ds-metric-card', `tone-${tone}`, 'is-clickable')}
+        className={clsx('ds-metric-card', `tone-${tone}`, compact && 'is-compact', 'is-clickable')}
         onClick={onClick}
       >
         {content}
@@ -113,5 +115,5 @@ export const MetricCard = ({
     );
   }
 
-  return <div className={clsx('ds-metric-card', `tone-${tone}`)}>{content}</div>;
+  return <div className={clsx('ds-metric-card', `tone-${tone}`, compact && 'is-compact')}>{content}</div>;
 };

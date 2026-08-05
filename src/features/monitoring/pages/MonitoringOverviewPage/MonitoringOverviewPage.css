@@ -288,3 +288,29 @@
   align-items: center;
   gap: 12px;
 }
+
+.ds-operations-page-status { display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-height:30px; color:var(--text-muted); font-size:12px; }
+.ds-monitoring-kpi-grid--compact { grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); }
+.ds-monitoring-source-banner { display:flex; align-items:flex-start; gap:10px; min-height:56px; margin-bottom:16px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--color-warning) 35%,var(--border-subtle)); border-left:3px solid var(--color-warning); border-radius:10px; background:var(--color-card); color:var(--color-warning); }
+.ds-monitoring-source-banner-copy { display:flex; min-width:0; flex:1; flex-direction:column; gap:2px; color:var(--text-secondary); font-size:12px; line-height:1.4; }
+.ds-monitoring-source-banner-copy strong { color:var(--text-primary); font-size:13px; }
+.ds-monitoring-source-banner-copy small { color:var(--text-muted); }
+.ds-monitoring-source-banner-actions { flex:none; }
+.ds-ops-list-row--action { width:100%; cursor:pointer; text-align:left; }
+.ds-monitoring-service-table { display:grid; overflow:auto; }
+.ds-monitoring-service-row { display:grid; grid-template-columns:minmax(180px,1.4fr) 120px 120px minmax(120px,.8fr) 170px 80px; align-items:center; gap:12px; min-width:780px; padding:10px 0; border-bottom:1px solid var(--border-subtle); color:var(--text-secondary); font-size:13px; }
+.ds-monitoring-service-row strong { color:var(--text-primary); }
+.ds-monitoring-service-row--header { color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+@media (max-width: 1366px) { .ds-monitoring-kpi-grid--compact { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+.ds-monitoring-service-tools { display:flex; justify-content:flex-end; gap:var(--space-2); margin-bottom:var(--space-3); }
+.ds-monitoring-service-tools .ant-input-affix-wrapper,
+.ds-monitoring-service-tools .ant-input,
+.ds-monitoring-service-tools .ant-select { width:min(100%,240px); }
+.ds-monitoring-service-diagnostics p { margin:0 0 var(--space-3); }
+.ds-monitoring-service-diagnostics ul { padding-left:20px; }
+@media (max-width:720px) {
+  .ds-monitoring-service-tools { flex-direction:column; }
+  .ds-monitoring-service-tools .ant-input-affix-wrapper,
+  .ds-monitoring-service-tools .ant-input,
+  .ds-monitoring-service-tools .ant-select { width:100%; }
+}
