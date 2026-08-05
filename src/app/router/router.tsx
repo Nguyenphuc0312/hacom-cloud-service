@@ -149,15 +149,15 @@ const routes = [
       },
       {
         path: 'services/smtp',
-        element: <Navigate to="/settings/smtp" replace />,
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: 'services/email-templates',
-        element: <Navigate to="/settings/email-templates" replace />,
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: 'settings',
-        element: <Navigate to="/settings/smtp" replace />,
+        element: <Navigate to="/settings/system" replace />,
       },
       {
         path: 'settings/:section',
