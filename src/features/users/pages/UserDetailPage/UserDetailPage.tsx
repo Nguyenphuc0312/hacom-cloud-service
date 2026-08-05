@@ -312,7 +312,7 @@ export const UserDetailPage = () => {
             <div className="ds-detail-list-item">
               <span>Dấu vết runtime</span>
               <strong>
-                {user.activeSessionCount ?? 0} phiên / {user.deviceCount ?? 0} thiết bị
+                {user.activeSessionCount ?? '-'} phiên / {user.deviceCount ?? '-'} thiết bị
               </strong>
             </div>
           </div>
