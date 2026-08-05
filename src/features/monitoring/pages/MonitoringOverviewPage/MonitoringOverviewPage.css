@@ -290,7 +290,7 @@
 }
 
 .ds-operations-page-status { display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-height:30px; color:var(--text-muted); font-size:12px; }
-.ds-monitoring-kpi-grid--compact { grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); }
+.ds-monitoring-kpi-grid--compact { display:grid; gap:var(--space-3); grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); }
 .ds-monitoring-source-banner { display:flex; align-items:flex-start; gap:10px; min-height:56px; margin-bottom:16px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--color-warning) 35%,var(--border-subtle)); border-left:3px solid var(--color-warning); border-radius:10px; background:var(--color-card); color:var(--color-warning); }
 .ds-monitoring-source-banner-copy { display:flex; min-width:0; flex:1; flex-direction:column; gap:2px; color:var(--text-secondary); font-size:12px; line-height:1.4; }
 .ds-monitoring-source-banner-copy strong { color:var(--text-primary); font-size:13px; }
