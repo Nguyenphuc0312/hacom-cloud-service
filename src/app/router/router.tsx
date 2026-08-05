@@ -18,6 +18,11 @@ const UserDetailPage = lazy(() =>
     default: module.UserDetailPage,
   })),
 );
+const UserActivityPage = lazy(() =>
+  import('@/features/users/pages/UserActivityPage/UserActivityPage').then((module) => ({
+    default: module.UserActivityPage,
+  })),
+);
 const AuditLogPage = lazy(() =>
   import('@/features/audit/pages/AuditLogPage/AuditLogPage').then((module) => ({
     default: module.AuditLogPage,
@@ -178,6 +183,10 @@ const routes = [
       {
         path: 'users',
         element: withSuspense(<UsersPage />),
+      },
+      {
+        path: 'users/activity',
+        element: withSuspense(<UserActivityPage />),
       },
       {
         path: 'authority',

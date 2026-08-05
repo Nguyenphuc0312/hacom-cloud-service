@@ -20,6 +20,7 @@ describe('operations navigation', () => {
 
   it('maps user detail and system routes to operations context', () => {
     expect(pickSelectedMenuKey('/users/00000000-0000-4000-8000-000000000001')).toBe('user-operations');
+    expect(pickSelectedMenuKey('/users/activity')).toBe('user-activity');
     expect(resolveNavigationContext('/logs').title).toBe('Logs & sự cố');
   });
 });

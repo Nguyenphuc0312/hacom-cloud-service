@@ -85,6 +85,13 @@ export const navItems: NavItem[] = [
     route: '/support-issues',
   },
   {
+    key: 'user-activity',
+    label: 'Hoạt động người dùng',
+    iconKey: 'activity',
+    section: 'users',
+    route: '/users/activity',
+  },
+  {
     key: 'account-lookup',
     label: 'Tra cứu tài khoản',
     iconKey: 'search',
@@ -117,6 +124,7 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/monitoring': 'Điểm nghẽn',
   '/logs': 'Logs & sự cố',
   '/users': 'Hiện trạng người dùng',
+  '/users/activity': 'Hoạt động người dùng',
   '/support-issues': 'Báo cáo công việc',
   '/audit': 'Lịch sử thao tác',
   '/settings/system': 'Thiết lập hiển thị',
@@ -169,6 +177,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/support-issues')) return 'work-reports';
   if (pathname.startsWith('/audit')) return 'support-history';
   if (pathname.startsWith('/settings')) return 'display-settings';
+  if (pathname.startsWith('/users/activity')) return 'user-activity';
   if (pathname.startsWith('/users')) return 'user-operations';
   return 'operations-overview';
 };
