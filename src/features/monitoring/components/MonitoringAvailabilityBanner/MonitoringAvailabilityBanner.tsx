@@ -1,5 +1,8 @@
-import { Alert } from 'antd';
+import { Button, Drawer } from 'antd';
 import type { FC } from 'react';
+import { useState } from 'react';
+
+import { AppIcon } from '@/components/AppIcon/AppIcon';
 
 import type { MonitoringOverviewResponse } from '@/api/types/monitoring/monitoring';
 
@@ -16,16 +19,11 @@ export const MonitoringAvailabilityBanner: FC<MonitoringAvailabilityBannerProps>
   prometheusStatus,
   lokiStatus,
 }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   if (freshness === 'live' && warnings.length === 0 && prometheusStatus !== 'unavailable') {
     return null;
   }
-
-  const getBannerType = (): 'error' | 'warning' | 'info' => {
-    if (freshness === 'unavailable' || prometheusStatus === 'unavailable') {
-      return 'error';
-    }
-    return 'warning';
-  };
 
   const getMessage = () => {
     const messages: string[] = [];
@@ -66,15 +64,21 @@ export const MonitoringAvailabilityBanner: FC<MonitoringAvailabilityBannerProps>
     return messages.join(' ');
   };
 
-  return (
-    <Alert
-      type={getBannerType()}
-      message="Canh bao du lieu giam sat"
-      description={getMessage()}
-      banner
-      showIcon
-      closable={freshness !== 'unavailable' && prometheusStatus !== 'unavailable'}
-      style={{ marginBottom: 16 }}
-    />
-  );
+  const affected = warnings.length > 0 ? `${warnings.length} nhóm chỉ số bị ảnh hưởng` : 'Một số chỉ số bị ảnh hưởng';
+  return <>
+    <section className="ds-monitoring-source-banner" role="status">
+      <AppIcon name={freshness === 'unavailable' ? 'alertCircle' : 'warning'} size={18} aria-hidden />
+      <div className="ds-monitoring-source-banner-copy"><strong>Nguồn monitoring cần chú ý</strong><span>{affected} · {getMessage()}</span>{expanded ? <small>{warnings.map((warning) => warning.suggestedAction ?? warning.message).join(' · ')}</small> : null}</div>
+      <div className="ds-monitoring-source-banner-actions">
+        <Button type="link" size="small" onClick={() => setExpanded((value) => !value)}>{expanded ? 'Thu gọn' : 'Chi tiết'}</Button>
+        <Button type="link" size="small" onClick={() => setDiagnosticsOpen(true)}>Chẩn đoán nguồn</Button>
+      </div>
+    </section>
+    <Drawer title="Chẩn đoán nguồn monitoring" open={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)}>
+      <p>Freshness hiện tại: <strong>{freshness}</strong></p>
+      <p>Prometheus: <strong>{prometheusStatus ?? 'chưa có dữ liệu'}</strong></p>
+      <p>Loki: <strong>{lokiStatus ?? 'chưa cấu hình'}</strong></p>
+      {warnings.length > 0 ? <ul>{warnings.map((warning) => <li key={warning.key}><strong>{warning.source}</strong>: {warning.message}{warning.suggestedAction ? ` — ${warning.suggestedAction}` : ''}</li>)}</ul> : <p>Không có warning chi tiết từ backend.</p>}
+    </Drawer>
+  </>;
 };

@@ -55,6 +55,30 @@
   background: linear-gradient(180deg, rgba(254, 242, 242, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
+.ds-metric-card.is-compact {
+  min-height: 112px;
+  gap: var(--space-2);
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--color-card);
+  box-shadow: none;
+}
+
+.ds-metric-card.is-compact.tone-success,
+.ds-metric-card.is-compact.tone-warning,
+.ds-metric-card.is-compact.tone-danger {
+  background: var(--color-card);
+}
+
+.ds-metric-card.is-compact.tone-success { border-left: 3px solid var(--brand-success); }
+.ds-metric-card.is-compact.tone-warning { border-left: 3px solid var(--brand-warning); }
+.ds-metric-card.is-compact.tone-danger { border-left: 3px solid var(--brand-danger); }
+
+.ds-metric-card.is-compact .ds-metric-card-label-group { gap: 6px; }
+.ds-metric-card.is-compact .ds-metric-card-value { font-size: clamp(24px, 2.2vw, 30px); }
+.ds-metric-card.is-compact .ds-metric-card-change { min-height: auto; padding: 0; background: transparent; color: var(--text-secondary); }
+.ds-metric-card.is-compact .ds-metric-card-caption { width: 100%; }
+
 /* From src/styles/foundation/foundation.css */
 .ds-metric-card-topline {
   display: flex;
