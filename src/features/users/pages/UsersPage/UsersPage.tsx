@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Popconfirm, Select, Space, Tag, Typography, message } from 'antd';
+import { Button, Checkbox, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useMemo, useState } from 'react';
@@ -23,9 +23,7 @@ import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState/EmptyState';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags/featureFlags';
-import { useAuthStore } from '@/store/authStore/authStore';
 import { formatDateTime } from '@/utils/date/date';
-import { canManageUsers } from '@/utils/role/role';
 import './UsersPage.css';
 
 const accountStatusOptions = [
@@ -52,8 +50,8 @@ const activityOptions = [
 export const UsersPage = () => {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
-  const currentRole = useAuthStore((state) => state.user?.role);
-  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
+  const [actionForm] = Form.useForm<{ reason: string; acknowledged: boolean }>();
+  const canWriteUserActions = isAdminWriteActionsEnabled;
 
   const [params, setParams] = useState<UsersListQuery>({
     page: 1,
@@ -62,6 +60,7 @@ export const UsersPage = () => {
     sortOrder: 'desc',
   });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<'lock' | 'unlock' | 'revoke' | null>(null);
 
   const usersQuery = useQuery({
     queryKey: queryKeys.usersList(params),
@@ -86,7 +85,7 @@ export const UsersPage = () => {
     mutationFn: async (input: {
       action: 'lock' | 'unlock' | 'revoke';
       userId: string;
-      payload?: UserActionPayload;
+      payload: UserActionPayload;
     }) => {
       if (input.action === 'lock') {
         return usersClient.lock(input.userId, input.payload);
@@ -175,19 +174,13 @@ export const UsersPage = () => {
         render: () => <MetaCell primary="-" secondary="API danh sách chưa trả về" />,
       },
       {
-        title: 'Vai trò',
-        key: 'role',
-        width: 140,
-        render: () => <MetaCell primary="-" secondary="API phân quyền" />,
-      },
-      {
         title: 'Trạng thái',
         dataIndex: 'accountStatus',
         width: 150,
         render: (value: string | null) => <StatusBadge status={value} />,
       },
       {
-        title: 'Liên kết HR',
+        title: 'Liên kết hồ sơ',
         dataIndex: 'employeeId',
         width: 130,
         render: (value: string | null) =>
@@ -282,7 +275,7 @@ export const UsersPage = () => {
     }));
   };
 
-  const handleUserAction = async (action: 'lock' | 'unlock' | 'revoke') => {
+  const handleUserAction = async () => {
     if (!selectedUserId) {
       return;
     }
@@ -292,22 +285,36 @@ export const UsersPage = () => {
       return;
     }
 
-    if (!canManageUsers(currentRole)) {
-      message.warning('Vai trò hiện tại không được phép thực hiện thao tác ghi.');
+    if (!pendingAction) {
       return;
     }
 
+    const values = await actionForm.validateFields();
     await actionMutation.mutateAsync({
-      action,
+      action: pendingAction,
       userId: selectedUserId,
-      payload: { reason: `panel_${action}` },
+      payload: { reason: values.reason.trim() },
     });
+    actionForm.resetFields();
+    setPendingAction(null);
   };
 
+  const openActionDialog = (action: 'lock' | 'unlock' | 'revoke') => {
+    actionForm.resetFields();
+    setPendingAction(action);
+  };
+
+  const actionCopy =
+    pendingAction === 'lock'
+      ? { title: 'Khóa tài khoản', confirm: 'Khóa tài khoản', detail: 'Người dùng sẽ bị vô hiệu theo chính sách tài khoản phía backend.' }
+      : pendingAction === 'unlock'
+        ? { title: 'Mở khóa tài khoản', confirm: 'Mở khóa tài khoản', detail: 'Tài khoản chỉ được kích hoạt lại nếu backend cho phép.' }
+        : { title: 'Thu hồi tất cả phiên', confirm: 'Thu hồi phiên', detail: 'Mọi phiên đang hoạt động của người dùng sẽ bị đăng xuất.' };
+
   const pageHeader = {
-    eyebrow: 'Danh tính',
-    title: 'Quản lý người dùng',
-    description: 'Quản lý tài khoản, danh tính HR, vai trò và trạng thái.',
+    eyebrow: 'Người dùng',
+    title: 'Vận hành người dùng',
+    description: 'Tra cứu trạng thái tài khoản, hoạt động và phiên đang sử dụng.',
   };
 
   if (usersQuery.isPending && !usersQuery.data) {
@@ -393,7 +400,7 @@ export const UsersPage = () => {
               rowKey="id"
               columns={columns}
               minHeight={560}
-              scroll={{ x: 1360, y: 'calc(100vh - 326px)' }}
+              scroll={{ x: 1220, y: 'calc(100vh - 326px)' }}
               loading={usersQuery.isFetching && !usersQuery.isPending}
               dataSource={data?.items ?? []}
               emptyNode={<EmptyState description="Không có người dùng khớp bộ lọc hiện tại." />}
@@ -501,57 +508,15 @@ export const UsersPage = () => {
               <section className="ds-ops-detail-section">
                 <h3>Thao tác</h3>
                 <div className="ds-admin-inline-actions">
-                  <Popconfirm
-                    title="Khóa tài khoản này?"
-                    description="Người dùng sẽ bị vô hiệu theo chính sách tài khoản phía backend."
-                    okText="Khóa"
-                    cancelText="Hủy"
-                    onConfirm={() => void handleUserAction('lock')}
-                    disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
-                  >
-                    <Button
-                      danger
-                      icon={<AppIcon name="lock" size={15} aria-hidden />}
-                      disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
-                      loading={actionMutation.isPending}
-                    >
-                      Khóa
-                    </Button>
-                  </Popconfirm>
-
-                  <Popconfirm
-                    title="Mở khóa tài khoản này?"
-                    description="Tài khoản sẽ trở lại trạng thái hoạt động nếu backend cho phép."
-                    okText="Mở khóa"
-                    cancelText="Hủy"
-                    onConfirm={() => void handleUserAction('unlock')}
-                    disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
-                  >
-                    <Button
-                      icon={<AppIcon name="unlock" size={15} aria-hidden />}
-                      disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
-                      loading={actionMutation.isPending}
-                    >
-                      Mở khóa
-                    </Button>
-                  </Popconfirm>
-
-                  <Popconfirm
-                    title="Thu hồi tất cả phiên?"
-                    description="Mọi phiên đang hoạt động của tài khoản này sẽ bị đăng xuất."
-                    okText="Thu hồi"
-                    cancelText="Hủy"
-                    onConfirm={() => void handleUserAction('revoke')}
-                    disabled={!canWriteUserActions}
-                  >
-                    <Button
-                      icon={<AppIcon name="warning" size={15} aria-hidden />}
-                      disabled={!canWriteUserActions}
-                      loading={actionMutation.isPending}
-                    >
-                      Thu hồi phiên
-                    </Button>
-                  </Popconfirm>
+                  <Button danger icon={<AppIcon name="lock" size={15} aria-hidden />} disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'} onClick={() => openActionDialog('lock')}>
+                    Khóa
+                  </Button>
+                  <Button icon={<AppIcon name="unlock" size={15} aria-hidden />} disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'} onClick={() => openActionDialog('unlock')}>
+                    Mở khóa
+                  </Button>
+                  <Button icon={<AppIcon name="warning" size={15} aria-hidden />} disabled={!canWriteUserActions} onClick={() => openActionDialog('revoke')}>
+                    Thu hồi phiên
+                  </Button>
                 </div>
               </section>
             </div>
@@ -560,6 +525,28 @@ export const UsersPage = () => {
           )}
         </DetailPanel>
       </div>
+      <Modal
+        open={pendingAction !== null}
+        title={actionCopy.title}
+        okText={actionCopy.confirm}
+        cancelText="Hủy"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          actionForm.resetFields();
+          setPendingAction(null);
+        }}
+        onOk={() => void handleUserAction()}
+      >
+        <p>{actionCopy.detail}</p>
+        <Form form={actionForm} layout="vertical">
+          <Form.Item name="reason" label="Lý do thao tác" rules={[{ required: true, whitespace: true, message: 'Nhập lý do để lưu vào nhật ký thao tác.' }, { max: 240, message: 'Lý do tối đa 240 ký tự.' }]}>
+            <Input.TextArea autoFocus autoSize={{ minRows: 3, maxRows: 6 }} maxLength={240} placeholder="Mô tả ngắn lý do hỗ trợ tài khoản" />
+          </Form.Item>
+          <Form.Item name="acknowledged" valuePropName="checked" rules={[{ validator: (_, value) => value ? Promise.resolve() : Promise.reject(new Error('Xác nhận trước khi tiếp tục.')) }]}>
+            <Checkbox>Tôi xác nhận thao tác này sẽ được ghi nhận và áp dụng theo chính sách backend.</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
     </PageShell>
   );
 };

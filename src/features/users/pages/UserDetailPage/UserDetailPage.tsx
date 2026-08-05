@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Modal, message } from 'antd';
+import { Button, Checkbox, Form, Input, Modal, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,9 +19,7 @@ import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
 import { DataTable } from '@/components/ui/DataTable/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags/featureFlags';
-import { useAuthStore } from '@/store/authStore/authStore';
 import { formatDateTime } from '@/utils/date/date';
-import { canManageUsers } from '@/utils/role/role';
 
 const formatOptionalDate = (value?: string | null): string => (value ? formatDateTime(value) : '-');
 
@@ -30,11 +28,12 @@ export const UserDetailPage = () => {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const userId = params.id ?? '';
-  const currentRole = useAuthStore((state) => state.user?.role);
-  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
+  const [actionForm] = Form.useForm<{ reason: string; acknowledged: boolean }>();
+  const canWriteUserActions = isAdminWriteActionsEnabled;
 
   const [sessionsPage, setSessionsPage] = useState(1);
   const [devicesPage, setDevicesPage] = useState(1);
+  const [pendingAction, setPendingAction] = useState<'lock' | 'unlock' | 'revoke' | null>(null);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.userDetail(userId),
@@ -59,7 +58,7 @@ export const UserDetailPage = () => {
   const actionMutation = useMutation({
     mutationFn: async (input: {
       action: 'lock' | 'unlock' | 'revoke';
-      payload?: UserActionPayload;
+      payload: UserActionPayload;
     }) => {
       if (input.action === 'lock') {
         return usersClient.lock(userId, input.payload);
@@ -103,39 +102,25 @@ export const UserDetailPage = () => {
     },
   });
 
-  const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
+  const openActionDialog = (action: 'lock' | 'unlock' | 'revoke') => {
     if (!isAdminWriteActionsEnabled) {
       message.info('Các thao tác ghi đang bị tắt theo cấu hình phát hành.');
       return;
     }
 
-    if (!canManageUsers(currentRole)) {
-      message.warning('Vai trò hiện tại của bạn không thể thực hiện thao tác ghi lên người dùng.');
-      return;
-    }
-
-    const titleMap: Record<typeof action, string> = {
-      lock: 'Khóa tài khoản',
-      unlock: 'Mở khóa tài khoản',
-      revoke: 'Thu hồi phiên đang hoạt động',
-    };
-
-    const contentMap: Record<typeof action, string> = {
-      lock: 'Tài khoản sẽ bị khóa và toàn bộ phiên đang hoạt động sẽ bị vô hiệu hóa.',
-      unlock: 'Tài khoản sẽ được bật lại.',
-      revoke: 'Toàn bộ phiên đang hoạt động của người dùng này sẽ bị thu hồi ngay lập tức.',
-    };
-
-    Modal.confirm({
-      title: titleMap[action],
-      content: contentMap[action],
-      okText: 'Xác nhận',
-      cancelText: 'Hủy',
-      onOk: async () => {
-        await actionMutation.mutateAsync({ action, payload: { reason: `panel_${action}` } });
-      },
-    });
+    actionForm.resetFields();
+    setPendingAction(action);
   };
+
+  const submitAction = async () => {
+    if (!pendingAction) return;
+    const values = await actionForm.validateFields();
+    await actionMutation.mutateAsync({ action: pendingAction, payload: { reason: values.reason.trim() } });
+    actionForm.resetFields();
+    setPendingAction(null);
+  };
+
+  const actionTitle = pendingAction === 'lock' ? 'Khóa tài khoản' : pendingAction === 'unlock' ? 'Mở khóa tài khoản' : 'Thu hồi phiên đang hoạt động';
 
   const sessionColumns = useMemo<ColumnsType<UserSession>>(
     () => [
@@ -238,19 +223,19 @@ export const UserDetailPage = () => {
                   label: 'Khóa tài khoản',
                   danger: true,
                   disabled: !canWriteUserActions || user.accountStatus === 'DISABLED',
-                  onClick: () => confirmAction('lock'),
+                  onClick: () => openActionDialog('lock'),
                 },
                 {
                   key: 'unlock',
                   label: 'Mở khóa tài khoản',
                   disabled: !canWriteUserActions || user.accountStatus !== 'DISABLED',
-                  onClick: () => confirmAction('unlock'),
+                  onClick: () => openActionDialog('unlock'),
                 },
                 {
                   key: 'revoke',
                   label: 'Thu hồi phiên',
                   disabled: !canWriteUserActions,
-                  onClick: () => confirmAction('revoke'),
+                  onClick: () => openActionDialog('revoke'),
                 },
               ]}
             />
@@ -399,6 +384,28 @@ export const UserDetailPage = () => {
           />
         )}
       </DataTableShell>
+      <Modal
+        open={pendingAction !== null}
+        title={actionTitle}
+        okText="Xác nhận thao tác"
+        cancelText="Hủy"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          actionForm.resetFields();
+          setPendingAction(null);
+        }}
+        onOk={() => void submitAction()}
+      >
+        <p>Thao tác được áp dụng bởi backend và sẽ được lưu vào nhật ký hỗ trợ.</p>
+        <Form form={actionForm} layout="vertical">
+          <Form.Item name="reason" label="Lý do thao tác" rules={[{ required: true, whitespace: true, message: 'Nhập lý do để tiếp tục.' }, { max: 240, message: 'Lý do tối đa 240 ký tự.' }]}>
+            <Input.TextArea autoFocus autoSize={{ minRows: 3, maxRows: 6 }} maxLength={240} placeholder="Mô tả ngắn lý do hỗ trợ tài khoản" />
+          </Form.Item>
+          <Form.Item name="acknowledged" valuePropName="checked" rules={[{ validator: (_, value) => value ? Promise.resolve() : Promise.reject(new Error('Xác nhận trước khi tiếp tục.')) }]}>
+            <Checkbox>Tôi xác nhận thao tác này cần được ghi nhận.</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
     </PageShell>
   );
 };

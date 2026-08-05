@@ -49,7 +49,7 @@ export interface UsersListResponse {
 }
 
 export interface UserActionPayload {
-  reason?: string;
+  reason: string;
 }
 
 export interface UserActionResponse {

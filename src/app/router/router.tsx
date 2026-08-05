@@ -4,17 +4,11 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess/RequireApprovedAccess';
 import { RequireAuth } from '@/app/guards/RequireAuth/RequireAuth';
-import { RequireRole } from '@/app/guards/RequireRole/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout/AppLayout';
 import { QueryStateView } from '@/components/QueryStates/QueryStates';
 
 const LoginPage = lazy(() =>
   import('@/features/auth/pages/LoginPage/LoginPage').then((module) => ({ default: module.LoginPage })),
-);
-const DashboardPage = lazy(() =>
-  import('@/features/dashboard/pages/DashboardPage/DashboardPage').then((module) => ({
-    default: module.DashboardPage,
-  })),
 );
 const UsersPage = lazy(() =>
   import('@/features/users/pages/UsersPage/UsersPage').then((module) => ({ default: module.UsersPage })),
@@ -22,11 +16,6 @@ const UsersPage = lazy(() =>
 const UserDetailPage = lazy(() =>
   import('@/features/users/pages/UserDetailPage/UserDetailPage').then((module) => ({
     default: module.UserDetailPage,
-  })),
-);
-const HREmployeesPage = lazy(() =>
-  import('@/features/hr-employees/pages/HREmployeesPage/HREmployeesPage').then((module) => ({
-    default: module.HREmployeesPage,
   })),
 );
 const AuditLogPage = lazy(() =>
@@ -59,34 +48,14 @@ const MonitoringOverviewPage = lazy(() =>
     default: module.MonitoringOverviewPage,
   })),
 );
-const ConversationsPage = lazy(() =>
-  import('@/features/conversations/pages/ConversationsPage/ConversationsPage').then((module) => ({
-    default: module.ConversationsPage,
-  })),
-);
 const AccessPendingPage = lazy(() =>
   import('@/features/access/pages/AccessPendingPage/AccessPendingPage').then((module) => ({
     default: module.AccessPendingPage,
   })),
 );
-const AccessRequestsPage = lazy(() =>
-  import('@/features/access/pages/AccessRequestsPage/AccessRequestsPage').then((module) => ({
-    default: module.AccessRequestsPage,
-  })),
-);
-const AuthorityPage = lazy(() =>
-  import('@/features/authority/pages/AuthorityPage/AuthorityPage').then((module) => ({
-    default: module.AuthorityPage,
-  })),
-);
 const ProfilePage = lazy(() =>
   import('@/features/profile/pages/ProfilePage/ProfilePage').then((module) => ({
     default: module.ProfilePage,
-  })),
-);
-const BackupRestorePage = lazy(() =>
-  import('@/features/backup/pages/BackupRestorePage/BackupRestorePage').then((module) => ({
-    default: module.BackupRestorePage,
   })),
 );
 const NotFoundPage = lazy(() =>
@@ -148,9 +117,8 @@ const routes = [
     children: [
       {
         index: true,
-        element: withSuspense(<DashboardPage />),
+        element: withSuspense(<MonitoringOverviewPage />),
       },
-      // Realtime routes
       {
         path: 'realtime',
         element: <Navigate to="/realtime/dashboard" replace />,
@@ -167,12 +135,10 @@ const routes = [
         path: 'realtime/traffic',
         element: withSuspense(<TrafficPage />),
       },
-      // Alerts routes
       {
         path: 'alerts',
         element: withSuspense(<AlertsPage />),
       },
-      // Existing routes
       {
         path: 'services',
         element: <Navigate to="/services/health" replace />,
@@ -202,10 +168,6 @@ const routes = [
         element: withSuspense(<MonitoringOverviewPage />),
       },
       {
-        path: 'conversations',
-        element: withSuspense(<ConversationsPage />),
-      },
-      {
         path: 'support-issues',
         element: withSuspense(<SupportIssuesPage />),
       },
@@ -219,11 +181,7 @@ const routes = [
       },
       {
         path: 'authority',
-        element: (
-          <RequireRole roles={['super_admin']}>
-            {withSuspense(<AuthorityPage />)}
-          </RequireRole>
-        ),
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: 'users/:id',
@@ -231,7 +189,7 @@ const routes = [
       },
       {
         path: 'hr-employees',
-        element: withSuspense(<HREmployeesPage />),
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: 'audit',
@@ -239,7 +197,7 @@ const routes = [
       },
       {
         path: 'access-requests',
-        element: withSuspense(<AccessRequestsPage />),
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: 'profile',
@@ -247,7 +205,7 @@ const routes = [
       },
       {
         path: 'backup-restore',
-        element: withSuspense(<BackupRestorePage />),
+        element: withSuspense(<NotFoundPage />),
       },
       {
         path: '*',

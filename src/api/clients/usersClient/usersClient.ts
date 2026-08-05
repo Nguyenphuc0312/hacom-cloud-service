@@ -25,18 +25,18 @@ export const usersClient = {
     return unwrapApiEnvelope<UserDetail>(response);
   },
 
-  async lock(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
-    const response = await adminAxiosInstance.post(`/users/${id}/lock`, payload ?? {});
+  async lock(id: string, payload: UserActionPayload): Promise<UserActionResponse> {
+    const response = await adminAxiosInstance.post(`/users/${id}/lock`, payload);
     return unwrapApiEnvelope<UserActionResponse>(response);
   },
 
-  async unlock(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
-    const response = await adminAxiosInstance.post(`/users/${id}/unlock`, payload ?? {});
+  async unlock(id: string, payload: UserActionPayload): Promise<UserActionResponse> {
+    const response = await adminAxiosInstance.post(`/users/${id}/unlock`, payload);
     return unwrapApiEnvelope<UserActionResponse>(response);
   },
 
-  async revokeSessions(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
-    const response = await adminAxiosInstance.post(`/users/${id}/revoke-sessions`, payload ?? {});
+  async revokeSessions(id: string, payload: UserActionPayload): Promise<UserActionResponse> {
+    const response = await adminAxiosInstance.post(`/users/${id}/revoke-sessions`, payload);
     return unwrapApiEnvelope<UserActionResponse>(response);
   },
 };
