@@ -1,5 +1,5 @@
-import { Button } from 'antd';
-import { useEffect, useMemo } from 'react';
+import { Button, Switch } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { appConfig } from '@/config/appConfig/appConfig';
@@ -40,16 +40,28 @@ const SYSTEM_SURFACES = [
   },
 ] as const;
 
+const DISPLAY_DENSITY_KEY = 'chat-admin-display-density';
+
 export const SettingsPage = () => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
   const activeSection = isSettingSectionKey(section) ? section : 'system';
+  const [compactDensity, setCompactDensity] = useState(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem(DISPLAY_DENSITY_KEY) === 'compact',
+  );
 
   useEffect(() => {
     if (!isSettingSectionKey(section)) {
       navigate('/settings/system', { replace: true });
     }
   }, [navigate, section]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    window.localStorage.setItem(DISPLAY_DENSITY_KEY, compactDensity ? 'compact' : 'comfortable');
+    document.documentElement.dataset.adminDensity = compactDensity ? 'compact' : 'comfortable';
+  }, [compactDensity]);
 
   const currentSection = useMemo(
     () => SETTING_SECTIONS.find((entry) => entry.key === activeSection) ?? SETTING_SECTIONS[0],
@@ -73,6 +85,16 @@ export const SettingsPage = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </SurfaceCard>
+
+        <SurfaceCard eyebrow="Cục bộ" title="Thiết lập hiển thị">
+          <div className="ds-settings-display-option">
+            <div>
+              <strong>Mật độ gọn</strong>
+              <p>Giảm khoảng cách giữa các khối và bảng trên thiết bị hiện tại.</p>
+            </div>
+            <Switch checked={compactDensity} onChange={setCompactDensity} />
           </div>
         </SurfaceCard>
 

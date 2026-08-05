@@ -603,6 +603,35 @@
   padding-top: 0;
 }
 
+.ds-settings-display-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ds-settings-display-option strong {
+  color: #0f172a;
+}
+
+.ds-settings-display-option p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+:root[data-admin-density='compact'] .ds-page-main-stack,
+:root[data-admin-density='compact'] .ds-settings-stack,
+:root[data-admin-density='compact'] .ds-ops-detail-stack {
+  gap: var(--space-3);
+}
+
+:root[data-admin-density='compact'] .ds-table-shell-header,
+:root[data-admin-density='compact'] .ds-ui-surface-card,
+:root[data-admin-density='compact'] .ds-ops-detail-section {
+  padding-block: var(--space-3);
+}
+
 .ds-settings-content .ds-form-section {
   padding: 14px !important;
 }
