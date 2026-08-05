@@ -7,6 +7,8 @@ import type {
   CloudItem,
   CloudPage,
   CloudQuota,
+  CloudQuotaRequest,
+  CloudTrashLifecycle,
   CloudUploadComplete,
   CloudUploadSession,
 } from "../types";
@@ -49,7 +51,7 @@ const isCloudDemoMode = (): boolean => {
   return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
 };
 
-const parseJson = async <T,>(response: Response): Promise<T> => {
+const parseJson = async <T>(response: Response): Promise<T> => {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     throw new CloudApiError({
@@ -62,7 +64,7 @@ const parseJson = async <T,>(response: Response): Promise<T> => {
   return (await response.json()) as T;
 };
 
-const cloudRequest = async <T,>(
+const cloudRequest = async <T>(
   path: string,
   { userId, headers, ...options }: CloudRequestOptions,
 ): Promise<T> => {
@@ -84,7 +86,10 @@ const cloudRequest = async <T,>(
   };
 
   let response = await request(getAccessToken() ?? undefined);
-  if ((response.status === 401 || response.status === 403) && !isCloudDemoMode()) {
+  if (
+    (response.status === 401 || response.status === 403) &&
+    !isCloudDemoMode()
+  ) {
     try {
       const refreshedToken = await refreshAccessTokenShared("http_401");
       response = await request(refreshedToken);
@@ -126,11 +131,19 @@ export const cloudApi = {
 
   listItems(
     userId: string,
-    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+    options: {
+      cursor?: string;
+      limit?: number;
+      q?: string;
+      type?: CloudItem["type"];
+      signal?: AbortSignal;
+    } = {},
   ): Promise<CloudPage> {
     const query = new URLSearchParams();
     query.set("limit", String(options.limit ?? 30));
     if (options.cursor) query.set("cursor", options.cursor);
+    if (options.q) query.set("q", options.q);
+    if (options.type) query.set("type", options.type);
     return cloudRequest<CloudPage>(`items?${query.toString()}`, {
       userId,
       signal: options.signal,
@@ -139,18 +152,30 @@ export const cloudApi = {
 
   listTrash(
     userId: string,
-    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
+    options: {
+      cursor?: string;
+      limit?: number;
+      q?: string;
+      type?: CloudItem["type"];
+      signal?: AbortSignal;
+    } = {},
   ): Promise<CloudPage> {
     const query = new URLSearchParams();
     query.set("limit", String(options.limit ?? 30));
     if (options.cursor) query.set("cursor", options.cursor);
+    if (options.q) query.set("q", options.q);
+    if (options.type) query.set("type", options.type);
     return cloudRequest<CloudPage>(`trash?${query.toString()}`, {
       userId,
       signal: options.signal,
     });
   },
 
-  getItem(userId: string, itemId: string, signal?: AbortSignal): Promise<CloudItem> {
+  getItem(
+    userId: string,
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<CloudItem> {
     return cloudRequest<CloudItem>(`items/${encodeURIComponent(itemId)}`, {
       userId,
       signal,
@@ -159,6 +184,35 @@ export const cloudApi = {
 
   getQuota(userId: string, signal?: AbortSignal): Promise<CloudQuota> {
     return cloudRequest<CloudQuota>("quota", { userId, signal });
+  },
+
+  getCurrentQuotaRequest(
+    userId: string,
+    signal?: AbortSignal,
+  ): Promise<CloudQuotaRequest> {
+    return cloudRequest<CloudQuotaRequest>("quota/requests/current", {
+      userId,
+      signal,
+    });
+  },
+
+  requestQuota(
+    userId: string,
+    requestedQuotaBytes: number,
+    reason?: string,
+  ): Promise<CloudQuotaRequest> {
+    return cloudRequest<CloudQuotaRequest>("quota/requests", {
+      userId,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
+      },
+      body: JSON.stringify({
+        requestedQuotaBytes,
+        ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      }),
+    });
   },
 
   createText(userId: string, content: string): Promise<CloudItem> {
@@ -179,22 +233,24 @@ export const cloudApi = {
     });
   },
 
-  trashItem(userId: string, itemId: string): Promise<CloudItem> {
-    return cloudRequest<CloudItem>(
+  trashItem(userId: string, itemId: string): Promise<CloudTrashLifecycle> {
+    return cloudRequest<CloudTrashLifecycle>(
       `items/${encodeURIComponent(itemId)}/trash`,
       {
         userId,
         method: "POST",
+        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
       },
     );
   },
 
-  restoreItem(userId: string, itemId: string): Promise<CloudItem> {
-    return cloudRequest<CloudItem>(
+  restoreItem(userId: string, itemId: string): Promise<CloudTrashLifecycle> {
+    return cloudRequest<CloudTrashLifecycle>(
       `items/${encodeURIComponent(itemId)}/restore`,
       {
         userId,
         method: "POST",
+        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
       },
     );
   },
@@ -208,6 +264,7 @@ export const cloudApi = {
       {
         userId,
         method: "DELETE",
+        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
       },
     );
   },
@@ -280,7 +337,10 @@ export const cloudApi = {
     });
   },
 
-  completeUpload(userId: string, sessionId: string): Promise<CloudUploadComplete> {
+  completeUpload(
+    userId: string,
+    sessionId: string,
+  ): Promise<CloudUploadComplete> {
     return cloudRequest<CloudUploadComplete>(
       `uploads/${encodeURIComponent(sessionId)}/complete`,
       {

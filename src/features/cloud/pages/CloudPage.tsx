@@ -1,18 +1,26 @@
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useState,
 } from "react";
-import { Files, LoaderCircle, Search, Trash2, X } from "lucide-react";
+import {
+  CirclePlus,
+  Files,
+  LoaderCircle,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
-import { InlineNotice, toast } from "../../../components/ui";
+import { Button, InlineNotice, toast } from "../../../components/ui";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useResponsive } from "../../../responsive/responsive";
 import { AppShell, ModuleSidebar } from "../../../shared/layout";
@@ -27,16 +35,14 @@ import {
 } from "../../../types";
 import { resolveChatLayoutProfile } from "../../../utils/densityPolicy";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
-import {
-  CLOUD_CONVERSATION_ID,
-  CLOUD_MAX_UPLOAD_BYTES,
-} from "../constants";
+import { CLOUD_CONVERSATION_ID, CLOUD_MAX_UPLOAD_BYTES } from "../constants";
 import {
   CloudConversationAvatar,
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
 import { CloudQuotaSummary } from "../components/CloudQuotaSummary";
+import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
 import type { CloudItem, CloudViewMode } from "../types";
@@ -63,6 +69,12 @@ const getErrorTranslationKey = (code: string): string => {
       return "errors.itemNotReady";
     case "TRASH_EXPIRED":
       return "errors.trashExpired";
+    case "INVALID_QUOTA_TIER":
+      return "errors.invalidQuotaTier";
+    case "QUOTA_REQUEST_PENDING":
+      return "errors.quotaRequestPending";
+    case "IDEMPOTENCY_CONFLICT":
+      return "errors.idempotencyConflict";
     case "OBJECT_UPLOAD_NETWORK_ERROR":
     case "CLOUD_NETWORK_ERROR":
     case "CLOUD_UNAVAILABLE":
@@ -100,10 +112,12 @@ export default function CloudPage() {
   const [draft, setDraft] = useState("");
   const [draftResetKey, setDraftResetKey] = useState(0);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
-  const workspace = useCloudWorkspace(authUser?.id);
+  const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
+  const workspace = useCloudWorkspace(authUser?.id, deferredSearch);
   const fetchConversations = useChatStore((state) => state.fetchConversations);
   const hasFetchedConversationsOnce = useChatStore(
     (state) => state.hasFetchedConversationsOnce,
@@ -111,9 +125,7 @@ export default function CloudPage() {
   const isLoadingConversations = useChatStore(
     (state) => state.isLoadingConversations,
   );
-  const conversationsError = useChatStore(
-    (state) => state.conversationsError,
-  );
+  const conversationsError = useChatStore((state) => state.conversationsError);
 
   const currentUser = useMemo<UserSummary>(() => {
     if (authUser) {
@@ -150,11 +162,7 @@ export default function CloudPage() {
   }, [currentUser.displayName, currentUser.id, currentUser.username]);
 
   useEffect(() => {
-    if (
-      !authUser ||
-      hasFetchedConversationsOnce ||
-      isLoadingConversations
-    ) {
+    if (!authUser || hasFetchedConversationsOnce || isLoadingConversations) {
       return;
     }
     void fetchConversations();
@@ -165,8 +173,7 @@ export default function CloudPage() {
     isLoadingConversations,
   ]);
 
-  const layoutState =
-    chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
+  const layoutState = chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
   const layoutProfile = resolveChatLayoutProfile(width, layoutState);
 
   const conversation = useMemo<Conversation>(
@@ -289,10 +296,13 @@ export default function CloudPage() {
     [navigate],
   );
 
-  const noopMessageAction = useCallback((_message: Message) => {
-    void _message;
-    showPhaseNotice();
-  }, [showPhaseNotice]);
+  const noopMessageAction = useCallback(
+    (_message: Message) => {
+      void _message;
+      showPhaseNotice();
+    },
+    [showPhaseNotice],
+  );
 
   const noopMessageIdAction = useCallback(
     (_messageId: string) => {
@@ -304,7 +314,9 @@ export default function CloudPage() {
 
   const handleDeleteRequest = useCallback(
     (messageId: string) => {
-      const item = workspace.items.find((candidate) => candidate.id === messageId);
+      const item = workspace.items.find(
+        (candidate) => candidate.id === messageId,
+      );
       if (item) setDeleteTarget(item);
     },
     [workspace.items],
@@ -356,8 +368,7 @@ export default function CloudPage() {
                 />
               }
               showConversationSkeleton={
-                isLoadingConversations &&
-                !hasFetchedConversationsOnce
+                isLoadingConversations && !hasFetchedConversationsOnce
               }
               conversationsError={conversationsError}
               onSelectConversation={handleSelectConversation}
@@ -411,6 +422,15 @@ export default function CloudPage() {
                 <span>{workspace.trashItems.length}</span>
               </button>
               <CloudQuotaSummary quota={workspace.quota} />
+              <Button
+                variant="secondary"
+                size="sm"
+                className="ml-auto"
+                onClick={() => setIsQuotaRequestOpen(true)}
+              >
+                <CirclePlus className="h-4 w-4" aria-hidden />
+                {t("quotaRequest.action")}
+              </Button>
             </ConversationLane>
           </div>
 
@@ -535,9 +555,7 @@ export default function CloudPage() {
                   workspace.isMutating
                     ? t("workspace.saving", {
                         size: workspace.uploadProgress
-                          ? formatBytes(
-                              workspace.quota?.reservedBytes ?? 0,
-                            )
+                          ? formatBytes(workspace.quota?.reservedBytes ?? 0)
                           : "",
                       })
                     : undefined
@@ -564,6 +582,17 @@ export default function CloudPage() {
         onClose={() => setDeleteTarget(null)}
         onTrash={handleTrash}
         onPermanentDelete={handlePermanentDelete}
+      />
+      <CloudQuotaRequestDialog
+        isOpen={isQuotaRequestOpen}
+        quota={workspace.quota}
+        currentRequest={workspace.quotaRequest}
+        isLoading={workspace.isRequestingQuota}
+        onClose={() => setIsQuotaRequestOpen(false)}
+        onSubmit={async (requestedQuotaBytes, reason) => {
+          await workspace.requestQuota(requestedQuotaBytes, reason);
+          toast.success(t("quotaRequest.submitted"));
+        }}
       />
     </AppShell>
   );

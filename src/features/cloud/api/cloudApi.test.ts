@@ -77,11 +77,15 @@ describe("cloudApi", () => {
     await cloudApi.listItems(userId, {
       cursor: "opaque+cursor/value==",
       limit: 30,
+      q: "quarterly report",
+      type: "file",
     });
 
     const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
     expect(requestedUrl).toContain("limit=30");
     expect(requestedUrl).toContain("cursor=opaque%2Bcursor%2Fvalue%3D%3D");
+    expect(requestedUrl).toContain("q=quarterly+report");
+    expect(requestedUrl).toContain("type=file");
   });
 
   it("preserves backend error codes and request IDs", async () => {
@@ -179,8 +183,8 @@ describe("cloudApi", () => {
           type: "text",
           status: "trashed",
           sizeBytes: 5,
-          trashedAt: "2026-07-31T03:00:00Z",
-          expiresAt: "2026-08-01T03:00:00Z",
+          deletedAt: "2026-07-31T03:00:00Z",
+          purgeAfter: "2026-08-01T03:00:00Z",
           createdAt: "2026-07-31T02:00:00Z",
           updatedAt: "2026-07-31T03:00:00Z",
         }),
@@ -204,5 +208,45 @@ describe("cloudApi", () => {
       "/cloud-api/api/v1/cloud/items/item-1",
       expect.objectContaining({ method: "DELETE" }),
     ]);
+    for (const callIndex of [1, 2]) {
+      const headers = fetchMock.mock.calls[callIndex]?.[1]?.headers as Headers;
+      expect(headers.get("Idempotency-Key")).toMatch(/^cloud-web-/);
+    }
+  });
+
+  it("submits an integer quota tier with an idempotency key", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          id: "quota-request-1",
+          status: "pending",
+          currentQuotaBytes: 5_000_000_000,
+          requestedQuotaBytes: 10_000_000_000,
+          createdAt: "2026-08-05T00:00:00Z",
+          updatedAt: "2026-08-05T00:00:00Z",
+          applied: true,
+        },
+        { status: 201 },
+      ),
+    );
+
+    await cloudApi.requestQuota(userId, 10_000_000_000, "Project archive");
+
+    const options = fetchMock.mock.calls[0]?.[1];
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/cloud-api/api/v1/cloud/quota/requests",
+    );
+    expect(options).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          requestedQuotaBytes: 10_000_000_000,
+          reason: "Project archive",
+        }),
+      }),
+    );
+    expect((options?.headers as Headers).get("Idempotency-Key")).toMatch(
+      /^cloud-web-/,
+    );
   });
 });

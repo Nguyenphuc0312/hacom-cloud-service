@@ -44,6 +44,23 @@
     "trash": "{{value}} in trash",
     "available": "{{value}} available"
   },
+  "quotaRequest": {
+    "action": "Request more storage",
+    "title": "Request more Cloud storage",
+    "description": "Choose an approved storage tier. Your current limit changes only after review.",
+    "tier": "Requested storage limit",
+    "reason": "Reason (optional)",
+    "reasonPlaceholder": "Briefly explain why you need more storage",
+    "submit": "Submit request",
+    "submitted": "Your storage request was submitted.",
+    "requested": "Requested limit: {{value}}",
+    "pendingNotice": "Only one request can be pending at a time.",
+    "status": {
+      "pending": "Pending review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
+  },
   "service": {
     "checking": "Checking Cloud service",
     "ready": "Cloud service is ready",
@@ -195,6 +212,9 @@
     "driveInactive": "Your Cloud workspace is not active.",
     "itemNotReady": "This item is still processing and cannot be deleted yet.",
     "trashExpired": "The 24-hour restore window has expired.",
+    "invalidQuotaTier": "Choose one of the supported storage limits.",
+    "quotaRequestPending": "A storage request is already pending review.",
+    "idempotencyConflict": "This action conflicts with an earlier request. Refresh and try again.",
     "offline": "The Cloud service is unreachable. Check the local backend.",
     "generic": "The Cloud action could not be completed. Please try again."
   }

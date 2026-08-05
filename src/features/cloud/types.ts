@@ -1,4 +1,5 @@
-export type CloudItemType = "text" | "link" | "file" | "image" | "video" | "audio";
+export type CloudItemType =
+  "text" | "link" | "file" | "image" | "video" | "audio";
 
 export type CloudItemStatus =
   | "pending"
@@ -17,8 +18,8 @@ export interface CloudItem {
   content?: string;
   url?: string;
   sizeBytes: number;
-  trashedAt?: string;
-  expiresAt?: string;
+  deletedAt?: string;
+  purgeAfter?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,12 +63,27 @@ export interface CloudUploadComplete {
 
 export interface CloudDeleteResult {
   itemId: string;
-  status: "deleting" | "deleted";
-  job?: {
-    id: string;
-    type: "permanent_delete";
-    status: "pending" | "processing" | "completed" | "failed" | "dead";
-  };
+  status: "delete_pending" | "deleted";
+  async: boolean;
+}
+
+export interface CloudTrashLifecycle {
+  itemId: string;
+  status: "ready" | "trashed";
+  deletedAt?: string;
+  purgeAfter?: string;
+  applied: boolean;
+}
+
+export interface CloudQuotaRequest {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  currentQuotaBytes: number;
+  requestedQuotaBytes: number;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+  applied?: boolean;
 }
 
 export type CloudViewMode = "active" | "trash";

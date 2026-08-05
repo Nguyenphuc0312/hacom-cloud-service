@@ -70,7 +70,7 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
               file: t("item.untitledFile"),
             });
             const preview = getCloudItemPreview(item);
-            const countdown = getTrashCountdown(item.expiresAt, now);
+            const countdown = getTrashCountdown(item.purgeAfter, now);
             const remaining = countdown.expired
               ? t("trash.expired")
               : countdown.hours > 0

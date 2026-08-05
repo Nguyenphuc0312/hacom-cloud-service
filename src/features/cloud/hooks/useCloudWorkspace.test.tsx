@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cloudApi } from "../api/cloudApi";
+import { cloudApi, CloudApiError } from "../api/cloudApi";
 import type { CloudItem, CloudQuota } from "../types";
 import { useCloudWorkspace } from "./useCloudWorkspace";
 
@@ -17,8 +17,8 @@ const activeItem: CloudItem = {
 const trashedItem: CloudItem = {
   ...activeItem,
   status: "trashed",
-  trashedAt: "2026-07-31T03:00:00Z",
-  expiresAt: "2026-08-01T03:00:00Z",
+  deletedAt: "2026-07-31T03:00:00Z",
+  purgeAfter: "2026-08-01T03:00:00Z",
   updatedAt: "2026-07-31T03:00:00Z",
 };
 const activeQuota: CloudQuota = {
@@ -43,21 +43,42 @@ describe("useCloudWorkspace trash lifecycle", () => {
   });
 
   it("moves server-confirmed items between active and trash collections", async () => {
-    vi.spyOn(cloudApi, "listItems").mockResolvedValue({
-      items: [activeItem],
-    });
-    vi.spyOn(cloudApi, "listTrash").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "listItems")
+      .mockResolvedValueOnce({ items: [activeItem] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [activeItem] });
+    vi.spyOn(cloudApi, "listTrash")
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [trashedItem] })
+      .mockResolvedValueOnce({ items: [] });
     vi.spyOn(cloudApi, "health").mockResolvedValue({
       status: "UP",
       service: "hacom-cloud-api",
     });
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "QUOTA_REQUEST_NOT_FOUND",
+        message: "No quota request",
+      }),
+    );
     const quotaSpy = vi
       .spyOn(cloudApi, "getQuota")
       .mockResolvedValueOnce(activeQuota)
       .mockResolvedValueOnce(trashQuota)
       .mockResolvedValueOnce(activeQuota);
-    vi.spyOn(cloudApi, "trashItem").mockResolvedValue(trashedItem);
-    vi.spyOn(cloudApi, "restoreItem").mockResolvedValue(activeItem);
+    vi.spyOn(cloudApi, "trashItem").mockResolvedValue({
+      itemId: activeItem.id,
+      status: "trashed",
+      deletedAt: trashedItem.deletedAt,
+      purgeAfter: trashedItem.purgeAfter,
+      applied: true,
+    });
+    vi.spyOn(cloudApi, "restoreItem").mockResolvedValue({
+      itemId: activeItem.id,
+      status: "ready",
+      applied: true,
+    });
 
     const { result } = renderHook(() => useCloudWorkspace(userId));
     await waitFor(() => expect(result.current.isLoading).toBe(false));

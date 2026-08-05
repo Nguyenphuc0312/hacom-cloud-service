@@ -44,6 +44,23 @@
     "trash": "{{value}} trong thùng rác",
     "available": "{{value}} còn lại"
   },
+  "quotaRequest": {
+    "action": "Yêu cầu tăng dung lượng",
+    "title": "Yêu cầu tăng dung lượng Cloud",
+    "description": "Chọn một mức dung lượng được hỗ trợ. Hạn mức chỉ thay đổi sau khi yêu cầu được duyệt.",
+    "tier": "Hạn mức đề nghị",
+    "reason": "Lý do (không bắt buộc)",
+    "reasonPlaceholder": "Mô tả ngắn lý do cần thêm dung lượng",
+    "submit": "Gửi yêu cầu",
+    "submitted": "Đã gửi yêu cầu tăng dung lượng.",
+    "requested": "Hạn mức đề nghị: {{value}}",
+    "pendingNotice": "Mỗi tài khoản chỉ có một yêu cầu đang chờ duyệt.",
+    "status": {
+      "pending": "Đang chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Đã từ chối"
+    }
+  },
   "service": {
     "checking": "Đang kiểm tra dịch vụ Cloud",
     "ready": "Dịch vụ Cloud sẵn sàng",
@@ -188,6 +205,9 @@
     "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
     "itemNotReady": "Mục đang xử lý nên chưa thể xóa. Hãy thử lại khi trạng thái sẵn sàng.",
     "trashExpired": "Mục đã hết thời hạn 24 giờ và không thể khôi phục.",
+    "invalidQuotaTier": "Hãy chọn một hạn mức dung lượng được hỗ trợ.",
+    "quotaRequestPending": "Đã có một yêu cầu tăng dung lượng đang chờ duyệt.",
+    "idempotencyConflict": "Thao tác xung đột với yêu cầu trước đó. Hãy làm mới rồi thử lại.",
     "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.",
     "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
   }
