@@ -1506,7 +1506,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 <span className="h-4 w-4 shrink-0 rounded-full border-2 border-[#1565C0] border-t-transparent animate-spin" />
                 <div className="min-w-0 flex-1">
                   <p id="composer-location-title" className="text-sm font-semibold text-text-primary">
-                    Đang gửi...
+                    Đang gửi vị trí…
                   </p>
                   <p id="composer-location-description" className="text-xs text-text-muted">
                     Vui lòng đợi trong giây lát

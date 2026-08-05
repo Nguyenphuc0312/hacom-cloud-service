@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAudioRecorder } from "./useAudioRecorder";
 
@@ -98,6 +98,9 @@ describe("useAudioRecorder", () => {
   });
 
   afterEach(() => {
+    // Unmount hooks while timer/browser mocks are still installed so the
+    // recorder cleanup can clear intervals and release media resources.
+    cleanup();
     vi.unstubAllGlobals();
   });
 
