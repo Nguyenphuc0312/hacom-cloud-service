@@ -7,21 +7,9 @@ import { isAdminWriteActionsEnabled } from '@/config/featureFlags/featureFlags';
 import { PageShell } from '@/components/PageShell/PageShell';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard/SurfaceCard';
-import { EmailTemplatesCard } from '@/features/services/components/EmailTemplatesCard/EmailTemplatesCard';
-import { SmtpSettingsCard } from '@/features/services/components/SmtpSettingsCard/SmtpSettingsCard';
 
 import './SettingsPage.css';
 const SETTING_SECTIONS = [
-  {
-    key: 'smtp',
-    label: 'SMTP',
-    description: 'Cấu hình gửi mail',
-  },
-  {
-    key: 'email-templates',
-    label: 'Mẫu email',
-    description: 'Nội dung email',
-  },
   {
     key: 'system',
     label: 'Thiết lập hệ thống',
@@ -55,11 +43,11 @@ const SYSTEM_SURFACES = [
 export const SettingsPage = () => {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
-  const activeSection = isSettingSectionKey(section) ? section : 'smtp';
+  const activeSection = isSettingSectionKey(section) ? section : 'system';
 
   useEffect(() => {
     if (!isSettingSectionKey(section)) {
-      navigate('/settings/smtp', { replace: true });
+      navigate('/settings/system', { replace: true });
     }
   }, [navigate, section]);
 
@@ -69,14 +57,6 @@ export const SettingsPage = () => {
   );
 
   const renderContent = () => {
-    if (activeSection === 'smtp') {
-      return <SmtpSettingsCard />;
-    }
-
-    if (activeSection === 'email-templates') {
-      return <EmailTemplatesCard />;
-    }
-
     return (
       <div className="ds-settings-stack">
         <SurfaceCard
