@@ -21,6 +21,7 @@ import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState/EmptyState';
 import { formatDateTime } from '@/utils/date/date';
+import { sanitizeMetadataForDisplay } from '../../auditMetadata';
 import './AuditLogPage.css';
 
 const getActiveFilterCount = (filters: AuditQuery) =>
@@ -153,9 +154,9 @@ export const AuditLogPage = () => {
   };
 
   const pageHeader = {
-    eyebrow: 'Kiểm soát truy cập',
-    title: 'Nhật ký audit',
-    description: 'Theo dõi thao tác quản trị, quyết định truy cập và sự kiện hệ thống.',
+    eyebrow: 'Hỗ trợ tài khoản',
+    title: 'Lịch sử thao tác',
+    description: 'Theo dõi thao tác hỗ trợ tài khoản và các sự kiện vận hành liên quan.',
   };
 
   if (query.isPending && !query.data) {
@@ -239,7 +240,7 @@ export const AuditLogPage = () => {
           </FilterBar>
 
           <DataTableShell
-            title="Sự kiện quản trị"
+            title="Sự kiện hỗ trợ và vận hành"
             meta="Metadata dài và payload trước/sau chỉ hiển thị trong panel chi tiết."
           >
             <DataTable
@@ -314,7 +315,7 @@ export const AuditLogPage = () => {
               <section className="ds-ops-detail-section">
                 <h3>Metadata</h3>
                 <div className="ds-ops-code-block">
-                  <pre>{JSON.stringify(selectedEntry.metadata ?? {}, null, 2)}</pre>
+                  <pre>{JSON.stringify(sanitizeMetadataForDisplay(selectedEntry.metadata ?? {}), null, 2)}</pre>
                 </div>
               </section>
 
