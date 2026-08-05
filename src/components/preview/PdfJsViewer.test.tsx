@@ -85,28 +85,56 @@ afterEach(() => {
 });
 
 describe("PdfJsViewer", () => {
-  it("nạp file qua fetch → ArrayBuffer, không đưa thẳng url cho pdf.js", async () => {
+  it("server KHÔNG hỗ trợ range (trả 200) → tải cả file, không đưa url cho pdf.js", async () => {
     getDocumentArgs.length = 0;
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(new ArrayBuffer(8), { status: 200 }) as Response,
-      );
+    // 200 = server phớt lờ header Range. Đưa { url } trong tình huống này chính
+    // là thứ gây trắng màn hôm 05-08-26.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new ArrayBuffer(8), { status: 200 }) as Response,
+    );
 
     render(
       <PdfJsViewer url="https://example.test/a.pdf" fileName="a.pdf" fileSize={1024} />,
     );
     await screen.findByText(/3 pages/);
 
-    // Đây là điều gây trắng màn: { url } khiến pdf.js tự phát range request.
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "https://example.test/a.pdf",
-      expect.anything(),
-    );
     expect(getDocumentArgs[0]).toHaveProperty("data");
     expect(getDocumentArgs[0]).not.toHaveProperty("url");
+  });
 
-    fetchSpy.mockRestore();
+  it("server CÓ hỗ trợ range (trả 206) → giao url cho pdf.js tải dần", async () => {
+    getDocumentArgs.length = 0;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new ArrayBuffer(2), { status: 206 }) as Response,
+    );
+
+    render(<PdfJsViewer url="https://example.test/big.pdf" fileName="big.pdf" />);
+    await screen.findByText(/3 pages/);
+
+    // Chỉ dò 2 byte, KHÔNG tải cả file — đây là điểm giúp file 200 trang mở ngay.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+      headers: { Range: "bytes=0-1" },
+    });
+    expect(getDocumentArgs[0]).toHaveProperty("url");
+    expect(getDocumentArgs[0]).not.toHaveProperty("data");
+  });
+
+  it("dò range lỗi (CORS chặn) → vẫn xem được bằng đường tải cả file", async () => {
+    getDocumentArgs.length = 0;
+    let call = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      call += 1;
+      // Lần 1 = dò range bị CORS chặn; lần 2 = tải cả file, phải thành công.
+      return call === 1
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : Promise.resolve(new Response(new ArrayBuffer(8), { status: 200 }) as Response);
+    });
+
+    render(<PdfJsViewer url="https://example.test/cors.pdf" fileName="cors.pdf" />);
+    await screen.findByText(/3 pages/);
+
+    expect(getDocumentArgs[0]).toHaveProperty("data");
   });
 
   it("vẽ canvas cho các trang lọt vào viewport", async () => {

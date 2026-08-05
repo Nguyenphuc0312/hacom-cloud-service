@@ -44,6 +44,8 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
 // Vẽ sẵn 1 màn hình trên/dưới viewport để cuộn không thấy khoảng trắng.
 const PRELOAD_MARGIN = "100% 0px";
+// Kích thước mỗi lần pdf.js xin thêm dữ liệu khi tải dần (mặc định của pdf.js).
+const RANGE_CHUNK_SIZE = 65536;
 
 // PDF.js worker configuration - loaded dynamically.
 // Use Vite's `?worker` import so the worker is bundled and instantiated by Vite
@@ -66,6 +68,31 @@ async function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
 }
 
 /**
+ * Server có phục vụ range request không? Hỏi bằng 1 request 2 byte.
+ *
+ * Không dùng HEAD: S3/MinIO ký presigned URL theo đúng HTTP method, nên URL ký
+ * cho GET sẽ trả 403 khi gọi HEAD. Phải hỏi bằng chính GET + header Range.
+ *
+ * Mọi trục trặc (CORS chặn header Range, mạng lỗi, server trả 200 thay vì 206)
+ * đều quy về `false` → rơi xuống đường tải cả file, vẫn xem được.
+ */
+async function supportsRangeRequests(url: string, signal: AbortSignal): Promise<boolean> {
+  try {
+    const res = await fetch(url, { headers: { Range: "bytes=0-1" }, signal });
+    // 206 = server hiểu và cắt đúng đoạn. 200 nghĩa là nó phớt lờ Range và trả cả file.
+    return res.status === 206;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchWholeFile(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`Failed to fetch PDF: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+/**
  * Một trang PDF tự quản vòng đời render của chính nó:
  * chỉ vẽ khi lọt vào viewport (IntersectionObserver), huỷ khi cuộn ra xa.
  * Nhờ vậy file 50+ trang chỉ giữ vài canvas trong bộ nhớ.
@@ -75,8 +102,10 @@ const PdfPage: React.FC<{
   totalPages: number;
   scale: number;
   doc: PDFDocumentWrapper;
+  /** Cỡ trang 1 — dùng làm chỗ trống cho trang chưa vẽ, để thanh cuộn đúng ngay từ đầu. */
+  placeholder: { width: number; height: number };
   onVisible: (pageNumber: number) => void;
-}> = React.memo(({ pageNumber, totalPages, scale, doc, onVisible }) => {
+}> = React.memo(({ pageNumber, totalPages, scale, doc, placeholder, onVisible }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [isNear, setIsNear] = useState(false);
 
@@ -161,7 +190,7 @@ const PdfPage: React.FC<{
           con nào vào đây, nếu không sẽ xoá mất canvas. */}
       <div
         ref={hostRef}
-        style={{ width: 600, height: 800 }}
+        style={placeholder}
         className="flex items-center justify-center"
       />
       <div className="absolute bottom-2 right-2 rounded bg-black/50 px-2 py-0.5 text-xs text-white">
@@ -183,6 +212,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentWrapper | null>(null);
+  const [pageSize, setPageSize] = useState({ width: 600, height: 800 });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.0);
@@ -190,6 +220,16 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const extension = getFileExtension(fileName);
+
+  // useMemo là bắt buộc, không phải tối ưu vặt: object mới mỗi lần render sẽ phá
+  // React.memo của PdfPage → cả 200 trang re-render mỗi lần cuộn đổi currentPage.
+  const placeholder = React.useMemo(
+    () => ({
+      width: Math.floor(pageSize.width * scale),
+      height: Math.floor(pageSize.height * scale),
+    }),
+    [pageSize.width, pageSize.height, scale],
+  );
 
   // Load PDF document
   useEffect(() => {
@@ -206,21 +246,34 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
         const pdfjs = await loadPdfJs();
         if (cancelled) return;
 
-        // Phải tự fetch rồi đưa ArrayBuffer cho pdf.js. KHÔNG đưa thẳng { url }:
-        // pdf.js tự request bằng XHR không kèm credentials nên file có xác thực
-        // sẽ tải hụt phần thân → trang trắng tinh dù vẫn đọc được số trang.
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch PDF: ${response.status}`);
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
+        const signal = abortControllerRef.current.signal;
+        const ranged = await supportsRangeRequests(url, signal);
         if (cancelled) return;
 
-        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        // Chọn đường nạp theo khả năng THẬT của server, không đoán:
+        //  - Có range → giao URL cho pdf.js tải dần, file 200 trang mở gần như tức thì.
+        //  - Không    → tự fetch cả file rồi đưa ArrayBuffer (chậm hơn nhưng luôn đúng).
+        // Đưa { url } khi server KHÔNG phục vụ range sẽ ra trang trắng tinh mà vẫn
+        // đọc được số trang — đã dính đúng lỗi này 05-08-26, xem PdfJsViewer.test.tsx.
+        const loadingTask = ranged
+          ? pdfjs.getDocument({
+              url,
+              disableAutoFetch: true,
+              disableStream: false,
+              rangeChunkSize: RANGE_CHUNK_SIZE,
+            })
+          : pdfjs.getDocument({ data: await fetchWholeFile(url, signal) });
+
         const pdf = await loadingTask.promise;
         if (cancelled) return;
 
+        // Đo trang 1 để mọi trang chưa vẽ có chỗ trống đúng tỉ lệ → thanh cuộn
+        // chuẩn ngay lập tức, không nhảy giật khi từng trang vẽ xong.
+        const firstPage = await pdf.getPage(1);
+        if (cancelled) return;
+        const { width, height } = firstPage.getViewport({ scale: 1 });
+
+        setPageSize({ width: Math.floor(width), height: Math.floor(height) });
         setPdfDoc(pdf as unknown as PDFDocumentWrapper);
         setTotalPages(pdf.numPages);
         setCurrentPage(1);
@@ -427,6 +480,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
                   totalPages={totalPages}
                   scale={scale}
                   doc={pdfDoc}
+                  placeholder={placeholder}
                   onVisible={setCurrentPage}
                 />
               ))
