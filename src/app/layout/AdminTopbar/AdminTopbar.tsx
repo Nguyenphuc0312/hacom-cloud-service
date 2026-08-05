@@ -13,7 +13,6 @@ import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { CommandPalette } from '@/components/CommandPalette/CommandPalette';
 import { useCommandPalette } from '@/hooks/useCommandPalette/useCommandPalette';
 import { useAuthStore } from '@/store/authStore/authStore';
-import { hasSomeRole } from '@/utils/role/role';
 import { getEnvironmentDisplayConfig } from '@/config/environment';
 import { TopbarActions } from '../TopbarActions/TopbarActions';
 import { TopbarSearch } from '../TopbarSearch/TopbarSearch';
@@ -88,7 +87,6 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const currentRole = useAuthStore((state) => state.user?.role);
   const { user } = useCurrentUser();
   const { isOpen, openPalette, closePalette } = useCommandPalette();
   const currentPage = resolveNavigationContext(location.pathname);
@@ -108,9 +106,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
 
   const paletteItems = useMemo(
     () => [
-      ...commandRouteItems
-        .filter((item) => !item.roles || hasSomeRole(currentRole, item.roles))
-        .map((item) => ({
+      ...commandRouteItems.map((item) => ({
           ...item,
           icon: <AppIcon name={item.iconKey} size={16} aria-hidden />,
           onSelect: () => {
@@ -118,7 +114,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
               navigate(item.route);
             }
           },
-        })),
+      })),
       {
         id: 'quick-open-users',
         label: 'Mở người dùng',
@@ -127,33 +123,6 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         icon: <AppIcon name="users" size={16} aria-hidden />,
         keywords: ['users', 'accounts', 'admin'],
         onSelect: () => navigate('/users'),
-      },
-      {
-        id: 'quick-open-email-templates',
-        label: 'Mở mẫu email',
-        description: 'Mở mẫu email hệ thống.',
-        category: 'Thao tác nhanh' as const,
-        icon: <AppIcon name="fileStack" size={16} aria-hidden />,
-        keywords: ['broadcast', 'announcement', 'message'],
-        onSelect: () => navigate('/settings/email-templates'),
-      },
-      {
-        id: 'quick-open-conversations',
-        label: 'Mở hội thoại',
-        description: 'Kiểm tra bản ghi hội thoại phục vụ admin.',
-        category: 'Điều hướng' as const,
-        icon: <AppIcon name="messages" size={16} aria-hidden />,
-        keywords: ['chat', 'conversation', 'support'],
-        onSelect: () => navigate('/conversations'),
-      },
-      {
-        id: 'quick-open-hr',
-        label: 'Mở nhân sự HR',
-        description: 'Rà soát hồ sơ HR và tài khoản liên kết.',
-        category: 'Thao tác nhanh' as const,
-        icon: <AppIcon name="hr" size={16} aria-hidden />,
-        keywords: ['hr', 'employees', 'directory'],
-        onSelect: () => navigate('/hr-employees'),
       },
       {
         id: 'quick-open-alerts',
@@ -174,7 +143,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         onSelect: () => navigate('/realtime'),
       },
     ],
-    [currentRole, navigate],
+    [navigate],
   );
 
   const handleLogout = async () => {
