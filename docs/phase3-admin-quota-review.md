@@ -1,5 +1,12 @@
 # Phase 3 admin quota review
 
+> **Ownership boundary (05/08/2026):** Cloud owns the transaction, API and
+> audit implementation described below. Auth/Admin/Notification backends are
+> maintained by the Hacom Holding DX team and are not modified by this project.
+> Their steps are a proposed integration contract and remain **DEFERRED** until
+> that team accepts/provisions them. Frontend work may consume the frozen Cloud
+> API, but cannot be used as evidence that the external trust chain is live.
+
 ## Trust and call chain
 
 1. The browser calls only `chat-admin-service` with its admin access token.

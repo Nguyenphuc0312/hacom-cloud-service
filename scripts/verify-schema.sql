@@ -237,7 +237,8 @@ BEGIN
   SET
     status = 'approved',
     reviewed_by_user_id = gen_random_uuid(),
-    reviewed_at = NOW()
+    reviewed_at = NOW(),
+    review_operation_id = 'verify-schema-approval'
   WHERE id = quota_request_a;
 
   INSERT INTO cloud.items (

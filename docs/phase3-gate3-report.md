@@ -1,39 +1,56 @@
-# Gate 3 QA report
+# Gate 3 QA report — Cloud scope and external handoff
 
-## Scope and evidence
+Date: 05/08/2026
 
-| Gate | Evidence | Result |
+## Status by ownership boundary
+
+| Gate criterion | Evidence in this repository | Status |
 |---|---|---|
-| Active/Trash search and stable cursor | repository cursor/filter integration suite; cursor fingerprint contract | PASS |
-| Search performance | 105,000-item benchmark: active 6.499 ms, Trash 4.398 ms, cursor 0.248 ms; all below the 2 s safety budget | PASS |
-| One pending request | concurrent create integration tests and unique partial index | PASS |
-| Authorized admin review | fresh Auth `/v1/auth/me`, exact `cloud.quota.review`, service-token scope tests | PASS |
-| Idempotent approval | row-lock transaction test repeats the same operation and proves one audit/quota update | PASS |
-| Transactional quota/audit | PostgreSQL integration assertion after approve | PASS |
-| Reject transaction/idempotency | PostgreSQL test proves unchanged quota, one audit, actor/trace and conflicting-decision rejection | PASS |
-| Trace continuity | Admin client test and audit `request_id=trace-admin-review` assertion | PASS |
-| Sensitive-data controls | common audit writer rejects sensitive metadata keys; metrics use bounded enums | PASS |
-| Audit immutability | migrations 000010/000011 reject UPDATE/DELETE and GUC bypass; maintenance is isolated behind a NOLOGIN role | PASS |
-| Cross-service E2E contract | seven-step Postman approve/reject/retry flow, default tiers and token/URL-injected runner | PASS |
+| Active/Trash search, filters and stable cursor | PostgreSQL repository integration suite; cursor fingerprint contract | PASS |
+| Search performance | 105,000-item benchmark: active 6.499 ms, Trash 4.398 ms, cursor 0.248 ms; 2 s safety budget | PASS |
+| One pending quota request | concurrent create tests and unique partial index | PASS |
+| Idempotent approve/reject transaction | row lock, operation ID and retry/conflict integration tests | PASS |
+| Quota and audit atomicity | PostgreSQL transaction assertions and reconciliation query | PASS |
+| Audit trace and sensitive-data controls | common audit writer and bounded metrics tests | PASS |
+| Audit append-only enforcement | migrations 000010/000011 and mutation/GUC-bypass tests | PASS |
+| Cloud API/Worker build and migration rollback | `make test-gate3` | PASS |
+| Chat Web user UI | separate authorized frontend worktree/branch and its readiness gate | IN PROGRESS |
+| Production Auth permission refresh | requires Hacom Holding DX Auth backend | DEFERRED |
+| Admin service token and `cloud.quota.review` provisioning | requires Auth/Admin backend owners | DEFERRED |
+| Admin review panel live integration | requires Admin backend contract; frontend may proceed after acceptance | DEFERRED |
+| Notification delivery from Cloud outbox | requires Notification backend consumer | DEFERRED |
+| Live cross-service HTTP E2E | requires Auth/Admin/Infrastructure integration environment | DEFERRED |
 
-## Security acceptance
+## What `make test-gate3` proves
 
-- Revoked permission fails closed even if the browser JWT still contains the permission.
-- Refreshed Auth actor mismatch is rejected before Cloud is called.
-- Browser JSON has no actor property; Admin Service overwrites the Cloud actor header
-  from the verified principal.
-- Cloud rejects missing/invalid service token and requires the exact service scope.
-- A duplicate approval with the same operation ID returns `applied=false`; a different
-  operation after completion returns invalid state and cannot increment quota again.
-- Neither reason text nor file/object metadata is emitted to logs or metrics.
-- Metric business rejection and internal-error outcomes are tested separately.
+The gate creates an isolated PostgreSQL database, applies and verifies all Cloud
+migrations, runs Search/Trash/quota/audit acceptance tests under the race
+detector, reconciles terminal quota requests against audit evidence, proves the
+audit-maintenance migration can roll back and recover, then vets/builds the
+Cloud API and Worker. It does not read, build or change any Hacom Holding DX
+backend repository.
 
-## Findings
+The Postman collection remains a machine-readable handoff artifact. Merely
+parsing that collection is not a live E2E pass.
 
-No Phase 3 implementation BLOCKER or MAJOR finding remains. Shared-types now builds
-on local package preparation; the Gate builds Auth, Admin Service and Admin Panel after
-the shared contract. Cloud full Go suite and PostgreSQL acceptance/reconciliation pass
-with non-empty approve/reject evidence.
+## Security boundary
 
-Gate 3 status: **PASS for code/data gates**. Run `make test-postman-phase3` with
-environment-specific user/admin tokens as the deployment smoke test.
+- Cloud rejects a missing/invalid service credential and requires the exact
+  review scope defined by the frozen contract.
+- The caller cannot provide the audited actor through request JSON.
+- An exact retry returns `applied=false`; a conflicting operation cannot update
+  quota or append a second terminal audit event.
+- Review notes, file content, object keys, access tokens and presigned URLs are
+  excluded from audit/metrics evidence.
+- External Auth must remain the account/permission authority. Cloud must not
+  add an HS256 compatibility shortcut or duplicate Auth state locally.
+
+## External work not claimed as complete
+
+Production identity, refreshed admin permission, service-token issuance,
+gateway routing and notification delivery are backend responsibilities of the
+Hacom Holding DX team. The required changes and acceptance evidence are tracked
+in `docs/HACOM-DX-BACKEND-CONTRACT-NEGOTIATION.md`.
+
+Gate 3 result: **PASS for the Cloud-owned code/data gate; frontend remains in
+progress; external backend and live cross-service criteria remain DEFERRED.**
