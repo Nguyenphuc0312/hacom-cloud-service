@@ -176,10 +176,32 @@ describe('LoginPage admin preflight', () => {
 
     await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('admin-token'));
     expect(loginMock).toHaveBeenCalledTimes(1);
+    expect(loginMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        email: 'admin@company.test',
+        password: 'secret88',
+        rememberMe: false,
+      }),
+    );
     expect(getCurrentAdminMock).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState().user).toEqual(admin);
     expect(message.success).toHaveBeenCalledWith('Đăng nhập thành công.');
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('forwards rememberMe when the persistent-session option is selected', async () => {
+    loginMock.mockResolvedValue({ accessToken: 'admin-token' });
+    getCurrentAdminMock.mockResolvedValue(admin);
+
+    const { container } = renderLoginPage();
+    fireEvent.click(screen.getByRole('checkbox'));
+    await submitLogin(container);
+
+    await waitFor(() => {
+      expect(loginMock.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ rememberMe: true }),
+      );
+    });
   });
 
   it('clears token and shows the non-admin reason when normal user logs into admin panel', async () => {

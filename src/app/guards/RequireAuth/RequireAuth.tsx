@@ -9,7 +9,12 @@ interface RequireAuthProps {
 
 export const RequireAuth = ({ children }: RequireAuthProps) => {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const isInitialized = useAuthStore((state) => state.isInitialized);
   const location = useLocation();
+
+  if (!isInitialized) {
+    return <div role="status">Äang khá»Ÿi táº¡o phiĂªn Ä‘Äƒng nháº­p...</div>;
+  }
 
   if (!accessToken) {
     return <Navigate to="/login" replace state={{ from: location }} />;

@@ -20,6 +20,8 @@ export interface LoginRequest {
   email?: string;
   loginIdentifier?: string;
   password: string;
+  /** Requests the Auth service's configured persistent-session policy. */
+  rememberMe?: boolean;
 }
 
 export interface LoginResponse {

@@ -23,6 +23,7 @@ interface AuthState {
   accessBootstrapStatus: AccessBootstrapStatus;
   rememberMe: boolean;
   isInitialized: boolean;
+  setInitialized: (isInitialized: boolean) => void;
   setAuth: (payload: {
     accessToken: string;
     user: CurrentAdmin | null;
@@ -46,7 +47,7 @@ const loadFromStorage = (): AuthStoragePayload => {
   if (localData) {
     try {
       const parsed = JSON.parse(localData);
-      return { ...parsed, rememberMe: true };
+      return { ...parsed, accessToken: null, rememberMe: true };
     } catch {
       // Invalid data, clear it
       localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -56,7 +57,7 @@ const loadFromStorage = (): AuthStoragePayload => {
   if (sessionData) {
     try {
       const parsed = JSON.parse(sessionData);
-      return { ...parsed, rememberMe: false };
+      return { ...parsed, accessToken: null, rememberMe: false };
     } catch {
       sessionStorage.removeItem(SESSION_KEY);
     }
@@ -72,7 +73,8 @@ const loadFromStorage = (): AuthStoragePayload => {
 };
 
 const saveToStorage = (state: AuthStoragePayload): void => {
-  const { rememberMe, ...rest } = state;
+  const { rememberMe, accessToken, ...rest } = state;
+  void accessToken;
   const storage = getStorage(rememberMe);
   const storageKey = rememberMe ? AUTH_STORAGE_KEY : SESSION_KEY;
 
@@ -113,6 +115,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   accessBootstrapStatus: 'unknown',
   rememberMe: false,
   isInitialized: false,
+
+  setInitialized: (isInitialized) => set({ isInitialized }),
 
   setAuth: ({ accessToken, user, rememberMe = false }) => {
     const currentState = get();
@@ -233,7 +237,7 @@ if (typeof window !== 'undefined') {
     access: stored.access,
     accessBootstrapStatus: stored.accessBootstrapStatus,
     rememberMe: stored.rememberMe,
-    isInitialized: true,
+    isInitialized: false,
   });
 
   // Listen for logout events from other tabs

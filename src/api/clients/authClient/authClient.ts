@@ -8,6 +8,15 @@ export const authClient = {
     return unwrapApiEnvelope<LoginResponse>(response);
   },
 
+  async logout(): Promise<void> {
+    await authAxiosInstance.post('/logout');
+  },
+
+  async refresh(): Promise<LoginResponse> {
+    const response = await authAxiosInstance.post('/refresh', {});
+    return unwrapApiEnvelope<LoginResponse>(response);
+  },
+
   async me(): Promise<MeResponse> {
     const response = await adminAxiosInstance.get('/me');
     const payload = unwrapApiEnvelope<{ admin: MeResponse }>(response);
