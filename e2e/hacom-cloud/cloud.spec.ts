@@ -1,15 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const loginIdentifier = process.env.HACOM_CLOUD_E2E_LOGIN ?? 'cloud.user@local.test';
 const password = process.env.HACOM_CLOUD_E2E_PASSWORD;
 
-test.beforeEach(async ({ page }) => {
+const login = async (page: Page) => {
   if (!password) throw new Error('HACOM_CLOUD_E2E_PASSWORD is required for the disposable local E2E principal.');
   await page.goto('/login');
   await page.getByLabel(/Email hoặc mã nhân viên/i).fill(loginIdentifier);
   await page.locator('input[type="password"]').fill(password);
   await page.getByRole('button', { name: /Đăng nhập ngay/i }).click();
   await page.waitForURL(/\/(?:chat|cloud|$)/, { timeout: 20_000 });
+};
+
+test.beforeEach(async ({ page }) => {
+  await login(page);
 });
 
 test('uses the shared chat workspace to create a note and upload a real file', async ({ page }) => {
@@ -32,25 +36,48 @@ test('uses the shared chat workspace to create a note and upload a real file', a
   await expect(page.getByRole('heading', { name: /Dung lượng lưu trữ/i })).toBeVisible();
 });
 
-test('synchronizes a Cloud note to another active tab without reload', async ({ browser }) => {
-  if (!password) throw new Error('HACOM_CLOUD_E2E_PASSWORD is required for the disposable local E2E principal.');
+test('syncs a Cloud upload to another authenticated tab without reload', async ({ browser }) => {
   const firstContext = await browser.newContext();
   const secondContext = await browser.newContext();
   const first = await firstContext.newPage();
   const second = await secondContext.newPage();
 
-  const signIn = async (page: typeof first) => {
-    await page.goto('/login');
-    await page.getByLabel(/Email hoặc mã nhân viên/i).fill(loginIdentifier);
-    await page.locator('input[type="password"]').fill(password);
-    await page.getByRole('button', { name: /Đăng nhập ngay/i }).click();
-    await page.waitForURL(/\/(?:chat|cloud|$)/, { timeout: 20_000 });
-    await page.locator('a[href="/cloud"]').first().click();
-    await page.waitForURL('**/cloud');
-  };
+  try {
+    await Promise.all([login(first), login(second)]);
+    await Promise.all([
+      first.locator('a[href="/cloud"]').first().click(),
+      second.locator('a[href="/cloud"]').first().click(),
+    ]);
+    await Promise.all([first.waitForURL('**/cloud'), second.waitForURL('**/cloud')]);
+    await expect(second.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
+
+    const filename = `browser-cloud-sync-${Date.now()}.txt`;
+    await first.locator('input[type="file"]').setInputFiles({
+      name: filename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Hacom Cloud multi-tab fixture', 'utf8'),
+    });
+    await expect(first.getByText(filename)).toBeVisible();
+    await expect(second.getByText(filename)).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await Promise.all([firstContext.close(), secondContext.close()]);
+  }
+});
+
+test('synchronizes a Cloud note to another active tab without reload', async ({ browser }) => {
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const first = await firstContext.newPage();
+  const second = await secondContext.newPage();
 
   try {
-    await Promise.all([signIn(first), signIn(second)]);
+    await Promise.all([login(first), login(second)]);
+    await Promise.all([
+      first.locator('a[href="/cloud"]').first().click(),
+      second.locator('a[href="/cloud"]').first().click(),
+    ]);
+    await Promise.all([first.waitForURL('**/cloud'), second.waitForURL('**/cloud')]);
+
     const note = `browser-cloud-realtime-${Date.now()}`;
     await first.getByTestId('chat-composer-input').fill(note);
     await first.getByTestId('chat-composer-input').press('Enter');
