@@ -16,6 +16,11 @@ export default {
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "sans-serif",
+          // Emoji fallback — xem chú thích ở body{} trong src/index.css
+          '"Apple Color Emoji"',
+          '"Segoe UI Emoji"',
+          '"Noto Color Emoji"',
+          '"Segoe UI Symbol"',
         ],
       },
       fontSize: {

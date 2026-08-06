@@ -520,7 +520,14 @@ body {
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
-    sans-serif;
+    sans-serif,
+    /* Emoji fallback — phải đứng sau sans-serif để chỉ nhận glyph emoji.
+       Thiếu dòng này Windows rơi vào "Segoe UI Symbol" (đen trắng, ô vuông),
+       lệch hẳn với Noto Color Emoji trên mobile. */
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
+    "Segoe UI Symbol";
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
   /* No CSS `zoom` here. We tried scaling the whole UI up on large monitors with
