@@ -47,21 +47,22 @@ describe("emoji catalog", () => {
   });
 
   /**
-   * Chuỗi ZWJ chỉ hiện thành MỘT hình khi trình duyệt thật sự áp được
-   * ligature của font. Nhiều chuỗi có ligature trong Noto v35 nhưng Chrome
-   * vẫn tách rời — 🐈‍⬛ hiện thành "con mèo + ô vuông đen" đúng như user báo.
+   * KHÔNG dùng emoji ghép bằng ZWJ trong picker.
    *
-   * Danh sách dưới đây là kết quả ĐO THẬT trên browser (e2e đo bề rộng: ô
-   * tách rời rộng gấp ~2 lần ô thường), không suy từ phiên bản Unicode.
-   * Thêm ZWJ mới thì phải đo lại, đừng đoán.
+   * Chrome trên Windows không ghép được chúng thành một hình, dù font Noto
+   * CÓ ligature (đã kiểm bảng GSUB) và dù Chromium headless đo ra thì lại
+   * ghép bình thường. Trên máy thật user vẫn thấy 2 hình rời:
+   *   🐕‍🦺 → con chó + cái áo bảo hộ      🏴‍☠️ → lá cờ + đầu lâu
+   *   🐈‍⬛ → con mèo + ô vuông đen         🏳️‍🌈 → 2 lá cờ trắng
+   *
+   * Đã thử đoán theo phiên bản Unicode rồi theo bảng ligature — sai cả hai.
+   * Nên chốt luật đơn giản: cấm sạch ZWJ. Emoji 1 code point luôn an toàn,
+   * và mọi thứ ZWJ diễn tả đều có bản đơn thay thế (🐕 🏳️ 🏴 🐈 ❤️).
    */
-  it("chỉ dùng chuỗi ZWJ nằm trong danh sách font vẽ được", () => {
-    const ALLOWED_ZWJ = ["🐕‍🦺", "🏴‍☠️", "🏳️‍🌈"];
-    const used = allLists
+  it("không dùng emoji ghép bằng ZWJ (Chrome/Windows tách rời)", () => {
+    const zwj = allLists
       .flatMap((l) => l.emojis)
       .filter((e) => e.includes("‍"));
-    expect([...new Set(used)].sort()).toEqual(
-      [...new Set(ALLOWED_ZWJ)].sort(),
-    );
+    expect([...new Set(zwj)]).toEqual([]);
   });
 });
