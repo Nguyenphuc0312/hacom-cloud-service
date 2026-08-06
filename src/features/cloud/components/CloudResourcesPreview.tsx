@@ -1,15 +1,18 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { FileText, ImageIcon, Link2, Play } from "lucide-react";
 import { ImagePreviewModal } from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import type { CloudItem } from "../types";
 import { formatBytes, getCloudItemTitle } from "../utils/cloudFormat";
+import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 
 type ResourceTab = "media" | "files" | "links";
+const ACCESS_REQUEST_CONCURRENCY = 4;
 
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
+  userId?: string;
 }
 
 const itemTitle = (item: CloudItem): string =>
@@ -21,22 +24,38 @@ const itemTitle = (item: CloudItem): string =>
 
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
+  userId,
 }) => {
   const [activeTab, setActiveTab] = useState<ResourceTab>("media");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [video, setVideo] = useState<CloudItem | null>(null);
+  const [accessById, setAccessById] = useState<
+    Record<string, { url: string; expiresAt: string }>
+  >({});
+
+  const resolvedItems = useMemo(
+    () =>
+      items.map((item) => ({
+        ...item,
+        accessUrl: accessById[item.id]?.url ?? item.accessUrl,
+      })),
+    [accessById, items],
+  );
 
   const media = useMemo(
-    () => items.filter((item) => item.type === "image" || item.type === "video"),
-    [items],
+    () =>
+      resolvedItems.filter(
+        (item) => item.type === "image" || item.type === "video",
+      ),
+    [resolvedItems],
   );
   const files = useMemo(
-    () => items.filter((item) => item.type === "file"),
-    [items],
+    () => resolvedItems.filter((item) => item.type === "file"),
+    [resolvedItems],
   );
   const links = useMemo(
-    () => items.filter((item) => item.type === "link"),
-    [items],
+    () => resolvedItems.filter((item) => item.type === "link"),
+    [resolvedItems],
   );
   const images = useMemo(
     () =>
@@ -45,6 +64,66 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         .map((item) => ({ url: item.accessUrl!, alt: itemTitle(item) })),
     [media],
   );
+
+  useEffect(() => {
+    if (!userId) return;
+    const sourceItems =
+      activeTab === "media" ? media : activeTab === "files" ? files : [];
+    const candidates = sourceItems.filter((item) => {
+      if (item.status !== "ready") return false;
+      const expiresAt = accessById[item.id]?.expiresAt ?? item.accessExpiresAt;
+      return !expiresAt || Date.parse(expiresAt) - Date.now() <= 30_000;
+    });
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    const entries: Array<
+      readonly [string, { url: string; expiresAt: string }] | null
+    > = Array.from({ length: candidates.length }, () => null);
+    let nextIndex = 0;
+    const hydrateNext = async (): Promise<void> => {
+      while (nextIndex < candidates.length && !cancelled) {
+        const index = nextIndex++;
+        const item = candidates[index];
+        try {
+          const access = await getCachedCloudFileAccess(userId, item.id);
+          entries[index] = [
+            item.id,
+            { url: access.url, expiresAt: access.expiresAt },
+          ];
+        } catch {
+          entries[index] = null;
+        }
+      }
+    };
+    void Promise.all(
+      Array.from(
+        {
+          length: Math.min(ACCESS_REQUEST_CONCURRENCY, candidates.length),
+        },
+        () => hydrateNext(),
+      ),
+    ).then(() => {
+      if (cancelled) return;
+      const next: Record<string, { url: string; expiresAt: string }> = {};
+      entries.forEach((entry) => {
+        if (entry) next[entry[0]] = entry[1];
+      });
+      if (Object.keys(next).length > 0) {
+        setAccessById((current) => {
+          const changed = Object.entries(next).some(
+            ([itemId, access]) =>
+              current[itemId]?.url !== access.url ||
+              current[itemId]?.expiresAt !== access.expiresAt,
+          );
+          if (!changed) return current;
+          return { ...current, ...next };
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessById, activeTab, files, media, userId]);
 
   const tabs: Array<{ key: ResourceTab; label: string; count: number }> = [
     { key: "media", label: "Ảnh/Video", count: media.length },

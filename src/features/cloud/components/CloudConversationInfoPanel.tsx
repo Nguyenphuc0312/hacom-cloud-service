@@ -1,8 +1,13 @@
-import React, { useMemo } from "react";
+import React from "react";
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { CirclePlus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { CloudItem, CloudQuota, CloudViewMode } from "../types";
+import type {
+  CloudItem,
+  CloudQuota,
+  CloudQuotaRequest,
+  CloudViewMode,
+} from "../types";
 import { formatBytes } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
 import { CloudResourcesPreview } from "./CloudResourcesPreview";
@@ -10,26 +15,28 @@ import { CloudResourcesPreview } from "./CloudResourcesPreview";
 interface CloudConversationInfoPanelProps {
   items: CloudItem[];
   trashItems: CloudItem[];
+  userId?: string;
   quota: CloudQuota | null;
+  quotaRequest: CloudQuotaRequest | null;
+  showQuotaRequest: boolean;
   viewMode: CloudViewMode;
   onViewModeChange: (mode: CloudViewMode) => void;
+  onRequestQuota: () => void;
   onClose: () => void;
 }
-
-const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
-  items.reduce(
-    (total, item) => total + (types.includes(item.type) ? item.sizeBytes : 0),
-    0,
-  );
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
 > = ({
   items,
   trashItems,
+  userId,
   quota,
+  quotaRequest,
+  showQuotaRequest,
   viewMode,
   onViewModeChange,
+  onRequestQuota,
   onClose,
 }) => {
   const { i18n } = useTranslation("cloud");
@@ -44,10 +51,10 @@ export const CloudConversationInfoPanel: React.FC<
         description:
           "Lưu trữ và truy cập nhanh những nội dung quan trọng của bạn trên Hacom Cloud",
         storage: "Dung lượng lưu trữ",
-        imageVideo: "Ảnh/Video",
-        file: "File",
-        link: "Link",
+        active: "Đang sử dụng",
         free: "Trống",
+        requestQuota: "Yêu cầu cấp thêm dung lượng",
+        quotaPending: "Yêu cầu tăng quota đang chờ duyệt",
       }
     : {
         title: "Conversation information",
@@ -58,35 +65,11 @@ export const CloudConversationInfoPanel: React.FC<
         description:
           "Store and quickly access your important content on Hacom Cloud",
         storage: "Storage",
-        imageVideo: "Photos/Videos",
-        file: "Files",
-        link: "Links",
+        active: "In use",
         free: "Free",
+        requestQuota: "Request more storage",
+        quotaPending: "Quota request is pending",
       };
-
-  const categories = useMemo(
-    () => [
-      {
-        key: "media",
-        label: labels.imageVideo,
-        color: "#22A06B",
-        bytes: typeBytes(items, ["image", "video"]),
-      },
-      {
-        key: "file",
-        label: labels.file,
-        color: "#F5B700",
-        bytes: typeBytes(items, ["file"]),
-      },
-      {
-        key: "link",
-        label: labels.link,
-        color: "#4F7DD9",
-        bytes: typeBytes(items, ["link"]),
-      },
-    ],
-    [items, labels.file, labels.imageVideo, labels.link],
-  );
 
   const limitBytes = quota?.limitBytes ?? 0;
   const percent = (bytes: number): number =>
@@ -132,16 +115,11 @@ export const CloudConversationInfoPanel: React.FC<
             className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted"
             aria-label={labels.storage}
           >
-            {categories.map((category) => (
-              <span
-                key={category.key}
-                style={{
-                  width: `${percent(category.bytes)}%`,
-                  backgroundColor: category.color,
-                }}
-                aria-hidden
-              />
-            ))}
+            <span
+              className="bg-[#22A06B]"
+              style={{ width: `${percent(quota?.activeBytes ?? 0)}%` }}
+              aria-hidden
+            />
             <span
               className="bg-[#F97316]"
               style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }}
@@ -154,12 +132,10 @@ export const CloudConversationInfoPanel: React.FC<
             />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-text-muted">
-            {categories.map((category) => (
-              <span key={category.key} className="flex items-center gap-1.5">
-                <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-                {category.label}
-              </span>
-            ))}
+            <span className="flex items-center gap-1.5">
+              <i className="h-2.5 w-2.5 rounded-full bg-[#22A06B]" />
+              {labels.active} · {formatBytes(quota?.activeBytes ?? 0)}
+            </span>
             <span className="flex items-center gap-1.5">
               <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
               {labels.trash}
@@ -169,6 +145,25 @@ export const CloudConversationInfoPanel: React.FC<
               {labels.free} · {formatBytes(quota?.availableBytes ?? 0)}
             </span>
           </div>
+          {showQuotaRequest ? (
+            <div className="mt-4 rounded-xl border border-brand-solid/20 bg-brand-soft/50 p-3">
+              <p className="text-xs leading-5 text-text-secondary">
+                {quotaRequest?.status === "pending"
+                  ? labels.quotaPending
+                  : labels.requestQuota}
+              </p>
+              {quotaRequest?.status !== "pending" ? (
+                <button
+                  type="button"
+                  onClick={onRequestQuota}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-solid hover:underline"
+                >
+                  <CirclePlus className="h-4 w-4" aria-hidden />
+                  {labels.requestQuota}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="border-b border-border/60 p-4">
@@ -201,7 +196,7 @@ export const CloudConversationInfoPanel: React.FC<
         </section>
 
         <section className="border-b border-border/60 p-4">
-          <CloudResourcesPreview items={items} />
+          <CloudResourcesPreview items={items} userId={userId} />
         </section>
       </div>
     </aside>

@@ -39,6 +39,7 @@ import {
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
+import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
@@ -50,6 +51,7 @@ import {
   getCloudItemTitle,
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
+import { shouldPromptQuotaRequest } from "../utils/cloudQuota";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
@@ -115,8 +117,12 @@ export default function CloudPage() {
   const [viewMode, setViewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
+  const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
   const cloudUserId = resolveCloudUserId(authUser?.id);
   const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
+  const showQuotaRequest =
+    shouldPromptQuotaRequest(workspace.quota, workspace.quotaRequest) ||
+    workspace.quotaRequest?.status === "pending";
   const fetchConversations = useChatStore((state) => state.fetchConversations);
   const hasFetchedConversationsOnce = useChatStore(
     (state) => state.hasFetchedConversationsOnce,
@@ -171,6 +177,12 @@ export default function CloudPage() {
     hasFetchedConversationsOnce,
     isLoadingConversations,
   ]);
+
+  useEffect(() => {
+    if (workspace.error?.code === "QUOTA_EXCEEDED") {
+      setIsQuotaRequestOpen(true);
+    }
+  }, [workspace.error?.code]);
 
   const layoutState =
     chatLayoutBreakpoint === "compact"
@@ -573,9 +585,13 @@ export default function CloudPage() {
             <CloudConversationInfoPanel
               items={workspace.items}
               trashItems={workspace.trashItems}
+              userId={cloudUserId}
               quota={workspace.quota}
+              quotaRequest={workspace.quotaRequest}
+              showQuotaRequest={showQuotaRequest}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              onRequestQuota={() => setIsQuotaRequestOpen(true)}
               onClose={() => setIsInfoPanelOpen(false)}
             />
           </div>
@@ -597,6 +613,17 @@ export default function CloudPage() {
         onClose={() => setDeleteTarget(null)}
         onTrash={handleTrash}
         onPermanentDelete={handlePermanentDelete}
+      />
+      <CloudQuotaRequestDialog
+        isOpen={isQuotaRequestOpen}
+        quota={workspace.quota}
+        currentRequest={workspace.quotaRequest}
+        isLoading={workspace.isRequestingQuota}
+        onClose={() => setIsQuotaRequestOpen(false)}
+        onSubmit={async (requestedQuotaBytes, reason) => {
+          await workspace.requestQuota(requestedQuotaBytes, reason);
+          toast.success(t("quotaRequest.submitted"));
+        }}
       />
     </AppShell>
   );

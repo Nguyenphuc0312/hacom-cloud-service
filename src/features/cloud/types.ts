@@ -24,6 +24,7 @@ export interface CloudItem {
   updatedAt: string;
   /** Short-lived, owner-scoped URL resolved client-side for media preview. */
   accessUrl?: string;
+  accessExpiresAt?: string;
   contentType?: string;
 }
 
