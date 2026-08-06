@@ -16,14 +16,15 @@ test.beforeEach(async ({ page }) => {
   await login(page);
 });
 
-test('creates a note and uploads a real file through the Cloud UI', async ({ page }) => {
+test('uses the shared chat workspace to create a note and upload a real file', async ({ page }) => {
   await page.locator('a[href="/cloud"]').first().click();
   await page.waitForURL('**/cloud');
-  await expect(page.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
 
   const note = `browser-e2e-${Date.now()}`;
-  await page.getByPlaceholder(/Viết ghi chú/i).fill(note);
-  await page.getByRole('button', { name: /Lưu ghi chú/i }).click();
+  const composer = page.getByTestId('chat-composer-input');
+  await composer.fill(note);
+  await composer.press('Enter');
   await expect(page.getByText(note)).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -32,7 +33,7 @@ test('creates a note and uploads a real file through the Cloud UI', async ({ pag
     buffer: Buffer.from('Hacom Cloud browser E2E fixture', 'utf8'),
   });
   await expect(page.getByText('browser-cloud.txt')).toBeVisible();
-  await expect(page.getByText(/Đã dùng/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Dung lượng lưu trữ/i })).toBeVisible();
 });
 
 test('syncs a Cloud upload to another authenticated tab without reload', async ({ browser }) => {
