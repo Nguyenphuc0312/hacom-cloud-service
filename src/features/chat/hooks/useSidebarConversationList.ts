@@ -8,6 +8,9 @@ import {
 import type { SidebarConversationFilter } from "../state/chatSidebarStore";
 import { useSidebarConversationSummaries } from "./useSidebarConversationSummaries";
 
+const isPersonalCloudConversation = (conversation: Conversation): boolean =>
+  String(conversation.type).toLowerCase() === "personal_cloud";
+
 interface SidebarConversationListResult {
   conversationIds: string[];
   counts: {
@@ -98,6 +101,9 @@ export const useSidebarConversationList = (
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
     const conversationIds = orderedConversations
+      // Personal Cloud has its own workspace at /cloud. Keeping it out of the
+      // normal inbox prevents it from inheriting group/DM presentation and unread semantics.
+      .filter((conversation) => !isPersonalCloudConversation(conversation))
       .filter((conversation) => matchesFilter(conversation, options.filter))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
