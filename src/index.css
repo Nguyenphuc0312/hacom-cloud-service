@@ -2,17 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Cờ quốc gia (🇻🇳…) — Windows KHÔNG có glyph cờ: "Segoe UI Emoji" cố ý bỏ
-   toàn bộ cờ quốc gia, nên browser fallback ra chữ cái thường và 🇻🇳 hiện
-   thành "vn". Không thứ tự font stack nào sửa được, phải nhúng glyph thật.
-   Android (Noto Color Emoji) có sẵn cờ nên mobile vốn đã đúng.
+/* ===== Emoji: tự nhúng font, KHÔNG dựa vào font hệ điều hành =====
+   "Segoe UI Emoji" của Windows chỉ tới ~Unicode 13 và cố ý bỏ TOÀN BỘ cờ
+   quốc gia. Hệ quả trên web (mobile không dính vì Android có Noto sẵn):
+     🇻🇳 → ra chữ "vn"  (cờ = 2 ký tự Regional Indicator, fallback ra chữ cái)
+     🫠 🫡 🥹 🫶 🩷 → ra ô vuông  (E14 trở đi Windows chưa có glyph)
+   Máy thiếu glyph thì xếp thứ tự font kiểu gì cũng vô ích — phải nhúng glyph.
 
-   `unicode-range` giới hạn font này ở đúng dải Regional Indicator, nên dù
-   đứng đầu stack nó CHỈ nạp khi trang có cờ và không đụng glyph nào khác. */
+   Noto Color Emoji v35 (6/2025, OFL-1.1) = đúng bộ Android đang dùng, nên
+   web khớp mobile 1:1. `unicode-range` giới hạn ở các dải emoji nên font
+   CHỈ tải khi trang thực sự có emoji, và không bao giờ đụng chữ tiếng Việt
+   dù nó đứng đầu font stack. Tải 1 lần rồi cache vĩnh viễn.
+
+   ponytail: 5.2MB là cái giá để hết lệch mobile; muốn nhẹ hơn phải tự subset
+   font theo tập emoji thực dùng — chỉ làm khi đo thấy tải chậm thật. */
 @font-face {
-  font-family: "Twemoji Country Flags";
-  src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2");
-  unicode-range: U+1F1E6-1F1FF;
+  font-family: "Noto Color Emoji";
+  src: url("/fonts/NotoColorEmoji.woff2") format("woff2");
+  unicode-range:
+    U+00A9, U+00AE, U+203C, U+2049, U+2122, U+2139, U+2194-21AA,
+    U+231A-231B, U+2328, U+23CF-23FA, U+24C2, U+25AA-25FE,
+    U+2600-27BF, U+2934-2935, U+2B00-2BFF, U+3030, U+303D,
+    U+3297, U+3299, U+FE0F, U+1F000-1F9FF, U+1FA00-1FAFF;
   font-display: swap;
 }
 
@@ -529,22 +540,19 @@ body,
 body {
   margin: 0;
   font-family:
-    /* Phải đứng TRƯỚC mọi font khác, nếu không "Segoe UI Symbol" giành mất
-       ký tự Regional Indicator và vẽ ra chữ cái. unicode-range giữ cho nó
-       chỉ áp dụng đúng dải cờ. */
-    "Twemoji Country Flags",
+    /* Phải đứng TRƯỚC mọi font khác: nếu để sau, "Segoe UI Emoji"/"Segoe UI
+       Symbol" giành mất ký tự và vẽ ra glyph cũ/ô vuông/chữ cái. unicode-range
+       ở @font-face giữ cho nó chỉ áp dụng đúng dải emoji. */
+    "Noto Color Emoji",
     var(--font-family-sans),
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif,
-    /* Emoji fallback — phải đứng sau sans-serif để chỉ nhận glyph emoji.
-       Thiếu dòng này Windows rơi vào "Segoe UI Symbol" (đen trắng, ô vuông),
-       lệch hẳn với Noto Color Emoji trên mobile. */
+    /* Fallback cho máy chưa tải xong font nhúng (font-display: swap). */
     "Apple Color Emoji",
     "Segoe UI Emoji",
-    "Noto Color Emoji",
     "Segoe UI Symbol";
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));

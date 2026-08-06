@@ -10,8 +10,8 @@ export default {
       screens: { xs: "360px" },
       fontFamily: {
         sans: [
-          // Cờ quốc gia — phải đứng đầu; xem @font-face trong src/index.css
-          '"Twemoji Country Flags"',
+          // Emoji — phải đứng đầu; xem @font-face trong src/index.css
+          '"Noto Color Emoji"',
           "var(--font-family-sans)",
           "system-ui",
           "-apple-system",
