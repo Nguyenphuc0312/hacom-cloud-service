@@ -4,6 +4,7 @@ import { useUIStore } from "../../../stores/uiStore";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { createConversationActivityComparator } from "../../../utils/conversationRanking";
 import type { Conversation } from "../../../types";
+import { isPersonalCloudConversation } from "../../cloud/personalCloudPolicy";
 
 interface SidebarConversationSummariesResult {
   orderedConversations: Conversation[];
@@ -38,10 +39,10 @@ export const useSidebarConversationSummaries =
       const counts = orderedConversations.reduce(
         (accumulator, conversation) => {
           accumulator.all += 1;
-          if ((conversation.unreadCount ?? 0) > 0) {
+          if (!isPersonalCloudConversation(conversation) && (conversation.unreadCount ?? 0) > 0) {
             accumulator.unread += 1;
           }
-          if (!isDirectConversation(conversation)) {
+          if (!isDirectConversation(conversation) && !isPersonalCloudConversation(conversation)) {
             accumulator.groups += 1;
           }
           return accumulator;

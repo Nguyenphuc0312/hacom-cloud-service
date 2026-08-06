@@ -38,6 +38,8 @@ import {
   useDeleteMessageMutation,
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
+import { PersonalCloudAvatar } from "../../../features/cloud/components/PersonalCloudAvatar";
+import { isPersonalCloudConversation, personalCloudPresentation } from "../../../features/cloud/personalCloudPolicy";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -62,6 +64,7 @@ interface RoomItemViewProps {
   avatarSrc?: string;
   avatarStatus?: UserStatus;
   isDirect: boolean;
+  isPersonalCloud: boolean;
   isActive: boolean;
   isKeyboardActive: boolean;
   isPinned: boolean;
@@ -237,6 +240,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   avatarSrc,
   avatarStatus,
   isDirect,
+  isPersonalCloud,
   isActive,
   isKeyboardActive,
   isPinned,
@@ -297,7 +301,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           isDense ? "gap-2" : "gap-2.5",
         )}
       >
-        {isDirect ? (
+        {isPersonalCloud ? (
+          <PersonalCloudAvatar size="md" />
+        ) : isDirect ? (
           <Avatar
             src={avatarSrc}
             alt={displayName}
@@ -444,6 +450,7 @@ const RoomItemView = React.memo(
     prev.avatarSrc === next.avatarSrc &&
     prev.avatarStatus === next.avatarStatus &&
     prev.isDirect === next.isDirect &&
+    prev.isPersonalCloud === next.isPersonalCloud &&
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
     prev.isPinned === next.isPinned &&
@@ -618,7 +625,10 @@ export const RoomItemContainer = React.memo(
         return null;
       }
 
-      const displayName =
+      const isPersonalCloud = isPersonalCloudConversation(conversation);
+      const displayName = isPersonalCloud
+        ? personalCloudPresentation.title
+        :
         alias ||
         enrichedName ||
         getConversationDisplayName(conversation, currentUser.id) ||
@@ -631,7 +641,7 @@ export const RoomItemContainer = React.memo(
         conversation.lastMessageSortAt ||
         conversation.lastMessageAt ||
         conversation.lastMessage?.createdAt;
-      const unreadCount = Math.max(0, conversation.unreadCount || 0);
+      const unreadCount = isPersonalCloud ? 0 : Math.max(0, conversation.unreadCount || 0);
       const isDirect = isDirectConversation(conversation);
 
       return {
@@ -644,12 +654,13 @@ export const RoomItemContainer = React.memo(
           : "",
         unreadCount,
         unreadLabel: unreadCount > 99 ? "99+" : String(unreadCount),
-        hasUnreadMention: hasConversationMention(conversation, currentUser),
+        hasUnreadMention: !isPersonalCloud && hasConversationMention(conversation, currentUser),
         avatarSrc: getConversationAvatar(conversation, currentUser.id),
         // Live presence (WS) only — never the backend `otherUser.status` field.
         avatarStatus: isDirect
           ? resolveLivePresenceStatus(livePresence)
           : undefined,
+        isPersonalCloud,
         isDirect,
       };
     }, [conversation, currentUser, livePresence, enrichedName, alias, lastSenderAlias]);
@@ -673,6 +684,7 @@ export const RoomItemContainer = React.memo(
         avatarSrc={viewModel.avatarSrc}
         avatarStatus={viewModel.avatarStatus}
         isDirect={viewModel.isDirect}
+        isPersonalCloud={viewModel.isPersonalCloud}
         isActive={isActive}
         isKeyboardActive={isKeyboardActive}
         isPinned={isPinned}
