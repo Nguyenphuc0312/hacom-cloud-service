@@ -7,6 +7,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from "react";
@@ -83,7 +84,10 @@ import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
 import { fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
-import { resolvePersonalCloudEntryPath } from "../features/cloud/personalCloudPolicy";
+import {
+  isPersonalCloudConversation,
+  resolvePersonalCloudEntryPath,
+} from "../features/cloud/personalCloudPolicy";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -629,6 +633,18 @@ export const ChatPage: React.FC = () => {
 
   const isSelectedDirectConversation =
     isDirectConversation(selectedConversation);
+  const isRoutePersonalCloud =
+    selectedConversation?.id === routeConversationId &&
+    isPersonalCloudConversation(selectedConversation);
+
+  // A saved/deep-linked Chat URL must resolve to the same Cloud surface as a
+  // sidebar click. Without this boundary, ChatWindow treats PERSONAL_CLOUD as
+  // a group and mounts group-only UI and requests before the user can leave it.
+  useLayoutEffect(() => {
+    if (isRoutePersonalCloud) {
+      navigate("/cloud", { replace: true });
+    }
+  }, [isRoutePersonalCloud, navigate]);
 
   // Get other user for direct chat
   const otherUser =
@@ -1348,7 +1364,7 @@ export const ChatPage: React.FC = () => {
           !selectedConversation && "hidden md:flex",
         )}
       >
-        {selectedConversation ? (
+        {isRoutePersonalCloud ? null : selectedConversation ? (
           <ChatWindow
             layoutState={chatWindowLayoutState}
             conversation={selectedConversation}
@@ -1405,7 +1421,7 @@ export const ChatPage: React.FC = () => {
 
       {/* Info panel */}
       {(infoPanelMode === "self-profile" ||
-        (infoPanelMode === "conversation" && Boolean(routeConversationId)) ||
+        (infoPanelMode === "conversation" && Boolean(routeConversationId) && !isRoutePersonalCloud) ||
         Boolean(selectedConversation)) && (
           <div
             className={clsx(
@@ -1474,7 +1490,7 @@ export const ChatPage: React.FC = () => {
                     ) : (
                       <ProfileSkeleton />
                     )
-                  ) : selectedConversation ? (
+                  ) : selectedConversation && !isRoutePersonalCloud ? (
                     <GroupInfo
                       conversation={selectedConversation}
                       currentUserId={currentUserSummary.id}
