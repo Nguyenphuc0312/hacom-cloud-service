@@ -18,6 +18,7 @@ import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
+import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import { InlineNotice, toast } from "../../../components/ui";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useResponsive } from "../../../responsive/responsive";
@@ -27,6 +28,7 @@ import { useChatStore } from "../../../stores/chatStore";
 import {
   RoomType,
   UserStatus,
+  type Attachment,
   type Conversation,
   type Message,
   type UserSummary,
@@ -118,6 +120,10 @@ export default function CloudPage() {
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
+  const [videoPreview, setVideoPreview] = useState<{
+    url: string;
+    fileName?: string;
+  } | null>(null);
   const cloudUserId = resolveCloudUserId(authUser?.id);
   const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
   const showQuotaRequest =
@@ -184,13 +190,19 @@ export default function CloudPage() {
     }
   }, [workspace.error?.code]);
 
-  const layoutState =
+  const pageLayoutState =
     chatLayoutBreakpoint === "compact"
       ? "mobile"
       : isInfoPanelOpen && chatLayoutBreakpoint === "wide"
         ? "with-panel"
         : "normal";
-  const layoutProfile = resolveChatLayoutProfile(width, layoutState);
+  // ChatWindow deliberately keeps the content density at the normal profile
+  // while a docked inspector is open. Cloud must follow the same rule; using
+  // `with-panel` here capped the timeline lane at 39rem and made My Documents
+  // look narrower than a regular Chat conversation.
+  const contentLayoutState =
+    chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
+  const layoutProfile = resolveChatLayoutProfile(width, contentLayoutState);
 
   const conversation = useMemo<Conversation>(
     () => ({
@@ -312,6 +324,15 @@ export default function CloudPage() {
     [workspace],
   );
 
+  const handleFilePreview = useCallback((attachment: Attachment) => {
+    const url = attachment.url ?? attachment.downloadUrl;
+    const isVideo =
+      attachment.mimeType?.startsWith("video/") === true ||
+      /\.(?:mp4|webm|mov|avi|mkv)$/i.test(attachment.fileName ?? "");
+    if (!isVideo || !url) return;
+    setVideoPreview({ url, fileName: attachment.fileName ?? undefined });
+  }, []);
+
   const handleSelectConversation = useCallback(
     (conversationId: string) => {
       navigate(`/chat/${conversationId}`);
@@ -372,7 +393,7 @@ export default function CloudPage() {
   return (
     <AppShell
       className="chat-page-shell cloud-chat-page"
-      data-chat-layout-state={layoutState}
+      data-chat-layout-state={pageLayoutState}
       moduleSidebar={
         <ModuleSidebar
           className="chat-page-module-sidebar cloud-chat-module-sidebar"
@@ -380,7 +401,7 @@ export default function CloudPage() {
         >
           <div className="h-full min-h-0 w-full">
             <Sidebar
-              layoutState={layoutState}
+              layoutState={contentLayoutState}
               currentUser={currentUser}
               selectedId={CLOUD_CONVERSATION_ID}
               leadingContent={
@@ -406,7 +427,7 @@ export default function CloudPage() {
         <div
           className="chat-background chat-shell relative flex min-w-0 flex-1 flex-col overflow-hidden"
           data-chat-layout-profile={layoutProfile}
-          data-chat-layout-state={layoutState}
+          data-chat-layout-state={contentLayoutState}
         >
           <ChatHeader
             conversation={conversation}
@@ -486,12 +507,13 @@ export default function CloudPage() {
               onPin={noopMessageIdAction}
               onEdit={noopMessageAction}
               onDelete={handleDeleteRequest}
+              onFilePreview={handleFilePreview}
               hasMore={Boolean(workspace.nextCursor)}
               isLoadingMore={workspace.isLoadingMore}
               isInitialLoading={workspace.isLoading}
               onLoadMore={() => workspace.loadMore()}
               density="comfortable"
-              layoutState={layoutState}
+              layoutState={contentLayoutState}
               selectedMessageIds={new Set()}
               className="min-h-0 flex-1"
             />
@@ -624,6 +646,12 @@ export default function CloudPage() {
           await workspace.requestQuota(requestedQuotaBytes, reason);
           toast.success(t("quotaRequest.submitted"));
         }}
+      />
+      <VideoPlayerModal
+        isOpen={videoPreview !== null}
+        onClose={() => setVideoPreview(null)}
+        url={videoPreview?.url ?? null}
+        fileName={videoPreview?.fileName}
       />
     </AppShell>
   );

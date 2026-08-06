@@ -535,6 +535,7 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
             : null}
         </div>
       );
+    case MessageType.VIDEO:
     case MessageType.FILE:
       return (
         <div className="space-y-2">
