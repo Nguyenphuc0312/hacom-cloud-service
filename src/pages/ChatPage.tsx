@@ -83,6 +83,7 @@ import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
 import { fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
+import { resolvePersonalCloudEntryPath } from "../features/cloud/personalCloudPolicy";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -708,6 +709,12 @@ export const ChatPage: React.FC = () => {
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
+      const conversation = useChatStore.getState().conversationById[id];
+      const personalCloudPath = resolvePersonalCloudEntryPath(conversation);
+      if (personalCloudPath) {
+        navigate(personalCloudPath);
+        return;
+      }
       if (id === routeConversationId) {
         return;
       }

@@ -23,6 +23,15 @@ const openCloud = async (page: Page) => {
   await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
 };
 
+const openCloudFromChat = async (page: Page) => {
+  await page.goto('/chat');
+  await Promise.all([
+    page.waitForURL('**/cloud'),
+    page.getByRole('option', { name: /Cloud của tôi/i }).click(),
+  ]);
+  await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
+};
+
 test.describe.serial('Hacom Cloud browser flow', () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(90_000);
@@ -32,7 +41,8 @@ test.describe.serial('Hacom Cloud browser flow', () => {
     // The second tab obtains its in-memory access token through the HttpOnly
     // refresh-cookie bootstrap, as a real same-browser multi-tab session does.
     second = await context.newPage();
-    await Promise.all([openCloud(first), openCloud(second)]);
+    await openCloud(second);
+    await openCloudFromChat(first);
   });
 
   test.afterAll(async () => {

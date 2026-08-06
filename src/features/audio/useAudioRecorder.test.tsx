@@ -109,7 +109,7 @@ describe("useAudioRecorder", () => {
       value: { getUserMedia },
     });
 
-    const { result } = renderHook(() => useAudioRecorder());
+    const { result, unmount } = renderHook(() => useAudioRecorder());
 
     await act(async () => {
       const ready = await result.current.requestPermission();
@@ -122,6 +122,7 @@ describe("useAudioRecorder", () => {
     expect(mediaRecorderInstances).toHaveLength(1);
     expect(mediaRecorderInstances[0].start).toHaveBeenCalledWith(250);
     expect(track.stop).not.toHaveBeenCalled();
+    unmount();
   });
 
   it("moves to error and stops tracks when MediaRecorder construction fails", async () => {

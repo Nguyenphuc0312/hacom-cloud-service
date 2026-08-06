@@ -7,9 +7,7 @@ import {
 } from "../../../utils/messageHelpers";
 import type { SidebarConversationFilter } from "../state/chatSidebarStore";
 import { useSidebarConversationSummaries } from "./useSidebarConversationSummaries";
-
-const isPersonalCloudConversation = (conversation: Conversation): boolean =>
-  String(conversation.type).toLowerCase() === "personal_cloud";
+import { isPersonalCloudConversation, personalCloudPresentation } from "../../cloud/personalCloudPolicy";
 
 interface SidebarConversationListResult {
   conversationIds: string[];
@@ -26,6 +24,10 @@ const includesQuery = (
   currentUserId: string,
 ): boolean => {
   if (!normalizedQuery) return true;
+
+  if (isPersonalCloudConversation(conversation)) {
+    return personalCloudPresentation.title.toLowerCase().includes(normalizedQuery);
+  }
 
   const resolvedConversationName = getConversationDisplayName(
     conversation,
@@ -83,7 +85,7 @@ const matchesFilter = (
   }
 
   if (filter === "groups") {
-    return !isDirectConversation(conversation);
+    return !isDirectConversation(conversation) && !isPersonalCloudConversation(conversation);
   }
 
   return true;
@@ -101,9 +103,6 @@ export const useSidebarConversationList = (
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
     const conversationIds = orderedConversations
-      // Personal Cloud has its own workspace at /cloud. Keeping it out of the
-      // normal inbox prevents it from inheriting group/DM presentation and unread semantics.
-      .filter((conversation) => !isPersonalCloudConversation(conversation))
       .filter((conversation) => matchesFilter(conversation, options.filter))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),

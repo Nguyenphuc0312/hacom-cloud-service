@@ -27,7 +27,7 @@ const formatBytes = (value: string | number) => {
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
-export const CloudChatWorkspace: React.FC = () => {
+export const PersonalCloudConversationSurface: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const density = useUIStore((state) => state.chatDensity);
   const { joinConversation, leaveConversation } = useGlobalWebSocket();
@@ -129,5 +129,7 @@ export const CloudChatWorkspace: React.FC = () => {
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;
 };
+
+export const CloudChatWorkspace: React.FC = () => <PersonalCloudConversationSurface />;
 
 export default CloudChatWorkspace;

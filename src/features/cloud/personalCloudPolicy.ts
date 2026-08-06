@@ -25,6 +25,15 @@ export const personalCloudPolicy = {
   showCloudSummary: true,
 } as const;
 
+export const isPersonalCloudConversation = (conversation: { type?: unknown }): boolean =>
+  String(conversation.type).toLowerCase() === 'personal_cloud';
+
+/** Both entry points deliberately resolve to the same conversation surface. */
+export const resolvePersonalCloudEntryPath = (
+  conversation: { type?: unknown } | undefined,
+): '/cloud' | null =>
+  conversation && isPersonalCloudConversation(conversation) ? '/cloud' : null;
+
 /**
  * chat-web-client's RoomType has not yet been extended with the backend's
  * PERSONAL_CLOUD value. Keep the compatibility boundary here until the shared
