@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Cờ quốc gia (🇻🇳…) — Windows KHÔNG có glyph cờ: "Segoe UI Emoji" cố ý bỏ
+   toàn bộ cờ quốc gia, nên browser fallback ra chữ cái thường và 🇻🇳 hiện
+   thành "vn". Không thứ tự font stack nào sửa được, phải nhúng glyph thật.
+   Android (Noto Color Emoji) có sẵn cờ nên mobile vốn đã đúng.
+
+   `unicode-range` giới hạn font này ở đúng dải Regional Indicator, nên dù
+   đứng đầu stack nó CHỈ nạp khi trang có cờ và không đụng glyph nào khác. */
+@font-face {
+  font-family: "Twemoji Country Flags";
+  src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2");
+  unicode-range: U+1F1E6-1F1FF;
+  font-display: swap;
+}
+
 /* Design tokens */
 :root {
   --font-family-sans: "Inter";
@@ -515,6 +529,10 @@ body,
 body {
   margin: 0;
   font-family:
+    /* Phải đứng TRƯỚC mọi font khác, nếu không "Segoe UI Symbol" giành mất
+       ký tự Regional Indicator và vẽ ra chữ cái. unicode-range giữ cho nó
+       chỉ áp dụng đúng dải cờ. */
+    "Twemoji Country Flags",
     var(--font-family-sans),
     system-ui,
     -apple-system,
