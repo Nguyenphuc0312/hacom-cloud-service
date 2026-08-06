@@ -63,3 +63,26 @@ test('syncs a Cloud upload to another authenticated tab without reload', async (
     await Promise.all([firstContext.close(), secondContext.close()]);
   }
 });
+
+test('synchronizes a Cloud note to another active tab without reload', async ({ browser }) => {
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const first = await firstContext.newPage();
+  const second = await secondContext.newPage();
+
+  try {
+    await Promise.all([login(first), login(second)]);
+    await Promise.all([
+      first.locator('a[href="/cloud"]').first().click(),
+      second.locator('a[href="/cloud"]').first().click(),
+    ]);
+    await Promise.all([first.waitForURL('**/cloud'), second.waitForURL('**/cloud')]);
+
+    const note = `browser-cloud-realtime-${Date.now()}`;
+    await first.getByTestId('chat-composer-input').fill(note);
+    await first.getByTestId('chat-composer-input').press('Enter');
+    await expect(second.getByText(note)).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await Promise.all([firstContext.close(), secondContext.close()]);
+  }
+});

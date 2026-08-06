@@ -19,7 +19,9 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',
     url: 'http://127.0.0.1:5100',
-    reuseExistingServer: true,
+    // The root runner owns this disposable port. Reusing an arbitrary local
+    // Vite process can execute another worktree's bundle and invalidate E2E.
+    reuseExistingServer: false,
     env: {
       ...process.env,
       VITE_DEV_API_PROXY_TARGET: apiTarget,
