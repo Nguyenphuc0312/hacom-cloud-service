@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Clock3, RotateCcw, Trash2 } from "lucide-react";
+import { Clock3, Download, Eye, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -20,6 +20,8 @@ interface CloudTrashTimelineProps {
   isMutating: boolean;
   onRestore: (itemId: string) => Promise<void>;
   onDelete: (item: CloudItem) => void;
+  onPreview?: (item: CloudItem) => void;
+  onDownload?: (item: CloudItem) => void;
   onLoadMore: () => void;
 }
 
@@ -31,6 +33,8 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
   isMutating,
   onRestore,
   onDelete,
+  onPreview,
+  onDownload,
   onLoadMore,
 }) => {
   const { t } = useTranslation("cloud");
@@ -97,6 +101,26 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                   </div>
                 </div>
                 <div className="cloud-trash-message__actions">
+                  {onPreview && item.status === "ready" && item.accessUrl ? (
+                    <Button
+                      size="xs"
+                      variant="secondary"
+                      leftIcon={<Eye className="h-3.5 w-3.5" />}
+                      onClick={() => onPreview(item)}
+                    >
+                      {t("trash.preview")}
+                    </Button>
+                  ) : null}
+                  {onDownload && item.status === "ready" && item.accessUrl ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      leftIcon={<Download className="h-3.5 w-3.5" />}
+                      onClick={() => onDownload(item)}
+                    >
+                      {t("inspector.actions.download")}
+                    </Button>
+                  ) : null}
                   <Button
                     size="xs"
                     variant="brand-outline"

@@ -48,9 +48,10 @@ import {
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
 import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
+import { CloudFilePreviewModal } from "../components/CloudFilePreviewModal";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
-import type { CloudItem, CloudViewMode } from "../types";
+import type { CloudFilter, CloudItem, CloudViewMode } from "../types";
 import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
 import {
   formatBytes,
@@ -59,6 +60,8 @@ import {
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
 import { shouldPromptQuotaRequest } from "../utils/cloudQuota";
+import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
@@ -111,6 +114,15 @@ const isStandaloneHttpUrl = (value: string): boolean => {
   }
 };
 
+const getCloudItemIdFromAttachment = (
+  attachment: Attachment,
+): string | undefined => {
+  const objectKey = attachment.objectKey ?? "";
+  if (!objectKey.startsWith("cloud:")) return undefined;
+  const parts = objectKey.split(":");
+  return parts.length >= 3 ? parts.at(-1) || undefined : undefined;
+};
+
 export default function CloudPage() {
   const { t } = useTranslation("cloud");
   const navigate = useNavigate();
@@ -120,6 +132,7 @@ export default function CloudPage() {
   const [draftResetKey, setDraftResetKey] = useState(0);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const [filter, setFilter] = useState<CloudFilter>("all");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
@@ -131,8 +144,14 @@ export default function CloudPage() {
   } | null>(null);
   const [imagePreview, setImagePreview] =
     useState<ImageClickPayload | null>(null);
+  const [filePreview, setFilePreview] = useState<{
+    url: string;
+    fileName?: string;
+    contentType?: string;
+    itemId?: string;
+  } | null>(null);
   const cloudUserId = resolveCloudUserId(authUser?.id);
-  const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
+  const workspace = useCloudWorkspace(cloudUserId, deferredSearch, filter);
   const showQuotaRequest =
     shouldPromptQuotaRequest(workspace.quota, workspace.quotaRequest) ||
     workspace.quotaRequest?.status === "pending";
@@ -249,7 +268,7 @@ export default function CloudPage() {
   // the owner metadata shown in the viewer footer.
   const cloudImageGallery = useMemo<GalleryImage[]>(
     () =>
-      [...workspace.items]
+      [...(viewMode === "trash" ? workspace.trashItems : workspace.items)]
         .filter(
           (item) =>
             item.type === "image" &&
@@ -273,7 +292,14 @@ export default function CloudPage() {
           sentAt: item.createdAt,
           groupKey: item.id,
         })),
-    [currentUser.avatar, currentUser.displayName, t, workspace.items],
+    [
+      currentUser.avatar,
+      currentUser.displayName,
+      t,
+      viewMode,
+      workspace.items,
+      workspace.trashItems,
+    ],
   );
 
   const handleImagePreview = useCallback(
@@ -410,14 +436,90 @@ export default function CloudPage() {
     [workspace],
   );
 
-  const handleFilePreview = useCallback((attachment: Attachment) => {
-    const url = attachment.url ?? attachment.downloadUrl;
-    const isVideo =
-      attachment.mimeType?.startsWith("video/") === true ||
-      /\.(?:mp4|webm|mov|avi|mkv)$/i.test(attachment.fileName ?? "");
-    if (!isVideo || !url) return;
-    setVideoPreview({ url, fileName: attachment.fileName ?? undefined });
-  }, []);
+  const resolveCloudAttachmentUrl = useCallback(
+    async (attachment: Attachment, force = false): Promise<string | undefined> => {
+      const objectKey = attachment.objectKey ?? "";
+      if (cloudUserId && objectKey.startsWith("cloud:")) {
+        const itemId = getCloudItemIdFromAttachment(attachment);
+        if (itemId) {
+          const access = await getCachedCloudFileAccess(cloudUserId, itemId, {
+            force,
+          });
+          return access.url;
+        }
+      }
+      return attachment.url ?? attachment.downloadUrl;
+    },
+    [cloudUserId],
+  );
+
+  const handleFilePreview = useCallback(
+    (attachment: Attachment) => {
+      void resolveCloudAttachmentUrl(attachment).then((url) => {
+        if (!url) return;
+        const isVideo =
+          attachment.mimeType?.startsWith("video/") === true ||
+          /\.(?:mp4|webm|mov|avi|mkv)$/i.test(attachment.fileName ?? "");
+        if (isVideo) {
+          setVideoPreview({ url, fileName: attachment.fileName ?? undefined });
+        } else {
+          setFilePreview({
+            url,
+            fileName: attachment.fileName ?? undefined,
+            contentType: attachment.mimeType,
+            itemId: getCloudItemIdFromAttachment(attachment),
+          });
+        }
+      });
+    },
+    [resolveCloudAttachmentUrl],
+  );
+
+  const handleTrashPreview = useCallback(
+    (item: CloudItem) => {
+      if (!cloudUserId) return;
+      void getCachedCloudFileAccess(cloudUserId, item.id)
+        .then((access) => {
+          if (item.type === "image") {
+            setImagePreview({
+              url: access.url,
+              alt: getCloudItemTitle(item, {
+                text: t("item.untitledText"),
+                link: t("item.untitledLink"),
+                file: t("item.untitledFile"),
+              }),
+              groupKey: item.id,
+              conversationId: CLOUD_CONVERSATION_ID,
+              senderName: currentUser.displayName,
+              senderAvatar: currentUser.avatar,
+              sentAt: item.createdAt,
+              initialIndex: 0,
+            });
+          } else if (item.type === "video") {
+            setVideoPreview({ url: access.url, fileName: item.title ?? undefined });
+          } else {
+            setFilePreview({
+              url: access.url,
+              fileName: item.title ?? undefined,
+              contentType: item.contentType,
+              itemId: item.id,
+            });
+          }
+        })
+        .catch(() => undefined);
+    },
+    [cloudUserId, currentUser.avatar, currentUser.displayName, t],
+  );
+
+  const handleCloudDownload = useCallback(
+    (item: CloudItem) => {
+      if (!cloudUserId) return;
+      void getCachedCloudFileAccess(cloudUserId, item.id).then((access) =>
+        downloadResourceWithName(access.url, item.title || `cloud-${item.id}`),
+      );
+    },
+    [cloudUserId],
+  );
 
   const handleSelectConversation = useCallback(
     (conversationId: string) => {
@@ -534,12 +636,13 @@ export default function CloudPage() {
           {isSearchOpen ? (
             <div className="border-b border-border/60 bg-surface py-2">
               <ConversationLane>
-                <label className="relative block">
+                <div className="relative block">
                   <Search
                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
                     aria-hidden
                   />
                   <input
+                    id="cloud-search-input"
                     autoFocus
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -547,6 +650,30 @@ export default function CloudPage() {
                     aria-label={t("search.aria")}
                     className="input-surface h-9 w-full pl-9 pr-9 text-sm"
                   />
+                  <select
+                    value={filter}
+                    onChange={(event) =>
+                      setFilter(event.target.value as CloudFilter)
+                    }
+                    aria-label={t("navigation.aria")}
+                    className="input-surface mt-2 h-9 w-full text-sm"
+                  >
+                    {(
+                      [
+                        "all",
+                        "text",
+                        "link",
+                        "image",
+                        "video",
+                        "audio",
+                        "file",
+                      ] as CloudFilter[]
+                    ).map((value) => (
+                      <option key={value} value={value}>
+                        {t(`navigation.${value}`)}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => {
@@ -558,7 +685,7 @@ export default function CloudPage() {
                   >
                     <X className="h-4 w-4" />
                   </button>
-                </label>
+                </div>
               </ConversationLane>
             </div>
           ) : null}
@@ -613,6 +740,8 @@ export default function CloudPage() {
               isMutating={workspace.isMutating}
               onRestore={handleRestore}
               onDelete={setDeleteTarget}
+              onPreview={handleTrashPreview}
+              onDownload={handleCloudDownload}
               onLoadMore={() => workspace.loadMoreTrash()}
             />
           )}
@@ -702,6 +831,8 @@ export default function CloudPage() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onRequestQuota={() => setIsQuotaRequestOpen(true)}
+              onEmptyTrash={workspace.emptyTrash}
+              isMutating={workspace.isMutating}
               onClose={() => setIsInfoPanelOpen(false)}
             />
           </div>
@@ -746,9 +877,30 @@ export default function CloudPage() {
         onClose={() => setImagePreview(null)}
         images={previewGallery}
         initialIndex={previewInitialIndex}
+        onDownload={async (image) => {
+          const itemId = image.groupKey;
+          if (!cloudUserId || !itemId) return image.url;
+          const access = await getCachedCloudFileAccess(cloudUserId, itemId);
+          return access.url;
+        }}
         onViewAll={() => {
           setImagePreview(null);
           setIsInfoPanelOpen(true);
+        }}
+      />
+      <CloudFilePreviewModal
+        isOpen={filePreview !== null}
+        onClose={() => setFilePreview(null)}
+        url={filePreview?.url ?? null}
+        fileName={filePreview?.fileName}
+        contentType={filePreview?.contentType}
+        onDownload={async () => {
+          if (!filePreview?.itemId || !cloudUserId) return filePreview?.url;
+          const access = await getCachedCloudFileAccess(
+            cloudUserId,
+            filePreview.itemId,
+          );
+          return access.url;
         }}
       />
     </AppShell>

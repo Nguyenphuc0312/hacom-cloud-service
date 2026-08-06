@@ -27,6 +27,7 @@ import {
   shouldContinueThumbnailPolling,
 } from "./imageThumbnailPolling";
 import { areAttachmentsRenderEquivalent } from "../../utils/messageRenderSignature";
+import { getCachedCloudFileAccess } from "../../features/cloud/utils/cloudFileAccessCache";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -46,6 +47,17 @@ interface ImageMessageProps {
 }
 
 const HD_THRESHOLD = 10 * 1024 * 1024; // 10MB
+
+const getCloudAccessIdentity = (
+  objectKey: string | undefined,
+): { userId: string; itemId: string } | null => {
+  if (!objectKey?.startsWith("cloud:")) return null;
+  const parts = objectKey.split(":");
+  if (parts.length < 3) return null;
+  const itemId = parts.pop();
+  const userId = parts.slice(1).join(":");
+  return userId && itemId ? { userId, itemId } : null;
+};
 
 // --- Thumbnail polling cadence (fallback when WS preview event is missed) ----
 // Exponential backoff during an "active" window, then a slow heartbeat so a job
@@ -69,6 +81,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
+  const [cloudAccessUrl, setCloudAccessUrl] = useState<string | null>(null);
   const refreshedSourceRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
@@ -143,7 +156,8 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
 
   // Use thumbnail URL for display; fall back to attachment's own URL when batch API
   // hasn't responded yet, is still processing, or has failed terminally.
-  const activeSource = thumbnailUrl?.url ?? attachmentDirectUrl ?? null;
+  const activeSource =
+    thumbnailUrl?.url ?? cloudAccessUrl ?? attachmentDirectUrl ?? null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
@@ -243,6 +257,17 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
     if (onClick) {
       let url = activeSource;
       if (!url && previewUrl) url = previewUrl;
+      if (!url) {
+        const cloudAccess = getCloudAccessIdentity(attachment.objectKey);
+        if (cloudAccess) {
+          const access = await getCachedCloudFileAccess(
+            cloudAccess.userId,
+            cloudAccess.itemId,
+          );
+          setCloudAccessUrl(access.url);
+          url = access.url;
+        }
+      }
       if (!url) url = await fetchPreview();
       if (url) {
         onClick({
@@ -265,7 +290,19 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
         if (url) setLightboxUrl(url);
       }
     }
-  }, [activeSource, previewUrl, fetchPreview, onClick, attachment.fileName, attachment.id, senderName, senderAvatar, sentAt, conversationId]);
+  }, [
+    activeSource,
+    attachment.fileName,
+    attachment.id,
+    attachment.objectKey,
+    conversationId,
+    fetchPreview,
+    onClick,
+    previewUrl,
+    senderAvatar,
+    senderName,
+    sentAt,
+  ]);
 
   const handleLoadHd = useCallback(async () => {
     setShowHd(true);
@@ -282,6 +319,19 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   const handleImageError = useCallback(() => {
     if (!activeSource) return;
 
+    const cloudAccess = getCloudAccessIdentity(attachment.objectKey);
+    if (cloudAccess) {
+      if (refreshedSourceRef.current !== activeSource) {
+        refreshedSourceRef.current = activeSource;
+        void getCachedCloudFileAccess(cloudAccess.userId, cloudAccess.itemId, {
+          force: true,
+        }).then((access) => setCloudAccessUrl(access.url));
+        return;
+      }
+      setFailedSource(activeSource);
+      return;
+    }
+
     if (refreshedSourceRef.current !== activeSource) {
       refreshedSourceRef.current = activeSource;
       void refreshThumbnail();
@@ -289,7 +339,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
     }
 
     setFailedSource(activeSource);
-  }, [activeSource, refreshThumbnail]);
+  }, [activeSource, attachment.objectKey, refreshThumbnail]);
 
   const isUploading = uploadProgress !== undefined && uploadProgress < 100;
 

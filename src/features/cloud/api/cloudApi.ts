@@ -25,6 +25,19 @@ interface CloudRequestOptions extends RequestInit {
   userId: string;
 }
 
+interface CloudMutationOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
+const mutationHeaders = (
+  idempotencyKey?: string,
+  contentType?: string,
+): Record<string, string> => ({
+  ...(contentType ? { "Content-Type": contentType } : {}),
+  "Idempotency-Key": idempotencyKey ?? `cloud-web-${crypto.randomUUID()}`,
+});
+
 export class CloudApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -230,14 +243,13 @@ export const cloudApi = {
     userId: string,
     requestedQuotaBytes: number,
     reason?: string,
+    options: CloudMutationOptions = {},
   ): Promise<CloudQuotaRequest> {
     return cloudRequest<CloudQuotaRequest>("quota/requests", {
       userId,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
-      },
+      headers: mutationHeaders(options.idempotencyKey, "application/json"),
+      signal: options.signal,
       body: JSON.stringify({
         requestedQuotaBytes,
         ...(reason?.trim() ? { reason: reason.trim() } : {}),
@@ -245,42 +257,63 @@ export const cloudApi = {
     });
   },
 
-  createText(userId: string, content: string): Promise<CloudItem> {
+  createText(
+    userId: string,
+    content: string,
+    options: CloudMutationOptions = {},
+  ): Promise<CloudItem> {
     return cloudRequest<CloudItem>("texts", {
       userId,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: mutationHeaders(options.idempotencyKey, "application/json"),
+      signal: options.signal,
       body: JSON.stringify({ content }),
     });
   },
 
-  createLink(userId: string, url: string, title: string): Promise<CloudItem> {
+  createLink(
+    userId: string,
+    url: string,
+    title: string,
+    options: CloudMutationOptions = {},
+  ): Promise<CloudItem> {
     return cloudRequest<CloudItem>("links", {
       userId,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: mutationHeaders(options.idempotencyKey, "application/json"),
+      signal: options.signal,
       body: JSON.stringify({ url, title }),
     });
   },
 
-  trashItem(userId: string, itemId: string): Promise<CloudTrashLifecycle> {
+  trashItem(
+    userId: string,
+    itemId: string,
+    options: CloudMutationOptions = {},
+  ): Promise<CloudTrashLifecycle> {
     return cloudRequest<CloudTrashLifecycle>(
       `items/${encodeURIComponent(itemId)}/trash`,
       {
         userId,
         method: "POST",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: mutationHeaders(options.idempotencyKey),
+        signal: options.signal,
       },
     );
   },
 
-  restoreItem(userId: string, itemId: string): Promise<CloudTrashLifecycle> {
+  restoreItem(
+    userId: string,
+    itemId: string,
+    options: CloudMutationOptions = {},
+  ): Promise<CloudTrashLifecycle> {
     return cloudRequest<CloudTrashLifecycle>(
       `items/${encodeURIComponent(itemId)}/restore`,
       {
         userId,
         method: "POST",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: mutationHeaders(options.idempotencyKey),
+        signal: options.signal,
       },
     );
   },
@@ -288,25 +321,29 @@ export const cloudApi = {
   permanentlyDeleteItem(
     userId: string,
     itemId: string,
+    options: CloudMutationOptions = {},
   ): Promise<CloudDeleteResult> {
     return cloudRequest<CloudDeleteResult>(
       `items/${encodeURIComponent(itemId)}`,
       {
         userId,
         method: "DELETE",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: mutationHeaders(options.idempotencyKey),
+        signal: options.signal,
       },
     );
   },
 
-  initiateUpload(userId: string, file: File): Promise<CloudUploadSession> {
+  initiateUpload(
+    userId: string,
+    file: File,
+    options: CloudMutationOptions = {},
+  ): Promise<CloudUploadSession> {
     return cloudRequest<CloudUploadSession>("uploads", {
       userId,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
-      },
+      headers: mutationHeaders(options.idempotencyKey, "application/json"),
+      signal: options.signal,
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "application/octet-stream",
@@ -370,12 +407,15 @@ export const cloudApi = {
   completeUpload(
     userId: string,
     sessionId: string,
+    options: CloudMutationOptions = {},
   ): Promise<CloudUploadComplete> {
     return cloudRequest<CloudUploadComplete>(
       `uploads/${encodeURIComponent(sessionId)}/complete`,
       {
         userId,
         method: "POST",
+        headers: mutationHeaders(options.idempotencyKey),
+        signal: options.signal,
       },
     );
   },

@@ -114,7 +114,14 @@ export interface CloudHealth {
   >;
 }
 
-export type CloudFilter = "all" | "text" | "image" | "file" | "link";
+export type CloudFilter =
+  | "all"
+  | "text"
+  | "link"
+  | "image"
+  | "video"
+  | "audio"
+  | "file";
 
 export type CloudComposerMode = "upload" | "text" | "link";
 

@@ -64,3 +64,12 @@ export const clearCloudFileAccessCache = (): void => {
   cache.clear();
   inFlight.clear();
 };
+
+export const invalidateCloudFileAccess = (
+  userId: string,
+  itemId: string,
+): void => {
+  const key = keyFor(userId, itemId);
+  cache.delete(key);
+  inFlight.delete(key);
+};

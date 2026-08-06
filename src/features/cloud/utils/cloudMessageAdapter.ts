@@ -49,9 +49,16 @@ const messageType = (item: CloudItem): MessageType => {
   }
 };
 
-const createAttachment = (item: CloudItem, fallbackName: string): Attachment => ({
+const createAttachment = (
+  item: CloudItem,
+  userId: string,
+  fallbackName: string,
+): Attachment => ({
   id: item.id,
-  objectKey: `cloud:${item.id}`,
+  // This is a client-only routing marker. It is never sent to Chat API and
+  // lets the shared media controls refresh through Cloud's owner-scoped access
+  // endpoint when the short-lived URL expires.
+  objectKey: `cloud:${userId}:${item.id}`,
   type: attachmentType(item),
   fileName: item.title?.trim() || fallbackName,
   fileSize: item.sizeBytes,
@@ -106,7 +113,7 @@ export const cloudItemToMessage = (
           }
         : undefined,
     attachments: isFile
-      ? [createAttachment(item, item.title?.trim() || fallbacks.file)]
+      ? [createAttachment(item, currentUser.id, item.title?.trim() || fallbacks.file)]
       : undefined,
     status: resolveMessageStatus(item),
     isEdited: false,

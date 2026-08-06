@@ -262,4 +262,24 @@ describe("cloudApi", () => {
       /^cloud-web-/,
     );
   });
+
+  it("preserves a caller-provided idempotency key across mutation requests", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ id: "item-1", type: "text" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "item-1", type: "text" }));
+
+    await cloudApi.createText(userId, "same operation", {
+      idempotencyKey: "cloud-web-retry-1",
+    });
+    await cloudApi.createText(userId, "same operation", {
+      idempotencyKey: "cloud-web-retry-1",
+    });
+
+    expect(
+      (fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("Idempotency-Key"),
+    ).toBe("cloud-web-retry-1");
+    expect(
+      (fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("Idempotency-Key"),
+    ).toBe("cloud-web-retry-1");
+  });
 });

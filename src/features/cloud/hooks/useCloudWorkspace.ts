@@ -6,9 +6,13 @@ import type {
   CloudPage,
   CloudQuota,
   CloudQuotaRequest,
+  CloudFilter,
   CloudUploadProgress,
 } from "../types";
-import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
+import {
+  getCachedCloudFileAccess,
+  invalidateCloudFileAccess,
+} from "../utils/cloudFileAccessCache";
 
 const PROCESSING_REFRESH_MS = 2_000;
 
@@ -139,9 +143,32 @@ const hydrateMediaAccess = async (
 export const useCloudWorkspace = (
   userId: string | undefined,
   searchQuery = "",
+  filter: CloudFilter = "all",
 ) => {
   const [state, setState] = useState<CloudWorkspaceState>(initialState);
   const mountedRef = useRef(true);
+  const generationRef = useRef(0);
+  const queryKeyRef = useRef("");
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const operationKeysRef = useRef(new Map<string, string>());
+
+  const query = searchQuery.trim() || undefined;
+  const itemType = filter === "all" ? undefined : filter;
+  const queryKey = `${userId ?? ""}|${query ?? ""}|${filter}`;
+  queryKeyRef.current = queryKey;
+
+  const getOperationKey = useCallback((operation: string, identity: string) => {
+    const key = `${operation}:${identity}`;
+    const existing = operationKeysRef.current.get(key);
+    if (existing) return existing;
+    const next = `cloud-web-${crypto.randomUUID()}`;
+    operationKeysRef.current.set(key, next);
+    return next;
+  }, []);
+
+  const completeOperation = useCallback((operation: string, identity: string) => {
+    operationKeysRef.current.delete(`${operation}:${identity}`);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -152,6 +179,13 @@ export const useCloudWorkspace = (
 
   const loadInitial = useCallback(
     async (signal?: AbortSignal, background = false) => {
+      const generation = ++generationRef.current;
+      if (activeRequestRef.current && !signal) {
+        activeRequestRef.current.abort();
+      }
+      const ownedController = signal ? null : new AbortController();
+      const requestSignal = signal ?? ownedController?.signal;
+      if (ownedController) activeRequestRef.current = ownedController;
       if (!userId) {
         setState((current) => ({
           ...current,
@@ -164,26 +198,35 @@ export const useCloudWorkspace = (
 
       setState((current) => ({
         ...current,
+        ...(background
+          ? {}
+          : {
+              items: [],
+              trashItems: [],
+              nextCursor: undefined,
+              trashNextCursor: undefined,
+            }),
         isLoading: background ? current.isLoading : true,
         isRefreshing: background,
+        isLoadingMore: false,
+        isLoadingMoreTrash: false,
         error: null,
       }));
 
       try {
-        const query = searchQuery.trim() || undefined;
         const [page, trashPage, quota, quotaRequest, health] =
           await Promise.all([
-            cloudApi.listItems(userId, { signal, q: query }),
-            cloudApi.listTrash(userId, { signal, q: query }),
-            cloudApi.getQuota(userId, signal),
+            cloudApi.listItems(userId, { signal: requestSignal, q: query, type: itemType }),
+            cloudApi.listTrash(userId, { signal: requestSignal, q: query, type: itemType }),
+            cloudApi.getQuota(userId, requestSignal),
             cloudApi
-              .getCurrentQuotaRequest(userId, signal)
+              .getCurrentQuotaRequest(userId, requestSignal)
               .catch((error: unknown): CloudQuotaRequest | null => {
                 if (error instanceof CloudApiError && error.status === 404)
                   return null;
                 throw error;
               }),
-            cloudApi.health(signal).catch((): CloudHealth => ({
+            cloudApi.health(requestSignal).catch((): CloudHealth => ({
               status: "DOWN",
               service: "hacom-cloud-api",
             })),
@@ -191,13 +234,23 @@ export const useCloudWorkspace = (
         const hydratedItems = await hydrateMediaAccess(
           page.items,
           userId,
-          signal,
+          requestSignal,
         );
-        if (!mountedRef.current || signal?.aborted) return;
+        const hydratedTrashItems = await hydrateMediaAccess(
+          trashPage.items,
+          userId,
+          requestSignal,
+        );
+        if (
+          !mountedRef.current ||
+          requestSignal?.aborted ||
+          generation !== generationRef.current ||
+          queryKey !== queryKeyRef.current
+        ) return;
         setState((current) => ({
           ...current,
           items: hydratedItems,
-          trashItems: trashPage.items,
+          trashItems: hydratedTrashItems,
           quota,
           quotaRequest,
           health,
@@ -209,7 +262,11 @@ export const useCloudWorkspace = (
           error: null,
         }));
       } catch (error) {
-        if (signal?.aborted || !mountedRef.current) return;
+        if (
+          requestSignal?.aborted ||
+          !mountedRef.current ||
+          generation !== generationRef.current
+        ) return;
         setState((current) => ({
           ...current,
           isLoading: false,
@@ -219,7 +276,7 @@ export const useCloudWorkspace = (
         }));
       }
     },
-    [searchQuery, userId],
+    [itemType, query, queryKey, userId],
   );
 
   useEffect(() => {
@@ -234,14 +291,28 @@ export const useCloudWorkspace = (
 
   const loadMore = useCallback(async () => {
     if (!userId || !state.nextCursor || state.isLoadingMore) return;
+    const generation = generationRef.current;
+    const requestKey = queryKeyRef.current;
+    const controller = new AbortController();
     setState((current) => ({ ...current, isLoadingMore: true }));
     try {
       const page: CloudPage = await cloudApi.listItems(userId, {
         cursor: state.nextCursor,
-        q: searchQuery.trim() || undefined,
+        q: query,
+        type: itemType,
+        signal: controller.signal,
       });
-      const hydratedItems = await hydrateMediaAccess(page.items, userId);
-      if (!mountedRef.current) return;
+      const hydratedItems = await hydrateMediaAccess(
+        page.items,
+        userId,
+        controller.signal,
+      );
+      if (
+        !mountedRef.current ||
+        controller.signal.aborted ||
+        generation !== generationRef.current ||
+        requestKey !== queryKeyRef.current
+      ) return;
       setState((current) => ({
         ...current,
         items: mergeItems(current.items, hydratedItems),
@@ -249,39 +320,54 @@ export const useCloudWorkspace = (
         isLoadingMore: false,
       }));
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || controller.signal.aborted) return;
       setState((current) => ({
         ...current,
         isLoadingMore: false,
         error: asCloudError(error),
       }));
     }
-  }, [searchQuery, state.isLoadingMore, state.nextCursor, userId]);
+  }, [itemType, query, state.isLoadingMore, state.nextCursor, userId]);
 
   const loadMoreTrash = useCallback(async () => {
     if (!userId || !state.trashNextCursor || state.isLoadingMoreTrash) return;
+    const generation = generationRef.current;
+    const requestKey = queryKeyRef.current;
+    const controller = new AbortController();
     setState((current) => ({ ...current, isLoadingMoreTrash: true }));
     try {
       const page = await cloudApi.listTrash(userId, {
         cursor: state.trashNextCursor,
-        q: searchQuery.trim() || undefined,
+        q: query,
+        type: itemType,
+        signal: controller.signal,
       });
-      if (!mountedRef.current) return;
+      const hydratedItems = await hydrateMediaAccess(
+        page.items,
+        userId,
+        controller.signal,
+      );
+      if (
+        !mountedRef.current ||
+        controller.signal.aborted ||
+        generation !== generationRef.current ||
+        requestKey !== queryKeyRef.current
+      ) return;
       setState((current) => ({
         ...current,
-        trashItems: mergeTrashItems(current.trashItems, page.items),
+        trashItems: mergeTrashItems(current.trashItems, hydratedItems),
         trashNextCursor: page.nextCursor,
         isLoadingMoreTrash: false,
       }));
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || controller.signal.aborted) return;
       setState((current) => ({
         ...current,
         isLoadingMoreTrash: false,
         error: asCloudError(error),
       }));
     }
-  }, [searchQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
+  }, [itemType, query, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
 
   const refreshQuota = useCallback(async () => {
     if (!userId) return;
@@ -308,8 +394,13 @@ export const useCloudWorkspace = (
         throw error;
       }
       setState((current) => ({ ...current, isMutating: true, error: null }));
+      const operationIdentity = crypto.randomUUID();
+      const idempotencyKey = getOperationKey("create-text", operationIdentity);
       try {
-        const item = await cloudApi.createText(userId, content);
+        const item = await cloudApi.createText(userId, content, {
+          idempotencyKey,
+        });
+        completeOperation("create-text", operationIdentity);
         await refreshQuota();
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -328,7 +419,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [completeOperation, getOperationKey, refreshQuota, userId],
   );
 
   const createLink = useCallback(
@@ -339,8 +430,13 @@ export const useCloudWorkspace = (
         throw error;
       }
       setState((current) => ({ ...current, isMutating: true, error: null }));
+      const operationIdentity = crypto.randomUUID();
+      const idempotencyKey = getOperationKey("create-link", operationIdentity);
       try {
-        const item = await cloudApi.createLink(userId, url, title);
+        const item = await cloudApi.createLink(userId, url, title, {
+          idempotencyKey,
+        });
+        completeOperation("create-link", operationIdentity);
         await refreshQuota();
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -359,7 +455,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [completeOperation, getOperationKey, refreshQuota, userId],
   );
 
   const uploadFile = useCallback(
@@ -379,8 +475,12 @@ export const useCloudWorkspace = (
           stage: "reserving",
         },
       }));
+      const operationIdentity = `${file.name}:${file.size}:${file.lastModified}`;
+      const initiateKey = getOperationKey("upload-initiate", operationIdentity);
       try {
-        const session = await cloudApi.initiateUpload(userId, file);
+        const session = await cloudApi.initiateUpload(userId, file, {
+          idempotencyKey: initiateKey,
+        });
         if (mountedRef.current) {
           setState((current) => ({
             ...current,
@@ -415,7 +515,15 @@ export const useCloudWorkspace = (
         const completed = await cloudApi.completeUpload(
           userId,
           session.uploadSessionId,
+          {
+            idempotencyKey: getOperationKey(
+              "upload-complete",
+              session.uploadSessionId,
+            ),
+          },
         );
+        completeOperation("upload-initiate", operationIdentity);
+        completeOperation("upload-complete", session.uploadSessionId);
         await refreshQuota();
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -440,15 +548,20 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [completeOperation, getOperationKey, refreshQuota, userId],
   );
 
   const trashItem = useCallback(
     async (itemId: string) => {
       if (!userId) throw createMissingUserError();
       setState((current) => ({ ...current, isMutating: true, error: null }));
+      const operationIdentity = itemId;
       try {
-        await cloudApi.trashItem(userId, itemId);
+        await cloudApi.trashItem(userId, itemId, {
+          idempotencyKey: getOperationKey("trash", operationIdentity),
+        });
+        invalidateCloudFileAccess(userId, itemId);
+        completeOperation("trash", operationIdentity);
         await loadInitial(undefined, true);
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -466,15 +579,20 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [loadInitial, userId],
+    [completeOperation, getOperationKey, loadInitial, userId],
   );
 
   const restoreItem = useCallback(
     async (itemId: string) => {
       if (!userId) throw createMissingUserError();
       setState((current) => ({ ...current, isMutating: true, error: null }));
+      const operationIdentity = itemId;
       try {
-        await cloudApi.restoreItem(userId, itemId);
+        await cloudApi.restoreItem(userId, itemId, {
+          idempotencyKey: getOperationKey("restore", operationIdentity),
+        });
+        invalidateCloudFileAccess(userId, itemId);
+        completeOperation("restore", operationIdentity);
         await loadInitial(undefined, true);
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -492,15 +610,20 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [loadInitial, userId],
+    [completeOperation, getOperationKey, loadInitial, userId],
   );
 
   const permanentlyDeleteItem = useCallback(
     async (itemId: string) => {
       if (!userId) throw createMissingUserError();
       setState((current) => ({ ...current, isMutating: true, error: null }));
+      const operationIdentity = itemId;
       try {
-        await cloudApi.permanentlyDeleteItem(userId, itemId);
+        await cloudApi.permanentlyDeleteItem(userId, itemId, {
+          idempotencyKey: getOperationKey("delete", operationIdentity),
+        });
+        invalidateCloudFileAccess(userId, itemId);
+        completeOperation("delete", operationIdentity);
         await loadInitial(undefined, true);
         if (!mountedRef.current) return;
         setState((current) => ({
@@ -518,8 +641,56 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [loadInitial, userId],
+    [completeOperation, getOperationKey, loadInitial, userId],
   );
+
+  const emptyTrash = useCallback(async () => {
+    if (!userId) throw createMissingUserError();
+    setState((current) => ({ ...current, isMutating: true, error: null }));
+    const deletedIds = new Set<string>();
+    try {
+      // The API currently exposes item-level permanent delete only. Re-read the
+      // first page after each batch so deleting a page cannot invalidate the
+      // cursor and leave older Trash items behind.
+      let emptied = false;
+      for (let round = 0; round < 100; round += 1) {
+        const page = await cloudApi.listTrash(userId, { limit: 100 });
+        if (page.items.length === 0) {
+          emptied = true;
+          break;
+        }
+        for (const item of page.items) {
+          deletedIds.add(item.id);
+          await cloudApi.permanentlyDeleteItem(userId, item.id, {
+            idempotencyKey: getOperationKey("empty-trash-delete", item.id),
+          });
+          invalidateCloudFileAccess(userId, item.id);
+        }
+      }
+      if (!emptied) {
+        throw new CloudApiError({
+          status: 409,
+          code: "EMPTY_TRASH_INCOMPLETE",
+          message: "Trash could not be emptied before the retry limit",
+        });
+      }
+      deletedIds.forEach((itemId) =>
+        completeOperation("empty-trash-delete", itemId),
+      );
+      await loadInitial(undefined, true);
+      if (!mountedRef.current) return;
+      setState((current) => ({ ...current, isMutating: false }));
+    } catch (error) {
+      if (!mountedRef.current) return;
+      const cloudError = asCloudError(error);
+      setState((current) => ({
+        ...current,
+        isMutating: false,
+        error: cloudError,
+      }));
+      throw cloudError;
+    }
+  }, [completeOperation, getOperationKey, loadInitial, userId]);
 
   const requestQuota = useCallback(
     async (requestedQuotaBytes: number, reason?: string) => {
@@ -529,12 +700,17 @@ export const useCloudWorkspace = (
         isRequestingQuota: true,
         error: null,
       }));
+      const operationIdentity = "current";
       try {
         const quotaRequest = await cloudApi.requestQuota(
           userId,
           requestedQuotaBytes,
           reason,
+          {
+            idempotencyKey: getOperationKey("quota-request", operationIdentity),
+          },
         );
+        completeOperation("quota-request", operationIdentity);
         if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
@@ -552,7 +728,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [userId],
+    [completeOperation, getOperationKey, userId],
   );
 
   const hasProcessingItems = useMemo(
@@ -569,13 +745,28 @@ export const useCloudWorkspace = (
     }
 
     let cancelled = false;
+    const generation = generationRef.current;
+    const requestKey = queryKeyRef.current;
+    const controller = new AbortController();
     const refreshProcessingItems = async () => {
       try {
         const page = await cloudApi.listItems(userId, {
-          q: searchQuery.trim() || undefined,
+          q: query,
+          type: itemType,
+          signal: controller.signal,
         });
-        const hydratedItems = await hydrateMediaAccess(page.items, userId);
-        if (cancelled || !mountedRef.current) return;
+        const hydratedItems = await hydrateMediaAccess(
+          page.items,
+          userId,
+          controller.signal,
+        );
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          !mountedRef.current ||
+          generation !== generationRef.current ||
+          requestKey !== queryKeyRef.current
+        ) return;
         const stillProcessing = hydratedItems.some(
           (item) => item.status === "processing",
         );
@@ -593,7 +784,7 @@ export const useCloudWorkspace = (
               : current.error,
         }));
       } catch (error) {
-        if (!cancelled && mountedRef.current) {
+        if (!cancelled && !controller.signal.aborted && mountedRef.current) {
           const cloudError = asCloudError(error);
           setState((current) => ({
             ...current,
@@ -614,9 +805,16 @@ export const useCloudWorkspace = (
     );
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearInterval(intervalId);
     };
-  }, [hasProcessingItems, searchQuery, state.uploadProgress?.stage, userId]);
+  }, [
+    hasProcessingItems,
+    itemType,
+    query,
+    state.uploadProgress?.stage,
+    userId,
+  ]);
 
   const clearError = useCallback(() => {
     setState((current) => ({ ...current, error: null }));
@@ -633,6 +831,7 @@ export const useCloudWorkspace = (
     trashItem,
     restoreItem,
     permanentlyDeleteItem,
+    emptyTrash,
     requestQuota,
     clearError,
   };

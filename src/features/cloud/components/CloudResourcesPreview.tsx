@@ -1,13 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { FileText, ImageIcon, Link2, Play } from "lucide-react";
+import { Download, FileText, ImageIcon, Link2, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { ImagePreviewModal } from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import type { CloudItem } from "../types";
-import { formatBytes, getCloudItemTitle } from "../utils/cloudFormat";
+import {
+  formatBytes,
+  getCloudItemTitle,
+  isSafeExternalUrl,
+} from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
 
-type ResourceTab = "media" | "files" | "links";
+type ResourceTab = "media" | "audio" | "files" | "links";
 const ACCESS_REQUEST_CONCURRENCY = 4;
 
 interface CloudResourcesPreviewProps {
@@ -17,19 +23,22 @@ interface CloudResourcesPreviewProps {
   senderAvatar?: string;
 }
 
-const itemTitle = (item: CloudItem): string =>
-  getCloudItemTitle(item, {
-    text: "Nội dung",
-    link: "Liên kết",
-    file: "Tệp",
-  });
-
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
   userId,
   senderName,
   senderAvatar,
 }) => {
+  const { t } = useTranslation("cloud");
+  const itemTitle = useCallback(
+    (item: CloudItem): string =>
+      getCloudItemTitle(item, {
+        text: t("item.untitledText"),
+        link: t("item.untitledLink"),
+        file: t("item.untitledFile"),
+      }),
+    [t],
+  );
   const [activeTab, setActiveTab] = useState<ResourceTab>("media");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [video, setVideo] = useState<CloudItem | null>(null);
@@ -57,6 +66,10 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     () => resolvedItems.filter((item) => item.type === "file"),
     [resolvedItems],
   );
+  const audio = useMemo(
+    () => resolvedItems.filter((item) => item.type === "audio"),
+    [resolvedItems],
+  );
   const links = useMemo(
     () => resolvedItems.filter((item) => item.type === "link"),
     [resolvedItems],
@@ -73,13 +86,19 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           sentAt: item.createdAt,
           groupKey: item.id,
         })),
-    [media, senderAvatar, senderName],
+    [itemTitle, media, senderAvatar, senderName],
   );
 
   useEffect(() => {
     if (!userId) return;
     const sourceItems =
-      activeTab === "media" ? media : activeTab === "files" ? files : [];
+      activeTab === "media"
+        ? media
+        : activeTab === "audio"
+          ? audio
+          : activeTab === "files"
+            ? files
+            : [];
     const candidates = sourceItems.filter((item) => {
       if (item.status !== "ready") return false;
       const expiresAt = accessById[item.id]?.expiresAt ?? item.accessExpiresAt;
@@ -134,13 +153,29 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [accessById, activeTab, files, media, userId]);
+  }, [accessById, activeTab, audio, files, media, userId]);
 
   const tabs: Array<{ key: ResourceTab; label: string; count: number }> = [
-    { key: "media", label: "Ảnh/Video", count: media.length },
-    { key: "files", label: "File", count: files.length },
-    { key: "links", label: "Link", count: links.length },
+    { key: "media", label: t("resources.media"), count: media.length },
+    { key: "audio", label: t("resources.audio"), count: audio.length },
+    { key: "files", label: t("resources.files"), count: files.length },
+    { key: "links", label: t("resources.links"), count: links.length },
   ];
+
+  const handleFileDownload = async (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    item: CloudItem,
+  ) => {
+    if (!userId) return;
+    event.preventDefault();
+    try {
+      const access = await getCachedCloudFileAccess(userId, item.id);
+      await downloadResourceWithName(access.url, itemTitle(item));
+    } catch {
+      // Keep the row usable when object storage is temporarily unavailable.
+      if (item.accessUrl) window.open(item.accessUrl, "_blank", "noopener");
+    }
+  };
 
   const openImage = (item: CloudItem) => {
     if (!item.accessUrl) return;
@@ -152,7 +187,9 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     <>
       <div className="overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="px-4 py-3">
-          <h3 className="text-sm font-semibold text-text-primary">Kho lưu trữ</h3>
+          <h3 className="text-sm font-semibold text-text-primary">
+            {t("resources.title")}
+          </h3>
         </div>
 
         <div className="flex border-t border-border">
@@ -161,6 +198,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
+              aria-label={`${tab.label} (${tab.key})`}
               className={clsx(
                 "flex min-w-0 flex-1 items-center justify-center gap-1 py-3 text-xs font-medium transition-colors",
                 activeTab === tab.key
@@ -228,7 +266,48 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 ))}
               </div>
             ) : (
-              <EmptyState icon={<ImageIcon />} label="Chưa có ảnh hoặc video" />
+              <EmptyState icon={<ImageIcon />} label={t("resources.emptyMedia")} />
+            )
+          ) : null}
+
+          {activeTab === "audio" ? (
+            audio.length > 0 ? (
+              <div className="space-y-2">
+                {audio.map((item) => (
+                  <div key={item.id} className="rounded-lg bg-surface-overlay p-2">
+                    <p className="mb-1 truncate text-xs font-medium text-text-primary">
+                      {itemTitle(item)}
+                    </p>
+                    {item.accessUrl ? (
+                      <>
+                        <audio className="w-full" controls preload="metadata" src={item.accessUrl} />
+                        <button
+                          type="button"
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                          aria-label={t("resources.download")}
+                          onClick={() => {
+                            if (!userId) return;
+                            void getCachedCloudFileAccess(userId, item.id).then(
+                              (access) =>
+                                downloadResourceWithName(
+                                  access.url,
+                                  itemTitle(item),
+                                ),
+                            );
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5" aria-hidden />
+                          {t("resources.download")}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-text-muted">{t("resources.accessUnavailable")}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon={<FileText />} label={t("resources.emptyAudio")} />
             )
           ) : null}
 
@@ -256,6 +335,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                       key={item.id}
                       href={item.accessUrl}
                       download={itemTitle(item)}
+                      onClick={(event) => void handleFileDownload(event, item)}
                       className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-surface-hover"
                     >
                       {content}
@@ -268,7 +348,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 })}
               </div>
             ) : (
-              <EmptyState icon={<FileText />} label="Chưa có file" />
+              <EmptyState icon={<FileText />} label={t("resources.emptyFiles")} />
             )
           ) : null}
 
@@ -286,7 +366,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                   return (
                     <a
                       key={item.id}
-                      href={url}
+                      href={isSafeExternalUrl(url) ? url : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-surface-hover"
@@ -307,7 +387,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 })}
               </div>
             ) : (
-              <EmptyState icon={<Link2 />} label="Chưa có liên kết" />
+              <EmptyState icon={<Link2 />} label={t("resources.emptyLinks")} />
             )
           ) : null}
         </div>

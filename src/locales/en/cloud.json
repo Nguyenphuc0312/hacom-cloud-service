@@ -26,6 +26,8 @@
     "all": "All",
     "text": "Text",
     "image": "Images",
+    "video": "Videos",
+    "audio": "Audio",
     "file": "Files",
     "link": "Links",
     "folders": "Folders",
@@ -60,6 +62,25 @@
       "approved": "Approved",
       "rejected": "Rejected"
     }
+  },
+  "resources": {
+    "title": "Cloud resources",
+    "media": "Images/video",
+    "audio": "Audio",
+    "files": "Files",
+    "links": "Links",
+    "emptyMedia": "No images or videos",
+    "emptyAudio": "No audio",
+    "emptyFiles": "No files",
+    "emptyLinks": "No links",
+    "download": "Download",
+    "accessUnavailable": "Access URL unavailable"
+  },
+  "filePreview": {
+    "title": "Cloud file",
+    "download": "Download",
+    "unavailable": "Preview is unavailable.",
+    "loading": "Loading preview..."
   },
   "service": {
     "checking": "Checking Cloud service",
@@ -166,6 +187,9 @@
     "emptyDescription": "Items moved here can be restored for 24 hours.",
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
+    "preview": "Preview",
+    "emptyAction": "Empty Trash",
+    "emptyConfirm": "Permanently delete every item in Trash? This cannot be undone.",
     "retentionNotice": "Items in Trash still use storage and are automatically deleted after 24 hours.",
     "expired": "Restore window expired",
     "hoursRemaining": "About {{count}} hours left",

@@ -4,6 +4,7 @@ import type { CloudFileAccess } from "../types";
 import {
   clearCloudFileAccessCache,
   getCachedCloudFileAccess,
+  invalidateCloudFileAccess,
 } from "./cloudFileAccessCache";
 
 const access = (overrides: Partial<CloudFileAccess> = {}): CloudFileAccess => ({
@@ -54,5 +55,21 @@ describe("cloud file access cache", () => {
       force: true,
     });
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates only the mutated Cloud item", async () => {
+    const request = vi
+      .spyOn(cloudApi, "getFileAccess")
+      .mockResolvedValueOnce(access())
+      .mockResolvedValueOnce(access({ itemId: "item-2" }))
+      .mockResolvedValueOnce(access({ url: "http://localhost:9000/object/item-1?signature=3" }));
+
+    await getCachedCloudFileAccess("user-1", "item-1");
+    await getCachedCloudFileAccess("user-1", "item-2");
+    invalidateCloudFileAccess("user-1", "item-1");
+    await getCachedCloudFileAccess("user-1", "item-1");
+    await getCachedCloudFileAccess("user-1", "item-2");
+
+    expect(request).toHaveBeenCalledTimes(3);
   });
 });

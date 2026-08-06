@@ -26,6 +26,8 @@
     "all": "Tất cả",
     "text": "Văn bản",
     "image": "Ảnh",
+    "video": "Video",
+    "audio": "Âm thanh",
     "file": "Tệp",
     "link": "Liên kết",
     "folders": "Thư mục",
@@ -42,10 +44,10 @@
     "of": " / {{limit}} đã dùng",
     "active": "{{value}} đang sử dụng",
     "trash": "{{value}} trong thùng rác",
-    "available": "{{value}} còn lại"
+    "available": "Trống · {{value}}"
   },
   "quotaRequest": {
-    "action": "Yêu cầu tăng dung lượng",
+    "action": "Yêu cầu cấp thêm dung lượng",
     "title": "Yêu cầu tăng dung lượng Cloud",
     "description": "Chọn một mức dung lượng được hỗ trợ. Hạn mức chỉ thay đổi sau khi yêu cầu được duyệt.",
     "tier": "Hạn mức đề nghị",
@@ -60,6 +62,25 @@
       "approved": "Đã duyệt",
       "rejected": "Đã từ chối"
     }
+  },
+  "resources": {
+    "title": "Kho lưu trữ",
+    "media": "Ảnh/video",
+    "audio": "Âm thanh",
+    "files": "Tệp",
+    "links": "Liên kết",
+    "emptyMedia": "Chưa có ảnh hoặc video",
+    "emptyAudio": "Chưa có âm thanh",
+    "emptyFiles": "Chưa có tệp",
+    "emptyLinks": "Chưa có liên kết",
+    "download": "Tải xuống",
+    "accessUnavailable": "Chưa lấy được URL truy cập"
+  },
+  "filePreview": {
+    "title": "Tệp Cloud",
+    "download": "Tải xuống",
+    "unavailable": "Không thể xem trước tệp.",
+    "loading": "Đang tải bản xem trước..."
   },
   "service": {
     "checking": "Đang kiểm tra dịch vụ Cloud",
@@ -162,6 +183,9 @@
     "emptyDescription": "Mục bạn đưa vào đây có thể được khôi phục trong 24 giờ.",
     "restore": "Khôi phục",
     "deletePermanently": "Xóa vĩnh viễn",
+    "preview": "Xem trước",
+    "emptyAction": "Dọn sạch Thùng rác",
+    "emptyConfirm": "Xóa vĩnh viễn mọi mục trong Thùng rác? Thao tác này không thể hoàn tác.",
     "retentionNotice": "Mục trong Thùng rác vẫn tính vào dung lượng và sẽ tự xóa sau 24 giờ.",
     "expired": "Đã hết hạn khôi phục",
     "hoursRemaining": "Còn khoảng {{count}} giờ",

@@ -5,6 +5,7 @@ import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { createSingleFlight } from "../utils/singleFlight";
+import { getCachedCloudFileAccess } from "../features/cloud/utils/cloudFileAccessCache";
 
 interface UseAttachmentDownloadUrlOptions {
   autoResolve?: boolean;
@@ -48,6 +49,17 @@ const parseExpiry = (expiresAt?: string): number => {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
+const getCloudAccessIdentity = (
+  objectKey: string | undefined,
+): { userId: string; itemId: string } | null => {
+  if (!objectKey?.startsWith("cloud:")) return null;
+  const parts = objectKey.split(":");
+  if (parts.length < 3) return null;
+  const itemId = parts.pop();
+  const userId = parts.slice(1).join(":");
+  return userId && itemId ? { userId, itemId } : null;
+};
+
 const getAttachmentUrlPolicy = (attachment: Attachment | undefined) => {
   const isImage = attachment?.mimeType?.toLowerCase().startsWith("image/");
   return {
@@ -82,6 +94,11 @@ export const useAttachmentDownloadUrl = (
     return undefined;
   }, [attachment]);
 
+  const cloudAccessIdentity = React.useMemo(
+    () => getCloudAccessIdentity(attachment?.objectKey),
+    [attachment?.objectKey],
+  );
+
   const [url, setUrl] = React.useState<string | undefined>(() => {
     const cached = cacheKey
       ? SIGNED_URL_CACHE.get(cacheKey, CACHE_SKEW_MS)
@@ -97,6 +114,28 @@ export const useAttachmentDownloadUrl = (
       if (!attachment || !conversationId) {
         setUrl(fallbackUrl);
         return fallbackUrl;
+      }
+
+      if (cloudAccessIdentity) {
+        setIsLoading(true);
+        try {
+          const access = await getCachedCloudFileAccess(
+            cloudAccessIdentity.userId,
+            cloudAccessIdentity.itemId,
+            { force },
+          );
+          setUrl(access.url);
+          setError(null);
+          return access.url;
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Failed to resolve Cloud access URL",
+          );
+          setUrl(fallbackUrl);
+          return fallbackUrl;
+        } finally {
+          setIsLoading(false);
+        }
       }
 
       if (isNonEmptyString(attachment.downloadUrl) && !force) {
@@ -181,7 +220,7 @@ export const useAttachmentDownloadUrl = (
         setIsLoading(false);
       }
     },
-    [attachment, cacheKey, conversationId, fallbackUrl],
+    [attachment, cacheKey, cloudAccessIdentity, conversationId, fallbackUrl],
   );
 
   const [prevCacheKey, setPrevCacheKey] = React.useState(cacheKey);

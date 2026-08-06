@@ -62,6 +62,7 @@ describe("cloud message adapter", () => {
     expect(message.type).toBe(MessageType.IMAGE);
     expect(message.attachments?.[0]).toMatchObject({
       type: "image",
+      objectKey: `cloud:${currentUser.id}:${"22222222-2222-4222-8222-222222222222"}`,
       fileName: "photo.png",
       mimeType: "image/png",
       url: "/cloud-object/bucket/photo.png?signed=1",

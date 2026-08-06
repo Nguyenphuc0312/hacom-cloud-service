@@ -37,6 +37,11 @@ const trashQuota: CloudQuota = {
   updatedAt: "2026-07-31T03:00:00Z",
 };
 
+const createTestItem = (
+  id: string,
+  updates: Partial<CloudItem> = {},
+): CloudItem => ({ ...activeItem, id, ...updates });
+
 describe("useCloudWorkspace trash lifecycle", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -97,5 +102,126 @@ describe("useCloudWorkspace trash lifecycle", () => {
     expect(result.current.trashItems).toEqual([]);
     expect(result.current.quota).toEqual(activeQuota);
     expect(quotaSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends the selected type filter to both active and Trash queries", async () => {
+    const listItems = vi.spyOn(cloudApi, "listItems").mockResolvedValue({
+      items: [],
+    });
+    const listTrash = vi.spyOn(cloudApi, "listTrash").mockResolvedValue({
+      items: [],
+    });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(activeQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "QUOTA_REQUEST_NOT_FOUND",
+        message: "No quota request",
+      }),
+    );
+
+    const { result } = renderHook(() => useCloudWorkspace(userId, "", "audio"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(listItems.mock.calls[0]?.[1]).toMatchObject({ type: "audio" });
+    expect(listTrash.mock.calls[0]?.[1]).toMatchObject({ type: "audio" });
+  });
+
+  it("ignores a load-more response from the previous search/filter generation", async () => {
+    let resolveMore: ((page: { items: CloudItem[]; nextCursor?: string }) => void) | undefined;
+    const morePage = new Promise<{ items: CloudItem[]; nextCursor?: string }>(
+      (resolve) => {
+        resolveMore = resolve;
+      },
+    );
+    const filteredItem = createTestItem("filtered-item", { type: "image" });
+    const staleItem = createTestItem("stale-item", { type: "image" });
+    const listItems = vi
+      .spyOn(cloudApi, "listItems")
+      .mockResolvedValueOnce({ items: [activeItem], nextCursor: "old-cursor" })
+      .mockReturnValueOnce(morePage)
+      .mockResolvedValue({ items: [filteredItem] });
+    vi.spyOn(cloudApi, "listTrash").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(activeQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "QUOTA_REQUEST_NOT_FOUND",
+        message: "No quota request",
+      }),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ filter }: { filter: "all" | "image" }) =>
+        useCloudWorkspace(userId, "", filter),
+      { initialProps: { filter: "all" } },
+    );
+    await waitFor(() => expect(result.current.nextCursor).toBe("old-cursor"));
+
+    let loadMorePromise: Promise<void> = Promise.resolve();
+    act(() => {
+      loadMorePromise = result.current.loadMore();
+    });
+    rerender({ filter: "image" });
+    await waitFor(() => expect(result.current.items).toEqual([filteredItem]));
+
+    resolveMore?.({ items: [staleItem], nextCursor: undefined });
+    await loadMorePromise;
+
+    expect(result.current.items).toEqual([filteredItem]);
+    expect(
+      listItems.mock.calls.some(([, options]) => options?.type === "image"),
+    ).toBe(true);
+  });
+
+  it("empties all Trash pages through item-level permanent deletes", async () => {
+    const listTrash = vi
+      .spyOn(cloudApi, "listTrash")
+      .mockResolvedValueOnce({ items: [trashedItem] })
+      .mockResolvedValueOnce({ items: [trashedItem] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "listItems").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(trashQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "QUOTA_REQUEST_NOT_FOUND",
+        message: "No quota request",
+      }),
+    );
+    const permanentlyDelete = vi
+      .spyOn(cloudApi, "permanentlyDeleteItem")
+      .mockResolvedValue({
+        itemId: trashedItem.id,
+        status: "delete_pending",
+        async: true,
+      });
+
+    const { result } = renderHook(() => useCloudWorkspace(userId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.emptyTrash();
+    });
+
+    expect(permanentlyDelete).toHaveBeenCalledTimes(1);
+    expect(permanentlyDelete.mock.calls[0]?.[2]?.idempotencyKey).toMatch(
+      /^cloud-web-/,
+    );
+    expect(listTrash).toHaveBeenCalledTimes(4);
+    expect(result.current.trashItems).toEqual([]);
   });
 });
