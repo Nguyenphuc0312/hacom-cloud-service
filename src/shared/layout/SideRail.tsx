@@ -6,6 +6,7 @@ import {
   BriefcaseIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
+  CloudIcon,
   Cog6ToothIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
@@ -13,6 +14,7 @@ import {
   BriefcaseIcon as BriefcaseSolid,
   CalendarDaysIcon as CalendarDaysSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
+  CloudIcon as CloudSolid,
   Cog6ToothIcon as Cog6ToothSolid,
   SparklesIcon as SparklesSolid,
 } from "@heroicons/react/24/solid";
@@ -62,6 +64,7 @@ const railItems: SideRailItem[] = [
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
+  { id: "cloud", label: "Cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },

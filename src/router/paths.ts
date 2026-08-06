@@ -12,6 +12,7 @@ export const ROUTE_PATHS = {
   PENDING_HR_LINK: "/pending-hr-link",
   CHAT: "/chat",
   CHAT_DETAIL: "/chat/:conversationId?",
+  CLOUD: "/cloud",
   FRIENDS: "/friends",
   FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
   JOIN_BY_TOKEN: "/join/:token",
