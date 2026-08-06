@@ -23,6 +23,18 @@ const openCloud = async (page: Page) => {
   await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
 };
 
+const resolveCloudConversationId = async (page: Page) => {
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().includes('/cloud/ensure') && response.request().method() === 'POST',
+  );
+  await openCloud(page);
+  const payload = await (await responsePromise).json() as { data?: { conversationId?: string } };
+  if (!payload.data?.conversationId) {
+    throw new Error('Cloud ensure response did not include the canonical conversationId.');
+  }
+  return payload.data.conversationId;
+};
+
 const openCloudFromChat = async (page: Page) => {
   await page.goto('/chat');
   await Promise.all([
@@ -81,5 +93,13 @@ test.describe.serial('Hacom Cloud browser flow', () => {
     await first.getByTestId('chat-composer-input').fill(note);
     await first.getByTestId('chat-composer-input').press('Enter');
     await expect(second.getByText(note)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('redirects a saved Cloud chat URL before group UI can mount', async () => {
+    const cloudConversationId = await resolveCloudConversationId(second);
+    await second.goto(`/chat/${cloudConversationId}`);
+    await second.waitForURL('**/cloud');
+    await expect(second.getByRole('heading', { name: /Cloud cá»§a tĂ´i/i, level: 1 })).toBeVisible();
+    await expect(second.getByText(/Target conversation is not a group/i)).toHaveCount(0);
   });
 });
