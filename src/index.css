@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Emoji: tự nhúng font, KHÔNG dựa vào font hệ điều hành =====
+   "Segoe UI Emoji" của Windows chỉ tới ~Unicode 13 và cố ý bỏ TOÀN BỘ cờ
+   quốc gia. Hệ quả trên web (mobile không dính vì Android có Noto sẵn):
+     🇻🇳 → ra chữ "vn"  (cờ = 2 ký tự Regional Indicator, fallback ra chữ cái)
+     🫠 🫡 🥹 🫶 🩷 → ra ô vuông  (E14 trở đi Windows chưa có glyph)
+   Máy thiếu glyph thì xếp thứ tự font kiểu gì cũng vô ích — phải nhúng glyph.
+
+   Noto Color Emoji v35 (6/2025, OFL-1.1) = đúng bộ Android đang dùng, nên
+   web khớp mobile 1:1. `unicode-range` giới hạn ở các dải emoji nên font
+   CHỈ tải khi trang thực sự có emoji, và không bao giờ đụng chữ tiếng Việt
+   dù nó đứng đầu font stack. Tải 1 lần rồi cache vĩnh viễn.
+
+   ponytail: 5.2MB là cái giá để hết lệch mobile; muốn nhẹ hơn phải tự subset
+   font theo tập emoji thực dùng — chỉ làm khi đo thấy tải chậm thật. */
+@font-face {
+  font-family: "Noto Color Emoji";
+  src: url("/fonts/NotoColorEmoji.woff2") format("woff2");
+  unicode-range:
+    U+00A9, U+00AE, U+203C, U+2049, U+2122, U+2139, U+2194-21AA,
+    U+231A-231B, U+2328, U+23CF-23FA, U+24C2, U+25AA-25FE,
+    U+2600-27BF, U+2934-2935, U+2B00-2BFF, U+3030, U+303D,
+    U+3297, U+3299, U+FE0F, U+1F000-1F9FF, U+1FA00-1FAFF;
+  font-display: swap;
+}
+
 /* Design tokens */
 :root {
   --font-family-sans: "Inter";
@@ -515,12 +540,20 @@ body,
 body {
   margin: 0;
   font-family:
+    /* Phải đứng TRƯỚC mọi font khác: nếu để sau, "Segoe UI Emoji"/"Segoe UI
+       Symbol" giành mất ký tự và vẽ ra glyph cũ/ô vuông/chữ cái. unicode-range
+       ở @font-face giữ cho nó chỉ áp dụng đúng dải emoji. */
+    "Noto Color Emoji",
     var(--font-family-sans),
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
-    sans-serif;
+    sans-serif,
+    /* Fallback cho máy chưa tải xong font nhúng (font-display: swap). */
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol";
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
   /* No CSS `zoom` here. We tried scaling the whole UI up on large monitors with
