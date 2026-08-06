@@ -18,7 +18,7 @@ import { HacomCloudInfoSidebar } from "./HacomCloudInfoSidebar";
 import { FilePreviewModal } from "../../../components/modals/FilePreviewModal";
 import { useFilePreview } from "../../../hooks/useFilePreview";
 import { getMimePreviewType } from "../../../utils/mimeRegistry";
-import type { Attachment, Message } from "../../../types";
+import { FileType, type Message } from "../../../types";
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
@@ -104,10 +104,11 @@ export const PersonalCloudConversationSurface: React.FC = () => {
       conversationId,
       attachment: {
         id: candidate.attachmentId ?? "",
+        type: candidate.mediaType === "image" ? FileType.IMAGE : candidate.mediaType === "video" ? FileType.VIDEO : FileType.OTHER,
         fileName: candidate.originalFilename,
         fileSize: Number(candidate.sizeBytes),
         mimeType: candidate.mimeType,
-      } as Attachment,
+      },
       previewType: getMimePreviewType(candidate.mimeType, candidate.originalFilename),
     });
     const gallery = assets.filter((candidate) => candidate.status === "available" && Boolean(candidate.attachmentId)).map(toTarget);
