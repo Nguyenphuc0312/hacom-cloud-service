@@ -14,6 +14,15 @@ const basePayload = {
 };
 
 describe("conversationAdapter — sendRestriction parsing", () => {
+  it("preserves PERSONAL_CLOUD instead of coercing it to a group", () => {
+    const conversation = normalizeConversation({
+      ...basePayload,
+      type: "personal_cloud",
+    });
+
+    expect(conversation?.type).toBe("personal_cloud");
+  });
+
   it("parses a FRIENDSHIP_REQUIRED restriction with UNFRIENDED reason", () => {
     const conversation = normalizeConversation({
       ...basePayload,

@@ -348,6 +348,10 @@ export const normalizeRoomType = (
       return RoomType.PRIVATE;
     case RoomType.GROUP:
       return RoomType.GROUP;
+    case "personal_cloud":
+      // The API owns this type. Keep it intact until the shared RoomType
+      // package is consumed by every deployed client.
+      return "personal_cloud" as RoomType;
     case RoomType.CHANNEL:
       return RoomType.CHANNEL;
     case RoomType.PUBLIC:
