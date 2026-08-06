@@ -86,6 +86,8 @@ export interface MessageInputProps {
     clientMessageId?: string,
   ) => unknown | Promise<unknown>;
   conversationName?: string;
+  /** Optional product-specific prompt while retaining the shared composer. */
+  placeholder?: string;
   /** "direct"|"private" = 1-1 DM; "group" = nhóm. Poll chỉ hiện khi là nhóm. */
   conversationType?: string;
 

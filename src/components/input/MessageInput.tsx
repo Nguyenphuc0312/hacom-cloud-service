@@ -171,6 +171,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     onShareContact,
     onShareLocation,
     conversationName,
+    placeholder,
     conversationType,
     // Multi-file upload queue
     uploadDrafts,
@@ -1586,7 +1587,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 ref={tipTapRef}
                 data-testid="chat-composer-input"
                 initialContent={externalValue}
-                placeholder={
+                placeholder={placeholder ?? (
                   conversationName
                     ? t("chat:composer.dynamicPlaceholder", {
                       name: conversationName,
@@ -1595,7 +1596,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     : t("chat:composer.placeholder", {
                       defaultValue: "Nhập @, tin nhắn tới...",
                     })
-                }
+                )}
                 disabled={disabled}
                 onContentChange={(plainText) => {
                   setDraftValue(plainText);

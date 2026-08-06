@@ -7,6 +7,7 @@ import { SimpleVirtualizedChatTimeline } from '../../chat/simple-virtual-timelin
 import { useGetMessagesQuery } from '../../api/chatApi';
 import { useAuthStore } from '../../../stores';
 import { useUIStore } from '../../../stores/uiStore';
+import { useGlobalWebSocket } from '../../realtime/GlobalWebSocketProvider';
 import { cloudApi, type CloudAsset } from '../api/cloudApi';
 import wsManager from '../../../lib/socket';
 import { useCloudUploadQueue } from '../hooks/useCloudUploadQueue';
@@ -25,6 +26,7 @@ type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 export const CloudChatWorkspace: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const density = useUIStore((state) => state.chatDensity);
+  const { joinConversation, leaveConversation } = useGlobalWebSocket();
   const [space, setSpace] = useState<CloudSpace | null>(null);
   const [assets, setAssets] = useState<CloudAsset[]>([]);
   const [draft, setDraft] = useState('');
@@ -60,6 +62,11 @@ export const CloudChatWorkspace: React.FC = () => {
   }, [refresh]);
 
   const conversationId = space?.conversationId ?? '';
+  useEffect(() => {
+    if (!conversationId) return;
+    joinConversation(conversationId);
+    return () => leaveConversation(conversationId);
+  }, [conversationId, joinConversation, leaveConversation]);
   const messagesQuery = useGetMessagesQuery({ conversationId, limit: 50 }, { skip: !conversationId, refetchOnReconnect: true });
   const messages = messagesQuery.data?.messages ?? [];
   const uploadQueue = useCloudUploadQueue(() => { void refresh(); void messagesQuery.refetch(); });
@@ -93,7 +100,7 @@ export const CloudChatWorkspace: React.FC = () => {
       <div className="min-h-0 flex-1">
         {conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={'direct' as never} currentUserId={user.id} messages={messages} onReply={() => undefined} onReact={() => undefined} onForward={() => undefined} onDelete={() => undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}
       </div>
-      <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
+      <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
     </main>
     <aside className={`${infoOpen ? 'w-[var(--app-inspector-width)] border-l' : 'w-0 border-l-0'} hidden shrink-0 overflow-hidden border-border/70 bg-surface transition-[width] duration-200 lg:block`} aria-hidden={!infoOpen}><div className="h-full w-[var(--app-inspector-width)] overflow-y-auto"><div className="flex min-h-[var(--app-header-height)] items-center justify-between border-b border-border/70 px-4"><strong>Thông tin Hacom Cloud</strong><button type="button" className="rounded p-1 hover:bg-surface-hover" onClick={() => setInfoOpen(false)} aria-label="Đóng thông tin Hacom Cloud"><XMarkIcon className="h-5 w-5" /></button></div><div className="space-y-6 p-4"><div className="text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand-soft text-brand-solid"><CloudIcon className="h-8 w-8" /></span><h2 className="mt-3 font-semibold">Cloud của tôi</h2><p className="mt-1 text-sm text-text-muted">Lưu trữ và truy cập nhanh các nội dung quan trọng của bạn</p></div>{quota && <section><h3 className="text-sm font-medium">Dung lượng lưu trữ</h3><p className="mt-2 text-sm">{formatBytes(used)} / {formatBytes(quota.limitBytes)}</p><div className="mt-2 h-2 overflow-hidden rounded bg-surface-hover"><div className="h-full bg-brand-solid" style={{ width: `${Math.min(100, Number(quota.limitBytes) ? used / Number(quota.limitBytes) * 100 : 0)}%` }} /></div><p className="mt-2 text-xs text-text-muted">Còn lại {formatBytes(Math.max(0, Number(quota.limitBytes) - used))}{Number(quota.reservedBytes) > 0 ? ` · Đang giữ chỗ ${formatBytes(quota.reservedBytes)}` : ''}</p></section>}<section><h3 className="text-sm font-medium">Ảnh và video gần đây</h3><div className="mt-2 grid grid-cols-3 gap-2">{recentMedia.map((asset) => <div key={asset.id} className="aspect-square rounded bg-surface-hover p-2 text-xs">{asset.mediaType === 'image' ? 'Ảnh' : 'Video'}</div>)}</div></section><section><h3 className="text-sm font-medium">Tệp gần đây</h3><ul className="mt-2 space-y-2">{recentFiles.map((asset) => <li key={asset.id} className="truncate text-sm">{asset.originalFilename}<small className="ml-1 text-text-muted">{formatBytes(asset.sizeBytes)}</small></li>)}</ul></section></div></div></aside>
   </section>;
