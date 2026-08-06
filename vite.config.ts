@@ -131,7 +131,10 @@ const wsProxy = (target: string) => ({
 // ---------------------------------------------------------------------------
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  // `loadEnv` deliberately reads only files. Merge process env afterwards so
+  // disposable E2E/CI stacks can supply isolated upstream targets without
+  // writing a developer's local .env file.
+  const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
 
   const packageJson = JSON.parse(
     fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"),

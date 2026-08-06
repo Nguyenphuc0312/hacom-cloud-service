@@ -18,12 +18,14 @@ const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
 const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
+const CloudPage = lazy(() => import("../../features/cloud/pages/CloudPage"));
 
 /**
  * Authenticated routes. Optional `roles` enables role-based access control.
  */
 export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.CHAT_DETAIL, component: ChatPage },
+  { path: ROUTE_PATHS.CLOUD, component: CloudPage },
   { path: ROUTE_PATHS.FRIENDS, component: FriendsPage },
   { path: ROUTE_PATHS.FRIEND_DISCOVERY, component: FriendsPage },
   { path: ROUTE_PATHS.JOIN_BY_TOKEN, component: JoinByLinkPage },

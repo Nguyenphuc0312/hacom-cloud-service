@@ -231,7 +231,6 @@ export const loginAuthApi = {
       AUTH_ENDPOINTS.login,
       {
         loginIdentifier: payload.loginIdentifier,
-        email: payload.email,
         password: payload.password,
         rememberMe: payload.rememberMe,
       },
