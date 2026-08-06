@@ -8,6 +8,7 @@ import type {
   CloudQuotaRequest,
   CloudViewMode,
 } from "../types";
+import type { UserSummary } from "../../../types";
 import { formatBytes } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
 import { CloudResourcesPreview } from "./CloudResourcesPreview";
@@ -16,6 +17,7 @@ interface CloudConversationInfoPanelProps {
   items: CloudItem[];
   trashItems: CloudItem[];
   userId?: string;
+  currentUser?: Pick<UserSummary, "displayName" | "avatar">;
   quota: CloudQuota | null;
   quotaRequest: CloudQuotaRequest | null;
   showQuotaRequest: boolean;
@@ -31,6 +33,7 @@ export const CloudConversationInfoPanel: React.FC<
   items,
   trashItems,
   userId,
+  currentUser,
   quota,
   quotaRequest,
   showQuotaRequest,
@@ -196,7 +199,12 @@ export const CloudConversationInfoPanel: React.FC<
         </section>
 
         <section className="border-b border-border/60 p-4">
-          <CloudResourcesPreview items={items} userId={userId} />
+          <CloudResourcesPreview
+            items={items}
+            userId={userId}
+            senderName={currentUser?.displayName}
+            senderAvatar={currentUser?.avatar}
+          />
         </section>
       </div>
     </aside>

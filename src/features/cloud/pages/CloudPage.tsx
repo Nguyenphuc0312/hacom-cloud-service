@@ -18,6 +18,10 @@ import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
+import {
+  ImagePreviewModal,
+  type GalleryImage,
+} from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import { InlineNotice, toast } from "../../../components/ui";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
@@ -30,6 +34,7 @@ import {
   UserStatus,
   type Attachment,
   type Conversation,
+  type ImageClickPayload,
   type Message,
   type UserSummary,
 } from "../../../types";
@@ -124,6 +129,8 @@ export default function CloudPage() {
     url: string;
     fileName?: string;
   } | null>(null);
+  const [imagePreview, setImagePreview] =
+    useState<ImageClickPayload | null>(null);
   const cloudUserId = resolveCloudUserId(authUser?.id);
   const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
   const showQuotaRequest =
@@ -234,6 +241,85 @@ export default function CloudPage() {
       }),
     [currentUser, t, workspace.items],
   );
+
+  // Cloud media is rendered by the same MessageBodyRenderer as a regular
+  // conversation. Build the gallery from the hydrated workspace items so a
+  // click in the timeline opens the exact Chat/Zalo-style viewer (counter,
+  // filmstrip, zoom, rotate, download and keyboard navigation), while keeping
+  // the owner metadata shown in the viewer footer.
+  const cloudImageGallery = useMemo<GalleryImage[]>(
+    () =>
+      [...workspace.items]
+        .filter(
+          (item) =>
+            item.type === "image" &&
+            item.status === "ready" &&
+            Boolean(item.accessUrl),
+        )
+        .sort(
+          (left, right) =>
+            new Date(left.createdAt).getTime() -
+            new Date(right.createdAt).getTime(),
+        )
+        .map((item) => ({
+          url: item.accessUrl!,
+          alt: getCloudItemTitle(item, {
+            text: t("item.untitledText"),
+            link: t("item.untitledLink"),
+            file: t("item.untitledFile"),
+          }),
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.avatar,
+          sentAt: item.createdAt,
+          groupKey: item.id,
+        })),
+    [currentUser.avatar, currentUser.displayName, t, workspace.items],
+  );
+
+  const handleImagePreview = useCallback(
+    (payload: ImageClickPayload) => {
+      const index = cloudImageGallery.findIndex(
+        (image) =>
+          image.groupKey === payload.groupKey || image.url === payload.url,
+      );
+      setImagePreview({
+        ...payload,
+        initialIndex: index >= 0 ? index : cloudImageGallery.length,
+      });
+    },
+    [cloudImageGallery],
+  );
+
+  const previewGallery = useMemo<GalleryImage[]>(() => {
+    if (!imagePreview) return cloudImageGallery;
+    const hasCurrentImage = cloudImageGallery.some(
+      (image) =>
+        image.groupKey === imagePreview.groupKey ||
+        image.url === imagePreview.url,
+    );
+    if (hasCurrentImage) return cloudImageGallery;
+    return [
+      ...cloudImageGallery,
+      {
+        url: imagePreview.url,
+        alt: imagePreview.alt,
+        senderName: imagePreview.senderName ?? currentUser.displayName,
+        senderAvatar: imagePreview.senderAvatar ?? currentUser.avatar,
+        sentAt: imagePreview.sentAt,
+        groupKey: imagePreview.groupKey,
+      },
+    ];
+  }, [cloudImageGallery, currentUser.avatar, currentUser.displayName, imagePreview]);
+
+  const previewInitialIndex = useMemo(() => {
+    if (!imagePreview || previewGallery.length === 0) return 0;
+    const index = previewGallery.findIndex(
+      (image) =>
+        image.groupKey === imagePreview.groupKey ||
+        image.url === imagePreview.url,
+    );
+    return index >= 0 ? index : imagePreview.initialIndex ?? 0;
+  }, [imagePreview, previewGallery]);
 
   const visibleMessages = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -507,6 +593,7 @@ export default function CloudPage() {
               onPin={noopMessageIdAction}
               onEdit={noopMessageAction}
               onDelete={handleDeleteRequest}
+              onImageClick={handleImagePreview}
               onFilePreview={handleFilePreview}
               hasMore={Boolean(workspace.nextCursor)}
               isLoadingMore={workspace.isLoadingMore}
@@ -608,6 +695,7 @@ export default function CloudPage() {
               items={workspace.items}
               trashItems={workspace.trashItems}
               userId={cloudUserId}
+              currentUser={currentUser}
               quota={workspace.quota}
               quotaRequest={workspace.quotaRequest}
               showQuotaRequest={showQuotaRequest}
@@ -652,6 +740,16 @@ export default function CloudPage() {
         onClose={() => setVideoPreview(null)}
         url={videoPreview?.url ?? null}
         fileName={videoPreview?.fileName}
+      />
+      <ImagePreviewModal
+        isOpen={imagePreview !== null}
+        onClose={() => setImagePreview(null)}
+        images={previewGallery}
+        initialIndex={previewInitialIndex}
+        onViewAll={() => {
+          setImagePreview(null);
+          setIsInfoPanelOpen(true);
+        }}
       />
     </AppShell>
   );

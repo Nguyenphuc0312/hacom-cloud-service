@@ -13,6 +13,8 @@ const ACCESS_REQUEST_CONCURRENCY = 4;
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
   userId?: string;
+  senderName?: string;
+  senderAvatar?: string;
 }
 
 const itemTitle = (item: CloudItem): string =>
@@ -25,6 +27,8 @@ const itemTitle = (item: CloudItem): string =>
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
   userId,
+  senderName,
+  senderAvatar,
 }) => {
   const [activeTab, setActiveTab] = useState<ResourceTab>("media");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -61,8 +65,15 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     () =>
       media
         .filter((item) => item.type === "image" && item.accessUrl)
-        .map((item) => ({ url: item.accessUrl!, alt: itemTitle(item) })),
-    [media],
+        .map((item) => ({
+          url: item.accessUrl!,
+          alt: itemTitle(item),
+          senderName,
+          senderAvatar,
+          sentAt: item.createdAt,
+          groupKey: item.id,
+        })),
+    [media, senderAvatar, senderName],
   );
 
   useEffect(() => {
