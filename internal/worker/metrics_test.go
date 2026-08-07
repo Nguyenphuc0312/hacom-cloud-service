@@ -14,6 +14,11 @@ func TestMetricsHandlerExportsPurgeAndDeadJobCounters(t *testing.T) {
 	metrics.RecordPurgeCompleted(true)
 	metrics.RecordPurgeFailed()
 	metrics.RecordDeadJobs(3)
+	metrics.RecordJobClaimed(false)
+	metrics.RecordJobClaimed(true)
+	metrics.RecordJobCompleted()
+	metrics.RecordJobFailed(true)
+	metrics.RecordJobFailed(false)
 
 	response := httptest.NewRecorder()
 	metrics.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
@@ -26,6 +31,11 @@ func TestMetricsHandlerExportsPurgeAndDeadJobCounters(t *testing.T) {
 		"hacom_cloud_trash_purge_missing_object_total 1",
 		"hacom_cloud_trash_purge_failed_total 1",
 		"hacom_cloud_worker_dead_jobs_total 3",
+		"hacom_cloud_worker_jobs_claimed_total 2",
+		"hacom_cloud_worker_jobs_completed_total 1",
+		"hacom_cloud_worker_jobs_failed_total 2",
+		"hacom_cloud_worker_job_retries_total 1",
+		"hacom_cloud_worker_stale_recovered_total 1",
 	} {
 		if !strings.Contains(response.Body.String(), value) {
 			t.Fatalf("metrics body missing %q: %s", value, response.Body.String())

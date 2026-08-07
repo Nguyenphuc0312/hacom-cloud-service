@@ -91,10 +91,11 @@ func (r *JobPostgres) Claim(ctx context.Context) (Job, error) {
 		job     Job
 		jobType string
 		payload []byte
+		stale   bool
 	)
 	err = tx.QueryRow(ctx, `
 WITH candidate AS (
-	SELECT job.id
+	SELECT job.id, job.status = 'processing' AS was_stale
 	FROM cloud.jobs AS job
 	WHERE job.attempts < LEAST(job.max_attempts, $2)
 	  AND (
@@ -116,11 +117,12 @@ SET status = 'processing',
 	last_error = NULL
 FROM candidate
 WHERE job.id = candidate.id
-RETURNING job.id, job.job_type::text, job.payload
+	RETURNING job.id, job.job_type::text, job.payload, candidate.was_stale
 	`, lockTimeoutMicros, r.policy.MaxAttempts, r.workerID).Scan(
 		&job.ID,
 		&jobType,
 		&payload,
+		&stale,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err := tx.Commit(ctx); err != nil {
@@ -142,6 +144,7 @@ RETURNING job.id, job.job_type::text, job.payload
 	}
 	if r.metrics != nil {
 		r.metrics.RecordDeadJobs(deadTag.RowsAffected())
+		r.metrics.RecordJobClaimed(stale)
 	}
 
 	job.Type = JobType(jobType)
@@ -215,6 +218,9 @@ func (r *JobPostgres) Complete(ctx context.Context, jobID string) error {
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit complete transaction: %w", err)
+	}
+	if r.metrics != nil {
+		r.metrics.RecordJobCompleted()
 	}
 	return nil
 }
@@ -311,6 +317,9 @@ func (r *JobPostgres) Fail(ctx context.Context, jobID string, cause error) error
 	}
 	if nextStatus == string(JobDead) && r.metrics != nil {
 		r.metrics.RecordDeadJobs(1)
+	}
+	if r.metrics != nil {
+		r.metrics.RecordJobFailed(nextStatus == string(JobFailed))
 	}
 	return nil
 }

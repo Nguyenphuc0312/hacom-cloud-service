@@ -12,6 +12,11 @@ type Metrics struct {
 	purgeMissingObject atomic.Uint64
 	purgeFailed        atomic.Uint64
 	deadJobs           atomic.Uint64
+	jobsClaimed        atomic.Uint64
+	jobsCompleted      atomic.Uint64
+	jobsFailed         atomic.Uint64
+	jobretries         atomic.Uint64
+	staleRecovered     atomic.Uint64
 }
 
 type MetricsSnapshot struct {
@@ -20,6 +25,11 @@ type MetricsSnapshot struct {
 	PurgeMissingObject uint64
 	PurgeFailed        uint64
 	DeadJobs           uint64
+	JobsClaimed        uint64
+	JobsCompleted      uint64
+	JobsFailed         uint64
+	JobRetries         uint64
+	StaleRecovered     uint64
 }
 
 func NewMetrics() *Metrics { return &Metrics{} }
@@ -52,6 +62,32 @@ func (m *Metrics) RecordDeadJobs(count int64) {
 	}
 }
 
+func (m *Metrics) RecordJobClaimed(stale bool) {
+	if m == nil {
+		return
+	}
+	m.jobsClaimed.Add(1)
+	if stale {
+		m.staleRecovered.Add(1)
+	}
+}
+
+func (m *Metrics) RecordJobCompleted() {
+	if m != nil {
+		m.jobsCompleted.Add(1)
+	}
+}
+
+func (m *Metrics) RecordJobFailed(retry bool) {
+	if m == nil {
+		return
+	}
+	m.jobsFailed.Add(1)
+	if retry {
+		m.jobretries.Add(1)
+	}
+}
+
 func (m *Metrics) Snapshot() MetricsSnapshot {
 	if m == nil {
 		return MetricsSnapshot{}
@@ -62,6 +98,11 @@ func (m *Metrics) Snapshot() MetricsSnapshot {
 		PurgeMissingObject: m.purgeMissingObject.Load(),
 		PurgeFailed:        m.purgeFailed.Load(),
 		DeadJobs:           m.deadJobs.Load(),
+		JobsClaimed:        m.jobsClaimed.Load(),
+		JobsCompleted:      m.jobsCompleted.Load(),
+		JobsFailed:         m.jobsFailed.Load(),
+		JobRetries:         m.jobretries.Load(),
+		StaleRecovered:     m.staleRecovered.Load(),
 	}
 }
 
@@ -84,6 +125,17 @@ hacom_cloud_trash_purge_missing_object_total %d
 hacom_cloud_trash_purge_failed_total %d
 # TYPE hacom_cloud_worker_dead_jobs_total counter
 hacom_cloud_worker_dead_jobs_total %d
-`, snapshot.PurgeScanned, snapshot.PurgeCompleted, snapshot.PurgeMissingObject, snapshot.PurgeFailed, snapshot.DeadJobs)
+# TYPE hacom_cloud_worker_jobs_claimed_total counter
+hacom_cloud_worker_jobs_claimed_total %d
+# TYPE hacom_cloud_worker_jobs_completed_total counter
+hacom_cloud_worker_jobs_completed_total %d
+# TYPE hacom_cloud_worker_jobs_failed_total counter
+hacom_cloud_worker_jobs_failed_total %d
+# TYPE hacom_cloud_worker_job_retries_total counter
+hacom_cloud_worker_job_retries_total %d
+# TYPE hacom_cloud_worker_stale_recovered_total counter
+hacom_cloud_worker_stale_recovered_total %d
+`, snapshot.PurgeScanned, snapshot.PurgeCompleted, snapshot.PurgeMissingObject, snapshot.PurgeFailed, snapshot.DeadJobs,
+			snapshot.JobsClaimed, snapshot.JobsCompleted, snapshot.JobsFailed, snapshot.JobRetries, snapshot.StaleRecovered)
 	})
 }

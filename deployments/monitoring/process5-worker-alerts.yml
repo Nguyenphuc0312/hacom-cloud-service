@@ -1,0 +1,52 @@
+groups:
+  - name: hacom-cloud-process5-worker
+    rules:
+      - alert: HacomCloudWorkerDeadJobs
+        expr: increase(hacom_cloud_worker_dead_jobs_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: cloud-worker
+        annotations:
+          summary: Cloud worker moved a job to dead
+          description: A worker job exhausted its retry budget; inspect job_type and last_error before replaying through the approved recovery flow.
+
+      - alert: HacomCloudWorkerPurgeFailures
+        expr: increase(hacom_cloud_trash_purge_failed_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: cloud-worker
+        annotations:
+          summary: Permanent-delete worker failures detected
+          description: Purge handlers are failing; check MinIO/PostgreSQL health and the recovery runbook.
+
+      - alert: HacomCloudWorkerRetryStorm
+        expr: increase(hacom_cloud_worker_job_retries_total[10m]) > 10 and increase(hacom_cloud_worker_jobs_claimed_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: cloud-worker
+        annotations:
+          summary: Cloud worker retry storm
+          description: Retries are elevated; verify dependency latency and stop a bad rollout before jobs become dead.
+
+      - alert: HacomCloudWorkerStaleLeaseRecovery
+        expr: increase(hacom_cloud_worker_stale_recovered_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: info
+          service: cloud-worker
+        annotations:
+          summary: Worker recovered stale leases
+          description: A worker restarted or lost a lease; verify the host/container restart reason and reconciliation output.
+
+      - alert: HacomCloudWorkerPurgeMissingObjects
+        expr: increase(hacom_cloud_trash_purge_missing_object_total[15m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: cloud-worker
+        annotations:
+          summary: Many purge objects were already missing
+          description: Treat missing objects as idempotent success, then check reconciliation for unexpected orphan metadata.

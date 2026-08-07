@@ -17,6 +17,10 @@ frontend SHA `af91a644`.
 - Slide outline: [`docs/process5-slide-outline-phase2.md`](docs/process5-slide-outline-phase2.md)
 - Deployment/rollback: [`docs/process5-deployment-rollback.md`](docs/process5-deployment-rollback.md)
 - API/OpenAPI/Postman: [`docs/process5-api-openapi-postman.md`](docs/process5-api-openapi-postman.md)
+- Worker release checklist: [`docs/process5-worker-release-checklist.md`](docs/process5-worker-release-checklist.md)
+- Worker soak report: [`docs/process5-worker-soak-report.md`](docs/process5-worker-soak-report.md)
+- Worker operations/recovery: [`docs/process5-worker-operations-runbook.md`](docs/process5-worker-operations-runbook.md)
+- Prometheus alerts: [`deployments/monitoring/process5-worker-alerts.yml`](deployments/monitoring/process5-worker-alerts.yml)
 
 The older section below is retained as the historical Phase 1 release procedure.
 
