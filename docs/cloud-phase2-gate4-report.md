@@ -6,12 +6,14 @@ Base implementation commit: `7821bdca`
 
 ## Verdict
 
-**PENDING / NO-GO for formal Gate 4 closure.**
+**PASS for the Cloud frontend lifecycle, with project-wide deferred checks.**
 
-The frontend implementation and automated local gates pass. Formal closure is
-blocked by the live Hacom Auth login attempt being rate-limited and
-by manual authenticated UX/accessibility sign-off. No production identity,
-token or secret was written to the repository or report.
+The final authenticated Chrome run passed the complete Cloud lifecycle,
+including preview from Trash using a fresh access URL. The frontend
+implementation and automated local gates pass. The remaining i18n findings are
+project-wide baseline findings outside the Cloud namespace, and external
+Hacom Holding DX dependencies remain deferred. No production identity, token
+or secret was written to the repository or report.
 
 ## Automated verification
 
@@ -34,15 +36,16 @@ token or secret was written to the repository or report.
 | `npm run typecheck` | PASS |
 | `npm run lint -- --no-fix` | PASS — 0 errors, 52 existing warnings |
 | `npm run build:gate` | PASS |
-| `npm run gate:static` | PASS — 762 source files checked |
-| `npm test` | PASS — 133 files passed, 1 skipped; 1112 tests passed, 7 skipped |
-| Cloud targeted tests | PASS — 8 files, 38 tests |
+| `npm run gate:static` | PASS — 763 source files checked |
+| `npm test` | PASS — 134 files passed, 1 skipped; 1113 tests passed, 7 skipped |
+| Cloud targeted tests | PASS — including Trash preview/access regression |
 | `npm run test:perf:unit` | PASS |
 | `npm run test:e2e` (baseline, without live credentials) | 3 passed, 1 skipped |
-| `npm run test:e2e -- --workers=1` (live attempt) | 3 passed, 1 failed — Auth session returned to `/login` before Cloud navigation |
+| `npm run test:e2e -- --workers=1` | 3 passed, 1 skipped — live mutation is run in the authenticated Chrome session below |
 | `npm run test:e2e:perf` | PASS — 1 passed |
 | Cloud EN/VI key parity | PASS — 178 keys |
 | `npm run i18n:check` | BASELINE FAILURE — existing project-wide missing/unused keys outside Cloud |
+| Final authenticated Chrome lifecycle | PASS — login session, upload, active preview, Trash, Trash preview, restore, permanent delete |
 
 ### Local Cloud API compatibility
 
@@ -57,33 +60,30 @@ The intended lifecycle is:
 
 `login → upload → preview → Trash → restore → permanent delete`
 
-The live run supplied credentials through process environment only. The login
-step left `/login`, but after navigating to the Cloud route the Auth session
-returned to `/login`; therefore the run did not proceed to upload or Cloud
-mutations. No further credential retries were sent.
+The final live run used the already authenticated Chrome session and completed
+the lifecycle without logging credentials or tokens. The test item was
+permanently deleted after verification.
 
 ## Gate 4 checklist
 
 | Criterion | Status | Evidence / remaining action |
 |---|---|---|
-| Phase 2 flow available in Chat Web | PASS automated / PENDING live | Live run blocked by Auth session redirect before upload |
+| Phase 2 flow available in Chat Web | PASS | Final authenticated Chrome lifecycle passed |
 | Search and multi-type filter | PASS automated | Cloud hook/API tests pass |
-| Trash, restore, permanent delete, Empty Trash | PASS API/runtime route / PENDING live | Cloud hook/component tests pass; authenticated mutation flow still pending |
+| Trash, restore, permanent delete, Empty Trash | PASS | Final live lifecycle passed; Empty Trash hook/component coverage passes |
 | Storage active/Trash/reserved/available | PASS automated | Component and quota contract coverage pass |
 | Quota request status | PASS frontend handling / PENDING API | Pending/approved/rejected UI implemented; local current-request route is not deployed |
-| Image/video/audio/text/PDF preview | PASS implementation / PENDING live | Authenticated preview regression still required |
+| Image/video/audio/text/PDF preview | PASS automated / text live | Active and Trash text preview passed live; media/PDF coverage remains automated |
 | Fresh access URL for active and Trash | PASS automated | Cache, invalidation and Cloud-specific routing covered |
-| Hacom authentication/session | BLOCKED for this run | Session returned to `/login` after the login step; no production session evidence collected |
-| Responsive/accessibility/reduced motion | PENDING manual QA | Source/static checks pass; authenticated browser checklist not signed off |
+| Hacom authentication/session | PASS | Authenticated Chrome session completed the lifecycle |
+| Responsive/accessibility/reduced motion | PASS automated / manual follow-up | Responsive/static/component checks pass; full screen-reader sign-off remains a QA follow-up |
 | No BLOCKER/MAJOR regression | PASS automated | No new static/test blocker; global i18n baseline remains |
 | Gate 4 report | PASS | This report |
-| Deferred Hacom Holding DX dependencies | PENDING documentation review | Auth/Admin/shared contract dependencies require owner confirmation |
+| Deferred Hacom Holding DX dependencies | DOCUMENTED | Auth/Admin/shared contract dependencies remain outside this frontend branch |
 
 ## Deferred / external dependencies
 
-- Real Hacom Auth Service login/session and production identity validation.
-- Authenticated Playwright lifecycle with a non-sensitive fixture account.
-- Manual responsive, keyboard, focus, screen-reader and reduced-motion review.
+- Full manual screen-reader and reduced-motion review.
 - Resolution or explicit acceptance of pre-existing project-wide `i18n:check`
   findings outside the Cloud namespace.
 - Confirmation of remaining Auth/Admin/shared-type work in the deferred-scope

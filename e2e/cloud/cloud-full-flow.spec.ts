@@ -46,16 +46,33 @@ test.describe("Cloud Phase 2 full lifecycle", () => {
     await page.getByRole("button", { name: /đưa vào thùng rác|move to trash/i }).click();
     await expect(message).toHaveCount(0);
 
-    await page.getByRole("button", { name: /toggle info|thông tin/i }).click();
-    await page.getByRole("button", { name: /thùng rác|trash/i }).click();
+    await page
+      .getByRole("button", {
+        name: /bật\/tắt bảng thông tin|toggle info panel/i,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: /^(thùng rác|trash) ·/i })
+      .click();
     const trashMessage = page.locator("article.cloud-trash-message").filter({
       hasText: fileName,
     });
     await expect(trashMessage).toBeVisible({ timeout: 15_000 });
+
+    await trashMessage
+      .getByRole("button", { name: /xem trước|preview/i })
+      .click();
+    const trashPreview = page.getByRole("dialog");
+    await expect(trashPreview).toBeVisible();
+    await trashPreview
+      .getByRole("button", { name: /đóng|close/i })
+      .click();
+    await expect(trashPreview).toBeHidden();
+
     await trashMessage.getByRole("button", { name: /khôi phục|restore/i }).click();
     await expect(trashMessage).toHaveCount(0);
 
-    await page.getByRole("button", { name: /tất cả|all/i }).click();
+    await page.getByRole("button", { name: /^(tất cả|all) ·/i }).click();
     const restoredMessage = page.locator('[data-testid^="message-item-"]').filter({
       hasText: fileName,
     }).first();

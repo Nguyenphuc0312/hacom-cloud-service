@@ -101,7 +101,8 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                   </div>
                 </div>
                 <div className="cloud-trash-message__actions">
-                  {onPreview && item.status === "ready" && item.accessUrl ? (
+                  {onPreview &&
+                  (item.status === "ready" || item.status === "trashed") ? (
                     <Button
                       size="xs"
                       variant="secondary"
@@ -111,7 +112,8 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                       {t("trash.preview")}
                     </Button>
                   ) : null}
-                  {onDownload && item.status === "ready" && item.accessUrl ? (
+                  {onDownload &&
+                  (item.status === "ready" || item.status === "trashed") ? (
                     <Button
                       size="xs"
                       variant="ghost"

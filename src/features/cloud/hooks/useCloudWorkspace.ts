@@ -102,6 +102,9 @@ const mergeTrashItems = (
 
 const ACCESS_REQUEST_CONCURRENCY = 4;
 
+const canResolveCloudAccess = (item: CloudItem): boolean =>
+  item.status === "ready" || item.status === "trashed";
+
 const hydrateMediaAccess = async (
   items: CloudItem[],
   userId: string,
@@ -114,7 +117,7 @@ const hydrateMediaAccess = async (
       ({ item }) =>
         (["image", "video", "audio", "file"] as CloudItem["type"][]).includes(
           item.type,
-        ) && item.status === "ready",
+        ) && canResolveCloudAccess(item),
     );
   let nextIndex = 0;
 
