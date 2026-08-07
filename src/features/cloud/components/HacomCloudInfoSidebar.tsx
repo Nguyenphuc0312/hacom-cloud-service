@@ -3,7 +3,6 @@ import {
   Download,
   File,
   FileImage,
-  FileText,
   FolderOpen,
   Forward,
   MoreHorizontal,
@@ -22,47 +21,28 @@ import { toast } from "../../../components/ui";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
+import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
+import { Input, Modal } from "../../../components/ui";
+import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
+import { formatRelativeTime } from "../../../utils/formatTime";
+import { truncateFilenameEnd } from "../../../utils/truncateFilename";
 
+/** API trả dung lượng dạng chuỗi (bigint) nên phải ép số trước khi đưa vào
+ *  formatFileSize dùng chung; giá trị hỏng thì hiện "—" thay vì "0 B". */
 const formatBytes = (value: string | number) => {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let index = 0;
-  let sized = bytes;
-  while (sized >= 1024 && index < units.length - 1) {
-    sized /= 1024;
-    index += 1;
-  }
-  return `${sized >= 10 || index === 0 ? Math.round(sized) : sized.toFixed(1)} ${units[index]}`;
+  return formatFileSize(bytes);
 };
 
-const formatWhen = (value: string) => {
-  const date = new Date(value);
-  const hours = Math.floor((Date.now() - date.getTime()) / 3_600_000);
-  if (Number.isNaN(hours)) return "";
-  if (hours < 1) return "Vừa xong";
-  if (hours < 24) return `${hours} giờ trước`;
-  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-};
-
-export const truncateFileNamePreservingExtension = (name: string, maxLength = 34) => {
-  if (name.length <= maxLength) return name;
-  const extensionIndex = name.lastIndexOf(".");
-  const extension = extensionIndex > 0 ? name.slice(extensionIndex) : "";
-  const base = extension ? name.slice(0, extensionIndex) : name;
-  const available = Math.max(1, maxLength - extension.length - 3);
-  return `${base.slice(0, available)}...${extension}`;
-};
+const formatWhen = (value: string) => formatRelativeTime(new Date(value));
 
 const isDocumentLikePreview = (asset: CloudAsset) =>
   /drawio|diagram|screenshot|document|pdf/i.test(asset.originalFilename) || asset.mimeType.includes("pdf");
 
-const fileIcon = (asset: CloudAsset) => {
-  if (asset.mediaType === "image") return <FileImage className="h-5 w-5 text-sky-600" />;
-  if (asset.mediaType === "video") return <Video className="h-5 w-5 text-violet-600" />;
-  if (asset.mimeType.includes("pdf")) return <FileText className="h-5 w-5 text-red-600" />;
-  return <File className="h-5 w-5 text-text-muted" />;
-};
+const fileIcon = (asset: CloudAsset) => (
+  <FileTypeIcon type={getFileIconType(asset.mimeType, asset.originalFilename)} className="h-5 w-5" />
+);
 
 const CloudEmptyState: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
   <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-lg bg-surface-hover/60 px-4 py-5 text-center text-sm text-text-muted">
@@ -281,7 +261,7 @@ export const CloudFileRow: React.FC<{
     <button type="button" onClick={() => onPreview(asset)} className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span>
       <span className="min-w-0">
-        <span title={asset.originalFilename} className="block truncate text-sm">{truncateFileNamePreservingExtension(asset.originalFilename)}</span>
+        <span title={asset.originalFilename} className="block truncate text-sm">{truncateFilenameEnd(asset.originalFilename, 34)}</span>
         <span className="block truncate text-xs text-text-muted">{formatBytes(asset.sizeBytes)} · {formatWhen(asset.createdAt)}</span>
       </span>
     </button>
@@ -359,21 +339,25 @@ const CloudManagerDialog: React.FC<{
   onTrash: (asset: CloudAsset) => void;
 }> = ({ assets, onClose, onPreview, onForward, onTrash }) => {
   const [query, setQuery] = useState("");
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
   const filtered = assets.filter((asset) => asset.originalFilename.toLowerCase().includes(query.toLowerCase()));
 
+  // Modal dùng chung lo sẵn overlay, nút đóng, phím Esc, bẫy focus và khoá cuộn
+  // nền — bản tự viết trước đây chỉ có Esc.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Quản lý Hacom Cloud">
-      <div className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl bg-surface shadow-xl">
-        <header className="flex items-center justify-between border-b border-border/70 p-4"><h2 className="font-semibold">Quản lý Hacom Cloud</h2><button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-surface-hover" aria-label="Đóng"><X className="h-5 w-5" /></button></header>
-        <div className="p-4"><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tệp" className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-solid" /></div>
-        <ul className="min-h-0 overflow-y-auto px-4 pb-4">{filtered.length ? filtered.map((asset) => <CloudFileRow key={asset.id} asset={asset} onPreview={onPreview} onForward={onForward} onTrash={onTrash} />) : <CloudEmptyState icon={<File className="h-6 w-6" />} text="Không tìm thấy tệp phù hợp" />}</ul>
-      </div>
-    </div>
+    <Modal isOpen onClose={onClose} title="Quản lý Hacom Cloud" size="xl" bodyClassName="flex max-h-[70vh] flex-col gap-3">
+      <Input
+        autoFocus
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Tìm tệp"
+        aria-label="Tìm tệp trong Hacom Cloud"
+      />
+      <ul className="min-h-0 flex-1 overflow-y-auto">
+        {filtered.length
+          ? filtered.map((asset) => <CloudFileRow key={asset.id} asset={asset} onPreview={onPreview} onForward={onForward} onTrash={onTrash} />)
+          : <CloudEmptyState icon={<File className="h-6 w-6" />} text="Không tìm thấy tệp phù hợp" />}
+      </ul>
+    </Modal>
   );
 };
 
@@ -432,7 +416,7 @@ export const HacomCloudInfoSidebar: React.FC<{
                   badge={<span className="rounded-full bg-surface-hover px-1.5 py-0.5 text-xs text-text-muted">{trashed.length}</span>}
                 >
                   <div className="p-2">
-                    {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFileNamePreservingExtension(asset.originalFilename)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
+                    {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFilenameEnd(asset.originalFilename, 34)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
                   </div>
                 </CollapsibleSection>
               </div>
