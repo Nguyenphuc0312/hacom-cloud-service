@@ -78,6 +78,11 @@ export interface PersonalChatMessage {
    * (endpoint đòi `Authorization`), KHÔNG phải link bấm được.
    */
   aiDraft?: WorkReportAiDraftReady;
+  /**
+   * Bản nháp đang dựng (SSE `work_report_ai_draft_waiting`) — render trạng thái
+   * + vòng poll `jobs/{job_id}`. Xong thì bị thay bằng `aiDraft`.
+   */
+  aiDraftPending?: WorkReportAiDraftPending;
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -195,6 +200,33 @@ export interface WorkReportAiDraftReady {
   export_format?: string;
   /** true = bản nháp dựng ngầm theo câu hỏi thường (không phải luồng tag). */
   read_only?: boolean;
+}
+
+/**
+ * SSE `work_report_ai_draft_waiting` — bản nháp đang dựng, BE gửi `job_id` để FE
+ * tự poll. Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có
+ * thể cần nhiều lượt LLM, vượt giới hạn chờ của SSE, nên `..._ready` thường
+ * KHÔNG kịp về trên chính stream đó. Giữ `job_id` và poll — tuyệt đối không bắt
+ * người dùng gõ lại tag.
+ */
+export interface WorkReportAiDraftWaiting {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+}
+
+/** Trạng thái vòng poll bản nháp, gắn vào message để render. */
+export interface WorkReportAiDraftPending {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+  /**
+   * `polling` = đang tự poll; `timeout` = quá hạn chờ, hiện nút "Kiểm tra lại"
+   * (contract §Luồng màn hình mục 3); `failed` = job hỏng, hiện lỗi vận hành và
+   * KHÔNG tự tạo lại job.
+   */
+  state: "polling" | "timeout" | "failed";
+  error_message?: string;
 }
 
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */

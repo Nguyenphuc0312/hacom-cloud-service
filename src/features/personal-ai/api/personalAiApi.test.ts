@@ -287,11 +287,11 @@ describe("streamPersonalChat work_report_ai_draft_ready", () => {
     );
   });
 
-  it("bỏ qua payload thiếu draft_id / export_url sai dạng", async () => {
+  it("bỏ qua payload không dựng được URL (thiếu draft_id, hoặc JSON hỏng)", async () => {
     fetchMock.mockResolvedValueOnce(
       sseResponse(
+        // Thiếu draft_id: có export_url hợp lệ nhưng contract đòi draft_id.
         `event: work_report_ai_draft_ready\ndata: {"export_url":"/api/work-report-drafts/d1/export.xlsx"}\n\n` +
-          `event: work_report_ai_draft_ready\ndata: {"draft_id":"d2","export_url":"/api/level-reports/export"}\n\n` +
           `event: work_report_ai_draft_ready\ndata: {khong-phai-json}\n\n` +
           `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
       ),
@@ -306,6 +306,112 @@ describe("streamPersonalChat work_report_ai_draft_ready", () => {
     expect(onDraftReady).not.toHaveBeenCalled();
     // Payload hỏng không được làm gãy phần còn lại của stream.
     expect(res.answer).toBe("a");
+  });
+
+  it("export_url sai dạng nhưng có draft_id → lùi về ghép từ draft_id", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_ready\ndata: {"draft_id":"d2","export_url":"/api/level-reports/export"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftReady = vi.fn();
+    await streamPersonalChat({ question: "#TBP_AITEST", session_id: null }, { onDraftReady });
+
+    // Không đi theo export_url lạ — luôn ghim về path bản nháp của draft_id.
+    expect(onDraftReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        export_url: `${AI}/api/work-report-drafts/d2/export.xlsx`,
+      }),
+    );
+  });
+
+  it("dựng export_url từ draft_id khi event không kèm export_url", async () => {
+    // Contract §"Trình bày chat và xuất Excel" mô tả event mang `draft_id`;
+    // request 06/08 mô tả mang `export_url`. FE nhận cả hai.
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_ready\ndata: {"draft_id":"d7"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftReady = vi.fn();
+    await streamPersonalChat({ question: "#TBP_AITEST", session_id: null }, { onDraftReady });
+
+    expect(onDraftReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft_id: "d7",
+        export_url: `${AI}/api/work-report-drafts/d7/export.xlsx`,
+      }),
+    );
+  });
+
+  it("draft_id có ký tự tách path → không dựng URL, bỏ qua event", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_ready\ndata: {"draft_id":"../../evil"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftReady = vi.fn();
+    await streamPersonalChat({ question: "#TBP_AITEST", session_id: null }, { onDraftReady });
+
+    expect(onDraftReady).not.toHaveBeenCalled();
+  });
+
+  it("waiting → onDraftWaiting kèm job_id để FE tự poll", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_waiting\ndata: {"job_id":"j1","period_start":"2026-08-01","period_end":"2026-08-07"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftWaiting = vi.fn();
+    await streamPersonalChat({ question: "#TBP_AITEST", session_id: null }, { onDraftWaiting });
+
+    expect(onDraftWaiting).toHaveBeenCalledWith({
+      job_id: "j1",
+      period_start: "2026-08-01",
+      period_end: "2026-08-07",
+    });
+  });
+
+  it("`..._job` KHÔNG phải kết thúc — vẫn báo job_id để poll tiếp", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_job\ndata: {"job_id":"j2"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftWaiting = vi.fn();
+    const res = await streamPersonalChat(
+      { question: "#TBP_AITEST", session_id: null },
+      { onDraftWaiting },
+    );
+
+    expect(onDraftWaiting).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: "j2" }),
+    );
+    expect(res.answer).toBe("a");
+  });
+
+  it("failed → onDraftFailed kèm error_message", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: work_report_ai_draft_failed\ndata: {"error_message":"pipeline hỏng"}\n\n` +
+          `event: done\ndata: {"session_id":"s","answer":"a"}\n\n`,
+      ),
+    );
+
+    const onDraftFailed = vi.fn();
+    await streamPersonalChat({ question: "#TBP_AITEST", session_id: null }, { onDraftFailed });
+
+    expect(onDraftFailed).toHaveBeenCalledWith("pipeline hỏng");
   });
 
   it("không có sự kiện = bản nháp chưa dựng xong, câu trả lời vẫn trọn vẹn", async () => {

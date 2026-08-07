@@ -29,7 +29,11 @@ import {
   normalizeScopeTypes,
   parseScopeRequiredDetail,
 } from "./workReportScopeApi";
-import type { WorkReportAiDraftReady, WorkReportScopeRequired } from "../types";
+import type {
+  WorkReportAiDraftReady,
+  WorkReportAiDraftWaiting,
+  WorkReportScopeRequired,
+} from "../types";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -955,6 +959,55 @@ export function buildWorkReportDraftExportUrl(exportUrl: string | undefined): st
 }
 
 /**
+ * URL tải bản nháp dựng TỪ `draft_id`.
+ *
+ * Contract §"Trình bày chat và xuất Excel" nói `work_report_ai_draft_ready` mang
+ * `draft_id`, còn request 06/08 mô tả cùng sự kiện đó mang `export_url`. Nhận cả
+ * hai: có `export_url` thì dùng, không thì ghép từ `draft_id`.
+ */
+export function workReportDraftExportUrlFromId(draftId: string | undefined): string | null {
+  const id = draftId?.trim();
+  // draft_id đi thẳng vào path nên phải chặn ký tự tách path/query, tránh dựng
+  // ra URL trỏ đi chỗ khác từ payload SSE.
+  if (!id || !/^[A-Za-z0-9._-]+$/.test(id)) return null;
+  return `${BASE_URL}/api/work-report-drafts/${id}/export.xlsx`;
+}
+
+/** Trạng thái job dựng bản nháp (contract §4). */
+export interface WorkReportDraftJob {
+  status: "queued" | "running" | "succeeded" | "failed";
+  draft_id?: string;
+  error_message?: string;
+}
+
+/**
+ * GET /api/work-report-drafts/jobs/{job_id} — poll trạng thái dựng bản nháp.
+ *
+ * Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có thể cần
+ * nhiều lượt LLM, vượt giới hạn chờ của SSE. Nên khi SSE chỉ kịp báo
+ * `work_report_ai_draft_waiting` kèm `job_id`, FE phải tự poll đúng job đó —
+ * TUYỆT ĐỐI không bắt TBP gõ lại tag để tạo/đọc job.
+ */
+export async function fetchWorkReportDraftJob(
+  jobId: string,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportDraftJob> {
+  const url = appendScopeTokenToUrl(
+    `${BASE_URL}/api/work-report-drafts/jobs/${encodeURIComponent(jobId)}`,
+  );
+  const response = await aiRequest(url, { signal: options?.signal });
+  const payload = (await response.json()) as Record<string, unknown>;
+  const status = pickString(payload.status) ?? "";
+  return {
+    status: (["queued", "running", "succeeded", "failed"].includes(status)
+      ? status
+      : "running") as WorkReportDraftJob["status"],
+    draft_id: pickString(payload.draft_id),
+    error_message: pickString(payload.error_message),
+  };
+}
+
+/**
  * GET /api/work-report-drafts/{draft_id}/export.xlsx → tải bản nháp AI (.xlsx).
  *
  * Endpoint đòi header `Authorization`, nên KHÔNG render `export_url` thành thẻ
@@ -1125,6 +1178,13 @@ export async function streamPersonalChat(
     onScopeRequired?: (data: WorkReportScopeRequired) => void;
     /** SSE `work_report_ai_draft_ready` — hiện nút tải bản nháp AI. */
     onDraftReady?: (data: WorkReportAiDraftReady) => void;
+    /**
+     * SSE `work_report_ai_draft_waiting` / `work_report_ai_draft_job` — bản nháp
+     * còn đang dựng, kèm `job_id` để FE tự poll thay vì bắt gõ lại tag.
+     */
+    onDraftWaiting?: (data: WorkReportAiDraftWaiting) => void;
+    /** SSE `work_report_ai_draft_failed` — dừng poll, hiện lỗi vận hành. */
+    onDraftFailed?: (message?: string) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -1232,12 +1292,16 @@ export async function streamPersonalChat(
           }
         } catch { /* malformed payload — ignore */ }
       } else if (eventType === "work_report_ai_draft_ready" && options?.onDraftReady) {
-        // Bản nháp AI đã dựng xong. `export_url` phải đúng dạng path bản nháp —
-        // payload lạ thì bỏ qua, không hiện nút tải hỏng.
+        // Bản nháp AI đã dựng xong. Contract nói event mang `draft_id`, request
+        // 06/08 nói mang `export_url` — nhận cả hai, ưu tiên `export_url` nếu có
+        // và hợp lệ, còn lại ghép từ `draft_id`. Không dựng được URL thì bỏ qua,
+        // không hiện nút tải hỏng.
         try {
           const parsed = JSON.parse(data) as Record<string, unknown>;
           const draftId = pickString(parsed.draft_id);
-          const exportUrl = buildWorkReportDraftExportUrl(pickString(parsed.export_url));
+          const exportUrl =
+            buildWorkReportDraftExportUrl(pickString(parsed.export_url)) ??
+            workReportDraftExportUrlFromId(draftId);
           if (draftId && exportUrl) {
             options.onDraftReady({
               draft_id: draftId,
@@ -1247,6 +1311,31 @@ export async function streamPersonalChat(
             });
           }
         } catch { /* malformed payload — ignore */ }
+      } else if (
+        (eventType === "work_report_ai_draft_waiting" ||
+          // `..._job` phát sau thời gian chờ của SSE. KHÔNG coi là kết thúc:
+          // giữ nguyên `job_id` và poll tiếp đúng job đó (contract mục 3).
+          eventType === "work_report_ai_draft_job") &&
+        options?.onDraftWaiting
+      ) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const jobId = pickString(parsed.job_id);
+          if (jobId) {
+            options.onDraftWaiting({
+              job_id: jobId,
+              period_start: pickString(parsed.period_start),
+              period_end: pickString(parsed.period_end),
+            });
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_failed" && options?.onDraftFailed) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          options.onDraftFailed(pickString(parsed.error_message, parsed.message));
+        } catch {
+          options.onDraftFailed(undefined);
+        }
       } else if (eventType === "done") {
         try {
           const parsed = JSON.parse(data);

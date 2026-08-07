@@ -55,9 +55,11 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { rehypeReportTableCols } from "../../../ai-assistant/utils/rehypeReportTableCols";
 import { reportTableComponents } from "../../../ai-assistant/components/reportTableComponents";
+import { handleDraftRetry } from "../../services/workReportDraftPoller";
 import type {
   PersonalChatMessage,
   PersonalCitation,
+  WorkReportAiDraftPending,
   WorkReportAiDraftReady,
 } from "../../types";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
@@ -162,6 +164,57 @@ const AiDraftDownload: React.FC<{ draft: WorkReportAiDraftReady }> = ({ draft })
         <code className="text-[10px]">#TBP_baocao</code> sẽ bị từ chối. Hãy nộp file
         báo cáo do bộ phận tự lập.
       </p>
+    </div>
+  );
+};
+
+/**
+ * Trạng thái bản nháp đang dựng (SSE `work_report_ai_draft_waiting`).
+ *
+ * Contract cấm bắt người dùng gõ lại tag khi xử lý lâu, nên ở đây chỉ có hai
+ * kết cục: FE tự poll xong (chuyển thành nút tải), hoặc quá hạn chờ → nút
+ * "Kiểm tra lại" poll tiếp ĐÚNG job cũ. Không có nhánh nào tạo job mới.
+ */
+const AiDraftPending: React.FC<{
+  pending: WorkReportAiDraftPending;
+  onRetry: () => void;
+}> = ({ pending, onRetry }) => {
+  const period =
+    pending.period_start && pending.period_end
+      ? ` (${pending.period_start} → ${pending.period_end})`
+      : "";
+
+  if (pending.state === "failed") {
+    return (
+      <div className="mt-3 w-full max-w-[680px] text-[11px] leading-[1.4] text-red-600">
+        Không tạo được bản nháp AI
+        {pending.error_message ? `: ${pending.error_message}` : "."}
+      </div>
+    );
+  }
+
+  if (pending.state === "timeout") {
+    return (
+      <div className="mt-3 w-full max-w-[680px]">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#1976D2]/60 px-2.5 py-1.5 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15"
+        >
+          <DownloadIcon size={13} strokeWidth={2} className="shrink-0" />
+          <span>Kiểm tra lại bản nháp AI</span>
+        </button>
+        <p className="mt-1 text-[11px] leading-[1.4] text-text-muted">
+          Bản nháp vẫn đang được tạo{period}. Bấm để kiểm tra lại — không cần gõ lại tag.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex w-full max-w-[680px] items-center gap-1.5 text-[11px] text-text-muted">
+      <Loader2Icon size={12} strokeWidth={2} className="shrink-0 animate-spin" />
+      <span>Đang tạo bản nháp AI{period}…</span>
     </div>
   );
 };
@@ -612,6 +665,22 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 định, bản nháp chỉ tồn tại dưới dạng file tải về). */}
             {isAssistant && !message.isStreaming && message.aiDraft && (
               <AiDraftDownload draft={message.aiDraft} />
+            )}
+
+            {/* Đang dựng / quá hạn chờ / hỏng — chỉ khi CHƯA có bản nháp. */}
+            {isAssistant && !message.aiDraft && message.aiDraftPending && (
+              <AiDraftPending
+                pending={message.aiDraftPending}
+                onRetry={() => {
+                  if (!activeConversationId) return;
+                  handleDraftRetry(
+                    message.aiDraftPending!,
+                    activeConversationId,
+                    message.id,
+                    patchMessage,
+                  );
+                }}
+              />
             )}
 
             {/* Citations */}

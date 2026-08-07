@@ -26,6 +26,8 @@ import {
   ScopeFeatureDisabledError,
   ScopeFetchError,
 } from "../api/workReportScopeApi";
+import { handleDraftRetry } from "../services/workReportDraftPoller";
+import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
 import type { PersonalChatMessage, PersonalDocument } from "../types";
@@ -79,10 +81,65 @@ export function usePersonalChat() {
    * nộp lại đúng lượt đó sau khi chọn — không bắt người dùng đính lại tệp.
    */
   const pendingLevelReportFile = useRef<{ question: string; file: File } | null>(null);
+  /**
+   * Vòng poll job dựng bản nháp đang chạy, khoá theo `job_id` để hai SSE liên
+   * tiếp của CÙNG một job (`..._waiting` rồi `..._job`) không dựng hai vòng poll
+   * song song cho cùng một job.
+   */
+  const draftPollers = useRef(new Map<string, DraftPollHandle>());
+
+  // Rời màn hình giữa lúc đang poll → huỷ hết, tránh timer chạy tiếp sau unmount.
+  useEffect(() => {
+    const pollers = draftPollers.current;
+    return () => {
+      pollers.forEach((p) => p.cancel());
+      pollers.clear();
+    };
+  }, []);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
   const messages = activeConversation?.messages ?? [];
+
+  /** Dừng mọi vòng poll bản nháp đang chạy (đã có kết quả, hoặc job hỏng). */
+  const stopDraftPolling = useCallback(() => {
+    draftPollers.current.forEach((p) => p.cancel());
+    draftPollers.current.clear();
+  }, []);
+
+  /**
+   * Bắt đầu (hoặc tiếp tục) poll một job dựng bản nháp.
+   *
+   * Cùng `job_id` gọi lại → bỏ qua, vì `..._waiting` rồi `..._job` của cùng một
+   * job đều dẫn tới đây và không được dựng hai vòng poll song song.
+   */
+  const startDraftPolling = useCallback(
+    (
+      waiting: { job_id: string; period_start?: string; period_end?: string },
+      conversationId: string,
+      messageId: string,
+    ) => {
+      if (draftPollers.current.has(waiting.job_id)) return;
+
+      // Dùng chung đường với nút "Kiểm tra lại" ở bubble: cùng patch trạng thái,
+      // cùng kết cục (ready / failed / timeout → giữ job_id, không tạo job mới).
+      const handle = handleDraftRetry(
+        { ...waiting, state: "polling" },
+        conversationId,
+        messageId,
+        (cid, mid, patch) => {
+          // Vòng poll kết thúc (mọi nhánh đều xoá `aiDraftPending.state=polling`)
+          // → bỏ khoá job để lượt "Kiểm tra lại" sau còn dựng lại được.
+          if (patch.aiDraftPending?.state !== "polling") {
+            draftPollers.current.delete(waiting.job_id);
+          }
+          patchMessage(cid, mid, patch);
+        },
+      );
+      if (handle) draftPollers.current.set(waiting.job_id, handle);
+    },
+    [patchMessage],
+  );
 
   // Fetch messages từ server khi user chọn conversation có serverSessionId nhưng chưa có messages
   useEffect(() => {
@@ -375,7 +432,27 @@ export function usePersonalChat() {
             // patch `aiDraft`, KHÔNG đụng `content`: luồng dựng ngầm theo câu
             // hỏi thường vẫn phải giữ nguyên bảng tổng hợp tất định đang stream.
             onDraftReady: (draft) => {
-              patchMessage(convIdSnapshot, assistantMessage.id, { aiDraft: draft });
+              // Về được ngay trên stream → không cần poll nữa.
+              stopDraftPolling();
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                aiDraft: draft,
+                aiDraftPending: undefined,
+              });
+            },
+            // Bản nháp cần nhiều lượt LLM, vượt hạn chờ của SSE → BE chỉ kịp gửi
+            // `job_id`. Tự poll đúng job đó; contract cấm bắt TBP gõ lại tag.
+            onDraftWaiting: (waiting) => {
+              startDraftPolling(waiting, convIdSnapshot, assistantMessage.id);
+            },
+            onDraftFailed: (errorMessage) => {
+              stopDraftPolling();
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                aiDraftPending: {
+                  job_id: "",
+                  state: "failed",
+                  error_message: errorMessage,
+                },
+              });
             },
             onSelectionRequest: (selectionData) => {
               patchMessage(convIdSnapshot, assistantMessage.id, {
@@ -497,6 +574,8 @@ export function usePersonalChat() {
       markMessageError,
       patchMessage,
       updateServerSessionId,
+      startDraftPolling,
+      stopDraftPolling,
     ],
   );
 
@@ -878,5 +957,7 @@ export function usePersonalChat() {
     sendWithFile,
     sendLevelReportWithFile,
     stopStreaming,
+    /** Nút "Kiểm tra lại" sau khi hết hạn chờ — poll tiếp ĐÚNG job cũ. */
+    resumeDraftPolling: startDraftPolling,
   };
 }
