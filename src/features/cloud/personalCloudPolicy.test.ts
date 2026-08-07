@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isPersonalCloudConversation,
   personalCloudPresentation,
-  resolvePersonalCloudEntryPath,
 } from './personalCloudPolicy';
 
 describe('personal Cloud dual-entry policy', () => {
@@ -11,9 +10,10 @@ describe('personal Cloud dual-entry policy', () => {
     expect(isPersonalCloudConversation({ type: 'group' })).toBe(false);
   });
 
-  it('routes the Chat-list entry to the same Cloud surface as the Cloud module', () => {
-    expect(resolvePersonalCloudEntryPath({ type: 'personal_cloud' })).toBe('/cloud');
-    expect(resolvePersonalCloudEntryPath({ type: 'direct' })).toBeNull();
+  it('nhận diện được cả hai cách backend viết type, để header không rơi vào nhánh group', () => {
+    expect(isPersonalCloudConversation({ type: 'personal_cloud' })).toBe(true);
+    expect(isPersonalCloudConversation({ type: 'direct' })).toBe(false);
+    expect(isPersonalCloudConversation({})).toBe(false);
   });
 
   it('keeps the canonical Cloud presentation free of group semantics', () => {

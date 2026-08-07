@@ -7,7 +7,6 @@ import React, {
   useState,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
 } from "react";
@@ -82,15 +81,24 @@ import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
 import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
-import { fileApi } from "../services/api";
+import { conversationApi, fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
 import {
+  cacheCloudConversationId,
   isPersonalCloudConversation,
-  resolvePersonalCloudEntryPath,
+  readCachedCloudConversationId,
 } from "../features/cloud/personalCloudPolicy";
+import { cloudApi } from "../features/cloud/api/cloudApi";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+const importCloudSurface = () =>
+  import("../features/cloud/components/CloudChatWorkspace");
+const PersonalCloudConversationSurface = React.lazy(() =>
+  importCloudSurface().then((module) => ({
+    default: module.PersonalCloudConversationSurface,
+  })),
+);
 const NewChatModal = React.lazy(
   () => import("../components/modals/NewChatModal"),
 );
@@ -420,6 +428,27 @@ const DeferredPanelFallback: React.FC = () => (
   </div>
 );
 
+/**
+ * Khung chờ của Cloud: giữ đúng bố cục header / timeline / composer để khi nội dung
+ * thật vào, không có cú nhảy layout. Dùng skeleton danh sách chung ở đây sẽ nhìn như
+ * một trang khác chớp qua rồi mới tới Cloud.
+ */
+const PersonalCloudSurfaceSkeleton: React.FC = () => (
+  <div className="flex h-full min-h-0 flex-col bg-surface" aria-busy="true">
+    <div className="flex min-h-[var(--app-header-height)] shrink-0 items-center gap-3 border-b border-border/70 px-4">
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-surface-hover" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-surface-hover" />
+        <div className="h-3 w-56 animate-pulse rounded bg-surface-hover" />
+      </div>
+    </div>
+    <div className="min-h-0 flex-1" />
+    <div className="shrink-0 border-t border-border/70 px-[var(--chat-lane-padding)] py-3">
+      <div className="mx-auto h-11 w-full max-w-[var(--chat-content-lane)] animate-pulse rounded-full bg-surface-hover" />
+    </div>
+  </div>
+);
+
 const DeferredModalFallback: React.FC = () => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
     <div
@@ -633,18 +662,56 @@ export const ChatPage: React.FC = () => {
 
   const isSelectedDirectConversation =
     isDirectConversation(selectedConversation);
-  const isRoutePersonalCloud =
-    selectedConversation?.id === routeConversationId &&
-    isPersonalCloudConversation(selectedConversation);
+  // Cloud của tôi mở ngay tại /chat/<id> như mọi hội thoại khác (giống My Documents
+  // của Zalo). Thân hội thoại dùng PersonalCloudConversationSurface thay cho ChatWindow:
+  // upload/xóa của Cloud phải đi qua cloudApi để trừ đúng quota — đường upload chat
+  // thường không đụng bảng cloud_quotas.
+  //
+  // KHÔNG suy ra từ selectedConversation: backend chưa trả conversation Cloud trong
+  // /conversations (inbox projection không có dòng nào cho nó), nên selectedConversation
+  // rỗng và màn hình sẽ rơi vào trạng thái "chưa chọn hội thoại". Đối chiếu thẳng id
+  // Cloud lấy từ /cloud/ensure.
+  // Nhớ id qua localStorage: nếu chờ ensure() mới nhận ra đây là Cloud thì ChatPage
+  // kịp render ChatWindow (UI nhóm) rồi ~2s sau mới đổi sang Cloud — đúng hiện tượng
+  // "khựng một lúc xong mới nhảy qua". Đọc cache là đồng bộ nên lượt sau nhận ra ngay.
+  const [cloudConversationId, setCloudConversationId] = useState<string | null>(
+    () => readCachedCloudConversationId(),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    // Nạp sẵn chunk của Cloud: nếu để tới lúc bấm mới tải, Suspense thay khung chat
+    // bằng skeleton một nhịp — người dùng thấy như màn hình chớp.
+    void importCloudSurface();
+    void (async () => {
+      try {
+        // Có cache và conversation đã nằm trong store thì không cần gọi lại: ensure()
+        // ở đây chạy mỗi lần mount ChatPage, kể cả khi đang mở hội thoại thường.
+        const cached = readCachedCloudConversationId();
+        if (cached && useChatStore.getState().conversationById[cached]) return;
 
-  // A saved/deep-linked Chat URL must resolve to the same Cloud surface as a
-  // sidebar click. Without this boundary, ChatWindow treats PERSONAL_CLOUD as
-  // a group and mounts group-only UI and requests before the user can leave it.
-  useLayoutEffect(() => {
-    if (isRoutePersonalCloud) {
-      navigate("/cloud", { replace: true });
-    }
-  }, [isRoutePersonalCloud, navigate]);
+        const space = await cloudApi.ensure();
+        if (cancelled) return;
+        setCloudConversationId(space.conversationId);
+        cacheCloudConversationId(space.conversationId);
+        // Ghim vào danh sách hội thoại: backend không trả nó trong /conversations
+        // nên phải nạp bằng id rồi merge vào store, nếu không sidebar sẽ không có dòng nào.
+        if (useChatStore.getState().conversationById[space.conversationId]) return;
+        const detail = await conversationApi.getConversationById(space.conversationId);
+        const payload = (detail as { data?: unknown })?.data ?? detail;
+        if (!cancelled && isCompleteConversation(payload)) addConversation(payload);
+      } catch {
+        // Cloud không dùng được thì chat vẫn phải chạy bình thường.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addConversation]);
+
+  const isRoutePersonalCloud = Boolean(
+    routeConversationId &&
+      (routeConversationId === cloudConversationId ||
+        (selectedConversation?.id === routeConversationId &&
+          isPersonalCloudConversation(selectedConversation))),
+  );
 
   // Get other user for direct chat
   const otherUser =
@@ -725,12 +792,6 @@ export const ChatPage: React.FC = () => {
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
-      const conversation = useChatStore.getState().conversationById[id];
-      const personalCloudPath = resolvePersonalCloudEntryPath(conversation);
-      if (personalCloudPath) {
-        navigate(personalCloudPath);
-        return;
-      }
       if (id === routeConversationId) {
         return;
       }
@@ -1364,7 +1425,11 @@ export const ChatPage: React.FC = () => {
           !selectedConversation && "hidden md:flex",
         )}
       >
-        {isRoutePersonalCloud ? null : selectedConversation ? (
+        {isRoutePersonalCloud ? (
+          <React.Suspense fallback={<PersonalCloudSurfaceSkeleton />}>
+            <PersonalCloudConversationSurface onBack={handleBack} conversationId={routeConversationId ?? undefined} />
+          </React.Suspense>
+        ) : selectedConversation ? (
           <ChatWindow
             layoutState={chatWindowLayoutState}
             conversation={selectedConversation}
@@ -1376,6 +1441,7 @@ export const ChatPage: React.FC = () => {
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
+            onCloseInfoPanel={closeInfoPanel}
             onBack={handleBack}
             onTyping={sessionHandleTyping}
             hasMoreMessages={sessionCurrentHasMore}

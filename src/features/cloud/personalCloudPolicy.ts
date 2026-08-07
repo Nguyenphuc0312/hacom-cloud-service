@@ -28,11 +28,31 @@ export const personalCloudPolicy = {
 export const isPersonalCloudConversation = (conversation: { type?: unknown }): boolean =>
   String(conversation.type).toLowerCase() === 'personal_cloud';
 
-/** Both entry points deliberately resolve to the same conversation surface. */
-export const resolvePersonalCloudEntryPath = (
-  conversation: { type?: unknown } | undefined,
-): '/cloud' | null =>
-  conversation && isPersonalCloudConversation(conversation) ? '/cloud' : null;
+/**
+ * id hội thoại Cloud gần nhất, nhớ giữa các phiên.
+ *
+ * Backend không trả conversation Cloud trong /conversations nên client phải hỏi
+ * /cloud/ensure mới biết id. Chờ mạng xong mới nhận ra "đây là Cloud" thì màn hình
+ * kịp hiện UI hội thoại thường rồi mới đổi — nhìn như bị khựng. Đọc cache đồng bộ
+ * để nhận ra ngay từ lần render đầu; giá trị sai chỉ tồn tại tới khi ensure() trả về.
+ */
+const CLOUD_CONVERSATION_ID_KEY = 'hacom-cloud:conversation-id';
+
+export const readCachedCloudConversationId = (): string | null => {
+  try {
+    return window.localStorage.getItem(CLOUD_CONVERSATION_ID_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const cacheCloudConversationId = (conversationId: string): void => {
+  try {
+    window.localStorage.setItem(CLOUD_CONVERSATION_ID_KEY, conversationId);
+  } catch {
+    // Trình duyệt chặn storage thì chỉ mất tối ưu, không hỏng chức năng.
+  }
+};
 
 /**
  * chat-web-client's RoomType has not yet been extended with the backend's
