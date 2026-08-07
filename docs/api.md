@@ -1,5 +1,13 @@
 # Hacom Cloud API
 
+## Process 5 release references
+
+The Gate 5 acceptance evidence, deployment/rollback procedure and runnable
+Postman order are indexed in [`process5-api-openapi-postman.md`](process5-api-openapi-postman.md).
+The machine-readable auth and admin boundaries remain the versioned OpenAPI
+documents under `docs/openapi/`; this page remains the source for core Cloud
+items, Trash, upload, search, quota and error semantics.
+
 ## Health
 
 | Method | Path | Mục đích |

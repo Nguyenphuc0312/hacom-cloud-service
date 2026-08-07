@@ -5,6 +5,21 @@
 > Backend: Go  
 > Phạm vi: Personal Cloud dạng timeline giống Zalo, chưa kết nối Chat và chưa triển khai Folder CRUD
 
+## Gate 5 current release (Phase 2)
+
+The current local release candidate covers Phase 2 Gates 1–3, the Process 4 Worker,
+and the My Documents frontend. It is identified by backend SHA `d0f0d650` and
+frontend SHA `af91a644`.
+
+- Acceptance matrix: [`docs/process5-acceptance-matrix.md`](docs/process5-acceptance-matrix.md)
+- Release report: [`docs/process5-release-report-phase2.md`](docs/process5-release-report-phase2.md)
+- Demo under 15 minutes: [`docs/process5-demo-script-phase2.md`](docs/process5-demo-script-phase2.md)
+- Slide outline: [`docs/process5-slide-outline-phase2.md`](docs/process5-slide-outline-phase2.md)
+- Deployment/rollback: [`docs/process5-deployment-rollback.md`](docs/process5-deployment-rollback.md)
+- API/OpenAPI/Postman: [`docs/process5-api-openapi-postman.md`](docs/process5-api-openapi-postman.md)
+
+The older section below is retained as the historical Phase 1 release procedure.
+
 ## Release candidate Quy trình 5
 
 Quy trình 5 khóa phạm vi ở backend Phase 1: text, link, timeline, quota, upload
