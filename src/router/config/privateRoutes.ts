@@ -17,6 +17,9 @@ const TipsPage = lazy(() => import("../../pages/TipsPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
+const WorkReportDraftPage = lazy(
+  () => import("../../features/personal-ai/pages/WorkReportDraftPage"),
+);
 const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
 
 /**
@@ -33,6 +36,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.TASKS, component: TasksPage },
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
+  { path: ROUTE_PATHS.WORK_REPORT_DRAFTS, component: WorkReportDraftPage },
   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },
   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
   { path: ROUTE_PATHS.HELP, component: HelpPage },

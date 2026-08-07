@@ -229,7 +229,10 @@ function pickString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-async function aiRequest(
+/** Host AI cho caller ngoài module (vd `workReportDraftApi`). */
+export const AI_BASE_URL = BASE_URL;
+
+export async function aiRequest(
   url: string,
   init: RequestInit = {},
   timeoutMs = TIMEOUT_MS,
