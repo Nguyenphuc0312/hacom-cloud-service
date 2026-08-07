@@ -157,7 +157,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
         </aside>
       </React.Suspense>
     ) : null}
-    <HacomCloudInfoSidebar open={infoOpen && !searchOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={infoOpen && !space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} messages={visibleMessages} />
+    <HacomCloudInfoSidebar open={infoOpen && !searchOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={infoOpen && !space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} />
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;

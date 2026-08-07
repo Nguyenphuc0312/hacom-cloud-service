@@ -132,24 +132,43 @@ test('nút kính lúp mở được panel tìm kiếm trong Cloud', async ({ pag
   await expect(page.getByPlaceholder(/Tìm/i).last()).toBeVisible({ timeout: 20_000 });
 });
 
-test('panel phải có đủ 3 mục: Ảnh/Video, Tệp, Link', async ({ page }) => {
+test('panel Cloud dùng "Kho lưu trữ" tab ngang giống panel nhóm', async ({ page }) => {
   await login(page);
   await page.goto('/chat');
   await cloudRow(page).click();
   await composer(page).waitFor({ timeout: 40_000 });
 
   await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
-  await expect(page.getByText(/Ảnh và video gần đây/i)).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText(/Tệp gần đây/i)).toBeVisible();
-  await expect(page.getByText(/Dung lượng lưu trữ/i)).toBeVisible();
 
-  // Mục Link nằm cuối panel — cuộn vùng cuộn của panel xuống đáy.
-  await page.evaluate(() => {
-    const strong = Array.from(document.querySelectorAll('strong'))
-      .find((el) => el.textContent?.trim() === 'Thông tin Hacom Cloud');
-    const scroller = strong?.closest('aside')?.querySelector('.overflow-y-auto');
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  });
-  // Tiêu đề mục kèm số đếm: "Link" + "(0)" nằm trong cùng một nút.
-  await expect(page.getByRole('button', { name: /^Link\s*\(\d+\)$/ })).toBeVisible({ timeout: 20_000 });
+  const panel = page.locator('aside').filter({ hasText: 'Thông tin Hacom Cloud' });
+  await expect(panel.getByText(/Dung lượng lưu trữ/i)).toBeVisible({ timeout: 20_000 });
+  await expect(panel.getByText(/Kho lưu trữ/i)).toBeVisible({ timeout: 20_000 });
+
+  // Ba tab kèm số đếm — đúng dạng Zalo, không còn ba mục xếp dọc.
+  for (const label of [/^Ảnh\/Video/, /^File/, /^Link/]) {
+    await expect(panel.getByRole('button', { name: label })).toBeVisible();
+  }
+
+  // Tệp trong Cloud giữ riêng vì đây là chỗ duy nhất xoá được (trả lại quota).
+  await expect(panel.getByText(/Tệp trong Cloud/i)).toBeVisible();
+});
+
+test('chuyển tab trong Kho lưu trữ đổi đúng nội dung', async ({ page }) => {
+  await login(page);
+  await page.goto('/chat');
+  await cloudRow(page).click();
+  await composer(page).waitFor({ timeout: 40_000 });
+  await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
+
+  const panel = page.locator('aside').filter({ hasText: 'Thông tin Hacom Cloud' });
+  await expect(panel.getByText(/Kho lưu trữ/i)).toBeVisible({ timeout: 20_000 });
+
+  await panel.getByRole('button', { name: /^File/ }).click();
+  await page.waitForTimeout(1200);
+  await expect(panel.getByText(/Chưa có ảnh hoặc video nào/i)).toHaveCount(0);
+
+  await panel.getByRole('button', { name: /^Link/ }).click();
+  await page.waitForTimeout(1200);
+  // Tab Link phải ra nội dung link (msn.com đã gửi ở các ca trước) chứ không phải tệp.
+  await expect(panel.getByText(/msn\.com|Chưa có liên kết/i).first()).toBeVisible({ timeout: 15_000 });
 });

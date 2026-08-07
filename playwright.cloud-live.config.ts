@@ -16,6 +16,9 @@ export default defineConfig({
   timeout: 180_000,
   fullyParallel: false,
   retries: 0,
+  // Một worker: nhiều tab cùng đăng nhập một tài khoản vào một dev server gây
+  // chập chờn (session/WS giành nhau), không phản ánh lỗi thật của app.
+  workers: 1,
   reporter: [['list']],
   use: {
     baseURL: process.env.HACOM_CLOUD_WEB_BASE_URL ?? 'http://localhost:5100',
