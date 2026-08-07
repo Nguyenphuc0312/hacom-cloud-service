@@ -40,6 +40,19 @@ type Config struct {
 	WorkerMaxBackoff          time.Duration
 	WorkerCleanupScanInterval time.Duration
 	WorkerCleanupBatchSize    int
+	AuthMode                  string
+	AuthJWKSURL               string
+	AuthIssuer                string
+	AuthAudience              string
+	AuthRevocationURL         string
+	AuthRedisAddr             string
+	AuthRedisPassword         string
+	AuthRedisDB               int
+	AuthJWKSCacheTTL          time.Duration
+	AuthLegacyHS256Enabled    bool
+	AuthLegacyHS256Secret     string
+	AuthRateLimit             int
+	AuthRateWindow            time.Duration
 }
 
 func Load() (Config, error) {
@@ -134,6 +147,30 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	authMode := env("AUTH_MODE", "demo")
+	if authMode != "demo" && authMode != "jwt" {
+		return Config{}, fmt.Errorf("AUTH_MODE must be demo or jwt")
+	}
+	authLegacyHS256, err := boolEnv("AUTH_LEGACY_HS256_VERIFY_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	authJWKSCacheTTL, err := durationEnv("AUTH_JWKS_CACHE_TTL", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	authRateLimit, err := intEnv("AUTH_RATE_LIMIT", 120)
+	if err != nil {
+		return Config{}, err
+	}
+	authRateWindow, err := durationEnv("AUTH_RATE_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	authRedisDB, err := intEnv("AUTH_REDIS_DB", 0)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		AppEnv:                    env("APP_ENV", "local"),
@@ -159,6 +196,35 @@ func Load() (Config, error) {
 		WorkerMaxBackoff:          workerMaxBackoff,
 		WorkerCleanupScanInterval: workerCleanupScanInterval,
 		WorkerCleanupBatchSize:    workerCleanupBatchSize,
+		AuthMode:                  authMode,
+		AuthJWKSURL:               os.Getenv("AUTH_JWKS_URL"),
+		AuthIssuer:                os.Getenv("JWT_ISSUER"),
+		AuthAudience:              os.Getenv("JWT_AUDIENCE"),
+		AuthRevocationURL:         os.Getenv("AUTH_REVOCATION_URL"),
+		AuthRedisAddr:             os.Getenv("AUTH_REDIS_ADDR"),
+		AuthRedisPassword:         os.Getenv("AUTH_REDIS_PASSWORD"),
+		AuthRedisDB:               authRedisDB,
+		AuthJWKSCacheTTL:          authJWKSCacheTTL,
+		AuthLegacyHS256Enabled:    authLegacyHS256,
+		AuthLegacyHS256Secret:     os.Getenv("AUTH_LEGACY_HS256_SECRET"),
+		AuthRateLimit:             authRateLimit,
+		AuthRateWindow:            authRateWindow,
+	}
+	if cfg.AppEnv != "local" && cfg.AppEnv != "test" && cfg.AuthMode == "demo" {
+		return Config{}, fmt.Errorf("demo auth is only allowed in local or test")
+	}
+	if cfg.AuthMode == "jwt" {
+		for key, value := range map[string]string{"AUTH_JWKS_URL": cfg.AuthJWKSURL, "JWT_ISSUER": cfg.AuthIssuer, "JWT_AUDIENCE": cfg.AuthAudience} {
+			if strings.TrimSpace(value) == "" {
+				return Config{}, fmt.Errorf("%s is required when AUTH_MODE=jwt", key)
+			}
+		}
+		if strings.TrimSpace(cfg.AuthRevocationURL) == "" && strings.TrimSpace(cfg.AuthRedisAddr) == "" {
+			return Config{}, fmt.Errorf("AUTH_REVOCATION_URL or AUTH_REDIS_ADDR is required when AUTH_MODE=jwt")
+		}
+	}
+	if cfg.AuthLegacyHS256Enabled && strings.TrimSpace(cfg.AuthLegacyHS256Secret) == "" {
+		return Config{}, fmt.Errorf("AUTH_LEGACY_HS256_SECRET is required when legacy HS256 verification is enabled")
 	}
 
 	required := []struct {

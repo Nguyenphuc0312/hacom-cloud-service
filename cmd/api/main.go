@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloudapi"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	redis "github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -93,11 +95,56 @@ func main() {
 		logger.Error("create upload service", "error", err)
 		os.Exit(1)
 	}
+	rateLimiter, err := auth.NewRateLimiter(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	if err != nil {
+		logger.Error("create auth rate limiter", "error", err)
+		os.Exit(1)
+	}
+	var authMiddleware func(http.Handler) http.Handler
+	if cfg.AuthMode == "jwt" {
+		var revocationChecker auth.RevocationChecker
+		if cfg.AuthRedisAddr != "" {
+			revocationChecker = auth.RedisRevocationChecker{Client: redis.NewClient(&redis.Options{
+				Addr: cfg.AuthRedisAddr, Password: cfg.AuthRedisPassword, DB: cfg.AuthRedisDB,
+			})}
+		} else {
+			revocationChecker = auth.HTTPRevocationChecker{URL: cfg.AuthRevocationURL}
+		}
+		verifier, verifyErr := auth.NewVerifier(auth.Config{
+			JWKSURL:                  cfg.AuthJWKSURL,
+			Issuer:                   cfg.AuthIssuer,
+			Audience:                 cfg.AuthAudience,
+			JWKSCacheTTL:             cfg.AuthJWKSCacheTTL,
+			LegacyHS256VerifyEnabled: cfg.AuthLegacyHS256Enabled,
+			LegacyHS256Secret:        []byte(cfg.AuthLegacyHS256Secret),
+			RevocationChecker:        revocationChecker,
+		})
+		if verifyErr != nil {
+			logger.Error("create auth verifier", "error", verifyErr)
+			os.Exit(1)
+		}
+		authMiddleware = func(next http.Handler) http.Handler {
+			handler, middlewareErr := auth.Middleware(auth.MiddlewareConfig{Mode: auth.ModeJWT, AppEnv: cfg.AppEnv, Verifier: verifier, RateLimiter: rateLimiter}, next)
+			if middlewareErr != nil {
+				panic(middlewareErr)
+			}
+			return handler
+		}
+	} else {
+		authMiddleware = func(next http.Handler) http.Handler {
+			handler, middlewareErr := auth.Middleware(auth.MiddlewareConfig{Mode: auth.ModeDemo, AppEnv: cfg.AppEnv, RateLimiter: rateLimiter}, next)
+			if middlewareErr != nil {
+				panic(middlewareErr)
+			}
+			return handler
+		}
+	}
 	cloudHandler, err := cloudapi.New(
 		cloudService,
 		cfg.MaxContentBytes,
 		logger,
 		cloudapi.WithUploadService(uploadService),
+		cloudapi.WithAuthMiddleware(authMiddleware),
 	)
 	if err != nil {
 		logger.Error("create cloud API handler", "error", err)

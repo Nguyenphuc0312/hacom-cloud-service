@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/auth"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/upload"
 	"github.com/google/uuid"
@@ -54,10 +55,11 @@ type UploadService interface {
 }
 
 type Handler struct {
-	service      Service
-	uploads      UploadService
-	maxBodyBytes int64
-	logger       *slog.Logger
+	service        Service
+	uploads        UploadService
+	maxBodyBytes   int64
+	logger         *slog.Logger
+	authMiddleware func(http.Handler) http.Handler
 }
 
 type Option func(*Handler) error
@@ -68,6 +70,18 @@ func WithUploadService(service UploadService) Option {
 			return errors.New("upload service is required")
 		}
 		handler.uploads = service
+		return nil
+	}
+}
+
+// WithAuthMiddleware replaces the local demo identity middleware. Production
+// callers must provide the JWT middleware from internal/auth.
+func WithAuthMiddleware(middleware func(http.Handler) http.Handler) Option {
+	return func(handler *Handler) error {
+		if middleware == nil {
+			return errors.New("auth middleware is required")
+		}
+		handler.authMiddleware = middleware
 		return nil
 	}
 }
@@ -123,7 +137,11 @@ func New(
 	}
 	mux.HandleFunc("/", handler.notFound)
 
-	return handler.requestIDMiddleware(handler.demoUserMiddleware(mux)), nil
+	authMiddleware := handler.authMiddleware
+	if authMiddleware == nil {
+		authMiddleware = handler.demoUserMiddleware
+	}
+	return handler.requestIDMiddleware(authMiddleware(mux)), nil
 }
 
 type initiateUploadRequest struct {
@@ -549,6 +567,9 @@ func (h *Handler) demoUserMiddleware(next http.Handler) http.Handler {
 }
 
 func ownerUserID(ctx context.Context) uuid.UUID {
+	if principal, ok := auth.PrincipalFromContext(ctx); ok {
+		return principal.UserID
+	}
 	value, _ := ctx.Value(ownerUserIDKey).(uuid.UUID)
 	return value
 }

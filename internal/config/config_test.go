@@ -90,6 +90,23 @@ func TestLoadRejectsMissingDependencyConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsDemoAuthOutsideLocal(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "demo")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "demo auth") {
+		t.Fatalf("expected production demo auth rejection, got %v", err)
+	}
+}
+
+func TestLoadRequiresJWTConfiguration(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AUTH_MODE", "jwt")
+	if _, err := Load(); err == nil || (!strings.Contains(err.Error(), "AUTH_JWKS_URL") && !strings.Contains(err.Error(), "JWT_ISSUER") && !strings.Contains(err.Error(), "JWT_AUDIENCE") && !strings.Contains(err.Error(), "AUTH_REVOCATION_URL")) {
+		t.Fatalf("expected JWT configuration error, got %v", err)
+	}
+}
+
 func TestLoadRejectsInvalidHealthTimeout(t *testing.T) {
 	setRequiredEnvironment(t)
 	t.Setenv("HEALTH_TIMEOUT", "invalid")
