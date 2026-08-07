@@ -1,0 +1,80 @@
+# Hacom Cloud Phase 2 — Gate 4 Verification Report
+
+Date: 2026-08-07
+Branch: `feature/cloud-phase2-process4`
+Commit under verification: `b7e6cc1a`
+
+## Verdict
+
+**PENDING / NO-GO for formal Gate 4 closure.**
+
+The frontend implementation and automated local gates pass. Formal closure is
+blocked by missing Hacom production-authenticated lifecycle evidence and manual
+authenticated UX/accessibility sign-off. No production identity, token or secret
+was fabricated for this verification.
+
+## Automated verification
+
+### Backend Cloud Service
+
+| Check | Result |
+|---|---|
+| `go test ./...` | PASS |
+| `go vet ./...` | PASS |
+| `go test -race -count=1 ./...` | PASS |
+| `go build ./...` | PASS |
+| `make test-integration-process4` | PASS — PostgreSQL, MinIO, Worker lifecycle and regression |
+| `/health` | PASS — HTTP 200, PostgreSQL/MinIO UP |
+| `/health/ready` | PASS — HTTP 200, PostgreSQL/MinIO UP |
+
+### Frontend Cloud Web Client
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | PASS |
+| `npm run lint -- --no-fix` | PASS — 0 errors, 52 existing warnings |
+| `npm run build:gate` | PASS |
+| `npm run gate:static` | PASS — 762 source files checked |
+| `npm test` | PASS — 133 files passed, 1 skipped; 1111 tests passed, 7 skipped |
+| Cloud targeted tests | PASS — 8 files, 37 tests |
+| `npm run test:perf:unit` | PASS |
+| `npm run test:e2e` | 3 passed, 1 skipped |
+| `npm run test:e2e:perf` | PASS — 1 passed |
+| Cloud EN/VI key parity | PASS — 177 keys |
+| `npm run i18n:check` | BASELINE FAILURE — existing project-wide missing/unused keys outside Cloud |
+
+The skipped E2E is the intended lifecycle:
+
+`login → upload → preview → Trash → restore → permanent delete`
+
+It requires `CLOUD_E2E_LOGIN`, `CLOUD_E2E_PASSWORD` and
+`CLOUD_E2E_MUTATION=true`. None were available in the verification environment.
+
+## Gate 4 checklist
+
+| Criterion | Status | Evidence / remaining action |
+|---|---|---|
+| Phase 2 flow available in Chat Web | PASS automated / PENDING live | Authenticated browser run required |
+| Search and multi-type filter | PASS automated | Cloud hook/API tests pass |
+| Trash, restore, permanent delete, Empty Trash | PASS automated | Cloud hook/component tests pass; live mutation run pending |
+| Storage active/Trash/reserved/available | PASS automated | Component and quota contract coverage pass |
+| Quota request status | PASS automated | Pending/approved/rejected UI implemented; live review pending |
+| Image/video/audio/text/PDF preview | PASS implementation / PENDING live | Authenticated preview regression still required |
+| Fresh access URL for active and Trash | PASS automated | Cache, invalidation and Cloud-specific routing covered |
+| Hacom authentication/session | PENDING | Requires real Hacom account/session |
+| Responsive/accessibility/reduced motion | PENDING manual QA | Source/static checks pass; authenticated browser checklist not signed off |
+| No BLOCKER/MAJOR regression | PASS automated | No new static/test blocker; global i18n baseline remains |
+| Gate 4 report | PASS | This report |
+| Deferred Hacom Holding DX dependencies | PENDING documentation review | Auth/Admin/shared contract dependencies require owner confirmation |
+
+## Deferred / external dependencies
+
+- Real Hacom Auth Service login/session and production identity validation.
+- Authenticated Playwright lifecycle with a non-sensitive fixture account.
+- Manual responsive, keyboard, focus, screen-reader and reduced-motion review.
+- Resolution or explicit acceptance of pre-existing project-wide `i18n:check`
+  findings outside the Cloud namespace.
+- Confirmation of remaining Auth/Admin/shared-type work in the deferred-scope
+  report owned by Hacom Holding DX.
+
+No backend Hacom Holding DX code was changed during this verification.

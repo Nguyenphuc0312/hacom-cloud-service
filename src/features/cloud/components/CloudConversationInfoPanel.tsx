@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import clsx from "clsx";
 import { CirclePlus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button, Modal } from "../../../components/ui";
 import type {
   CloudItem,
   CloudQuota,
@@ -47,10 +48,21 @@ export const CloudConversationInfoPanel: React.FC<
   onClose,
 }) => {
   const { t } = useTranslation("cloud");
+  const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
 
   const limitBytes = quota?.limitBytes ?? 0;
   const percent = (bytes: number): number =>
     limitBytes > 0 ? Math.min(100, Math.max(0, (bytes / limitBytes) * 100)) : 0;
+
+  const confirmEmptyTrash = async () => {
+    if (!onEmptyTrash) return;
+    try {
+      await onEmptyTrash();
+      setIsEmptyTrashConfirmOpen(false);
+    } catch {
+      // The page keeps the canonical Cloud error visible after a failed mutation.
+    }
+  };
 
   return (
     <aside className="flex h-full min-h-0 flex-col bg-surface" aria-label={t("inspector.title")}>
@@ -193,11 +205,7 @@ export const CloudConversationInfoPanel: React.FC<
             <button
               type="button"
               disabled={isMutating}
-              onClick={() => {
-                if (window.confirm(t("trash.emptyConfirm"))) {
-                  void onEmptyTrash();
-                }
-              }}
+              onClick={() => setIsEmptyTrashConfirmOpen(true)}
               className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-danger/30 px-3 py-2 text-xs font-semibold text-danger hover:bg-danger/5"
             >
               <Trash2 className="h-4 w-4" aria-hidden />
@@ -212,6 +220,37 @@ export const CloudConversationInfoPanel: React.FC<
           />
         </section>
       </div>
+      <Modal
+        isOpen={isEmptyTrashConfirmOpen}
+        onClose={() => setIsEmptyTrashConfirmOpen(false)}
+        title={t("trash.emptyAction")}
+        description={t("trash.emptyConfirm")}
+        size="sm"
+        closeOnOverlayClick={!isMutating}
+        closeOnEsc={!isMutating}
+      >
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={isMutating}
+            onClick={() => setIsEmptyTrashConfirmOpen(false)}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            isLoading={isMutating}
+            disabled={isMutating}
+            onClick={() => void confirmEmptyTrash()}
+          >
+            {t("trash.emptyAction")}
+          </Button>
+        </div>
+      </Modal>
     </aside>
   );
 };

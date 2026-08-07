@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CloudItem, CloudQuota } from "../types";
 import { CloudConversationInfoPanel } from "./CloudConversationInfoPanel";
@@ -130,5 +130,35 @@ describe("CloudConversationInfoPanel", () => {
       }),
     );
     expect(onRequestQuota).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses an accessible confirmation modal before Empty Trash", async () => {
+    const onEmptyTrash = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CloudConversationInfoPanel
+        items={[]}
+        trashItems={[trashItem]}
+        quota={quota}
+        quotaRequest={null}
+        showQuotaRequest={false}
+        viewMode="trash"
+        onViewModeChange={vi.fn()}
+        onRequestQuota={vi.fn()}
+        onEmptyTrash={onEmptyTrash}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /empty trash|dọn sạch/i }),
+    );
+    expect(screen.getByText(/cannot be undone|không thể hoàn tác/i)).not.toBeNull();
+
+    const emptyButtons = screen.getAllByRole("button", {
+      name: /empty trash|dọn sạch/i,
+    });
+    fireEvent.click(emptyButtons.at(-1)!);
+    await waitFor(() => expect(onEmptyTrash).toHaveBeenCalledTimes(1));
   });
 });
