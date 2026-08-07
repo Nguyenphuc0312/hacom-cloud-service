@@ -22,6 +22,7 @@ import { blobPreviewCache } from "../../lib/blobPreviewCache";
 import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 import { SafeImage } from "../common/SafeImage";
+import { getRedactedResourceTiming, reportImagePerformance } from "../../utils/imagePerformanceTelemetry";
 import {
   getThumbnailPollDelayMs,
   shouldContinueThumbnailPolling,
@@ -70,6 +71,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const refreshedSourceRef = useRef<string | null>(null);
+  const imageRequestedAtRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
 
@@ -151,6 +153,10 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // Terminal states where no URL will ever be available — show a static fallback icon,
   // never a spinning skeleton.
   const isTerminalNoUrl = !activeSource && terminalBatchStatus;
+
+  useEffect(() => {
+    imageRequestedAtRef.current = activeSource ? performance.now() : null;
+  }, [activeSource]);
 
   // Reset backoff bookkeeping whenever the thumbnail pipeline leaves the
   // retryable state (reaches ready, failed, not_found, etc.).
@@ -496,8 +502,20 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
               src={activeSource!}
               alt={caption || attachment.fileName || t("chat:image.previewAlt")}
               onClick={handleImageClick}
-              onLoad={() => {
+              onLoad={(event, source, meta) => {
                 if (!activeSource) return;
+                const requestedAt = imageRequestedAtRef.current;
+                reportImagePerformance({
+                  kind: 'image_painted',
+                  durationMs: requestedAt === null ? undefined : Math.round(performance.now() - requestedAt),
+                  width: event.currentTarget.naturalWidth,
+                  height: event.currentTarget.naturalHeight,
+                  renderedWidth: event.currentTarget.clientWidth,
+                  renderedHeight: event.currentTarget.clientHeight,
+                  decodeDurationMs: meta?.decodeDurationMs,
+                  ...getRedactedResourceTiming(source),
+                  outcome: 'success',
+                });
                 setLoadedSource(activeSource);
                 setFailedSource((previous) =>
                   previous === activeSource ? null : previous,

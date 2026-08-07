@@ -17,7 +17,7 @@ interface SafeImageProps
   retryOnSignedUrlExpired?: boolean;
   onRetrySource?: (src: string) => void;
   onError?: (event: React.SyntheticEvent<HTMLImageElement>, src: string) => void;
-  onLoad?: (event: React.SyntheticEvent<HTMLImageElement>, src: string) => void;
+  onLoad?: (event: React.SyntheticEvent<HTMLImageElement>, src: string, meta?: { decodeDurationMs?: number }) => void;
 }
 
 const objectFitClasses = {
@@ -61,6 +61,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   // Keep painting the last successfully-loaded image until the next one is
   // ready, so switching src never blanks the <img> for a frame (gray flash).
   const [displaySource, setDisplaySource] = React.useState<string | null>(null);
+  const decodeDurationBySourceRef = React.useRef(new Map<string, number>());
   const status: SafeImageStatus = !safeSrc
     ? "empty"
     : failedSources.has(safeSrc)
@@ -117,7 +118,11 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     // the swap is truly flash-free). Not in every environment (e.g. jsdom) —
     // there the onload/onerror handlers above carry the load.
     if (typeof preloader.decode === "function") {
-      preloader.decode().then(commit).catch(() => {
+      const decodeStartedAt = performance.now();
+      preloader.decode().then(() => {
+        decodeDurationBySourceRef.current.set(safeSrc, performance.now() - decodeStartedAt);
+        commit();
+      }).catch(() => {
         if (preloader.complete && preloader.naturalWidth === 0) fail();
       });
     }
@@ -140,7 +145,9 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       });
       setLoadedSource(safeSrc);
       setDisplaySource(safeSrc);
-      onLoad?.(event, safeSrc);
+      onLoad?.(event, safeSrc, {
+        decodeDurationMs: decodeDurationBySourceRef.current.get(safeSrc),
+      });
     },
     [onLoad, safeSrc],
   );
