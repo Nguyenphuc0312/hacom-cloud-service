@@ -70,6 +70,8 @@ const PENDING_TTL_MS = 10_000; // negative cache for PENDING thumbnails
 const FAILED_TTL_MS = 60_000; // negative cache for not_found/forbidden/error
 const MAX_THUMBNAIL_CACHE_ENTRIES = 500;
 const MAX_PREVIEW_SIGNAL_KEYS = 500;
+// Must track chat-api-service MAX_THUMBNAIL_URL_BATCH_SIZE. The API remains
+// authoritative and rejects oversize batches instead of silently truncating.
 const MAX_BATCH_IDS = 20;
 const BATCH_WINDOW_MS = 16;
 const MAX_BATCH_REQUESTS_PER_CONVERSATION = 2;
@@ -299,32 +301,46 @@ const executeBatchFetch = async (
   const startedAtMs = performance.now();
   let outcome: 'success' | 'error' = 'error';
   try {
-    const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
-    const payload = unwrapApiSuccess(response);
-    const resolved: Record<string, ThumbnailUrlItem> = {};
-    for (const raw of payload.items) {
-      const item = resolveItem(raw);
-      THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
-      resolved[item.fileId] = item;
-    }
-    outcome = 'success';
-    return resolved;
+  const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
+  const payload = unwrapApiSuccess(response);
+  const resolved: Record<string, ThumbnailUrlItem> = {};
+  for (const raw of payload.items) {
+    const item = resolveItem(raw);
+    THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
+    resolved[item.fileId] = item;
+  }
+  outcome = 'success';
+  return resolved;
   } finally {
-    reportImagePerformance({ kind: 'batch_url_request', batchSize: fileIds.length, durationMs: Math.round(performance.now() - startedAtMs), outcome });
+    reportImagePerformance({
+      kind: 'batch_url_request',
+      batchSize: fileIds.length,
+      durationMs: Math.round(performance.now() - startedAtMs),
+      outcome,
+    });
   }
 };
 
 const flushConversationQueue = (conversationId: string): void => {
   const queue = conversationBatchQueues.get(conversationId);
   if (!queue) return;
-  if (queue.timer) { clearTimeout(queue.timer); queue.timer = null; }
+  if (queue.timer) {
+    clearTimeout(queue.timer);
+    queue.timer = null;
+  }
   if (queue.active >= MAX_BATCH_REQUESTS_PER_CONVERSATION || queue.pending.length === 0) return;
+
+  // Select complete callers greedily. A caller never has to wait for several
+  // HTTP responses, and at most MAX_BATCH_IDS unique IDs reach the API.
   const selected: QueuedBatchRequest[] = [];
   const selectedIds = new Set<string>();
   const deferred: QueuedBatchRequest[] = [];
   for (const request of queue.pending) {
     const nextIds = request.fileIds.filter((id) => !selectedIds.has(id));
-    if (selected.length > 0 && selectedIds.size + nextIds.length > MAX_BATCH_IDS) { deferred.push(request); continue; }
+    if (selected.length > 0 && selectedIds.size + nextIds.length > MAX_BATCH_IDS) {
+      deferred.push(request);
+      continue;
+    }
     selected.push(request);
     for (const id of nextIds) selectedIds.add(id);
   }
@@ -332,12 +348,16 @@ const flushConversationQueue = (conversationId: string): void => {
   if (selected.length === 0) return;
   queue.active += 1;
   const queueWaitMs = Math.max(0, Date.now() - Math.min(...selected.map((request) => request.queuedAtMs)));
+
   void executeBatchFetch(conversationId, [...selectedIds])
     .then((results) => {
       reportImagePerformance({ kind: 'batch_url_request', batchSize: selectedIds.size, queueWaitMs, outcome: 'success' });
       for (const request of selected) {
         const requestResults: Record<string, ThumbnailUrlItem> = {};
-        for (const fileId of request.fileIds) { const item = results[fileId]; if (item) requestResults[fileId] = item; }
+        for (const fileId of request.fileIds) {
+          const item = results[fileId];
+          if (item) requestResults[fileId] = item;
+        }
         request.resolve(requestResults);
       }
     })
@@ -349,18 +369,30 @@ const flushConversationQueue = (conversationId: string): void => {
       const current = conversationBatchQueues.get(conversationId);
       if (!current) return;
       current.active -= 1;
-      if (current.pending.length > 0) current.timer = setTimeout(() => flushConversationQueue(conversationId), 0);
-      else if (current.active === 0) conversationBatchQueues.delete(conversationId);
+      if (current.pending.length > 0) {
+        current.timer = setTimeout(() => flushConversationQueue(conversationId), 0);
+      } else if (current.active === 0) {
+        conversationBatchQueues.delete(conversationId);
+      }
     });
 };
 
-const enqueueBatchFetch = (conversationId: string, fileIds: string[]): Promise<Record<string, ThumbnailUrlItem>> => {
+const enqueueBatchFetch = (
+  conversationId: string,
+  fileIds: string[],
+): Promise<Record<string, ThumbnailUrlItem>> => {
   if (!isTimelineBatchingEnabled()) return executeBatchFetch(conversationId, fileIds);
   return new Promise((resolve, reject) => {
-    const queue = conversationBatchQueues.get(conversationId) ?? { pending: [], timer: null, active: 0 };
+    const queue = conversationBatchQueues.get(conversationId) ?? {
+      pending: [],
+      timer: null,
+      active: 0,
+    };
     queue.pending.push({ fileIds, queuedAtMs: Date.now(), resolve, reject });
     conversationBatchQueues.set(conversationId, queue);
-    if (!queue.timer) queue.timer = setTimeout(() => flushConversationQueue(conversationId), BATCH_WINDOW_MS);
+    if (!queue.timer) {
+      queue.timer = setTimeout(() => flushConversationQueue(conversationId), BATCH_WINDOW_MS);
+    }
   });
 };
 
@@ -371,8 +403,8 @@ const dedupedBatchFetch = (
   const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
   const existing = inFlightBatchRequests.get(key);
   if (existing) return existing;
-  const request = enqueueBatchFetch(conversationId, fileIds).finally(() => inFlightBatchRequests.delete(key));
-
+  const request = enqueueBatchFetch(conversationId, fileIds)
+    .finally(() => inFlightBatchRequests.delete(key));
   inFlightBatchRequests.set(key, request);
   return request;
 };
@@ -436,7 +468,9 @@ export const __thumbnailCacheTestUtils = {
   previewSignalKeyCount: () => previewSignalListeners.size,
   clearThumbnailCache: () => THUMBNAIL_CACHE.clear(),
   clearBatchQueues: () => {
-    for (const queue of conversationBatchQueues.values()) if (queue.timer) clearTimeout(queue.timer);
+    for (const queue of conversationBatchQueues.values()) {
+      if (queue.timer) clearTimeout(queue.timer);
+    }
     conversationBatchQueues.clear();
     inFlightBatchRequests.clear();
   },

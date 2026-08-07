@@ -275,6 +275,7 @@
   "attachmentTray": {
     "queued": "Đang chờ",
     "uploading": "Đang tải",
+    "completing": "Đang hoàn tất…",
     "ready": "Sẵn sàng",
     "failed": "Thất bại",
     "blocked": "Bị chặn",

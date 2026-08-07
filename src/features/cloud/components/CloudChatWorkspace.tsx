@@ -5,11 +5,11 @@ import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
-import { useDeleteMessageMutation, useGetMessagesQuery } from "../../api/chatApi";
+import { useGetMessagesQuery } from "../../api/chatApi";
 import { useAuthStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
-import { cloudApi, type CloudAsset } from "../api/cloudApi";
+import { cloudApi, deleteCloudAssetForMessage, type CloudAsset } from "../api/cloudApi";
 import wsManager from "../../../lib/socket";
 import { useCloudUploadQueue } from "../hooks/useCloudUploadQueue";
 import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineType } from "../personalCloudPolicy";
@@ -54,10 +54,12 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     const sync = () => { void refresh(); };
     wsManager.on("cloud:asset:created", sync);
     wsManager.on("cloud:asset:trashed", sync);
+    wsManager.on("cloud:asset:restored", sync);
     wsManager.on("cloud:quota:changed", sync);
     return () => {
       wsManager.off("cloud:asset:created", sync);
       wsManager.off("cloud:asset:trashed", sync);
+      wsManager.off("cloud:asset:restored", sync);
       wsManager.off("cloud:quota:changed", sync);
     };
   }, [refresh]);
@@ -70,9 +72,15 @@ export const PersonalCloudConversationSurface: React.FC = () => {
   }, [conversationId, joinConversation, leaveConversation]);
 
   const messagesQuery = useGetMessagesQuery({ conversationId, limit: 50 }, { skip: !conversationId, refetchOnReconnect: true });
-  const [deleteMessage] = useDeleteMessageMutation();
-  const uploadQueue = useCloudUploadQueue(() => { void refresh(); void messagesQuery.refetch(); });
-  const hiddenCloudMessageIds = useMemo(() => new Set(assets.filter((asset) => asset.status === "trashed").map((asset) => asset.messageId).filter((id): id is string => Boolean(id))), [assets]);
+  const applyQuota = useCallback((quota: NonNullable<CloudSpace>["quota"]) => {
+    setSpace((current) => current ? { ...current, quota } : current);
+  }, []);
+  const uploadCompleted = useCallback(() => {
+    void refresh();
+    void messagesQuery.refetch();
+  }, [messagesQuery, refresh]);
+  const uploadQueue = useCloudUploadQueue(uploadCompleted, space?.maxUploadBytes, applyQuota);
+  const hiddenCloudMessageIds = useMemo(() => new Set(assets.filter((asset) => asset.status !== "available").map((asset) => asset.messageId).filter((id): id is string => Boolean(id))), [assets]);
   const visibleMessages = useMemo(() => (messagesQuery.data?.messages ?? []).filter((message) => !hiddenCloudMessageIds.has(message.id)), [hiddenCloudMessageIds, messagesQuery.data?.messages]);
 
   const sendNote = useCallback(async (content?: string) => {
@@ -87,16 +95,14 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     }
   }, [messagesQuery, refresh]);
 
-  const handleDelete = useCallback(async (messageId: string, mode: "FOR_ME" | "FOR_EVERYONE" = "FOR_EVERYONE") => {
-    const asset = assets.find((candidate) => candidate.messageId === messageId && candidate.status === "available");
+  const handleDelete = useCallback(async (messageId: string) => {
     try {
-      if (asset) await cloudApi.trash(asset.id);
-      else if (conversationId) await deleteMessage({ conversationId, messageId, mode }).unwrap();
+      await deleteCloudAssetForMessage(messageId, assets);
       await Promise.all([refresh(), messagesQuery.refetch()]);
     } catch {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
     }
-  }, [assets, conversationId, deleteMessage, messagesQuery, refresh]);
+  }, [assets, messagesQuery, refresh]);
 
   const previewAsset = useCallback((asset: CloudAsset) => {
     if (!asset.attachmentId || !conversationId) return;
@@ -130,9 +136,9 @@ export const PersonalCloudConversationSurface: React.FC = () => {
       <header className="chat-header shrink-0 border-b border-border/70 bg-surface"><ConversationLane><div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-3"><PersonalCloudAvatar /><div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-medium">{personalCloudPresentation.title}</h1><p className="truncate text-xs text-text-muted">{personalCloudPresentation.subtitle}</p></div><button type="button" className="chat-header-action inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-surface-hover" onClick={() => setInfoOpen((open) => !open)} aria-label="Bật hoặc tắt thông tin Hacom Cloud"><PanelLeft className="h-5 w-5" /></button></div></ConversationLane></header>
       {error && <p role="alert" className="mx-4 mt-3 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
-      <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
+      <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
     </main>
-    <HacomCloudInfoSidebar open={infoOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} />
+    <HacomCloudInfoSidebar open={infoOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} onPreview={previewAsset} onForward={forwardAsset} />
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;
