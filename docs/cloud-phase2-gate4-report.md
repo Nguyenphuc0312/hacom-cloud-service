@@ -2,16 +2,16 @@
 
 Date: 2026-08-07
 Branch: `feature/cloud-phase2-process4`
-Commit under verification: `b7e6cc1a`
+Base implementation commit: `7821bdca`
 
 ## Verdict
 
 **PENDING / NO-GO for formal Gate 4 closure.**
 
 The frontend implementation and automated local gates pass. Formal closure is
-blocked by missing Hacom production-authenticated lifecycle evidence and manual
-authenticated UX/accessibility sign-off. No production identity, token or secret
-was fabricated for this verification.
+blocked by the live Hacom Auth login attempt being rate-limited and
+by manual authenticated UX/accessibility sign-off. No production identity,
+token or secret was written to the repository or report.
 
 ## Automated verification
 
@@ -38,30 +38,34 @@ was fabricated for this verification.
 | `npm test` | PASS — 133 files passed, 1 skipped; 1111 tests passed, 7 skipped |
 | Cloud targeted tests | PASS — 8 files, 37 tests |
 | `npm run test:perf:unit` | PASS |
-| `npm run test:e2e` | 3 passed, 1 skipped |
+| `npm run test:e2e` (baseline, without live credentials) | 3 passed, 1 skipped |
+| `npm run test:e2e -- --workers=1` (live attempt) | 3 passed, 1 failed — lifecycle remained on `/login` after Auth Service rate-limit |
 | `npm run test:e2e:perf` | PASS — 1 passed |
 | Cloud EN/VI key parity | PASS — 177 keys |
 | `npm run i18n:check` | BASELINE FAILURE — existing project-wide missing/unused keys outside Cloud |
 
-The skipped E2E is the intended lifecycle:
+The intended lifecycle is:
 
 `login → upload → preview → Trash → restore → permanent delete`
 
-It requires `CLOUD_E2E_LOGIN`, `CLOUD_E2E_PASSWORD` and
-`CLOUD_E2E_MUTATION=true`. None were available in the verification environment.
+The live run supplied credentials through process environment only. The first
+attempt exposed a selector issue in the E2E test, which was corrected to target
+the actual login inputs. A retry after the displayed cooldown still received
+the Auth Service rate-limit response, so the run did not proceed to upload or
+Cloud mutations. No further retries were sent.
 
 ## Gate 4 checklist
 
 | Criterion | Status | Evidence / remaining action |
 |---|---|---|
-| Phase 2 flow available in Chat Web | PASS automated / PENDING live | Authenticated browser run required |
+| Phase 2 flow available in Chat Web | PASS automated / PENDING live | Live run blocked at Hacom Auth rate-limit before upload |
 | Search and multi-type filter | PASS automated | Cloud hook/API tests pass |
 | Trash, restore, permanent delete, Empty Trash | PASS automated | Cloud hook/component tests pass; live mutation run pending |
 | Storage active/Trash/reserved/available | PASS automated | Component and quota contract coverage pass |
 | Quota request status | PASS automated | Pending/approved/rejected UI implemented; live review pending |
 | Image/video/audio/text/PDF preview | PASS implementation / PENDING live | Authenticated preview regression still required |
 | Fresh access URL for active and Trash | PASS automated | Cache, invalidation and Cloud-specific routing covered |
-| Hacom authentication/session | PENDING | Requires real Hacom account/session |
+| Hacom authentication/session | BLOCKED for this run | Auth Service rate-limit persisted after one cooldown retry; no production session evidence collected |
 | Responsive/accessibility/reduced motion | PENDING manual QA | Source/static checks pass; authenticated browser checklist not signed off |
 | No BLOCKER/MAJOR regression | PASS automated | No new static/test blocker; global i18n baseline remains |
 | Gate 4 report | PASS | This report |

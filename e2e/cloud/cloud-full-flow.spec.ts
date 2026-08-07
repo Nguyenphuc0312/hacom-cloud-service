@@ -18,12 +18,8 @@ test.describe("Cloud Phase 2 full lifecycle", () => {
     const fileName = `cloud-phase2-e2e-${Date.now()}.txt`;
 
     await page.goto("/login");
-    await page.getByLabel(/tài khoản|username|email/i).first().fill(
-      process.env.CLOUD_E2E_LOGIN!,
-    );
-    await page.getByLabel(/mật khẩu|password/i).first().fill(
-      process.env.CLOUD_E2E_PASSWORD!,
-    );
+    await page.locator("#loginIdentifier").fill(process.env.CLOUD_E2E_LOGIN!);
+    await page.locator("#password").fill(process.env.CLOUD_E2E_PASSWORD!);
     await page.getByRole("button", { name: /đăng nhập|log in|sign in/i }).click();
     await expect(page).not.toHaveURL(/\/login(?:\?|$)/, { timeout: 30_000 });
 
