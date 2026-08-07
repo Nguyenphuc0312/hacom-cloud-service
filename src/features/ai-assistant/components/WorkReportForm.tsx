@@ -25,6 +25,7 @@ import {
   type WorkReportTaskSubmit,
 } from "../services/aiChatApi";
 import { ConfirmDialog } from "../../../components/ui";
+import { taskRowHasInput } from "./workReportCancelGuard";
 
 interface WorkReportFormProps {
   data: WorkReportFormRequest;
@@ -335,6 +336,8 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  /** Lượt hủy này có xóa việc đã tự lưu nháp ở BE không — quyết định lời nhắn. */
+  const [cancelDeletesSaved, setCancelDeletesSaved] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   /**
    * Thao tác xóa đang chờ xác nhận. Một state cho MỌI kiểu xóa (công việc đã
@@ -676,15 +679,30 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
     }
   };
 
-  // Hủy: nếu đã có việc tự lưu nháp (để đính kèm) thì PHẢI xóa khỏi BE, nếu
-  // không báo cáo vẫn tồn tại dù người dùng đã hủy. Mở hộp thoại xác nhận ở giữa
-  // màn hình (ConfirmDialog) để tránh mất dữ liệu ngoài ý muốn — việc chưa lưu
-  // nháp gì thì hủy luôn.
+  /**
+   * Hủy: form trống thì đóng luôn (hỏi lúc chưa có gì để mất chỉ gây phiền).
+   * Có dữ liệu → hộp xác nhận giữa màn hình.
+   *
+   * Điều kiện hỏi tính CẢ dữ liệu mới gõ, không chỉ việc đã tự lưu nháp: gõ đầy
+   * một bảng công việc mà chưa đính tệp thì `autoSavedTaskIds` vẫn rỗng, và
+   * trước đây bấm Hủy là mất trắng không một câu hỏi — trong khi nút Gửi (hoàn
+   * tác được bằng cách xóa) lại có hộp xác nhận. Đúng chiều ngược lại.
+   *
+   * Đọc ref trong handler chứ không lúc render: ref đổi KHÔNG kích hoạt render,
+   * tính sẵn ở thân component sẽ ra giá trị cũ.
+   */
   const requestCancel = () => {
-    if (autoSavedTaskIds.current.size === 0) {
+    const hasUnsavedInput =
+      autoSavedTaskIds.current.size > 0 ||
+      attachments.length > 0 ||
+      tasks.some(taskRowHasInput);
+    if (!hasUnsavedInput) {
       onCancel();
       return;
     }
+    // Việc đã tự lưu nháp (để đính kèm) còn PHẢI xóa khỏi BE khi xác nhận, nếu
+    // không báo cáo vẫn tồn tại dù người dùng đã hủy → lời nhắn nói rõ điều đó.
+    setCancelDeletesSaved(autoSavedTaskIds.current.size > 0);
     setShowCancelConfirm(true);
   };
 
@@ -1221,7 +1239,13 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({ data, onSuccess,
         }}
         onConfirm={() => void confirmCancel()}
         title="Bỏ báo cáo đang nhập?"
-        message="Các công việc và tệp vừa thêm sẽ bị xóa khỏi báo cáo."
+        // Nói đúng thứ sắp mất: có việc đã tự lưu nháp thì BE cũng bị xóa theo,
+        // còn không thì chỉ mất phần đang gõ trên màn hình.
+        message={
+          cancelDeletesSaved
+            ? "Các công việc và tệp vừa thêm sẽ bị xóa khỏi báo cáo."
+            : "Nội dung bạn vừa nhập sẽ không được lưu."
+        }
         confirmText="Bỏ báo cáo"
         cancelText="Tiếp tục nhập"
         variant="danger"

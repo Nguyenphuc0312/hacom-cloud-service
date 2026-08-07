@@ -34,8 +34,10 @@ import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
 import { appendScopeToken } from "../../personal-ai/stores/workReportScopeStore";
 import {
   readUploadFailureFromBody,
+  shouldRefreshAndRetry,
   type UploadFailure,
 } from "../../../services/ai-chat/uploadFailure";
+import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
 
 export class AiApiError extends Error {
   readonly status: number;
@@ -335,8 +337,34 @@ function normalizeUploadResponse(value: unknown): WeeklyReportUploadResponse {
  * Upload weekly report file kèm câu hỏi lên endpoint AI cá nhân.
  * Dùng XHR để có upload progress; response (JSON hoặc SSE buffered)
  * sẽ được chuẩn hoá thành `AiChatResponse`.
+ *
+ * Contract FE 07/08/26 §4: 401 kèm `action=refresh_token_and_retry` → làm mới
+ * token và gửi lại ĐÚNG file/FormData này MỘT lần. Người dùng không phải chọn
+ * lại tệp chỉ vì token vừa hết hạn giữa lúc nộp. Không retry với 400/403/409/
+ * 429/5xx — đó là những lý do gửi lại y nguyên cũng hỏng y như cũ.
  */
-export function uploadPersonalWeeklyReport(
+export async function uploadPersonalWeeklyReport(
+  file: File,
+  body: WeeklyReportUploadRequest,
+  options?: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<WeeklyReportUploadResponse> {
+  try {
+    return await postPersonalWeeklyReport(file, body, options);
+  } catch (err) {
+    if (!(err instanceof AiApiError) || !err.failure || !shouldRefreshAndRetry(err.failure)) {
+      throw err;
+    }
+    // Đúng MỘT lần: 401 lần hai là hết phiên thật, retry tiếp chỉ thành vòng lặp.
+    const fresh = await refreshAccessTokenShared("http_401").catch(() => null);
+    if (!fresh) throw err;
+    return postPersonalWeeklyReport(file, body, options);
+  }
+}
+
+function postPersonalWeeklyReport(
   file: File,
   body: WeeklyReportUploadRequest,
   options?: {

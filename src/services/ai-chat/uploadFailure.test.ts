@@ -3,6 +3,7 @@ import {
   fallbackUploadMessage,
   readUploadFailureFromBody,
   readWorkReportUploadFailure,
+  shouldRefreshAndRetry,
   withRetryAfterHint,
 } from "./uploadFailure";
 
@@ -125,6 +126,44 @@ describe("readWorkReportUploadFailure", () => {
     expect((await readWorkReportUploadFailure(response)).message).toBe("Sai tuần");
     // Body chưa bị tiêu thụ — đây là lý do phải clone.
     await expect(response.json()).resolves.toEqual({ detail: "Sai tuần" });
+  });
+});
+
+/**
+ * §4: retry là hành động gửi LẠI CẢ FILE — chỉ làm khi BE nói rõ đáng làm.
+ * Đoán bừa từ status 401 thì 401-vì-sai-quyền cũng bị retry vô ích.
+ */
+describe("shouldRefreshAndRetry", () => {
+  const failure = (status: number, action?: string) =>
+    readUploadFailureFromBody(
+      status,
+      JSON.stringify({ detail: { message: "x", ...(action ? { action } : {}) } }),
+    );
+
+  it("CHỈ retry khi 401 + action=refresh_token_and_retry", () => {
+    expect(shouldRefreshAndRetry(failure(401, "refresh_token_and_retry"))).toBe(true);
+  });
+
+  it("401 detail CHUỖI (BE tuần hiện tại) → CHƯA có tín hiệu, không retry", () => {
+    // BE endpoint tuần chưa chuẩn hoá 401 — FE không được tự đoán mà retry.
+    expect(
+      shouldRefreshAndRetry(
+        readUploadFailureFromBody(401, JSON.stringify({ detail: "Hết phiên" })),
+      ),
+    ).toBe(false);
+    expect(shouldRefreshAndRetry(readUploadFailureFromBody(401, ""))).toBe(false);
+  });
+
+  it("KHÔNG retry 400/403/409/429/5xx dù có action", () => {
+    for (const status of [400, 403, 409, 429, 500, 503]) {
+      expect(shouldRefreshAndRetry(failure(status, "refresh_token_and_retry"))).toBe(
+        false,
+      );
+    }
+  });
+
+  it("KHÔNG retry khi action là giá trị khác", () => {
+    expect(shouldRefreshAndRetry(failure(401, "relogin"))).toBe(false);
   });
 });
 
