@@ -21,6 +21,7 @@ import { splitTagSegments, tagBeforeCursor } from "./tagText";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
 import { useVisibleReportTags } from "../../permissions/useVisibleReportTags";
 import type { ReportTagCommand } from "../../permissions/reportTags";
+import type { PersonalAttachment } from "../../types";
 
 // #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Danh sách tag
 // + quy tắc ẩn/hiện theo quyền SUBMIT nằm ở `permissions/reportTags.ts` (spec
@@ -44,6 +45,13 @@ interface PersonalChatInputProps {
   onRemoveFile?: () => void;
   /** Đang upload (disable gửi và textarea). */
   isUploading?: boolean;
+  /**
+   * Tệp đính kèm hỏi đáp TẠM đã upload xong của hội thoại hiện tại. Khác
+   * `pendingFile` (chưa gửi lên): những chip này đã có `attachment_id` từ BE.
+   */
+  attachments?: PersonalAttachment[];
+  /** Xoá chip — chỉ được gọi BE, chip biến mất sau khi BE trả 2xx. */
+  onRemoveAttachment?: (attachmentId: string) => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -78,6 +86,8 @@ export const PersonalChatInput = forwardRef<
       onAttachFile,
       onRemoveFile,
       isUploading = false,
+      attachments = [],
+      onRemoveAttachment,
     },
     ref,
   ) => {
@@ -359,6 +369,38 @@ export const PersonalChatInput = forwardRef<
               : "border-border focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border/20 focus-within:shadow-md",
           )}
         >
+          {/* Tệp hỏi đáp tạm đã upload — chip có nút xoá gọi BE. */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.attachment_id}
+                  className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
+                    <FileTextIcon size={16} strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{attachment.filename}</div>
+                    <div className="text-xs text-text-muted">
+                      {attachment.pages ? `${attachment.pages} trang · ` : ""}Hỏi đáp tạm
+                    </div>
+                  </div>
+                  {onRemoveAttachment && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(attachment.attachment_id)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
+                      aria-label={`Xoá tệp ${attachment.filename}`}
+                    >
+                      <XIcon size={14} strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Pending file chip */}
           {pendingFile && (
             <div className="px-3 pt-3">

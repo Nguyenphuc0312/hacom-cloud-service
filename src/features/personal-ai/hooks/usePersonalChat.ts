@@ -5,7 +5,11 @@ import {
   LevelReportScopeRequiredError,
   uploadLevelReport,
   normalizeCalendarEvents,
+  normalizeWorkReportAiDraft,
+  uploadPersonalAttachment,
+  listPersonalAttachments,
 } from "../api/personalAiApi";
+import { isReportSubmissionText } from "../permissions/reportTags";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
@@ -36,6 +40,7 @@ import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
 import type { PersonalChatMessage, PersonalDocument } from "../types";
+import { PERSONAL_ATTACHMENT_MODE } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
@@ -75,6 +80,8 @@ export function usePersonalChat() {
     patchMessage,
     updateServerSessionId,
     loadMessagesForConversation,
+    addAttachment,
+    setAttachments,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -192,6 +199,11 @@ export function usePersonalChat() {
           // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
           // metadata — markdown text không chứa event_id nên không parse ngược được.
           const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
+          // Nút "Tải bản nháp AI" phải sống qua F5 / mở lại hội thoại / tải thêm
+          // trang lịch sử. BE trả lại cùng shape với SSE ở
+          // `metadata.work_report_ai_draft` nên dựng lại y hệt, không parse link
+          // trong markdown (link đó cần Authorization, bấm thẳng không tải được).
+          const aiDraft = normalizeWorkReportAiDraft(m.metadata?.work_report_ai_draft);
           return {
             id: m.id || crypto.randomUUID(),
             role: m.role as "user" | "assistant",
@@ -205,10 +217,22 @@ export function usePersonalChat() {
             ...(isReportRequest && { reportRequest: true as const }),
             // Render lại bảng lịch (khi BE trả metadata.calendar_events).
             ...(calendarEvents && { calendarEvents }),
+            // Render lại nút tải bản nháp AI (khi BE trả metadata.work_report_ai_draft).
+            ...(aiDraft && { aiDraft }),
           };
         });
         if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
+      })
+      .then(() => {
+        // Khôi phục chip tệp tạm CHƯA hết hạn khi mở lại hội thoại. Lỗi ở đây
+        // không được làm hỏng việc tải lịch sử — chỉ là không có chip.
+        if (ac.signal.aborted) return;
+        return listPersonalAttachments(serverSessionId, { signal: ac.signal })
+          .then((list) => {
+            if (!ac.signal.aborted) setAttachments(activeConversationId, list);
+          })
+          .catch(() => { /* không có chip cũng không sao */ });
       })
       .catch(() => { /* Silent — hiển thị empty state làm fallback */ })
       .finally(() => { if (!ac.signal.aborted) setIsLoadingHistory(false); });
@@ -375,6 +399,8 @@ export function usePersonalChat() {
       // (pendingNew) HOẶC chưa có serverSessionId — belt-and-suspenders đảm bảo
       // backend luôn tạo session riêng biệt thay vì redirect vào session cũ nhất.
       const isNewConversation = (targetConv?.pendingNew ?? false) || !serverSessionId;
+      // Chip tệp tạm của ĐÚNG hội thoại này (không mang sang hội thoại khác).
+      const attachmentIds = (targetConv?.attachments ?? []).map((a) => a.attachment_id);
 
       try {
         const response = await streamPersonalChat(
@@ -393,7 +419,13 @@ export function usePersonalChat() {
             org_unit: user?.orgUnit ?? "",
             // Luôn gửi document_ids (mảng rỗng khi bỏ tick hết) để backend
             // chuyển sang chitchat mode thay vì dùng lại RAG context của session.
-            document_ids: selectedBackendDocumentIds,
+            document_ids: attachmentIds.length ? [] : selectedBackendDocumentIds,
+            // Hỏi đáp tệp tạm: gửi attachment_ids và TẮT Sources. Hai nguồn không
+            // bao giờ đi cùng nhau — trộn là điều request cấm thẳng.
+            ...(attachmentIds.length > 0 && {
+              attachment_ids: attachmentIds,
+              sources_enabled: false,
+            }),
           },
           {
             onToken: (token) => {
@@ -476,6 +508,12 @@ export function usePersonalChat() {
         );
 
         finalizeMessage(convIdSnapshot, response.answer, response.sources);
+
+        // Trả lời dựa trên tệp đính kèm tạm → hiện nhãn nói rõ không dùng dữ liệu
+        // Công ty/Sources, để user không hiểu nhầm nguồn của câu trả lời.
+        if (response.mode === PERSONAL_ATTACHMENT_MODE) {
+          patchMessage(convIdSnapshot, assistantMessage.id, { attachmentMode: true });
+        }
 
         // Câu trả lời lịch: BE trả `calendar_events` ở SSE done → render bảng
         // lịch 5 cột + nút "Xem chi tiết" thay markdown thuần (xem
@@ -649,6 +687,34 @@ export function usePersonalChat() {
       const convIdSnapshot = conversationId;
       const targetConvForFile = conversations.find((c) => c.id === conversationId);
       const fileServerSessionId = targetConvForFile?.serverSessionId ?? null;
+
+      // Tệp KHÔNG kèm lệnh nộp báo cáo → hỏi đáp tệp tạm, không đụng endpoint
+      // báo cáo lẫn Sources. Định tuyến bằng parser lệnh chứ không dò `#` thô.
+      if (!isReportSubmissionText(trimmed)) {
+        try {
+          const attachment = await uploadPersonalAttachment(
+            file,
+            fileServerSessionId ?? convIdSnapshot,
+            { signal: controller.signal },
+          );
+          // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
+          addAttachment(convIdSnapshot, attachment);
+          setIsStreaming(false);
+          abortRef.current = null;
+          await sendMessage(trimmed);
+          return true;
+        } catch (err) {
+          const content =
+            err instanceof PersonalAiError && err.kind === "http"
+              ? err.message
+              : UPLOAD_CONNECTION_ERROR;
+          finalizeMessage(convIdSnapshot, content);
+          markMessageError(convIdSnapshot);
+          setIsStreaming(false);
+          abortRef.current = null;
+          return false;
+        }
+      }
 
       try {
         const response = await uploadPersonalWeeklyReport(

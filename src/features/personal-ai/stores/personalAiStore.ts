@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { PersonalDocument, PersonalChatMessage } from "../types";
+import type { PersonalAttachment, PersonalDocument, PersonalChatMessage } from "../types";
 import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface PersonalWorkspaceConversation {
@@ -17,6 +17,11 @@ interface PersonalWorkspaceConversation {
   /** Đánh dấu conversation được tạo mới bằng nút "+", chưa được backend xác nhận.
    * Đảm bảo new_conversation: true luôn được gửi trên tin nhắn đầu tiên. */
   pendingNew?: boolean;
+  /**
+   * Tệp đính kèm hỏi đáp TẠM của riêng hội thoại này. Không mang sang hội thoại
+   * khác (yêu cầu 07-08-26) nên phải nằm trong conversation, không để state phẳng.
+   */
+  attachments?: PersonalAttachment[];
 }
 
 interface ServerSessionInput {
@@ -87,6 +92,12 @@ interface PersonalAiState {
   setOwnerId: (id: string) => void;
   /** Nạp messages từ server vào conversation (chỉ khi conversation đang rỗng). */
   loadMessagesForConversation: (conversationId: string, messages: PersonalChatMessage[]) => void;
+  /** Ghi chip tệp đính kèm tạm — CHỈ gọi sau khi BE trả 2xx có attachment_id. */
+  addAttachment: (conversationId: string, attachment: PersonalAttachment) => void;
+  /** Bỏ chip — CHỈ gọi sau khi DELETE trả 2xx. */
+  removeAttachment: (conversationId: string, attachmentId: string) => void;
+  /** Thay toàn bộ chip khi khôi phục lúc mở lại hội thoại. */
+  setAttachments: (conversationId: string, attachments: PersonalAttachment[]) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout). */
   clearStore: () => void;
 }
@@ -318,6 +329,38 @@ export const usePersonalAiStore = create<PersonalAiState>()(
           }),
         }));
       },
+
+      addAttachment: (conversationId, attachment) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const existing = c.attachments ?? [];
+            // Tải lại cùng một tệp không được nhân đôi chip.
+            if (existing.some((a) => a.attachment_id === attachment.attachment_id)) return c;
+            return { ...c, attachments: [...existing, attachment] };
+          }),
+        })),
+
+      removeAttachment: (conversationId, attachmentId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  attachments: (c.attachments ?? []).filter(
+                    (a) => a.attachment_id !== attachmentId,
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      setAttachments: (conversationId, attachments) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, attachments } : c,
+          ),
+        })),
 
       renameConversation: (id, title) =>
         set((s) => ({
