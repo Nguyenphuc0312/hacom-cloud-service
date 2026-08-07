@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { CloudIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { PanelLeft } from "lucide-react";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
+import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useDeleteMessageMutation, useGetMessagesQuery } from "../../api/chatApi";
-import { useAuthStore } from "../../../stores";
+import { useAuthStore, useChatStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
 import { cloudApi, type CloudAsset } from "../api/cloudApi";
@@ -22,15 +21,15 @@ import { FileType, type Message } from "../../../types";
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
-export const PersonalCloudConversationSurface: React.FC = () => {
+export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; conversationId?: string }> = ({ onBack, conversationId: knownConversationId }) => {
   const user = useAuthStore((state) => state.user);
   const density = useUIStore((state) => state.chatDensity);
   const { joinConversation, leaveConversation } = useGlobalWebSocket();
   const [space, setSpace] = useState<CloudSpace | null>(null);
   const [assets, setAssets] = useState<CloudAsset[]>([]);
   const [draft, setDraft] = useState("");
-  const [query, setQuery] = useState("");
-  const [infoOpen, setInfoOpen] = useState(true);
+  // ponytail: mặc định đóng mỗi lần vào, không nhớ trạng thái (chốt với user 07-08-26)
+  const [infoOpen, setInfoOpen] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
   const filePreview = useFilePreview();
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     try {
       const [nextSpace, nextAssets] = await Promise.all([
         cloudApi.ensure(),
-        cloudApi.list({ q: query || undefined, includeTrashed: true, limit: 100 }),
+        cloudApi.list({ includeTrashed: true, limit: 100 }),
       ]);
       setSpace(nextSpace);
       setAssets(nextAssets.items);
@@ -47,7 +46,7 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     } catch {
       setError("Không thể tải Hacom Cloud. Vui lòng thử lại.");
     }
-  }, [query]);
+  }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
@@ -62,7 +61,9 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     };
   }, [refresh]);
 
-  const conversationId = space?.conversationId ?? "";
+  // Ưu tiên id ChatPage đã giải sẵn để composer không bị khóa trong lúc chờ ensure().
+  const conversationId = space?.conversationId ?? knownConversationId ?? "";
+  const conversation = useChatStore((state) => (conversationId ? state.conversationById[conversationId] : undefined));
   useEffect(() => {
     if (!conversationId) return;
     joinConversation(conversationId);
@@ -121,13 +122,10 @@ export const PersonalCloudConversationSurface: React.FC = () => {
   }, [messagesQuery.data?.messages]);
 
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">
-    <aside className="hidden w-[var(--app-sidebar-width)] shrink-0 border-r border-border/70 bg-surface md:flex md:flex-col" aria-label="Hacom Cloud">
-      <div className="flex min-h-[var(--app-header-height)] items-center gap-2 border-b border-border/70 px-4 font-semibold"><CloudIcon className="h-5 w-5" />Hacom Cloud</div>
-      <label className="m-3 flex items-center gap-2 rounded-lg bg-surface-hover px-3 py-2 text-text-muted"><MagnifyingGlassIcon className="h-4 w-4" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm trong Hacom Cloud" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
-      <button type="button" className="mx-2 flex items-center gap-3 rounded-lg bg-surface-active px-3 py-3 text-left" aria-current="page"><PersonalCloudAvatar size="sm" /><span className="min-w-0"><strong className="block truncate text-sm">Cloud của tôi</strong><small className="block truncate text-text-muted">{assets[0]?.originalFilename ?? "Lưu trữ riêng tư"}</small></span></button>
-    </aside>
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="chat-header shrink-0 border-b border-border/70 bg-surface"><ConversationLane><div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-3"><PersonalCloudAvatar /><div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-medium">{personalCloudPresentation.title}</h1><p className="truncate text-xs text-text-muted">{personalCloudPresentation.subtitle}</p></div><button type="button" className="chat-header-action inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-surface-hover" onClick={() => setInfoOpen((open) => !open)} aria-label="Bật hoặc tắt thông tin Hacom Cloud"><PanelLeft className="h-5 w-5" /></button></div></ConversationLane></header>
+      {conversation && user
+        ? <ChatHeader conversation={conversation} currentUserId={user.id} onInfoClick={() => setInfoOpen((open) => !open)} onBack={onBack} />
+        : <header className="chat-header shrink-0 border-b border-border/70 bg-surface"><ConversationLane><div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-3"><PersonalCloudAvatar /><div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-medium">{personalCloudPresentation.title}</h1><p className="truncate text-xs text-text-muted">{personalCloudPresentation.subtitle}</p></div></div></ConversationLane></header>}
       {error && <p role="alert" className="mx-4 mt-3 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
       <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
@@ -138,5 +136,4 @@ export const PersonalCloudConversationSurface: React.FC = () => {
   </section>;
 };
 
-export const CloudChatWorkspace: React.FC = () => <PersonalCloudConversationSurface />;
-export default CloudChatWorkspace;
+export default PersonalCloudConversationSurface;

@@ -64,6 +64,9 @@ const railItems: SideRailItem[] = [
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
+  // ponytail: Cloud của tôi là một hội thoại nên nó sống ở /chat/<id>; /cloud chỉ là
+  // lối tắt giải id rồi chuyển hướng. Vì thế icon sáng lúc đó là "Tin nhắn", giống
+  // Zalo mở My Documents — không cố ép icon này sáng theo.
   { id: "cloud", label: "Cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },

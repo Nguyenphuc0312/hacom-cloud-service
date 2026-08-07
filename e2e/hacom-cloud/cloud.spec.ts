@@ -17,10 +17,11 @@ const login = async (page: Page) => {
   await page.waitForURL(/\/(?:chat|cloud|$)/, { timeout: 20_000 });
 };
 
+// /cloud nay chỉ là lối tắt: giải id rồi chuyển sang /chat/<id>.
 const openCloud = async (page: Page) => {
   await page.goto('/cloud');
-  await page.waitForURL('**/cloud');
-  await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
+  await page.waitForURL(/\/chat\/[^/]+$/, { timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
 };
 
 const resolveCloudConversationId = async (page: Page) => {
@@ -35,13 +36,12 @@ const resolveCloudConversationId = async (page: Page) => {
   return payload.data.conversationId;
 };
 
+// Cloud của tôi mở NGAY trong danh sách hội thoại — không còn nhảy sang /cloud.
 const openCloudFromChat = async (page: Page) => {
   await page.goto('/chat');
-  await Promise.all([
-    page.waitForURL('**/cloud'),
-    page.getByRole('option', { name: /Cloud của tôi/i }).click(),
-  ]);
-  await expect(page.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
+  await page.getByRole('option', { name: /Cloud của tôi/i }).click();
+  await expect(page).toHaveURL(/\/chat\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
 };
 
 test.describe.serial('Hacom Cloud browser flow', () => {
@@ -95,11 +95,12 @@ test.describe.serial('Hacom Cloud browser flow', () => {
     await expect(second.getByText(note)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('redirects a saved Cloud chat URL before group UI can mount', async () => {
+  test('mở thẳng URL /chat/<cloudId> mà không mount UI nhóm', async () => {
     const cloudConversationId = await resolveCloudConversationId(second);
     await second.goto(`/chat/${cloudConversationId}`);
-    await second.waitForURL('**/cloud');
-    await expect(second.getByRole('heading', { name: /Cloud cá»§a tĂ´i/i, level: 1 })).toBeVisible();
+    await expect(second).toHaveURL(new RegExp(`/chat/${cloudConversationId}$`));
+    await expect(second.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
     await expect(second.getByText(/Target conversation is not a group/i)).toHaveCount(0);
+    await expect(second.getByText(/0 thành viên/i)).toHaveCount(0);
   });
 });
