@@ -1,9 +1,11 @@
 import React from "react";
-import { SparklesIcon, BookMarkedIcon, PanelRightIcon } from "lucide-react";
+import { Link } from "react-router-dom";
+import { SparklesIcon, BookMarkedIcon, PanelRightIcon, FileTextIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
+import { ROUTE_PATHS } from "../../../../router/paths";
 
 export const PersonalWorkspaceHeader: React.FC = () => {
   const { isRagMode, activeDocuments } = usePersonalDocuments();
@@ -46,8 +48,16 @@ export const PersonalWorkspaceHeader: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Right — source panel toggle */}
+      {/* Right — lối vào màn bản nháp + source panel toggle */}
       <div className="flex items-center gap-1">
+        <Link
+          to={ROUTE_PATHS.WORK_REPORT_DRAFTS}
+          className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10"
+          title="Tạo bản nháp AI báo cáo giao ban"
+        >
+          <FileTextIcon size={15} strokeWidth={1.8} />
+          <span className="hidden sm:inline">Bản nháp giao ban</span>
+        </Link>
         <button
           type="button"
           onClick={() => toggleSourcePanel()}

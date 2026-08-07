@@ -72,6 +72,17 @@ export interface PersonalChatMessage {
    * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
    */
   calendarEvents?: CalendarEventRow[];
+  /**
+   * SSE `work_report_ai_draft_ready` — bản nháp AI đã dựng xong, render nút
+   * "Tải bản nháp AI (chỉ để đọc tham khảo)". Nút tải bằng fetch kèm token
+   * (endpoint đòi `Authorization`), KHÔNG phải link bấm được.
+   */
+  aiDraft?: WorkReportAiDraftReady;
+  /**
+   * Bản nháp đang dựng (SSE `work_report_ai_draft_waiting`) — render trạng thái
+   * + vòng poll `jobs/{job_id}`. Xong thì bị thay bằng `aiDraft`.
+   */
+  aiDraftPending?: WorkReportAiDraftPending;
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -169,6 +180,53 @@ export interface WorkReportScopeRequired {
   capability?: WorkReportCapability;
   requiredAction?: WorkReportRequiredAction;
   allowedScopeTypes?: WorkReportScopeType[];
+}
+
+/**
+ * SSE `work_report_ai_draft_ready` — BE đã dựng xong bản nháp AI báo cáo giao
+ * ban, gửi link tải. Phát ở CẢ hai luồng: gõ `#TBP_AITEST`, và (khi cờ
+ * `WORK_REPORT_AI_DRAFT_V3_SHADOW_ON_QUESTION_ENABLED` bật) khi TBP hỏi tổng
+ * hợp báo cáo bộ phận theo cách thường — luồng sau có thêm `read_only: true`
+ * và KHÔNG kèm bảng nháp trong transcript.
+ *
+ * Bản nháp chỉ để ĐỌC THAM KHẢO: nộp lại chính file này bằng `#TBP_baocao` sẽ
+ * bị BE từ chối (nhận diện bằng dấu nhúng trong file, đổi tên không qua được).
+ * Không có sự kiện này = bản nháp chưa dựng xong; câu trả lời vẫn trọn vẹn.
+ */
+export interface WorkReportAiDraftReady {
+  draft_id: string;
+  /** URL tải đã ghép sẵn host AI — dùng thẳng cho `downloadWorkReportDraft`. */
+  export_url: string;
+  export_format?: string;
+  /** true = bản nháp dựng ngầm theo câu hỏi thường (không phải luồng tag). */
+  read_only?: boolean;
+}
+
+/**
+ * SSE `work_report_ai_draft_waiting` — bản nháp đang dựng, BE gửi `job_id` để FE
+ * tự poll. Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có
+ * thể cần nhiều lượt LLM, vượt giới hạn chờ của SSE, nên `..._ready` thường
+ * KHÔNG kịp về trên chính stream đó. Giữ `job_id` và poll — tuyệt đối không bắt
+ * người dùng gõ lại tag.
+ */
+export interface WorkReportAiDraftWaiting {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+}
+
+/** Trạng thái vòng poll bản nháp, gắn vào message để render. */
+export interface WorkReportAiDraftPending {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+  /**
+   * `polling` = đang tự poll; `timeout` = quá hạn chờ, hiện nút "Kiểm tra lại"
+   * (contract §Luồng màn hình mục 3); `failed` = job hỏng, hiện lỗi vận hành và
+   * KHÔNG tự tạo lại job.
+   */
+  state: "polling" | "timeout" | "failed";
+  error_message?: string;
 }
 
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */
