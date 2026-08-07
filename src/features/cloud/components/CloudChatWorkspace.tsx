@@ -4,7 +4,9 @@ import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { PinnedMessageBar } from "../../../components/chat/PinnedMessageBar";
-import { usePinnedMessages } from "../../../hooks";
+import { usePinnedMessages, useMobileViewportMetrics } from "../../../hooks";
+import { resolveChatLayoutProfile } from "../../../utils/densityPolicy";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useGetMessagesQuery } from "../../api/chatApi";
 // useChatStore: lấy conversation để dựng ChatHeader chuẩn (Cloud mở trong danh sách chat).
@@ -81,6 +83,15 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const conversationId = space?.conversationId ?? knownConversationId ?? "";
   const conversation = useChatStore((state) => (conversationId ? state.conversationById[conversationId] : undefined));
   const { pinnedMessages, isLoading: pinnedLoading, error: pinnedError, togglePin } = usePinnedMessages(conversationId || null);
+  const viewportMetrics = useMobileViewportMetrics();
+  // Panel mở thì lane phải hẹp lại đúng như hội thoại thường (with-panel).
+  const layoutState: ChatLayoutState = viewportMetrics.width < 768
+    ? "mobile"
+    : (infoOpen || searchOpen || pinnedOpen) ? "with-panel" : "normal";
+  const layoutProfile = useMemo(
+    () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
+    [layoutState, viewportMetrics.width],
+  );
   useEffect(() => {
     if (!conversationId) return;
     joinConversation(conversationId);
@@ -151,11 +162,27 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   }, [messagesQuery.data?.messages]);
 
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">
-    <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    {/* `chat-shell` + hai data-attribute là nơi CSS đặt --chat-lane-padding và
+        --chat-content-lane. Thiếu chúng, Cloud rơi về giá trị mặc định (54rem)
+        nên ô nhập hẹp hơn hội thoại thường 263px và thụt vào 132px. */}
+    <main
+      className="chat-shell flex min-w-0 flex-1 flex-col overflow-hidden"
+      data-chat-layout-profile={layoutProfile}
+      data-chat-layout-state={layoutState}
+    >
       {conversation && user
         ? <ChatHeader conversation={conversation} currentUserId={user.id} onInfoClick={() => { setSearchOpen(false); setPinnedOpen(false); setInfoOpen((open) => !open); }} onSearchClick={() => { setInfoOpen(false); setPinnedOpen(false); setSearchOpen((open) => !open); }} onPinnedClick={() => { setInfoOpen(false); setSearchOpen(false); setPinnedOpen((open) => !open); }} onBack={onBack} />
         : <header className="chat-header shrink-0 border-b border-border/70 bg-surface"><ConversationLane><div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-3"><PersonalCloudAvatar /><div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-medium">{personalCloudPresentation.title}</h1><p className="truncate text-xs text-text-muted">{personalCloudPresentation.subtitle}</p></div></div></ConversationLane></header>}
-      {error && <p role="alert" className="mx-4 mt-3 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+      {/* Dải báo lỗi bám sát header và tràn hết bề ngang, giống PinnedMessageBar của
+          hội thoại thường — để mép trên khung tin nhắn hai màn trùng nhau. Dùng
+          `mx-4 mt-3` sẽ tạo khe 12px và thụt hai bên, nhìn lệch hẳn so với chat. */}
+      {error && (
+        <div role="alert" className="shrink-0 border-b border-border/70 bg-danger/10">
+          <ConversationLane>
+            <div className="flex min-h-[44px] items-center py-1.5 text-sm text-danger">{error}</div>
+          </ConversationLane>
+        </div>
+      )}
       {pinnedMessages.length > 0 && user && (
         <PinnedMessageBar pinnedMessages={pinnedMessages} currentUserId={user.id} onOpenList={() => { setInfoOpen(false); setSearchOpen(false); setPinnedOpen(true); }} />
       )}
