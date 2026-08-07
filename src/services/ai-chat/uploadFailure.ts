@@ -127,3 +127,18 @@ export function withRetryAfterHint(failure: UploadFailure): string {
     seconds >= 60 ? `${Math.ceil(seconds / 60)} phút` : `${seconds} giây`;
   return `${failure.message} (thử lại sau ${wait})`;
 }
+
+/**
+ * Có được phép làm mới token rồi gửi lại lượt nộp này không (§4).
+ *
+ * CHỈ khi BE nói `action=refresh_token_and_retry`. Không suy từ status 401 trần:
+ * 401 vì sai quyền HRM mà cứ refresh+retry thì chỉ tốn thêm một vòng rồi vẫn
+ * hỏng; còn 400/403/409/429/5xx retry là gửi lại một file BE đã từ chối có lý do.
+ *
+ * BE endpoint tuần hiện CHƯA trả `action` này (mới chỉ báo cáo cấp có) — chưa có
+ * tín hiệu thì trả false và luồng giữ nguyên. BE chuẩn hoá xong là chạy được
+ * ngay, không phải sửa thêm FE.
+ */
+export function shouldRefreshAndRetry(failure: UploadFailure): boolean {
+  return failure.status === 401 && failure.action === "refresh_token_and_retry";
+}
