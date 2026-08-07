@@ -1476,10 +1476,14 @@ export interface PersonalSessionMessage {
    * - `calendar_events`: mảng sự kiện lịch (kèm event_id) để render lại bảng
    *   lịch + nút "Xem chi tiết". Không có → bảng lịch về markdown, mất nút.
    *   (Xem contract: FE__calendar-chat-history-events__contract__09-07-26.md)
+   * - `work_report_ai_draft`: bản nháp AI đã dựng, để render lại nút tải sau
+   *   khi F5/mở lại hội thoại. Cùng shape với SSE `work_report_ai_draft_ready`.
+   *   (Xem request: FE__ai-draft-download-persistence__request__07-08-26.md)
    */
   metadata?: {
     exportable_table?: boolean;
     calendar_events?: unknown;
+    work_report_ai_draft?: unknown;
   } | null;
 }
 
