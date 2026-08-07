@@ -29,7 +29,7 @@ import {
   normalizeScopeTypes,
   parseScopeRequiredDetail,
 } from "./workReportScopeApi";
-import type { WorkReportScopeRequired } from "../types";
+import type { WorkReportAiDraftReady, WorkReportScopeRequired } from "../types";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -926,6 +926,64 @@ export async function downloadLevelReportExport(url: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+/**
+ * Dựng URL tải bản nháp AI từ `export_url` của SSE `work_report_ai_draft_ready`.
+ *
+ * BE gửi path tương đối (`/api/work-report-drafts/<id>/export.xlsx`); ghép qua
+ * `BASE_URL` để đi đúng host AI (dev: proxy `/ai-api`). Chỉ nhận path đúng dạng
+ * bản nháp — payload lạ trả null và caller không hiện nút tải.
+ *
+ * `/api/work-report-drafts/*` đi qua `BASE_URL` như MỌI endpoint chatbot khác,
+ * KHÔNG qua `chat.hacomholdings.com.vn`. Team Chatbot từng báo "gateway chưa
+ * định tuyến" kèm 404 trên host chat, nhưng host đó proxy toàn bộ `/api/` sang
+ * chat-api (NestJS) và chưa bao giờ là cổng vào của API chatbot —
+ * `/api/work-reports/*` hiện có cũng 404 y hệt ở đó. FE giữ một đường: host AI.
+ */
+export function buildWorkReportDraftExportUrl(exportUrl: string | undefined): string | null {
+  if (!exportUrl?.trim()) return null;
+  try {
+    // BASE_URL có thể tương đối ở dev (/ai-api) nên new URL() không dùng làm
+    // base được — parse theo origin hiện tại rồi ghép lại như parseLevelReportExportHref.
+    const url = new URL(exportUrl.trim(), window.location.origin);
+    if (/^\/api\/work-report-drafts\/[^/]+\/export\.xlsx$/i.test(url.pathname)) {
+      return `${BASE_URL}${url.pathname}${url.search}`;
+    }
+  } catch {
+    /* export_url không hợp lệ */
+  }
+  return null;
+}
+
+/**
+ * GET /api/work-report-drafts/{draft_id}/export.xlsx → tải bản nháp AI (.xlsx).
+ *
+ * Endpoint đòi header `Authorization`, nên KHÔNG render `export_url` thành thẻ
+ * `<a href>`: dán vào thanh địa chỉ luôn 401 vì trình duyệt không gửi token.
+ * Phải fetch blob rồi trigger download thủ công như `downloadLevelReportExport`.
+ *
+ * Token chỉ đi trong header — không nhét vào URL, không log, không lưu thêm chỗ nào.
+ */
+export async function downloadWorkReportDraft(url: string): Promise<void> {
+  // Nhiều phạm vi DEPARTMENT → gửi kèm `scope_token` như các endpoint khác.
+  const response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = "nhap-giao-ban.xlsx";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 function normalizeWeeklyReportFile(raw: unknown): WeeklyReportFileItem | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -1065,6 +1123,8 @@ export async function streamPersonalChat(
     onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
     /** SSE `work_report_scope_required` — mở widget chọn scope ngay (§3). */
     onScopeRequired?: (data: WorkReportScopeRequired) => void;
+    /** SSE `work_report_ai_draft_ready` — hiện nút tải bản nháp AI. */
+    onDraftReady?: (data: WorkReportAiDraftReady) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -1168,6 +1228,22 @@ export async function streamPersonalChat(
               capability: asCapability(parsed.capability),
               requiredAction: asRequiredAction(parsed.requiredAction),
               allowedScopeTypes: normalizeScopeTypes(parsed.allowedScopeTypes),
+            });
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_ready" && options?.onDraftReady) {
+        // Bản nháp AI đã dựng xong. `export_url` phải đúng dạng path bản nháp —
+        // payload lạ thì bỏ qua, không hiện nút tải hỏng.
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const draftId = pickString(parsed.draft_id);
+          const exportUrl = buildWorkReportDraftExportUrl(pickString(parsed.export_url));
+          if (draftId && exportUrl) {
+            options.onDraftReady({
+              draft_id: draftId,
+              export_url: exportUrl,
+              export_format: pickString(parsed.export_format),
+              read_only: parsed.read_only === true,
             });
           }
         } catch { /* malformed payload — ignore */ }

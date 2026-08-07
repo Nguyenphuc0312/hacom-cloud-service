@@ -14,6 +14,7 @@ import {
   openWeeklyReportFile,
   parseLevelReportExportHref,
   downloadLevelReportExport,
+  downloadWorkReportDraft,
 } from "../../api/personalAiApi";
 import {
   downloadWorkReportFile,
@@ -54,7 +55,11 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { rehypeReportTableCols } from "../../../ai-assistant/utils/rehypeReportTableCols";
 import { reportTableComponents } from "../../../ai-assistant/components/reportTableComponents";
-import type { PersonalChatMessage, PersonalCitation } from "../../types";
+import type {
+  PersonalChatMessage,
+  PersonalCitation,
+  WorkReportAiDraftReady,
+} from "../../types";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import {
   AiMessageAvatar,
@@ -109,6 +114,55 @@ const ThinkingIndicator: React.FC<{
         </div>
       </div>
     </motion.div>
+  );
+};
+
+/**
+ * Nút tải bản nháp AI (SSE `work_report_ai_draft_ready`).
+ *
+ * Là NÚT chứ không phải link: endpoint đòi header `Authorization`, dán URL vào
+ * thanh địa chỉ luôn 401. Nhãn nói rõ "chỉ để đọc tham khảo" ngay từ đầu — nộp
+ * lại chính file này bằng `#TBP_baocao` sẽ bị BE từ chối, và người dùng phải
+ * biết trước lúc tải chứ không phải lúc bị chặn.
+ */
+const AiDraftDownload: React.FC<{ draft: WorkReportAiDraftReady }> = ({ draft }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = () => {
+    if (loading) return;
+    setLoading(true);
+    downloadWorkReportDraft(draft.export_url)
+      .then(() => toast.success("Đã tải bản nháp AI."))
+      .catch((err) => {
+        // Thông điệp BE là nguồn sự thật (401 hết phiên / 404 bản nháp không
+        // còn / 409 cần dựng lại) — hiện nguyên văn thay vì gộp thành "Lỗi tải".
+        toast.error(err instanceof Error ? err.message : "Không thể tải bản nháp.");
+      })
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div className="mt-3 w-full max-w-[680px]">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-[#1976D2]/60 px-2.5 py-1.5 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10 active:bg-[#1976D2]/15 disabled:opacity-60"
+      >
+        {loading ? (
+          <Loader2Icon size={13} strokeWidth={2} className="shrink-0 animate-spin" />
+        ) : (
+          <DownloadIcon size={13} strokeWidth={2} className="shrink-0" />
+        )}
+        <span>Tải bản nháp AI (chỉ để đọc tham khảo)</span>
+      </button>
+      <p className="mt-1 text-[11px] leading-[1.4] text-text-muted">
+        File này không dùng để nộp báo cáo chính thức — nộp lại bằng
+        {" "}
+        <code className="text-[10px]">#TBP_baocao</code> sẽ bị từ chối. Hãy nộp file
+        báo cáo do bộ phận tự lập.
+      </p>
+    </div>
   );
 };
 
@@ -552,6 +606,13 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Bản nháp AI — hiện sau khi stream xong, độc lập với nhánh render
+                thân bài ở trên (luồng dựng ngầm giữ nguyên bảng tổng hợp tất
+                định, bản nháp chỉ tồn tại dưới dạng file tải về). */}
+            {isAssistant && !message.isStreaming && message.aiDraft && (
+              <AiDraftDownload draft={message.aiDraft} />
+            )}
 
             {/* Citations */}
             {isAssistant &&

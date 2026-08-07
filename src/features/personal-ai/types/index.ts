@@ -72,6 +72,12 @@ export interface PersonalChatMessage {
    * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
    */
   calendarEvents?: CalendarEventRow[];
+  /**
+   * SSE `work_report_ai_draft_ready` — bản nháp AI đã dựng xong, render nút
+   * "Tải bản nháp AI (chỉ để đọc tham khảo)". Nút tải bằng fetch kèm token
+   * (endpoint đòi `Authorization`), KHÔNG phải link bấm được.
+   */
+  aiDraft?: WorkReportAiDraftReady;
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -169,6 +175,26 @@ export interface WorkReportScopeRequired {
   capability?: WorkReportCapability;
   requiredAction?: WorkReportRequiredAction;
   allowedScopeTypes?: WorkReportScopeType[];
+}
+
+/**
+ * SSE `work_report_ai_draft_ready` — BE đã dựng xong bản nháp AI báo cáo giao
+ * ban, gửi link tải. Phát ở CẢ hai luồng: gõ `#TBP_AITEST`, và (khi cờ
+ * `WORK_REPORT_AI_DRAFT_V3_SHADOW_ON_QUESTION_ENABLED` bật) khi TBP hỏi tổng
+ * hợp báo cáo bộ phận theo cách thường — luồng sau có thêm `read_only: true`
+ * và KHÔNG kèm bảng nháp trong transcript.
+ *
+ * Bản nháp chỉ để ĐỌC THAM KHẢO: nộp lại chính file này bằng `#TBP_baocao` sẽ
+ * bị BE từ chối (nhận diện bằng dấu nhúng trong file, đổi tên không qua được).
+ * Không có sự kiện này = bản nháp chưa dựng xong; câu trả lời vẫn trọn vẹn.
+ */
+export interface WorkReportAiDraftReady {
+  draft_id: string;
+  /** URL tải đã ghép sẵn host AI — dùng thẳng cho `downloadWorkReportDraft`. */
+  export_url: string;
+  export_format?: string;
+  /** true = bản nháp dựng ngầm theo câu hỏi thường (không phải luồng tag). */
+  read_only?: boolean;
 }
 
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */

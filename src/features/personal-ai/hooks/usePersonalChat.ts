@@ -371,6 +371,12 @@ export function usePersonalChat() {
                 thinkingPhase: null,
               });
             },
+            // Bản nháp AI dựng xong → gắn vào message để render nút tải. Chỉ
+            // patch `aiDraft`, KHÔNG đụng `content`: luồng dựng ngầm theo câu
+            // hỏi thường vẫn phải giữ nguyên bảng tổng hợp tất định đang stream.
+            onDraftReady: (draft) => {
+              patchMessage(convIdSnapshot, assistantMessage.id, { aiDraft: draft });
+            },
             onSelectionRequest: (selectionData) => {
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",

@@ -339,7 +339,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
 
         <h3 className="mb-2 text-lg font-semibold text-text-primary">{title}</h3>
-        <p className="mb-6 text-sm text-text-secondary">{message}</p>
+        {/* whitespace-pre-line: caller tách đoạn bằng "\n" (vd nhắc "bản nháp AI
+            không dùng để nộp" ở màn nộp báo cáo cấp) — <p> thường nuốt hết
+            xuống dòng thành một khối chữ liền. */}
+        <p className="mb-6 whitespace-pre-line text-sm text-text-secondary">{message}</p>
 
         <div className="flex gap-3">
           <Button

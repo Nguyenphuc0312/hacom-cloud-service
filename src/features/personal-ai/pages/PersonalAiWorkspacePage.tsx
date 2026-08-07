@@ -40,7 +40,10 @@ function describeSubmit(text: string, file: File): PendingSubmit {
       text,
       file,
       title: `Gửi ${tag.destination}?`,
-      message: `Tệp "${file.name}" sẽ được nộp ${tag.destinationLong}. Bản đã nộp của tuần này (nếu có) sẽ bị thay thế.`,
+      // Nhắc về bản nháp AI ngay ở đây: BE từ chối file do AI sinh (nhận diện
+      // bằng dấu nhúng trong file, đổi tên không qua được). Người dùng phải
+      // biết TRƯỚC khi tốn công gửi, không phải lúc bị chặn.
+      message: `Tệp "${file.name}" sẽ được nộp ${tag.destinationLong}. Bản đã nộp của tuần này (nếu có) sẽ bị thay thế.\n\nLưu ý: bản nháp AI (chỉ để đọc tham khảo) không dùng để nộp — hãy nộp file báo cáo do bộ phận tự lập.`,
       confirmText: "Gửi báo cáo",
     };
   }
