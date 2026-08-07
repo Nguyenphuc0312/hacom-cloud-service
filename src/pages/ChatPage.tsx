@@ -83,7 +83,11 @@ import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
 import { conversationApi, fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
-import { isPersonalCloudConversation } from "../features/cloud/personalCloudPolicy";
+import {
+  cacheCloudConversationId,
+  isPersonalCloudConversation,
+  readCachedCloudConversationId,
+} from "../features/cloud/personalCloudPolicy";
 import { cloudApi } from "../features/cloud/api/cloudApi";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
@@ -422,6 +426,27 @@ const DeferredPanelFallback: React.FC = () => (
   </div>
 );
 
+/**
+ * Khung chờ của Cloud: giữ đúng bố cục header / timeline / composer để khi nội dung
+ * thật vào, không có cú nhảy layout. Dùng skeleton danh sách chung ở đây sẽ nhìn như
+ * một trang khác chớp qua rồi mới tới Cloud.
+ */
+const PersonalCloudSurfaceSkeleton: React.FC = () => (
+  <div className="flex h-full min-h-0 flex-col bg-surface" aria-busy="true">
+    <div className="flex min-h-[var(--app-header-height)] shrink-0 items-center gap-3 border-b border-border/70 px-4">
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-surface-hover" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-surface-hover" />
+        <div className="h-3 w-56 animate-pulse rounded bg-surface-hover" />
+      </div>
+    </div>
+    <div className="min-h-0 flex-1" />
+    <div className="shrink-0 border-t border-border/70 px-[var(--chat-lane-padding)] py-3">
+      <div className="mx-auto h-11 w-full max-w-[var(--chat-content-lane)] animate-pulse rounded-full bg-surface-hover" />
+    </div>
+  </div>
+);
+
 const DeferredModalFallback: React.FC = () => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
     <div
@@ -644,14 +669,25 @@ export const ChatPage: React.FC = () => {
   // /conversations (inbox projection không có dòng nào cho nó), nên selectedConversation
   // rỗng và màn hình sẽ rơi vào trạng thái "chưa chọn hội thoại". Đối chiếu thẳng id
   // Cloud lấy từ /cloud/ensure.
-  const [cloudConversationId, setCloudConversationId] = useState<string | null>(null);
+  // Nhớ id qua localStorage: nếu chờ ensure() mới nhận ra đây là Cloud thì ChatPage
+  // kịp render ChatWindow (UI nhóm) rồi ~2s sau mới đổi sang Cloud — đúng hiện tượng
+  // "khựng một lúc xong mới nhảy qua". Đọc cache là đồng bộ nên lượt sau nhận ra ngay.
+  const [cloudConversationId, setCloudConversationId] = useState<string | null>(
+    () => readCachedCloudConversationId(),
+  );
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
+        // Có cache và conversation đã nằm trong store thì không cần gọi lại: ensure()
+        // ở đây chạy mỗi lần mount ChatPage, kể cả khi đang mở hội thoại thường.
+        const cached = readCachedCloudConversationId();
+        if (cached && useChatStore.getState().conversationById[cached]) return;
+
         const space = await cloudApi.ensure();
         if (cancelled) return;
         setCloudConversationId(space.conversationId);
+        cacheCloudConversationId(space.conversationId);
         // Ghim vào danh sách hội thoại: backend không trả nó trong /conversations
         // nên phải nạp bằng id rồi merge vào store, nếu không sidebar sẽ không có dòng nào.
         if (useChatStore.getState().conversationById[space.conversationId]) return;
@@ -1385,7 +1421,7 @@ export const ChatPage: React.FC = () => {
         )}
       >
         {isRoutePersonalCloud ? (
-          <React.Suspense fallback={<DeferredPanelFallback />}>
+          <React.Suspense fallback={<PersonalCloudSurfaceSkeleton />}>
             <PersonalCloudConversationSurface onBack={handleBack} conversationId={routeConversationId ?? undefined} />
           </React.Suspense>
         ) : selectedConversation ? (

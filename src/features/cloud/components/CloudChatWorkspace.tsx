@@ -34,21 +34,31 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const filePreview = useFilePreview();
   const [error, setError] = useState<string | null>(null);
 
+  // ChatPage đã gọi ensure() để giải id trước khi render surface này. Gọi lại là
+  // thừa và làm nghẽn lượt mở đầu tiên — chỉ ensure() khi không được truyền id.
   const refresh = useCallback(async () => {
     try {
       const [nextSpace, nextAssets] = await Promise.all([
-        cloudApi.ensure(),
+        knownConversationId ? Promise.resolve(null) : cloudApi.ensure(),
         cloudApi.list({ includeTrashed: true, limit: 100 }),
       ]);
-      setSpace(nextSpace);
+      if (nextSpace) setSpace(nextSpace);
       setAssets(nextAssets.items);
       setError(null);
     } catch {
       setError("Không thể tải Hacom Cloud. Vui lòng thử lại.");
     }
-  }, []);
+  }, [knownConversationId]);
 
+  // assets vẫn cần ngay (dùng lọc message của file đã xóa), nhưng không chặn render:
+  // timeline và composer hiện trước, danh sách file điền vào sau.
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // quota chỉ hiện trong panel thông tin (mặc định đóng) → nạp khi thật sự mở.
+  useEffect(() => {
+    if (!knownConversationId || !infoOpen || space) return;
+    void cloudApi.ensure().then(setSpace).catch(() => undefined);
+  }, [infoOpen, knownConversationId, space]);
   useEffect(() => {
     const sync = () => { void refresh(); };
     wsManager.on("cloud:asset:created", sync);

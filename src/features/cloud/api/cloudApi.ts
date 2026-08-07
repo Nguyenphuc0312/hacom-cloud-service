@@ -23,8 +23,24 @@ client.interceptors.request.use((request) => {
 
 const data = <T>(response: { data: { data: T } }): T => response.data.data;
 
+type CloudSpace = { conversationId: string; quota: { limitBytes: string; usedBytes: string; reservedBytes: string } };
+
+/**
+ * ensure() được gọi từ nhiều nơi gần như cùng lúc (CloudPage giải id, ChatPage nhận
+ * diện route, Cloud surface lấy quota). Gộp các lời gọi trùng nhau trong cùng một
+ * nhịp thành một request — trước đây mở /cloud bắn tới 4 lần ensure liên tiếp.
+ */
+let inFlightEnsure: Promise<CloudSpace> | null = null;
+
 export const cloudApi = {
-  ensure: () => client.post('/ensure').then(data<{ conversationId: string; quota: { limitBytes: string; usedBytes: string; reservedBytes: string } }>),
+  ensure: (): Promise<CloudSpace> => {
+    if (inFlightEnsure) return inFlightEnsure;
+    inFlightEnsure = client
+      .post('/ensure')
+      .then(data<CloudSpace>)
+      .finally(() => { inFlightEnsure = null; });
+    return inFlightEnsure;
+  },
   list: (params: { cursor?: string; limit?: number; q?: string; type?: string; includeTrashed?: boolean }) => client.get('/assets', { params }).then(data<{ items: CloudAsset[]; nextCursor: string | null }>),
   note: (content: string) => client.post('/notes', { content }).then(data),
   reserveUpload: (file: File) => client.post('/uploads', { filename: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size }).then(data<{
