@@ -5,11 +5,11 @@ import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
-import { useDeleteMessageMutation, useGetMessagesQuery } from "../../api/chatApi";
+import { useGetMessagesQuery } from "../../api/chatApi";
 import { useAuthStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
-import { cloudApi, type CloudAsset } from "../api/cloudApi";
+import { cloudApi, deleteCloudAssetForMessage, type CloudAsset } from "../api/cloudApi";
 import wsManager from "../../../lib/socket";
 import { useCloudUploadQueue } from "../hooks/useCloudUploadQueue";
 import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineType } from "../personalCloudPolicy";
@@ -72,7 +72,6 @@ export const PersonalCloudConversationSurface: React.FC = () => {
   }, [conversationId, joinConversation, leaveConversation]);
 
   const messagesQuery = useGetMessagesQuery({ conversationId, limit: 50 }, { skip: !conversationId, refetchOnReconnect: true });
-  const [deleteMessage] = useDeleteMessageMutation();
   const applyQuota = useCallback((quota: NonNullable<CloudSpace>["quota"]) => {
     setSpace((current) => current ? { ...current, quota } : current);
   }, []);
@@ -96,16 +95,14 @@ export const PersonalCloudConversationSurface: React.FC = () => {
     }
   }, [messagesQuery, refresh]);
 
-  const handleDelete = useCallback(async (messageId: string, mode: "FOR_ME" | "FOR_EVERYONE" = "FOR_EVERYONE") => {
-    const asset = assets.find((candidate) => candidate.messageId === messageId && candidate.status === "available");
+  const handleDelete = useCallback(async (messageId: string) => {
     try {
-      if (asset) await cloudApi.trash(asset.id);
-      else if (conversationId) await deleteMessage({ conversationId, messageId, mode }).unwrap();
+      await deleteCloudAssetForMessage(messageId, assets);
       await Promise.all([refresh(), messagesQuery.refetch()]);
     } catch {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
     }
-  }, [assets, conversationId, deleteMessage, messagesQuery, refresh]);
+  }, [assets, messagesQuery, refresh]);
 
   const previewAsset = useCallback((asset: CloudAsset) => {
     if (!asset.attachmentId || !conversationId) return;

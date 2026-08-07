@@ -37,8 +37,19 @@ export const cloudApi = {
   cancelUpload: (uploadId: string) =>
     client.post(`/uploads/${uploadId}/cancel`).then(data<CancelCloudUploadDto>),
   trash: (assetId: string) => client.delete(`/assets/${assetId}`).then(data<CloudAsset>),
+  trashByMessage: (messageId: string) =>
+    client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
   restore: (assetId: string) => client.post(`/assets/${assetId}/restore`).then(data<CloudAsset>),
   download: (assetId: string) => client.get(`/assets/${assetId}/download`).then(data<{ url: string }>),
   forward: (assetId: string, targetConversationId: string) =>
     client.post(`/assets/${assetId}/forward`, { targetConversationId }).then(data),
+};
+
+export const deleteCloudAssetForMessage = (
+  messageId: string,
+  assets: readonly CloudAsset[],
+  gateway: Pick<typeof cloudApi, 'trash' | 'trashByMessage'> = cloudApi,
+): Promise<CloudAsset> => {
+  const loaded = assets.find((asset) => asset.messageId === messageId && asset.status === 'available');
+  return loaded ? gateway.trash(loaded.id) : gateway.trashByMessage(messageId);
 };
