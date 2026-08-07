@@ -34,6 +34,15 @@ func integrationWorkerPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+func postgresNow(t *testing.T, pool *pgxpool.Pool) time.Time {
+	t.Helper()
+	var now time.Time
+	if err := pool.QueryRow(context.Background(), `SELECT NOW()`).Scan(&now); err != nil {
+		t.Fatalf("read PostgreSQL clock: %v", err)
+	}
+	return now
+}
+
 func cleanupWorkerDrive(t *testing.T, pool *pgxpool.Pool, driveID uuid.UUID) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -124,7 +133,7 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 		50,
 		0,
 		3,
-		time.Now().UTC().Add(-time.Second),
+		postgresNow(t, pool).Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "low"},
@@ -139,7 +148,7 @@ func TestJobPostgresClaimsByPriorityAndReturnsPayload(t *testing.T) {
 		10,
 		0,
 		3,
-		time.Now().UTC().Add(-time.Second),
+		postgresNow(t, pool).Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "high"},
@@ -192,7 +201,7 @@ func TestJobPostgresDoesNotClaimBeforeRunAfter(t *testing.T) {
 		10,
 		0,
 		3,
-		time.Now().UTC().Add(time.Minute),
+		postgresNow(t, pool).Add(time.Minute),
 		nil,
 		nil,
 		map[string]string{"name": "future"},
@@ -221,7 +230,7 @@ func TestJobPostgresConcurrentClaimAllowsOnlyOneWinner(t *testing.T) {
 		10,
 		0,
 		3,
-		time.Now().UTC().Add(-time.Second),
+		postgresNow(t, pool).Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "race"},
@@ -297,7 +306,7 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 		10,
 		0,
 		2,
-		time.Now().UTC().Add(-time.Second),
+		postgresNow(t, pool).Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "retry"},
@@ -325,12 +334,16 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 	var status string
 	var attempts int
 	var lastError string
-	var runAfter time.Time
+	var retryDelaySeconds float64
 	if err := pool.QueryRow(context.Background(), `
-		SELECT status::text, attempts, last_error, run_after
+		SELECT
+			status::text,
+			attempts,
+			last_error,
+			EXTRACT(EPOCH FROM (run_after - NOW()))
 		FROM cloud.jobs
 		WHERE id = $1
-	`, jobID).Scan(&status, &attempts, &lastError, &runAfter); err != nil {
+	`, jobID).Scan(&status, &attempts, &lastError, &retryDelaySeconds); err != nil {
 		t.Fatal(err)
 	}
 	if status != string(JobFailed) || attempts != 1 {
@@ -339,8 +352,8 @@ func TestJobPostgresFailRetriesThenMovesToDead(t *testing.T) {
 	if len(lastError) != maxJobErrorLength {
 		t.Fatalf("last_error length = %d, want %d", len(lastError), maxJobErrorLength)
 	}
-	if time.Until(runAfter) < 1500*time.Millisecond {
-		t.Fatalf("run_after = %v, want at least ~2s in the future", runAfter)
+	if retryDelaySeconds < 1.5 {
+		t.Fatalf("retry delay = %.3fs, want at least ~2s", retryDelaySeconds)
 	}
 
 	if _, err := pool.Exec(context.Background(), `
@@ -391,7 +404,7 @@ func TestJobPostgresRetryBackoffIsExponentialAndCapped(t *testing.T) {
 		10,
 		0,
 		4,
-		time.Now().UTC().Add(-time.Second),
+		postgresNow(t, pool).Add(-time.Second),
 		nil,
 		nil,
 		map[string]string{"name": "backoff-cap"},
@@ -471,7 +484,8 @@ func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 	pool := integrationWorkerPool(t)
 	driveID := insertWorkerDrive(t, pool)
 	jobID := uuid.New()
-	lockedAt := time.Now().UTC().Add(-2 * time.Minute)
+	databaseNow := postgresNow(t, pool)
+	lockedAt := databaseNow.Add(-2 * time.Minute)
 	workerA := "worker-a"
 	insertWorkerJob(
 		t,
@@ -483,7 +497,7 @@ func TestJobPostgresRecoversStaleLockAndCompleteIsIdempotent(t *testing.T) {
 		10,
 		1,
 		4,
-		time.Now().UTC().Add(-time.Second),
+		databaseNow.Add(-time.Second),
 		&workerA,
 		&lockedAt,
 		map[string]string{"session_id": "session-1"},
@@ -563,7 +577,8 @@ func TestJobPostgresMovesExhaustedStaleJobToDead(t *testing.T) {
 	pool := integrationWorkerPool(t)
 	driveID := insertWorkerDrive(t, pool)
 	jobID := uuid.New()
-	lockedAt := time.Now().UTC().Add(-2 * time.Minute)
+	databaseNow := postgresNow(t, pool)
+	lockedAt := databaseNow.Add(-2 * time.Minute)
 	workerA := "worker-a"
 	insertWorkerJob(
 		t,
@@ -575,7 +590,7 @@ func TestJobPostgresMovesExhaustedStaleJobToDead(t *testing.T) {
 		10,
 		3,
 		3,
-		time.Now().UTC().Add(-time.Minute),
+		databaseNow.Add(-time.Minute),
 		&workerA,
 		&lockedAt,
 		map[string]string{"name": "exhausted-stale"},
@@ -611,7 +626,8 @@ func TestJobPostgresRejectsCompletionAfterLeaseTimeout(t *testing.T) {
 	pool := integrationWorkerPool(t)
 	driveID := insertWorkerDrive(t, pool)
 	jobID := uuid.New()
-	lockedAt := time.Now().UTC().Add(-2 * time.Minute)
+	databaseNow := postgresNow(t, pool)
+	lockedAt := databaseNow.Add(-2 * time.Minute)
 	workerID := "worker-a"
 	insertWorkerJob(
 		t,
@@ -623,7 +639,7 @@ func TestJobPostgresRejectsCompletionAfterLeaseTimeout(t *testing.T) {
 		10,
 		1,
 		3,
-		time.Now().UTC().Add(-time.Minute),
+		databaseNow.Add(-time.Minute),
 		&workerID,
 		&lockedAt,
 		map[string]string{"name": "expired-lease"},

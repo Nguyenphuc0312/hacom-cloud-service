@@ -40,6 +40,12 @@ go build ./...
 make test-integration-process4
 ```
 
+Integration Gate 4 chạy package bootstrap production `cmd/worker` trong một
+tiến trình test riêng vì toàn bộ package dùng chung một database sạch. Việc này
+ngăn Worker production trong test bootstrap claim job do test repository của
+package khác tạo, nhưng không thay đổi cơ chế claim song song giữa nhiều Worker
+bên trong từng kịch bản test và không loại package nào khỏi race suite.
+
 ## Kết quả race test
 
 Ngày 2026-07-28, toàn bộ package đã đạt:
@@ -54,6 +60,21 @@ MSYS2 UCRT64. Không phát hiện data race.
 Script integration luôn tạo database riêng, chạy migration và cleanup database
 sau khi kết thúc. Nếu implementation Người 1–3 chưa có, script dừng với mã `2`
 và nêu chính xác dependency còn thiếu, thay vì báo Gate 4 thành công giả.
+
+## Kết quả xác minh Gate 4 ngày 2026-08-07
+
+- `go test -race -count=1` cho toàn bộ package, gồm PostgreSQL, MinIO và Worker
+  lifecycle: đạt.
+- PostgreSQL Job Repository: claim ưu tiên, claim đồng thời, retry/backoff,
+  `dead`, stale recovery và lease timeout đều đạt.
+- Production Worker bootstrap `cmd/worker`: hash file, cleanup session hết hạn,
+  quota và ledger đều đạt.
+- `go vet ./...` và `go build ./...`: đạt.
+- Script dùng line ending LF và đã qua kiểm tra cú pháp POSIX `sh -n`.
+
+Các mốc `run_after`/`locked_at` trong PostgreSQL integration test lấy từ đồng
+hồ PostgreSQL. Điều này giữ đúng contract dùng database time và tránh kết quả
+sai khi đồng hồ host với Docker VM có sai lệch.
 
 ## Kịch bản QA bắt buộc sau khi tích hợp Người 1–3
 
