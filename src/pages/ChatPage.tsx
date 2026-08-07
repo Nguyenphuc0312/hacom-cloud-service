@@ -1436,6 +1436,7 @@ export const ChatPage: React.FC = () => {
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
+            onCloseInfoPanel={closeInfoPanel}
             onBack={handleBack}
             onTyping={sessionHandleTyping}
             hasMoreMessages={sessionCurrentHasMore}

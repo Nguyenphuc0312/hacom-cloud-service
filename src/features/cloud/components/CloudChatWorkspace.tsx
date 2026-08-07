@@ -21,6 +21,8 @@ import { FileType, type Message } from "../../../types";
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
+const SearchPanel = React.lazy(() => import("../../../components/chat/SearchPanel"));
+
 export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; conversationId?: string }> = ({ onBack, conversationId: knownConversationId }) => {
   const user = useAuthStore((state) => state.user);
   const density = useUIStore((state) => state.chatDensity);
@@ -30,16 +32,19 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const [draft, setDraft] = useState("");
   // ponytail: mặc định đóng mỗi lần vào, không nhớ trạng thái (chốt với user 07-08-26)
   const [infoOpen, setInfoOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
   const filePreview = useFilePreview();
   const [error, setError] = useState<string | null>(null);
 
-  // ChatPage đã gọi ensure() để giải id trước khi render surface này. Gọi lại là
-  // thừa và làm nghẽn lượt mở đầu tiên — chỉ ensure() khi không được truyền id.
+  // ChatPage đã gọi ensure() để giải id trước khi render surface này, nên lượt mở đầu
+  // không cần gọi lại. Nhưng quota CHỈ có trong ensure(): sau mỗi lần upload/xóa phải
+  // lấy lại, nếu không con số "Dung lượng lưu trữ" đứng im ở lần đọc đầu tiên.
+  const needSpace = !knownConversationId || infoOpen;
   const refresh = useCallback(async () => {
     try {
       const [nextSpace, nextAssets] = await Promise.all([
-        knownConversationId ? Promise.resolve(null) : cloudApi.ensure(),
+        needSpace ? cloudApi.ensure() : Promise.resolve(null),
         cloudApi.list({ includeTrashed: true, limit: 100 }),
       ]);
       if (nextSpace) setSpace(nextSpace);
@@ -48,17 +53,12 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     } catch {
       setError("Không thể tải Hacom Cloud. Vui lòng thử lại.");
     }
-  }, [knownConversationId]);
+  }, [needSpace]);
 
   // assets vẫn cần ngay (dùng lọc message của file đã xóa), nhưng không chặn render:
-  // timeline và composer hiện trước, danh sách file điền vào sau.
+  // timeline và composer hiện trước, danh sách file điền vào sau. Mở panel cũng chạy
+  // lại effect này (needSpace đổi) nên quota được nạp đúng lúc cần.
   useEffect(() => { void refresh(); }, [refresh]);
-
-  // quota chỉ hiện trong panel thông tin (mặc định đóng) → nạp khi thật sự mở.
-  useEffect(() => {
-    if (!knownConversationId || !infoOpen || space) return;
-    void cloudApi.ensure().then(setSpace).catch(() => undefined);
-  }, [infoOpen, knownConversationId, space]);
   useEffect(() => {
     const sync = () => { void refresh(); };
     wsManager.on("cloud:asset:created", sync);
@@ -134,13 +134,28 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {conversation && user
-        ? <ChatHeader conversation={conversation} currentUserId={user.id} onInfoClick={() => setInfoOpen((open) => !open)} onBack={onBack} />
+        ? <ChatHeader conversation={conversation} currentUserId={user.id} onInfoClick={() => { setSearchOpen(false); setInfoOpen((open) => !open); }} onSearchClick={() => { setInfoOpen(false); setSearchOpen((open) => !open); }} onBack={onBack} />
         : <header className="chat-header shrink-0 border-b border-border/70 bg-surface"><ConversationLane><div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-3"><PersonalCloudAvatar /><div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-medium">{personalCloudPresentation.title}</h1><p className="truncate text-xs text-text-muted">{personalCloudPresentation.subtitle}</p></div></div></ConversationLane></header>}
       {error && <p role="alert" className="mx-4 mt-3 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
-      <div className="shrink-0 border-t border-border/70 bg-surface px-[var(--chat-lane-padding)] py-2"><div className="mx-auto w-full max-w-[var(--chat-content-lane)]"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div></div>
+      {/* Không bọc thêm padding/max-width: MessageInput tự canh lane giống ChatWindow.
+          Bọc thêm làm ô nhập lệch 32px và hụt 64px so với hội thoại thường. */}
+      <div className="sticky bottom-0 z-sticky shrink-0"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div>
     </main>
-    <HacomCloudInfoSidebar open={infoOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} />
+    {searchOpen && conversationId ? (
+      <React.Suspense fallback={null}>
+        <aside className="hidden w-[var(--app-inspector-width)] shrink-0 border-l border-border/70 lg:block">
+          <SearchPanel
+            conversationId={conversationId}
+            onSelectMessage={() => setSearchOpen(false)}
+            onNavigateToMessageId={() => setSearchOpen(false)}
+            onClose={() => setSearchOpen(false)}
+            className="h-full w-[var(--app-inspector-width)]"
+          />
+        </aside>
+      </React.Suspense>
+    ) : null}
+    <HacomCloudInfoSidebar open={infoOpen && !searchOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={infoOpen && !space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} messages={visibleMessages} />
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;

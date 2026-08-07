@@ -87,10 +87,22 @@ const clampRange = (
   };
 };
 
+/**
+ * Nội dung tin nhắn được soạn bằng Tiptap nên có thể là HTML (`<p>`, `<a href…>`).
+ * Bản xem trước là văn bản thuần, hiện thẳng HTML sẽ ra `<p><a target="_blank"…`
+ * thay vì câu chữ người dùng gõ.
+ */
+const toPlainText = (content: string): string => {
+  if (!/<[a-z][\s\S]*>/i.test(content)) return content;
+  const text = new DOMParser().parseFromString(content, "text/html").body.textContent ?? "";
+  return text.replace(/\s+/g, " ").trim();
+};
+
 export const getMessageSearchPreview = (
-  content: string,
+  rawContent: string,
   query: string,
 ): string => {
+  const content = toPlainText(rawContent ?? "");
   if (!content) {
     return "";
   }

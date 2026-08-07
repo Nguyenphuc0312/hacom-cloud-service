@@ -23,7 +23,15 @@ client.interceptors.request.use((request) => {
 
 const data = <T>(response: { data: { data: T } }): T => response.data.data;
 
-type CloudSpace = { conversationId: string; quota: { limitBytes: string; usedBytes: string; reservedBytes: string } };
+export type CloudQuotaUsageByType = { image: string; video: string; file: string; other: string };
+export type CloudQuota = {
+  limitBytes: string;
+  usedBytes: string;
+  reservedBytes: string;
+  /** BE mới trả thêm; client cũ/BE cũ vẫn chạy khi thiếu trường này. */
+  usedByType?: CloudQuotaUsageByType;
+};
+type CloudSpace = { conversationId: string; quota: CloudQuota };
 
 /**
  * ensure() được gọi từ nhiều nơi gần như cùng lúc (CloudPage giải id, ChatPage nhận
