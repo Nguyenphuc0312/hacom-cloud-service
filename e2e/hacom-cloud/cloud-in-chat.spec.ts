@@ -67,14 +67,14 @@ test.describe.serial('Cloud của tôi nằm trong danh sách hội thoại', ()
 
     expect(await infoPanelWidth(page)).toBe(0);
 
-    await page.getByRole('button', { name: /Bật hoặc tắt thông tin|toggleInfoPanel|thông tin/i }).first().click();
+    await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
     await expect.poll(() => infoPanelWidth(page)).toBeGreaterThan(200);
     await expect(page.getByText(/Dung lượng lưu trữ/i)).toBeVisible();
   });
 
   test('panel vẫn đóng lại khi vào lần sau (không nhớ trạng thái)', async ({ page }) => {
     await openCloudFromSidebar(page);
-    await page.getByRole('button', { name: /Bật hoặc tắt thông tin|toggleInfoPanel|thông tin/i }).first().click();
+    await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
     await expect.poll(() => infoPanelWidth(page)).toBeGreaterThan(200);
 
     // Rời đi rồi quay lại: phải đóng như mặc định.

@@ -92,8 +92,10 @@ import { cloudApi } from "../features/cloud/api/cloudApi";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+const importCloudSurface = () =>
+  import("../features/cloud/components/CloudChatWorkspace");
 const PersonalCloudConversationSurface = React.lazy(() =>
-  import("../features/cloud/components/CloudChatWorkspace").then((module) => ({
+  importCloudSurface().then((module) => ({
     default: module.PersonalCloudConversationSurface,
   })),
 );
@@ -677,6 +679,9 @@ export const ChatPage: React.FC = () => {
   );
   useEffect(() => {
     let cancelled = false;
+    // Nạp sẵn chunk của Cloud: nếu để tới lúc bấm mới tải, Suspense thay khung chat
+    // bằng skeleton một nhịp — người dùng thấy như màn hình chớp.
+    void importCloudSurface();
     void (async () => {
       try {
         // Có cache và conversation đã nằm trong store thì không cần gọi lại: ensure()

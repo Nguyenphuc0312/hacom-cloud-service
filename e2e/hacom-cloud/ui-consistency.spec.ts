@@ -138,7 +138,7 @@ test('panel phải có đủ 3 mục: Ảnh/Video, Tệp, Link', async ({ page }
   await cloudRow(page).click();
   await composer(page).waitFor({ timeout: 40_000 });
 
-  await page.getByRole('button', { name: /Bật hoặc tắt thông tin|thông tin/i }).first().click();
+  await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
   await expect(page.getByText(/Ảnh và video gần đây/i)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Tệp gần đây/i)).toBeVisible();
   await expect(page.getByText(/Dung lượng lưu trữ/i)).toBeVisible();

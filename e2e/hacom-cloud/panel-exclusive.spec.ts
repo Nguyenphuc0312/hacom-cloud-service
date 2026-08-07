@@ -23,7 +23,7 @@ const header = (page: Page) => page.locator('header.chat-header');
 const searchBtn = (page: Page) =>
   header(page).getByRole('button', { name: /Tìm trong cuộc trò chuyện/i }).first();
 const infoBtn = (page: Page) =>
-  header(page).getByRole('button', { name: /thông tin/i }).first();
+  header(page).getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first();
 
 /**
  * Đếm panel đang thực sự chiếm chỗ ở cạnh phải. Chỉ tính <aside> hẹp (panel thật),

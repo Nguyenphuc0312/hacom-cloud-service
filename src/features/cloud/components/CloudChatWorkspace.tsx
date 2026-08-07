@@ -142,15 +142,17 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
           Bọc thêm làm ô nhập lệch 32px và hụt 64px so với hội thoại thường. */}
       <div className="sticky bottom-0 z-sticky shrink-0"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div>
     </main>
+    {/* Panel tìm kiếm dùng đúng khung của panel thông tin: cùng bề rộng, cùng đường viền,
+        cùng cách phủ toàn màn ở mobile — để Cloud không lệch so với hội thoại thường. */}
     {searchOpen && conversationId ? (
       <React.Suspense fallback={null}>
-        <aside className="hidden w-[var(--app-inspector-width)] shrink-0 border-l border-border/70 lg:block">
+        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,400px)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
           <SearchPanel
             conversationId={conversationId}
             onSelectMessage={() => setSearchOpen(false)}
             onNavigateToMessageId={() => setSearchOpen(false)}
             onClose={() => setSearchOpen(false)}
-            className="h-full w-[var(--app-inspector-width)]"
+            className="h-full w-full"
           />
         </aside>
       </React.Suspense>
