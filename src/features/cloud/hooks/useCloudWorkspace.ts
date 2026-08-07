@@ -27,6 +27,7 @@ interface CloudWorkspaceState {
   isLoadingMore: boolean;
   isLoadingTrash: boolean;
   isLoadingMoreTrash: boolean;
+  trashUnavailable: boolean;
   isMutating: boolean;
   isRequestingQuota: boolean;
   error: CloudApiError | null;
@@ -46,6 +47,7 @@ const initialState: CloudWorkspaceState = {
   isLoadingMore: false,
   isLoadingTrash: true,
   isLoadingMoreTrash: false,
+  trashUnavailable: false,
   isMutating: false,
   isRequestingQuota: false,
   error: null,
@@ -67,6 +69,11 @@ const createMissingUserError = (): CloudApiError =>
     code: "CLOUD_USER_MISSING",
     message: "Current user ID is unavailable",
   });
+
+const isMissingTrashRoute = (error: unknown): error is CloudApiError =>
+  error instanceof CloudApiError &&
+  error.status === 404 &&
+  error.code === "ROUTE_NOT_FOUND";
 
 const mergeItems = (
   current: CloudItem[],
@@ -210,14 +217,31 @@ export const useCloudWorkspace = (
         isRefreshing: background,
         isLoadingMore: false,
         isLoadingMoreTrash: false,
+        trashUnavailable: false,
         error: null,
       }));
 
       try {
-        const [page, trashPage, quota, quotaRequest, health] =
+        const trashPageResult: Promise<{
+          page: CloudPage;
+          unavailable: boolean;
+        }> = cloudApi
+          .listTrash(userId, {
+            signal: requestSignal,
+            q: query,
+            type: itemType,
+          })
+          .then((page) => ({ page, unavailable: false }))
+          .catch((error: unknown) => {
+            if (isMissingTrashRoute(error)) {
+              return { page: { items: [] }, unavailable: true };
+            }
+            throw error;
+          });
+        const [page, trashResult, quota, quotaRequest, health] =
           await Promise.all([
             cloudApi.listItems(userId, { signal: requestSignal, q: query, type: itemType }),
-            cloudApi.listTrash(userId, { signal: requestSignal, q: query, type: itemType }),
+            trashPageResult,
             cloudApi.getQuota(userId, requestSignal),
             cloudApi
               .getCurrentQuotaRequest(userId, requestSignal)
@@ -237,7 +261,7 @@ export const useCloudWorkspace = (
           requestSignal,
         );
         const hydratedTrashItems = await hydrateMediaAccess(
-          trashPage.items,
+          trashResult.page.items,
           userId,
           requestSignal,
         );
@@ -251,11 +275,12 @@ export const useCloudWorkspace = (
           ...current,
           items: hydratedItems,
           trashItems: hydratedTrashItems,
+          trashUnavailable: trashResult.unavailable,
           quota,
           quotaRequest,
           health,
           nextCursor: page.nextCursor,
-          trashNextCursor: trashPage.nextCursor,
+          trashNextCursor: trashResult.page.nextCursor,
           isLoading: false,
           isRefreshing: false,
           isLoadingTrash: false,
@@ -330,7 +355,13 @@ export const useCloudWorkspace = (
   }, [itemType, query, state.isLoadingMore, state.nextCursor, userId]);
 
   const loadMoreTrash = useCallback(async () => {
-    if (!userId || !state.trashNextCursor || state.isLoadingMoreTrash) return;
+    if (
+      !userId ||
+      state.trashUnavailable ||
+      !state.trashNextCursor ||
+      state.isLoadingMoreTrash
+    )
+      return;
     const generation = generationRef.current;
     const requestKey = queryKeyRef.current;
     const controller = new AbortController();
@@ -367,7 +398,14 @@ export const useCloudWorkspace = (
         error: asCloudError(error),
       }));
     }
-  }, [itemType, query, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
+  }, [
+    itemType,
+    query,
+    state.isLoadingMoreTrash,
+    state.trashNextCursor,
+    state.trashUnavailable,
+    userId,
+  ]);
 
   const refreshQuota = useCallback(async () => {
     if (!userId) return;

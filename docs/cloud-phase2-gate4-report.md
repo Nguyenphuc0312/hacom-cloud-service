@@ -41,8 +41,17 @@ token or secret was written to the repository or report.
 | `npm run test:e2e` (baseline, without live credentials) | 3 passed, 1 skipped |
 | `npm run test:e2e -- --workers=1` (live attempt) | 3 passed, 1 failed — lifecycle remained on `/login` after Auth Service rate-limit |
 | `npm run test:e2e:perf` | PASS — 1 passed |
-| Cloud EN/VI key parity | PASS — 177 keys |
+| Cloud EN/VI key parity | PASS — 178 keys |
 | `npm run i18n:check` | BASELINE FAILURE — existing project-wide missing/unused keys outside Cloud |
+
+### Local Cloud API compatibility
+
+The local Cloud API currently returns `200` for active items and quota, but
+returns `404 ROUTE_NOT_FOUND` for `GET /trash` and
+`GET /quota/requests/current`. The frontend now treats the missing Trash route
+as an unavailable capability: Active and Quota remain usable, while the Trash
+view shows an explicit warning instead of presenting a false empty state. No
+backend code was changed.
 
 The intended lifecycle is:
 
@@ -60,9 +69,9 @@ Cloud mutations. No further retries were sent.
 |---|---|---|
 | Phase 2 flow available in Chat Web | PASS automated / PENDING live | Live run blocked at Hacom Auth rate-limit before upload |
 | Search and multi-type filter | PASS automated | Cloud hook/API tests pass |
-| Trash, restore, permanent delete, Empty Trash | PASS automated | Cloud hook/component tests pass; live mutation run pending |
+| Trash, restore, permanent delete, Empty Trash | PASS frontend handling / PENDING API | Cloud hook/component tests pass; local API lifecycle routes are not deployed |
 | Storage active/Trash/reserved/available | PASS automated | Component and quota contract coverage pass |
-| Quota request status | PASS automated | Pending/approved/rejected UI implemented; live review pending |
+| Quota request status | PASS frontend handling / PENDING API | Pending/approved/rejected UI implemented; local current-request route is not deployed |
 | Image/video/audio/text/PDF preview | PASS implementation / PENDING live | Authenticated preview regression still required |
 | Fresh access URL for active and Trash | PASS automated | Cache, invalidation and Cloud-specific routing covered |
 | Hacom authentication/session | BLOCKED for this run | Auth Service rate-limit persisted after one cooldown retry; no production session evidence collected |

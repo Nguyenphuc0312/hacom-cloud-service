@@ -731,6 +731,13 @@ export default function CloudPage() {
               selectedMessageIds={new Set()}
               className="min-h-0 flex-1"
             />
+          ) : workspace.trashUnavailable ? (
+            <ConversationLane className="flex min-h-0 flex-1 items-start pt-5">
+              <InlineNotice
+                tone="warning"
+                message={t("errors.trashUnavailable")}
+              />
+            </ConversationLane>
           ) : (
             <CloudTrashTimeline
               items={visibleTrashItems}

@@ -131,6 +131,38 @@ describe("useCloudWorkspace trash lifecycle", () => {
     expect(listTrash.mock.calls[0]?.[1]).toMatchObject({ type: "audio" });
   });
 
+  it("keeps Active and Quota usable when the local API has no Trash route", async () => {
+    vi.spyOn(cloudApi, "listItems").mockResolvedValue({ items: [activeItem] });
+    vi.spyOn(cloudApi, "listTrash").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "ROUTE_NOT_FOUND",
+        message: "route not found",
+      }),
+    );
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(activeQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "ROUTE_NOT_FOUND",
+        message: "route not found",
+      }),
+    );
+
+    const { result } = renderHook(() => useCloudWorkspace(userId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.items).toEqual([activeItem]);
+    expect(result.current.quota).toEqual(activeQuota);
+    expect(result.current.trashItems).toEqual([]);
+    expect(result.current.trashUnavailable).toBe(true);
+  });
+
   it("ignores a load-more response from the previous search/filter generation", async () => {
     let resolveMore: ((page: { items: CloudItem[]; nextCursor?: string }) => void) | undefined;
     const morePage = new Promise<{ items: CloudItem[]; nextCursor?: string }>(
