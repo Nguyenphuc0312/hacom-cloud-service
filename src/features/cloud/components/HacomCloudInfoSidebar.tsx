@@ -1,6 +1,5 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
   Download,
   File,
   FileImage,
@@ -10,6 +9,7 @@ import {
   MoreHorizontal,
   Play,
   RotateCcw,
+  Pin,
   Trash2,
   Video,
   X,
@@ -17,8 +17,11 @@ import {
 import type { CloudAsset, CloudQuota } from "../api/cloudApi";
 import { cloudApi } from "../api/cloudApi";
 import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
+import { useUIStore } from "../../../stores/uiStore";
+import { toast } from "../../../components/ui";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
+import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
 
 const formatBytes = (value: string | number) => {
   const bytes = Number(value);
@@ -185,28 +188,6 @@ export const CloudStorageCard: React.FC<{
   );
 };
 
-export const CloudSidebarSection: React.FC<{ title: string; count: number; children: React.ReactNode }> = ({ title, count, children }) => {
-  const [open, setOpen] = useState(true);
-  const contentId = useId();
-
-  return (
-    <section>
-      <button
-        type="button"
-        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        aria-controls={contentId}
-      >
-        <span className="text-sm font-semibold">{title}</span>
-        <span className="rounded-full bg-surface-hover px-1.5 py-0.5 text-xs text-text-muted">{count}</span>
-        <ChevronDown className={`ml-auto h-[18px] w-[18px] text-text-muted transition-transform duration-200 ${open ? "" : "-rotate-90"}`} aria-hidden="true" />
-      </button>
-      {open && <div id={contentId} className="mt-2">{children}</div>}
-    </section>
-  );
-};
-
 const CloudMediaTile: React.FC<{ asset: CloudAsset; conversationId: string; onOpen: (asset: CloudAsset) => void }> = ({ asset, conversationId, onOpen }) => {
   const { url } = usePreviewUrl(conversationId, asset.attachmentId ?? "", { autoFetch: Boolean(asset.attachmentId) });
   const documentLike = isDocumentLikePreview(asset);
@@ -324,15 +305,51 @@ export const RecentFileList: React.FC<{
   );
 };
 
-export const CloudIdentity: React.FC = () => (
-  <div className="flex min-h-[72px] items-center gap-3">
-    <PersonalCloudAvatar size="md" className="rounded-xl" />
-    <div className="min-w-0">
-      <h2 className="text-base font-semibold">Cloud của tôi</h2>
-      <p className="mt-0.5 text-[13px] leading-5 text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
-    </div>
-  </div>
-);
+/** Hero + thao tác nhanh, dựng theo đúng khuôn của GroupInfo/UserProfile.
+ *  Hai loại ghim khác nhau và cùng tồn tại như hội thoại thường:
+ *  - ghim TIN NHẮN: nút trên ChatHeader, cạnh tìm kiếm;
+ *  - ghim HỘI THOẠI (đưa Cloud lên đầu sidebar): nút dưới đây. */
+export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversationId }) => {
+  const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
+  const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
+  const isPinned = pinnedConversationIds.includes(conversationId);
+
+  const handleTogglePin = () => {
+    togglePinnedConversation(conversationId);
+    toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+  };
+
+  return (
+    <>
+      <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
+        <div className="mb-4">
+          <PersonalCloudAvatar size="lg" />
+        </div>
+        <h2 className="text-base font-bold text-text-primary">Cloud của tôi</h2>
+        <p className="mt-1 text-xs text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
+      </div>
+
+      <div className="bg-surface px-4 pb-5">
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={handleTogglePin}
+            disabled={!conversationId}
+            className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover disabled:opacity-50"
+            aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15"}`}>
+              <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
+            </div>
+            <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+              {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
+            </span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+};
 
 const CloudManagerDialog: React.FC<{
   assets: CloudAsset[];
@@ -389,16 +406,16 @@ export const HacomCloudInfoSidebar: React.FC<{
     <>
       <aside className={`${open ? "translate-x-0 lg:w-[388px] lg:min-w-[360px] lg:max-w-[420px] lg:border-l" : "translate-x-full lg:w-0 lg:min-w-0 lg:border-l-0"} fixed inset-y-0 right-0 z-40 flex w-full overflow-hidden border-l border-border/70 bg-surface shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:shrink-0 lg:shadow-none lg:transition-[width]`} aria-hidden={!open}>
         <div className="flex h-full w-full flex-col">
-          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-surface px-5">
-            <strong className="text-[17px] font-semibold">Thông tin Hacom Cloud</strong>
-            <button type="button" className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid" onClick={onClose} aria-label="Đóng thông tin Hacom Cloud"><X className="h-5 w-5" /></button>
+          <header className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
+            <h3 className="text-title-sm text-text-primary">Thông tin Hacom Cloud</h3>
+            <button type="button" className="icon-button-surface h-9 w-9" onClick={onClose} aria-label="Đóng thông tin Hacom Cloud"><X className="h-5 w-5" /></button>
           </header>
           {loading ? (
             <div className="space-y-4 p-4" aria-label="Đang tải thông tin Hacom Cloud"><div className="h-[72px] animate-pulse rounded-xl bg-surface-hover" /><div className="h-44 animate-pulse rounded-xl bg-surface-hover" /><div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="aspect-square animate-pulse rounded-lg bg-surface-hover" />)}</div>{[1, 2, 3].map((item) => <div key={item} className="h-[60px] animate-pulse rounded-lg bg-surface-hover" />)}</div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-4 pr-5 pb-6" style={{ scrollbarGutter: "stable" }}>
-              <div className="space-y-4">
-                <CloudIdentity />
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
+              <CloudIdentity conversationId={conversationId} />
+              <div className="space-y-4 px-4 pr-5">
                 <CloudStorageCard quota={quota} onManage={() => setManagerOpen(true)} />
                 {/* Kho lưu trữ dùng ĐÚNG component của panel thông tin nhóm: tab ngang
                     Ảnh/Video · File · Link, có số đếm và "Xem tất cả". Trong đó thao tác
@@ -409,9 +426,15 @@ export const HacomCloudInfoSidebar: React.FC<{
                     <CloudSharedResources conversationId={conversationId} />
                   </React.Suspense>
                 ) : null}
-                <CloudSidebarSection title="Thùng rác" count={trashed.length}>
-                  {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFileNamePreservingExtension(asset.originalFilename)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
-                </CloudSidebarSection>
+                <CollapsibleSection
+                  title="Thùng rác"
+                  icon={<Trash2 className="h-[18px] w-[18px]" />}
+                  badge={<span className="rounded-full bg-surface-hover px-1.5 py-0.5 text-xs text-text-muted">{trashed.length}</span>}
+                >
+                  <div className="p-2">
+                    {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFileNamePreservingExtension(asset.originalFilename)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
+                  </div>
+                </CollapsibleSection>
               </div>
             </div>
           )}
