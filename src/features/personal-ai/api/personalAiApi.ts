@@ -18,6 +18,7 @@ import {
   refreshAccessTokenShared,
 } from "../../../services/authRefreshCoordinator";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
+import { fallbackUploadMessage } from "../../../services/ai-chat/uploadFailure";
 import {
   appendScopeTokenToUrl,
   withScopeToken,
@@ -146,7 +147,9 @@ export class AiHttpError extends PersonalAiError {
   readonly rawBody: string;
 
   constructor(status: number, rawBody: string) {
-    super(status, "http", parseHttpErrorMessage(rawBody));
+    // Body rỗng (vd 500 không có JSON) → câu an toàn theo status, KHÔNG để lọt
+    // `PersonalAI error [http]: 500` ra bong bóng chat (contract 07/08/26 §7.9).
+    super(status, "http", parseHttpErrorMessage(rawBody) ?? fallbackUploadMessage(status));
     this.name = "AiHttpError";
     this.rawBody = rawBody;
   }
@@ -622,8 +625,9 @@ function postLevelReport(
             : new PersonalAiError(
                 status,
                 "http",
-                parseHttpErrorMessage(xhr.responseText) ??
-                  formatHttpErrorMessage(xhr.responseText, status),
+                // §2: lý do BE trả trước, fallback theo status sau — không bao
+                // giờ đẩy chuỗi kỹ thuật `PersonalAI error [http]: …` ra UI.
+                parseHttpErrorMessage(xhr.responseText) ?? fallbackUploadMessage(status),
               ),
         );
       }

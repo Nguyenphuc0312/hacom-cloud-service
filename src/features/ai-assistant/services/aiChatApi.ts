@@ -32,19 +32,34 @@ import type {
 } from "../types";
 import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
 import { appendScopeToken } from "../../personal-ai/stores/workReportScopeStore";
+import {
+  readUploadFailureFromBody,
+  type UploadFailure,
+} from "../../../services/ai-chat/uploadFailure";
 
 export class AiApiError extends Error {
   readonly status: number;
   readonly kind: "timeout" | "network" | "http";
+  /**
+   * Lý do BE trả trong body (contract FE 07/08/26 §2). `undefined` khi lỗi là
+   * timeout/mạng — khi đó không có response nào để đọc.
+   *
+   * Trước đây lớp này chỉ giữ status, nên `uploadPersonalWeeklyReport` vứt sạch
+   * `xhr.responseText` và mọi lỗi nghiệp vụ ("File sai form…", "File chứa công
+   * việc của nhiều tuần…") đều hiện thành một câu chung vô nghĩa.
+   */
+  readonly failure?: UploadFailure;
 
   constructor(
     status: number,
     kind: "timeout" | "network" | "http" = "http",
+    failure?: UploadFailure,
   ) {
-    super(`AI API error [${kind}]: ${status}`);
+    super(failure?.message ?? `AI API error [${kind}]: ${status}`);
     this.name = "AiApiError";
     this.status = status;
     this.kind = kind;
+    this.failure = failure;
   }
 }
 
@@ -401,7 +416,15 @@ export function uploadPersonalWeeklyReport(
         resolve(parseWeeklyReportUploadBody(text));
         return;
       }
-      reject(new AiApiError(status, "http"));
+      // §2: đọc body TRƯỚC khi quyết định câu hiển thị. BE trả lý do cụ thể
+      // (sai form, nhiều tuần, nộp thay người khác…) — nuốt nó là bug gốc.
+      reject(
+        new AiApiError(
+          status,
+          "http",
+          readUploadFailureFromBody(status, text, xhr.getResponseHeader("Retry-After")),
+        ),
+      );
     });
 
     xhr.addEventListener("error", () => {

@@ -161,15 +161,17 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     if (!submit) return;
     setPendingSubmit(null);
     setInputValue("");
-    setPendingFile(null);
     setIsUploading(true);
     // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) đi endpoint
     // riêng /api/level-reports/upload; BE tự thay bản cũ nếu nộp lại cùng tuần.
-    if (submit.kind === "level") {
-      await sendLevelReportWithFile(submit.text, submit.file);
-    } else {
-      await sendWithFile(submit.text, submit.file);
-    }
+    const accepted =
+      submit.kind === "level"
+        ? await sendLevelReportWithFile(submit.text, submit.file)
+        : await sendWithFile(submit.text, submit.file);
+    // Contract 07/08/26 §7.10: CHỈ xoá tệp đang chờ sau HTTP 2xx. Xoá sớm như
+    // trước khiến mọi lỗi (sai form, sai tuần, hết phiên, mất mạng) đều bắt user
+    // đi tìm và đính lại đúng file đó — trong khi lý do lỗi bảo họ "thử lại".
+    if (accepted) setPendingFile(null);
     setIsUploading(false);
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, [pendingSubmit, sendWithFile, sendLevelReportWithFile]);

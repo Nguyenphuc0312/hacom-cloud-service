@@ -26,6 +26,11 @@ import {
   ScopeFeatureDisabledError,
   ScopeFetchError,
 } from "../api/workReportScopeApi";
+import {
+  fallbackUploadMessage,
+  UPLOAD_CONNECTION_ERROR,
+  withRetryAfterHint,
+} from "../../../services/ai-chat/uploadFailure";
 import { handleDraftRetry } from "../services/workReportDraftPoller";
 import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
@@ -602,10 +607,16 @@ export function usePersonalChat() {
     void sendMessage(scopePendingQuestion, tokenPromptId ?? undefined);
   }, [scopeSelected, scopeIsPicking, scopePendingQuestion, isStreaming, sendMessage]);
 
+  /**
+   * Trả `true` khi BE đã nhận file (HTTP 2xx) — contract 07/08/26 §7.10: caller
+   * CHỈ được xoá tệp đang chờ sau khi biết chắc đã nộp được. Trước đây trang gọi
+   * xoá tệp ngay lúc bấm Gửi, nên mọi lỗi (sai form, sai tuần, hết phiên) đều
+   * bắt user đi tìm và đính lại file.
+   */
   const sendWithFile = useCallback(
-    async (question: string, file: File) => {
+    async (question: string, file: File): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || isStreaming) return false;
 
       let conversationId = activeConversationId;
       if (!conversationId) {
@@ -678,22 +689,22 @@ export function usePersonalChat() {
         if (response.session_id && response.session_id !== fileServerSessionId) {
           updateServerSessionId(convIdSnapshot, response.session_id);
         }
+        return true;
       } catch (err) {
+        // Contract 07/08/26 §4: có HTTP response → hiện NGUYÊN VĂN lý do BE trả
+        // (err.failure.message đã ưu tiên detail.message → detail → message →
+        // error → fallback theo status). Chỉ mất mạng/timeout mới dùng câu
+        // "không kết nối được" — và câu đó phải nói rõ báo cáo CHƯA được ghi nhận.
         const content =
           err instanceof AiApiError
-            ? err.kind === "timeout"
-              ? "Yêu cầu quá thời gian. Vui lòng thử lại."
-              : err.kind === "network"
-                ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
-                : err.status === 413
-                  ? "Tệp vượt quá dung lượng cho phép của máy chủ."
-                  : err.status === 415
-                    ? "Định dạng tệp không được hỗ trợ."
-                    : "Đã xảy ra lỗi. Vui lòng thử lại."
-            : "Đã xảy ra lỗi không xác định.";
+            ? err.kind === "http" && err.failure
+              ? withRetryAfterHint(err.failure)
+              : UPLOAD_CONNECTION_ERROR
+            : UPLOAD_CONNECTION_ERROR;
 
         finalizeMessage(convIdSnapshot, content);
         markMessageError(convIdSnapshot);
+        return false;
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
@@ -723,9 +734,9 @@ export function usePersonalChat() {
    * danh sách phạm vi để FE mở dropdown mà không mất file.
    */
   const sendLevelReportWithFile = useCallback(
-    async (question: string, file: File, scopeToken?: string) => {
+    async (question: string, file: File, scopeToken?: string): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || isStreaming) return false;
 
       let conversationId = activeConversationId;
       if (!conversationId) {
@@ -761,7 +772,7 @@ export function usePersonalChat() {
               timestamp: new Date(),
               isStreaming: false,
             });
-            return;
+            return false;
           }
           if (decision.kind === "pick") {
             // ≥2 phạm vi → hỏi TRƯỚC khi tốn băng thông. Giữ file trong memory;
@@ -783,7 +794,10 @@ export function usePersonalChat() {
               isStreaming: false,
               scopeRequired: true,
             });
-            return;
+            // Chưa nộp được — file đang giữ trong `pendingLevelReportFile` để
+            // effect nộp-lại lo. Trả false để trang KHÔNG xoá chip tệp: user còn
+            // thấy mình đang nộp cái gì trong lúc chọn phạm vi.
+            return false;
           }
           // `auto`: đúng MỘT phạm vi → BE tự bind, gửi thẳng KHÔNG kèm token (§2.4).
         } catch (err) {
@@ -811,7 +825,7 @@ export function usePersonalChat() {
           timestamp: new Date(),
           isStreaming: false,
         });
-        return;
+        return false;
       }
 
       addMessage(conversationId, {
@@ -845,6 +859,7 @@ export function usePersonalChat() {
         finalizeMessage(convIdSnapshot, response.message);
         // §4: token chỉ sống trong đúng vòng "BE hỏi → user chọn → nộp lại".
         if (scopeToken) useWorkReportScopeStore.getState().releaseScopeToken();
+        return true;
       } catch (err) {
         // §2.5: lỗi mang sẵn danh sách phạm vi → mở dropdown NGAY, giữ file trong
         // memory (`pendingLevelReportFile`) để effect bên dưới nộp lại chính lượt
@@ -861,7 +876,7 @@ export function usePersonalChat() {
             isStreaming: false,
             thinkingPhase: null,
           });
-          return;
+          return false;
         }
 
         // BE bản cũ (chưa ship 2.5) hoặc đường lùi khi không ký được token:
@@ -876,31 +891,29 @@ export function usePersonalChat() {
             convIdSnapshot,
             "Phạm vi báo cáo không còn hiệu lực. Vui lòng chọn lại phạm vi rồi nộp lại tệp.",
           );
-          return;
+          return false;
         }
 
+        // Contract 07/08/26 §4: HTTP lỗi → hiện NGUYÊN VĂN lý do BE trả.
+        // `PersonalAiError.message` đã là `detail.message`/`detail` đọc từ body
+        // (xem `parseHttpErrorMessage`); các câu cứng theo status trước đây đè
+        // mất lý do thật ("File này là BẢN NHÁP AI…", "Bạn chưa có quyền nộp
+        // #TBP_baocao cho bộ phận này." → chỉ còn "Bạn không có quyền…").
+        //
+        // Riêng 401 giữ câu của FE: tới đây là 401 SAU khi `uploadLevelReport`
+        // đã tự làm mới token và gửi lại (§2.6) — tức hết phiên thật. Câu của BE
+        // không nói được điều đó, và user cần biết tệp CHƯA được nộp.
         const content =
           err instanceof PersonalAiError
-            ? err.kind === "timeout"
-              ? "Yêu cầu quá thời gian. Vui lòng thử lại."
-              : err.kind === "network"
-                ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
-                : err.status === 413
-                  ? "Tệp vượt quá dung lượng cho phép (tối đa 25MB)."
-                  : err.status === 403
-                    ? "Bạn không có quyền nộp báo cáo cấp này."
-                    : // §2.6: tới đây là 401 SAU khi `uploadLevelReport` đã tự làm
-                      // mới token và gửi lại — tức hết phiên thật, không phải
-                      // token cũ kẹt lại. Nói rõ để user đăng nhập lại, và báo
-                      // tệp chưa được nhận để họ biết phải nộp lại.
-                      err.status === 401
-                      ? "Phiên đăng nhập đã hết hạn. Tệp CHƯA được nộp — vui lòng đăng nhập lại rồi nộp lại tệp."
-                      : err.status === 400
-                        ? err.message || "File không hợp lệ hoặc thiếu tag báo cáo."
-                        : err.message || "Đã xảy ra lỗi. Vui lòng thử lại."
-            : "Đã xảy ra lỗi không xác định.";
+            ? err.kind !== "http"
+              ? UPLOAD_CONNECTION_ERROR
+              : err.status === 401
+                ? "Phiên đăng nhập đã hết hạn. Tệp CHƯA được nộp — vui lòng đăng nhập lại rồi nộp lại tệp."
+                : err.message?.trim() || fallbackUploadMessage(err.status)
+            : UPLOAD_CONNECTION_ERROR;
         finalizeMessage(convIdSnapshot, content);
         markMessageError(convIdSnapshot);
+        return false;
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
