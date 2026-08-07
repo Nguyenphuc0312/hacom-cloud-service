@@ -1001,7 +1001,12 @@ export const ChatPage: React.FC = () => {
 
   if (routeConversationId !== prevRouteConversationId) {
     setPrevRouteConversationId(routeConversationId);
-    if (!routeConversationId && infoPanelMode === "conversation") {
+    // Đổi hội thoại thì panel "thông tin hội thoại" phải đóng, không chỉ khi rời
+    // hẳn khỏi /chat/:id. Trước đây giữ nguyên panel cũ nên sang Cloud là hiện
+    // CÙNG LÚC hai panel (GroupInfo cũ + panel Cloud), timeline bị bóp lệch, và
+    // GroupInfo còn gọi API nhóm lên id Cloud -> 400 "Target conversation is not
+    // a group" rồi văng ra màn lỗi 500.
+    if (infoPanelMode === "conversation") {
       setIsInfoPanelOpen(false);
     }
   }
@@ -1486,9 +1491,12 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Info panel */}
+      {/* Route Cloud có panel riêng (HacomCloudInfoSidebar) nên panel của ChatPage
+          phải im lặng hoàn toàn — nhánh `Boolean(selectedConversation)` trước đây
+          không chặn nên hai panel cùng hiện khi chuyển từ nhóm sang Cloud. */}
       {(infoPanelMode === "self-profile" ||
         (infoPanelMode === "conversation" && Boolean(routeConversationId) && !isRoutePersonalCloud) ||
-        Boolean(selectedConversation)) && (
+        (Boolean(selectedConversation) && !isRoutePersonalCloud)) && (
           <div
             className={clsx(
               "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
