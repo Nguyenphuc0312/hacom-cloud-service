@@ -149,8 +149,8 @@ test('panel Cloud dùng "Kho lưu trữ" tab ngang giống panel nhóm', async (
     await expect(panel.getByRole('button', { name: label })).toBeVisible();
   }
 
-  // Tệp trong Cloud giữ riêng vì đây là chỗ duy nhất xoá được (trả lại quota).
-  await expect(panel.getByText(/Tệp trong Cloud/i)).toBeVisible();
+  // Thùng rác giữ riêng: đây là chỗ khôi phục tệp đã xoá, Kho lưu trữ không có.
+  await expect(panel.getByText(/Thùng rác/i)).toBeVisible();
 });
 
 test('chuyển tab trong Kho lưu trữ đổi đúng nội dung', async ({ page }) => {

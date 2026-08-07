@@ -275,6 +275,7 @@
   "attachmentTray": {
     "queued": "Queued",
     "uploading": "Uploading",
+    "completing": "Finalizing…",
     "ready": "Ready",
     "failed": "Failed",
     "blocked": "Blocked",

@@ -22,3 +22,4 @@ describe('personal Cloud dual-entry policy', () => {
     expect(personalCloudPresentation.showInfoPanel).toBe(true);
   });
 });
+

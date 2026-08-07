@@ -4,11 +4,12 @@ import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
-import { useDeleteMessageMutation, useGetMessagesQuery } from "../../api/chatApi";
+import { useGetMessagesQuery } from "../../api/chatApi";
+// useChatStore: lấy conversation để dựng ChatHeader chuẩn (Cloud mở trong danh sách chat).
 import { useAuthStore, useChatStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
-import { cloudApi, type CloudAsset } from "../api/cloudApi";
+import { cloudApi, deleteCloudAssetForMessage, type CloudAsset } from "../api/cloudApi";
 import wsManager from "../../../lib/socket";
 import { useCloudUploadQueue } from "../hooks/useCloudUploadQueue";
 import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineType } from "../personalCloudPolicy";
@@ -37,36 +38,35 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const filePreview = useFilePreview();
   const [error, setError] = useState<string | null>(null);
 
-  // ChatPage đã gọi ensure() để giải id trước khi render surface này, nên lượt mở đầu
-  // không cần gọi lại. Nhưng quota CHỈ có trong ensure(): sau mỗi lần upload/xóa phải
-  // lấy lại, nếu không con số "Dung lượng lưu trữ" đứng im ở lần đọc đầu tiên.
-  const needSpace = !knownConversationId || infoOpen;
+  // ensure() phải chạy ngay cả khi ChatPage đã giải id: quota CHỈ có trong ensure(),
+  // và panel + upload queue (maxUploadBytes) đều cần nó. Hoãn tới lúc mở panel thì
+  // panel kẹt ở skeleton vì skeleton dựa vào quota === null.
+  // cloudApi.ensure() đã gộp các lời gọi trùng trong cùng một nhịp nên không tốn thêm.
   const refresh = useCallback(async () => {
     try {
       const [nextSpace, nextAssets] = await Promise.all([
-        needSpace ? cloudApi.ensure() : Promise.resolve(null),
+        cloudApi.ensure(),
         cloudApi.list({ includeTrashed: true, limit: 100 }),
       ]);
-      if (nextSpace) setSpace(nextSpace);
+      setSpace(nextSpace);
       setAssets(nextAssets.items);
       setError(null);
     } catch {
       setError("Không thể tải Hacom Cloud. Vui lòng thử lại.");
     }
-  }, [needSpace]);
+  }, []);
 
-  // assets vẫn cần ngay (dùng lọc message của file đã xóa), nhưng không chặn render:
-  // timeline và composer hiện trước, danh sách file điền vào sau. Mở panel cũng chạy
-  // lại effect này (needSpace đổi) nên quota được nạp đúng lúc cần.
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     const sync = () => { void refresh(); };
     wsManager.on("cloud:asset:created", sync);
     wsManager.on("cloud:asset:trashed", sync);
+    wsManager.on("cloud:asset:restored", sync);
     wsManager.on("cloud:quota:changed", sync);
     return () => {
       wsManager.off("cloud:asset:created", sync);
       wsManager.off("cloud:asset:trashed", sync);
+      wsManager.off("cloud:asset:restored", sync);
       wsManager.off("cloud:quota:changed", sync);
     };
   }, [refresh]);
@@ -81,9 +81,15 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   }, [conversationId, joinConversation, leaveConversation]);
 
   const messagesQuery = useGetMessagesQuery({ conversationId, limit: 50 }, { skip: !conversationId, refetchOnReconnect: true });
-  const [deleteMessage] = useDeleteMessageMutation();
-  const uploadQueue = useCloudUploadQueue(() => { void refresh(); void messagesQuery.refetch(); });
-  const hiddenCloudMessageIds = useMemo(() => new Set(assets.filter((asset) => asset.status === "trashed").map((asset) => asset.messageId).filter((id): id is string => Boolean(id))), [assets]);
+  const applyQuota = useCallback((quota: NonNullable<CloudSpace>["quota"]) => {
+    setSpace((current) => current ? { ...current, quota } : current);
+  }, []);
+  const uploadCompleted = useCallback(() => {
+    void refresh();
+    void messagesQuery.refetch();
+  }, [messagesQuery, refresh]);
+  const uploadQueue = useCloudUploadQueue(uploadCompleted, space?.maxUploadBytes, applyQuota);
+  const hiddenCloudMessageIds = useMemo(() => new Set(assets.filter((asset) => asset.status !== "available").map((asset) => asset.messageId).filter((id): id is string => Boolean(id))), [assets]);
   const visibleMessages = useMemo(() => (messagesQuery.data?.messages ?? []).filter((message) => !hiddenCloudMessageIds.has(message.id)), [hiddenCloudMessageIds, messagesQuery.data?.messages]);
 
   const sendNote = useCallback(async (content?: string) => {
@@ -98,16 +104,14 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     }
   }, [messagesQuery, refresh]);
 
-  const handleDelete = useCallback(async (messageId: string, mode: "FOR_ME" | "FOR_EVERYONE" = "FOR_EVERYONE") => {
-    const asset = assets.find((candidate) => candidate.messageId === messageId && candidate.status === "available");
+  const handleDelete = useCallback(async (messageId: string) => {
     try {
-      if (asset) await cloudApi.trash(asset.id);
-      else if (conversationId) await deleteMessage({ conversationId, messageId, mode }).unwrap();
+      await deleteCloudAssetForMessage(messageId, assets);
       await Promise.all([refresh(), messagesQuery.refetch()]);
     } catch {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
     }
-  }, [assets, conversationId, deleteMessage, messagesQuery, refresh]);
+  }, [assets, messagesQuery, refresh]);
 
   const previewAsset = useCallback((asset: CloudAsset) => {
     if (!asset.attachmentId || !conversationId) return;
@@ -157,7 +161,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
         </aside>
       </React.Suspense>
     ) : null}
-    <HacomCloudInfoSidebar open={infoOpen && !searchOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={infoOpen && !space && !error} onChanged={refresh} onPreview={previewAsset} onForward={forwardAsset} />
+    <HacomCloudInfoSidebar open={infoOpen && !searchOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} onPreview={previewAsset} onForward={forwardAsset} />
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;

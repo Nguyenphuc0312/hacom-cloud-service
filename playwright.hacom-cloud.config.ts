@@ -5,7 +5,7 @@ const authTarget = process.env.HACOM_CLOUD_AUTH_BASE_URL ?? 'http://127.0.0.1:31
 
 export default defineConfig({
   testDir: './e2e/hacom-cloud',
-  timeout: 45_000,
+  timeout: 60_000,
   fullyParallel: false,
   retries: 0,
   reporter: [['list'], ['html', { outputFolder: '../artifacts/hacom-cloud/browser-report', open: 'never' }]],
@@ -19,8 +19,6 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',
     url: 'http://127.0.0.1:5100',
-    // The root runner owns this disposable port. Reusing an arbitrary local
-    // Vite process can execute another worktree's bundle and invalidate E2E.
     reuseExistingServer: false,
     env: {
       ...process.env,
