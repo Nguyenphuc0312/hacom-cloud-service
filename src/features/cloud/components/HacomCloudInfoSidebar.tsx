@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Play,
   RotateCcw,
+  Pin,
   Trash2,
   Video,
   X,
@@ -16,6 +17,8 @@ import {
 import type { CloudAsset, CloudQuota } from "../api/cloudApi";
 import { cloudApi } from "../api/cloudApi";
 import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
+import { useUIStore } from "../../../stores/uiStore";
+import { toast } from "../../../components/ui";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
@@ -302,18 +305,51 @@ export const RecentFileList: React.FC<{
   );
 };
 
-/** Hero dựng theo đúng khuôn của GroupInfo/UserProfile để panel Cloud không lạc
- *  lõng giữa các panel thông tin khác. Nút ghim nằm ở ChatHeader (cạnh tìm kiếm),
- *  giống hội thoại thường — không lặp lại ở đây. */
-export const CloudIdentity: React.FC = () => (
-  <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
-    <div className="mb-4">
-      <PersonalCloudAvatar size="lg" />
-    </div>
-    <h2 className="text-base font-bold text-text-primary">Cloud của tôi</h2>
-    <p className="mt-1 text-xs text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
-  </div>
-);
+/** Hero + thao tác nhanh, dựng theo đúng khuôn của GroupInfo/UserProfile.
+ *  Hai loại ghim khác nhau và cùng tồn tại như hội thoại thường:
+ *  - ghim TIN NHẮN: nút trên ChatHeader, cạnh tìm kiếm;
+ *  - ghim HỘI THOẠI (đưa Cloud lên đầu sidebar): nút dưới đây. */
+export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversationId }) => {
+  const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
+  const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
+  const isPinned = pinnedConversationIds.includes(conversationId);
+
+  const handleTogglePin = () => {
+    togglePinnedConversation(conversationId);
+    toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+  };
+
+  return (
+    <>
+      <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
+        <div className="mb-4">
+          <PersonalCloudAvatar size="lg" />
+        </div>
+        <h2 className="text-base font-bold text-text-primary">Cloud của tôi</h2>
+        <p className="mt-1 text-xs text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
+      </div>
+
+      <div className="bg-surface px-4 pb-5">
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={handleTogglePin}
+            disabled={!conversationId}
+            className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover disabled:opacity-50"
+            aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15"}`}>
+              <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
+            </div>
+            <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+              {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
+            </span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+};
 
 const CloudManagerDialog: React.FC<{
   assets: CloudAsset[];
@@ -378,7 +414,7 @@ export const HacomCloudInfoSidebar: React.FC<{
             <div className="space-y-4 p-4" aria-label="Đang tải thông tin Hacom Cloud"><div className="h-[72px] animate-pulse rounded-xl bg-surface-hover" /><div className="h-44 animate-pulse rounded-xl bg-surface-hover" /><div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="aspect-square animate-pulse rounded-lg bg-surface-hover" />)}</div>{[1, 2, 3].map((item) => <div key={item} className="h-[60px] animate-pulse rounded-lg bg-surface-hover" />)}</div>
           ) : (
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
-              <CloudIdentity />
+              <CloudIdentity conversationId={conversationId} />
               <div className="space-y-4 px-4 pr-5">
                 <CloudStorageCard quota={quota} onManage={() => setManagerOpen(true)} />
                 {/* Kho lưu trữ dùng ĐÚNG component của panel thông tin nhóm: tab ngang
