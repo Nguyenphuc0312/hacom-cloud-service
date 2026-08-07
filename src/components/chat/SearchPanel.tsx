@@ -308,8 +308,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       aria-label={t("chat:search.title")}
       onKeyDown={handleKeyDown}
     >
-      {/* Header — matches the info panel (GroupInfo) header */}
-      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
+      {/* Header — phải cao bằng ChatHeader để đường kẻ ngang thẳng hàng với khung chat.
+          ChatHeader đặt min-h var(--app-header-height) trên div CON và border-b ở thẻ
+          NGOÀI; gộp cả hai vào một thẻ khiến border ăn vào vùng min-h và hụt 1px. */}
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
+        <div className="flex min-h-[var(--app-header-height)] items-center justify-between">
         <h3 className="text-sm font-bold text-text-primary">
           {t("chat:search.title")}
         </h3>
@@ -321,6 +324,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
+        </div>
       </div>
 
       {/* Search input */}

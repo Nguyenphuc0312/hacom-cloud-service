@@ -16,8 +16,10 @@ const login = async (target: Page) => {
 
 const openCloud = async (target: Page) => {
   await target.goto('/cloud');
-  await target.waitForURL('**/cloud');
-  await expect(target.getByRole('heading', { name: /Cloud của tôi/i, level: 1 })).toBeVisible();
+  // /cloud nay là lối tắt: giải id rồi chuyển sang /chat/<id> (Cloud sống trong
+  // danh sách hội thoại như My Documents của Zalo).
+  await target.waitForURL(/\/chat\/[^/]+$/, { timeout: 20_000 });
+  await expect(target.getByRole('heading', { name: /Cloud của tôi/i })).toBeVisible();
 };
 
 test.describe.serial('Hacom Cloud browser state', () => {

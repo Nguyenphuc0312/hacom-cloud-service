@@ -18,6 +18,7 @@ import type { CloudAsset, CloudQuota } from "../api/cloudApi";
 import { cloudApi } from "../api/cloudApi";
 import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
+import { CloudSharedResources } from "./CloudSharedResources";
 
 const formatBytes = (value: string | number) => {
   const bytes = Number(value);
@@ -67,7 +68,23 @@ const CloudEmptyState: React.FC<{ icon: React.ReactNode; text: string }> = ({ ic
   </div>
 );
 
-export const StorageUsageBar: React.FC<{ usedBytes: string; limitBytes: string; availableBytes?: string }> = ({ usedBytes, limitBytes, availableBytes }) => {
+/**
+ * Thanh dung lượng nhiều khúc theo loại nội dung (kiểu Zalo). Mỗi khúc có màu riêng
+ * và luôn kèm nhãn chữ ở chú thích — không dựa vào mỗi màu để truyền đạt thông tin.
+ */
+const USAGE_SEGMENTS = [
+  { key: "image", label: "Ảnh", className: "bg-[#F26D21]" },
+  { key: "video", label: "Video", className: "bg-[#1E9E52]" },
+  { key: "file", label: "File", className: "bg-[#F2C230]" },
+  { key: "other", label: "Khác", className: "bg-[#1565C0]" },
+] as const;
+
+export const StorageUsageBar: React.FC<{
+  usedBytes: string;
+  limitBytes: string;
+  availableBytes?: string;
+  usedByType?: { image: string; video: string; file: string; other: string };
+}> = ({ usedBytes, limitBytes, availableBytes, usedByType }) => {
   const used = Number(usedBytes);
   const limit = Number(limitBytes);
   const percent = limit > 0 ? Math.max(0, Math.min(100, used / limit * 100)) : 0;
@@ -75,10 +92,26 @@ export const StorageUsageBar: React.FC<{ usedBytes: string; limitBytes: string; 
   const color = percent >= 95 ? "bg-danger" : percent >= 80 ? "bg-warning" : "bg-brand-solid";
   const displayPercent = percent > 0 && percent < 0.1 ? "< 0,1%" : `${percent.toFixed(percent < 10 ? 1 : 0)}%`;
 
+  // Phần đã dùng nhưng không rơi vào loại nào (API cũ chưa trả usedByType) vẫn phải
+  // hiện, nếu không thanh sẽ ngắn hơn con số "đã dùng" ngay bên trên.
+  const typed = usedByType
+    ? USAGE_SEGMENTS.map((segment) => ({ ...segment, bytes: Number(usedByType[segment.key]) || 0 }))
+    : [];
+  const typedTotal = typed.reduce((sum, segment) => sum + segment.bytes, 0);
+  const segments = (usedByType
+    ? typed.map((segment) =>
+        segment.key === "other"
+          ? { ...segment, bytes: segment.bytes + Math.max(0, used - typedTotal) }
+          : segment,
+      )
+    : []
+  ).filter((segment) => segment.bytes > 0);
+  const nearFull = percent >= 95;
+
   return (
     <div className="mt-3">
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-surface-hover"
+        className={`flex h-1.5 gap-px overflow-hidden rounded-full bg-surface-hover`}
         role="progressbar"
         aria-label="Dung lượng đã sử dụng"
         aria-valuemin={0}
@@ -86,8 +119,30 @@ export const StorageUsageBar: React.FC<{ usedBytes: string; limitBytes: string; 
         aria-valuenow={Math.min(used, limit || used)}
         aria-valuetext={`${formatBytes(used)} trên ${formatBytes(limit)} đã dùng, ${displayPercent}`}
       >
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${visualPercent}%` }} />
+        {segments.length > 1 ? (
+          segments.map((segment) => (
+            <div
+              key={segment.key}
+              className={nearFull ? "bg-danger" : segment.className}
+              // Khúc rất nhỏ vẫn phải thấy được nên có bề rộng tối thiểu.
+              style={{ width: `${Math.max(1.5, limit > 0 ? (segment.bytes / limit) * 100 : 0)}%` }}
+            />
+          ))
+        ) : (
+          <div className={`h-full rounded-full ${color}`} style={{ width: `${visualPercent}%` }} />
+        )}
       </div>
+      {segments.length > 1 && (
+        <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+          {segments.map((segment) => (
+            <li key={segment.key} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${segment.className}`} aria-hidden="true" />
+              <span>{segment.label}</span>
+              <span className="text-text-primary">{formatBytes(segment.bytes)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="mt-2 text-xs text-text-muted">Còn trống {formatBytes(availableBytes ?? Math.max(0, limit - used))}</p>
     </div>
   );
@@ -115,7 +170,7 @@ export const CloudStorageCard: React.FC<{
       </div>
       <p className="mt-2 text-base font-semibold">{formatBytes(used)} <span className="text-sm font-normal text-text-muted">đã dùng</span></p>
       <p className="text-xs text-text-muted">trên tổng dung lượng {formatBytes(quota.limitBytes)}</p>
-      <StorageUsageBar usedBytes={used} limitBytes={quota.limitBytes} availableBytes={quota.availableBytes} />
+      <StorageUsageBar usedBytes={used} limitBytes={quota.limitBytes} availableBytes={quota.availableBytes} usedByType={quota.usedByType} />
       {reservedNumber > 0 && <p className="mt-1 text-xs text-text-muted">Đang tải lên: {formatBytes(reservedNumber)} · Còn có thể dùng {formatBytes(quota.availableBytes)}</p>}
       <button
         type="button"
@@ -321,7 +376,6 @@ export const HacomCloudInfoSidebar: React.FC<{
   const [managerOpen, setManagerOpen] = useState(false);
   const available = useMemo(() => assets.filter((asset) => asset.status === "available"), [assets]);
   const trashed = useMemo(() => assets.filter((asset) => asset.status === "trashed" || asset.status === "purge_failed"), [assets]);
-  const media = useMemo(() => available.filter((asset) => asset.mediaType === "image" || asset.mediaType === "video"), [available]);
   const trash = async (asset: CloudAsset) => {
     await cloudApi.trash(asset.id);
     await onChanged();
@@ -346,10 +400,17 @@ export const HacomCloudInfoSidebar: React.FC<{
               <div className="space-y-4">
                 <CloudIdentity />
                 <CloudStorageCard quota={quota} onManage={() => setManagerOpen(true)} />
-                <CloudSidebarSection title="Ảnh và video" count={media.length}>{error ? <CloudSectionError text="Không thể tải ảnh và video" onRetry={() => onRetry?.()} /> : <RecentMediaGrid assets={media} conversationId={conversationId} onOpen={onPreview} />}</CloudSidebarSection>
-                <CloudSidebarSection title="Tệp gần đây" count={available.length}>{error ? <CloudSectionError text="Không thể tải tệp gần đây" onRetry={() => onRetry?.()} /> : <RecentFileList assets={available} onPreview={onPreview} onForward={onForward} onTrash={trash} onManage={() => setManagerOpen(true)} />}</CloudSidebarSection>
+                {/* Kho lưu trữ dùng ĐÚNG component của panel thông tin nhóm: tab ngang
+                    Ảnh/Video · File · Link, có số đếm và "Xem tất cả". Trong đó thao tác
+                    chuyển tiếp/tải giống hệt bên ngoài, nên không cần mục "Tệp trong Cloud"
+                    riêng nữa (chốt với user 07-08-26). */}
+                {conversationId ? (
+                  <React.Suspense fallback={<div className="h-44 animate-pulse rounded-xl bg-surface-hover" />}>
+                    <CloudSharedResources conversationId={conversationId} />
+                  </React.Suspense>
+                ) : null}
                 <CloudSidebarSection title="Thùng rác" count={trashed.length}>
-                  {trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFileNamePreservingExtension(asset.originalFilename)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
+                  {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFileNamePreservingExtension(asset.originalFilename)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
                 </CloudSidebarSection>
               </div>
             </div>

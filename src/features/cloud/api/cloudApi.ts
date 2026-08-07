@@ -21,8 +21,22 @@ client.interceptors.request.use((request) => {
 
 const data = <T>(response: { data: { data: T } }): T => response.data.data;
 
+/**
+ * ensure() được gọi từ nhiều nơi gần như cùng lúc (CloudPage giải id, ChatPage nhận
+ * diện route, Cloud surface lấy quota). Gộp các lời gọi trùng nhau trong cùng một
+ * nhịp thành một request — trước đây mở /cloud bắn tới 4 lần ensure liên tiếp.
+ */
+let inFlightEnsure: Promise<CloudSpaceDto> | null = null;
+
 export const cloudApi = {
-  ensure: () => client.post('/ensure').then(data<CloudSpaceDto>),
+  ensure: (): Promise<CloudSpaceDto> => {
+    if (inFlightEnsure) return inFlightEnsure;
+    inFlightEnsure = client
+      .post('/ensure')
+      .then(data<CloudSpaceDto>)
+      .finally(() => { inFlightEnsure = null; });
+    return inFlightEnsure;
+  },
   list: (params: { cursor?: string; limit?: number; q?: string; type?: string; includeTrashed?: boolean }) =>
     client.get('/assets', { params }).then(data<{ items: CloudAsset[]; nextCursor: string | null }>),
   note: (content: string) => client.post('/notes', { content }).then(data),
