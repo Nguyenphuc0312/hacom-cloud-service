@@ -56,3 +56,4 @@ export const personalCloudPresentation = {
   showInfoPanel: true,
   infoPanelVariant: 'personal-cloud',
 } as const;
+
