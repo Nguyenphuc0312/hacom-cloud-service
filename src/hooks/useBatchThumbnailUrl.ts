@@ -20,6 +20,7 @@ import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { logger } from "../utils/logger";
 import { blobPreviewCache } from "../lib/blobPreviewCache";
+import { reportImagePerformance } from "../utils/imagePerformanceTelemetry";
 
 export interface ThumbnailUrlItem {
   fileId: string;
@@ -69,6 +70,9 @@ const PENDING_TTL_MS = 10_000; // negative cache for PENDING thumbnails
 const FAILED_TTL_MS = 60_000; // negative cache for not_found/forbidden/error
 const MAX_THUMBNAIL_CACHE_ENTRIES = 500;
 const MAX_PREVIEW_SIGNAL_KEYS = 500;
+const MAX_BATCH_IDS = 20;
+const BATCH_WINDOW_MS = 16;
+const MAX_BATCH_REQUESTS_PER_CONVERSATION = 2;
 
 // Cache value = the resolved display item. The cache entry's expiry encodes
 // "refetch after" time, so ExpiringLruCache.get() returning undefined means
@@ -82,6 +86,24 @@ const inFlightBatchRequests = new Map<
   string,
   Promise<Record<string, ThumbnailUrlItem>>
 >();
+
+interface QueuedBatchRequest {
+  fileIds: string[];
+  queuedAtMs: number;
+  resolve: (items: Record<string, ThumbnailUrlItem>) => void;
+  reject: (error: unknown) => void;
+}
+
+interface ConversationBatchQueue {
+  pending: QueuedBatchRequest[];
+  timer: ReturnType<typeof setTimeout> | null;
+  active: number;
+}
+
+const conversationBatchQueues = new Map<string, ConversationBatchQueue>();
+
+const isTimelineBatchingEnabled = (): boolean =>
+  import.meta.env.VITE_WEB_IMAGE_TIMELINE_BATCHING_ENABLED !== "false";
 
 // --- Realtime preview signals (WebSocket-driven) ---------------------------
 // When the worker finishes a thumbnail it publishes `attachment:preview_ready`
@@ -270,19 +292,14 @@ const readCachedUrls = (
   return { cached, missing };
 };
 
-const dedupedBatchFetch = (
+const executeBatchFetch = async (
   conversationId: string,
   fileIds: string[],
 ): Promise<Record<string, ThumbnailUrlItem>> => {
-  const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
-  const existing = inFlightBatchRequests.get(key);
-  if (existing) return existing;
-
-  const request = (async () => {
-    const response = await fileApi.batchThumbnailUrls({
-      conversationId,
-      fileIds,
-    });
+  const startedAtMs = performance.now();
+  let outcome: 'success' | 'error' = 'error';
+  try {
+    const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
     const payload = unwrapApiSuccess(response);
     const resolved: Record<string, ThumbnailUrlItem> = {};
     for (const raw of payload.items) {
@@ -290,11 +307,71 @@ const dedupedBatchFetch = (
       THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
       resolved[item.fileId] = item;
     }
+    outcome = 'success';
     return resolved;
-  })()
+  } finally {
+    reportImagePerformance({ kind: 'batch_url_request', batchSize: fileIds.length, durationMs: Math.round(performance.now() - startedAtMs), outcome });
+  }
+};
+
+const flushConversationQueue = (conversationId: string): void => {
+  const queue = conversationBatchQueues.get(conversationId);
+  if (!queue) return;
+  if (queue.timer) { clearTimeout(queue.timer); queue.timer = null; }
+  if (queue.active >= MAX_BATCH_REQUESTS_PER_CONVERSATION || queue.pending.length === 0) return;
+  const selected: QueuedBatchRequest[] = [];
+  const selectedIds = new Set<string>();
+  const deferred: QueuedBatchRequest[] = [];
+  for (const request of queue.pending) {
+    const nextIds = request.fileIds.filter((id) => !selectedIds.has(id));
+    if (selected.length > 0 && selectedIds.size + nextIds.length > MAX_BATCH_IDS) { deferred.push(request); continue; }
+    selected.push(request);
+    for (const id of nextIds) selectedIds.add(id);
+  }
+  queue.pending = deferred;
+  if (selected.length === 0) return;
+  queue.active += 1;
+  const queueWaitMs = Math.max(0, Date.now() - Math.min(...selected.map((request) => request.queuedAtMs)));
+  void executeBatchFetch(conversationId, [...selectedIds])
+    .then((results) => {
+      reportImagePerformance({ kind: 'batch_url_request', batchSize: selectedIds.size, queueWaitMs, outcome: 'success' });
+      for (const request of selected) {
+        const requestResults: Record<string, ThumbnailUrlItem> = {};
+        for (const fileId of request.fileIds) { const item = results[fileId]; if (item) requestResults[fileId] = item; }
+        request.resolve(requestResults);
+      }
+    })
+    .catch((error) => {
+      reportImagePerformance({ kind: 'batch_url_request', batchSize: selectedIds.size, queueWaitMs, outcome: 'error' });
+      for (const request of selected) request.reject(error);
+    })
     .finally(() => {
-      inFlightBatchRequests.delete(key);
+      const current = conversationBatchQueues.get(conversationId);
+      if (!current) return;
+      current.active -= 1;
+      if (current.pending.length > 0) current.timer = setTimeout(() => flushConversationQueue(conversationId), 0);
+      else if (current.active === 0) conversationBatchQueues.delete(conversationId);
     });
+};
+
+const enqueueBatchFetch = (conversationId: string, fileIds: string[]): Promise<Record<string, ThumbnailUrlItem>> => {
+  if (!isTimelineBatchingEnabled()) return executeBatchFetch(conversationId, fileIds);
+  return new Promise((resolve, reject) => {
+    const queue = conversationBatchQueues.get(conversationId) ?? { pending: [], timer: null, active: 0 };
+    queue.pending.push({ fileIds, queuedAtMs: Date.now(), resolve, reject });
+    conversationBatchQueues.set(conversationId, queue);
+    if (!queue.timer) queue.timer = setTimeout(() => flushConversationQueue(conversationId), BATCH_WINDOW_MS);
+  });
+};
+
+const dedupedBatchFetch = (
+  conversationId: string,
+  fileIds: string[],
+): Promise<Record<string, ThumbnailUrlItem>> => {
+  const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
+  const existing = inFlightBatchRequests.get(key);
+  if (existing) return existing;
+  const request = enqueueBatchFetch(conversationId, fileIds).finally(() => inFlightBatchRequests.delete(key));
 
   inFlightBatchRequests.set(key, request);
   return request;
@@ -358,6 +435,11 @@ export const __thumbnailCacheTestUtils = {
   maxPreviewSignalKeys: MAX_PREVIEW_SIGNAL_KEYS,
   previewSignalKeyCount: () => previewSignalListeners.size,
   clearThumbnailCache: () => THUMBNAIL_CACHE.clear(),
+  clearBatchQueues: () => {
+    for (const queue of conversationBatchQueues.values()) if (queue.timer) clearTimeout(queue.timer);
+    conversationBatchQueues.clear();
+    inFlightBatchRequests.clear();
+  },
   clearPreviewSignalListeners: () => previewSignalListeners.clear(),
 };
 

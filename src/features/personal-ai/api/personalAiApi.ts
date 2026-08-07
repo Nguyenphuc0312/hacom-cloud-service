@@ -18,6 +18,7 @@ import {
   refreshAccessTokenShared,
 } from "../../../services/authRefreshCoordinator";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
+import { fallbackUploadMessage } from "../../../services/ai-chat/uploadFailure";
 import {
   appendScopeTokenToUrl,
   withScopeToken,
@@ -29,7 +30,11 @@ import {
   normalizeScopeTypes,
   parseScopeRequiredDetail,
 } from "./workReportScopeApi";
-import type { WorkReportScopeRequired } from "../types";
+import type {
+  WorkReportAiDraftReady,
+  WorkReportAiDraftWaiting,
+  WorkReportScopeRequired,
+} from "../types";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
@@ -142,7 +147,9 @@ export class AiHttpError extends PersonalAiError {
   readonly rawBody: string;
 
   constructor(status: number, rawBody: string) {
-    super(status, "http", parseHttpErrorMessage(rawBody));
+    // Body rỗng (vd 500 không có JSON) → câu an toàn theo status, KHÔNG để lọt
+    // `PersonalAI error [http]: 500` ra bong bóng chat (contract 07/08/26 §7.9).
+    super(status, "http", parseHttpErrorMessage(rawBody) ?? fallbackUploadMessage(status));
     this.name = "AiHttpError";
     this.rawBody = rawBody;
   }
@@ -225,7 +232,10 @@ function pickString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-async function aiRequest(
+/** Host AI cho caller ngoài module (vd `workReportDraftApi`). */
+export const AI_BASE_URL = BASE_URL;
+
+export async function aiRequest(
   url: string,
   init: RequestInit = {},
   timeoutMs = TIMEOUT_MS,
@@ -615,8 +625,9 @@ function postLevelReport(
             : new PersonalAiError(
                 status,
                 "http",
-                parseHttpErrorMessage(xhr.responseText) ??
-                  formatHttpErrorMessage(xhr.responseText, status),
+                // §2: lý do BE trả trước, fallback theo status sau — không bao
+                // giờ đẩy chuỗi kỹ thuật `PersonalAI error [http]: …` ra UI.
+                parseHttpErrorMessage(xhr.responseText) ?? fallbackUploadMessage(status),
               ),
         );
       }
@@ -926,6 +937,113 @@ export async function downloadLevelReportExport(url: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+/**
+ * Dựng URL tải bản nháp AI từ `export_url` của SSE `work_report_ai_draft_ready`.
+ *
+ * BE gửi path tương đối (`/api/work-report-drafts/<id>/export.xlsx`); ghép qua
+ * `BASE_URL` để đi đúng host AI (dev: proxy `/ai-api`). Chỉ nhận path đúng dạng
+ * bản nháp — payload lạ trả null và caller không hiện nút tải.
+ *
+ * `/api/work-report-drafts/*` đi qua `BASE_URL` như MỌI endpoint chatbot khác,
+ * KHÔNG qua `chat.hacomholdings.com.vn`. Team Chatbot từng báo "gateway chưa
+ * định tuyến" kèm 404 trên host chat, nhưng host đó proxy toàn bộ `/api/` sang
+ * chat-api (NestJS) và chưa bao giờ là cổng vào của API chatbot —
+ * `/api/work-reports/*` hiện có cũng 404 y hệt ở đó. FE giữ một đường: host AI.
+ */
+export function buildWorkReportDraftExportUrl(exportUrl: string | undefined): string | null {
+  if (!exportUrl?.trim()) return null;
+  try {
+    // BASE_URL có thể tương đối ở dev (/ai-api) nên new URL() không dùng làm
+    // base được — parse theo origin hiện tại rồi ghép lại như parseLevelReportExportHref.
+    const url = new URL(exportUrl.trim(), window.location.origin);
+    if (/^\/api\/work-report-drafts\/[^/]+\/export\.xlsx$/i.test(url.pathname)) {
+      return `${BASE_URL}${url.pathname}${url.search}`;
+    }
+  } catch {
+    /* export_url không hợp lệ */
+  }
+  return null;
+}
+
+/**
+ * URL tải bản nháp dựng TỪ `draft_id`.
+ *
+ * Contract §"Trình bày chat và xuất Excel" nói `work_report_ai_draft_ready` mang
+ * `draft_id`, còn request 06/08 mô tả cùng sự kiện đó mang `export_url`. Nhận cả
+ * hai: có `export_url` thì dùng, không thì ghép từ `draft_id`.
+ */
+export function workReportDraftExportUrlFromId(draftId: string | undefined): string | null {
+  const id = draftId?.trim();
+  // draft_id đi thẳng vào path nên phải chặn ký tự tách path/query, tránh dựng
+  // ra URL trỏ đi chỗ khác từ payload SSE.
+  if (!id || !/^[A-Za-z0-9._-]+$/.test(id)) return null;
+  return `${BASE_URL}/api/work-report-drafts/${id}/export.xlsx`;
+}
+
+/** Trạng thái job dựng bản nháp (contract §4). */
+export interface WorkReportDraftJob {
+  status: "queued" | "running" | "succeeded" | "failed";
+  draft_id?: string;
+  error_message?: string;
+}
+
+/**
+ * GET /api/work-report-drafts/jobs/{job_id} — poll trạng thái dựng bản nháp.
+ *
+ * Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có thể cần
+ * nhiều lượt LLM, vượt giới hạn chờ của SSE. Nên khi SSE chỉ kịp báo
+ * `work_report_ai_draft_waiting` kèm `job_id`, FE phải tự poll đúng job đó —
+ * TUYỆT ĐỐI không bắt TBP gõ lại tag để tạo/đọc job.
+ */
+export async function fetchWorkReportDraftJob(
+  jobId: string,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportDraftJob> {
+  const url = appendScopeTokenToUrl(
+    `${BASE_URL}/api/work-report-drafts/jobs/${encodeURIComponent(jobId)}`,
+  );
+  const response = await aiRequest(url, { signal: options?.signal });
+  const payload = (await response.json()) as Record<string, unknown>;
+  const status = pickString(payload.status) ?? "";
+  return {
+    status: (["queued", "running", "succeeded", "failed"].includes(status)
+      ? status
+      : "running") as WorkReportDraftJob["status"],
+    draft_id: pickString(payload.draft_id),
+    error_message: pickString(payload.error_message),
+  };
+}
+
+/**
+ * GET /api/work-report-drafts/{draft_id}/export.xlsx → tải bản nháp AI (.xlsx).
+ *
+ * Endpoint đòi header `Authorization`, nên KHÔNG render `export_url` thành thẻ
+ * `<a href>`: dán vào thanh địa chỉ luôn 401 vì trình duyệt không gửi token.
+ * Phải fetch blob rồi trigger download thủ công như `downloadLevelReportExport`.
+ *
+ * Token chỉ đi trong header — không nhét vào URL, không log, không lưu thêm chỗ nào.
+ */
+export async function downloadWorkReportDraft(url: string): Promise<void> {
+  // Nhiều phạm vi DEPARTMENT → gửi kèm `scope_token` như các endpoint khác.
+  const response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = "nhap-giao-ban.xlsx";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 function normalizeWeeklyReportFile(raw: unknown): WeeklyReportFileItem | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -1065,6 +1183,15 @@ export async function streamPersonalChat(
     onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
     /** SSE `work_report_scope_required` — mở widget chọn scope ngay (§3). */
     onScopeRequired?: (data: WorkReportScopeRequired) => void;
+    /** SSE `work_report_ai_draft_ready` — hiện nút tải bản nháp AI. */
+    onDraftReady?: (data: WorkReportAiDraftReady) => void;
+    /**
+     * SSE `work_report_ai_draft_waiting` / `work_report_ai_draft_job` — bản nháp
+     * còn đang dựng, kèm `job_id` để FE tự poll thay vì bắt gõ lại tag.
+     */
+    onDraftWaiting?: (data: WorkReportAiDraftWaiting) => void;
+    /** SSE `work_report_ai_draft_failed` — dừng poll, hiện lỗi vận hành. */
+    onDraftFailed?: (message?: string) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -1171,6 +1298,51 @@ export async function streamPersonalChat(
             });
           }
         } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_ready" && options?.onDraftReady) {
+        // Bản nháp AI đã dựng xong. Contract nói event mang `draft_id`, request
+        // 06/08 nói mang `export_url` — nhận cả hai, ưu tiên `export_url` nếu có
+        // và hợp lệ, còn lại ghép từ `draft_id`. Không dựng được URL thì bỏ qua,
+        // không hiện nút tải hỏng.
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const draftId = pickString(parsed.draft_id);
+          const exportUrl =
+            buildWorkReportDraftExportUrl(pickString(parsed.export_url)) ??
+            workReportDraftExportUrlFromId(draftId);
+          if (draftId && exportUrl) {
+            options.onDraftReady({
+              draft_id: draftId,
+              export_url: exportUrl,
+              export_format: pickString(parsed.export_format),
+              read_only: parsed.read_only === true,
+            });
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (
+        (eventType === "work_report_ai_draft_waiting" ||
+          // `..._job` phát sau thời gian chờ của SSE. KHÔNG coi là kết thúc:
+          // giữ nguyên `job_id` và poll tiếp đúng job đó (contract mục 3).
+          eventType === "work_report_ai_draft_job") &&
+        options?.onDraftWaiting
+      ) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const jobId = pickString(parsed.job_id);
+          if (jobId) {
+            options.onDraftWaiting({
+              job_id: jobId,
+              period_start: pickString(parsed.period_start),
+              period_end: pickString(parsed.period_end),
+            });
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_failed" && options?.onDraftFailed) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          options.onDraftFailed(pickString(parsed.error_message, parsed.message));
+        } catch {
+          options.onDraftFailed(undefined);
+        }
       } else if (eventType === "done") {
         try {
           const parsed = JSON.parse(data);

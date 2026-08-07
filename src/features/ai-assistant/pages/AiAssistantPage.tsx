@@ -10,6 +10,10 @@ import {
   fetchPersonalSessions,
   AiApiError,
 } from "../services/aiChatApi";
+import {
+  fallbackUploadMessage,
+  withRetryAfterHint,
+} from "../../../services/ai-chat/uploadFailure";
 import { useAiChatSessions, useAiChatHistory } from "../hooks/useAiChatQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
@@ -255,19 +259,22 @@ export const AiAssistantPage: React.FC = () => {
     [],
   );
 
-  /** Helper: mapping lỗi từ AiApiError sang message tiếng Việt. */
+  /**
+   * Helper: mapping lỗi từ AiApiError sang message hiển thị.
+   *
+   * Contract FE 07/08/26 §2: đã có HTTP response thì hiện NGUYÊN VĂN lý do BE
+   * trả (`err.failure.message`) — các câu cứng theo status đè mất lý do thật
+   * ("File sai form…", "File báo cáo này được xuất cho nhân viên khác…").
+   * Không có response (timeout/mạng) mới dùng câu kết nối chung.
+   */
   const describeApiError = useCallback(
     (err: unknown, fallback: string): string => {
       if (err instanceof AiApiError) {
         if (err.kind === "timeout") return t("chat.errorTimeout");
         if (err.kind === "network") return t("chat.errorNetwork");
+        if (err.failure) return withRetryAfterHint(err.failure);
         if (err.status === 422) return t("chat.error422");
-        if (err.status === 413)
-          return "Tệp vượt quá dung lượng cho phép của máy chủ.";
-        if (err.status === 415)
-          return "Định dạng tệp không được hỗ trợ.";
-        if (err.status === 401 || err.status === 403)
-          return "Bạn không có quyền sử dụng tính năng này.";
+        return fallbackUploadMessage(err.status);
       }
       return fallback;
     },
