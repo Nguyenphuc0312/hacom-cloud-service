@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
-import { MessageInput } from "../../../components/input/MessageInput";
+import { MessageInput, type MessageInputHandle } from "../../../components/input/MessageInput";
 import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { PinnedMessageBar } from "../../../components/chat/PinnedMessageBar";
 import { usePinnedMessages, useMobileViewportMetrics } from "../../../hooks";
@@ -23,6 +23,8 @@ import { FilePreviewModal } from "../../../components/modals/FilePreviewModal";
 import { useFilePreview } from "../../../hooks/useFilePreview";
 import { getMimePreviewType } from "../../../utils/mimeRegistry";
 import { FileType, type Message } from "../../../types";
+import { toast } from "../../../components/ui";
+import { extractApiError } from "../../../lib/apiContract";
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
@@ -45,6 +47,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
   const filePreview = useFilePreview();
   const [error, setError] = useState<string | null>(null);
+  const messageInputRef = useRef<MessageInputHandle>(null);
 
   // ensure() phải chạy ngay cả khi ChatPage đã giải id: quota CHỈ có trong ensure(),
   // và panel + upload queue (maxUploadBytes) đều cần nó. Hoãn tới lúc mở panel thì
@@ -98,6 +101,18 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     return () => leaveConversation(conversationId);
   }, [conversationId, joinConversation, leaveConversation]);
 
+  // Auto-focus ô nhập khi mở Cloud, giống mọi hội thoại khác (ChatWindow đã làm việc
+  // này qua messageInputRef, nhưng Cloud dựng composer riêng nên chưa có ai gọi).
+  // Cùng guard: chỉ desktop (tránh bật bàn phím ảo trên mobile) + đợi 1 frame.
+  useEffect(() => {
+    if (!conversationId) return;
+    if (typeof window === "undefined" || !window.matchMedia("(pointer: fine)").matches) return;
+    const rafId = window.requestAnimationFrame(() => {
+      messageInputRef.current?.focus({ scrollIntoView: false });
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [conversationId]);
+
   const messagesQuery = useGetMessagesQuery({ conversationId, limit: 50 }, { skip: !conversationId, refetchOnReconnect: true });
   const applyQuota = useCallback((quota: NonNullable<CloudSpace>["quota"]) => {
     setSpace((current) => current ? { ...current, quota } : current);
@@ -132,10 +147,16 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
 
   const handleDelete = useCallback(async (messageId: string) => {
     try {
-      await deleteCloudAssetForMessage(messageId, assets);
+      const asset = await deleteCloudAssetForMessage(messageId, assets);
       await Promise.all([refresh(), messagesQuery.refetch()]);
-    } catch {
+      toast.action("Đã xóa nội dung khỏi Cloud", "Hoàn tác", () => {
+        void cloudApi.restore(asset.id)
+          .then(() => Promise.all([refresh(), messagesQuery.refetch()]))
+          .catch((error) => toast.error(extractApiError(error).message));
+      });
+    } catch (error) {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
+      toast.error(extractApiError(error).message);
     }
   }, [assets, messagesQuery, refresh]);
 
@@ -189,7 +210,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
       <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onPin={personalCloudPolicy.allowPin ? handlePin : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
       {/* Không bọc thêm padding/max-width: MessageInput tự canh lane giống ChatWindow.
           Bọc thêm làm ô nhập lệch 32px và hụt 64px so với hội thoại thường. */}
-      <div className="sticky bottom-0 z-sticky shrink-0"><MessageInput value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div>
+      <div className="sticky bottom-0 z-sticky shrink-0"><MessageInput ref={messageInputRef} value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div>
     </main>
     {/* Panel tìm kiếm dùng đúng khung của panel thông tin: cùng bề rộng, cùng đường viền,
         cùng cách phủ toàn màn ở mobile — để Cloud không lệch so với hội thoại thường. */}

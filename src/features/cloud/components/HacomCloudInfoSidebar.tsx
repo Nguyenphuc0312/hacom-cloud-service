@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   Download,
   File,
   FileImage,
@@ -24,7 +25,7 @@ import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
 import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
-import { Input, Modal } from "../../../components/ui";
+import { Input, Modal, ConfirmDialog } from "../../../components/ui";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import { truncateFilenameEnd } from "../../../utils/truncateFilename";
@@ -403,15 +404,49 @@ export const HacomCloudInfoSidebar: React.FC<{
   onForward?: (asset: CloudAsset) => void;
 }> = ({ open, onClose, quota, assets, conversationId, loading = false, error, onChanged, onRetry, onPreview, onForward }) => {
   const [managerOpen, setManagerOpen] = useState(false);
+  // Zalo My Documents: "Chọn" bật chế độ chọn (checkbox mọc trên từng dòng + thanh hành
+  // động thay header) chứ không phải checkbox nằm sẵn cạnh "Chọn tất cả" mọi lúc.
+  const [trashSelectMode, setTrashSelectMode] = useState(false);
+  const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
+  const [emptyingTrash, setEmptyingTrash] = useState(false);
   const available = useMemo(() => assets.filter((asset) => asset.status === "available"), [assets]);
   const trashed = useMemo(() => assets.filter((asset) => asset.status === "trashed" || asset.status === "purge_failed"), [assets]);
+  const trashedTotalBytes = useMemo(
+    () => trashed.reduce((sum, asset) => sum + (Number(asset.sizeBytes) || 0), 0),
+    [trashed],
+  );
+
   const trash = async (asset: CloudAsset) => {
     await cloudApi.trash(asset.id);
     await onChanged();
+    toast.action("Đã xóa " + truncateFilenameEnd(asset.originalFilename, 28), "Hoàn tác", () => {
+      void cloudApi.restore(asset.id).then(onChanged).catch((error) => toast.error(extractApiError(error).message));
+    });
   };
   const restore = async (asset: CloudAsset) => {
     await cloudApi.restore(asset.id);
     await onChanged();
+    toast.success("Đã khôi phục " + truncateFilenameEnd(asset.originalFilename, 28));
+  };
+  const emptyTrash = async () => {
+    setEmptyingTrash(true);
+    try {
+      const result = await cloudApi.emptyTrash();
+      await onChanged();
+      setTrashSelectMode(false);
+      setConfirmEmptyTrash(false);
+      if (result.failed > 0) {
+        toast.warning(`Đã xóa vĩnh viễn ${result.purged}/${result.claimed} mục, ${result.failed} mục lỗi`);
+      } else if (result.purged > 0) {
+        toast.success(`Đã xóa vĩnh viễn ${result.purged} mục khỏi thùng rác`);
+      } else {
+        toast.info("Thùng rác đang trống");
+      }
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setEmptyingTrash(false);
+    }
   };
 
   return (
@@ -444,7 +479,71 @@ export const HacomCloudInfoSidebar: React.FC<{
                   badge={<span className="rounded-full bg-surface-hover px-1.5 py-0.5 text-xs text-text-muted">{trashed.length}</span>}
                 >
                   <div className="p-2">
-                    {error ? <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} /> : trashed.length ? <ul className="space-y-1">{trashed.slice(0, 5).map((asset) => <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm" title={asset.originalFilename}>{truncateFilenameEnd(asset.originalFilename, 34)}</span><span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span></span><button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button></li>)}</ul> : <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />}
+                    {error ? (
+                      <CloudSectionError text="Không thể tải thùng rác" onRetry={() => onRetry?.()} />
+                    ) : trashed.length ? (
+                      <>
+                        {/* Giống thanh "Chọn"/"Đã chọn N mục" của Zalo My Documents: header
+                            đổi hẳn sang chế độ chọn thay vì để checkbox nằm cạnh nút mọi lúc. */}
+                        <div className="flex items-center justify-between px-2 pb-2">
+                          {trashSelectMode ? (
+                            <>
+                              <span className="text-xs font-medium text-text-primary">
+                                Đã chọn {trashed.length} mục ({formatBytes(trashedTotalBytes)})
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmEmptyTrash(true)}
+                                  className="text-xs font-medium text-danger hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid"
+                                >
+                                  Xóa vĩnh viễn
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTrashSelectMode(false)}
+                                  className="text-xs font-medium text-text-muted hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs text-text-muted">{trashed.length} mục</span>
+                              <button
+                                type="button"
+                                onClick={() => setTrashSelectMode(true)}
+                                className="text-xs font-medium text-brand-solid hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid"
+                              >
+                                Chọn
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <ul className="space-y-1">
+                          {trashed.slice(0, 5).map((asset) => (
+                            <li key={asset.id} className="flex min-h-[52px] items-center gap-3 rounded-lg p-2 hover:bg-surface-hover">
+                              {trashSelectMode && (
+                                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-solid text-white" aria-hidden="true">
+                                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                </span>
+                              )}
+                              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-hover">{fileIcon(asset)}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm" title={asset.originalFilename}>{truncateFilenameEnd(asset.originalFilename, 34)}</span>
+                                <span className="text-xs text-text-muted">{formatBytes(asset.sizeBytes)}</span>
+                              </span>
+                              {!trashSelectMode && (
+                                <button type="button" onClick={() => void restore(asset)} className="flex h-8 w-8 items-center justify-center rounded-md text-brand-solid hover:bg-surface" aria-label={`Khôi phục ${asset.originalFilename}`}><RotateCcw className="h-4 w-4" /></button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <CloudEmptyState icon={<Trash2 className="h-6 w-6" />} text="Thùng rác đang trống" />
+                    )}
                   </div>
                 </CollapsibleSection>
               </div>
@@ -453,6 +552,16 @@ export const HacomCloudInfoSidebar: React.FC<{
         </div>
       </aside>
       {managerOpen && <CloudManagerDialog assets={available} onClose={() => setManagerOpen(false)} onPreview={onPreview} onForward={onForward} onTrash={trash} />}
+      <ConfirmDialog
+        isOpen={confirmEmptyTrash}
+        onClose={() => setConfirmEmptyTrash(false)}
+        onConfirm={() => void emptyTrash()}
+        title="Dọn thùng rác"
+        message={`${trashed.length} mục sẽ bị xóa vĩnh viễn và không thể khôi phục. Bạn có chắc chắn?`}
+        confirmText="Xóa vĩnh viễn"
+        variant="danger"
+        isLoading={emptyingTrash}
+      />
     </>
   );
 };

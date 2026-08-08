@@ -54,6 +54,8 @@ export const cloudApi = {
   trashByMessage: (messageId: string) =>
     client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
   restore: (assetId: string) => client.post(`/assets/${assetId}/restore`).then(data<CloudAsset>),
+  emptyTrash: () =>
+    client.post('/trash/empty').then(data<{ claimed: number; purged: number; failed: number }>),
   download: (assetId: string) => client.get(`/assets/${assetId}/download`).then(data<{ url: string }>),
   forward: (assetId: string, targetConversationId: string) =>
     client.post(`/assets/${assetId}/forward`, { targetConversationId }).then(data),
