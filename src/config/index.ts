@@ -226,25 +226,6 @@ export const USE_AUTH_SERVICE =
     ? true
     : rawUseAuthService === "true";
 
-/**
- * Đính kèm file/ảnh vào lịch (calendar attachments).
- *
- * BE đã ship: chat-api purpose `calendar_attachment` (migration 069) + hr-api
- * lưu `attachmentFileIds` và resolve `attachments[]` khi đọc (forward Bearer token).
- * → Upload đi qua chat-api storage thật, mọi người xem event đều tải được file.
- *
- * Xem: chat-api-service/docs/requests/FE__calendar-attachments__ACCEPTANCE__02-07-26.md
- */
-export const CALENDAR_ATTACHMENTS_ENABLED = true;
-
-/**
- * Lớp mock (IndexedDB) chỉ để dev-test khi BE tắt — file mock là blob: local, CHỈ
- * người upload trên chính máy đó xem được (không dùng cho thật).
- * Mặc định FALSE (dùng API thật). Bật lại mock: VITE_CALENDAR_ATTACHMENTS_MOCK=true.
- */
-export const CALENDAR_ATTACHMENTS_USE_MOCK =
-  import.meta.env.VITE_CALENDAR_ATTACHMENTS_MOCK === "true";
-
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 
@@ -282,11 +263,9 @@ if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
   });
 }
 
-const rawWebSocketBaseUrl =
-  import.meta.env.VITE_WS_BASE_URL ||
-  import.meta.env.VITE_WS_URL ||
-  import.meta.env.VITE_WEBSOCKET_URL ||
-  "/ws";
+// VITE_WS_URL là biến duy nhất cho WS base — trùng tên với repo variable mà
+// deploy-production.yml + Dockerfile truyền vào lúc build.
+const rawWebSocketBaseUrl = import.meta.env.VITE_WS_URL || "/ws";
 
 const resolveWebSocketUrl = (value: string): string => {
   const normalizedValue = ensureWebSocketScheme(value);

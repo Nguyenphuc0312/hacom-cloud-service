@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useClickOutside } from "../../../hooks";
 import {
   ArrowDownUp,
   Check,
@@ -69,19 +70,7 @@ const SortDropdown: React.FC<{ value: SortKey; onChange: (key: SortKey) => void 
   const label = SORT_OPTIONS.find((option) => option.key === value)?.label ?? "";
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
-    const closeOnOutsidePointer = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("mousedown", closeOnOutsidePointer);
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("mousedown", closeOnOutsidePointer);
-    };
-  }, [open]);
+  useClickOutside(menuRef, () => setOpen(false), { active: open, escape: true });
 
   return (
     <div ref={menuRef} className="relative shrink-0">
@@ -119,19 +108,7 @@ const RowMenu: React.FC<{ asset: CloudAsset; onDownload: () => void; onTrash: ()
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
-    const closeOnOutsidePointer = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("mousedown", closeOnOutsidePointer);
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("mousedown", closeOnOutsidePointer);
-    };
-  }, [open]);
+  useClickOutside(menuRef, () => setOpen(false), { active: open, escape: true });
 
   return (
     <div ref={menuRef} className="relative shrink-0">

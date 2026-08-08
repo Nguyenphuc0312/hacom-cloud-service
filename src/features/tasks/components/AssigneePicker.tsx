@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../../hooks";
 import { MagnifyingGlassIcon, XMarkIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { searchUsersUseCase } from "../../chat/usecases/searchUsers";
 import { resolvePublicResourceUrl } from "../../../config";
@@ -66,16 +67,7 @@ export const AssigneePicker: React.FC<AssigneePickerProps> = ({
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, search]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  useClickOutside(containerRef, () => setIsOpen(false));
 
   const handleSelect = (user: AssigneeUser) => {
     onChange(user);

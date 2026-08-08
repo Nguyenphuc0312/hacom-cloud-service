@@ -1,5 +1,6 @@
 import React from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
+import { useClickOutside } from "../../hooks";
 import type { ReminderInfo, ReminderResponse } from "@hacom/chat-shared-types/chat";
 import clsx from "clsx";
 import { messageApi } from "../../services/api";
@@ -124,16 +125,7 @@ export const ReminderMessage: React.FC<ReminderMessageProps> = ({
     [loadProfiles],
   );
 
-  React.useEffect(() => {
-    if (!respondMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (respondRef.current && !respondRef.current.contains(e.target as Node)) {
-        setRespondMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [respondMenuOpen]);
+  useClickOutside(respondRef, () => setRespondMenuOpen(false), { active: respondMenuOpen });
 
   const respond = (response: "accepted" | "declined") => {
     if (!messageId || !canRespond) return;
