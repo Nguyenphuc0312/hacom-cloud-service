@@ -12,7 +12,10 @@ import {
   TrashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { Button, IconButton, Modal } from "../../ui";
+import { Button, IconButton, Modal, toast } from "../../ui";
+import { useChatStore } from "../../../stores";
+import { conversationApi, type ConversationLabelStateDto } from "../../../services/api";
+import { extractApiError } from "../../../lib/apiContract";
 import {
   type ConversationLabel,
   useUIStore,
@@ -37,6 +40,22 @@ type FloatingMenuPosition = {
   left: number;
   top: number;
   maxHeight: number;
+};
+
+const applyConversationLabelState = (
+  state: ConversationLabelStateDto,
+  setConversationLabelState: (
+    labels: ConversationLabel[],
+    assignments?: Record<string, string[]>,
+  ) => void,
+) => {
+  setConversationLabelState(state.labels, state.assignments);
+  const chatState = useChatStore.getState();
+  Object.keys(chatState.conversationById).forEach((conversationId) => {
+    chatState.updateConversation(conversationId, {
+      labelIds: state.assignments[conversationId] ?? [],
+    });
+  });
 };
 
 const getFloatingFilterMenuPosition = (
@@ -157,6 +176,9 @@ export const SidebarLabelFilter: React.FC<{
   const clearSelectedLabels = useUIStore(
     (state) => state.clearSelectedConversationLabels,
   );
+  const setConversationLabelState = useUIStore(
+    (state) => state.setConversationLabelState,
+  );
   const openManager = useUIStore(
     (state) => state.openConversationLabelManager,
   );
@@ -182,6 +204,23 @@ export const SidebarLabelFilter: React.FC<{
     [moreButtonRef, moreMenuRef],
     () => setMoreOpen(false),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    conversationApi
+      .getConversationLabels()
+      .then((state) => {
+        if (cancelled) return;
+        applyConversationLabelState(state, setConversationLabelState);
+      })
+      .catch(() => {
+        // The sidebar still works without labels; API errors surface on mutation.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setConversationLabelState]);
 
   const selectedLabels = useMemo(
     () => labels.filter((label) => selectedLabelIds.includes(label.id)),
@@ -446,16 +485,19 @@ export const ConversationLabelManagerModal: React.FC = () => {
   const isOpen = useUIStore((state) => state.isConversationLabelManagerOpen);
   const onClose = useUIStore((state) => state.closeConversationLabelManager);
   const labels = useUIStore((state) => state.conversationLabels);
-  const addLabel = useUIStore((state) => state.addConversationLabel);
-  const updateLabel = useUIStore((state) => state.updateConversationLabel);
-  const deleteLabel = useUIStore((state) => state.deleteConversationLabel);
-  const restoreDefaults = useUIStore(
-    (state) => state.restoreDefaultConversationLabels,
+  const setConversationLabelState = useUIStore(
+    (state) => state.setConversationLabelState,
   );
   const [draftName, setDraftName] = useState("");
   const [draftColor, setDraftColor] = useState(LABEL_SWATCHES[0]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [pending, setPending] = useState(false);
+
+  const refreshLabelState = async () => {
+    const state = await conversationApi.getConversationLabels();
+    applyConversationLabelState(state, setConversationLabelState);
+  };
 
   const handleClose = () => {
     setDraftName("");
@@ -465,10 +507,60 @@ export const ConversationLabelManagerModal: React.FC = () => {
     onClose();
   };
 
-  const handleAddLabel = () => {
+  const handleAddLabel = async () => {
     if (!draftName.trim()) return;
-    addLabel(draftName, draftColor);
-    setDraftName("");
+    setPending(true);
+    try {
+      await conversationApi.createConversationLabel({
+        name: draftName,
+        color: draftColor,
+      });
+      setDraftName("");
+      await refreshLabelState();
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleUpdateLabel = async (labelId: string, name: string) => {
+    if (!name.trim()) return;
+    setPending(true);
+    try {
+      await conversationApi.updateConversationLabel(labelId, { name });
+      setEditingId(null);
+      setEditingName("");
+      await refreshLabelState();
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleDeleteLabel = async (labelId: string) => {
+    setPending(true);
+    try {
+      await conversationApi.deleteConversationLabel(labelId);
+      await refreshLabelState();
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleRestoreDefaults = async () => {
+    setPending(true);
+    try {
+      await conversationApi.restoreDefaultConversationLabels();
+      await refreshLabelState();
+    } catch (error) {
+      toast.error(extractApiError(error).message);
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -501,8 +593,7 @@ export const ConversationLabelManagerModal: React.FC = () => {
                       onChange={(event) => setEditingName(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
-                          updateLabel(label.id, { name: editingName });
-                          setEditingId(null);
+                          void handleUpdateLabel(label.id, editingName);
                         }
                       }}
                       className="input-surface min-h-9 min-w-0 flex-1 px-3 text-sm"
@@ -521,9 +612,9 @@ export const ConversationLabelManagerModal: React.FC = () => {
                       size="xs"
                       variant="brand-outline"
                       onClick={() => {
-                        updateLabel(label.id, { name: editingName });
-                        setEditingId(null);
+                        void handleUpdateLabel(label.id, editingName);
                       }}
+                      disabled={pending}
                     >
                       {t("common:actions.save")}
                     </Button>
@@ -546,7 +637,8 @@ export const ConversationLabelManagerModal: React.FC = () => {
                     variant="ghost"
                     icon={<TrashIcon className="h-4 w-4" />}
                     aria-label={t("sidebar:labels.delete")}
-                    onClick={() => deleteLabel(label.id)}
+                    onClick={() => void handleDeleteLabel(label.id)}
+                    disabled={pending}
                     className="text-danger hover:text-danger"
                   />
                 </div>
@@ -594,8 +686,8 @@ export const ConversationLabelManagerModal: React.FC = () => {
             variant="brand"
             size="sm"
             leftIcon={<PlusIcon className="h-4 w-4" />}
-            onClick={handleAddLabel}
-            disabled={!draftName.trim()}
+            onClick={() => void handleAddLabel()}
+            disabled={!draftName.trim() || pending}
           >
             {t("common:actions.add")}
           </Button>
@@ -603,7 +695,13 @@ export const ConversationLabelManagerModal: React.FC = () => {
       </section>
 
       <div className="flex justify-end">
-        <Button type="button" variant="ghost" size="sm" onClick={restoreDefaults}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleRestoreDefaults()}
+          disabled={pending}
+        >
           {t("sidebar:labels.restoreDefaults")}
         </Button>
       </div>

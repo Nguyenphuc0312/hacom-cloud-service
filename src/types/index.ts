@@ -168,6 +168,9 @@ export type Conversation = Omit<
   lastMessageSortAt?: Date | string | null;
   lastMessageId?: string | null;
   lastMessageStatus?: "pending" | "sent" | "failed" | null;
+  pinnedAt?: Date | string | null;
+  pinOrder?: number | null;
+  labelIds?: string[];
   membershipState?: "active" | "left" | "removed" | "banned" | "deleted";
   summaryVersion?: number;
   typingUsers?: TypingUser[];

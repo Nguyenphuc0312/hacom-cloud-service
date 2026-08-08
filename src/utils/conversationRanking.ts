@@ -114,11 +114,22 @@ export const getConversationSortIdentity = (
  * sánh trở thành thuần nên test được mà không cần dựng store.
  */
 export const createConversationActivityComparator =
-  (pinnedIds: ReadonlySet<string>) =>
+  (
+    pinnedIds: ReadonlySet<string>,
+    pinnedAtById: ReadonlyMap<string, number> = new Map(),
+  ) =>
   (a: Conversation, b: Conversation): number => {
     const aPinned = pinnedIds.has(a.id);
     const bPinned = pinnedIds.has(b.id);
     if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
+    if (aPinned && bPinned) {
+      const aPinnedAt = pinnedAtById.get(a.id) ?? 0;
+      const bPinnedAt = pinnedAtById.get(b.id) ?? 0;
+      if (aPinnedAt !== bPinnedAt) {
+        return bPinnedAt - aPinnedAt;
+      }
+    }
 
     const aActivity = getConversationActivityTimestamp(a);
     const bActivity = getConversationActivityTimestamp(b);
@@ -139,6 +150,10 @@ export const createConversationActivityComparator =
 /** Đọc tập ghim hiện tại từ uiStore (một lần, không gọi trong vòng sort). */
 export const getPinnedConversationIdSet = (): ReadonlySet<string> =>
   new Set(useUIStore.getState().pinnedConversationIds);
+
+export const getConversationPinnedTimestamp = (
+  conversation: Conversation,
+): number => toTimestamp(conversation.pinnedAt);
 
 export const sortConversationsByActivity = (
   conversations: Conversation[] | null | undefined,

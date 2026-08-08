@@ -93,13 +93,12 @@ const matchesFilter = (
 };
 
 const matchesLabels = (
-  conversationId: string,
+  conversation: Conversation,
   selectedLabelIds: string[],
-  labelsByConversationId: Record<string, string[]>,
 ): boolean => {
   if (selectedLabelIds.length === 0) return true;
 
-  const labelIds = labelsByConversationId[conversationId] ?? [];
+  const labelIds = conversation.labelIds ?? [];
   return selectedLabelIds.some((labelId) => labelIds.includes(labelId));
 };
 
@@ -114,17 +113,12 @@ export const useSidebarConversationList = (
   const selectedLabelIds = useUIStore(
     (state) => state.selectedConversationLabelIds,
   );
-  const labelsByConversationId = useUIStore(
-    (state) => state.conversationLabelsByConversationId,
-  );
 
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
     const conversationIds = orderedConversations
       .filter((conversation) => matchesFilter(conversation, options.filter))
-      .filter((conversation) =>
-        matchesLabels(conversation.id, selectedLabelIds, labelsByConversationId),
-      )
+      .filter((conversation) => matchesLabels(conversation, selectedLabelIds))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
       )
@@ -136,7 +130,6 @@ export const useSidebarConversationList = (
   }, [
     counts,
     currentUser.id,
-    labelsByConversationId,
     options.filter,
     options.query,
     orderedConversations,

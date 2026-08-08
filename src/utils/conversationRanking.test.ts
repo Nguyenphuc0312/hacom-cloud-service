@@ -45,6 +45,27 @@ describe("createConversationActivityComparator", () => {
     expect(compare(newer, older)).toBeLessThan(0);
   });
 
+  it("hai hội thoại cùng ghim có pinnedAt thì ghim mới hơn đứng trước dù tin nhắn cũ hơn", () => {
+    const pinnedAtById = new Map([
+      ["old-pin", Date.parse("2026-01-01T00:00:00.000Z")],
+      ["new-pin", Date.parse("2026-02-01T00:00:00.000Z")],
+    ]);
+    const compare = createConversationActivityComparator(
+      new Set(pinnedAtById.keys()),
+      pinnedAtById,
+    );
+    const oldPinWithFreshMessage = conversation(
+      "old-pin",
+      "2026-08-01T00:00:00.000Z",
+    );
+    const newPinWithOlderMessage = conversation(
+      "new-pin",
+      "2026-03-01T00:00:00.000Z",
+    );
+
+    expect(compare(newPinWithOlderMessage, oldPinWithFreshMessage)).toBeLessThan(0);
+  });
+
   it("thứ tự ổn định khi trùng mốc thời gian (tie-break theo id)", () => {
     const compare = createConversationActivityComparator(new Set());
     const same = "2026-03-01T00:00:00.000Z";
