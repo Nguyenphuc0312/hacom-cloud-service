@@ -38,6 +38,9 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
 
   const currentUser = useAuthStore((s) => s.user);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Modal tự focus phần tử focusable ĐẦU TIÊN (nút ✕ ở header) sau khi mở —
+  // đè lên autoFocus của input. initialFocusRef trỏ thẳng vào ô tìm kiếm.
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Debounced search
   const handleSearch = useCallback((searchQuery: string) => {
@@ -150,12 +153,14 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
       onClose={handleClose}
       title="Tìm kiếm người để xem lịch"
       size="md"
+      initialFocusRef={searchInputRef}
     >
       <div className="space-y-4">
         {/* Search input */}
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted" />
           <input
+            ref={searchInputRef}
             type="text"
             value={query}
             onChange={(e) => {
