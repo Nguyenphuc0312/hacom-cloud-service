@@ -10,6 +10,7 @@ import {
   listPersonalAttachments,
   AiStreamError,
   stripDraftExportLinks,
+  isAttachmentGoneError,
 } from "../api/personalAiApi";
 import { isReportSubmissionText } from "../permissions/reportTags";
 import {
@@ -41,7 +42,7 @@ import { handleDraftRetry } from "../services/workReportDraftPoller";
 import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
-import type { PersonalChatMessage, PersonalDocument } from "../types";
+import type { PersonalAttachment, PersonalChatMessage, PersonalDocument } from "../types";
 import { PERSONAL_ATTACHMENT_MODE, isAttachmentExpired } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
@@ -84,6 +85,7 @@ export function usePersonalChat() {
     loadMessagesForConversation,
     addAttachment,
     setAttachments,
+    removeAttachment,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -235,7 +237,13 @@ export function usePersonalChat() {
         if (ac.signal.aborted) return;
         return listPersonalAttachments(serverSessionId, { signal: ac.signal })
           .then((list) => {
-            if (!ac.signal.aborted) setAttachments(activeConversationId, list);
+            if (ac.signal.aborted) return;
+            // KHÔNG ghi đè bằng danh sách RỖNG. Effect này chạy lại ngay sau lượt
+            // hỏi đầu tiên (lúc `serverSessionId` vừa có), và nếu BE chưa kịp
+            // liệt kê tệp vừa upload thì `[]` sẽ xoá đúng cái chip user vừa đính
+            // — chip biến mất ngay trước mắt dù tệp vẫn dùng được.
+            if (list.length === 0) return;
+            setAttachments(activeConversationId, list);
           })
           .catch(() => { /* không có chip cũng không sao */ });
       })
@@ -247,20 +255,48 @@ export function usePersonalChat() {
   }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
 
   const sendMessage = useCallback(
-    async (promptText: string, scopePromptId?: string) => {
+    async (
+      promptText: string,
+      scopePromptId?: string,
+      // Tệp đính kèm CỦA RIÊNG lượt này — chỉ `sendWithFile` truyền vào, để bong
+      // bóng user hiện chip tệp (kiểu ChatGPT). Các chip khác đang treo ở
+      // composer không thuộc lượt này nên không suy từ store.
+      attachedFile?: PersonalChatMessage["attachedFile"],
+    ) => {
       const trimmed = promptText.trim();
       if (!trimmed || isStreaming) return;
 
-      let conversationId = activeConversationId;
+      // Đọc TƯƠI: `sendWithFile` có thể vừa tạo hội thoại + ghi chip xong rồi gọi
+      // thẳng vào đây trong CÙNG một lượt, lúc đó `activeConversationId` của
+      // closure vẫn là null → tạo thêm hội thoại thứ hai, và chip nằm ở hội thoại
+      // thứ nhất nên `attachment_ids` rỗng ("vui lòng gửi file" dù chip đã hiện).
+      let conversationId =
+        usePersonalAiStore.getState().activeConversationId ?? activeConversationId;
       if (!conversationId) {
         conversationId = createConversation();
       }
+
+      // Tệp hiện trong bong bóng user = tệp THỰC SỰ gửi kèm lượt này. Suy từ
+      // chip còn hiệu lực của hội thoại chứ không chỉ nhận từ `sendWithFile`:
+      // câu hỏi thứ hai trở đi vẫn gửi `attachment_ids` nhưng không đi qua
+      // `sendWithFile`, nếu chỉ dựa vào tham số thì bong bóng trống trơn —
+      // user không biết AI đang đọc tệp nào (ảnh "hỏi xong mất file").
+      const liveForBubble = (
+        usePersonalAiStore.getState().conversations.find((c) => c.id === conversationId)
+          ?.attachments ?? []
+      ).filter((a) => !isAttachmentExpired(a));
+      const bubbleFile =
+        attachedFile ??
+        (liveForBubble.length === 1
+          ? { name: liveForBubble[0].filename, pages: liveForBubble[0].pages }
+          : undefined);
 
       const userMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
         timestamp: new Date(),
+        ...(bubbleFile && { attachedFile: bubbleFile }),
       };
       addMessage(conversationId, userMessage);
 
@@ -397,8 +433,13 @@ export function usePersonalChat() {
       setIsStreaming(true);
 
       const convIdSnapshot = conversationId;
-      // Lấy serverSessionId của conversation hiện tại (null = chưa có session trên backend)
-      const targetConv = conversations.find((c) => c.id === conversationId);
+      // Đọc TƯƠI từ store, không dùng `conversations` của closure: `sendWithFile`
+      // gọi `addAttachment` rồi `await sendMessage(...)` ngay trong cùng một lượt,
+      // nên closure vẫn giữ snapshot TRƯỚC lúc có chip → `attachment_ids` rỗng và
+      // BE trả "vui lòng gửi file" dù chip đã hiện. Cùng lý do với serverSessionId.
+      const targetConv = usePersonalAiStore
+        .getState()
+        .conversations.find((c) => c.id === conversationId);
       const serverSessionId = targetConv?.serverSessionId ?? null;
       // Gửi new_conversation: true nếu conversation được tạo mới bằng nút "+"
       // (pendingNew) HOẶC chưa có serverSessionId — belt-and-suspenders đảm bảo
@@ -599,6 +640,12 @@ export function usePersonalChat() {
         // Với ATTACHMENT_MODE_REJECTED, GIỮ NGUYÊN chip tệp và ô nhập để user tự
         // chọn lại luồng; FE không tự chuyển tệp sang Sources hay báo cáo.
         if (err instanceof AiStreamError) {
+          // NGOẠI LỆ: tệp không còn trên BE thì chip đang trỏ vào ID chết. Giữ nó
+          // lại là mọi câu hỏi sau trong hội thoại đều hỏng đúng kiểu này, user
+          // không hiểu vì sao và cũng không có cách nào thoát ngoài xoá tay.
+          if (isAttachmentGoneError(err)) {
+            attachmentIds.forEach((id) => removeAttachment(convIdSnapshot, id));
+          }
           finalizeMessage(convIdSnapshot, err.message);
           markMessageError(convIdSnapshot);
           return;
@@ -659,6 +706,7 @@ export function usePersonalChat() {
       updateServerSessionId,
       startDraftPolling,
       stopDraftPolling,
+      removeAttachment,
     ],
   );
 
@@ -701,6 +749,91 @@ export function usePersonalChat() {
         conversationId = createConversation();
       }
 
+      const convIdSnapshot = conversationId;
+      const fileServerSessionId =
+        usePersonalAiStore.getState().conversations.find((c) => c.id === conversationId)
+          ?.serverSessionId ?? null;
+
+      // Tệp KHÔNG kèm lệnh nộp báo cáo → hỏi đáp tệp tạm, không đụng endpoint
+      // báo cáo lẫn Sources. Định tuyến bằng parser lệnh chứ không dò `#` thô.
+      //
+      // Nhánh này KHÔNG tự dựng bong bóng: nó uỷ thác cho `sendMessage`, mà
+      // `sendMessage` tự thêm cặp user+assistant của nó. Dựng thêm ở đây thì câu
+      // hỏi hiện HAI lần và bong bóng đầu kẹt mãi ở "Đang tìm kiếm trong tài
+      // liệu..." (không ai finalize nó).
+      if (!isReportSubmissionText(trimmed)) {
+        // Sources đang bật + tệp thường = hai nguồn tranh nhau. Bắt user chọn rõ
+        // MODE thay vì tự tắt Sources giúp họ: tắt ngầm đúng thứ request cấm, và
+        // user sẽ không hiểu vì sao câu trả lời bỏ qua nguồn họ đã tick.
+        if (selectedDocumentIds.length > 0) {
+          addMessage(conversationId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              "Bạn đang chọn nguồn trong Sources. Hỏi đáp tệp đính kèm không dùng " +
+              "chung với Sources — vui lòng bỏ chọn nguồn trong Sources, hoặc mở " +
+              "hội thoại mới rồi gửi lại tệp.",
+            timestamp: new Date(),
+            isError: true,
+          });
+          // Giữ nguyên tệp + câu hỏi để user chọn lại luồng, không nuốt mất file.
+          return false;
+        }
+
+        setIsStreaming(true);
+        const uploadController = new AbortController();
+        abortRef.current = uploadController;
+        let uploaded: PersonalAttachment;
+        try {
+          uploaded = await uploadPersonalAttachment(
+            file,
+            fileServerSessionId ?? convIdSnapshot,
+            { signal: uploadController.signal },
+          );
+          // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
+          addAttachment(convIdSnapshot, uploaded);
+          // Gắn hội thoại vào ĐÚNG session BE đã cất tệp. Hội thoại mới chưa có
+          // serverSessionId nên tệp được upload dưới id cục bộ; không nhận session
+          // thật về đây thì lượt hỏi ngay sau gửi `new_conversation: true` → BE mở
+          // session KHÁC → "Không tìm thấy tệp đính kèm" ngay câu hỏi ĐẦU TIÊN.
+          if (uploaded.session_id && uploaded.session_id !== fileServerSessionId) {
+            updateServerSessionId(convIdSnapshot, uploaded.session_id);
+          }
+        } catch (err) {
+          addMessage(convIdSnapshot, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              err instanceof PersonalAiError && err.kind === "http"
+                ? err.message
+                : UPLOAD_CONNECTION_ERROR,
+            timestamp: new Date(),
+            isError: true,
+          });
+          setIsStreaming(false);
+          abortRef.current = null;
+          return false;
+        }
+        // Nhả cờ TRƯỚC khi gửi: `sendMessage` bỏ qua lượt gửi khi `isStreaming`
+        // còn bật (guard đầu hàm) — quên nhả là câu hỏi biến mất không dấu vết.
+        setIsStreaming(false);
+        abortRef.current = null;
+        // Chip đã vào store; `sendMessage` đọc TƯƠI từ store nên thấy được
+        // `attachment_ids` của lượt này. Kèm tên tệp để bong bóng user hiện chip.
+        //
+        // Chip Ở LẠI composer sau khi hỏi — đúng request mục 5: chip chỉ mất khi
+        // user bấm xoá (DELETE trả 2xx) hoặc tệp hết hạn, và được khôi phục qua
+        // GET .../attachments khi mở lại hội thoại. Tệp tạm là NGỮ CẢNH của cả
+        // hội thoại, không phải đính kèm dùng một lần: bỏ chip đi thì câu hỏi thứ
+        // hai không còn gửi `attachment_ids`, chỉ chạy đúng nhờ BE tự nhớ theo
+        // session — tức FE dựa vào hành vi không có trong hợp đồng.
+        await sendMessage(trimmed, undefined, {
+          name: uploaded.filename,
+          pages: uploaded.pages,
+        });
+        return true;
+      }
+
       const userMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
@@ -723,56 +856,6 @@ export function usePersonalChat() {
       const controller = new AbortController();
       abortRef.current = controller;
       setIsStreaming(true);
-
-      const convIdSnapshot = conversationId;
-      const targetConvForFile = conversations.find((c) => c.id === conversationId);
-      const fileServerSessionId = targetConvForFile?.serverSessionId ?? null;
-
-      // Tệp KHÔNG kèm lệnh nộp báo cáo → hỏi đáp tệp tạm, không đụng endpoint
-      // báo cáo lẫn Sources. Định tuyến bằng parser lệnh chứ không dò `#` thô.
-      if (!isReportSubmissionText(trimmed)) {
-        // Sources đang bật + tệp thường = hai nguồn tranh nhau. Bắt user chọn rõ
-        // MODE thay vì tự tắt Sources giúp họ: tắt ngầm đúng thứ request cấm, và
-        // user sẽ không hiểu vì sao câu trả lời bỏ qua nguồn họ đã tick.
-        if (selectedDocumentIds.length > 0) {
-          patchMessage(convIdSnapshot, assistantId, {
-            content:
-              "Bạn đang chọn nguồn trong Sources. Hỏi đáp tệp đính kèm không dùng " +
-              "chung với Sources — vui lòng bỏ chọn nguồn trong Sources, hoặc mở " +
-              "hội thoại mới rồi gửi lại tệp.",
-            isStreaming: false,
-            thinkingPhase: null,
-            isError: true,
-          });
-          setIsStreaming(false);
-          abortRef.current = null;
-          // Giữ nguyên tệp + câu hỏi để user chọn lại luồng, không nuốt mất file.
-          return false;
-        }
-        try {
-          const attachment = await uploadPersonalAttachment(
-            file,
-            fileServerSessionId ?? convIdSnapshot,
-            { signal: controller.signal },
-          );
-          // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
-          addAttachment(convIdSnapshot, attachment);
-          setIsStreaming(false);
-          abortRef.current = null;
-          await sendMessage(trimmed);
-          return true;
-        } catch (err) {
-          const content =
-            err instanceof PersonalAiError && err.kind === "http"
-              ? err.message
-              : UPLOAD_CONNECTION_ERROR;
-          finalizeMessage(convIdSnapshot, content);
-          markMessageError(convIdSnapshot);
-          setIsStreaming(false);
-          abortRef.current = null;
-          return false;
-        }
-      }
 
       try {
         const response = await uploadPersonalWeeklyReport(
@@ -837,7 +920,6 @@ export function usePersonalChat() {
     [
       isStreaming,
       activeConversationId,
-      conversations,
       user,
       createConversation,
       addMessage,
@@ -845,7 +927,6 @@ export function usePersonalChat() {
       markMessageError,
       updateServerSessionId,
       selectedDocumentIds,
-      patchMessage,
       addAttachment,
       sendMessage,
     ],

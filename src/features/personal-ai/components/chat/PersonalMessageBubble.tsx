@@ -545,6 +545,22 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               <ThinkingIndicator phase={message.thinkingPhase} />
             )}
 
+            {/* Tệp user đính kèm cho lượt hỏi này — thẻ riêng NẰM TRÊN bong bóng
+                chữ (kiểu ChatGPT), không nhét tên file vào nội dung câu hỏi. */}
+            {isUser && message.attachedFile && (
+              <div className="mb-1.5 inline-flex max-w-[76%] items-center gap-2.5 rounded-2xl border border-border bg-surface px-3 py-2">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
+                  <FileTextIcon size={17} strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[12px] font-medium text-text-primary">
+                    {message.attachedFile.name}
+                  </div>
+                  <div className="text-[11px] text-text-muted">Tệp</div>
+                </div>
+              </div>
+            )}
+
             {/* Message body */}
             <div
               className={clsx(

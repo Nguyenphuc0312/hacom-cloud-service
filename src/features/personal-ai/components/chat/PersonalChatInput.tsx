@@ -119,6 +119,41 @@ export const PersonalChatInput = forwardRef<
       );
     }, [hashMenuOpen, hashQuery, hashCommands]);
 
+    /**
+     * Danh sách chip tệp của ô nhập — gộp tệp ĐANG upload (`pendingFile`) và tệp
+     * ĐÃ upload (`attachments`) thành MỘT nguồn.
+     *
+     * Phải khử trùng theo tên: trong lúc `sendWithFile` chờ stream trả lời xong,
+     * cả hai state cùng trỏ tới một tệp — render rời sẽ ra hai chip giống hệt
+     * nhau nằm cạnh nhau. Chip đã upload thắng vì nó có `attachment_id` thật.
+     */
+    const composerFiles = useMemo(() => {
+      const chips = attachments.map((a) => ({
+        key: a.attachment_id,
+        name: a.filename,
+        title: a.pages ? `${a.filename} · ${a.pages} trang` : a.filename,
+        isUploading: false,
+        onRemove: onRemoveAttachment
+          ? () => onRemoveAttachment(a.attachment_id)
+          : undefined,
+      }));
+
+      if (pendingFile && !chips.some((c) => c.name === pendingFile.name)) {
+        const size = formatFileSize(pendingFile.size);
+        chips.push({
+          key: `pending:${pendingFile.name}`,
+          name: pendingFile.name,
+          title: isUploading
+            ? `${pendingFile.name} · Đang tải lên...`
+            : `${pendingFile.name}${size ? ` · ${size}` : ""}`,
+          isUploading: Boolean(isUploading),
+          // Đang tải lên thì không cho xoá — huỷ giữa chừng để lại tệp mồ côi ở BE.
+          onRemove: onRemoveFile && !isUploading ? onRemoveFile : undefined,
+        });
+      }
+      return chips;
+    }, [attachments, pendingFile, isUploading, onRemoveAttachment, onRemoveFile]);
+
     const handleSelectHashCommand = useCallback(
       (cmd: HashCommand) => {
         setHashMenuOpen(false);
@@ -369,68 +404,46 @@ export const PersonalChatInput = forwardRef<
               : "border-border focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border/20 focus-within:shadow-md",
           )}
         >
-          {/* Tệp hỏi đáp tạm đã upload — chip có nút xoá gọi BE. */}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3">
-              {attachments.map((attachment) => (
+          {/* MỘT hàng chip duy nhất cho mọi tệp của ô nhập.
+              Trước đây `attachments` (đã upload) và `pendingFile` (đang upload)
+              render thành HAI hàng riêng; suốt lúc đang trả lời thì cả hai cùng
+              đúng nên CÙNG MỘT tệp hiện hai lần, tới khi stream xong mới hết. */}
+          {composerFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+              {composerFiles.map((chip) => (
                 <div
-                  key={attachment.attachment_id}
-                  className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+                  key={chip.key}
+                  className="inline-flex max-w-[280px] items-center gap-1.5 rounded-lg border border-border bg-surface-hover py-1 pl-2 pr-1"
+                  title={chip.title}
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
-                    <FileTextIcon size={16} strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{attachment.filename}</div>
-                    <div className="text-xs text-text-muted">
-                      {attachment.pages ? `${attachment.pages} trang · ` : ""}Hỏi đáp tạm
-                    </div>
-                  </div>
-                  {onRemoveAttachment && (
+                  {chip.isUploading ? (
+                    <Loader2Icon
+                      size={13}
+                      strokeWidth={2}
+                      className="shrink-0 animate-spin text-[#1565C0]"
+                    />
+                  ) : (
+                    <FileTextIcon
+                      size={13}
+                      strokeWidth={2}
+                      className="shrink-0 text-[#1565C0]"
+                    />
+                  )}
+                  <span className="truncate text-[12px] text-text-primary">
+                    {chip.name}
+                  </span>
+                  {chip.onRemove && (
                     <button
                       type="button"
-                      onClick={() => onRemoveAttachment(attachment.attachment_id)}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
-                      aria-label={`Xoá tệp ${attachment.filename}`}
+                      onClick={chip.onRemove}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
+                      aria-label={`Xoá tệp ${chip.name}`}
                     >
-                      <XIcon size={14} strokeWidth={2} />
+                      <XIcon size={12} strokeWidth={2} />
                     </button>
                   )}
                 </div>
               ))}
-            </div>
-          )}
-
-          {/* Pending file chip */}
-          {pendingFile && (
-            <div className="px-3 pt-3">
-              <div className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
-                  {isUploading ? (
-                    <Loader2Icon size={16} strokeWidth={2} className="animate-spin" />
-                  ) : (
-                    <FileTextIcon size={16} strokeWidth={2} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{pendingFile.name}</div>
-                  <div className="text-xs text-text-muted">
-                    {isUploading
-                      ? "Đang tải lên..."
-                      : formatFileSize(pendingFile.size) || "Đã đính kèm"}
-                  </div>
-                </div>
-                {onRemoveFile && !isUploading && (
-                  <button
-                    type="button"
-                    onClick={onRemoveFile}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-active hover:text-text-secondary transition-colors"
-                    aria-label="Xoá tệp đính kèm"
-                  >
-                    <XIcon size={14} strokeWidth={2} />
-                  </button>
-                )}
-              </div>
             </div>
           )}
 
