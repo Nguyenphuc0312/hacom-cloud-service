@@ -87,7 +87,6 @@
     "delete": "Xóa thẻ",
     "restoreDefaults": "Khôi phục thẻ mặc định",
     "markRead": "Đánh dấu đã đọc",
-    "markUnread": "Đánh dấu chưa đọc",
     "confirmTitle": "Xác nhận",
     "confirmMarkReadMessage": "Toàn bộ tin nhắn trong khu vực này sẽ được đánh dấu đã đọc. Bạn có muốn tiếp tục?",
     "confirmNo": "Không",
@@ -99,13 +98,9 @@
     "classify": "Phân loại",
     "pin": "Ghim hội thoại",
     "unpin": "Bỏ ghim hội thoại",
-    "mute": "Tắt thông báo",
-    "hide": "Ẩn trò chuyện",
-    "report": "Báo xấu",
     "deleteConversation": "Xóa hội thoại",
     "deleteConversationSuccess": "Đã xóa hội thoại.",
-    "deleteConversationFailed": "Không thể xóa hội thoại.",
-    "actionPending": "Mục này cần API hỗ trợ để lưu trạng thái thật."
+    "deleteConversationFailed": "Không thể xóa hội thoại."
   },
   "room": {
     "section": {

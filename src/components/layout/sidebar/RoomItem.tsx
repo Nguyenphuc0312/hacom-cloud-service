@@ -325,11 +325,6 @@ const ConversationItemMenu: React.FC<{
     [],
   );
 
-  const showPendingToast = () => {
-    toast.info(t("sidebar:labels.actionPending"));
-    setOpen(false);
-  };
-
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (!nextOpen) {
@@ -484,17 +479,6 @@ const ConversationItemMenu: React.FC<{
 
           <div className="my-1 border-t border-border/70" />
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={showPendingToast}
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
-          >
-            <CheckIcon className="h-4 w-4 text-text-secondary" />
-            <span>{t("sidebar:labels.markUnread")}</span>
-          </button>
-
-          <div className="my-1 border-t border-border/70" />
           <button
             type="button"
             role="menuitem"

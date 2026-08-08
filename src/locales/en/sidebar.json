@@ -87,7 +87,6 @@
     "delete": "Delete label",
     "restoreDefaults": "Restore default labels",
     "markRead": "Mark as read",
-    "markUnread": "Mark as unread",
     "confirmTitle": "Confirm",
     "confirmMarkReadMessage": "All messages in this area will be marked as read. Do you want to continue?",
     "confirmNo": "No",
@@ -99,13 +98,9 @@
     "classify": "Classify",
     "pin": "Pin conversation",
     "unpin": "Unpin conversation",
-    "mute": "Mute notifications",
-    "hide": "Hide conversation",
-    "report": "Report",
     "deleteConversation": "Delete conversation",
     "deleteConversationSuccess": "Conversation deleted.",
-    "deleteConversationFailed": "Could not delete conversation.",
-    "actionPending": "This item needs API support before it can save real state."
+    "deleteConversationFailed": "Could not delete conversation."
   },
   "room": {
     "section": {

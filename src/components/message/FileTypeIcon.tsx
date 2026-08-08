@@ -57,11 +57,13 @@ const OfficeGlyph: React.FC<{
 }> = ({ color, label, title, className }) => (
   <svg
     viewBox="0 0 24 24"
-    className={clsx("h-6 w-6", className)}
+    // Mặc định chiếm trọn ô chứa (như Zalo); nơi nào cần cỡ cố định thì truyền
+    // className (vd "h-5 w-5") — đặt sau nên ghi đè được.
+    className={clsx("h-full w-full", className)}
     role="img"
     aria-label={title}
   >
-    <rect x="2.5" y="2" width="19" height="20" rx="3" fill={color} />
+    <rect x="0" y="0" width="24" height="24" rx="5" fill={color} />
     <text
       x="12"
       y="12.5"
@@ -69,7 +71,7 @@ const OfficeGlyph: React.FC<{
       dominantBaseline="central"
       fill="#FFFFFF"
       // Chữ PDF dài hơn → phải nhỏ lại mới vừa khối.
-      fontSize={label.length > 1 ? 7 : 11}
+      fontSize={label.length > 1 ? 8 : 14}
       fontWeight="700"
       fontFamily="Segoe UI, system-ui, sans-serif"
       letterSpacing={label.length > 1 ? "0.2" : "0"}
@@ -116,7 +118,11 @@ const POWERPOINT: OfficeGlyphSpec = {
 };
 const PDF: OfficeGlyphSpec = { color: BRAND.pdf, label: "PDF", title: "PDF" };
 
-/** Phần mở rộng Office thật → glyph tương ứng. */
+/**
+ * Phần mở rộng → glyph. Office/PDF dùng màu thương hiệu chính thức; các loại
+ * còn lại lấy nhãn là chính đuôi file (như Zalo: ZIP, PNG, MP4…) để user nhận ra
+ * ngay mà không phải đọc tên file dài.
+ */
 const EXT_GLYPHS: Record<string, OfficeGlyphSpec> = {
   doc: WORD,
   docx: WORD,
@@ -132,19 +138,50 @@ const EXT_GLYPHS: Record<string, OfficeGlyphSpec> = {
   pdf: PDF,
 };
 
+/** Màu khối cho các loại không phải Office, theo nhóm nội dung. */
+const TYPE_COLORS: Partial<Record<FileIconType, string>> = {
+  image: "#22A06B",
+  video: "#7C4DFF",
+  audio: "#F2994A",
+  archive: "#B58105",
+  code: "#0E7490",
+  spreadsheet: BRAND.excel,
+  document: "#546E7A",
+  generic: "#78909C",
+};
+
+/** Nhãn tối đa 4 ký tự cho vừa khối; đuôi dài hơn thì cắt bớt. */
+const glyphLabelFromExt = (ext: string): string =>
+  ext.slice(0, 4).toUpperCase();
+
 /**
- * Chọn glyph Office cho file, hoặc `null` để dùng icon outline.
+ * Chọn glyph khối cho file, hoặc `null` để dùng icon outline.
  *
- * Có tên file → quyết theo phần mở rộng (chính xác nhất). Không có tên → chỉ
- * `pdf` là an toàn, vì `document`/`spreadsheet` còn gộp cả .txt/.csv.
+ * Ưu tiên phần mở rộng (chính xác nhất, phân biệt được .docx với .txt vốn cùng
+ * `type` = document). Không có tên file thì chỉ dựa vào `type` cho các nhóm
+ * không bị gộp nhập nhằng.
  */
 function resolveOfficeGlyph(
   type: FileIconType,
   fileName: string | undefined,
 ): OfficeGlyphSpec | null {
   const ext = fileName?.toLowerCase().split(".").pop() ?? "";
+
+  // 1. Office / PDF — màu thương hiệu, nhãn cố định.
   if (ext && EXT_GLYPHS[ext]) return EXT_GLYPHS[ext];
-  // PDF là loại duy nhất `type` đủ tin cậy để tự quyết (không gộp loại nào khác).
+
+  // 2. Loại khác nhưng có đuôi file → khối màu theo nhóm, nhãn là đuôi file.
+  //    Chỉ nhận đuôi "trông như đuôi thật" để tên kiểu "báo cáo v1.2" không biến
+  //    thành nhãn "2".
+  if (ext && /^[a-z0-9]{2,4}$/.test(ext) && TYPE_COLORS[type]) {
+    return {
+      color: TYPE_COLORS[type] as string,
+      label: glyphLabelFromExt(ext),
+      title: ext.toUpperCase(),
+    };
+  }
+
+  // 3. Không có tên file: PDF là loại duy nhất `type` đủ tin cậy để tự quyết.
   return type === "pdf" ? PDF : null;
 }
 

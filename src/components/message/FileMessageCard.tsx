@@ -476,11 +476,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 w-[17rem] max-w-full items-center gap-3 rounded-2xl border p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        // Rộng 20rem: 17rem quá chật nên tên file và dòng trạng thái đều bị cắt
+        // cụt ("Tải về để xe..."). Nền TRẮNG cho cả hai phía như Zalo — thẻ nền
+        // mờ đục đặt trên bong bóng xanh của người gửi nhìn đục và khó đọc.
+        "group/file flex min-w-0 w-[20rem] max-w-full items-center gap-3 rounded-2xl border border-black/5 bg-white p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         canClickToOpen && "cursor-pointer",
-        isOwn
-          ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
-          : "border-[#1976D2]/15 bg-[#1976D2]/[0.035] hover:border-[#1976D2]/25 hover:bg-[#1976D2]/[0.07]",
         className,
       )}
       onClick={canClickToOpen ? () => void handleCardClick() : undefined}
@@ -505,47 +505,28 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           : undefined
       }
     >
-      {/* Icon */}
-      <div
-        className={clsx(
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover/file:scale-105",
-          isOwn
-            ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15]"
-            : "bg-[#DBEAFE]/70 ring-1 ring-inset ring-[#1976D2]/10",
-        )}
-      >
+      {/* Icon — khối đặc chiếm trọn ô, cỡ 48px như Zalo (không nền nhạt bao ngoài
+          cho các loại Office, vì glyph đã là khối màu). */}
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center transition-transform duration-200 group-hover/file:scale-105">
         <FileTypeIcon type={iconType} fileName={attachment.fileName} />
       </div>
 
-      {/* File info */}
+      {/* File info — nền thẻ luôn trắng nên màu chữ không phụ thuộc isOwn nữa. */}
       <div className="min-w-0 flex-1">
         <FileName
           name={attachment.fileName || t("chat:file.unknown")}
           title={attachment.fileName}
-          className={clsx(
-            "text-sm font-semibold",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
-          )}
+          className="text-sm font-semibold text-text-primary"
         />
-        <div className="mt-0.5 flex items-center gap-1.5">
+        <div className="mt-1 flex items-center gap-1.5 text-xs">
+          <span className="shrink-0 text-text-muted">{size}</span>
+          <span className="shrink-0 text-text-muted/50">·</span>
           <span
             className={clsx(
-              "shrink-0 text-xs",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
-            )}
-          >
-            {size}
-          </span>
-          <span
-            className={clsx(
-              "flex min-w-0 items-center gap-1 text-xs",
-              isDownloaded
-                ? isOwn
-                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.85]"
-                  : "text-emerald-600"
-                : isOwn
-                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]"
-                  : "text-[#1565C0]",
+              // `min-w-0` để phần chữ tự co, nhưng KHÔNG truncate: dòng này ngắn,
+              // cắt cụt thành "Tải về để xe..." là lỗi thẩm mỹ thấy rõ nhất.
+              "flex min-w-0 items-center gap-1",
+              isDownloaded ? "text-emerald-600" : "text-[#1565C0]",
             )}
           >
             {isDownloaded ? (
@@ -554,7 +535,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               <ClockIcon className="h-3.5 w-3.5 shrink-0" />
             )}
             {/* Rê chuột lên thẻ xem được → đổi thành lời mời bấm, như Zalo. */}
-            <span className="truncate">
+            <span className="whitespace-nowrap">
               {isPreviewable && (
                 <span className="hidden group-hover/file:inline">
                   {t("chat:file.clickToPreview", {
@@ -579,20 +560,17 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               event.stopPropagation();
               void reveal();
             }}
-            className={clsx(
-              "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90",
-              isOwn
-                ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:scale-110 hover:bg-[hsl(var(--chat-bubble-sent-text))/0.32]"
-                : "bg-white text-[#1565C0] shadow-sm hover:scale-110 hover:bg-[#1565C0] hover:text-white hover:shadow-md hover:shadow-[#1565C0]/30",
-            )}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:border-[#1976D2]/40 hover:bg-[#1976D2]/8 hover:text-[#1565C0] active:scale-95"
             aria-label={t("chat:file.showInFolder", {
               defaultValue: "Mở thư mục chứa file",
             })}
           >
-            <FolderOpenIcon className="h-4 w-4" />
+            <FolderOpenIcon className="h-[18px] w-[18px]" />
           </button>
         )}
 
+        {/* Nút tải: khung vuông bo góc, viền nhạt — đúng kiểu Zalo, không phải
+            nút tròn nổi bật (thẻ file không nên tranh chú ý với nội dung chat). */}
         <button
           type="button"
           onClick={(event) => {
@@ -600,15 +578,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             void handleDownload();
           }}
           disabled={isDownloading}
-          className={clsx(
-            "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 disabled:cursor-not-allowed disabled:opacity-50",
-            isOwn
-              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:scale-110 hover:bg-[hsl(var(--chat-bubble-sent-text))/0.32]"
-              : "bg-white text-[#1565C0] shadow-sm hover:scale-110 hover:bg-[#1565C0] hover:text-white hover:shadow-md hover:shadow-[#1565C0]/30",
-          )}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:border-[#1976D2]/40 hover:bg-[#1976D2]/8 hover:text-[#1565C0] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={t("chat:file.download")}
         >
-          <ArrowDownTrayIcon className="h-4 w-4" />
+          <ArrowDownTrayIcon className="h-[18px] w-[18px]" />
         </button>
       </div>
     </div>
