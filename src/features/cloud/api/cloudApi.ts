@@ -53,15 +53,19 @@ export const cloudApi = {
   trash: (assetId: string) => client.delete(`/assets/${assetId}`).then(data<CloudAsset>),
   trashByMessage: (messageId: string) =>
     client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
-  /** Xóa vĩnh viễn 1 thao tác (khung chat Cloud): object + quota + message, không qua thùng rác. */
-  purgeByMessage: (messageId: string) =>
-    client
-      .delete(`/assets/by-message/${encodeURIComponent(messageId)}`, { params: { permanent: true } })
-      .then(data<CloudAsset>),
   restore: (assetId: string) => client.post(`/assets/${assetId}/restore`).then(data<CloudAsset>),
   emptyTrash: () =>
     client.post('/trash/empty').then(data<{ claimed: number; purged: number; failed: number }>),
   download: (assetId: string) => client.get(`/assets/${assetId}/download`).then(data<{ url: string }>),
   forward: (assetId: string, targetConversationId: string) =>
     client.post(`/assets/${assetId}/forward`, { targetConversationId }).then(data),
+};
+
+export const deleteCloudAssetForMessage = (
+  messageId: string,
+  assets: readonly CloudAsset[],
+  gateway: Pick<typeof cloudApi, 'trash' | 'trashByMessage'> = cloudApi,
+): Promise<CloudAsset> => {
+  const loaded = assets.find((asset) => asset.messageId === messageId && asset.status === 'available');
+  return loaded ? gateway.trash(loaded.id) : gateway.trashByMessage(messageId);
 };

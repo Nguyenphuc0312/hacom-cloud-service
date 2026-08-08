@@ -13,6 +13,7 @@ import { useRetrySendMessage } from "../../../features/chat/hooks/useSendMessage
 import { UserProfile } from "../../info/UserProfile";
 import { DraggableProfileModal } from "../../info/DraggableProfileModal";
 import {
+  isCloudMediaMessage,
   resolveMessageActions,
   type MessageActionId,
 } from "../../../utils/messageActionPolicy";
@@ -666,12 +667,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         onAction={handleAction}
         onClose={closeActions}
         actionLabelOverrides={
-          isPersonalCloud
-            ? {
-                deleteForMe: t("chat:message.actions.deletePermanently", {
-                  defaultValue: "Xóa vĩnh viễn",
-                }),
-              }
+          // Ghi chú/link trong Cloud: 1 nút "Xóa" duy nhất (xóa vĩnh viễn),
+          // không phải "Xóa chỉ ở phía tôi". Media giữ nhãn thường (thùng rác).
+          isPersonalCloud && !isCloudMediaMessage(message)
+            ? { deleteForMe: t("chat:message.actions.delete", { defaultValue: "Xóa" }) }
             : undefined
         }
       />

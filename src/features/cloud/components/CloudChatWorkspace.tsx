@@ -13,7 +13,9 @@ import { useGetMessagesQuery } from "../../api/chatApi";
 import { useAuthStore, useChatStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
-import { cloudApi, type CloudAsset } from "../api/cloudApi";
+import { cloudApi, deleteCloudAssetForMessage, type CloudAsset } from "../api/cloudApi";
+import { messageApi } from "../../../services/api";
+import { isCloudMediaMessage } from "../../../utils/messageActionPolicy";
 import wsManager from "../../../lib/socket";
 import { useCloudUploadQueue } from "../hooks/useCloudUploadQueue";
 import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineType } from "../personalCloudPolicy";
@@ -144,17 +146,31 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     await togglePin(target);
   }, [togglePin, visibleMessages]);
 
-  // Xóa vĩnh viễn 1 thao tác (chốt với user 08-08-26): không thùng rác, không hoàn tác.
+  // Chốt với user 08-08-26: media chiếm dung lượng → thùng rác + Hoàn tác như cũ;
+  // ghi chú/link → xóa vĩnh viễn ngay trong 1 thao tác (tombstone, Cloud chỉ có
+  // mình mình nên đồng nghĩa mất hẳn), không thùng rác vì chẳng có gì để trả quota.
   const handleDelete = useCallback(async (messageId: string) => {
+    const target = visibleMessages.find((message) => message.id === messageId);
+    if (!target) return;
     try {
-      await cloudApi.purgeByMessage(messageId);
-      await Promise.all([refresh(), messagesQuery.refetch()]);
-      toast.success("Đã xóa vĩnh viễn khỏi Cloud");
+      if (isCloudMediaMessage(target)) {
+        const asset = await deleteCloudAssetForMessage(messageId, assets);
+        await Promise.all([refresh(), messagesQuery.refetch()]);
+        toast.action("Đã xóa nội dung khỏi Cloud", "Hoàn tác", () => {
+          void cloudApi.restore(asset.id)
+            .then(() => Promise.all([refresh(), messagesQuery.refetch()]))
+            .catch((error) => toast.error(extractApiError(error).message));
+        });
+      } else {
+        await messageApi.deleteMessage(messageId, { mode: "FOR_ME" });
+        await messagesQuery.refetch();
+        toast.success("Đã xóa ghi chú khỏi Cloud");
+      }
     } catch (error) {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
       toast.error(extractApiError(error).message);
     }
-  }, [messagesQuery, refresh]);
+  }, [assets, messagesQuery, refresh, visibleMessages]);
 
 
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">

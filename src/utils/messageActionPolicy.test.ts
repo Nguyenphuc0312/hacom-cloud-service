@@ -133,7 +133,7 @@ describe("resolveMessageActions", () => {
     ).toEqual(["copy", "select", "adminDelete", "deleteForMe"]);
   });
 
-  it("Cloud cá nhân: media chỉ có đúng 1 nút xóa (vĩnh viễn), không thu hồi", () => {
+  it("Cloud cá nhân: media giữ luồng xóa như cũ (thu hồi + xóa phía tôi)", () => {
     expect(
       resolveMessageActions({
         message: message({ type: MessageType.IMAGE, content: "" }),
@@ -143,10 +143,10 @@ describe("resolveMessageActions", () => {
         canDelete: true,
         isPersonalCloud: true,
       }).menuActions,
-    ).toEqual(["pin", "deleteForMe"]);
+    ).toEqual(["pin", "recall", "deleteForMe"]);
   });
 
-  it("Cloud cá nhân: text/link không có xóa hay thu hồi", () => {
+  it("Cloud cá nhân: text/link có đúng 1 nút Xóa (mất vĩnh viễn), không thu hồi", () => {
     const menuActions = resolveMessageActions({
       message: message(),
       isOwn: true,
@@ -156,10 +156,8 @@ describe("resolveMessageActions", () => {
       isPersonalCloud: true,
     }).menuActions;
 
-    expect(menuActions).toContain("copy");
-    expect(menuActions).not.toContain("deleteForMe");
+    expect(menuActions).toEqual(["copy", "pin", "deleteForMe"]);
     expect(menuActions).not.toContain("recall");
-    expect(menuActions).not.toContain("adminDelete");
   });
 
   it("uses the inverse label for pinned messages and hides delete without permission", () => {

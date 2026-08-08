@@ -1,35 +1,33 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { CloudAsset } from './cloudApi';
+import { deleteCloudAssetForMessage } from './cloudApi';
 
-const { del } = vi.hoisted(() => ({ del: vi.fn() }));
+const asset = { id: 'asset-1', messageId: 'message-1', status: 'available' } as CloudAsset;
 
-vi.mock('axios', () => ({
-  default: {
-    create: () => ({
-      interceptors: { request: { use: vi.fn() } },
-      delete: del,
-      get: vi.fn(),
-      post: vi.fn(),
-    }),
-  },
-}));
-
-import { cloudApi } from './cloudApi';
-
-describe('cloudApi', () => {
-  beforeEach(() => {
-    del.mockReset();
-    del.mockResolvedValue({ data: { data: { id: 'asset-1' } } });
+describe('deleteCloudAssetForMessage', () => {
+  it('uses the loaded asset id when it is present', async () => {
+    const gateway = { trash: vi.fn().mockResolvedValue(asset), trashByMessage: vi.fn() };
+    await deleteCloudAssetForMessage('message-1', [asset], gateway);
+    expect(gateway.trash).toHaveBeenCalledWith('asset-1');
+    expect(gateway.trashByMessage).not.toHaveBeenCalled();
   });
 
-  it('purgeByMessage gọi endpoint by-message với permanent=true (xóa vĩnh viễn 1 thao tác)', async () => {
-    await cloudApi.purgeByMessage('message 1');
-    expect(del).toHaveBeenCalledWith('/assets/by-message/message%201', {
-      params: { permanent: true },
-    });
+  it('uses the canonical message resolver for an asset outside the first 100 items', async () => {
+    const gateway = { trash: vi.fn(), trashByMessage: vi.fn().mockResolvedValue(asset) };
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...asset,
+      id: `asset-${index}`,
+      messageId: `message-${index}`,
+    }));
+    await deleteCloudAssetForMessage('message-101', firstPage, gateway);
+    expect(gateway.trashByMessage).toHaveBeenCalledWith('message-101');
+    expect(gateway.trash).not.toHaveBeenCalled();
   });
 
-  it('trashByMessage giữ nguyên đường thùng rác (không permanent) cho trang quản lý', async () => {
-    await cloudApi.trashByMessage('message-1');
-    expect(del).toHaveBeenCalledWith('/assets/by-message/message-1');
+  it('does not depend on the current search or filter result', async () => {
+    const gateway = { trash: vi.fn(), trashByMessage: vi.fn().mockResolvedValue(asset) };
+    await deleteCloudAssetForMessage('message-filtered-out', [], gateway);
+    expect(gateway.trashByMessage).toHaveBeenCalledWith('message-filtered-out');
+    expect(gateway.trash).not.toHaveBeenCalled();
   });
 });
