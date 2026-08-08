@@ -11,7 +11,41 @@ import {
   selectPersonalSources,
   streamPersonalChat,
   uploadLevelReport,
+  ATTACHMENT_MODE_REJECTED,
 } from "./personalAiApi";
+import { isAttachmentExpired } from "../types";
+
+describe("isAttachmentExpired", () => {
+  const now = Date.parse("2026-08-07T10:00:00Z");
+
+  it("coi là hết hạn khi đã qua expires_at", () => {
+    expect(
+      isAttachmentExpired(
+        { attachment_id: "pga-1", filename: "a.md", expires_at: "2026-08-07T09:59:00Z" },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("còn hạn thì không chặn", () => {
+    expect(
+      isAttachmentExpired(
+        { attachment_id: "pga-1", filename: "a.md", expires_at: "2026-08-07T10:01:00Z" },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("thiếu/hỏng expires_at → coi là CÒN hạn, để BE quyết (không chặn oan)", () => {
+    expect(isAttachmentExpired({ attachment_id: "p", filename: "a.md" }, now)).toBe(false);
+    expect(
+      isAttachmentExpired(
+        { attachment_id: "p", filename: "a.md", expires_at: "không-phải-ngày" },
+        now,
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("matchLevelReportTag", () => {
   it("nhận ra tag nộp lên TBP và LĐĐV (không phân biệt hoa thường)", () => {
@@ -110,6 +144,58 @@ describe("personalAiApi document identity contract", () => {
       employee_code: "HC888890",
       session_id: "personal-HC888890-session",
     });
+  });
+});
+
+describe("streamPersonalChat SSE error event", () => {
+  const sseResponse = (body: string) =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body));
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "text/event-stream" } },
+    );
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("ném AiStreamError giữ nguyên code + detail của BE (không hoá thành network)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: error\ndata: ${JSON.stringify({
+          code: ATTACHMENT_MODE_REJECTED,
+          detail: "Tệp không dùng được ở luồng này.",
+        })}\n\n`,
+      ),
+    );
+
+    await expect(
+      streamPersonalChat({ question: "tóm tắt", session_id: "s" }),
+    ).rejects.toMatchObject({
+      name: "AiStreamError",
+      code: ATTACHMENT_MODE_REJECTED,
+      message: "Tệp không dùng được ở luồng này.",
+    });
+  });
+
+  it("stream lỗi KHÔNG được rơi xuống fallback 'done' cũ trong buffer", async () => {
+    // `done` đứng trước rồi BE mới báo lỗi → lỗi phải thắng, không trả kết quả dở.
+    fetchMock.mockResolvedValueOnce(
+      sseResponse(
+        `event: done\ndata: {"session_id":"s","answer":"nửa chừng"}\n\n` +
+          `event: error\ndata: {"code":"ATTACHMENT_MODE_REJECTED"}\n\n`,
+      ),
+    );
+
+    await expect(
+      streamPersonalChat({ question: "q", session_id: "s" }),
+    ).rejects.toMatchObject({ name: "AiStreamError" });
   });
 });
 

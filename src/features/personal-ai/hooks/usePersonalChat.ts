@@ -8,6 +8,7 @@ import {
   normalizeWorkReportAiDraft,
   uploadPersonalAttachment,
   listPersonalAttachments,
+  AiStreamError,
 } from "../api/personalAiApi";
 import { isReportSubmissionText } from "../permissions/reportTags";
 import {
@@ -40,7 +41,7 @@ import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
 import type { PersonalChatMessage, PersonalDocument } from "../types";
-import { PERSONAL_ATTACHMENT_MODE } from "../types";
+import { PERSONAL_ATTACHMENT_MODE, isAttachmentExpired } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
@@ -400,7 +401,25 @@ export function usePersonalChat() {
       // backend luôn tạo session riêng biệt thay vì redirect vào session cũ nhất.
       const isNewConversation = (targetConv?.pendingNew ?? false) || !serverSessionId;
       // Chip tệp tạm của ĐÚNG hội thoại này (không mang sang hội thoại khác).
-      const attachmentIds = (targetConv?.attachments ?? []).map((a) => a.attachment_id);
+      // Bỏ tệp đã hết hạn: gửi ID chết làm BE từ chối cả lượt hỏi, còn user thì
+      // vẫn thấy chip nên tưởng tệp còn dùng được (nghiệm thu mục 6).
+      const liveAttachments = (targetConv?.attachments ?? []).filter(
+        (a) => !isAttachmentExpired(a),
+      );
+      const attachmentIds = liveAttachments.map((a) => a.attachment_id);
+      if (liveAttachments.length < (targetConv?.attachments ?? []).length) {
+        // Dùng chính bong bóng vừa tạo, đừng thêm cái thứ hai — bỏ lửng nó sẽ
+        // để lại một bong bóng rỗng quay mãi.
+        patchMessage(convIdSnapshot, assistantMessage.id, {
+          content: "Tệp đính kèm đã hết hạn. Vui lòng tải lại tệp rồi hỏi lại.",
+          isStreaming: false,
+          thinkingPhase: null,
+          isError: true,
+        });
+        setIsStreaming(false);
+        abortRef.current = null;
+        return;
+      }
 
       try {
         const response = await streamPersonalChat(
@@ -564,6 +583,15 @@ export function usePersonalChat() {
         // handleScopeErrorStatus(403) đã clearSelection (xóa token lỗi) nên
         // `selected` null → effect gửi-lại-sau-khi-chọn KHÔNG chạy tới khi user
         // chủ động chọn lại. Câu hỏi giữ trong pendingQuestion để gửi sau khi chọn.
+        // BE từ chối giữa stream và đã nói rõ lý do → hiện đúng câu của BE.
+        // Với ATTACHMENT_MODE_REJECTED, GIỮ NGUYÊN chip tệp và ô nhập để user tự
+        // chọn lại luồng; FE không tự chuyển tệp sang Sources hay báo cáo.
+        if (err instanceof AiStreamError) {
+          finalizeMessage(convIdSnapshot, err.message);
+          markMessageError(convIdSnapshot);
+          return;
+        }
+
         if (
           err instanceof PersonalAiError &&
           err.kind === "http" &&
@@ -691,6 +719,24 @@ export function usePersonalChat() {
       // Tệp KHÔNG kèm lệnh nộp báo cáo → hỏi đáp tệp tạm, không đụng endpoint
       // báo cáo lẫn Sources. Định tuyến bằng parser lệnh chứ không dò `#` thô.
       if (!isReportSubmissionText(trimmed)) {
+        // Sources đang bật + tệp thường = hai nguồn tranh nhau. Bắt user chọn rõ
+        // MODE thay vì tự tắt Sources giúp họ: tắt ngầm đúng thứ request cấm, và
+        // user sẽ không hiểu vì sao câu trả lời bỏ qua nguồn họ đã tick.
+        if (selectedDocumentIds.length > 0) {
+          patchMessage(convIdSnapshot, assistantId, {
+            content:
+              "Bạn đang chọn nguồn trong Sources. Hỏi đáp tệp đính kèm không dùng " +
+              "chung với Sources — vui lòng bỏ chọn nguồn trong Sources, hoặc mở " +
+              "hội thoại mới rồi gửi lại tệp.",
+            isStreaming: false,
+            thinkingPhase: null,
+            isError: true,
+          });
+          setIsStreaming(false);
+          abortRef.current = null;
+          // Giữ nguyên tệp + câu hỏi để user chọn lại luồng, không nuốt mất file.
+          return false;
+        }
         try {
           const attachment = await uploadPersonalAttachment(
             file,
@@ -786,6 +832,10 @@ export function usePersonalChat() {
       finalizeMessage,
       markMessageError,
       updateServerSessionId,
+      selectedDocumentIds,
+      patchMessage,
+      addAttachment,
+      sendMessage,
     ],
   );
 
