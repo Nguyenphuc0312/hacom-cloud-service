@@ -1343,6 +1343,41 @@ export function normalizeWorkReportAiDraft(raw: unknown): WorkReportAiDraftReady
   };
 }
 
+/** Link tải bản nháp trong transcript: `/api/work-report-drafts/<id>/export.xlsx`. */
+const DRAFT_EXPORT_HREF_RE =
+  /(?:https?:\/\/[^\s)]+)?\/api\/work-report-drafts\/[^\s/)]+\/export\.xlsx(?:\?[^\s)]*)?/gi;
+
+/**
+ * Bỏ link tải bản nháp AI khỏi nội dung chat.
+ *
+ * Request 07/08/26: transcript chỉ được có MỘT nút tải + một dòng cảnh báo,
+ * không render link Markdown/URL thô. Link đó cần `Authorization` nên bấm thẳng
+ * luôn ra 401 — để lại chỉ tạo một lối tải hỏng cạnh cái nút chạy được. BE suy
+ * metadata cho transcript cũ TỪ chính link/marker này, nên nó vẫn nằm trong
+ * `content` và sẽ hiện lên sau khi tải lịch sử nếu không cắt.
+ *
+ * Chỉ cắt phần link; chữ còn lại của câu giữ nguyên (BE có thể đã viết câu dẫn
+ * quanh nó). Dọn nốt dấu ngoặc/nhãn rỗng do cắt để lại, và các dòng trống thừa.
+ */
+export function stripDraftExportLinks(content: string): string {
+  if (!content || !/work-report-drafts/i.test(content)) return content;
+
+  return content
+    // [nhãn](link) → bỏ trọn cụm Markdown, kể cả nhãn.
+    .replace(
+      /\[[^\]\n]*\]\(\s*(?:https?:\/\/[^\s)]+)?\/api\/work-report-drafts\/[^\s/)]+\/export\.xlsx(?:\?[^\s)]*)?\s*\)/gi,
+      "",
+    )
+    // URL trần còn sót (kể cả trong <...>).
+    .replace(DRAFT_EXPORT_HREF_RE, "")
+    .replace(/<\s*>/g, "")
+    // Dòng chỉ còn dấu câu/gạch đầu dòng sau khi cắt → bỏ hẳn dòng đó.
+    .replace(/^[ \t]*[-*>]?[ \t]*[.,;:]*[ \t]*$/gm, "")
+    // Gộp dòng trống thừa và cắt khoảng trắng hai đầu.
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * Chuẩn hoá `calendar_events` từ SSE `done`. Chỉ giữ dòng có `event_id` (bắt
  * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì

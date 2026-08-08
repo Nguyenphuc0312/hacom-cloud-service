@@ -9,6 +9,7 @@ import {
   uploadPersonalAttachment,
   listPersonalAttachments,
   AiStreamError,
+  stripDraftExportLinks,
 } from "../api/personalAiApi";
 import { isReportSubmissionText } from "../permissions/reportTags";
 import {
@@ -208,7 +209,10 @@ export function usePersonalChat() {
           return {
             id: m.id || crypto.randomUUID(),
             role: m.role as "user" | "assistant",
-            content: m.content,
+            // Có nút tải rồi thì cắt link thô trong transcript: link cần
+            // Authorization nên bấm thẳng ra 401, để lại chỉ là lối tải hỏng
+            // nằm cạnh nút chạy được (request: đúng MỘT nút, không link thô).
+            content: aiDraft ? stripDraftExportLinks(m.content) : m.content,
             timestamp: new Date(m.timestamp),
             isStreaming: false as const,
             thinkingPhase: null as null,
@@ -526,7 +530,15 @@ export function usePersonalChat() {
           },
         );
 
-        finalizeMessage(convIdSnapshot, response.answer, response.sources);
+        // Cắt link tải bản nháp khỏi câu trả lời: link cần Authorization nên
+        // bấm thẳng luôn 401. Cắt vô điều kiện — link hỏng thì hỏng dù nút tải
+        // có hiện hay không (nút do `onDraftReady`/metadata dựng, không phải từ
+        // link này). Không có link thì hàm trả nguyên chuỗi.
+        finalizeMessage(
+          convIdSnapshot,
+          stripDraftExportLinks(response.answer),
+          response.sources,
+        );
 
         // Trả lời dựa trên tệp đính kèm tạm → hiện nhãn nói rõ không dùng dữ liệu
         // Công ty/Sources, để user không hiểu nhầm nguồn của câu trả lời.
