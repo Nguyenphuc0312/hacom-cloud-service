@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../../../hooks";
 import {
   ArrowUpIcon,
   FileTextIcon,
@@ -180,19 +181,7 @@ export const PersonalChatInput = forwardRef<
       [onChange, onSubmit, ref],
     );
 
-    useEffect(() => {
-      if (!hashMenuOpen) return;
-      const handlePointerDown = (event: MouseEvent) => {
-        if (
-          hashMenuRef.current &&
-          !hashMenuRef.current.contains(event.target as Node)
-        ) {
-          setHashMenuOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handlePointerDown);
-      return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [hashMenuOpen]);
+    useClickOutside(hashMenuRef, () => setHashMenuOpen(false), { active: hashMenuOpen });
 
     const adjustHeight = useCallback((el: HTMLTextAreaElement) => {
       el.style.height = "auto";

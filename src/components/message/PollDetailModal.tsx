@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import { useClickOutside } from "../../hooks";
 import {
   XMarkIcon,
   ChevronLeftIcon,
@@ -111,16 +112,7 @@ export const PollDetailModal: React.FC<PollDetailModalProps> = ({
     else onClose();
   };
 
-  React.useEffect(() => {
-    if (!menuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (gearRef.current && !gearRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [menuOpen]);
+  useClickOutside(gearRef, () => setMenuOpen(false), { active: menuOpen });
 
   if (!isOpen) return null;
 

@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import { useClickOutside } from "../../../hooks";
 import { XMarkIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { Modal } from "../../../components/ui";
@@ -134,20 +135,7 @@ const DeadlinePicker: React.FC<{
     };
   }, [open]);
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (
-        ref.current && !ref.current.contains(t) &&
-        popRef.current && !popRef.current.contains(t)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  useClickOutside([ref, popRef], () => setOpen(false), { active: open });
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();

@@ -23,6 +23,7 @@ export { usePinnedMessages } from "./usePinnedMessages";
 export { useFriendship } from "./useFriendship";
 export { usePresence } from "./usePresence";
 export { useComposerAvailability } from "./useComposerAvailability";
+export { useClickOutside } from "./useClickOutside";
 export { useMobileViewportMetrics } from "./useMobileViewportMetrics";
 export { useResendCooldown } from "./useResendCooldown";
 export { useOtpInput } from "./useOtpInput";

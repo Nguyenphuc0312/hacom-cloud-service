@@ -45,7 +45,6 @@ import {
 import {
   hrCalendarApi,
   type HRCalendarEvent,
-  type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
 import { apiVisibilityToForm } from "../utils/calendarVisibility";
 import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
@@ -71,11 +70,7 @@ import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
-import {
-  resolvePublicResourceUrl,
-  CALENDAR_ATTACHMENTS_USE_MOCK,
-} from "../../../config";
-import { mockGetAttachmentsForEvents } from "../utils/calendarAttachmentMockStore";
+import { resolvePublicResourceUrl } from "../../../config";
 
 /**
  * Calendar view types.
@@ -511,7 +506,6 @@ export const CalendarPage: React.FC = () => {
     viewingUnitName,
     filters,
     setFilters,
-    setViewingUser,
     fetchEvents,
     isLoading: storeLoading,
   } = storeState;
@@ -584,9 +578,15 @@ export const CalendarPage: React.FC = () => {
   // Create event loading state
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
-  // Handle select user from search
+  // Handle select user from search. Đồng bộ tháng đang xem của TRANG vào store
+  // trước (setDate không fetch): đổi người khi ĐANG ở mode "other" thì effect
+  // refetch không chạy lại (deps y nguyên), chỉ còn fetch của setViewingUser —
+  // mà nó lấy range theo store, không sync thì load nhầm tháng (cùng bẫy với
+  // handleBackToMyCalendar bên dưới).
   const handleSelectUser = (userId: string, userName: string) => {
-    setViewingUser(userId, userName);
+    const store = useCalendarStore.getState();
+    store.setDate(currentYear, currentMonth);
+    store.setViewingUser(userId, userName);
   };
 
   // Hai nguồn cùng yêu cầu mở sẵn một sự kiện:
@@ -764,22 +764,6 @@ export const CalendarPage: React.FC = () => {
   // Day/Week View dựng block theo thời lượng + overlap — xem utils/timeline.ts).
   const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
     return apiEvents.map(mapHrmEventToCalendarEvent);
-  }, [apiEvents]);
-
-  // MOCK attachments (khi BE chưa trả `attachments[]`): nạp từ IndexedDB theo
-  // eventId để viewer + form sửa hiển thị lại. No-op khi nối BE thật.
-  const [mockAttachmentsByEventId, setMockAttachmentsByEventId] = useState<
-    Record<string, CalendarAttachmentDto[]>
-  >({});
-  useEffect(() => {
-    if (!CALENDAR_ATTACHMENTS_USE_MOCK || apiEvents.length === 0) return;
-    let cancelled = false;
-    void mockGetAttachmentsForEvents(apiEvents.map((e) => e.id)).then((map) => {
-      if (!cancelled) setMockAttachmentsByEventId(map);
-    });
-    return () => {
-      cancelled = true;
-    };
   }, [apiEvents]);
 
   // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll) bằng authUserId —
@@ -1050,15 +1034,8 @@ export const CalendarPage: React.FC = () => {
   // Raw HR event for the selected item — carries participant roster + response.
   const selectedHrEvent = useMemo(() => {
     if (!selectedEvent) return undefined;
-    const found = apiEvents.find((e) => e.id === selectedEvent.id);
-    if (!found) return undefined;
-    // MOCK: overlay attachments từ IndexedDB nếu BE chưa trả (found.attachments rỗng).
-    const mockAtts = mockAttachmentsByEventId[found.id];
-    if (mockAtts && (!found.attachments || found.attachments.length === 0)) {
-      return { ...found, attachments: mockAtts };
-    }
-    return found;
-  }, [selectedEvent, apiEvents, mockAttachmentsByEventId]);
+    return apiEvents.find((e) => e.id === selectedEvent.id);
+  }, [selectedEvent, apiEvents]);
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
@@ -1511,6 +1488,13 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Suspense CỤC BỘ cho cụm modal lazy — bắt buộc, không phải trang trí.
+          Thiếu nó, lần ĐẦU mở modal (chunk chưa tải) suspend nổi bọt lên
+          boundary ở RootLayout → React ẩn cả trang và DỌN effect của cây bị ẩn
+          → cleanup unmount ở trên chạy resetCalendarData() → đang xem lịch
+          người khác bị đá về "Lịch của tôi". Lần 2 chunk đã cache nên không
+          tái hiện — đúng kiểu bug "làm lại thì hết". */}
+      <React.Suspense fallback={null}>
       {/* Event detail modal */}
       {selectedEventLive && (
         <EventDetailModal
@@ -1629,6 +1613,7 @@ export const CalendarPage: React.FC = () => {
           initialData={editingPersonalEvent}
         />
       )}
+      </React.Suspense>
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog
