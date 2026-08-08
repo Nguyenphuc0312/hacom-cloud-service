@@ -660,6 +660,14 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
               )}
             </div>
 
+            {/* Câu trả lời chỉ dựa trên tệp đính kèm tạm — nói rõ nguồn để user
+                không tưởng AI đã đọc dữ liệu Công ty/Sources. */}
+            {isAssistant && !message.isStreaming && message.attachmentMode && (
+              <p className="mt-2 text-[11px] leading-[1.4] text-text-muted">
+                Đang hỏi về tệp đính kèm — không dùng dữ liệu Công ty hoặc Sources.
+              </p>
+            )}
+
             {/* Bản nháp AI — hiện sau khi stream xong, độc lập với nhánh render
                 thân bài ở trên (luồng dựng ngầm giữ nguyên bảng tổng hợp tất
                 định, bản nháp chỉ tồn tại dưới dạng file tải về). */}

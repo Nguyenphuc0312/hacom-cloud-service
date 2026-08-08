@@ -3,7 +3,11 @@ import {
   buildWorkReportDraftExportUrl,
   LevelReportScopeRequiredError,
   listPersonalDocuments,
+  deletePersonalAttachment,
+  listPersonalAttachments,
   matchLevelReportTag,
+  normalizePersonalAttachment,
+  normalizeWorkReportAiDraft,
   selectPersonalSources,
   streamPersonalChat,
   uploadLevelReport,
@@ -219,6 +223,100 @@ describe("buildWorkReportDraftExportUrl", () => {
     // Thiếu draft_id, hoặc không phải export.xlsx.
     expect(buildWorkReportDraftExportUrl("/api/work-report-drafts/export.xlsx")).toBeNull();
     expect(buildWorkReportDraftExportUrl("/api/work-report-drafts/b6/items")).toBeNull();
+  });
+});
+
+describe("normalizeWorkReportAiDraft", () => {
+  // Cùng một hàm phục vụ SSE `work_report_ai_draft_ready` và
+  // `metadata.work_report_ai_draft` lúc tải lịch sử, nên nút sau F5 giống hệt.
+  it("dựng lại nút tải từ metadata sau khi reload", () => {
+    expect(
+      normalizeWorkReportAiDraft({
+        draft_id: "b6141bd9",
+        export_url: "/api/work-report-drafts/b6141bd9/export.xlsx",
+        export_format: "ai_work_report_draft_v3_full",
+        read_only: true,
+      }),
+    ).toEqual({
+      draft_id: "b6141bd9",
+      export_url: `${AI}/api/work-report-drafts/b6141bd9/export.xlsx`,
+      export_format: "ai_work_report_draft_v3_full",
+      read_only: true,
+    });
+  });
+
+  it("thiếu export_url thì ghép từ draft_id", () => {
+    expect(normalizeWorkReportAiDraft({ draft_id: "abc-123" })?.export_url).toBe(
+      `${AI}/api/work-report-drafts/abc-123/export.xlsx`,
+    );
+  });
+
+  it("payload hỏng trả undefined để không hiện nút tải chết", () => {
+    expect(normalizeWorkReportAiDraft(undefined)).toBeUndefined();
+    expect(normalizeWorkReportAiDraft(null)).toBeUndefined();
+    expect(normalizeWorkReportAiDraft("chuỗi")).toBeUndefined();
+    expect(normalizeWorkReportAiDraft({})).toBeUndefined();
+    // draft_id chứa ký tự tách path -> không được dựng URL trỏ đi chỗ khác.
+    expect(normalizeWorkReportAiDraft({ draft_id: "../../etc" })).toBeUndefined();
+  });
+
+  it("read_only chỉ true khi BE gửi đúng boolean true", () => {
+    expect(normalizeWorkReportAiDraft({ draft_id: "x1" })?.read_only).toBe(false);
+    expect(normalizeWorkReportAiDraft({ draft_id: "x1", read_only: "true" })?.read_only).toBe(false);
+  });
+});
+
+describe("tệp đính kèm hỏi đáp tạm", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("normalize nhận cả dạng bọc { attachment } và object phẳng", () => {
+    const wrapped = normalizePersonalAttachment({
+      ok: true,
+      attachment: { attachment_id: "pga-1", filename: "huong_dan.md", pages: 1 },
+    });
+    expect(wrapped?.attachment_id).toBe("pga-1");
+    expect(wrapped?.filename).toBe("huong_dan.md");
+    expect(normalizePersonalAttachment({ attachment_id: "pga-2" })?.attachment_id).toBe("pga-2");
+  });
+
+  it("thiếu attachment_id thì bỏ — không dựng chip không xoá được", () => {
+    expect(normalizePersonalAttachment({ filename: "a.md" })).toBeUndefined();
+    expect(normalizePersonalAttachment(null)).toBeUndefined();
+  });
+
+  it("list gọi đúng endpoint tệp tạm, KHÔNG đụng documents (Sources)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ attachments: [{ attachment_id: "pga-9", filename: "x.md" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const list = await listPersonalAttachments("personal-HC000001-abc");
+    expect(list).toHaveLength(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("/api/chat/personal/attachments");
+    expect(url).toContain("session_id=personal-HC000001-abc");
+    expect(url).not.toContain("/documents");
+  });
+
+  it("delete ném lỗi khi BE không trả 2xx → caller giữ nguyên chip", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "Tệp đã hết hạn" }), { status: 409 }),
+    );
+    await expect(deletePersonalAttachment("pga-1", "sess-1")).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("delete resolve khi 2xx", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(deletePersonalAttachment("pga-1", "sess-1")).resolves.toBeUndefined();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/attachments/pga-1");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "DELETE" });
   });
 });
 

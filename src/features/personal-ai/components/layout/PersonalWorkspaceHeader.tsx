@@ -1,11 +1,9 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { SparklesIcon, BookMarkedIcon, PanelRightIcon, FileTextIcon } from "lucide-react";
+import { SparklesIcon, BookMarkedIcon, PanelRightIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { usePersonalAiStore } from "../../stores/personalAiStore";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
-import { ROUTE_PATHS } from "../../../../router/paths";
 
 export const PersonalWorkspaceHeader: React.FC = () => {
   const { isRagMode, activeDocuments } = usePersonalDocuments();
@@ -48,16 +46,12 @@ export const PersonalWorkspaceHeader: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Right — lối vào màn bản nháp + source panel toggle */}
+      {/* Right — source panel toggle.
+          Bỏ nút "Bản nháp giao ban": trùng lối vào với tag `#TBP_AITEST` ngay
+          trong khung chat, mà lại hiện cho MỌI user trong khi trang đích đòi
+          phạm vi bộ phận — ai không phải TBP bấm vào chỉ nhận "Bạn không có
+          phạm vi bộ phận nào". Trang /work-report-drafts vẫn còn, vào bằng URL. */}
       <div className="flex items-center gap-1">
-        <Link
-          to={ROUTE_PATHS.WORK_REPORT_DRAFTS}
-          className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1976D2]/10"
-          title="Tạo bản nháp AI báo cáo giao ban"
-        >
-          <FileTextIcon size={15} strokeWidth={1.8} />
-          <span className="hidden sm:inline">Bản nháp giao ban</span>
-        </Link>
         <button
           type="button"
           onClick={() => toggleSourcePanel()}
