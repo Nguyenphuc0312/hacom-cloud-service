@@ -777,6 +777,13 @@ export function usePersonalChat() {
           );
           // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
           addAttachment(convIdSnapshot, uploaded);
+          // Gắn hội thoại vào ĐÚNG session BE đã cất tệp. Hội thoại mới chưa có
+          // serverSessionId nên tệp được upload dưới id cục bộ; không nhận session
+          // thật về đây thì lượt hỏi ngay sau gửi `new_conversation: true` → BE mở
+          // session KHÁC → "Không tìm thấy tệp đính kèm" ngay câu hỏi ĐẦU TIÊN.
+          if (uploaded.session_id && uploaded.session_id !== fileServerSessionId) {
+            updateServerSessionId(convIdSnapshot, uploaded.session_id);
+          }
         } catch (err) {
           addMessage(convIdSnapshot, {
             id: crypto.randomUUID(),

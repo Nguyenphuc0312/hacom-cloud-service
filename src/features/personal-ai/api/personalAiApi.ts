@@ -559,6 +559,8 @@ export function normalizePersonalAttachment(raw: unknown): PersonalAttachment | 
     pages: typeof node.pages === "number" ? node.pages : undefined,
     expires_at: pickString(node.expires_at),
     mode: pickString(node.mode),
+    // `session_id` nằm ở gốc response (cạnh `attachment`), không nằm trong node.
+    session_id: pickString(obj?.session_id, node.session_id),
   };
 }
 

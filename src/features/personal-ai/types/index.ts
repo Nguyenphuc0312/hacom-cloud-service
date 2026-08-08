@@ -333,6 +333,15 @@ export interface PersonalAttachment {
   /** ISO time; hết hạn thì chip phải yêu cầu tải lại chứ không gửi ID chết. */
   expires_at?: string;
   mode?: string;
+  /**
+   * `session_id` BE trả ở response upload — session mà BE THỰC SỰ gắn tệp vào.
+   *
+   * Bắt buộc giữ: hội thoại mới chưa có `serverSessionId` nên FE upload bằng id
+   * cục bộ, BE tự sinh session thật và trả lại ở đây. Không lấy về thì lượt hỏi
+   * ngay sau đó gửi `session_id: null` + `new_conversation: true` → BE mở session
+   * KHÁC → tệp vừa upload nằm ở session cũ → "Không tìm thấy tệp đính kèm".
+   */
+  session_id?: string;
 }
 
 /** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */

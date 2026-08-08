@@ -180,6 +180,25 @@ describe("personalAiApi document identity contract", () => {
   });
 });
 
+describe("normalizePersonalAttachment — session_id", () => {
+  it("giữ session_id ở GỐC response (BE gắn tệp vào session này)", () => {
+    expect(
+      normalizePersonalAttachment({
+        ok: true,
+        session_id: "personal-HC000001-abc",
+        attachment: { attachment_id: "pga-1", filename: "a.md", pages: 1 },
+      }),
+    ).toMatchObject({ attachment_id: "pga-1", session_id: "personal-HC000001-abc" });
+  });
+
+  it("thiếu session_id thì undefined, không dựng chuỗi rỗng", () => {
+    expect(
+      normalizePersonalAttachment({ attachment: { attachment_id: "pga-1", filename: "a.md" } })
+        ?.session_id,
+    ).toBeUndefined();
+  });
+});
+
 describe("streamPersonalChat SSE error event", () => {
   const sseResponse = (body: string) =>
     new Response(

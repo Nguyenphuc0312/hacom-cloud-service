@@ -71,6 +71,8 @@ beforeEach(() => {
     filename: "1671020230_DAUCAOMINHNHAT.docx",
     pages: 47,
     mode: "personal_attachment_general",
+    // BE gắn tệp vào session THẬT này (khác id cục bộ FE dùng lúc upload).
+    session_id: "personal-HC1-real",
   });
   streamPersonalChatMock.mockResolvedValue({
     session_id: "personal-HC1-abc",
@@ -157,6 +159,21 @@ describe("usePersonalChat — hỏi đáp tệp đính kèm tạm", () => {
     expect(streamPersonalChatMock).not.toHaveBeenCalled();
     // Sources vẫn nguyên — FE không được tự bỏ tick giúp user.
     expect(usePersonalAiStore.getState().selectedDocumentIds).toEqual(["doc-1"]);
+  });
+
+  it("hỏi ĐÚNG session BE đã cất tệp — không mở session mới làm mất tệp", async () => {
+    const { result } = renderHook(() => usePersonalChat());
+
+    await act(async () => {
+      await result.current.sendWithFile("tóm tắt", FILE);
+    });
+
+    const body = streamPersonalChatMock.mock.calls[0][0];
+    // Phải hỏi trên session BE trả về lúc upload…
+    expect(body.session_id).toBe("personal-HC1-real");
+    // …và KHÔNG được xin session mới: `new_conversation: true` khiến BE mở
+    // session khác, tệp vừa upload nằm lại session cũ → "Không tìm thấy tệp".
+    expect(body.new_conversation).toBeUndefined();
   });
 
   it("hỏi xong thì chip RỜI ô nhập (kiểu ChatGPT) — tệp đã thuộc về lượt hỏi đó", async () => {
