@@ -102,9 +102,21 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   const officeOnlineFailed =
     officeOnlineState.key === resetKey && officeOnlineState.failed;
 
+  // Đã thử xin URL mới cho file này chưa. Chỉ thử ĐÚNG MỘT LẦN: nếu URL mới vẫn
+  // hỏng thì nguyên nhân không phải hết hạn, thử tiếp chỉ làm user chờ vô ích.
+  const retriedUrlRef = useRef<string | null>(null);
+
   const handleOfficeOnlineUnavailable = useCallback(() => {
+    // Nguyên nhân hay gặp nhất là URL ký đã hết hạn (mở tài liệu đọc quá lâu).
+    // Xin URL mới rồi để viewer thử lại — giữ được bản xem chuẩn của Microsoft
+    // thay vì tụt xuống bản tự render kém hơn.
+    if (secureUrl && retriedUrlRef.current !== secureUrl) {
+      retriedUrlRef.current = secureUrl;
+      void onRefreshUrl();
+      return;
+    }
     setOfficeOnlineState({ key: resetKey, failed: true });
-  }, [resetKey]);
+  }, [onRefreshUrl, resetKey, secureUrl]);
 
   // Get preview type from attachment
   const attachment = current?.attachment;
