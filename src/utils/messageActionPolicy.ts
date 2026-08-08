@@ -32,6 +32,11 @@ export interface MessageActionPolicyInput {
   canEdit?: boolean;
   /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
   canRecallOthers?: boolean;
+  /**
+   * Cloud cá nhân: ghi chú/link giữ vĩnh viễn (không xóa/thu hồi); chỉ tin
+   * media chiếm dung lượng mới có đúng 1 nút "Xóa vĩnh viễn".
+   */
+  isPersonalCloud?: boolean;
 }
 
 interface ActionCandidate {
@@ -96,6 +101,14 @@ const canEditMessage = (message: Message): boolean =>
   !isFailedMessage(message) &&
   Boolean(message.content?.trim());
 
+// Chỉ tin upload chiếm dung lượng Cloud mới xóa được — khớp mediaTypeFor của BE.
+const CLOUD_DELETABLE_TYPES = new Set<MessageType>([
+  MessageType.IMAGE,
+  MessageType.VIDEO,
+  MessageType.AUDIO,
+  MessageType.FILE,
+]);
+
 // Zalo rule: thu hồi chỉ trong 24h sau khi gửi; quá hạn chỉ còn "Xóa chỉ ở phía tôi".
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -115,6 +128,7 @@ const getActionCandidates = ({
   canDelete = false,
   canEdit = false,
   canRecallOthers = false,
+  isPersonalCloud = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -197,6 +211,19 @@ const getActionCandidates = ({
   }
 
   if (canDelete && canDeleteMessage(message)) {
+    if (isPersonalCloud) {
+      // Cloud: 1 thao tác duy nhất, chỉ cho media; nhãn được override thành
+      // "Xóa vĩnh viễn" ở MessageCluster.
+      if (CLOUD_DELETABLE_TYPES.has(message.type)) {
+        candidates.push({
+          id: "deleteForMe",
+          menuOrder: 3,
+          railEligible: false,
+          menuEligible: true,
+        });
+      }
+      return candidates;
+    }
     if (isOwn && isWithinRecallWindow(message)) {
       candidates.push({
         id: "recall",

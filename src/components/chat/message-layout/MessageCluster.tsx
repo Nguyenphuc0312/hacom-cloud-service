@@ -21,6 +21,7 @@ import {
   isPendingMessage,
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
+import { isPersonalCloudConversation } from "../../../features/cloud/personalCloudPolicy";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
@@ -313,6 +314,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     closeActions();
   }, [closeActions, message, t]);
 
+  const isPersonalCloud = isPersonalCloudConversation({ type: conversationType });
+
   const actionPolicy = React.useMemo(
     () =>
       resolveMessageActions({
@@ -328,10 +331,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canDelete: Boolean(onDelete),
         canEdit: Boolean(onEdit),
         canRecallOthers: viewerCanRecallOthers,
+        isPersonalCloud,
       }),
     [
       coarsePointer,
       isOwn,
+      isPersonalCloud,
       isSelectionMode,
       message,
       onDelete,
@@ -660,6 +665,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         anchorRect={menuAnchorRect ?? undefined}
         onAction={handleAction}
         onClose={closeActions}
+        actionLabelOverrides={
+          isPersonalCloud
+            ? {
+                deleteForMe: t("chat:message.actions.deletePermanently", {
+                  defaultValue: "Xóa vĩnh viễn",
+                }),
+              }
+            : undefined
+        }
       />
 
       {editHistoryMessageId && (

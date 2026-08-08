@@ -79,6 +79,7 @@
       "deleteForMe": "Delete for me",
       "deleteForEveryone": "Unsend",
       "deleteForEveryoneAdmin": "Remove for everyone",
+      "deletePermanently": "Delete permanently",
       "pin": "Pin message",
       "unpin": "Unpin",
       "save": "Save message",

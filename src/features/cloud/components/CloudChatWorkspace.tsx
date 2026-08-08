@@ -13,7 +13,7 @@ import { useGetMessagesQuery } from "../../api/chatApi";
 import { useAuthStore, useChatStore } from "../../../stores";
 import { useUIStore } from "../../../stores/uiStore";
 import { useGlobalWebSocket } from "../../realtime/GlobalWebSocketProvider";
-import { cloudApi, deleteCloudAssetForMessage, type CloudAsset } from "../api/cloudApi";
+import { cloudApi, type CloudAsset } from "../api/cloudApi";
 import wsManager from "../../../lib/socket";
 import { useCloudUploadQueue } from "../hooks/useCloudUploadQueue";
 import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineType } from "../personalCloudPolicy";
@@ -144,20 +144,17 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     await togglePin(target);
   }, [togglePin, visibleMessages]);
 
+  // Xóa vĩnh viễn 1 thao tác (chốt với user 08-08-26): không thùng rác, không hoàn tác.
   const handleDelete = useCallback(async (messageId: string) => {
     try {
-      const asset = await deleteCloudAssetForMessage(messageId, assets);
+      await cloudApi.purgeByMessage(messageId);
       await Promise.all([refresh(), messagesQuery.refetch()]);
-      toast.action("Đã xóa nội dung khỏi Cloud", "Hoàn tác", () => {
-        void cloudApi.restore(asset.id)
-          .then(() => Promise.all([refresh(), messagesQuery.refetch()]))
-          .catch((error) => toast.error(extractApiError(error).message));
-      });
+      toast.success("Đã xóa vĩnh viễn khỏi Cloud");
     } catch (error) {
       setError("Không thể xóa nội dung Cloud. Vui lòng thử lại.");
       toast.error(extractApiError(error).message);
     }
-  }, [assets, messagesQuery, refresh]);
+  }, [messagesQuery, refresh]);
 
 
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">
