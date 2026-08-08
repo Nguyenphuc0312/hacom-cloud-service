@@ -41,7 +41,7 @@ import { handleDraftRetry } from "../services/workReportDraftPoller";
 import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
-import type { PersonalChatMessage, PersonalDocument } from "../types";
+import type { PersonalAttachment, PersonalChatMessage, PersonalDocument } from "../types";
 import { PERSONAL_ATTACHMENT_MODE, isAttachmentExpired } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
@@ -247,7 +247,14 @@ export function usePersonalChat() {
   }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
 
   const sendMessage = useCallback(
-    async (promptText: string, scopePromptId?: string) => {
+    async (
+      promptText: string,
+      scopePromptId?: string,
+      // Tệp đính kèm CỦA RIÊNG lượt này — chỉ `sendWithFile` truyền vào, để bong
+      // bóng user hiện chip tệp (kiểu ChatGPT). Các chip khác đang treo ở
+      // composer không thuộc lượt này nên không suy từ store.
+      attachedFile?: PersonalChatMessage["attachedFile"],
+    ) => {
       const trimmed = promptText.trim();
       if (!trimmed || isStreaming) return;
 
@@ -266,6 +273,7 @@ export function usePersonalChat() {
         role: "user",
         content: trimmed,
         timestamp: new Date(),
+        ...(attachedFile && { attachedFile }),
       };
       addMessage(conversationId, userMessage);
 
@@ -745,14 +753,15 @@ export function usePersonalChat() {
         setIsStreaming(true);
         const uploadController = new AbortController();
         abortRef.current = uploadController;
+        let uploaded: PersonalAttachment;
         try {
-          const attachment = await uploadPersonalAttachment(
+          uploaded = await uploadPersonalAttachment(
             file,
             fileServerSessionId ?? convIdSnapshot,
             { signal: uploadController.signal },
           );
           // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
-          addAttachment(convIdSnapshot, attachment);
+          addAttachment(convIdSnapshot, uploaded);
         } catch (err) {
           addMessage(convIdSnapshot, {
             id: crypto.randomUUID(),
@@ -773,8 +782,11 @@ export function usePersonalChat() {
         setIsStreaming(false);
         abortRef.current = null;
         // Chip đã vào store; `sendMessage` đọc TƯƠI từ store nên thấy được
-        // `attachment_ids` của lượt này.
-        await sendMessage(trimmed);
+        // `attachment_ids` của lượt này. Kèm tên tệp để bong bóng user hiện chip.
+        await sendMessage(trimmed, undefined, {
+          name: uploaded.filename,
+          pages: uploaded.pages,
+        });
         return true;
       }
 

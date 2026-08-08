@@ -89,6 +89,13 @@ export interface PersonalChatMessage {
    * Công ty/Sources.
    */
   attachmentMode?: boolean;
+  /**
+   * Tệp user đính kèm cho CHÍNH lượt hỏi này — render thành chip trong bong bóng
+   * user (kiểu ChatGPT), thay vì nhét `[Tệp đính kèm: ...]` vào `content`. Là dữ
+   * liệu chứ không phải chữ, nên câu hỏi gửi lên BE sạch và tên file dài không
+   * phá layout bong bóng.
+   */
+  attachedFile?: { name: string; pages?: number };
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */

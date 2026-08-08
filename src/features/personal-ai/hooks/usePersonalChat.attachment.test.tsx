@@ -95,6 +95,25 @@ describe("usePersonalChat — hỏi đáp tệp đính kèm tạm", () => {
     expect(conv.messages.some((m) => m.isStreaming)).toBe(false);
   });
 
+  it("gắn tên tệp vào bong bóng user (chip), KHÔNG nhét vào nội dung câu hỏi", async () => {
+    const { result } = renderHook(() => usePersonalChat());
+
+    await act(async () => {
+      await result.current.sendWithFile("tom tắt file cho tôi", FILE);
+    });
+
+    const conv = usePersonalAiStore.getState().conversations[0];
+    const userMsg = conv.messages.find((m) => m.role === "user")!;
+
+    expect(userMsg.attachedFile).toMatchObject({
+      name: "1671020230_DAUCAOMINHNHAT.docx",
+      pages: 47,
+    });
+    // Câu hỏi gửi lên BE phải sạch — không có tiền tố "[Tệp đính kèm: ...]".
+    expect(userMsg.content).toBe("tom tắt file cho tôi");
+    expect(streamPersonalChatMock.mock.calls[0][0].question).toBe("tom tắt file cho tôi");
+  });
+
   it("Sources đang bật → chặn và GIỮ tệp, không upload, không tắt Sources ngầm", async () => {
     // Phải có hội thoại SẴN rồi mới tick nguồn: `createConversation` xoá
     // `selectedDocumentIds` (nguồn thuộc phạm vi từng hội thoại).

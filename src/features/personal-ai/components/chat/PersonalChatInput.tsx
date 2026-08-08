@@ -369,31 +369,37 @@ export const PersonalChatInput = forwardRef<
               : "border-border focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border/20 focus-within:shadow-md",
           )}
         >
-          {/* Tệp hỏi đáp tạm đã upload — chip có nút xoá gọi BE. */}
+          {/* Tệp hỏi đáp tạm đã upload — chip gọn MỘT dòng (kiểu ChatGPT): tên
+              tệp + nút xoá. Thẻ hai dòng cũ chiếm gần hết bề ngang composer và
+              trông như một khối riêng chứ không phải phần đính kèm của ô nhập. */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3">
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
               {attachments.map((attachment) => (
                 <div
                   key={attachment.attachment_id}
-                  className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary"
+                  className="group inline-flex max-w-[280px] items-center gap-1.5 rounded-lg border border-border bg-surface-hover py-1 pl-2 pr-1"
+                  title={
+                    attachment.pages
+                      ? `${attachment.filename} · ${attachment.pages} trang`
+                      : attachment.filename
+                  }
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
-                    <FileTextIcon size={16} strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{attachment.filename}</div>
-                    <div className="text-xs text-text-muted">
-                      {attachment.pages ? `${attachment.pages} trang · ` : ""}Hỏi đáp tạm
-                    </div>
-                  </div>
+                  <FileTextIcon
+                    size={13}
+                    strokeWidth={2}
+                    className="shrink-0 text-[#1565C0]"
+                  />
+                  <span className="truncate text-[12px] text-text-primary">
+                    {attachment.filename}
+                  </span>
                   {onRemoveAttachment && (
                     <button
                       type="button"
                       onClick={() => onRemoveAttachment(attachment.attachment_id)}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
                       aria-label={`Xoá tệp ${attachment.filename}`}
                     >
-                      <XIcon size={14} strokeWidth={2} />
+                      <XIcon size={12} strokeWidth={2} />
                     </button>
                   )}
                 </div>
@@ -401,33 +407,41 @@ export const PersonalChatInput = forwardRef<
             </div>
           )}
 
-          {/* Pending file chip */}
+          {/* Tệp vừa chọn, CHƯA upload — cùng dáng chip gọn với chip đã upload. */}
           {pendingFile && (
-            <div className="px-3 pt-3">
-              <div className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
-                  {isUploading ? (
-                    <Loader2Icon size={16} strokeWidth={2} className="animate-spin" />
-                  ) : (
-                    <FileTextIcon size={16} strokeWidth={2} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{pendingFile.name}</div>
-                  <div className="text-xs text-text-muted">
-                    {isUploading
-                      ? "Đang tải lên..."
-                      : formatFileSize(pendingFile.size) || "Đã đính kèm"}
-                  </div>
-                </div>
+            <div className="px-3 pt-2.5">
+              <div
+                className="inline-flex max-w-[280px] items-center gap-1.5 rounded-lg border border-border bg-surface-hover py-1 pl-2 pr-1"
+                title={
+                  isUploading
+                    ? `${pendingFile.name} · Đang tải lên...`
+                    : `${pendingFile.name}${formatFileSize(pendingFile.size) ? ` · ${formatFileSize(pendingFile.size)}` : ""}`
+                }
+              >
+                {isUploading ? (
+                  <Loader2Icon
+                    size={13}
+                    strokeWidth={2}
+                    className="shrink-0 animate-spin text-[#1565C0]"
+                  />
+                ) : (
+                  <FileTextIcon
+                    size={13}
+                    strokeWidth={2}
+                    className="shrink-0 text-[#1565C0]"
+                  />
+                )}
+                <span className="truncate text-[12px] text-text-primary">
+                  {pendingFile.name}
+                </span>
                 {onRemoveFile && !isUploading && (
                   <button
                     type="button"
                     onClick={onRemoveFile}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-active hover:text-text-secondary transition-colors"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
                     aria-label="Xoá tệp đính kèm"
                   >
-                    <XIcon size={14} strokeWidth={2} />
+                    <XIcon size={12} strokeWidth={2} />
                   </button>
                 )}
               </div>
