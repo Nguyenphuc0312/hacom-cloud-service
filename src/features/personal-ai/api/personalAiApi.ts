@@ -201,6 +201,28 @@ export class AiStreamError extends PersonalAiError {
 /** BE từ chối lượt hỏi vì tệp đính kèm không hợp mode — giữ file + câu hỏi. */
 export const ATTACHMENT_MODE_REJECTED = "ATTACHMENT_MODE_REJECTED";
 
+/**
+ * BE không còn giữ tệp đính kèm nữa (hết hạn, bị dọn, hoặc upload chưa từng
+ * thành công). KHÁC `ATTACHMENT_MODE_REJECTED`: ở đây chip đang trỏ vào một ID
+ * chết, giữ lại chỉ làm MỌI câu hỏi sau trong hội thoại hỏng y hệt — phải bỏ chip
+ * và bảo user tải lại tệp.
+ */
+export const ATTACHMENT_NOT_FOUND = "ATTACHMENT_NOT_FOUND";
+
+/**
+ * Lỗi này có phải "tệp không còn nữa" không.
+ *
+ * Nhận cả theo `code` lẫn theo lời văn: BE hiện trả câu tiếng Việt "Không tìm
+ * thấy tệp đính kèm đã chọn hoặc tệp đã hết hạn." mà chưa chắc kèm mã, và nếu
+ * đoán sai theo hướng giữ chip thì hội thoại kẹt vĩnh viễn.
+ */
+export function isAttachmentGoneError(err: unknown): boolean {
+  if (!(err instanceof AiStreamError)) return false;
+  const code = err.code.toUpperCase();
+  if (code === ATTACHMENT_NOT_FOUND || code === "ATTACHMENT_EXPIRED") return true;
+  return /không tìm thấy tệp đính kèm|tệp đã hết hạn/i.test(err.message);
+}
+
 function extractHttpErrorMessage(rawText: string): string | undefined {
   if (!rawText.trim()) return undefined;
 
@@ -537,6 +559,8 @@ export function normalizePersonalAttachment(raw: unknown): PersonalAttachment | 
     pages: typeof node.pages === "number" ? node.pages : undefined,
     expires_at: pickString(node.expires_at),
     mode: pickString(node.mode),
+    // `session_id` nằm ở gốc response (cạnh `attachment`), không nằm trong node.
+    session_id: pickString(obj?.session_id, node.session_id),
   };
 }
 

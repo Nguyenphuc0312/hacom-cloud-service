@@ -17,6 +17,14 @@ import { ConfirmDialog } from "../../../components/ui";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
+/**
+ * Trần tệp hỏi đáp TẠM — BE chặn ở 10MB ("Tệp quá lớn (tối đa 10MB)").
+ *
+ * Phải chặn ở FE bằng ĐÚNG con số của BE: để 25MB như luồng nộp báo cáo thì tệp
+ * 10–25MB lọt qua, user chờ hết thời gian upload rồi mới nhận lỗi từ server.
+ */
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
 /** Lượt nộp file đang chờ user xác nhận (xem `pendingSubmit`). */
 interface PendingSubmit {
   /** `level` = nộp lên cấp trên (#TBP/#LDDV); `weekly` = báo cáo tuần cá nhân. */
@@ -86,7 +94,10 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     s.conversations.find((c) => c.id === s.activeConversationId),
   );
   // Chip của ĐÚNG hội thoại đang mở — không mang sang hội thoại khác.
-  const attachments = activeConversation?.attachments ?? [];
+  // Bỏ tệp đã dùng cho một câu hỏi: hỏi xong là tệp "đi luôn" khỏi ô nhập, nó đã
+  // hiện trong bong bóng của lượt hỏi đó. Tệp vẫn nằm trong store nên các lượt
+  // sau vẫn gửi kèm `attachment_ids`.
+  const attachments = (activeConversation?.attachments ?? []).filter((a) => !a.consumed);
   const user = useAuthStore((s) => s.user);
 
   // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
@@ -174,6 +185,15 @@ export const PersonalAiWorkspacePage: React.FC = () => {
         // khỏi hội thoại, không ghi đè báo cáo nào. Hộp xác nhận ở đây chỉ để
         // chặn lượt NỘP, nên bỏ qua để không bắt user xác nhận vô cớ.
         if (!isReportSubmissionText(text)) {
+          // Trần của luồng hỏi đáp tạm (10MB) THẤP HƠN luồng nộp báo cáo (25MB),
+          // mà lúc đính tệp chưa biết user sẽ đi luồng nào — nên chặn đúng ở đây,
+          // khi đã biết. Không chặn thì user chờ upload xong mới nhận lỗi BE.
+          if (pendingFile.size > ATTACHMENT_MAX_BYTES) {
+            toast.error(
+              `Tệp "${pendingFile.name}" quá lớn (hỏi đáp tệp tối đa 10MB). Vui lòng dùng tệp nhỏ hơn.`,
+            );
+            return;
+          }
           setIsUploading(true);
           setInputValue("");
           const accepted = await sendWithFile(text, pendingFile);

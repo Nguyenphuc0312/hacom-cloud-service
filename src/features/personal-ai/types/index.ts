@@ -89,6 +89,13 @@ export interface PersonalChatMessage {
    * Công ty/Sources.
    */
   attachmentMode?: boolean;
+  /**
+   * Tệp user đính kèm cho CHÍNH lượt hỏi này — render thành chip trong bong bóng
+   * user (kiểu ChatGPT), thay vì nhét `[Tệp đính kèm: ...]` vào `content`. Là dữ
+   * liệu chứ không phải chữ, nên câu hỏi gửi lên BE sạch và tên file dài không
+   * phá layout bong bóng.
+   */
+  attachedFile?: { name: string; pages?: number };
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -326,6 +333,25 @@ export interface PersonalAttachment {
   /** ISO time; hết hạn thì chip phải yêu cầu tải lại chứ không gửi ID chết. */
   expires_at?: string;
   mode?: string;
+  /**
+   * `session_id` BE trả ở response upload — session mà BE THỰC SỰ gắn tệp vào.
+   *
+   * Bắt buộc giữ: hội thoại mới chưa có `serverSessionId` nên FE upload bằng id
+   * cục bộ, BE tự sinh session thật và trả lại ở đây. Không lấy về thì lượt hỏi
+   * ngay sau đó gửi `session_id: null` + `new_conversation: true` → BE mở session
+   * KHÁC → tệp vừa upload nằm ở session cũ → "Không tìm thấy tệp đính kèm".
+   */
+  session_id?: string;
+  /**
+   * Tệp đã được dùng cho ít nhất một câu hỏi → KHÔNG hiện chip ở ô nhập nữa
+   * (tệp "đi luôn" sau khi hỏi, kiểu ChatGPT).
+   *
+   * Đánh dấu chứ KHÔNG xoá khỏi store: tệp vẫn là ngữ cảnh của hội thoại nên các
+   * câu hỏi sau vẫn phải gửi `attachment_ids` như hợp đồng. Xoá hẳn thì lượt sau
+   * gửi rỗng và chỉ chạy đúng nhờ BE tự nhớ theo session — dựa vào hành vi ngoài
+   * hợp đồng, BE đổi cách nhớ là hỏng ngầm.
+   */
+  consumed?: boolean;
 }
 
 /** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */
