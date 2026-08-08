@@ -194,7 +194,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const tipTapRef = React.useRef<TipTapEditorHandle>(null);
   const [tipTapEditor, setTipTapEditor] = React.useState<Editor | null>(null);
 
-  const { textareaRef, recomputeHeight } = useAutoResizeTextarea({
+  const { recomputeHeight } = useAutoResizeTextarea({
     value: draftValue,
     minRows: 1,
     maxRows: isFormatModeExpanded ? 15 : 5,

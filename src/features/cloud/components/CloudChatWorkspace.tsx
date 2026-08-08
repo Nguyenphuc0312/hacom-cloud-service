@@ -21,8 +21,7 @@ import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { HacomCloudInfoSidebar } from "./HacomCloudInfoSidebar";
 import { FilePreviewModal } from "../../../components/modals/FilePreviewModal";
 import { useFilePreview } from "../../../hooks/useFilePreview";
-import { getMimePreviewType } from "../../../utils/mimeRegistry";
-import { FileType, type Message } from "../../../types";
+import type { Message } from "../../../types";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
 
@@ -160,27 +159,6 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     }
   }, [assets, messagesQuery, refresh]);
 
-  const previewAsset = useCallback((asset: CloudAsset) => {
-    if (!asset.attachmentId || !conversationId) return;
-    const toTarget = (candidate: CloudAsset) => ({
-      conversationId,
-      attachment: {
-        id: candidate.attachmentId ?? "",
-        type: candidate.mediaType === "image" ? FileType.IMAGE : candidate.mediaType === "video" ? FileType.VIDEO : FileType.OTHER,
-        fileName: candidate.originalFilename,
-        fileSize: Number(candidate.sizeBytes),
-        mimeType: candidate.mimeType,
-      },
-      previewType: getMimePreviewType(candidate.mimeType, candidate.originalFilename),
-    });
-    const gallery = assets.filter((candidate) => candidate.status === "available" && Boolean(candidate.attachmentId)).map(toTarget);
-    filePreview.open(toTarget(asset), gallery);
-  }, [assets, conversationId, filePreview]);
-
-  const forwardAsset = useCallback((asset: CloudAsset) => {
-    const message = (messagesQuery.data?.messages ?? []).find((candidate) => candidate.id === asset.messageId);
-    if (message) setForwardMessage(message);
-  }, [messagesQuery.data?.messages]);
 
   return <section className="flex h-full min-h-0 overflow-hidden bg-surface text-text-primary">
     {/* `chat-shell` + hai data-attribute là nơi CSS đặt --chat-lane-padding và
@@ -242,7 +220,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
         </aside>
       </React.Suspense>
     ) : null}
-    <HacomCloudInfoSidebar open={infoOpen && !searchOpen && !pinnedOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} onPreview={previewAsset} onForward={forwardAsset} />
+    <HacomCloudInfoSidebar open={infoOpen && !searchOpen && !pinnedOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} />
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;
