@@ -78,10 +78,10 @@ const SidebarConversationTabs: React.FC<{
             aria-selected={active}
             onClick={() => onChange(tab.id)}
             className={clsx(
-              "relative inline-flex h-9 shrink-0 items-center justify-center gap-1 px-0.5 text-[13px] font-semibold transition-micro",
+              "inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[13px] font-semibold transition-micro",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/25",
               active
-                ? "text-[#1565C0]"
+                ? "bg-[#1976D2]/10 text-[#1565C0]"
                 : "text-text-secondary hover:text-text-primary",
             )}
           >
@@ -97,9 +97,6 @@ const SidebarConversationTabs: React.FC<{
               >
                 {tab.count > 99 ? "99+" : tab.count}
               </span>
-            ) : null}
-            {active ? (
-              <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-[#1565C0]" />
             ) : null}
           </button>
         );
