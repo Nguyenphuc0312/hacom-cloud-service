@@ -331,7 +331,13 @@
   },
   "file": {
     "unknown": "Unknown file",
-    "download": "Download file"
+    "download": "Download file",
+    "savedOnDevice": "Saved on this device",
+    "alreadyDownloaded": "Downloaded",
+    "downloadToKeep": "Download to keep",
+    "clickToPreview": "Click to preview",
+    "showInFolder": "Show in folder",
+    "openFile": "Open {{name}}"
   },
   "voice": {
     "play": "Play",

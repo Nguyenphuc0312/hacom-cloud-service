@@ -5,16 +5,10 @@ type NavigatorBadgeApi = Navigator & {
   clearAppBadge?: () => Promise<void>;
 };
 
-// Electron desktop bridge — injected by preload.js when running as a packaged app
-type ChatDesktopBridge = {
-  setUnreadBadge?: (count: number) => void;
-};
-
-declare global {
-  interface Window {
-    chatDesktop?: ChatDesktopBridge;
-  }
-}
+// Electron desktop bridge — injected by preload.js when running as a packaged app.
+// Kiểu + khai báo `window.chatDesktop` nằm ở utils/desktopBridge.ts (nguồn duy
+// nhất); khai lại ở đây sẽ xung đột kiểu.
+import "./desktopBridge";
 
 export interface BroadcastUnreadConversationSnapshot {
   conversationId: string;

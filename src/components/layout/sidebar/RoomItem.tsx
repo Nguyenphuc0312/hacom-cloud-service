@@ -1,6 +1,15 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import {
+  ChevronRightIcon,
+  CheckIcon,
+  EllipsisHorizontalIcon,
+  TagIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
+import { Pin } from "lucide-react";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
 import {
@@ -38,8 +47,15 @@ import {
   useDeleteMessageMutation,
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
+import { extractApiError } from "../../../lib/apiContract";
+import { conversationApi } from "../../../services/api";
 import { PersonalCloudAvatar } from "../../../features/cloud/components/PersonalCloudAvatar";
 import { isPersonalCloudConversation, personalCloudPresentation } from "../../../features/cloud/personalCloudPolicy";
+import {
+  ConversationLabelChips,
+  ConversationLabelMarker,
+} from "./ConversationLabels";
+import type { ConversationLabel } from "../../../stores/uiStore";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -68,11 +84,18 @@ interface RoomItemViewProps {
   isActive: boolean;
   isKeyboardActive: boolean;
   isPinned: boolean;
+  labels: ConversationLabel[];
+  assignedLabels: ConversationLabel[];
+  assignedLabelIds: string[];
   isDropTarget: boolean;
   onSelect: (conversationId: string) => void;
-  onDragOver: (event: React.DragEvent<HTMLButtonElement>) => void;
-  onDragLeave: (event: React.DragEvent<HTMLButtonElement>) => void;
-  onDrop: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onTogglePinned: (conversationId: string) => void;
+  onToggleLabel: (conversationId: string, labelId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
+  onOpenLabelManager: () => void;
+  onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 type RoomItemVisualState =
@@ -82,6 +105,8 @@ type RoomItemVisualState =
   | "unread"
   | "muted"
   | "mention";
+
+const EMPTY_LABEL_IDS: string[] = [];
 
 interface RoomItemStateStyles {
   container: string;
@@ -226,6 +251,267 @@ const buildPreviewText = (
   );
 };
 
+const ConversationItemMenu: React.FC<{
+  conversationId: string;
+  isPinned: boolean;
+  labels: ConversationLabel[];
+  assignedLabelIds: string[];
+  onTogglePinned: (conversationId: string) => void;
+  onToggleLabel: (conversationId: string, labelId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
+  onOpenLabelManager: () => void;
+}> = ({
+  conversationId,
+  isPinned,
+  labels,
+  assignedLabelIds,
+  onTogglePinned,
+  onToggleLabel,
+  onDeleteConversation,
+  onOpenLabelManager,
+}) => {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [labelSubmenuOpen, setLabelSubmenuOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [labelSubmenuPosition, setLabelSubmenuPosition] = useState({
+    left: 0,
+    top: 0,
+  });
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
+  const labelTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const labelSubmenuRef = React.useRef<HTMLDivElement | null>(null);
+  const labelSubmenuCloseTimerRef = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (
+        buttonRef.current?.contains(target) ||
+        menuRef.current?.contains(target) ||
+        labelSubmenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+      setLabelSubmenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setLabelSubmenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(
+    () => () => {
+      if (labelSubmenuCloseTimerRef.current !== null) {
+        window.clearTimeout(labelSubmenuCloseTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setLabelSubmenuOpen(false);
+    }
+  };
+
+  const clearLabelSubmenuCloseTimer = () => {
+    if (labelSubmenuCloseTimerRef.current !== null) {
+      window.clearTimeout(labelSubmenuCloseTimerRef.current);
+      labelSubmenuCloseTimerRef.current = null;
+    }
+  };
+
+  const openLabelSubmenu = () => {
+    clearLabelSubmenuCloseTimer();
+    const rect = labelTriggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const width = 256;
+      const padding = 8;
+      setLabelSubmenuPosition({
+        left: Math.max(
+          padding,
+          Math.min(rect.right - 4, window.innerWidth - width - padding),
+        ),
+        top: Math.max(
+          padding,
+          Math.min(rect.top, window.innerHeight - 352 - padding),
+        ),
+      });
+    }
+    setLabelSubmenuOpen(true);
+  };
+
+  const scheduleLabelSubmenuClose = () => {
+    clearLabelSubmenuCloseTimer();
+    labelSubmenuCloseTimerRef.current = window.setTimeout(() => {
+      setLabelSubmenuOpen(false);
+      labelSubmenuCloseTimerRef.current = null;
+    }, 120);
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          handleOpenChange(!open);
+        }}
+        className={clsx(
+          "flex h-7 w-7 items-center justify-center rounded-md text-text-muted opacity-0 transition-micro",
+          "hover:bg-surface-hover hover:text-text-primary focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          open && "bg-surface-hover text-text-primary opacity-100",
+          "group-hover:opacity-100",
+        )}
+        aria-label={t("sidebar:labels.conversationMenu")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <EllipsisHorizontalIcon className="h-5 w-5" />
+      </button>
+
+      {open ? (
+        <div
+          ref={menuRef}
+          role="menu"
+          onClick={(event) => event.stopPropagation()}
+          className="absolute right-0 top-full z-dropdown mt-1 w-72 overflow-visible rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onTogglePinned(conversationId);
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+          >
+            <Pin className="h-4 w-4 text-text-secondary" strokeWidth={1.6} />
+            <span>{isPinned ? t("sidebar:labels.unpin") : t("sidebar:labels.pin")}</span>
+          </button>
+
+          <div className="my-1 border-t border-border/70" />
+
+          <div
+            className="relative"
+            onMouseEnter={openLabelSubmenu}
+            onMouseLeave={scheduleLabelSubmenuClose}
+          >
+            <button
+              ref={labelTriggerRef}
+              type="button"
+              role="menuitem"
+              onFocus={openLabelSubmenu}
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+            >
+              <TagIcon className="h-4 w-4 text-text-secondary" />
+              <span>{t("sidebar:labels.classify")}</span>
+              <ChevronRightIcon className="ml-auto h-4 w-4 text-text-secondary" />
+            </button>
+
+            {labelSubmenuOpen && typeof document !== "undefined" ? createPortal(
+              <div
+                ref={labelSubmenuRef}
+                role="menu"
+                onMouseEnter={clearLabelSubmenuCloseTimer}
+                onMouseLeave={scheduleLabelSubmenuClose}
+                className="fixed z-[1000] max-h-[min(22rem,calc(100vh-1rem))] w-64 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-elev3"
+                style={labelSubmenuPosition}
+              >
+                {labels.map((label) => {
+                  const checked = assignedLabelIds.includes(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={checked}
+                      onClick={() => onToggleLabel(conversationId, label.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {checked ? (
+                          <CheckIcon className="h-4 w-4 text-[#1565C0]" />
+                        ) : null}
+                      </span>
+                      <ConversationLabelMarker color={label.color} />
+                      <span className="min-w-0 flex-1 truncate">{label.name}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    setLabelSubmenuOpen(false);
+                    onOpenLabelManager();
+                  }}
+                  className="flex w-full items-center gap-3 border-t border-border/70 px-3 py-2.5 text-left font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/8"
+                >
+                  <TagIcon className="h-4 w-4" />
+                  <span>{t("sidebar:labels.manage")}</span>
+                </button>
+              </div>,
+              document.body,
+            ) : null}
+          </div>
+
+          <div className="my-1 border-t border-border/70" />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              if (isDeleting) return;
+              setIsDeleting(true);
+              try {
+                await conversationApi.deleteConversation(conversationId);
+                onDeleteConversation(conversationId);
+                toast.success(t("sidebar:labels.deleteConversationSuccess"));
+              } catch (error) {
+                toast.error(
+                  extractApiError(error).message ||
+                    t("sidebar:labels.deleteConversationFailed"),
+                );
+              } finally {
+                setIsDeleting(false);
+                setOpen(false);
+                setLabelSubmenuOpen(false);
+              }
+            }}
+            disabled={isDeleting}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60"
+          >
+            <TrashIcon className="h-4 w-4" />
+            <span>{t("sidebar:labels.deleteConversation")}</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   conversation,
   layoutState,
@@ -244,8 +530,15 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   isActive,
   isKeyboardActive,
   isPinned,
+  labels,
+  assignedLabels,
+  assignedLabelIds,
   isDropTarget,
   onSelect,
+  onTogglePinned,
+  onToggleLabel,
+  onDeleteConversation,
+  onOpenLabelManager,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -272,8 +565,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
         : "bg-transparent";
 
   return (
-    <button
-      type="button"
+    <div
       onClick={() => onSelect(conversation.id)}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -284,7 +576,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       data-keyboard-active={isKeyboardActive}
       data-render-probe="conversation-item"
       className={clsx(
-        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
+        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] cursor-pointer items-center text-left",
         "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
@@ -353,6 +645,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             >
               {displayName}
             </p>
+            <ConversationLabelChips labels={assignedLabels} />
           </div>
 
           {draftText ? (
@@ -430,7 +723,19 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           )}
         </div>
       </div>
-    </button>
+      <div className="absolute right-1 top-1">
+        <ConversationItemMenu
+          conversationId={conversation.id}
+          isPinned={isPinned}
+          labels={labels}
+          assignedLabelIds={assignedLabelIds}
+          onTogglePinned={onTogglePinned}
+          onToggleLabel={onToggleLabel}
+          onDeleteConversation={onDeleteConversation}
+          onOpenLabelManager={onOpenLabelManager}
+        />
+      </div>
+    </div>
   );
 };
 
@@ -454,8 +759,15 @@ const RoomItemView = React.memo(
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
     prev.isPinned === next.isPinned &&
+    prev.labels === next.labels &&
+    prev.assignedLabels === next.assignedLabels &&
+    prev.assignedLabelIds === next.assignedLabelIds &&
     prev.isDropTarget === next.isDropTarget &&
     prev.onSelect === next.onSelect &&
+    prev.onTogglePinned === next.onTogglePinned &&
+    prev.onToggleLabel === next.onToggleLabel &&
+    prev.onDeleteConversation === next.onDeleteConversation &&
+    prev.onOpenLabelManager === next.onOpenLabelManager &&
     prev.onDragOver === next.onDragOver &&
     prev.onDragLeave === next.onDragLeave &&
     prev.onDrop === next.onDrop,
@@ -479,6 +791,29 @@ export const RoomItemContainer = React.memo(
     const isPinned = useUIStore(
       useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
     );
+    const labels = useUIStore((state) => state.conversationLabels);
+    const storedAssignedLabelIds = useUIStore(
+      useMemo(
+        () => (state) =>
+          state.conversationLabelsByConversationId[conversationId],
+        [conversationId],
+      ),
+    );
+    const assignedLabelIds = storedAssignedLabelIds ?? EMPTY_LABEL_IDS;
+    const togglePinnedConversation = useUIStore(
+      (state) => state.togglePinnedConversation,
+    );
+    const toggleConversationLabel = useUIStore(
+      (state) => state.toggleConversationLabel,
+    );
+    const removeConversation = useChatStore((state) => state.removeConversation);
+    const openConversationLabelManager = useUIStore(
+      (state) => state.openConversationLabelManager,
+    );
+    const assignedLabels = useMemo(
+      () => labels.filter((label) => assignedLabelIds.includes(label.id)),
+      [assignedLabelIds, labels],
+    );
     // Unsent draft preview ("Chưa gửi") — hidden on the active room since its
     // composer is already visible. Draft lives in chatUiStore (sessionStorage).
     const draftText = useChatUiStore(
@@ -496,7 +831,7 @@ export const RoomItemContainer = React.memo(
     const [deleteMessage] = useDeleteMessageMutation();
 
     const handleDragOver = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         if (!isMessageDrag(event.dataTransfer)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
@@ -506,7 +841,7 @@ export const RoomItemContainer = React.memo(
     );
 
     const handleDragLeave = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         // Ignore leaves into child elements — only clear when truly leaving.
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return;
@@ -560,7 +895,7 @@ export const RoomItemContainer = React.memo(
     }, [directPartnerId]);
 
     const handleDrop = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         const payload = decodeMessageDrag(event.dataTransfer);
         if (!payload) return;
         event.preventDefault();
@@ -688,8 +1023,15 @@ export const RoomItemContainer = React.memo(
         isActive={isActive}
         isKeyboardActive={isKeyboardActive}
         isPinned={isPinned}
+        labels={labels}
+        assignedLabels={assignedLabels}
+        assignedLabelIds={assignedLabelIds}
         isDropTarget={isDropTarget}
         onSelect={onSelect}
+        onTogglePinned={togglePinnedConversation}
+        onToggleLabel={toggleConversationLabel}
+        onDeleteConversation={removeConversation}
+        onOpenLabelManager={openConversationLabelManager}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}

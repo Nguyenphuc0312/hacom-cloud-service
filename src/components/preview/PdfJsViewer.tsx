@@ -23,6 +23,11 @@ import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
 import { truncateFilename } from "../../utils/truncateFilename";
 import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileTypeIcon } from "../message/FileTypeIcon";
+import {
+  buildPdfKey,
+  loadPdfPage,
+  savePdfPage,
+} from "../../utils/pdfReadingPosition";
 
 interface PdfJsViewerProps {
   url: string;
@@ -239,6 +244,15 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Nhớ trang đang đọc. Khoá theo tên+cỡ file vì `url` là URL ký, đổi mỗi lần mở.
+  const positionKey = React.useMemo(
+    () => buildPdfKey(fileName, fileSize),
+    [fileName, fileSize],
+  );
+  // Trong lúc cuộn về trang đã lưu, IntersectionObserver bắn `onVisible` cho các
+  // trang lướt qua — nếu ghi luôn thì vị trí lưu bị đè bằng trang trung gian.
+  const isRestoringRef = useRef(false);
+
   const extension = getFileExtension(fileName);
 
   // useMemo là bắt buộc, không phải tối ưu vặt: object mới mỗi lần render sẽ phá
@@ -324,6 +338,47 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
       ?.querySelector(`[data-page="${pageNumber}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  // Mở lại file đang đọc dở → nhảy về đúng trang cũ.
+  // Chạy sau khi tài liệu nạp xong (lúc đó các <PdfPage/> mới có trong DOM).
+  useEffect(() => {
+    if (isLoading || !pdfDoc || totalPages === 0) return;
+
+    const saved = loadPdfPage(positionKey, totalPages);
+    if (saved === null) return;
+
+    isRestoringRef.current = true;
+
+    // Đợi hết frame hiện tại: lúc đó các <PdfPage/> mới nằm trong DOM và có
+    // chiều cao chỗ trống đúng, cuộn mới tới đúng trang. Đây là việc đồng bộ
+    // với DOM nên không đặt setState thẳng trong thân effect.
+    let timer = 0;
+    const frame = window.requestAnimationFrame(() => {
+      setCurrentPage(saved);
+      // Nhảy thẳng, không cuộn mượt: cuộn mượt qua vài chục trang vừa chậm vừa
+      // bắn hàng loạt onVisible trung gian.
+      containerRef.current
+        ?.querySelector(`[data-page="${saved}"]`)
+        ?.scrollIntoView({ block: "start" });
+
+      // Nhả cờ sau khi trình duyệt xử lý xong đợt scroll + observer callback.
+      timer = window.setTimeout(() => {
+        isRestoringRef.current = false;
+      }, 600);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      isRestoringRef.current = false;
+    };
+  }, [isLoading, pdfDoc, totalPages, positionKey]);
+
+  // Ghi lại vị trí khi người dùng cuộn sang trang khác.
+  useEffect(() => {
+    if (isLoading || isRestoringRef.current || totalPages === 0) return;
+    savePdfPage(positionKey, currentPage, totalPages);
+  }, [currentPage, isLoading, positionKey, totalPages]);
 
   // Handlers
   const handleDownload = useCallback(async () => {

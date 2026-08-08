@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useUIStore } from "../../../stores/uiStore";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import {
@@ -91,6 +92,17 @@ const matchesFilter = (
   return true;
 };
 
+const matchesLabels = (
+  conversationId: string,
+  selectedLabelIds: string[],
+  labelsByConversationId: Record<string, string[]>,
+): boolean => {
+  if (selectedLabelIds.length === 0) return true;
+
+  const labelIds = labelsByConversationId[conversationId] ?? [];
+  return selectedLabelIds.some((labelId) => labelIds.includes(labelId));
+};
+
 export const useSidebarConversationList = (
   currentUser: UserSummary,
   options: {
@@ -99,11 +111,20 @@ export const useSidebarConversationList = (
   },
 ): SidebarConversationListResult => {
   const { orderedConversations, counts } = useSidebarConversationSummaries();
+  const selectedLabelIds = useUIStore(
+    (state) => state.selectedConversationLabelIds,
+  );
+  const labelsByConversationId = useUIStore(
+    (state) => state.conversationLabelsByConversationId,
+  );
 
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
     const conversationIds = orderedConversations
       .filter((conversation) => matchesFilter(conversation, options.filter))
+      .filter((conversation) =>
+        matchesLabels(conversation.id, selectedLabelIds, labelsByConversationId),
+      )
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
       )
@@ -115,9 +136,11 @@ export const useSidebarConversationList = (
   }, [
     counts,
     currentUser.id,
+    labelsByConversationId,
     options.filter,
     options.query,
     orderedConversations,
+    selectedLabelIds,
   ]);
 };
 
