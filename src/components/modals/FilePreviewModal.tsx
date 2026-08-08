@@ -37,6 +37,7 @@ import {
   downloadResourceWithName,
   openResourceInNewTab,
 } from "../../utils/downloadFile";
+import { markFileDownloaded } from "../../utils/downloadedFiles";
 import { truncateFilename } from "../../utils/truncateFilename";
 
 interface FilePreviewModalProps {
@@ -150,7 +151,11 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       secureUrl,
       fileName || `file-${Date.now()}.${extension.toLowerCase() || "bin"}`,
     );
-  }, [extension, fileName, secureUrl]);
+    // Cùng khoá với FileMessageCard để thẻ file ngoài timeline đổi trạng thái ngay.
+    markFileDownloaded(
+      attachment?.id || attachment?.objectKey || attachment?.url,
+    );
+  }, [attachment, extension, fileName, secureUrl]);
 
   const handleOpenInNewTab = useCallback(() => {
     if (!secureUrl) return;

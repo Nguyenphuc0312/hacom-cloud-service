@@ -18,7 +18,10 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
+  CheckCircleIcon,
+  ClockIcon,
   EyeIcon,
+  FolderOpenIcon,
   ExclamationTriangleIcon,
   ShieldExclamationIcon,
 } from "@heroicons/react/24/outline";
@@ -28,7 +31,6 @@ import { resolvePublicResourceUrl } from "../../config";
 import { useInViewport } from "../../hooks/useInViewport";
 import {
   formatFileSize,
-  getFileExtension,
   getFileIconType,
   getPreviewType,
   isFileTooLargeForPreview,
@@ -41,6 +43,7 @@ import { downloadResourceWithName } from "../../utils/downloadFile";
 import { FileName } from "../common/FileName";
 import { MediaThumbnail } from "../common/MediaThumbnail";
 import { SafeImage } from "../common/SafeImage";
+import { useLocalFile } from "../../hooks/useLocalFile";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -74,7 +77,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     attachment.fileName,
   ) as PreviewType;
   const iconType = getFileIconType(attachment.mimeType, attachment.fileName) as FileIconType;
-  const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
   // Office documents (Word/Excel/PowerPoint) + PDF/text/csv/media are all
   // previewable in-browser. Only truly opaque types (archives, unknown) and
@@ -101,6 +103,16 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     conversationId,
     attachment,
   );
+
+  // Trạng thái "file có trên máy chưa" + mở bằng app hệ thống (chỉ desktop).
+  const {
+    status: localStatus,
+    canOpenLocally,
+    openLocal,
+    reveal,
+    saveLocal,
+    markDownloaded,
+  } = useLocalFile(attachment);
 
   const directThumbnailUrl = useMemo(
     () =>
@@ -158,15 +170,50 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const handleDownload = useCallback(async () => {
     const downloadUrl = await resolveUrl(true);
     if (!downloadUrl) return;
+
+    // Desktop: lưu thêm một bản vào thư mục app để lần sau mở thẳng bằng Word/
+    // Excel mà không phải tải lại. Lỗi ở bước này không được chặn việc tải về
+    // theo cách thường — user vẫn phải nhận được file.
+    if (canOpenLocally) {
+      try {
+        const response = await fetch(downloadUrl);
+        if (response.ok) {
+          await saveLocal(await response.blob());
+        }
+      } catch {
+        // Bỏ qua: vẫn tải theo luồng trình duyệt bên dưới.
+      }
+    }
+
     // Tải bằng blob để giữ đúng tên gốc (URL ký khác origin sẽ bỏ qua a.download).
     await downloadResourceWithName(downloadUrl, attachment.fileName);
-  }, [resolveUrl, attachment.fileName]);
+    markDownloaded();
+  }, [
+    resolveUrl,
+    attachment.fileName,
+    canOpenLocally,
+    saveLocal,
+    markDownloaded,
+  ]);
 
   const handlePreview = useCallback(() => {
     if (onPreview && isPreviewable) {
       onPreview(attachment, previewType);
     }
   }, [onPreview, isPreviewable, attachment, previewType]);
+
+  /**
+   * Bấm vào card — hành vi kiểu Zalo:
+   *  - Desktop + file đã có trên đĩa → mở bằng Word/Excel/Acrobat thật.
+   *  - Còn lại → mở trình xem trong app.
+   * Desktop mở file thất bại (bị xoá tay) thì rơi về trình xem, không im lặng.
+   */
+  const handleCardClick = useCallback(async () => {
+    if (canOpenLocally && localStatus === "downloaded") {
+      if (await openLocal()) return;
+    }
+    handlePreview();
+  }, [canOpenLocally, localStatus, openLocal, handlePreview]);
 
   // ─ Edge-case renderers ─
 
@@ -408,16 +455,55 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }
 
   // ─ Generic file card (PDF, documents, etc.) ─
+  //
+  // Kiểu Zalo: bấm cả thẻ là mở (không có nút "con mắt" riêng). Dòng phụ đổi
+  // theo trạng thái — bình thường nhắc tải về, khi rê chuột thành "Nhấn để xem
+  // trước", khi đã có trên máy thì báo đã có.
+
+  const isDownloaded = localStatus === "downloaded";
+  const canClickToOpen = isPreviewable || (canOpenLocally && isDownloaded);
+
+  // Nhãn dòng phụ: ưu tiên báo "đã có trên máy" (thông tin đắt giá nhất),
+  // sau đó mới tới lời mời xem trước.
+  const statusLabel = isDownloaded
+    ? canOpenLocally
+      ? t("chat:file.savedOnDevice", { defaultValue: "Đã có trên máy" })
+      : t("chat:file.alreadyDownloaded", { defaultValue: "Đã tải xuống" })
+    : t("chat:file.downloadToKeep", {
+        defaultValue: "Tải về để xem lâu dài",
+      });
 
   return (
     <div
       className={clsx(
         "group/file flex min-w-0 w-[17rem] max-w-full items-center gap-3 rounded-2xl border p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        canClickToOpen && "cursor-pointer",
         isOwn
           ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
           : "border-[#1976D2]/15 bg-[#1976D2]/[0.035] hover:border-[#1976D2]/25 hover:bg-[#1976D2]/[0.07]",
         className,
       )}
+      onClick={canClickToOpen ? () => void handleCardClick() : undefined}
+      role={canClickToOpen ? "button" : undefined}
+      tabIndex={canClickToOpen ? 0 : undefined}
+      onKeyDown={
+        canClickToOpen
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                void handleCardClick();
+              }
+            }
+          : undefined
+      }
+      aria-label={
+        canClickToOpen
+          ? t("chat:file.openFile", {
+              defaultValue: "Mở {{name}}",
+              name: attachment.fileName || t("chat:file.unknown"),
+            })
+          : undefined
+      }
     >
       {/* Icon */}
       <div
@@ -428,7 +514,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             : "bg-[#DBEAFE]/70 ring-1 ring-inset ring-[#1976D2]/10",
         )}
       >
-        <FileTypeIcon type={iconType} />
+        <FileTypeIcon type={iconType} fileName={attachment.fileName} />
       </div>
 
       {/* File info */}
@@ -442,52 +528,77 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           )}
         />
         <div className="mt-0.5 flex items-center gap-1.5">
-          {extension ? (
-            <span
-              className={clsx(
-                "rounded-md px-1.5 py-px text-[10px] font-bold uppercase tracking-wide",
-                isOwn
-                  ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))/0.85]"
-                  : "bg-[#1976D2]/10 text-[#1565C0]",
-              )}
-            >
-              {extension}
-            </span>
-          ) : null}
           <span
             className={clsx(
-              "text-xs",
+              "shrink-0 text-xs",
               isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
             )}
           >
             {size}
           </span>
+          <span
+            className={clsx(
+              "flex min-w-0 items-center gap-1 text-xs",
+              isDownloaded
+                ? isOwn
+                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.85]"
+                  : "text-emerald-600"
+                : isOwn
+                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]"
+                  : "text-[#1565C0]",
+            )}
+          >
+            {isDownloaded ? (
+              <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <ClockIcon className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {/* Rê chuột lên thẻ xem được → đổi thành lời mời bấm, như Zalo. */}
+            <span className="truncate">
+              {isPreviewable && (
+                <span className="hidden group-hover/file:inline">
+                  {t("chat:file.clickToPreview", {
+                    defaultValue: "Nhấn để xem trước",
+                  })}
+                </span>
+              )}
+              <span className={clsx(isPreviewable && "group-hover/file:hidden")}>
+                {statusLabel}
+              </span>
+            </span>
+          </span>
         </div>
       </div>
 
-      {/* Action buttons */}
+      {/* Action buttons — click phải dừng nổi bọt, tránh kích hoạt mở thẻ. */}
       <div className="flex shrink-0 items-center gap-1">
-        {isPreviewable && onPreview && (
+        {canOpenLocally && isDownloaded && (
           <button
             type="button"
-            onClick={handlePreview}
+            onClick={(event) => {
+              event.stopPropagation();
+              void reveal();
+            }}
             className={clsx(
               "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90",
               isOwn
                 ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:scale-110 hover:bg-[hsl(var(--chat-bubble-sent-text))/0.32]"
                 : "bg-white text-[#1565C0] shadow-sm hover:scale-110 hover:bg-[#1565C0] hover:text-white hover:shadow-md hover:shadow-[#1565C0]/30",
             )}
-            aria-label={t("chat:filePreview.preview", {
-              defaultValue: "Preview",
+            aria-label={t("chat:file.showInFolder", {
+              defaultValue: "Mở thư mục chứa file",
             })}
           >
-            <EyeIcon className="h-4 w-4" />
+            <FolderOpenIcon className="h-4 w-4" />
           </button>
         )}
 
         <button
           type="button"
-          onClick={() => void handleDownload()}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleDownload();
+          }}
           disabled={isDownloading}
           className={clsx(
             "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90 disabled:cursor-not-allowed disabled:opacity-50",
