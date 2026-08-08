@@ -276,12 +276,27 @@ export function usePersonalChat() {
         conversationId = createConversation();
       }
 
+      // Tệp hiện trong bong bóng user = tệp THỰC SỰ gửi kèm lượt này. Suy từ
+      // chip còn hiệu lực của hội thoại chứ không chỉ nhận từ `sendWithFile`:
+      // câu hỏi thứ hai trở đi vẫn gửi `attachment_ids` nhưng không đi qua
+      // `sendWithFile`, nếu chỉ dựa vào tham số thì bong bóng trống trơn —
+      // user không biết AI đang đọc tệp nào (ảnh "hỏi xong mất file").
+      const liveForBubble = (
+        usePersonalAiStore.getState().conversations.find((c) => c.id === conversationId)
+          ?.attachments ?? []
+      ).filter((a) => !isAttachmentExpired(a));
+      const bubbleFile =
+        attachedFile ??
+        (liveForBubble.length === 1
+          ? { name: liveForBubble[0].filename, pages: liveForBubble[0].pages }
+          : undefined);
+
       const userMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
         timestamp: new Date(),
-        ...(attachedFile && { attachedFile }),
+        ...(bubbleFile && { attachedFile: bubbleFile }),
       };
       addMessage(conversationId, userMessage);
 
@@ -805,15 +820,17 @@ export function usePersonalChat() {
         abortRef.current = null;
         // Chip đã vào store; `sendMessage` đọc TƯƠI từ store nên thấy được
         // `attachment_ids` của lượt này. Kèm tên tệp để bong bóng user hiện chip.
+        //
+        // Chip Ở LẠI composer sau khi hỏi — đúng request mục 5: chip chỉ mất khi
+        // user bấm xoá (DELETE trả 2xx) hoặc tệp hết hạn, và được khôi phục qua
+        // GET .../attachments khi mở lại hội thoại. Tệp tạm là NGỮ CẢNH của cả
+        // hội thoại, không phải đính kèm dùng một lần: bỏ chip đi thì câu hỏi thứ
+        // hai không còn gửi `attachment_ids`, chỉ chạy đúng nhờ BE tự nhớ theo
+        // session — tức FE dựa vào hành vi không có trong hợp đồng.
         await sendMessage(trimmed, undefined, {
           name: uploaded.filename,
           pages: uploaded.pages,
         });
-        // Hỏi xong thì tệp RỜI ô nhập (kiểu ChatGPT): nó đã thuộc về lượt hỏi vừa
-        // gửi và hiện trong bong bóng user. Treo lại ở composer khiến mọi câu hỏi
-        // sau vô tình gửi kèm tệp cũ, và khi tệp hết hạn thì cả hội thoại kẹt ở
-        // lỗi "Không tìm thấy tệp đính kèm..." không có đường thoát.
-        removeAttachment(convIdSnapshot, uploaded.attachment_id);
         return true;
       }
 
@@ -911,7 +928,6 @@ export function usePersonalChat() {
       updateServerSessionId,
       selectedDocumentIds,
       addAttachment,
-      removeAttachment,
       sendMessage,
     ],
   );

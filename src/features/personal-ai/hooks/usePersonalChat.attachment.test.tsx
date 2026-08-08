@@ -176,26 +176,30 @@ describe("usePersonalChat — hỏi đáp tệp đính kèm tạm", () => {
     expect(body.new_conversation).toBeUndefined();
   });
 
-  it("hỏi xong thì chip RỜI ô nhập (kiểu ChatGPT) — tệp đã thuộc về lượt hỏi đó", async () => {
+  it("chip Ở LẠI sau khi hỏi và câu hỏi SAU vẫn gửi kèm tệp + hiện tệp ở bong bóng", async () => {
     const { result } = renderHook(() => usePersonalChat());
 
     await act(async () => {
       await result.current.sendWithFile("tóm tắt", FILE);
     });
 
+    // Request mục 5: chip chỉ mất khi user bấm xoá (DELETE 2xx) hoặc hết hạn.
     const convId = usePersonalAiStore.getState().activeConversationId!;
-    const conv = usePersonalAiStore
-      .getState()
-      .conversations.find((c) => c.id === convId)!;
+    const convOf = () =>
+      usePersonalAiStore.getState().conversations.find((c) => c.id === convId)!;
+    expect(convOf().attachments ?? []).toHaveLength(1);
 
-    // Tệp đã gửi kèm câu hỏi (attachment_ids) và hiện trong bong bóng user…
-    expect(streamPersonalChatMock.mock.calls[0][0].attachment_ids).toEqual(["pga-1"]);
-    expect(conv.messages.find((m) => m.role === "user")!.attachedFile?.name).toBe(
-      "1671020230_DAUCAOMINHNHAT.docx",
-    );
-    // …nên KHÔNG được treo lại ở ô nhập: giữ lại thì lượt hỏi sau vô tình gửi
-    // kèm tệp cũ, và khi tệp hết hạn thì hội thoại kẹt lỗi "không tìm thấy tệp".
-    expect(conv.attachments ?? []).toHaveLength(0);
+    // Câu hỏi THỨ HAI (không qua sendWithFile) vẫn phải mang attachment_ids…
+    await act(async () => {
+      await result.current.sendMessage("file này có gì");
+    });
+    expect(streamPersonalChatMock.mock.calls[1][0].attachment_ids).toEqual(["pga-1"]);
+
+    // …và bong bóng của nó vẫn cho thấy đang hỏi về tệp nào (ảnh user: câu hỏi
+    // thứ hai mất sạch dấu vết tệp dù câu trả lời vẫn dựa trên tệp đó).
+    const userMsgs = convOf().messages.filter((m) => m.role === "user");
+    expect(userMsgs).toHaveLength(2);
+    expect(userMsgs[1].attachedFile?.name).toBe("1671020230_DAUCAOMINHNHAT.docx");
   });
 
   it("upload lỗi → không gửi câu hỏi, không ghi chip", async () => {
