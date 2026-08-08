@@ -12,7 +12,40 @@ import {
   streamPersonalChat,
   uploadLevelReport,
   ATTACHMENT_MODE_REJECTED,
+  stripDraftExportLinks,
 } from "./personalAiApi";
+
+describe("stripDraftExportLinks", () => {
+  it("bỏ link Markdown tải bản nháp (nút riêng lo việc tải, link thô luôn 401)", () => {
+    const out = stripDraftExportLinks(
+      "Đã dựng xong bản nháp.\n\n[Tải bản nháp](/api/work-report-drafts/abc-1/export.xlsx)",
+    );
+    expect(out).toBe("Đã dựng xong bản nháp.");
+    expect(out).not.toContain("work-report-drafts");
+  });
+
+  it("bỏ cả URL trần và URL tuyệt đối kèm query", () => {
+    expect(
+      stripDraftExportLinks(
+        "Tải tại https://chat.hacomholdings.com.vn/api/work-report-drafts/d1/export.xlsx?scope_token=x nhé",
+      ),
+    ).toBe("Tải tại  nhé".trim());
+    expect(
+      stripDraftExportLinks("Link: /api/work-report-drafts/d1/export.xlsx"),
+    ).toBe("Link:");
+  });
+
+  it("giữ nguyên nội dung không liên quan (kể cả bảng markdown)", () => {
+    const table = "| Việc | Trạng thái |\n| --- | --- |\n| A | Xong |";
+    expect(stripDraftExportLinks(table)).toBe(table);
+    expect(stripDraftExportLinks("")).toBe("");
+  });
+
+  it("KHÔNG đụng link work-report-drafts khác export.xlsx", () => {
+    const keep = "Xem [chi tiết](/api/work-report-drafts/d1/items) để đối chiếu.";
+    expect(stripDraftExportLinks(keep)).toBe(keep);
+  });
+});
 import { isAttachmentExpired } from "../types";
 
 describe("isAttachmentExpired", () => {
