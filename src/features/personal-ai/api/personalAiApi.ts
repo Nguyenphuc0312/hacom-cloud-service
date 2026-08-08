@@ -181,6 +181,26 @@ export class LevelReportScopeRequiredError extends PersonalAiError {
   }
 }
 
+/**
+ * SSE `event: error` — BE từ chối/bỏ dở giữa stream, KHÔNG phải lỗi HTTP hay
+ * mạng. Trước đây event này bị bỏ qua hoàn toàn: stream kết thúc không có `done`
+ * nên caller nhận "network", và mã lý do (vd `ATTACHMENT_MODE_REJECTED`) mất
+ * sạch — user chỉ thấy "lỗi kết nối" cho một lượt BE đã trả lời rõ ràng.
+ * `code` giữ nguyên để caller quyết định giữ lại file/câu hỏi.
+ */
+export class AiStreamError extends PersonalAiError {
+  readonly code: string;
+
+  constructor(code: string, message?: string) {
+    super(0, "http", message ?? "Không xử lý được yêu cầu. Vui lòng thử lại.");
+    this.name = "AiStreamError";
+    this.code = code;
+  }
+}
+
+/** BE từ chối lượt hỏi vì tệp đính kèm không hợp mode — giữ file + câu hỏi. */
+export const ATTACHMENT_MODE_REJECTED = "ATTACHMENT_MODE_REJECTED";
+
 function extractHttpErrorMessage(rawText: string): string | undefined {
   if (!rawText.trim()) return undefined;
 
@@ -1415,6 +1435,9 @@ export async function streamPersonalChat(
     // nguyên nhân #baocaocv "lúc hiện lúc không" (mất selection_request → rơi vào
     // ReportTextBox rỗng). Chỉ xử lý event đã đủ (kết bằng "\n\n"), giữ phần dư.
     let buffer = "";
+    // SSE `event: error` không thể ném ngay trong processEvent (đang ở trong
+    // vòng đọc) — giữ lại rồi ném sau khi thoát vòng, trước mọi fallback.
+    let streamError: AiStreamError | null = null;
 
     const processEvent = (event: string) => {
       if (!event.trim()) return;
@@ -1517,6 +1540,18 @@ export async function streamPersonalChat(
         } catch {
           options.onDraftFailed(undefined);
         }
+      } else if (eventType === "error") {
+        // BE trả lý do rõ ràng giữa stream (vd ATTACHMENT_MODE_REJECTED). Giữ
+        // `code` + `detail` an toàn của BE thay vì để rơi xuống "network".
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          streamError = new AiStreamError(
+            pickString(parsed.code, parsed.error_code) ?? "",
+            pickString(parsed.detail, parsed.message, parsed.error),
+          );
+        } catch {
+          streamError = new AiStreamError("", data.trim() || undefined);
+        }
       } else if (eventType === "done") {
         try {
           const parsed = JSON.parse(data);
@@ -1560,6 +1595,10 @@ export async function streamPersonalChat(
 
     // Flush event cuối nếu server không gửi "\n\n" kết thúc.
     if (buffer.trim()) processEvent(buffer);
+
+    // BE đã nói rõ vì sao dừng → ném đúng lý do đó. Phải đứng TRƯỚC fallback
+    // parse: stream lỗi không có `done`, để rơi xuống dưới sẽ thành "network".
+    if (streamError) throw streamError;
 
     // Fallback: parse from accumulated text
     if (!finalResponse) {

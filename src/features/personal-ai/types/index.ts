@@ -331,6 +331,20 @@ export interface PersonalAttachment {
 /** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */
 export const PERSONAL_ATTACHMENT_MODE = "personal_attachment_general";
 
+/**
+ * Tệp tạm đã quá `expires_at` chưa. Thiếu/không parse được `expires_at` → coi là
+ * CÒN HẠN: BE là bên quyết định thật, FE đoán "hết hạn" sẽ chặn oan một tệp dùng
+ * được. Chỉ chặn khi biết chắc đã quá hạn.
+ */
+export function isAttachmentExpired(
+  attachment: PersonalAttachment,
+  now: number = Date.now(),
+): boolean {
+  if (!attachment.expires_at) return false;
+  const at = Date.parse(attachment.expires_at);
+  return Number.isFinite(at) && at <= now;
+}
+
 export interface SelectSourcesRequest {
   document_ids: string[];
 }
