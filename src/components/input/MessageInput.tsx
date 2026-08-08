@@ -1241,11 +1241,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     }
   }, [mode]);
 
-  React.useEffect(() => {
-    if (!conversationId || !textareaRef.current) return;
-
-    textareaRef.current.focus();
-  }, [conversationId, textareaRef]);
+  // ponytail: textareaRef trỏ vào <textarea> ẩn của useAutoResizeTextarea — ô nhập
+  // thật render qua TipTapEditor nên effect focus() cũ ở đây không bao giờ chạy.
+  // Auto-focus-khi-mở-hội-thoại đã có đúng chỗ (ChatWindow gọi qua messageInputRef,
+  // desktop-only + rAF), xóa effect chết thay vì fix tại chỗ.
 
   React.useEffect(() => {
     if (!showMentionPanel) {
