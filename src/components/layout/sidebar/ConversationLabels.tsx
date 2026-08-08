@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   Bars3Icon,
@@ -29,6 +30,42 @@ const LABEL_SWATCHES = [
 ];
 
 const SKIP_MARK_READ_CONFIRM_KEY = "chat.sidebar.skipMarkReadConfirm";
+const FILTER_MENU_WIDTH = 288;
+const FLOATING_MENU_GAP = 8;
+
+type FloatingMenuPosition = {
+  left: number;
+  top: number;
+  maxHeight: number;
+};
+
+const getFloatingFilterMenuPosition = (
+  button: HTMLElement,
+): FloatingMenuPosition => {
+  const buttonRect = button.getBoundingClientRect();
+  const sidebarRect = button.closest("aside")?.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const preferredLeft =
+    (sidebarRect?.right ?? buttonRect.right) + FLOATING_MENU_GAP;
+  const left = Math.min(
+    Math.max(FLOATING_MENU_GAP, preferredLeft),
+    Math.max(
+      FLOATING_MENU_GAP,
+      viewportWidth - FILTER_MENU_WIDTH - FLOATING_MENU_GAP,
+    ),
+  );
+  const top = Math.min(
+    buttonRect.bottom + FLOATING_MENU_GAP,
+    Math.max(FLOATING_MENU_GAP, viewportHeight - 260),
+  );
+
+  return {
+    left,
+    top,
+    maxHeight: Math.max(240, viewportHeight - top - FLOATING_MENU_GAP),
+  };
+};
 
 export const ConversationLabelMarker: React.FC<{
   color: string;
@@ -127,6 +164,8 @@ export const SidebarLabelFilter: React.FC<{
   const [moreOpen, setMoreOpen] = useState(false);
   const [confirmMarkReadOpen, setConfirmMarkReadOpen] = useState(false);
   const [skipMarkReadConfirm, setSkipMarkReadConfirm] = useState(false);
+  const [filterMenuPosition, setFilterMenuPosition] =
+    useState<FloatingMenuPosition | null>(null);
   const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -148,6 +187,25 @@ export const SidebarLabelFilter: React.FC<{
     () => labels.filter((label) => selectedLabelIds.includes(label.id)),
     [labels, selectedLabelIds],
   );
+
+  useEffect(() => {
+    if (!filterOpen) return undefined;
+
+    const updateFilterMenuPosition = () => {
+      const button = filterButtonRef.current;
+      if (!button) return;
+      setFilterMenuPosition(getFloatingFilterMenuPosition(button));
+    };
+
+    const frame = window.requestAnimationFrame(updateFilterMenuPosition);
+    window.addEventListener("resize", updateFilterMenuPosition);
+    window.addEventListener("scroll", updateFilterMenuPosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateFilterMenuPosition);
+      window.removeEventListener("scroll", updateFilterMenuPosition, true);
+    };
+  }, [filterOpen]);
 
   const toggleFilterLabel = (labelId: string) => {
     setSelectedLabelIds(
@@ -187,6 +245,11 @@ export const SidebarLabelFilter: React.FC<{
         type="button"
         onClick={() => {
           setMoreOpen(false);
+          if (!filterOpen && filterButtonRef.current) {
+            setFilterMenuPosition(
+              getFloatingFilterMenuPosition(filterButtonRef.current),
+            );
+          }
           setFilterOpen((open) => !open);
         }}
         className={clsx(
@@ -231,70 +294,81 @@ export const SidebarLabelFilter: React.FC<{
         <EllipsisHorizontalIcon className="h-5 w-5" />
       </button>
 
-      {filterOpen ? (
-        <div
-          ref={filterMenuRef}
-          role="menu"
-          className="absolute right-0 top-full z-dropdown mt-2 w-72 overflow-hidden rounded-lg border border-border bg-surface shadow-elev3"
-        >
-          <div className="border-b border-border/70 px-3 py-2 text-sm font-medium text-text-primary">
-            {t("sidebar:labels.filterTitle")}
-          </div>
-          <div className="max-h-72 overflow-y-auto py-1">
-            {labels.map((label) => {
-              const checked = selectedLabelIds.includes(label.id);
-              return (
-                <button
-                  key={label.id}
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={checked}
-                  onClick={() => toggleFilterLabel(label.id)}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-text-primary transition-micro hover:bg-surface-hover"
-                >
-                  <span
-                    className={clsx(
-                      "flex h-5 w-5 items-center justify-center rounded border-2",
-                      checked
-                        ? "border-[#1565C0] bg-[#1565C0]"
-                        : "border-border bg-surface",
-                    )}
-                  >
-                    {checked ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
-                    ) : null}
-                  </span>
-                  <ConversationLabelMarker color={label.color} />
-                  <span className="min-w-0 flex-1 truncate">{label.name}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="border-t border-border/70">
-            {selectedLabelIds.length > 0 ? (
-              <button
-                type="button"
-                onClick={clearSelectedLabels}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary"
-              >
-                <XMarkIcon className="h-4 w-4" />
-                {t("sidebar:labels.clearFilter")}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                setFilterOpen(false);
-                openManager();
+      {filterOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={filterMenuRef}
+              role="menu"
+              className="fixed z-[1000] w-72 overflow-hidden rounded-lg border border-border bg-surface shadow-elev3"
+              style={{
+                left: filterMenuPosition?.left ?? 0,
+                top: filterMenuPosition?.top ?? 0,
+                maxHeight: filterMenuPosition?.maxHeight,
+                visibility: filterMenuPosition ? "visible" : "hidden",
               }}
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/8"
             >
-              <PencilSquareIcon className="h-4 w-4" />
-              {t("sidebar:labels.manage")}
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <div className="border-b border-border/70 px-3 py-2 text-sm font-medium text-text-primary">
+                {t("sidebar:labels.filterTitle")}
+              </div>
+              <div className="max-h-72 overflow-y-auto py-1">
+                {labels.map((label) => {
+                  const checked = selectedLabelIds.includes(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={checked}
+                      onClick={() => toggleFilterLabel(label.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-text-primary transition-micro hover:bg-surface-hover"
+                    >
+                      <span
+                        className={clsx(
+                          "flex h-5 w-5 items-center justify-center rounded border-2",
+                          checked
+                            ? "border-[#1565C0] bg-[#1565C0]"
+                            : "border-border bg-surface",
+                        )}
+                      >
+                        {checked ? (
+                          <span className="h-2 w-2 rounded-full bg-white" />
+                        ) : null}
+                      </span>
+                      <ConversationLabelMarker color={label.color} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {label.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="border-t border-border/70">
+                {selectedLabelIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearSelectedLabels}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                    {t("sidebar:labels.clearFilter")}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterOpen(false);
+                    openManager();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/8"
+                >
+                  <PencilSquareIcon className="h-4 w-4" />
+                  {t("sidebar:labels.manage")}
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {moreOpen ? (
         <div
