@@ -57,13 +57,20 @@ export const OfficeOnlinePreview: React.FC<OfficeOnlinePreviewProps> = ({
   }, [onUnavailable]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      // Chưa `load` sau ngần này giây → coi như Microsoft không lấy được file.
-      onUnavailableRef.current();
-    }, LOAD_TIMEOUT_MS);
+    // Đã load xong thì KHÔNG đặt hạn chờ nữa.
+    //
+    // Thiếu điều kiện này là bug đã gặp: hạn chờ vẫn nổ sau 20 giây dù viewer
+    // hiển thị đúng, nên tài liệu đang hiện chuẩn bỗng bị thay bằng bản tự
+    // render — đúng triệu chứng "đang đúng tự dưng load về cái cũ".
+    if (isLoading) {
+      const timer = window.setTimeout(() => {
+        // Chưa `load` sau ngần này giây → coi như Microsoft không lấy được file.
+        onUnavailableRef.current();
+      }, LOAD_TIMEOUT_MS);
 
-    return () => window.clearTimeout(timer);
-  }, [url]);
+      return () => window.clearTimeout(timer);
+    }
+  }, [url, isLoading]);
 
   const handleLoad = useCallback(() => {
     setLoadState({ key: url, loaded: true });
@@ -82,9 +89,19 @@ export const OfficeOnlinePreview: React.FC<OfficeOnlinePreviewProps> = ({
         title={fileName || "Xem tài liệu"}
         className="h-full w-full border-0"
         onLoad={handleLoad}
-        // Viewer của Microsoft cần script + tải file; không cho phép nó truy cập
-        // same-origin với app mình.
-        sandbox="allow-scripts allow-popups allow-forms allow-downloads"
+        // `allow-same-origin` là BẮT BUỘC, không phải nới lỏng cho tiện.
+        //
+        // Excel/Word Online là ứng dụng thật: nó cần cookie + localStorage +
+        // WebSocket để giữ phiên làm việc. Thiếu cờ này, trình duyệt ép iframe
+        // vào origin "null" (opaque) → viewer mất session và hiện
+        // "Trying to reconnect. Check your internet connection." lặp vô hạn,
+        // dù mạng vẫn tốt. Đã gặp đúng lỗi này 08-08-26.
+        //
+        // Không hở bảo mật: iframe trỏ sang view.officeapps.live.com nên
+        // "same-origin" ở đây là origin CỦA MICROSOFT, khác origin app mình.
+        // Nó không đọc được DOM, cookie hay token của app. Vẫn giữ sandbox để
+        // chặn allow-top-navigation (viewer không thể tự điều hướng cả trang).
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
       />
     </div>
   );

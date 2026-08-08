@@ -156,6 +156,9 @@ export function useFilePreview(): UseFilePreviewReturn {
           conversationId: target.conversationId,
           objectKey: target.attachment.objectKey || undefined,
           attachmentId: target.attachment.id || undefined,
+          // Đây là luồng XEM: xin URL hạn dài để trình xem nhúng không chết
+          // giữa chừng khi người dùng đọc tài liệu lâu.
+          mode: "view",
           signal: controller.signal,
         });
 

@@ -788,28 +788,17 @@ export const RoomItemContainer = React.memo(
         [conversationId],
       ),
     );
-    const isPinned = useUIStore(
-      useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
-    );
     const labels = useUIStore((state) => state.conversationLabels);
-    const storedAssignedLabelIds = useUIStore(
-      useMemo(
-        () => (state) =>
-          state.conversationLabelsByConversationId[conversationId],
-        [conversationId],
-      ),
-    );
-    const assignedLabelIds = storedAssignedLabelIds ?? EMPTY_LABEL_IDS;
-    const togglePinnedConversation = useUIStore(
-      (state) => state.togglePinnedConversation,
-    );
-    const toggleConversationLabel = useUIStore(
-      (state) => state.toggleConversationLabel,
-    );
     const removeConversation = useChatStore((state) => state.removeConversation);
+    const updateConversation = useChatStore((state) => state.updateConversation);
     const openConversationLabelManager = useUIStore(
       (state) => state.openConversationLabelManager,
     );
+    const setConversationLabelAssignment = useUIStore(
+      (state) => state.setConversationLabelAssignment,
+    );
+    const isPinned = Boolean(conversation?.pinnedAt);
+    const assignedLabelIds = conversation?.labelIds ?? EMPTY_LABEL_IDS;
     const assignedLabels = useMemo(
       () => labels.filter((label) => assignedLabelIds.includes(label.id)),
       [assignedLabelIds, labels],
@@ -829,6 +818,75 @@ export const RoomItemContainer = React.memo(
     const [isDropTarget, setIsDropTarget] = useState(false);
     const [forwardMessages] = useForwardMessagesMutation();
     const [deleteMessage] = useDeleteMessageMutation();
+
+    const handleTogglePinned = React.useCallback(
+      async (targetConversationId: string) => {
+        const currentConversation =
+          useChatStore.getState().conversationById[targetConversationId];
+        if (!currentConversation) return;
+        const wasPinned = Boolean(currentConversation.pinnedAt);
+        const optimisticPinnedAt = wasPinned ? null : new Date().toISOString();
+        updateConversation(targetConversationId, {
+          pinnedAt: optimisticPinnedAt,
+          pinOrder: wasPinned ? null : 0,
+          isPinned: !wasPinned,
+        });
+
+        try {
+          const result = await conversationApi.setConversationPinned(
+            targetConversationId,
+            !wasPinned,
+          );
+          updateConversation(targetConversationId, {
+            pinnedAt: result.pinnedAt,
+            pinOrder: result.pinOrder,
+            isPinned: Boolean(result.pinnedAt),
+          });
+        } catch (error) {
+          updateConversation(targetConversationId, {
+            pinnedAt: currentConversation.pinnedAt ?? null,
+            pinOrder: currentConversation.pinOrder ?? null,
+            isPinned: Boolean(currentConversation.pinnedAt),
+          });
+          toast.error(extractApiError(error).message);
+        }
+      },
+      [updateConversation],
+    );
+
+    const handleToggleLabel = React.useCallback(
+      async (targetConversationId: string, labelId: string) => {
+        const currentConversation =
+          useChatStore.getState().conversationById[targetConversationId];
+        if (!currentConversation) return;
+        const currentLabelIds = currentConversation.labelIds ?? [];
+        const nextLabelIds = currentLabelIds.includes(labelId)
+          ? currentLabelIds.filter((id) => id !== labelId)
+          : [...currentLabelIds, labelId];
+
+        updateConversation(targetConversationId, { labelIds: nextLabelIds });
+        setConversationLabelAssignment(targetConversationId, nextLabelIds);
+
+        try {
+          const result = await conversationApi.setConversationLabels(
+            targetConversationId,
+            nextLabelIds,
+          );
+          updateConversation(targetConversationId, { labelIds: result.labelIds });
+          setConversationLabelAssignment(targetConversationId, result.labelIds);
+        } catch (error) {
+          updateConversation(targetConversationId, {
+            labelIds: currentConversation.labelIds ?? [],
+          });
+          setConversationLabelAssignment(
+            targetConversationId,
+            currentConversation.labelIds ?? [],
+          );
+          toast.error(extractApiError(error).message);
+        }
+      },
+      [setConversationLabelAssignment, updateConversation],
+    );
 
     const handleDragOver = React.useCallback(
       (event: React.DragEvent<HTMLDivElement>) => {
@@ -1028,8 +1086,8 @@ export const RoomItemContainer = React.memo(
         assignedLabelIds={assignedLabelIds}
         isDropTarget={isDropTarget}
         onSelect={onSelect}
-        onTogglePinned={togglePinnedConversation}
-        onToggleLabel={toggleConversationLabel}
+        onTogglePinned={handleTogglePinned}
+        onToggleLabel={handleToggleLabel}
         onDeleteConversation={removeConversation}
         onOpenLabelManager={openConversationLabelManager}
         onDragOver={handleDragOver}

@@ -23,8 +23,10 @@ import {
   getConversationDisplayName,
   getUserDisplayName,
 } from "../../../utils/messageHelpers";
-import { createConversationActivityComparator } from "../../../utils/conversationRanking";
-import { useUIStore } from "../../../stores/uiStore";
+import {
+  createConversationActivityComparator,
+  getConversationPinnedTimestamp,
+} from "../../../utils/conversationRanking";
 import { conversationResourcesApi } from "../../../services/api";
 import type { ConversationResourcesFileItem } from "../../../services/api";
 import { getFileIconType } from "../../../utils/formatFileSize";
@@ -116,22 +118,31 @@ export const useGlobalGroupSearch = (
 ): Conversation[] => {
   const conversationById = useChatStore((s) => s.conversationById);
   const orderedIds = useChatStore((s) => s.orderedConversationIds);
-  const pinnedConversationIds = useUIStore((s) => s.pinnedConversationIds);
 
   return useMemo(() => {
     const q = normalize(query);
-    const comparator = createConversationActivityComparator(
-      new Set(pinnedConversationIds),
-    );
-    return orderedIds
+    const conversations = orderedIds
       .map((id) => conversationById[id])
-      .filter((c): c is Conversation => Boolean(c) && !isDirectConversation(c))
+      .filter((c): c is Conversation => Boolean(c) && !isDirectConversation(c));
+    const pinnedAtById = new Map(
+      conversations
+        .map((conversation) => [
+          conversation.id,
+          getConversationPinnedTimestamp(conversation),
+        ] as const)
+        .filter(([, pinnedAt]) => pinnedAt > 0),
+    );
+    const comparator = createConversationActivityComparator(
+      new Set(pinnedAtById.keys()),
+      pinnedAtById,
+    );
+    return conversations
       .filter((c) => {
         if (!q) return true;
         return normalize(getConversationDisplayName(c, currentUser.id)).includes(q);
       })
       .sort(comparator);
-  }, [conversationById, orderedIds, query, currentUser.id, pinnedConversationIds]);
+  }, [conversationById, orderedIds, query, currentUser.id]);
 };
 
 // --- Messages (real search endpoint, server-side sender/date filters) --------
