@@ -506,7 +506,6 @@ export const CalendarPage: React.FC = () => {
     viewingUnitName,
     filters,
     setFilters,
-    setViewingUser,
     fetchEvents,
     isLoading: storeLoading,
   } = storeState;
@@ -579,9 +578,15 @@ export const CalendarPage: React.FC = () => {
   // Create event loading state
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
-  // Handle select user from search
+  // Handle select user from search. Đồng bộ tháng đang xem của TRANG vào store
+  // trước (setDate không fetch): đổi người khi ĐANG ở mode "other" thì effect
+  // refetch không chạy lại (deps y nguyên), chỉ còn fetch của setViewingUser —
+  // mà nó lấy range theo store, không sync thì load nhầm tháng (cùng bẫy với
+  // handleBackToMyCalendar bên dưới).
   const handleSelectUser = (userId: string, userName: string) => {
-    setViewingUser(userId, userName);
+    const store = useCalendarStore.getState();
+    store.setDate(currentYear, currentMonth);
+    store.setViewingUser(userId, userName);
   };
 
   // Hai nguồn cùng yêu cầu mở sẵn một sự kiện:
@@ -1483,6 +1488,13 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Suspense CỤC BỘ cho cụm modal lazy — bắt buộc, không phải trang trí.
+          Thiếu nó, lần ĐẦU mở modal (chunk chưa tải) suspend nổi bọt lên
+          boundary ở RootLayout → React ẩn cả trang và DỌN effect của cây bị ẩn
+          → cleanup unmount ở trên chạy resetCalendarData() → đang xem lịch
+          người khác bị đá về "Lịch của tôi". Lần 2 chunk đã cache nên không
+          tái hiện — đúng kiểu bug "làm lại thì hết". */}
+      <React.Suspense fallback={null}>
       {/* Event detail modal */}
       {selectedEventLive && (
         <EventDetailModal
@@ -1601,6 +1613,7 @@ export const CalendarPage: React.FC = () => {
           initialData={editingPersonalEvent}
         />
       )}
+      </React.Suspense>
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog
