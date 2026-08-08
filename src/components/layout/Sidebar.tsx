@@ -6,7 +6,7 @@ import React, {
 } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { SegmentedControl } from "../ui";
+import { toast } from "../ui";
 import { usePresence, useNotifications } from "../../hooks";
 import { useAuthStore } from "../../stores";
 import { useChatStore } from "../../stores";
@@ -18,9 +18,14 @@ import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
 import { GlobalSearchOverlay } from "./sidebar/GlobalSearchOverlay";
+import {
+  ConversationLabelManagerModal,
+  SidebarLabelFilter,
+} from "./sidebar/ConversationLabels";
 import { useChatSidebarStore } from "../../features/chat/state/chatSidebarStore";
 import { useSidebarConversationList } from "../../features/chat/hooks/useSidebarConversationList";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
+import type { SidebarConversationFilter } from "../../features/chat/state/chatSidebarStore";
 
 interface SidebarProps {
   layoutState: ChatLayoutState;
@@ -37,6 +42,71 @@ interface SidebarProps {
   onCurrentUserClick?: () => void;
   className?: string;
 }
+
+const SidebarConversationTabs: React.FC<{
+  value: SidebarConversationFilter;
+  counts: {
+    all: number;
+    unread: number;
+    groups: number;
+  };
+  onChange: (value: SidebarConversationFilter) => void;
+}> = ({ value, counts, onChange }) => {
+  const { t } = useTranslation();
+  const tabs: Array<{
+    id: SidebarConversationFilter;
+    label: string;
+    count: number;
+  }> = [
+    { id: "all", label: t("sidebar:tabs.all"), count: counts.all },
+    { id: "groups", label: t("sidebar:tabs.groups"), count: counts.groups },
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label={t("sidebar:room.listAria")}
+      className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+    >
+      {tabs.map((tab) => {
+        const active = value === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={clsx(
+              "relative inline-flex h-9 shrink-0 items-center justify-center gap-1 px-0.5 text-[13px] font-semibold transition-micro",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/25",
+              active
+                ? "text-[#1565C0]"
+                : "text-text-secondary hover:text-text-primary",
+            )}
+          >
+            <span className="whitespace-nowrap">{tab.label}</span>
+            {tab.count > 0 ? (
+              <span
+                className={clsx(
+                  "inline-flex min-w-[1.15rem] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                  active
+                    ? "bg-[#1976D2]/10 text-[#1565C0]"
+                    : "bg-surface-overlay text-text-muted",
+                )}
+              >
+                {tab.count > 99 ? "99+" : tab.count}
+              </span>
+            ) : null}
+            {active ? (
+              <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-[#1565C0]" />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 export const Sidebar: React.FC<SidebarProps> = ({
   layoutState,
@@ -64,6 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const closeSearch = useChatSidebarStore((state) => state.closeSearch);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const isAuthenticated = !!useAuthStore((s) => s.user);
+  const markAsRead = useChatStore((state) => state.markAsRead);
   useNotifications(isAuthenticated);
 
   const handleSelectRoom = useCallback(
@@ -77,6 +148,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
     filter: activeFilter,
     query: deferredSearchQuery,
   });
+
+  const handleMarkVisibleRead = useCallback(async () => {
+    const conversationById = useChatStore.getState().conversationById;
+    const unreadConversationIds = conversationIds.filter(
+      (conversationId) =>
+        (conversationById[conversationId]?.unreadCount ?? 0) > 0,
+    );
+
+    if (unreadConversationIds.length === 0) {
+      toast.info(t("sidebar:labels.noUnreadInScope"));
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      unreadConversationIds.map((conversationId) => markAsRead(conversationId)),
+    );
+    const failedCount = results.filter(
+      (result) => result.status === "rejected",
+    ).length;
+
+    if (failedCount > 0) {
+      toast.warning(t("sidebar:labels.markReadPartial"));
+      return;
+    }
+
+    toast.success(t("sidebar:labels.markReadSuccess"));
+  }, [conversationIds, markAsRead, t]);
 
   const dmUserIds = useMemo(() => {
     const ids = new Set<string>();
@@ -117,26 +215,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             layoutState === "normal" ? "px-4 pb-3" : "px-3 pb-2.5"
           }
         >
-          <SegmentedControl
-            value={activeFilter}
-            onChange={(value) =>
-              setActiveFilter(value as "all" | "unread" | "groups")
-            }
-            size="sm"
-            ariaLabel={t("sidebar:room.listAria")}
-            options={[
-              {
-                id: "all",
-                label: t("sidebar:tabs.all"),
-                count: counts.all,
-              },
-              {
-                id: "groups",
-                label: t("sidebar:tabs.groups"),
-                count: counts.groups,
-              },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <SidebarConversationTabs
+              value={activeFilter}
+              counts={counts}
+              onChange={setActiveFilter}
+            />
+            <SidebarLabelFilter
+              layoutState={layoutState}
+              onMarkVisibleRead={handleMarkVisibleRead}
+            />
+          </div>
 
 
         </div>
@@ -173,6 +262,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         ) : null}
       </SidebarContainer>
+      <ConversationLabelManagerModal />
     </>
   );
 };
