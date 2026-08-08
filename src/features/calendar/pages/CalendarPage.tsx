@@ -45,7 +45,6 @@ import {
 import {
   hrCalendarApi,
   type HRCalendarEvent,
-  type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
 import { apiVisibilityToForm } from "../utils/calendarVisibility";
 import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
@@ -71,11 +70,7 @@ import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
-import {
-  resolvePublicResourceUrl,
-  CALENDAR_ATTACHMENTS_USE_MOCK,
-} from "../../../config";
-import { mockGetAttachmentsForEvents } from "../utils/calendarAttachmentMockStore";
+import { resolvePublicResourceUrl } from "../../../config";
 
 /**
  * Calendar view types.
@@ -766,22 +761,6 @@ export const CalendarPage: React.FC = () => {
     return apiEvents.map(mapHrmEventToCalendarEvent);
   }, [apiEvents]);
 
-  // MOCK attachments (khi BE chưa trả `attachments[]`): nạp từ IndexedDB theo
-  // eventId để viewer + form sửa hiển thị lại. No-op khi nối BE thật.
-  const [mockAttachmentsByEventId, setMockAttachmentsByEventId] = useState<
-    Record<string, CalendarAttachmentDto[]>
-  >({});
-  useEffect(() => {
-    if (!CALENDAR_ATTACHMENTS_USE_MOCK || apiEvents.length === 0) return;
-    let cancelled = false;
-    void mockGetAttachmentsForEvents(apiEvents.map((e) => e.id)).then((map) => {
-      if (!cancelled) setMockAttachmentsByEventId(map);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiEvents]);
-
   // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll) bằng authUserId —
   // không phụ thuộc hr-api. Batch-load 1 lần cho mọi participant đang hiển thị.
   const [participantAvatars, setParticipantAvatars] = useState<Record<string, string | null>>({});
@@ -1050,15 +1029,8 @@ export const CalendarPage: React.FC = () => {
   // Raw HR event for the selected item — carries participant roster + response.
   const selectedHrEvent = useMemo(() => {
     if (!selectedEvent) return undefined;
-    const found = apiEvents.find((e) => e.id === selectedEvent.id);
-    if (!found) return undefined;
-    // MOCK: overlay attachments từ IndexedDB nếu BE chưa trả (found.attachments rỗng).
-    const mockAtts = mockAttachmentsByEventId[found.id];
-    if (mockAtts && (!found.attachments || found.attachments.length === 0)) {
-      return { ...found, attachments: mockAtts };
-    }
-    return found;
-  }, [selectedEvent, apiEvents, mockAttachmentsByEventId]);
+    return apiEvents.find((e) => e.id === selectedEvent.id);
+  }, [selectedEvent, apiEvents]);
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {

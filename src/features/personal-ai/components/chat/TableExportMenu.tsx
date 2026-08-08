@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
+import { useClickOutside } from "../../../../hooks";
 import {
   DownloadIcon,
   CopyIcon,
@@ -53,21 +54,7 @@ export const TableExportMenu: React.FC<TableExportMenuProps> = ({
   const currentEpoch = useWorkReportScopeStore((s) => s.dataEpoch);
   const scopeStale = scopeEpoch !== undefined && scopeEpoch !== currentEpoch;
 
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(rootRef, () => setOpen(false), { active: open, escape: true });
 
   const fileBase = title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "bao-cao";
 

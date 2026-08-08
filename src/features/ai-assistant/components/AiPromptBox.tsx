@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../../hooks";
 import {
   ArrowUpIcon,
   SquareIcon,
@@ -161,33 +162,8 @@ const AiPromptBoxImpl = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
       });
     }, [onRegisterFilePicker]);
 
-    useEffect(() => {
-      if (!attachMenuOpen) return;
-      const handlePointerDown = (event: MouseEvent) => {
-        if (
-          attachMenuRef.current &&
-          !attachMenuRef.current.contains(event.target as Node)
-        ) {
-          setAttachMenuOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handlePointerDown);
-      return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [attachMenuOpen]);
-
-    useEffect(() => {
-      if (!hashMenuOpen) return;
-      const handlePointerDown = (event: MouseEvent) => {
-        if (
-          hashMenuRef.current &&
-          !hashMenuRef.current.contains(event.target as Node)
-        ) {
-          setHashMenuOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handlePointerDown);
-      return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [hashMenuOpen]);
+    useClickOutside(attachMenuRef, () => setAttachMenuOpen(false), { active: attachMenuOpen });
+    useClickOutside(hashMenuRef, () => setHashMenuOpen(false), { active: hashMenuOpen });
 
     const handleFileChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {

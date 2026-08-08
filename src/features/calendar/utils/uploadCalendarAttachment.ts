@@ -16,8 +16,6 @@
 
 import uploadClient from "../../../services/uploadClient";
 import { extractApiError } from "../../../lib/apiContract";
-import { CALENDAR_ATTACHMENTS_USE_MOCK } from "../../../config";
-import { mockUploadCalendarFile } from "./calendarAttachmentMockStore";
 import type { CalendarLocalAttachment } from "../../../components/ui/CalendarAttachmentZone";
 
 export interface UploadedCalendarAttachment {
@@ -91,10 +89,6 @@ export async function uploadCalendarAttachments(
 ): Promise<UploadedCalendarAttachment[]> {
   if (files.length === 0) return [];
   try {
-    // MOCK: lưu blob vào IndexedDB, sinh fileId giả — hoạt động thật, không cần BE.
-    if (CALENDAR_ATTACHMENTS_USE_MOCK) {
-      return await Promise.all(files.map(mockUploadCalendarFile));
-    }
     return await Promise.all(files.map(uploadOne));
   } catch (err) {
     if (err instanceof CalendarAttachmentUploadError) throw err;
