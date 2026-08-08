@@ -13,6 +13,7 @@ export const ROUTE_PATHS = {
   CHAT: "/chat",
   CHAT_DETAIL: "/chat/:conversationId?",
   CLOUD: "/cloud",
+  CLOUD_MANAGE: "/cloud/manage",
   FRIENDS: "/friends",
   FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
   JOIN_BY_TOKEN: "/join/:token",

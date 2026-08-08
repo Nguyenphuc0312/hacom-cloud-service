@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Check,
   Download,
@@ -25,10 +26,11 @@ import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
 import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
-import { Input, Modal, ConfirmDialog } from "../../../components/ui";
+import { ConfirmDialog } from "../../../components/ui";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import { truncateFilenameEnd } from "../../../utils/truncateFilename";
+import { ROUTE_PATHS } from "../../../router/paths";
 
 /** API trả dung lượng dạng chuỗi (bigint) nên phải ép số trước khi đưa vào
  *  formatFileSize dùng chung; giá trị hỏng thì hiện "—" thay vì "0 B". */
@@ -136,7 +138,8 @@ export const StorageUsageBar: React.FC<{
 
 export const CloudStorageCard: React.FC<{
   quota: CloudQuota | null;
-  onManage: () => void;
+  /** Bỏ trống khi card này đã nằm sẵn trong trang quản lý — không cần nút quay lại chính nó. */
+  onManage?: () => void;
 }> = ({ quota, onManage }) => {
   if (!quota) {
     return <div className="h-[174px] animate-pulse rounded-xl border border-border/70 bg-surface-hover/50" aria-label="Đang tải dung lượng lưu trữ" />;
@@ -158,15 +161,17 @@ export const CloudStorageCard: React.FC<{
       <p className="text-xs text-text-muted">trên tổng dung lượng {formatBytes(quota.limitBytes)}</p>
       <StorageUsageBar usedBytes={used} limitBytes={quota.limitBytes} availableBytes={quota.availableBytes} usedByType={quota.usedByType} />
       {reservedNumber > 0 && <p className="mt-1 text-xs text-text-muted">Đang tải lên: {formatBytes(reservedNumber)} · Còn có thể dùng {formatBytes(quota.availableBytes)}</p>}
-      <button
-        type="button"
-        onClick={onManage}
-        className="mt-4 flex h-10 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-sm font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-solid"
-      >
-        <FolderOpen className="h-4 w-4 shrink-0" />
-        <span className="min-w-0 flex-1">Xem và quản lý Hacom Cloud</span>
-        <span aria-hidden="true">→</span>
-      </button>
+      {onManage && (
+        <button
+          type="button"
+          onClick={onManage}
+          className="mt-4 flex h-10 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-sm font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-solid"
+        >
+          <FolderOpen className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">Xem và quản lý Hacom Cloud</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      )}
     </section>
   );
 };
@@ -360,36 +365,6 @@ export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversati
   );
 };
 
-const CloudManagerDialog: React.FC<{
-  assets: CloudAsset[];
-  onClose: () => void;
-  onPreview: (asset: CloudAsset) => void;
-  onForward?: (asset: CloudAsset) => void;
-  onTrash: (asset: CloudAsset) => void;
-}> = ({ assets, onClose, onPreview, onForward, onTrash }) => {
-  const [query, setQuery] = useState("");
-  const filtered = assets.filter((asset) => asset.originalFilename.toLowerCase().includes(query.toLowerCase()));
-
-  // Modal dùng chung lo sẵn overlay, nút đóng, phím Esc, bẫy focus và khoá cuộn
-  // nền — bản tự viết trước đây chỉ có Esc.
-  return (
-    <Modal isOpen onClose={onClose} title="Quản lý Hacom Cloud" size="xl" bodyClassName="flex max-h-[70vh] flex-col gap-3">
-      <Input
-        autoFocus
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Tìm tệp"
-        aria-label="Tìm tệp trong Hacom Cloud"
-      />
-      <ul className="min-h-0 flex-1 overflow-y-auto">
-        {filtered.length
-          ? filtered.map((asset) => <CloudFileRow key={asset.id} asset={asset} onPreview={onPreview} onForward={onForward} onTrash={onTrash} />)
-          : <CloudEmptyState icon={<File className="h-6 w-6" />} text="Không tìm thấy tệp phù hợp" />}
-      </ul>
-    </Modal>
-  );
-};
-
 export const HacomCloudInfoSidebar: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -400,29 +375,19 @@ export const HacomCloudInfoSidebar: React.FC<{
   error?: string | null;
   onChanged: () => Promise<void> | void;
   onRetry?: () => void;
-  onPreview: (asset: CloudAsset) => void;
-  onForward?: (asset: CloudAsset) => void;
-}> = ({ open, onClose, quota, assets, conversationId, loading = false, error, onChanged, onRetry, onPreview, onForward }) => {
-  const [managerOpen, setManagerOpen] = useState(false);
+}> = ({ open, onClose, quota, assets, conversationId, loading = false, error, onChanged, onRetry }) => {
+  const navigate = useNavigate();
   // Zalo My Documents: "Chọn" bật chế độ chọn (checkbox mọc trên từng dòng + thanh hành
   // động thay header) chứ không phải checkbox nằm sẵn cạnh "Chọn tất cả" mọi lúc.
   const [trashSelectMode, setTrashSelectMode] = useState(false);
   const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
   const [emptyingTrash, setEmptyingTrash] = useState(false);
-  const available = useMemo(() => assets.filter((asset) => asset.status === "available"), [assets]);
   const trashed = useMemo(() => assets.filter((asset) => asset.status === "trashed" || asset.status === "purge_failed"), [assets]);
   const trashedTotalBytes = useMemo(
     () => trashed.reduce((sum, asset) => sum + (Number(asset.sizeBytes) || 0), 0),
     [trashed],
   );
 
-  const trash = async (asset: CloudAsset) => {
-    await cloudApi.trash(asset.id);
-    await onChanged();
-    toast.action("Đã xóa " + truncateFilenameEnd(asset.originalFilename, 28), "Hoàn tác", () => {
-      void cloudApi.restore(asset.id).then(onChanged).catch((error) => toast.error(extractApiError(error).message));
-    });
-  };
   const restore = async (asset: CloudAsset) => {
     await cloudApi.restore(asset.id);
     await onChanged();
@@ -463,7 +428,7 @@ export const HacomCloudInfoSidebar: React.FC<{
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
               <CloudIdentity conversationId={conversationId} />
               <div className="space-y-4 px-4 pr-5">
-                <CloudStorageCard quota={quota} onManage={() => setManagerOpen(true)} />
+                <CloudStorageCard quota={quota} onManage={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)} />
                 {/* Kho lưu trữ dùng ĐÚNG component của panel thông tin nhóm: tab ngang
                     Ảnh/Video · File · Link, có số đếm và "Xem tất cả". Trong đó thao tác
                     chuyển tiếp/tải giống hệt bên ngoài, nên không cần mục "Tệp trong Cloud"
@@ -551,7 +516,6 @@ export const HacomCloudInfoSidebar: React.FC<{
           )}
         </div>
       </aside>
-      {managerOpen && <CloudManagerDialog assets={available} onClose={() => setManagerOpen(false)} onPreview={onPreview} onForward={onForward} onTrash={trash} />}
       <ConfirmDialog
         isOpen={confirmEmptyTrash}
         onClose={() => setConfirmEmptyTrash(false)}
