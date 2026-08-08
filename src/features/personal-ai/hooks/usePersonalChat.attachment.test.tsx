@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePersonalChat } from "./usePersonalChat";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useWorkReportScopeStore } from "../stores/workReportScopeStore";
+import { AiStreamError } from "../api/personalAiApi";
 
 /**
  * Hỏi đáp tệp đính kèm TẠM (FE__personal-general-attachment__request__07-08-26).
@@ -30,21 +31,41 @@ vi.mock("../api/personalAiApi", async () => {
     uploadPersonalAttachment: (...args: unknown[]) =>
       uploadPersonalAttachmentMock(...args),
     streamPersonalChat: (...args: unknown[]) => streamPersonalChatMock(...args),
-    listPersonalAttachments: vi.fn().mockResolvedValue([]),
+    // Hàm thường, KHÔNG phải vi.fn(): `clearAllMocks` ở beforeEach sẽ xoá
+    // mockResolvedValue của vi.fn() và biến nó thành trả undefined.
+    listPersonalAttachments: async () => [],
   };
 });
 
 vi.mock("../../../stores/authStore", () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
-    selector({ user: { id: "u1" } }),
+  useAuthStore: (
+    selector: (state: { user: { id: string; employeeCode: string } }) => unknown,
+  ) => selector({ user: { id: "u1", employeeCode: "HC000001" } }),
 }));
+
+vi.mock("../../ai-assistant/services/aiChatApi", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../ai-assistant/services/aiChatApi")
+  >("../../ai-assistant/services/aiChatApi");
+  return {
+    ...actual,
+    // Không có lịch sử để tải — test chỉ quan tâm lượt hỏi mới.
+    fetchPersonalSessionMessages: vi.fn().mockResolvedValue([]),
+  };
+});
 
 const FILE = new File(["noi dung"], "1671020230_DAUCAOMINHNHAT.docx");
 
 beforeEach(() => {
   vi.clearAllMocks();
   useWorkReportScopeStore.getState().reset();
-  usePersonalAiStore.setState({ conversations: [], activeConversationId: null });
+  // `selectedDocumentIds` phải reset cùng: test "Sources đang bật" set nó và
+  // Zustand giữ nguyên giữa các test → test sau bị chặn ở nhánh Sources.
+  usePersonalAiStore.setState({
+    conversations: [],
+    activeConversationId: null,
+    selectedDocumentIds: [],
+  });
   uploadPersonalAttachmentMock.mockResolvedValue({
     attachment_id: "pga-1",
     filename: "1671020230_DAUCAOMINHNHAT.docx",
@@ -136,6 +157,28 @@ describe("usePersonalChat — hỏi đáp tệp đính kèm tạm", () => {
     expect(streamPersonalChatMock).not.toHaveBeenCalled();
     // Sources vẫn nguyên — FE không được tự bỏ tick giúp user.
     expect(usePersonalAiStore.getState().selectedDocumentIds).toEqual(["doc-1"]);
+  });
+
+  it("hỏi xong thì chip RỜI ô nhập (kiểu ChatGPT) — tệp đã thuộc về lượt hỏi đó", async () => {
+    const { result } = renderHook(() => usePersonalChat());
+
+    await act(async () => {
+      await result.current.sendWithFile("tóm tắt", FILE);
+    });
+
+    const convId = usePersonalAiStore.getState().activeConversationId!;
+    const conv = usePersonalAiStore
+      .getState()
+      .conversations.find((c) => c.id === convId)!;
+
+    // Tệp đã gửi kèm câu hỏi (attachment_ids) và hiện trong bong bóng user…
+    expect(streamPersonalChatMock.mock.calls[0][0].attachment_ids).toEqual(["pga-1"]);
+    expect(conv.messages.find((m) => m.role === "user")!.attachedFile?.name).toBe(
+      "1671020230_DAUCAOMINHNHAT.docx",
+    );
+    // …nên KHÔNG được treo lại ở ô nhập: giữ lại thì lượt hỏi sau vô tình gửi
+    // kèm tệp cũ, và khi tệp hết hạn thì hội thoại kẹt lỗi "không tìm thấy tệp".
+    expect(conv.attachments ?? []).toHaveLength(0);
   });
 
   it("upload lỗi → không gửi câu hỏi, không ghi chip", async () => {

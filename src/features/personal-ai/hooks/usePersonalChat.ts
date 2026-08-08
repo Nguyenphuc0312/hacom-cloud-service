@@ -10,6 +10,7 @@ import {
   listPersonalAttachments,
   AiStreamError,
   stripDraftExportLinks,
+  isAttachmentGoneError,
 } from "../api/personalAiApi";
 import { isReportSubmissionText } from "../permissions/reportTags";
 import {
@@ -84,6 +85,7 @@ export function usePersonalChat() {
     loadMessagesForConversation,
     addAttachment,
     setAttachments,
+    removeAttachment,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -235,7 +237,13 @@ export function usePersonalChat() {
         if (ac.signal.aborted) return;
         return listPersonalAttachments(serverSessionId, { signal: ac.signal })
           .then((list) => {
-            if (!ac.signal.aborted) setAttachments(activeConversationId, list);
+            if (ac.signal.aborted) return;
+            // KHÔNG ghi đè bằng danh sách RỖNG. Effect này chạy lại ngay sau lượt
+            // hỏi đầu tiên (lúc `serverSessionId` vừa có), và nếu BE chưa kịp
+            // liệt kê tệp vừa upload thì `[]` sẽ xoá đúng cái chip user vừa đính
+            // — chip biến mất ngay trước mắt dù tệp vẫn dùng được.
+            if (list.length === 0) return;
+            setAttachments(activeConversationId, list);
           })
           .catch(() => { /* không có chip cũng không sao */ });
       })
@@ -617,6 +625,12 @@ export function usePersonalChat() {
         // Với ATTACHMENT_MODE_REJECTED, GIỮ NGUYÊN chip tệp và ô nhập để user tự
         // chọn lại luồng; FE không tự chuyển tệp sang Sources hay báo cáo.
         if (err instanceof AiStreamError) {
+          // NGOẠI LỆ: tệp không còn trên BE thì chip đang trỏ vào ID chết. Giữ nó
+          // lại là mọi câu hỏi sau trong hội thoại đều hỏng đúng kiểu này, user
+          // không hiểu vì sao và cũng không có cách nào thoát ngoài xoá tay.
+          if (isAttachmentGoneError(err)) {
+            attachmentIds.forEach((id) => removeAttachment(convIdSnapshot, id));
+          }
           finalizeMessage(convIdSnapshot, err.message);
           markMessageError(convIdSnapshot);
           return;
@@ -677,6 +691,7 @@ export function usePersonalChat() {
       updateServerSessionId,
       startDraftPolling,
       stopDraftPolling,
+      removeAttachment,
     ],
   );
 
@@ -787,6 +802,11 @@ export function usePersonalChat() {
           name: uploaded.filename,
           pages: uploaded.pages,
         });
+        // Hỏi xong thì tệp RỜI ô nhập (kiểu ChatGPT): nó đã thuộc về lượt hỏi vừa
+        // gửi và hiện trong bong bóng user. Treo lại ở composer khiến mọi câu hỏi
+        // sau vô tình gửi kèm tệp cũ, và khi tệp hết hạn thì cả hội thoại kẹt ở
+        // lỗi "Không tìm thấy tệp đính kèm..." không có đường thoát.
+        removeAttachment(convIdSnapshot, uploaded.attachment_id);
         return true;
       }
 
@@ -884,6 +904,7 @@ export function usePersonalChat() {
       updateServerSessionId,
       selectedDocumentIds,
       addAttachment,
+      removeAttachment,
       sendMessage,
     ],
   );
