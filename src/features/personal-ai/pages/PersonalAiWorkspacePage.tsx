@@ -6,7 +6,8 @@ import { PersonalChatArea } from "../components/chat/PersonalChatArea";
 import { PersonalChatInput } from "../components/chat/PersonalChatInput";
 import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceHeader";
 import { usePersonalChat } from "../hooks/usePersonalChat";
-import { matchLevelReportTag } from "../api/personalAiApi";
+import { matchLevelReportTag, deletePersonalAttachment, PersonalAiError } from "../api/personalAiApi";
+import { isReportSubmissionText } from "../permissions/reportTags";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
@@ -79,6 +80,13 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
   const setOwnerId = usePersonalAiStore((s) => s.setOwnerId);
+  const removeAttachment = usePersonalAiStore((s) => s.removeAttachment);
+  const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
+  const activeConversation = usePersonalAiStore((s) =>
+    s.conversations.find((c) => c.id === s.activeConversationId),
+  );
+  // Chip của ĐÚNG hội thoại đang mở — không mang sang hội thoại khác.
+  const attachments = activeConversation?.attachments ?? [];
   const user = useAuthStore((s) => s.user);
 
   // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
@@ -131,6 +139,28 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     if (!isUploading) setPendingFile(null);
   }, [isUploading]);
 
+  /**
+   * Xoá chip tệp hỏi đáp tạm. Gọi BE TRƯỚC, chỉ bỏ chip khi BE trả 2xx — bỏ
+   * trước rồi lỗi sẽ khiến câu hỏi sau vẫn gửi kèm ID mà user tưởng đã xoá.
+   */
+  const handleRemoveAttachment = useCallback(
+    async (attachmentId: string) => {
+      const sessionId = activeConversation?.serverSessionId;
+      if (!sessionId || !activeConversationId) return;
+      try {
+        await deletePersonalAttachment(attachmentId, sessionId);
+        removeAttachment(activeConversationId, attachmentId);
+      } catch (err) {
+        toast.error(
+          err instanceof PersonalAiError && err.kind === "http"
+            ? err.message
+            : "Không xoá được tệp đính kèm. Vui lòng thử lại.",
+        );
+      }
+    },
+    [activeConversation?.serverSessionId, activeConversationId, removeAttachment],
+  );
+
   const handleSubmit = useCallback(
     async (text: string) => {
       // Mọi lượt gửi KÈM FILE đều là hành động không hoàn tác được (ghi đè bản
@@ -140,19 +170,32 @@ export const PersonalAiWorkspacePage: React.FC = () => {
       if (pendingFile) {
         // Đang nộp dở / đã mở hộp xác nhận → bỏ qua, không xếp chồng hai lượt.
         if (isUploading || pendingSubmit) return;
+        // Hỏi đáp tệp tạm KHÔNG phải hành động không hoàn tác được: tệp không rời
+        // khỏi hội thoại, không ghi đè báo cáo nào. Hộp xác nhận ở đây chỉ để
+        // chặn lượt NỘP, nên bỏ qua để không bắt user xác nhận vô cớ.
+        if (!isReportSubmissionText(text)) {
+          setIsUploading(true);
+          setInputValue("");
+          const accepted = await sendWithFile(text, pendingFile);
+          if (accepted) setPendingFile(null);
+          setIsUploading(false);
+          setTimeout(() => textareaRef.current?.focus(), 0);
+          return;
+        }
         setPendingSubmit(describeSubmit(text, pendingFile));
         return;
       }
       // Tag nộp mà KHÔNG đính tệp → đây là lượt XEM, không nộp gì cả. Nói trước
       // để người quên đính tệp không tưởng là đã nộp xong.
-      if (matchLevelReportTag(text)) {
+      // Dùng parser lệnh: câu chỉ NHẮC tới tag giữa dòng không phải lượt xem báo cáo.
+      if (matchLevelReportTag(text) && isReportSubmissionText(text)) {
         toast.info("Đang xem báo cáo. Muốn nộp thì đính kèm tệp báo cáo rồi gửi lại.");
       }
       setInputValue("");
       await sendMessage(text);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [sendMessage, pendingFile, isUploading, pendingSubmit],
+    [sendMessage, sendWithFile, pendingFile, isUploading, pendingSubmit],
   );
 
   /** Người dùng đã xác nhận gửi → thực sự nộp file. */
@@ -229,6 +272,8 @@ export const PersonalAiWorkspacePage: React.FC = () => {
               onAttachFile={handleAttachFile}
               onRemoveFile={handleRemoveFile}
               isUploading={isUploading}
+              attachments={attachments}
+              onRemoveAttachment={handleRemoveAttachment}
             />
           </div>
         </div>

@@ -31,6 +31,7 @@ import {
   parseScopeRequiredDetail,
 } from "./workReportScopeApi";
 import type {
+  PersonalAttachment,
   WorkReportAiDraftReady,
   WorkReportAiDraftWaiting,
   WorkReportScopeRequired,
@@ -41,6 +42,12 @@ const BASE_URL =
   "https://ai.hacomholdings.com.vn";
 
 const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
+/**
+ * Tệp đính kèm hỏi đáp TẠM trong Trợ lý cá nhân — KHÁC `DOCS_BASE` (Sources/
+ * NotebookLM). Tệp ở đây không vào thư viện Sources, chỉ sống trong một hội
+ * thoại và có hạn dùng. Xem FE__personal-general-attachment__request__07-08-26.
+ */
+const ATTACHMENTS_BASE = `${BASE_URL}/api/chat/personal/attachments`;
 const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;
 const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
 /** Báo cáo theo CẤP (TBP / LĐĐV / TCT) — nộp file + xuất Excel bảng gộp. */
@@ -495,6 +502,160 @@ export function uploadPersonalDocument(
 
     xhr.send(form);
   });
+}
+
+/** Chuẩn hoá payload tệp đính kèm tạm; thiếu `attachment_id` thì coi như hỏng. */
+export function normalizePersonalAttachment(raw: unknown): PersonalAttachment | undefined {
+  const obj = asRecord(raw);
+  // BE trả { ok, attachment: {...} }; nhận cả object phẳng cho chắc.
+  const node = asRecord(obj?.attachment) ?? obj;
+  const attachmentId = pickString(node?.attachment_id);
+  if (!node || !attachmentId) return undefined;
+  return {
+    attachment_id: attachmentId,
+    filename: pickString(node.filename) ?? "Tệp đính kèm",
+    pages: typeof node.pages === "number" ? node.pages : undefined,
+    expires_at: pickString(node.expires_at),
+    mode: pickString(node.mode),
+  };
+}
+
+/**
+ * POST /api/chat/personal/attachments/upload — tải tệp hỏi đáp TẠM.
+ *
+ * Chỉ gọi khi user KHÔNG dùng lệnh nộp báo cáo (xem `isReportSubmissionText`).
+ * Tệp không vào Sources; chỉ sau 2xx có `attachment_id` mới được hiện chip.
+ */
+export function uploadPersonalAttachment(
+  file: File,
+  sessionId: string,
+  options?: { onProgress?: (pct: number) => void; signal?: AbortSignal },
+): Promise<PersonalAttachment> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new PersonalAiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new PersonalAiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("session_id", sessionId);
+
+    xhr.open("POST", `${ATTACHMENTS_BASE}/upload`, true);
+    xhr.responseType = "text";
+    for (const [key, value] of Object.entries(buildAuthHeaders())) {
+      xhr.setRequestHeader(key, value);
+    }
+
+    if (options?.onProgress) {
+      xhr.upload.addEventListener("progress", (evt) => {
+        if (evt.lengthComputable && evt.total > 0) {
+          options.onProgress!(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const attachment = normalizePersonalAttachment(JSON.parse(xhr.responseText));
+          if (attachment) resolve(attachment);
+          else reject(invalidUploadResponseError());
+        } catch (err) {
+          reject(err instanceof PersonalAiError ? err : invalidUploadResponseError());
+        }
+      } else {
+        reject(
+          new PersonalAiError(
+            xhr.status,
+            "http",
+            parseHttpErrorMessage(xhr.responseText) ??
+              formatHttpErrorMessage(xhr.responseText, xhr.status),
+          ),
+        );
+      }
+    });
+    xhr.addEventListener("error", () => { cleanup(); reject(new PersonalAiError(0, "network")); });
+    xhr.addEventListener("abort", () => { cleanup(); reject(new PersonalAiError(0, "timeout")); });
+    xhr.send(form);
+  });
+}
+
+/** GET /api/chat/personal/attachments?session_id=… — khôi phục chip sau reload. */
+export async function listPersonalAttachments(
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<PersonalAttachment[]> {
+  const url = `${ATTACHMENTS_BASE}?session_id=${encodeURIComponent(sessionId)}`;
+  const res = await fetch(url, { headers: buildAuthHeaders(), signal: options?.signal });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new PersonalAiError(
+      res.status,
+      "http",
+      parseHttpErrorMessage(text) ?? formatHttpErrorMessage(text, res.status),
+    );
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const obj = asRecord(payload);
+  const list = Array.isArray(obj?.attachments)
+    ? obj.attachments
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  return list
+    .map(normalizePersonalAttachment)
+    .filter((a): a is PersonalAttachment => a !== undefined);
+}
+
+/**
+ * DELETE /api/chat/personal/attachments/{id}?session_id=… — xoá chip.
+ * Caller CHỈ được xoá chip local sau khi hàm này resolve (BE trả 2xx).
+ */
+export async function deletePersonalAttachment(
+  attachmentId: string,
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const url = `${ATTACHMENTS_BASE}/${encodeURIComponent(attachmentId)}?session_id=${encodeURIComponent(sessionId)}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: buildAuthHeaders(),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new PersonalAiError(
+      res.status,
+      "http",
+      parseHttpErrorMessage(text) ?? formatHttpErrorMessage(text, res.status),
+    );
+  }
 }
 
 /**
@@ -1139,6 +1300,30 @@ function normalizeCitation(raw: unknown): PersonalCitation | null {
 }
 
 /**
+ * Chuẩn hoá bản nháp AI về đúng shape `WorkReportAiDraftReady`.
+ *
+ * Dùng chung cho CẢ hai nguồn: SSE `work_report_ai_draft_ready` và
+ * `metadata.work_report_ai_draft` lúc tải lịch sử — nút tải sau khi F5 phải
+ * giống hệt nút lúc nhận SSE, nên không tách hai bản kiểm tra.
+ * Không dựng được URL hợp lệ thì trả undefined và caller không hiện nút.
+ */
+export function normalizeWorkReportAiDraft(raw: unknown): WorkReportAiDraftReady | undefined {
+  const obj = asRecord(raw);
+  if (!obj) return undefined;
+  const draftId = pickString(obj.draft_id);
+  const exportUrl =
+    buildWorkReportDraftExportUrl(pickString(obj.export_url)) ??
+    workReportDraftExportUrlFromId(draftId);
+  if (!draftId || !exportUrl) return undefined;
+  return {
+    draft_id: draftId,
+    export_url: exportUrl,
+    export_format: pickString(obj.export_format),
+    read_only: obj.read_only === true,
+  };
+}
+
+/**
  * Chuẩn hoá `calendar_events` từ SSE `done`. Chỉ giữ dòng có `event_id` (bắt
  * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì
  * bỏ, khi đó bubble không hiện nút chi tiết cho dòng đó (theo spec).
@@ -1304,19 +1489,8 @@ export async function streamPersonalChat(
         // và hợp lệ, còn lại ghép từ `draft_id`. Không dựng được URL thì bỏ qua,
         // không hiện nút tải hỏng.
         try {
-          const parsed = JSON.parse(data) as Record<string, unknown>;
-          const draftId = pickString(parsed.draft_id);
-          const exportUrl =
-            buildWorkReportDraftExportUrl(pickString(parsed.export_url)) ??
-            workReportDraftExportUrlFromId(draftId);
-          if (draftId && exportUrl) {
-            options.onDraftReady({
-              draft_id: draftId,
-              export_url: exportUrl,
-              export_format: pickString(parsed.export_format),
-              read_only: parsed.read_only === true,
-            });
-          }
+          const draft = normalizeWorkReportAiDraft(JSON.parse(data));
+          if (draft) options.onDraftReady(draft);
         } catch { /* malformed payload — ignore */ }
       } else if (
         (eventType === "work_report_ai_draft_waiting" ||
@@ -1360,6 +1534,7 @@ export async function streamPersonalChat(
                 ? parsed.export_id
                 : undefined,
             calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+            mode: pickString(parsed.mode),
           };
         } catch {
           /* malformed done payload — recover below */
@@ -1406,6 +1581,7 @@ export async function streamPersonalChat(
                 ? parsed.export_id
                 : undefined,
             calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+            mode: pickString(parsed.mode),
           };
         } catch {
           /* unrecoverable */

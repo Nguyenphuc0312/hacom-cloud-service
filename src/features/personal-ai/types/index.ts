@@ -83,6 +83,12 @@ export interface PersonalChatMessage {
    * + vòng poll `jobs/{job_id}`. Xong thì bị thay bằng `aiDraft`.
    */
   aiDraftPending?: WorkReportAiDraftPending;
+  /**
+   * SSE `done.mode === "personal_attachment_general"` — câu trả lời chỉ dựa trên
+   * tệp đính kèm tạm. Hiện nhãn nói rõ để user không tưởng AI đã đọc dữ liệu
+   * Công ty/Sources.
+   */
+  attachmentMode?: boolean;
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -264,6 +270,13 @@ export interface PersonalChatRequest {
   department_name?: string;
   org_unit?: string;
   document_ids?: string[];
+  /**
+   * Tệp đính kèm hỏi đáp TẠM. TÁCH BIỆT với `document_ids` (Sources) — không bao
+   * giờ gửi kèm nhau; kèm nhau là trộn nguồn, đúng thứ request cấm.
+   */
+  attachment_ids?: string[];
+  /** false = nói rõ lượt này không dùng Sources/NotebookLM. */
+  sources_enabled?: boolean;
 }
 
 export interface PersonalChatResponse {
@@ -276,6 +289,11 @@ export interface PersonalChatResponse {
   export_id?: string;
   /** SSE `done` — mảng sự kiện lịch khi câu trả lời là bảng lịch (xem CalendarEventRow). */
   calendar_events?: CalendarEventRow[];
+  /**
+   * SSE `done` — chế độ trả lời. `personal_attachment_general` = câu trả lời chỉ
+   * dựa trên tệp đính kèm tạm, không dùng dữ liệu Công ty/Sources.
+   */
+  mode?: string;
 }
 
 export interface UploadDocumentResponse {
@@ -292,6 +310,26 @@ export interface UploadDocumentResponse {
   open_url?: string;
   reader_url?: string;
 }
+
+/**
+ * Tệp đính kèm hỏi đáp TẠM trong Trợ lý cá nhân.
+ *
+ * KHÔNG phải Sources/NotebookLM: tệp không vào thư viện, chỉ sống trong đúng một
+ * hội thoại và hết hạn theo `expires_at`. Định danh là `attachment_id` — tuyệt
+ * đối không trộn với `document_ids` của Sources.
+ * (FE__personal-general-attachment__request__07-08-26.md)
+ */
+export interface PersonalAttachment {
+  attachment_id: string;
+  filename: string;
+  pages?: number;
+  /** ISO time; hết hạn thì chip phải yêu cầu tải lại chứ không gửi ID chết. */
+  expires_at?: string;
+  mode?: string;
+}
+
+/** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */
+export const PERSONAL_ATTACHMENT_MODE = "personal_attachment_general";
 
 export interface SelectSourcesRequest {
   document_ids: string[];
