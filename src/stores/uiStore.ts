@@ -17,6 +17,8 @@ export interface ConversationLabel {
   id: string;
   name: string;
   color: string;
+  sortOrder?: number;
+  systemKey?: string | null;
 }
 export type ModalType =
   | "createGroup"
@@ -112,6 +114,11 @@ interface UIState {
   isConversationLabelManagerOpen: boolean;
   openConversationLabelManager: () => void;
   closeConversationLabelManager: () => void;
+  setConversationLabelState: (
+    labels: ConversationLabel[],
+    assignments?: Record<string, string[]>,
+  ) => void;
+  setConversationLabelAssignment: (conversationId: string, labelIds: string[]) => void;
   setSelectedConversationLabelIds: (labelIds: string[]) => void;
   clearSelectedConversationLabels: () => void;
   toggleConversationLabel: (conversationId: string, labelId: string) => void;
@@ -349,6 +356,41 @@ export const useUIStore = create<UIState>()(
         set({ isConversationLabelManagerOpen: false });
       },
 
+      setConversationLabelState: (labels, assignments = {}) => {
+        const labelIdSet = new Set(labels.map((label) => label.id));
+        set((state) => ({
+          conversationLabels: labels,
+          conversationLabelsByConversationId: Object.fromEntries(
+            Object.entries(assignments)
+              .map(([conversationId, labelIds]) => [
+                conversationId,
+                uniqueLabelIds(labelIds).filter((labelId) =>
+                  labelIdSet.has(labelId),
+                ),
+              ])
+              .filter(([, labelIds]) => labelIds.length > 0),
+          ),
+          selectedConversationLabelIds: state.selectedConversationLabelIds.filter(
+            (labelId) => labelIdSet.has(labelId),
+          ),
+        }));
+      },
+
+      setConversationLabelAssignment: (conversationId, labelIds) => {
+        set((state) => {
+          const nextAssignments = {
+            ...state.conversationLabelsByConversationId,
+          };
+          const nextLabelIds = uniqueLabelIds(labelIds);
+          if (nextLabelIds.length > 0) {
+            nextAssignments[conversationId] = nextLabelIds;
+          } else {
+            delete nextAssignments[conversationId];
+          }
+          return { conversationLabelsByConversationId: nextAssignments };
+        });
+      },
+
       setSelectedConversationLabelIds: (labelIds) => {
         set({ selectedConversationLabelIds: uniqueLabelIds(labelIds) });
       },
@@ -451,16 +493,26 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "ui-storage",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState;
+        }
+        const state = persistedState as Partial<UIState>;
+        return {
+          ...state,
+          pinnedConversationIds: [],
+          conversationLabels: DEFAULT_CONVERSATION_LABELS,
+          conversationLabelsByConversationId: {},
+          selectedConversationLabelIds: [],
+        };
+      },
       partialize: (state) => ({
         theme: state.theme,
         brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
         chatDensity: state.chatDensity,
-        pinnedConversationIds: state.pinnedConversationIds,
-        conversationLabels: state.conversationLabels,
-        conversationLabelsByConversationId: state.conversationLabelsByConversationId,
-        selectedConversationLabelIds: state.selectedConversationLabelIds,
       }),
     },
   ),

@@ -16,8 +16,10 @@ import {
 import type { CloudAsset, CloudQuota } from "../api/cloudApi";
 import { cloudApi } from "../api/cloudApi";
 import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
-import { useUIStore } from "../../../stores/uiStore";
+import { useChatStore } from "../../../stores";
 import { toast } from "../../../components/ui";
+import { conversationApi } from "../../../services/api";
+import { extractApiError } from "../../../lib/apiContract";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
@@ -290,13 +292,39 @@ export const RecentFileList: React.FC<{
  *  - ghim TIN NHẮN: nút trên ChatHeader, cạnh tìm kiếm;
  *  - ghim HỘI THOẠI (đưa Cloud lên đầu sidebar): nút dưới đây. */
 export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversationId }) => {
-  const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
-  const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
-  const isPinned = pinnedConversationIds.includes(conversationId);
+  const conversation = useChatStore((state) => state.conversationById[conversationId]);
+  const updateConversation = useChatStore((state) => state.updateConversation);
+  const isPinned = Boolean(conversation?.pinnedAt);
 
-  const handleTogglePin = () => {
-    togglePinnedConversation(conversationId);
-    toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+  const handleTogglePin = async () => {
+    const previousPinnedAt = conversation?.pinnedAt ?? null;
+    const previousPinOrder = conversation?.pinOrder ?? null;
+    const nextPinned = !isPinned;
+
+    updateConversation(conversationId, {
+      pinnedAt: nextPinned ? new Date().toISOString() : null,
+      pinOrder: nextPinned ? 0 : null,
+      isPinned: nextPinned,
+    });
+
+    try {
+      const result = await conversationApi.setConversationPinned(
+        conversationId,
+        nextPinned,
+      );
+      updateConversation(conversationId, {
+        pinnedAt: result.pinnedAt,
+        pinOrder: result.pinOrder,
+        isPinned: Boolean(result.pinnedAt),
+      });
+    } catch (error) {
+      updateConversation(conversationId, {
+        pinnedAt: previousPinnedAt,
+        pinOrder: previousPinOrder,
+        isPinned,
+      });
+      toast.error(extractApiError(error).message);
+    }
   };
 
   return (
@@ -313,7 +341,7 @@ export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversati
         <div className="flex flex-wrap justify-center gap-2">
           <button
             type="button"
-            onClick={handleTogglePin}
+            onClick={() => { void handleTogglePin(); }}
             disabled={!conversationId}
             className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover disabled:opacity-50"
             aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}

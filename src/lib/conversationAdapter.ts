@@ -469,6 +469,15 @@ export const normalizeConversation = (
   const avatar = asNullableString(payload.avatar);
   const avatarFileId = asNullableString(payload.avatarFileId);
   const avatarVersion = asNumber(payload.avatarVersion);
+  const pinnedAt = asNullableDateValue(payload.pinnedAt ?? payload.pinned_at);
+  const rawLabelIds = Array.isArray(payload.labelIds)
+    ? payload.labelIds
+    : Array.isArray(payload.label_ids)
+      ? payload.label_ids
+      : [];
+  const labelIds = rawLabelIds.filter(
+    (labelId): labelId is string => typeof labelId === "string",
+  );
   const resolvedParticipantCount =
     normalizedType === RoomType.DIRECT && otherUser && participantCount < 2
       ? 2
@@ -482,7 +491,7 @@ export const normalizeConversation = (
         ? null
         : (conversationName ?? (displayName || null)),
     unreadCount: asNumber(payload.unreadCount) ?? asNumber(payload.unread) ?? 0,
-    isPinned: asBoolean(payload.isPinned, false),
+    isPinned: Boolean(pinnedAt) || asBoolean(payload.isPinned, false),
     isMuted: asBoolean(payload.isMuted, false),
     isArchived: asBoolean(payload.isArchived, false),
     isBlocked: asBoolean(payload.isBlocked, false),
@@ -509,6 +518,13 @@ export const normalizeConversation = (
       ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
       : {}),
     ...(lastMessageSortAt ? { lastMessageSortAt } : {}),
+    pinnedAt: pinnedAt ?? null,
+    ...(asNumber(payload.pinOrder) !== undefined
+      ? { pinOrder: asNumber(payload.pinOrder) }
+      : asNumber(payload.pin_order) !== undefined
+        ? { pinOrder: asNumber(payload.pin_order) }
+        : { pinOrder: null }),
+    labelIds,
     ...(lastMessageId ? { lastMessageId } : { lastMessageId: null }),
     ...(normalizeLastMessageStatus(payload, lastMessage) !== null
       ? { lastMessageStatus: normalizeLastMessageStatus(payload, lastMessage) }
