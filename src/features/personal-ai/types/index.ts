@@ -342,6 +342,16 @@ export interface PersonalAttachment {
    * KHÁC → tệp vừa upload nằm ở session cũ → "Không tìm thấy tệp đính kèm".
    */
   session_id?: string;
+  /**
+   * Tệp đã được dùng cho ít nhất một câu hỏi → KHÔNG hiện chip ở ô nhập nữa
+   * (tệp "đi luôn" sau khi hỏi, kiểu ChatGPT).
+   *
+   * Đánh dấu chứ KHÔNG xoá khỏi store: tệp vẫn là ngữ cảnh của hội thoại nên các
+   * câu hỏi sau vẫn phải gửi `attachment_ids` như hợp đồng. Xoá hẳn thì lượt sau
+   * gửi rỗng và chỉ chạy đúng nhờ BE tự nhớ theo session — dựa vào hành vi ngoài
+   * hợp đồng, BE đổi cách nhớ là hỏng ngầm.
+   */
+  consumed?: boolean;
 }
 
 /** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */

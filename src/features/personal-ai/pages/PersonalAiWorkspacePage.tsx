@@ -94,7 +94,10 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     s.conversations.find((c) => c.id === s.activeConversationId),
   );
   // Chip của ĐÚNG hội thoại đang mở — không mang sang hội thoại khác.
-  const attachments = activeConversation?.attachments ?? [];
+  // Bỏ tệp đã dùng cho một câu hỏi: hỏi xong là tệp "đi luôn" khỏi ô nhập, nó đã
+  // hiện trong bong bóng của lượt hỏi đó. Tệp vẫn nằm trong store nên các lượt
+  // sau vẫn gửi kèm `attachment_ids`.
+  const attachments = (activeConversation?.attachments ?? []).filter((a) => !a.consumed);
   const user = useAuthStore((s) => s.user);
 
   // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu

@@ -86,6 +86,7 @@ export function usePersonalChat() {
     addAttachment,
     setAttachments,
     removeAttachment,
+    markAttachmentsConsumed,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -466,6 +467,14 @@ export function usePersonalChat() {
         return;
       }
 
+      // Tệp đã thuộc về lượt hỏi này → ẩn chip khỏi ô nhập ngay (tệp "đi luôn"
+      // sau khi hỏi). Đánh dấu TRƯỚC khi chờ stream để chip biến mất ngay lúc
+      // bấm gửi, không nán lại suốt lúc đang trả lời. Chỉ ẩn, không xoá: lượt
+      // hỏi sau vẫn gửi `attachment_ids` như hợp đồng.
+      if (attachmentIds.length > 0) {
+        markAttachmentsConsumed(convIdSnapshot);
+      }
+
       try {
         const response = await streamPersonalChat(
           {
@@ -707,6 +716,7 @@ export function usePersonalChat() {
       startDraftPolling,
       stopDraftPolling,
       removeAttachment,
+      markAttachmentsConsumed,
     ],
   );
 

@@ -176,29 +176,34 @@ describe("usePersonalChat — hỏi đáp tệp đính kèm tạm", () => {
     expect(body.new_conversation).toBeUndefined();
   });
 
-  it("chip Ở LẠI sau khi hỏi và câu hỏi SAU vẫn gửi kèm tệp + hiện tệp ở bong bóng", async () => {
+  it("hỏi xong tệp ĐI LUÔN khỏi ô nhập, nhưng lượt sau vẫn gửi kèm attachment_ids", async () => {
     const { result } = renderHook(() => usePersonalChat());
 
     await act(async () => {
       await result.current.sendWithFile("tóm tắt", FILE);
     });
 
-    // Request mục 5: chip chỉ mất khi user bấm xoá (DELETE 2xx) hoặc hết hạn.
     const convId = usePersonalAiStore.getState().activeConversationId!;
     const convOf = () =>
       usePersonalAiStore.getState().conversations.find((c) => c.id === convId)!;
+
+    // Ô nhập lọc theo `consumed` → chip biến mất ngay sau khi hỏi.
+    const visible = () => (convOf().attachments ?? []).filter((a) => !a.consumed);
+    expect(visible()).toHaveLength(0);
+    // Nhưng tệp vẫn còn trong store (chỉ ẩn, không xoá).
     expect(convOf().attachments ?? []).toHaveLength(1);
 
-    // Câu hỏi THỨ HAI (không qua sendWithFile) vẫn phải mang attachment_ids…
+    // Câu hỏi THỨ HAI vẫn gửi kèm tệp — đúng hợp đồng, không dựa vào việc BE
+    // tự nhớ tệp theo session.
     await act(async () => {
       await result.current.sendMessage("file này có gì");
     });
     expect(streamPersonalChatMock.mock.calls[1][0].attachment_ids).toEqual(["pga-1"]);
 
-    // …và bong bóng của nó vẫn cho thấy đang hỏi về tệp nào (ảnh user: câu hỏi
-    // thứ hai mất sạch dấu vết tệp dù câu trả lời vẫn dựa trên tệp đó).
+    // Bong bóng của cả hai lượt đều cho thấy đang hỏi về tệp nào.
     const userMsgs = convOf().messages.filter((m) => m.role === "user");
     expect(userMsgs).toHaveLength(2);
+    expect(userMsgs[0].attachedFile?.name).toBe("1671020230_DAUCAOMINHNHAT.docx");
     expect(userMsgs[1].attachedFile?.name).toBe("1671020230_DAUCAOMINHNHAT.docx");
   });
 

@@ -96,6 +96,11 @@ interface PersonalAiState {
   addAttachment: (conversationId: string, attachment: PersonalAttachment) => void;
   /** Bỏ chip — CHỈ gọi sau khi DELETE trả 2xx. */
   removeAttachment: (conversationId: string, attachmentId: string) => void;
+  /**
+   * Đánh dấu tệp đã dùng cho một câu hỏi → ẩn chip khỏi ô nhập, nhưng GIỮ lại
+   * trong store để các lượt hỏi sau vẫn gửi kèm `attachment_ids`.
+   */
+  markAttachmentsConsumed: (conversationId: string) => void;
   /** Thay toàn bộ chip khi khôi phục lúc mở lại hội thoại. */
   setAttachments: (conversationId: string, attachments: PersonalAttachment[]) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout). */
@@ -349,6 +354,20 @@ export const usePersonalAiStore = create<PersonalAiState>()(
                   ...c,
                   attachments: (c.attachments ?? []).filter(
                     (a) => a.attachment_id !== attachmentId,
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      markAttachmentsConsumed: (conversationId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  attachments: (c.attachments ?? []).map((a) =>
+                    a.consumed ? a : { ...a, consumed: true },
                   ),
                 }
               : c,
