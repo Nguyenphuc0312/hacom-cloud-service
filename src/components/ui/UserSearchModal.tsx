@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { Avatar } from "@/components/common/Avatar";
 import { Modal } from "@/components/ui/Modal";
 import { resolvePublicResourceUrl } from "@/config";
+import { logger } from "@/utils/logger";
 
 interface UserSearchModalProps {
   isOpen: boolean;
@@ -98,7 +99,7 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
           setResults([]);
         }
       } catch (error) {
-        console.error("Failed to search users:", error);
+        logger.warn("user-search-modal", "search_failed", error);
         setResults([]);
       } finally {
         setIsLoading(false);

@@ -28,6 +28,7 @@ import {
   loadPdfPage,
   savePdfPage,
 } from "../../utils/pdfReadingPosition";
+import { logger } from "../../utils/logger";
 
 interface PdfJsViewerProps {
   url: string;
@@ -192,7 +193,12 @@ const PdfPage: React.FC<{
         host.replaceChildren(canvas);
       } catch (err) {
         // Huỷ render khi cuộn nhanh là chuyện bình thường, không phải lỗi.
-        if (!cancelled) console.error(`Failed to render page ${pageNumber}:`, err);
+        if (!cancelled) {
+          logger.warn("pdf-viewer", "page_render_failed", {
+            pageNumber,
+            error: err,
+          });
+        }
       }
     })();
 

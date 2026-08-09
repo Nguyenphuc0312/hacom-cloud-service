@@ -34,6 +34,7 @@ import {
   isChatPerformanceEnabled,
   recordChatPerformanceMeasure,
 } from "../../utils/chatPerformance";
+import { logger } from "../../utils/logger";
 import {
   createLongMessageTextFile,
   getInlineMessageValidationState,
@@ -341,7 +342,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(getAudioSendErrorMessage(err, t));
-      console.error("[AudioSend]", msg);
+      logger.error("audio-send", "send_failed", { message: msg });
       audioMarkFailed({
         code: err instanceof AudioUploadError ? err.code : "MESSAGE_CREATE_FAILURE",
         message: getAudioSendErrorMessage(err, t),

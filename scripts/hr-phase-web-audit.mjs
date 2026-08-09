@@ -15,6 +15,104 @@ if (!email || !password) {
 }
 
 const routeWaitMs = Number(process.env.E2E_ROUTE_WAIT_MS || 1200);
+const mutatingMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const ignoredMutationUrls = [/\/auth(\/|$)/i, /\/login(\/|$)/i, /\/refresh(\/|$)/i];
+
+const routeExpectations = {
+  "hr-web:dashboard": {
+    requiredText: [
+      "Dashboard",
+      "Tổng nhân sự",
+      "Nhân sự theo đơn vị",
+      "Chuẩn bị bàn giao lương",
+      "Chuyên cần theo đơn vị",
+    ],
+    forbiddenText: [
+      "Tong nhan su",
+      "Chuan bi ban giao luong",
+      "Chuyen can theo don vi",
+      "Dang doi chieu CSV",
+    ],
+  },
+  "hr-web:timesheet-grid": {
+    requiredText: [
+      "Bảng chấm công tháng",
+      "Tháng",
+      "Năm",
+      "Phòng ban",
+      "Tính lại tháng này",
+    ],
+  },
+  "hr-web:timesheet-periods": {
+    requiredText: [
+      "Quản lý kỳ công",
+      "Mở kỳ công",
+      "Tải lại",
+      "Kỳ",
+      "Phạm vi",
+      "Trạng thái",
+      "Hạn xác nhận",
+      "Số nhân viên",
+    ],
+  },
+  "hr-web:leave": {
+    requiredText: [
+      "Quản lý nghỉ phép",
+      "Danh sách đơn nghỉ phép",
+      "Danh mục ký hiệu nghỉ phép",
+      "Tạo đơn",
+      "Nhân viên",
+      "Loại nghỉ",
+      "Trạng thái",
+    ],
+    forbiddenText: [
+      "Create leave request",
+      "Leave request list",
+      "Leave policy types",
+      "Employee",
+      "Leave type",
+      "Start date",
+      "End date",
+      "Save request",
+    ],
+  },
+  "chat-web:timesheet": {
+    requiredText: [
+      "Công của tôi",
+      "Tháng",
+      "Tải lại",
+      "Nhóm của tôi",
+      "Xác nhận",
+      "Khiếu nại",
+      "Gửi HR",
+    ],
+  },
+  "chat-web:leave": {
+    requiredText: [
+      "Nghỉ phép của tôi",
+      "Năm",
+      "Tải lại",
+      "Đơn nghỉ phép",
+      "Gửi đơn nghỉ",
+      "Loại nghỉ",
+      "Chứng từ/URL",
+      "Gửi đơn",
+    ],
+    forbiddenText: ["Chung tu/URL", "Bat buoc voi nghi om tu 3 ngay"],
+  },
+  "chat-web:team-timesheet": {
+    requiredText: [
+      "Nhóm của tôi",
+      "Tháng",
+      "Tải lại",
+      "Công của tôi",
+      "Tổng nhân viên",
+      "Đã xác nhận",
+      "Chưa xác nhận",
+      "Khiếu nại",
+    ],
+  },
+};
 
 function sanitizeUrl(value) {
   try {
@@ -95,6 +193,18 @@ function attachDiagnostics(page, bucket, appName) {
     });
   });
 
+  page.on("request", (request) => {
+    const method = request.method().toUpperCase();
+    if (!mutatingMethods.has(method)) return;
+    const url = request.url();
+    if (ignoredMutationUrls.some((pattern) => pattern.test(url))) return;
+    bucket.mutations.push({
+      app: appName,
+      method,
+      url: sanitizeUrl(url),
+    });
+  });
+
   page.on("response", (response) => {
     const status = response.status();
     if (status < 400) return;
@@ -125,6 +235,178 @@ async function fillFirstVisible(locator, value) {
     }
   }
   throw new Error("No visible input found.");
+}
+
+function routeKey(appName, routeName) {
+  return `${appName}:${routeName}`;
+}
+
+async function bodyText(page) {
+  return page.locator("body").innerText({ timeout: 5_000 });
+}
+
+async function ensureLocatorVisible(locator, label, timeout = 5_000) {
+  const item = locator.first();
+  await item.waitFor({ state: "visible", timeout });
+  return item;
+}
+
+async function ensureText(page, text, label = text) {
+  return ensureLocatorVisible(page.getByText(text, { exact: false }), label);
+}
+
+async function ensureButton(page, name, label = `button ${String(name)}`) {
+  return ensureLocatorVisible(page.getByRole("button", { name }), label);
+}
+
+async function clickButton(page, name, label = `button ${String(name)}`) {
+  const button = await ensureButton(page, name, label);
+  await button.click();
+  await waitForSettled(page);
+  return button;
+}
+
+async function assertBodyIncludes(page, phrases) {
+  const text = await bodyText(page);
+  const missing = phrases.filter((phrase) => !text.includes(phrase));
+  if (missing.length > 0) {
+    throw new Error(`Missing visible text: ${missing.join(", ")}`);
+  }
+}
+
+async function assertBodyExcludes(page, phrases) {
+  const text = await bodyText(page);
+  const present = phrases.filter((phrase) => text.includes(phrase));
+  if (present.length > 0) {
+    throw new Error(`Unexpected visible text: ${present.join(", ")}`);
+  }
+}
+
+async function recordCheck(checks, name, fn) {
+  try {
+    await fn();
+    checks.push({ name, status: "passed" });
+  } catch (error) {
+    checks.push({
+      name,
+      status: "failed",
+      message: sanitizeText(error?.message || String(error)),
+    });
+  }
+}
+
+function assertNoMatchingMutation(diagnostics, beforeCount, matcher, label) {
+  const matches = diagnostics.mutations.slice(beforeCount).filter((entry) => matcher.test(entry.url));
+  if (matches.length > 0) {
+    throw new Error(
+      `${label} unexpectedly sent ${matches.length} mutating request(s): ${matches
+        .map((entry) => `${entry.method} ${entry.url}`)
+        .join("; ")}`,
+    );
+  }
+}
+
+async function assertRouteStillAvailable(page, expectedPath) {
+  const url = new URL(page.url());
+  if (url.pathname.includes("/login")) {
+    throw new Error(`Route redirected to login instead of staying on ${expectedPath}.`);
+  }
+  if (!url.pathname.endsWith(expectedPath)) {
+    throw new Error(`Expected path ${expectedPath}, got ${url.pathname}.`);
+  }
+}
+
+async function runExpectationChecks(page, appName, routeName, expectedPath, checks) {
+  const expectation = routeExpectations[routeKey(appName, routeName)];
+  await recordCheck(checks, "route stays authenticated", () =>
+    assertRouteStillAvailable(page, expectedPath),
+  );
+  if (!expectation) return;
+
+  await recordCheck(checks, "required visible text", () =>
+    assertBodyIncludes(page, expectation.requiredText ?? []),
+  );
+
+  if (expectation.forbiddenText?.length) {
+    await recordCheck(checks, "stale labels are absent", () =>
+      assertBodyExcludes(page, expectation.forbiddenText),
+    );
+  }
+}
+
+async function runInteractionChecks(page, appName, routeName, diagnostics, checks) {
+  if (appName === "hr-web" && routeName === "timesheet-periods") {
+    await recordCheck(checks, "reload periods", () => clickButton(page, /Tải lại/i));
+    await recordCheck(checks, "open period modal fields", async () => {
+      await clickButton(page, /Mở kỳ công/i);
+      await assertBodyIncludes(page, ["Mở kỳ công", "Tháng", "Năm", "Phạm vi", "Hạn xác nhận", "Mở kỳ"]);
+      await clickButton(page, /Hủy/i);
+    });
+    await recordCheck(checks, "confirmation modal is inspectable when rows exist", async () => {
+      const confirmationButtons = page.getByRole("button", { name: /^Xác nhận$/ });
+      const count = await confirmationButtons.count();
+      if (count === 0) return;
+      await confirmationButtons.first().click();
+      await waitForSettled(page);
+      await assertBodyIncludes(page, ["Chưa xác nhận", "Đã xác nhận", "Khiếu nại"]);
+      await page.keyboard.press("Escape");
+      await waitForSettled(page);
+    });
+  }
+
+  if (appName === "hr-web" && routeName === "leave") {
+    await recordCheck(checks, "open leave drawer and validate empty form", async () => {
+      await clickButton(page, /Tạo đơn/i);
+      await assertBodyIncludes(page, ["Tạo đơn nghỉ phép", "Nhân viên", "Loại nghỉ", "Từ ngày", "Đến ngày", "Lý do"]);
+      const before = diagnostics.mutations.length;
+      await clickButton(page, /Lưu đơn/i);
+      await assertBodyIncludes(page, [
+        "Chọn nhân viên.",
+        "Chọn loại nghỉ.",
+        "Nhập ngày bắt đầu.",
+        "Nhập ngày kết thúc.",
+        "Tổng số ngày tối thiểu là 0.5.",
+        "Nhập lý do nghỉ phép.",
+      ]);
+      assertNoMatchingMutation(diagnostics, before, /\/leave\/requests/i, "HR leave empty validation");
+      await clickButton(page, /Hủy/i);
+    });
+  }
+
+  if (appName === "chat-web" && routeName === "timesheet") {
+    await recordCheck(checks, "reload my timesheet", () => clickButton(page, /Tải lại/i));
+    await recordCheck(checks, "timesheet action surface", async () => {
+      await ensureButton(page, /^Xác nhận$/i);
+      await ensureButton(page, /^Gửi HR$/i);
+      await ensureLocatorVisible(page.locator("textarea").first(), "dispute textarea");
+    });
+  }
+
+  if (appName === "chat-web" && routeName === "leave") {
+    await recordCheck(checks, "reload my leave", () => clickButton(page, /Tải lại/i));
+    await recordCheck(checks, "leave request form fields", async () => {
+      await ensureLocatorVisible(page.locator('select').first(), "leave type select");
+      await ensureLocatorVisible(page.locator('input[type="date"]').first(), "start date input");
+      await ensureLocatorVisible(page.locator('input[type="date"]').nth(1), "end date input");
+      await ensureLocatorVisible(page.locator("textarea").first(), "reason textarea");
+      const attachmentInput = await ensureLocatorVisible(
+        page.locator('input[type="url"]').first(),
+        "attachment url input",
+      );
+      const placeholder = await attachmentInput.getAttribute("placeholder");
+      if (placeholder !== "Bắt buộc với nghỉ ốm từ 3 ngày") {
+        throw new Error(`Unexpected attachment placeholder: ${placeholder ?? "[empty]"}`);
+      }
+      await ensureButton(page, /^Gửi đơn$/i);
+    });
+  }
+
+  if (appName === "chat-web" && routeName === "team-timesheet") {
+    await recordCheck(checks, "reload team timesheet", () => clickButton(page, /Tải lại/i));
+    await recordCheck(checks, "team navigation link back to personal timesheet", () =>
+      ensureLocatorVisible(page.getByRole("link", { name: /Công của tôi/i }), "personal timesheet link"),
+    );
+  }
 }
 
 async function loginHr(page) {
@@ -248,9 +530,13 @@ async function collectUiMetrics(page) {
   });
 }
 
-async function auditRoute(page, appName, name, urlPath, viewportName) {
+async function auditRoute(page, appName, name, urlPath, viewportName, diagnostics) {
   const fullUrl = `${appName === "hr-web" ? hrBaseUrl : chatBaseUrl}${urlPath}`;
   await page.goto(fullUrl, { waitUntil: "domcontentloaded" });
+  await waitForSettled(page);
+  const checks = [];
+  await runExpectationChecks(page, appName, name, urlPath, checks);
+  await runInteractionChecks(page, appName, name, diagnostics, checks);
   await waitForSettled(page);
   const safeName = `${appName}-${viewportName}-${name}`.replace(/[^a-z0-9_-]+/gi, "-");
   const screenshotPath = path.join(screenshotDir, `${safeName}.png`);
@@ -263,6 +549,7 @@ async function auditRoute(page, appName, name, urlPath, viewportName) {
     expectedPath: urlPath,
     finalUrl: sanitizeUrl(page.url()),
     screenshotPath,
+    checks,
     metrics,
   };
 }
@@ -273,28 +560,88 @@ async function runForViewport(browser, viewportName, viewport) {
     ignoreHTTPSErrors: true,
     locale: "vi-VN",
   });
-  const diagnostics = { console: [], pageErrors: [], httpFailures: [] };
+  const diagnostics = { console: [], pageErrors: [], httpFailures: [], mutations: [] };
   const results = [];
 
   const hrPage = await context.newPage();
   attachDiagnostics(hrPage, diagnostics, "hr-web");
   await loginHr(hrPage);
-  results.push(await auditRoute(hrPage, "hr-web", "dashboard", "/dashboard", viewportName));
-  results.push(await auditRoute(hrPage, "hr-web", "timesheet-grid", "/attendance/timesheet", viewportName));
-  results.push(await auditRoute(hrPage, "hr-web", "timesheet-periods", "/attendance/periods", viewportName));
-  results.push(await auditRoute(hrPage, "hr-web", "leave", "/leave", viewportName));
+  results.push(await auditRoute(hrPage, "hr-web", "dashboard", "/dashboard", viewportName, diagnostics));
+  results.push(await auditRoute(hrPage, "hr-web", "timesheet-grid", "/attendance/timesheet", viewportName, diagnostics));
+  results.push(await auditRoute(hrPage, "hr-web", "timesheet-periods", "/attendance/periods", viewportName, diagnostics));
+  results.push(await auditRoute(hrPage, "hr-web", "leave", "/leave", viewportName, diagnostics));
   await hrPage.close();
 
   const chatPage = await context.newPage();
   attachDiagnostics(chatPage, diagnostics, "chat-web");
   await loginChat(chatPage);
-  results.push(await auditRoute(chatPage, "chat-web", "timesheet", "/timesheet", viewportName));
-  results.push(await auditRoute(chatPage, "chat-web", "leave", "/leave", viewportName));
-  results.push(await auditRoute(chatPage, "chat-web", "team-timesheet", "/timesheet/team", viewportName));
+  results.push(await auditRoute(chatPage, "chat-web", "timesheet", "/timesheet", viewportName, diagnostics));
+  results.push(await auditRoute(chatPage, "chat-web", "leave", "/leave", viewportName, diagnostics));
+  results.push(await auditRoute(chatPage, "chat-web", "team-timesheet", "/timesheet/team", viewportName, diagnostics));
   await chatPage.close();
 
   await context.close();
   return { viewport: viewportName, results, diagnostics };
+}
+
+function collectFailures(summary) {
+  const failures = [];
+  for (const run of summary.runs) {
+    for (const item of run.diagnostics.console) {
+      failures.push({
+        viewport: run.viewport,
+        app: item.app,
+        type: "console",
+        message: item.text,
+      });
+    }
+    for (const item of run.diagnostics.pageErrors) {
+      failures.push({
+        viewport: run.viewport,
+        app: item.app,
+        type: "pageerror",
+        message: item.message,
+      });
+    }
+    for (const item of run.diagnostics.httpFailures) {
+      failures.push({
+        viewport: run.viewport,
+        app: item.app,
+        type: "http",
+        message: `${item.method} ${item.status} ${item.url}`,
+      });
+    }
+    for (const route of run.results) {
+      for (const check of route.checks.filter((item) => item.status !== "passed")) {
+        failures.push({
+          viewport: run.viewport,
+          app: route.app,
+          route: route.name,
+          type: "check",
+          message: `${check.name}: ${check.message}`,
+        });
+      }
+      if (route.metrics.horizontalOverflow) {
+        failures.push({
+          viewport: run.viewport,
+          app: route.app,
+          route: route.name,
+          type: "layout",
+          message: `horizontal overflow: viewport ${route.metrics.viewport.width}, document ${route.metrics.viewport.documentWidth}, body ${route.metrics.viewport.bodyWidth}`,
+        });
+      }
+      for (const overflow of route.metrics.textOverflows) {
+        failures.push({
+          viewport: run.viewport,
+          app: route.app,
+          route: route.name,
+          type: "text-overflow",
+          message: `${overflow.tag} "${overflow.text}" ${overflow.width}x${overflow.height} scroll ${overflow.scrollWidth}x${overflow.scrollHeight}`,
+        });
+      }
+    }
+  }
+  return failures;
 }
 
 async function main() {
@@ -317,7 +664,12 @@ async function main() {
     hrBaseUrl,
     runs,
   };
+  summary.failures = collectFailures(summary);
+  summary.ok = summary.failures.length === 0;
   console.log(JSON.stringify(summary, null, 2));
+  if (!summary.ok) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

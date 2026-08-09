@@ -539,12 +539,12 @@ export const MyLeavePage: React.FC = () => {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium text-[#475569]">
-                  <span>Chung tu/URL</span>
+                  <span>Chứng từ/URL</span>
                   <input
                     type="url"
                     value={form.attachmentUrl}
                     onChange={(event) => setForm((current) => ({ ...current, attachmentUrl: event.currentTarget.value }))}
-                    placeholder="Bat buoc voi nghi om tu 3 ngay"
+                    placeholder="Bắt buộc với nghỉ ốm từ 3 ngày"
                     className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                   />
                 </label>

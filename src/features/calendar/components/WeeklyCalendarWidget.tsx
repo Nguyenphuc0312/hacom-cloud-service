@@ -57,6 +57,7 @@ import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { EventDetailModal } from "./EventDetailModal";
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import { type HRCalendarEvent } from "../../api/hrCalendarApi";
+import { reportError } from "../../../utils/errorReporter";
 
 const formatDateStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -104,8 +105,11 @@ class WidgetErrorBoundary extends React.Component<
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error: Error) {
-    console.error("[WidgetErrorBoundary] WeeklyCalendarWidget render error:", error);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    reportError(error, {
+      boundary: "WeeklyCalendarWidget",
+      componentStack: info.componentStack ?? undefined,
+    });
   }
   render() {
     if (this.state.hasError) {

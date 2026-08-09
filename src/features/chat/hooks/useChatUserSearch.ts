@@ -9,6 +9,7 @@ import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshi
 import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
 import { USERS_SEARCH_PAGE_SIZE } from "../../../services/api";
 import { asStringValue as asString } from "../../../utils/payloadGuards";
+import { logger } from "../../../utils/logger";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -267,13 +268,16 @@ export const useChatUserSearch = (
           setResults(cachedData);
           setIsLoading(false);
           setErrorMessage(null);
-          if (import.meta.env.DEV) {
-            console.debug("[api-perf] USER_SEARCH cache hit", {
+          logger.debug(
+            "api-perf",
+            "user_search_cache_hit",
+            {
               query: trimmedQuery,
               limit,
               resultCount: cachedData.length,
-            });
-          }
+            },
+            { debugOnly: true },
+          );
         }
         return;
       }
@@ -296,13 +300,16 @@ export const useChatUserSearch = (
           // Phase 1: Cache successful results
           setCachedResults(trimmedQuery, limit, excludedUserIds, nextResults);
           setResults(nextResults);
-          if (import.meta.env.DEV) {
-            console.debug("[api-perf] USER_SEARCH cache miss", {
+          logger.debug(
+            "api-perf",
+            "user_search_cache_miss",
+            {
               query: trimmedQuery,
               limit,
               resultCount: nextResults.length,
-            });
-          }
+            },
+            { debugOnly: true },
+          );
         }
       } catch (error) {
         if (abortController.signal.aborted) {

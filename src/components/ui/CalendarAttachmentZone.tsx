@@ -290,8 +290,6 @@ export const CalendarAttachmentList: React.FC<{
   const preview = useFilePreview();
   const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
 
-  if (attachments.length === 0) return null;
-
   // File (không phải ảnh) lên đầu, ảnh xuống dưới — mỗi thứ 1 dòng.
   const ordered = [...attachments].sort((x, y) => {
     const xi =
@@ -356,6 +354,8 @@ export const CalendarAttachmentList: React.FC<{
     },
     [eventId],
   );
+
+  if (attachments.length === 0) return null;
 
   return (
     <>
