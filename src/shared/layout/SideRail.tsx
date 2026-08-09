@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   BriefcaseIcon,
   CalendarDaysIcon,
+  CalendarIcon,
   ChatBubbleLeftRightIcon,
   CloudIcon,
   Cog6ToothIcon,
@@ -14,6 +15,7 @@ import {
 import {
   BriefcaseIcon as BriefcaseSolid,
   CalendarDaysIcon as CalendarDaysSolid,
+  CalendarIcon as CalendarSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
   CloudIcon as CloudSolid,
   Cog6ToothIcon as Cog6ToothSolid,
@@ -84,6 +86,13 @@ const railItems: SideRailItem[] = [
     icon: ClipboardDocumentCheckIcon,
     iconActive: ClipboardDocumentCheckSolid,
     to: ROUTE_PATHS.TIMESHEET,
+  },
+  {
+    id: "leave",
+    label: "sidebar:rail.leave",
+    icon: CalendarIcon,
+    iconActive: CalendarSolid,
+    to: ROUTE_PATHS.LEAVE,
   },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },

@@ -18,6 +18,7 @@ const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
 const MyTimesheetPage = lazy(() => import("../../features/timesheet/pages/MyTimesheetPage"));
 const TeamTimesheetPage = lazy(() => import("../../features/timesheet/pages/TeamTimesheetPage"));
+const MyLeavePage = lazy(() => import("../../features/leave/pages/MyLeavePage"));
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
 const WorkReportDraftPage = lazy(
   () => import("../../features/personal-ai/pages/WorkReportDraftPage"),
@@ -42,6 +43,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.TASKS, component: TasksPage },
   { path: ROUTE_PATHS.TEAM_TIMESHEET, component: TeamTimesheetPage },
   { path: ROUTE_PATHS.TIMESHEET, component: MyTimesheetPage },
+  { path: ROUTE_PATHS.LEAVE, component: MyLeavePage },
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
   { path: ROUTE_PATHS.WORK_REPORT_DRAFTS, component: WorkReportDraftPage },

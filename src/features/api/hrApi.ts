@@ -258,6 +258,79 @@ export interface TeamTimesheetQuery {
   year?: number;
 }
 
+export type LeaveType =
+  | "ANNUAL"
+  | "SICK"
+  | "UNPAID"
+  | "MARRIAGE"
+  | "MATERNITY"
+  | "OTHER";
+
+export type WorkflowStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason?: string | null;
+  status: WorkflowStatus;
+  approverId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employee?: {
+    id: string;
+    employeeCode?: string | null;
+    fullName?: string | null;
+  } | null;
+}
+
+export interface LeaveBalance {
+  leaveType: Extract<LeaveType, "ANNUAL" | "SICK" | "UNPAID" | "OTHER">;
+  label: string;
+  entitlementDays: number | null;
+  usedDays: number;
+  pendingDays: number;
+  remainingDays: number | null;
+  source: "TIMESHEET_P_SYMBOL" | "APPROVED_LEAVE_REQUESTS" | string;
+  balanceStatus: "PENDING_HR_CSV_RECONCILIATION" | string;
+}
+
+export interface MyLeaveResponse {
+  year: number;
+  employeeId: string | null;
+  mode: "TRIAL_PENDING_CSV_RECONCILIATION" | "EMPLOYEE_NOT_LINKED" | string;
+  balances: LeaveBalance[];
+  requests: LeaveRequest[];
+  reason?: "EMPLOYEE_NOT_LINKED" | string;
+  message?: string | null;
+}
+
+export interface CreateMyLeaveRequestPayload {
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason?: string;
+}
+
+export interface LeaveRequestListResponse {
+  data: LeaveRequest[];
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
   payload && typeof payload === "object" && "success" in payload && payload.success === true
     ? (payload as { data: T }).data
@@ -343,6 +416,47 @@ export const hrApi = {
     if (params.year) query.set("year", String(params.year));
     const response = await hrApiClient.get(`/team/timesheet?${query.toString()}`);
     return unwrapHrEnvelope<TeamTimesheetResponse>(response.data);
+  },
+
+  getMyLeave: async (params?: { year?: number }): Promise<MyLeaveResponse> => {
+    const query = new URLSearchParams();
+    if (params?.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(
+      `/leave/me${query.toString() ? `?${query.toString()}` : ""}`
+    );
+    return unwrapHrEnvelope<MyLeaveResponse>(response.data);
+  },
+
+  createMyLeaveRequest: async (
+    payload: CreateMyLeaveRequestPayload,
+  ): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post("/leave/me/requests", payload);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  cancelMyLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/me/requests/${id}/cancel`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  getPendingLeaveRequests: async (): Promise<LeaveRequestListResponse> => {
+    const query = new URLSearchParams({
+      status: "SUBMITTED",
+      page: "1",
+      pageSize: "5",
+    });
+    const response = await hrApiClient.get(`/leave/requests?${query.toString()}`);
+    return unwrapHrEnvelope<LeaveRequestListResponse>(response.data);
+  },
+
+  approveLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/requests/${id}/approve`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  rejectLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/requests/${id}/reject`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
   },
 };
 
