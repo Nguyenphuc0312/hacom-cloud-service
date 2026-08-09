@@ -10,9 +10,11 @@ import {
   RefreshCcw,
   Send,
   Users,
+  XCircle,
 } from "lucide-react";
 import {
   hrApi,
+  type AttendanceExplanation,
   type MyTimesheetDay,
   type MyTimesheetResponse,
   type TimesheetConfirmationStatus,
@@ -40,6 +42,20 @@ const confirmationStatusLabel: Record<TimesheetConfirmationStatus, string> = {
   DISPUTED: "Đã khiếu nại",
 };
 
+const explanationStatusLabel: Record<AttendanceExplanation["status"], string> = {
+  DRAFT: "Nháp",
+  SUBMITTED: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  REJECTED: "Từ chối",
+  CANCELLED: "Đã hủy",
+};
+
+const explanationStatusClass = (status: AttendanceExplanation["status"]) => {
+  if (status === "APPROVED") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "REJECTED" || status === "CANCELLED") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+};
+
 const symbolClass = (symbol: string) => {
   const first = symbol.split(";")[0];
   if (first === "+") return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -53,6 +69,16 @@ const symbolClass = (symbol: string) => {
 
 const formatMonthTitle = (month: number, year: number) =>
   `Tháng ${month}/${year}`;
+
+const formatShortDate = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+};
 
 const toInputMonth = (month: number, year: number) =>
   `${year}-${String(month).padStart(2, "0")}`;
@@ -169,6 +195,65 @@ const SummaryTile: React.FC<{ label: string; value: string; tone?: string }> = (
   </div>
 );
 
+const MyExplanationItem: React.FC<{ item: AttendanceExplanation }> = ({ item }) => (
+  <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fbff] px-3 py-2">
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-sm font-medium text-[#0f172a]">
+        {formatShortDate(item.timesheetDay?.workDate)}
+      </div>
+      <span
+        className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${explanationStatusClass(item.status)}`}
+      >
+        {explanationStatusLabel[item.status]}
+      </span>
+    </div>
+    <div className="mt-1 line-clamp-2 text-xs text-[#64748b]">{item.reason}</div>
+  </div>
+);
+
+const PendingExplanationItem: React.FC<{
+  item: AttendanceExplanation;
+  reviewingId: string | null;
+  onReview: (item: AttendanceExplanation, status: "APPROVED" | "REJECTED") => void;
+}> = ({ item, reviewingId, onReview }) => (
+  <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="text-sm font-semibold text-[#0f172a]">
+          {item.employee?.fullName ?? item.employeeId}
+        </div>
+        <div className="text-xs text-[#64748b]">
+          {item.employee?.employeeCode ?? "-"} · {formatShortDate(item.timesheetDay?.workDate)}
+        </div>
+      </div>
+      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+        {item.type}
+      </span>
+    </div>
+    <div className="mt-2 line-clamp-2 text-xs text-[#475569]">{item.reason}</div>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-[#1565C0] px-2 text-xs font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+        disabled={reviewingId !== null}
+        onClick={() => onReview(item, "APPROVED")}
+      >
+        <CheckCircle2 size={14} aria-hidden="true" />
+        {reviewingId === item.id ? "Đang xử lý" : "Duyệt"}
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+        disabled={reviewingId !== null}
+        onClick={() => onReview(item, "REJECTED")}
+      >
+        <XCircle size={14} aria-hidden="true" />
+        Từ chối
+      </button>
+    </div>
+  </div>
+);
+
 export const MyTimesheetPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const queryPeriod = periodFromQuery(searchParams.get("month"));
@@ -186,6 +271,9 @@ export const MyTimesheetPage: React.FC = () => {
   const [explainingDay, setExplainingDay] = React.useState<MyTimesheetDay | null>(null);
   const [explanationReason, setExplanationReason] = React.useState("");
   const [submittingExplanation, setSubmittingExplanation] = React.useState(false);
+  const [myExplanations, setMyExplanations] = React.useState<AttendanceExplanation[]>([]);
+  const [pendingExplanations, setPendingExplanations] = React.useState<AttendanceExplanation[]>([]);
+  const [reviewingExplanationId, setReviewingExplanationId] = React.useState<string | null>(null);
 
   const loadTimesheet = React.useCallback(async () => {
     setState((current) => ({ status: "loading", data: current.data, error: null }));
@@ -201,6 +289,22 @@ export const MyTimesheetPage: React.FC = () => {
     }
   }, [month, year]);
 
+  const loadExplanations = React.useCallback(async () => {
+    try {
+      const mine = await hrApi.getMyAttendanceExplanations({ month, year });
+      setMyExplanations(mine.items ?? []);
+    } catch {
+      setMyExplanations([]);
+    }
+
+    try {
+      const pending = await hrApi.getPendingAttendanceExplanations();
+      setPendingExplanations(pending.items ?? []);
+    } catch {
+      setPendingExplanations([]);
+    }
+  }, [month, year]);
+
   React.useEffect(() => {
     if (!queryMonth || !queryYear) return;
     setMonth(queryMonth);
@@ -210,6 +314,10 @@ export const MyTimesheetPage: React.FC = () => {
   React.useEffect(() => {
     void loadTimesheet();
   }, [loadTimesheet]);
+
+  React.useEffect(() => {
+    void loadExplanations();
+  }, [loadExplanations]);
 
   const data = state.data;
   const period = data?.period ?? null;
@@ -270,10 +378,33 @@ export const MyTimesheetPage: React.FC = () => {
       setExplainingDay(null);
       setExplanationReason("");
       await loadTimesheet();
+      await loadExplanations();
     } catch (error) {
       toast.error(extractErrorMessage(error));
     } finally {
       setSubmittingExplanation(false);
+    }
+  }
+
+  async function handleReviewExplanation(
+    item: AttendanceExplanation,
+    status: "APPROVED" | "REJECTED",
+  ) {
+    setReviewingExplanationId(item.id);
+    try {
+      if (status === "APPROVED") {
+        await hrApi.approveAttendanceExplanation(item.id);
+        toast.success("Đã duyệt giải trình.");
+      } else {
+        await hrApi.rejectAttendanceExplanation(item.id);
+        toast.success("Đã từ chối giải trình.");
+      }
+      await loadTimesheet();
+      await loadExplanations();
+    } catch (error) {
+      toast.error(extractErrorMessage(error));
+    } finally {
+      setReviewingExplanationId(null);
     }
   }
 
@@ -470,6 +601,45 @@ export const MyTimesheetPage: React.FC = () => {
                 {submitting === "dispute" ? "Đang gửi" : "Gửi HR"}
               </button>
             </div>
+
+            <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-[#0f172a]">Giải trình đã gửi</div>
+                <span className="text-xs font-medium text-[#64748b]">{myExplanations.length}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {myExplanations.length > 0 ? (
+                  myExplanations.slice(0, 5).map((item) => (
+                    <MyExplanationItem key={item.id} item={item} />
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-[#d7dce3] px-3 py-4 text-center text-xs text-[#64748b]">
+                    Chưa có đơn giải trình trong tháng này.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {pendingExplanations.length > 0 ? (
+              <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-[#0f172a]">Chờ duyệt giải trình</div>
+                  <span className="text-xs font-medium text-[#64748b]">
+                    {pendingExplanations.length}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {pendingExplanations.slice(0, 5).map((item) => (
+                    <PendingExplanationItem
+                      key={item.id}
+                      item={item}
+                      reviewingId={reviewingExplanationId}
+                      onReview={(target, status) => void handleReviewExplanation(target, status)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {explainingDay ? (
               <div className="rounded-lg border border-amber-200 bg-white p-4">

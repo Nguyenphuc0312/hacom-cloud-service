@@ -373,6 +373,19 @@ export interface AttendanceExplanation {
   reviewerId?: string | null;
   reviewedAt?: string | null;
   reviewNote?: string | null;
+  employee?: {
+    employeeCode: string;
+    fullName: string;
+  };
+  timesheetDay?: {
+    id?: string;
+    workDate: string;
+    displaySymbol?: string | null;
+    firstPunch?: string | null;
+    lastPunch?: string | null;
+    needsExplanation?: boolean;
+    isLocked?: boolean;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -381,6 +394,11 @@ export interface CreateAttendanceExplanationPayload {
   timesheetDayId: string;
   type: AttendanceExplanationType;
   reason: string;
+}
+
+export interface AttendanceExplanationListResponse {
+  items: AttendanceExplanation[];
+  reason?: "EMPLOYEE_NOT_LINKED" | string;
 }
 
 const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
@@ -515,6 +533,44 @@ export const hrApi = {
     payload: CreateAttendanceExplanationPayload,
   ): Promise<AttendanceExplanation> => {
     const response = await hrApiClient.post("/attendance/explanations/me", payload);
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
+  },
+
+  getMyAttendanceExplanations: async (params?: {
+    month?: number;
+    year?: number;
+  }): Promise<AttendanceExplanationListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.month) query.set("month", String(params.month));
+    if (params?.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(
+      `/attendance/explanations/me${query.toString() ? `?${query.toString()}` : ""}`
+    );
+    return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
+  },
+
+  getPendingAttendanceExplanations: async (): Promise<AttendanceExplanationListResponse> => {
+    const response = await hrApiClient.get("/attendance/explanations/pending");
+    return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
+  },
+
+  approveAttendanceExplanation: async (
+    id: string,
+    note?: string,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post(`/attendance/explanations/${id}/approve`, {
+      note,
+    });
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
+  },
+
+  rejectAttendanceExplanation: async (
+    id: string,
+    note?: string,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post(`/attendance/explanations/${id}/reject`, {
+      note,
+    });
     return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 };
