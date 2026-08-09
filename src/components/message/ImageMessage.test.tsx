@@ -12,6 +12,7 @@ const batchState = vi.hoisted(() => ({
       url: string | null;
       status: "ready" | "processing";
       isRetryable?: boolean;
+      placeholder?: string | null;
     }
   >,
 }));
@@ -40,7 +41,12 @@ vi.mock("../../hooks/useInViewport", () => ({
 }));
 
 vi.mock("../../utils/imagePerformanceTelemetry", () => ({
+  afterNextPaint: (callback: () => void) => {
+    callback();
+    return vi.fn();
+  },
   getRedactedResourceTiming: () => ({}),
+  markImagePerformanceMilestone: vi.fn(),
   reportImagePerformance: vi.fn(),
 }));
 
@@ -105,5 +111,30 @@ describe("ImageMessage large-image timeline source", () => {
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("Đang xử lý...")).toBeVisible();
+  });
+
+  it("paints an inline placeholder while processing without requesting the original", () => {
+    const placeholder = "data:image/jpeg;base64,cGxhY2Vob2xkZXI=";
+    batchState.current = {
+      "image-1": {
+        fileId: "image-1",
+        url: null,
+        status: "processing",
+        isRetryable: true,
+        placeholder,
+      },
+    };
+
+    const { container } = render(
+      <ImageMessage
+        conversationId="conversation-1"
+        attachment={attachment}
+        isOwn
+      />,
+    );
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(container.querySelector('[style*="data:image/jpeg;base64"]')).toBeTruthy();
+    expect(container.innerHTML).not.toContain(attachment.url);
   });
 });

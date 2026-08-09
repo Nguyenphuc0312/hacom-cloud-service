@@ -20,7 +20,10 @@ import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { logger } from "../utils/logger";
 import { blobPreviewCache } from "../lib/blobPreviewCache";
-import { reportImagePerformance } from "../utils/imagePerformanceTelemetry";
+import {
+  markImagePerformanceMilestone,
+  reportImagePerformance,
+} from "../utils/imagePerformanceTelemetry";
 
 export interface ThumbnailUrlItem {
   fileId: string;
@@ -36,11 +39,13 @@ export interface ThumbnailUrlItem {
    * forbidden      — no access to this file.
    * error          — unexpected server error.
    */
-  status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'not_found' | 'forbidden' | 'error';
+  status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'fallback_original' | 'not_found' | 'forbidden' | 'error';
   /** Only set when a URL is returned (status = ready). */
   variant?: 'thumbnail' | 'preview' | 'original';
   width?: number | null;
   height?: number | null;
+  aspectRatio?: number | null;
+  placeholder?: string | null;
   mimeType?: string;
   fallbackReason?: string | null;
   /**
@@ -242,6 +247,8 @@ const resolveItem = (raw: {
   variant?: ThumbnailUrlItem['variant'] | 'pending'; // accept legacy 'pending' defensively
   width?: number | null;
   height?: number | null;
+  aspectRatio?: number | null;
+  placeholder?: string | null;
   mimeType?: string;
   fallbackReason?: string | null;
   isRetryable?: boolean;    // present in new contract; absent in legacy responses
@@ -297,6 +304,11 @@ const readCachedUrls = (
 const executeBatchFetch = async (
   conversationId: string,
   fileIds: string[],
+  telemetry: {
+    queueWaitMs?: number;
+    subscriberCount?: number;
+    deduplicatedIds?: number;
+  } = {},
 ): Promise<Record<string, ThumbnailUrlItem>> => {
   const startedAtMs = performance.now();
   let outcome: 'success' | 'error' = 'error';
@@ -310,12 +322,17 @@ const executeBatchFetch = async (
     resolved[item.fileId] = item;
   }
   outcome = 'success';
+  markImagePerformanceMilestone(conversationId, "T4", {
+    batchSize: fileIds.length,
+    outcome: "success",
+  });
   return resolved;
   } finally {
-    reportImagePerformance({
+    reportImagePerformance(conversationId, {
       kind: 'batch_url_request',
       batchSize: fileIds.length,
       durationMs: Math.round(performance.now() - startedAtMs),
+      ...telemetry,
       outcome,
     });
   }
@@ -348,10 +365,17 @@ const flushConversationQueue = (conversationId: string): void => {
   if (selected.length === 0) return;
   queue.active += 1;
   const queueWaitMs = Math.max(0, Date.now() - Math.min(...selected.map((request) => request.queuedAtMs)));
+  const requestedIds = selected.reduce(
+    (total, request) => total + request.fileIds.length,
+    0,
+  );
 
-  void executeBatchFetch(conversationId, [...selectedIds])
+  void executeBatchFetch(conversationId, [...selectedIds], {
+    queueWaitMs,
+    subscriberCount: selected.length,
+    deduplicatedIds: Math.max(0, requestedIds - selectedIds.size),
+  })
     .then((results) => {
-      reportImagePerformance({ kind: 'batch_url_request', batchSize: selectedIds.size, queueWaitMs, outcome: 'success' });
       for (const request of selected) {
         const requestResults: Record<string, ThumbnailUrlItem> = {};
         for (const fileId of request.fileIds) {
@@ -362,7 +386,6 @@ const flushConversationQueue = (conversationId: string): void => {
       }
     })
     .catch((error) => {
-      reportImagePerformance({ kind: 'batch_url_request', batchSize: selectedIds.size, queueWaitMs, outcome: 'error' });
       for (const request of selected) request.reject(error);
     })
     .finally(() => {
@@ -402,7 +425,14 @@ const dedupedBatchFetch = (
 ): Promise<Record<string, ThumbnailUrlItem>> => {
   const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
   const existing = inFlightBatchRequests.get(key);
-  if (existing) return existing;
+  if (existing) {
+    reportImagePerformance(conversationId, {
+      kind: "inflight_dedupe",
+      deduplicatedIds: fileIds.length,
+      outcome: "success",
+    });
+    return existing;
+  }
   const request = enqueueBatchFetch(conversationId, fileIds)
     .finally(() => inFlightBatchRequests.delete(key));
   inFlightBatchRequests.set(key, request);

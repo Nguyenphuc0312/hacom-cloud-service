@@ -13,6 +13,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { SafeImage } from "../common/SafeImage";
+import {
+  afterNextPaint,
+  markImagePerformanceMilestone,
+} from "../../utils/imagePerformanceTelemetry";
 
 export interface GalleryImage {
   url: string;
@@ -40,6 +44,8 @@ export interface ImagePreviewModalProps {
   sentAt?: Date | string;
   /** Open the full "Kho lưu trữ" panel — shown as the last filmstrip cell when the gallery exceeds the strip cap */
   onViewAll?: () => void;
+  /** Internal trace key only; never emitted in the telemetry payload. */
+  telemetryConversationKey?: string;
 }
 
 /** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
@@ -138,6 +144,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   senderAvatar,
   sentAt,
   onViewAll,
+  telemetryConversationKey,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
@@ -457,6 +464,19 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             )}
             style={{
               transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px) rotate(${rotation}deg)`,
+            }}
+            onLoad={(_event, _source, meta) => {
+              if (!telemetryConversationKey) return;
+              afterNextPaint(() => {
+                markImagePerformanceMilestone(
+                  telemetryConversationKey,
+                  "T10",
+                  {
+                    decodeDurationMs: meta?.decodeDurationMs,
+                    outcome: "success",
+                  },
+                );
+              });
             }}
             draggable={false}
             fallback={
