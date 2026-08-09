@@ -8,6 +8,7 @@ import { getMessageSeq } from "../../features/chat/domain/messageMerge";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { logMessageDebug } from "../../utils/messageDebug";
+import { markImagePerformanceMilestone } from "../../utils/imagePerformanceTelemetry";
 
 interface ConversationViewportProps {
   layoutState: ChatLayoutState;
@@ -127,6 +128,14 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
         isLoadingOlder,
         loadOlder,
       } = useConversationMessagesRTK(conversation.id);
+
+      React.useLayoutEffect(() => {
+        if (!isInitialLoading) {
+          markImagePerformanceMilestone(conversation.id, "T2", {
+            outcome: "success",
+          });
+        }
+      }, [conversation.id, isInitialLoading, messages.length]);
 
       React.useEffect(() => {
         const latestMessage = messages[messages.length - 1];

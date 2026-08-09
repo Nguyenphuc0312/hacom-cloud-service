@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const batchThumbnailUrls = vi.fn();
+const reportImagePerformance = vi.fn();
 
 vi.mock("../services/api", () => ({
   fileApi: { batchThumbnailUrls: (...args: unknown[]) => batchThumbnailUrls(...args) },
@@ -9,6 +10,10 @@ vi.mock("../lib/apiContract", () => ({ unwrapApiSuccess: (value: unknown) => val
 vi.mock("../config", () => ({ resolvePublicResourceUrl: (value: string) => value }));
 vi.mock("../utils/logger", () => ({ logger: { warn: vi.fn() } }));
 vi.mock("../lib/blobPreviewCache", () => ({ blobPreviewCache: { delete: vi.fn() } }));
+vi.mock("../utils/imagePerformanceTelemetry", () => ({
+  markImagePerformanceMilestone: vi.fn(),
+  reportImagePerformance: (...args: unknown[]) => reportImagePerformance(...args),
+}));
 
 import {
   __thumbnailCacheTestUtils,
@@ -29,6 +34,7 @@ const readyItem = (fileId: string) => ({
 describe("thumbnail batch coordinator", () => {
   beforeEach(() => {
     batchThumbnailUrls.mockReset();
+    reportImagePerformance.mockReset();
     __thumbnailCacheTestUtils.clearThumbnailCache();
     __thumbnailCacheTestUtils.clearBatchQueues();
   });
@@ -46,6 +52,15 @@ describe("thumbnail batch coordinator", () => {
     expect(batchThumbnailUrls).toHaveBeenCalledTimes(1);
     expect(batchThumbnailUrls).toHaveBeenCalledWith({ conversationId: "conversation-1", fileIds: ids });
     expect(results.every((result, index) => result[ids[index]]?.status === "ready")).toBe(true);
+    expect(reportImagePerformance).toHaveBeenCalledTimes(1);
+    expect(reportImagePerformance).toHaveBeenCalledWith(
+      "conversation-1",
+      expect.objectContaining({
+        kind: "batch_url_request",
+        batchSize: 20,
+        outcome: "success",
+      }),
+    );
   });
 
   it("dedupes duplicate attachment callers before issuing the batch", async () => {
@@ -60,6 +75,27 @@ describe("thumbnail batch coordinator", () => {
 
     expect(batchThumbnailUrls).toHaveBeenCalledTimes(1);
     expect(batchThumbnailUrls).toHaveBeenCalledWith({ conversationId: "conversation-1", fileIds: ["same-file"] });
+    expect(reportImagePerformance).toHaveBeenCalledTimes(2);
+    expect(reportImagePerformance.mock.calls).toEqual(
+      expect.arrayContaining([
+        [
+          "conversation-1",
+          expect.objectContaining({
+            kind: "inflight_dedupe",
+            deduplicatedIds: 1,
+          }),
+        ],
+        [
+          "conversation-1",
+          expect.objectContaining({
+            kind: "batch_url_request",
+            batchSize: 1,
+            subscriberCount: 1,
+            deduplicatedIds: 0,
+          }),
+        ],
+      ]),
+    );
   });
 
   it("uses a warm URL cache without minting another signed URL", async () => {

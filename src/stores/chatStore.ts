@@ -20,6 +20,7 @@ import {
 } from "../utils/messageIdFactory";
 import { logMessageDebug } from "../utils/messageDebug";
 import { markChatPerformance } from "../utils/chatPerformance";
+import { beginImagePerformanceTrace } from "../utils/imagePerformanceTelemetry";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import {
   createConversationActivityComparator,
@@ -2354,6 +2355,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       selectConversation: (id) => {
+        if (id && get().selectedConversationId !== id) {
+          beginImagePerformanceTrace(id, {
+            hasCachedTimeline:
+              get().hasAuthoritativeHistoryByConversation[id] === true,
+          });
+        }
         set((state) => {
           const trimState = buildInactiveMessageTrimState(state, id);
           if (state.selectedConversationId === id) {
