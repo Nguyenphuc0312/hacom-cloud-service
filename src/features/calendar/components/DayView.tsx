@@ -41,6 +41,7 @@ interface DayViewProps {
   attendance?: {
     firstPunch?: string | null;
     lastPunch?: string | null;
+    displaySymbol?: string | null;
     totalTime?: string | null;
   };
   onEventClick: (event: CalendarEvent) => void;
@@ -214,6 +215,7 @@ const DayViewImpl: React.FC<DayViewProps> = ({
 
   const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+  const attendanceSymbol = attendance?.displaySymbol?.trim();
 
   // Auto-scroll tới giờ hiện tại (today) hoặc 07:00 (ngày khác) khi mở/đổi ngày.
   useEffect(() => {
@@ -270,6 +272,14 @@ const DayViewImpl: React.FC<DayViewProps> = ({
       {attendance && (
         <div className="border-b border-border bg-emerald-50 px-4 py-2 dark:bg-emerald-900/20">
           <div className="flex items-center gap-4 text-sm">
+            {attendanceSymbol && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-emerald-700 dark:text-emerald-300">Công:</span>
+                <span className="rounded border border-emerald-200 bg-white px-2 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  {attendanceSymbol}
+                </span>
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ đến:</span>
               <span className="font-mono text-emerald-600 dark:text-emerald-400">

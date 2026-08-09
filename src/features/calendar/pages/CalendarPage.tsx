@@ -327,13 +327,32 @@ const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
 }> = ({ attendance }) => {
   const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
+  const symbol = attendance.displaySymbol?.trim();
 
   return (
     <div
       className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
-      title={hasPunch ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}` : "Chưa có dữ liệu chấm công"}
+      title={[
+        symbol ? `Công: ${symbol}` : null,
+        hasPunch
+          ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "Chưa có dữ liệu chấm công"}
     >
-      {hasPunch ? (
+      {symbol ? (
+        <span className="block space-y-0.5">
+          <span className="inline-flex min-w-6 items-center justify-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
+            {symbol}
+          </span>
+          {hasPunch ? (
+            <span className="block truncate text-[11px] text-text-secondary">
+              {formatTime(attendance.firstPunch)} - {formatTime(attendance.lastPunch)}
+            </span>
+          ) : null}
+        </span>
+      ) : hasPunch ? (
         <span className="block space-y-0.5">
           <span className="block truncate text-text-secondary">Giờ đến: <span className="font-medium text-text-primary">{formatTime(attendance.firstPunch)}</span></span>
           <span className="block truncate text-text-secondary">Giờ về: <span className="font-medium text-text-primary">{formatTime(attendance.lastPunch)}</span></span>
@@ -726,7 +745,7 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     const { from, to } = getMonthFetchRange(currentYear, currentMonth);
     void fetchEvents(from, to);
-  }, [currentYear, currentMonth, mode]);
+  }, [currentYear, currentMonth, fetchEvents, mode]);
 
   // Extended events map cho detail view — thuần derive từ apiEvents → useMemo
   // (trước là effect+setState gây cascading render + chặn React Compiler).

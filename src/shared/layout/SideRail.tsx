@@ -5,17 +5,21 @@ import { useTranslation } from "react-i18next";
 import {
   BriefcaseIcon,
   CalendarDaysIcon,
+  CalendarIcon,
   ChatBubbleLeftRightIcon,
   CloudIcon,
   Cog6ToothIcon,
+  ClipboardDocumentCheckIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
 import {
   BriefcaseIcon as BriefcaseSolid,
   CalendarDaysIcon as CalendarDaysSolid,
+  CalendarIcon as CalendarSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
   CloudIcon as CloudSolid,
   Cog6ToothIcon as Cog6ToothSolid,
+  ClipboardDocumentCheckIcon as ClipboardDocumentCheckSolid,
   SparklesIcon as SparklesSolid,
 } from "@heroicons/react/24/solid";
 import { Contact, HandHelping } from "lucide-react";
@@ -76,6 +80,20 @@ const railItems: SideRailItem[] = [
   // giải id rồi chuyển hướng (dùng khi chưa biết id).
   { id: "cloud", label: "Cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
+  {
+    id: "timesheet",
+    label: "sidebar:rail.timesheet",
+    icon: ClipboardDocumentCheckIcon,
+    iconActive: ClipboardDocumentCheckSolid,
+    to: ROUTE_PATHS.TIMESHEET,
+  },
+  {
+    id: "leave",
+    label: "sidebar:rail.leave",
+    icon: CalendarIcon,
+    iconActive: CalendarSolid,
+    to: ROUTE_PATHS.LEAVE,
+  },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },
 ];
