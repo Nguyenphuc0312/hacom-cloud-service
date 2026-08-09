@@ -10,7 +10,11 @@ import { API_BASE_URL } from '../../../config';
 import { getAccessToken } from '../../../services/tokenService';
 
 export type CloudAsset = CloudAssetDto;
-export type CloudQuota = CloudQuotaDto;
+// Shared source đã có breakdown này nhưng package dist cục bộ có thể chưa được
+// build lại; giữ adapter optional để tương thích cả response cũ lẫn dist cũ.
+export type CloudQuota = CloudQuotaDto & {
+  usedByType?: { image: string; video: string; file: string; other: string };
+};
 
 const client = axios.create({ baseURL: `${API_BASE_URL}/cloud`, timeout: 30_000 });
 client.interceptors.request.use((request) => {
