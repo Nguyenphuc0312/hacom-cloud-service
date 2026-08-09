@@ -13,6 +13,7 @@ import {
 import {
   hrApi,
   type LeaveBalance,
+  type LeaveHalfDaySession,
   type LeaveRequest,
   type LeaveType,
   type MyLeaveResponse,
@@ -60,6 +61,18 @@ const currentApprovalStep = (request: LeaveRequest) =>
     ? (request.approvalSteps?.find((step) => step.status === "SUBMITTED") ?? null)
     : null;
 
+const toHalfDaySession = (portion: LeaveDayPortion): LeaveHalfDaySession => {
+  if (portion === "AM") return "MORNING";
+  if (portion === "PM") return "AFTERNOON";
+  return "FULL_DAY";
+};
+
+const halfDaySessionLabel = (value?: LeaveHalfDaySession | null) => {
+  if (value === "MORNING") return "Sang";
+  if (value === "AFTERNOON") return "Chieu";
+  return "Ca ngay";
+};
+
 const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
@@ -75,6 +88,14 @@ const formatDays = (value: number | null | undefined) =>
 
 const extractErrorMessage = (error: unknown) => {
   const status = (error as { response?: { status?: number } })?.response?.status;
+  const message = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+  const normalizedMessage = Array.isArray(message) ? message.join(" ") : (message ?? "");
+  if (normalizedMessage.includes("RETROACTIVE_LEAVE_LIMIT_EXCEEDED")) {
+    return "Chỉ được khai lùi đơn nghỉ tối đa 3 ngày.";
+  }
+  if (normalizedMessage.includes("SICK_LEAVE_ATTACHMENT_REQUIRED")) {
+    return "Nghỉ ốm từ 3 ngày cần có chứng từ đính kèm.";
+  }
   if (status === 422) return "Tài khoản chưa liên kết hồ sơ nhân sự hoặc dữ liệu chưa hợp lệ.";
   if (status === 409) return "Trạng thái đơn nghỉ phép đã thay đổi.";
   return "Không tải được dữ liệu nghỉ phép lúc này.";
@@ -128,6 +149,9 @@ const RequestRow: React.FC<{
     </td>
     <td className="min-w-[190px] px-4 py-3 text-sm text-[#475569]">
       {formatDate(request.startDate)} - {formatDate(request.endDate)}
+      <div className="mt-1 text-xs text-[#64748b]">
+        Buoi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
+      </div>
     </td>
     <td className="min-w-[220px] px-4 py-3 text-sm text-[#475569]">
       {request.reason || "-"}
@@ -183,6 +207,9 @@ const ApprovalRow: React.FC<{
     <div className="mt-2 text-sm text-[#475569]">
       {formatDate(request.startDate)} - {formatDate(request.endDate)}
     </div>
+    <div className="mt-1 text-xs text-[#64748b]">
+      Buoi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
+    </div>
     {request.reason ? (
       <div className="mt-1 line-clamp-2 text-sm text-[#64748b]">{request.reason}</div>
     ) : null}
@@ -226,6 +253,7 @@ export const MyLeavePage: React.FC = () => {
     startPortion: "FULL" as LeaveDayPortion,
     endPortion: "FULL" as LeaveDayPortion,
     reason: "",
+    attachmentUrl: "",
   });
 
   const totalDays = React.useMemo(
@@ -276,11 +304,14 @@ export const MyLeavePage: React.FC = () => {
         leaveType: form.leaveType,
         startDate: form.startDate,
         endDate: form.endDate,
+        startHalfDaySession: toHalfDaySession(form.startPortion),
+        endHalfDaySession: toHalfDaySession(form.endPortion),
         totalDays,
         reason: form.reason.trim() || undefined,
+        attachmentUrl: form.attachmentUrl.trim() || undefined,
       });
       toast.success("Đã gửi đơn nghỉ phép.");
-      setForm((current) => ({ ...current, reason: "" }));
+      setForm((current) => ({ ...current, reason: "", attachmentUrl: "" }));
       await loadLeave();
     } catch (error) {
       toast.error(extractErrorMessage(error));
@@ -493,6 +524,16 @@ export const MyLeavePage: React.FC = () => {
                     rows={4}
                     maxLength={1000}
                     className="resize-none rounded-lg border border-[#d7dce3] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-[#475569]">
+                  <span>Chung tu/URL</span>
+                  <input
+                    type="url"
+                    value={form.attachmentUrl}
+                    onChange={(event) => setForm((current) => ({ ...current, attachmentUrl: event.currentTarget.value }))}
+                    placeholder="Bat buoc voi nghi om tu 3 ngay"
+                    className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                   />
                 </label>
                 <div className="rounded-lg border border-[#d7dce3] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">

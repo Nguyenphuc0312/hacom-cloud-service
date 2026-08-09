@@ -274,14 +274,19 @@ export type WorkflowStatus =
   | "REJECTED"
   | "CANCELLED";
 
+export type LeaveHalfDaySession = "FULL_DAY" | "MORNING" | "AFTERNOON";
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;
   leaveType: LeaveType;
   startDate: string;
   endDate: string;
+  startHalfDaySession?: LeaveHalfDaySession;
+  endHalfDaySession?: LeaveHalfDaySession;
   totalDays: number;
   reason?: string | null;
+  attachmentUrl?: string | null;
   status: WorkflowStatus;
   approverId?: string | null;
   createdAt: string;
@@ -331,8 +336,11 @@ export interface CreateMyLeaveRequestPayload {
   leaveType: LeaveType;
   startDate: string;
   endDate: string;
+  startHalfDaySession?: LeaveHalfDaySession;
+  endHalfDaySession?: LeaveHalfDaySession;
   totalDays: number;
   reason?: string;
+  attachmentUrl?: string;
 }
 
 export interface LeaveRequestListResponse {
