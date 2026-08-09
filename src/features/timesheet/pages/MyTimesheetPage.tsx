@@ -1,5 +1,6 @@
 import React from "react";
 import toast from "react-hot-toast";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -56,10 +57,17 @@ const toInputMonth = (month: number, year: number) =>
 
 const fromInputMonth = (value: string) => {
   const [year, month] = value.split("-").map(Number);
+  const validMonth = Number.isFinite(month) && month >= 1 && month <= 12;
+  const validYear = Number.isFinite(year) && year >= 2000 && year <= 2100;
   return {
-    month: Number.isFinite(month) ? month : now.getMonth() + 1,
-    year: Number.isFinite(year) ? year : now.getFullYear(),
+    month: validMonth ? month : now.getMonth() + 1,
+    year: validYear ? year : now.getFullYear(),
   };
+};
+
+const periodFromQuery = (value: string | null) => {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
+  return fromInputMonth(value);
 };
 
 const extractErrorMessage = (error: unknown) => {
@@ -135,8 +143,12 @@ const SummaryTile: React.FC<{ label: string; value: string; tone?: string }> = (
 );
 
 export const MyTimesheetPage: React.FC = () => {
-  const [month, setMonth] = React.useState(now.getMonth() + 1);
-  const [year, setYear] = React.useState(now.getFullYear());
+  const [searchParams] = useSearchParams();
+  const queryPeriod = periodFromQuery(searchParams.get("month"));
+  const queryMonth = queryPeriod?.month;
+  const queryYear = queryPeriod?.year;
+  const [month, setMonth] = React.useState(queryPeriod?.month ?? now.getMonth() + 1);
+  const [year, setYear] = React.useState(queryPeriod?.year ?? now.getFullYear());
   const [state, setState] = React.useState<LoadState>({
     status: "idle",
     data: null,
@@ -158,6 +170,12 @@ export const MyTimesheetPage: React.FC = () => {
       }));
     }
   }, [month, year]);
+
+  React.useEffect(() => {
+    if (!queryMonth || !queryYear) return;
+    setMonth(queryMonth);
+    setYear(queryYear);
+  }, [queryMonth, queryYear]);
 
   React.useEffect(() => {
     void loadTimesheet();
