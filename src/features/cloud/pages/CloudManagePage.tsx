@@ -11,6 +11,9 @@ import {
   List,
   Mic,
   MoreHorizontal,
+  Play,
+  RefreshCw,
+  Search,
   Trash2,
   Video,
 } from "lucide-react";
@@ -27,7 +30,9 @@ import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { readCachedCloudConversationId } from "../personalCloudPolicy";
 import { ROUTE_PATHS } from "../../../router/paths";
 import wsManager from "../../../lib/socket";
-import { PageSpinner } from "../../../components/ui/Spinner";
+import { SafeImage } from "../../../components/common/SafeImage";
+import { useBatchThumbnailUrl } from "../../../hooks/useBatchThumbnailUrl";
+import { useInViewport } from "../../../hooks/useInViewport";
 
 type MediaFilter = "all" | "image" | "video" | "file" | "audio";
 type SortKey = "date_desc" | "date_asc" | "size_desc" | "size_asc";
@@ -65,6 +70,75 @@ const sortAssets = (assets: CloudAsset[], sort: SortKey): CloudAsset[] => {
   return sorted;
 };
 
+const getAssetTypeLabel = (asset: CloudAsset): string => {
+  const extension = asset.originalFilename.split(".").pop()?.trim();
+  if (extension && extension !== asset.originalFilename && /^[a-z0-9]{1,5}$/i.test(extension)) {
+    return extension.toUpperCase();
+  }
+
+  switch (asset.mediaType) {
+    case "image": return "Ảnh";
+    case "video": return "Video";
+    case "audio": return "Âm thanh";
+    default: return "Tệp";
+  }
+};
+
+const CloudAssetThumbnail: React.FC<{
+  asset: CloudAsset;
+  conversationId: string | null;
+  size?: "list" | "grid";
+}> = ({ asset, conversationId, size = "list" }) => {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const media = asset.mediaType === "image" || asset.mediaType === "video";
+  const attachmentId = asset.attachmentId ?? "";
+  const visible = useInViewport(containerRef, {
+    rootMargin: "160px 0px",
+    enabled: media && Boolean(conversationId && attachmentId),
+  });
+  const { urls } = useBatchThumbnailUrl(
+    conversationId ?? undefined,
+    media && attachmentId ? [attachmentId] : [],
+    { autoFetch: media && visible && Boolean(conversationId && attachmentId) },
+  );
+  const thumbnailUrl = attachmentId ? urls[attachmentId]?.url : null;
+  const dimensions = size === "list" ? "h-11 w-11" : "h-12 w-12";
+  const fallback = (
+    <span className="grid h-full w-full place-items-center bg-surface-hover text-text-muted">
+      <FileTypeIcon
+        type={getFileIconType(asset.mimeType, asset.originalFilename)}
+        fileName={asset.originalFilename}
+        className="h-7 w-7 shrink-0"
+      />
+    </span>
+  );
+
+  return (
+    <span
+      ref={containerRef}
+      className={`relative block ${dimensions} shrink-0 overflow-hidden rounded-lg border border-border/60 bg-surface-hover`}
+      aria-hidden="true"
+    >
+      {thumbnailUrl ? (
+        <SafeImage
+          src={thumbnailUrl}
+          alt=""
+          className="h-full w-full"
+          objectFit={asset.mediaType === "image" ? "cover" : "contain"}
+          fallback={fallback}
+        />
+      ) : fallback}
+      {asset.mediaType === "video" && thumbnailUrl ? (
+        <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/15">
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-white/90 text-text-primary shadow-sm">
+            <Play className="ml-px h-3 w-3 fill-current" />
+          </span>
+        </span>
+      ) : null}
+    </span>
+  );
+};
+
 const SortDropdown: React.FC<{ value: SortKey; onChange: (key: SortKey) => void }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const label = SORT_OPTIONS.find((option) => option.key === value)?.label ?? "";
@@ -77,22 +151,23 @@ const SortDropdown: React.FC<{ value: SortKey; onChange: (key: SortKey) => void 
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm text-text-secondary hover:bg-surface-hover"
+        className="flex h-10 items-center gap-2 rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text-secondary transition-colors hover:border-border-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+        aria-label="Sắp xếp tệp"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <ArrowDownUp className="h-4 w-4" />
+        <ArrowDownUp className="h-[18px] w-[18px] shrink-0" />
         <span className="whitespace-nowrap">{label}</span>
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-border bg-surface p-1 shadow-lg" role="menu">
+        <div className="absolute right-0 z-20 mt-1.5 w-64 rounded-xl border border-border bg-surface p-1.5 shadow-lg" role="menu">
           {SORT_OPTIONS.map((option) => (
             <button
               key={option.key}
               type="button"
               role="menuitem"
               onClick={() => { onChange(option.key); setOpen(false); }}
-              className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-surface-hover"
+              className="flex min-h-9 w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/30"
             >
               {option.label}
               {option.key === value && <Check className="h-4 w-4 text-brand-solid" />}
@@ -115,18 +190,20 @@ const RowMenu: React.FC<{ asset: CloudAsset; onDownload: () => void; onTrash: ()
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-text-primary"
-        aria-label={`Thao tác với ${asset.originalFilename}`}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+        aria-label={`Tùy chọn tệp ${asset.originalFilename}`}
         aria-expanded={open}
+        title="Tùy chọn tệp"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-border bg-surface p-1 shadow-lg" role="menu">
-          <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-hover" onClick={() => { onDownload(); setOpen(false); }}>
+        <div className="absolute right-0 z-20 mt-1.5 w-44 rounded-xl border border-border bg-surface p-1.5 shadow-lg" role="menu">
+          <button type="button" role="menuitem" className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/30" onClick={() => { onDownload(); setOpen(false); }}>
             <Download className="h-4 w-4" />Lưu về máy
           </button>
-          <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-danger hover:bg-surface-hover" onClick={() => { onTrash(); setOpen(false); }}>
+          <div className="my-1 border-t border-border/70" />
+          <button type="button" role="menuitem" className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-danger transition-colors hover:bg-danger/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-danger/25" onClick={() => { onTrash(); setOpen(false); }}>
             <Trash2 className="h-4 w-4" />Xóa
           </button>
         </div>
@@ -144,8 +221,14 @@ export const CloudManageView: React.FC<{
   quota: CloudQuota | null;
   assets: CloudAsset[];
   onChanged: () => Promise<void> | void;
-}> = ({ quota, assets, onChanged }) => {
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  conversationId?: string | null;
+}> = ({ quota, assets, onChanged, loading = false, error = null, onRetry, conversationId }) => {
   const navigate = useNavigate();
+  const cachedConversationId = useMemo(() => readCachedCloudConversationId(), []);
+  const cloudConversationId = conversationId ?? cachedConversationId;
   const [filter, setFilter] = useState<MediaFilter>("all");
   const [sort, setSort] = useState<SortKey>("date_desc");
   const [view, setView] = useState<ViewMode>("list");
@@ -206,14 +289,12 @@ export const CloudManageView: React.FC<{
     for (const asset of selected) {
       // ponytail: tải tuần tự — trình duyệt tự chặn nhiều download "cùng lúc" từ script,
       // song song không nhanh hơn mà dễ bị chặn popup.
-      // eslint-disable-next-line no-await-in-loop
       await downloadAsset(asset);
     }
   };
 
   const viewOriginalMessage = () => {
-    const conversationId = readCachedCloudConversationId();
-    if (conversationId) navigate(`${ROUTE_PATHS.CHAT}/${conversationId}`);
+    if (cloudConversationId) navigate(`${ROUTE_PATHS.CHAT}/${cloudConversationId}`);
   };
 
   const trashSelected = async () => {
@@ -222,7 +303,6 @@ export const CloudManageView: React.FC<{
       let failed = 0;
       for (const asset of selected) {
         try {
-          // eslint-disable-next-line no-await-in-loop
           await cloudApi.trash(asset.id);
         } catch {
           failed += 1;
@@ -251,14 +331,16 @@ export const CloudManageView: React.FC<{
         header={null}
         sidebar={
           <div className="hidden h-full min-h-0 flex-col gap-4 overflow-y-auto md:flex">
-            <CloudStorageCard quota={quota} />
+            <CloudStorageCard quota={quota} error={error} onRetry={onRetry} />
           </div>
         }
       >
-        <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden rounded-2xl border border-border bg-background p-4 sm:p-6">
+        <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-background p-4 sm:p-5">
           {/* 4 ô lọc theo loại, giống Zalo My Documents */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {MEDIA_TILES.map((tile) => {
+            {loading ? MEDIA_TILES.map((tile) => (
+              <div key={tile.key} className="h-[72px] animate-pulse rounded-xl border border-border/60 bg-surface-hover/60" />
+            )) : MEDIA_TILES.map((tile) => {
               const bytes = tile.quotaKey ? quota?.usedByType?.[tile.quotaKey] : undefined;
               const active = filter === tile.key;
               return (
@@ -266,15 +348,16 @@ export const CloudManageView: React.FC<{
                   key={tile.key}
                   type="button"
                   onClick={() => setFilter(active ? "all" : tile.key)}
-                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-                    active ? "border-brand-solid bg-brand-soft/40" : "border-border hover:bg-surface-hover"
+                  aria-pressed={active}
+                  className={`flex h-[72px] min-w-0 items-center gap-3 rounded-xl border px-3.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${
+                    active ? "border-brand-solid/45 bg-brand-soft/35" : "border-border bg-surface/40 hover:border-border-strong hover:bg-surface-hover"
                   }`}
                 >
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${active ? "bg-brand-solid text-white" : "bg-surface-hover text-text-muted"}`}>
+                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${active ? "bg-brand-soft text-brand-solid" : "bg-surface-hover text-text-muted"}`}>
                     {tile.icon}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-text-primary">{tile.label}</span>
+                    <span className="block truncate text-sm font-semibold text-text-primary">{tile.label}</span>
                     {bytes !== undefined && <span className="block text-xs text-text-muted">{formatFileSize(Number(bytes) || 0)}</span>}
                   </span>
                 </button>
@@ -284,38 +367,46 @@ export const CloudManageView: React.FC<{
 
           {/* Header: mặc định "Chọn" hoặc thanh hành động khi đang chọn */}
           {selectMode ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+            <div className="flex min-h-10 flex-wrap items-center justify-between gap-3 border-b border-border pb-2">
               <span className="text-sm font-medium text-text-primary">
                 Đã chọn {selected.length} mục ({formatFileSize(selectedBytes)})
               </span>
-              <div className="flex items-center gap-4">
-                <button type="button" disabled={!selected.length} onClick={() => void downloadSelected()} className="text-sm font-medium text-brand-solid hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" disabled={!selected.length} onClick={() => void downloadSelected()} className="rounded text-[13px] font-medium text-brand-solid hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
                   Lưu về máy
                 </button>
-                <button type="button" disabled={!selected.length} onClick={viewOriginalMessage} className="text-sm font-medium text-brand-solid hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
+                <button type="button" disabled={!selected.length || !cloudConversationId} onClick={viewOriginalMessage} className="rounded text-[13px] font-medium text-brand-solid hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
                   Xem tin nhắn gốc
                 </button>
-                <button type="button" disabled={!selected.length} onClick={() => setConfirmTrash(true)} className="text-sm font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
+                <button type="button" disabled={!selected.length} onClick={() => setConfirmTrash(true)} className="rounded text-[13px] font-medium text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline">
                   Xóa
                 </button>
-                <button type="button" onClick={exitSelectMode} className="text-sm font-medium text-text-muted hover:underline">
+                <button type="button" onClick={exitSelectMode} className="rounded text-[13px] font-medium text-text-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30">
                   Hủy
                 </button>
               </div>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-text-primary">Tất cả dữ liệu Hacom Cloud</h2>
-              <div className="flex flex-1 items-center justify-end gap-2">
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tệp" aria-label="Tìm tệp trong Hacom Cloud" className="max-w-[220px]" />
+              <h2 className="min-w-0 text-sm font-semibold text-text-primary">Tất cả dữ liệu Hacom Cloud</h2>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Tìm tệp"
+                  aria-label="Tìm tệp trong Hacom Cloud"
+                  leftIcon={<Search className="h-[18px] w-[18px]" />}
+                  containerClassName="w-full sm:w-[260px] sm:max-w-[260px]"
+                  className="h-10 rounded-[10px] text-[13px]"
+                />
                 <SortDropdown value={sort} onChange={setSort} />
                 <div className="hidden sm:block">
-                  <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-                    <button type="button" onClick={() => setView("list")} aria-label="Xem dạng danh sách" className={`flex h-7 w-7 items-center justify-center rounded-md ${view === "list" ? "bg-brand-soft text-brand-solid" : "text-text-muted hover:bg-surface-hover"}`}>
-                      <List className="h-4 w-4" />
+                  <div className="flex h-10 items-center gap-1 rounded-[10px] border border-border bg-surface p-1" role="group" aria-label="Kiểu hiển thị tệp">
+                    <button type="button" onClick={() => setView("list")} aria-label="Chuyển sang dạng danh sách" aria-pressed={view === "list"} className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${view === "list" ? "bg-brand-soft text-brand-solid" : "text-text-muted hover:bg-surface-hover hover:text-text-primary"}`}>
+                      <List className="h-[18px] w-[18px]" />
                     </button>
-                    <button type="button" onClick={() => setView("grid")} aria-label="Xem dạng lưới" className={`flex h-7 w-7 items-center justify-center rounded-md ${view === "grid" ? "bg-brand-soft text-brand-solid" : "text-text-muted hover:bg-surface-hover"}`}>
-                      <Grid3x2 className="h-4 w-4" />
+                    <button type="button" onClick={() => setView("grid")} aria-label="Chuyển sang dạng lưới" aria-pressed={view === "grid"} className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${view === "grid" ? "bg-brand-soft text-brand-solid" : "text-text-muted hover:bg-surface-hover hover:text-text-primary"}`}>
+                      <Grid3x2 className="h-[18px] w-[18px]" />
                     </button>
                   </div>
                 </div>
@@ -323,76 +414,114 @@ export const CloudManageView: React.FC<{
             </div>
           )}
 
-          {!selectMode && filtered.length > 0 && (
-            <label className="flex items-center gap-2 px-1 text-xs text-text-muted">
+          {!loading && !error && !selectMode && filtered.length > 0 && (
+            <div className="flex min-h-6 items-center px-1">
               <Checkbox
                 checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
                 onChange={() => { setSelectMode(true); toggleSelectAll(); }}
-                className="h-4 w-4"
+                label="Chọn"
+                containerClassName="w-auto"
               />
-              Chọn
-            </label>
+            </div>
           )}
 
           {/* Bảng / lưới nội dung */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-sm text-text-muted">
-                <File className="h-8 w-8" />
-                <span>{query.trim() ? "Không tìm thấy tệp phù hợp" : "Chưa có dữ liệu"}</span>
+          <div className="scrollbar-stable min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            {error ? (
+              <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+                <File className="h-8 w-8 text-text-muted" />
+                <p className="text-sm font-medium text-text-primary">Không thể tải danh sách tệp</p>
+                <p className="text-xs text-text-muted">Vui lòng kiểm tra kết nối và thử lại.</p>
+                {onRetry ? (
+                  <button type="button" onClick={onRetry} className="mt-1 inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-medium text-brand-solid transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30">
+                    <RefreshCw className="h-4 w-4" />Thử lại
+                  </button>
+                ) : null}
+              </div>
+            ) : loading ? (
+              <div aria-label="Đang tải danh sách tệp" className="space-y-px">
+                <div className="h-11 animate-pulse border-b border-border bg-surface-hover/50" />
+                {[1, 2, 3, 4, 5].map((item) => (
+                  <div key={item} className="flex h-[68px] items-center gap-3 border-b border-border/60 px-3">
+                    <div className="h-11 w-11 shrink-0 animate-pulse rounded-lg bg-surface-hover" />
+                    <div className="h-3.5 w-2/5 animate-pulse rounded bg-surface-hover" />
+                  </div>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-surface-hover text-text-muted"><File className="h-6 w-6" /></span>
+                <span className="text-sm font-medium text-text-primary">{query.trim() ? "Không tìm thấy tệp phù hợp" : "Chưa có tệp nào"}</span>
+                <span className="max-w-sm text-xs text-text-muted">{query.trim() ? "Hãy thử từ khóa khác." : "Tải tệp lên Hacom Cloud để lưu trữ và truy cập nhanh."}</span>
               </div>
             ) : view === "list" ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-text-muted">
-                    <th className="w-8 px-2 py-2" />
-                    <th className="px-2 py-2 font-medium">Tên</th>
-                    <th className="w-28 px-2 py-2 font-medium">Kích thước</th>
-                    <th className="w-32 px-2 py-2 font-medium">Ngày gửi</th>
-                    <th className="w-10 px-2 py-2" />
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-10" />
+                  <col />
+                  <col className="w-28" />
+                  <col className="w-32" />
+                  <col className="w-12" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-background">
+                  <tr className="h-11 border-b border-border bg-surface-hover/35 text-left text-xs font-semibold text-text-secondary">
+                    <th className="px-2" />
+                    <th className="px-2 font-semibold">Tên</th>
+                    <th className="px-2 font-semibold">Kích thước</th>
+                    <th className="px-2 font-semibold">Ngày gửi</th>
+                    <th className="px-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((asset) => (
-                    <tr key={asset.id} className="group border-b border-border/60 hover:bg-surface-hover">
-                      <td className="px-2 py-2">
-                        {selectMode && (
-                          <Checkbox checked={selectedIds.has(asset.id)} onChange={() => toggleSelected(asset.id)} aria-label={`Chọn ${asset.originalFilename}`} className="h-4 w-4" />
-                        )}
-                      </td>
-                      <td className="min-w-0 px-2 py-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <FileTypeIcon type={getFileIconType(asset.mimeType, asset.originalFilename)} className="h-6 w-6 shrink-0" />
-                          <span className="truncate" title={asset.originalFilename}>{asset.originalFilename}</span>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</td>
-                      <td className="px-2 py-2 text-text-muted">{formatRelativeDate(new Date(asset.createdAt))}</td>
-                      <td className="px-2 py-2">
-                        {!selectMode && <RowMenu asset={asset} onDownload={() => void downloadAsset(asset)} onTrash={() => void trashAsset(asset)} />}
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((asset) => {
+                    const selectedRow = selectedIds.has(asset.id);
+                    return (
+                      <tr key={asset.id} className={`group h-[68px] border-b border-border/60 transition-colors ${selectedRow ? "bg-brand-soft/30" : "hover:bg-surface-hover/70"}`}>
+                        <td className="px-2 align-middle">
+                          {selectMode && (
+                            <Checkbox checked={selectedRow} onChange={() => toggleSelected(asset.id)} aria-label={`Chọn ${asset.originalFilename}`} containerClassName="w-auto" />
+                          )}
+                        </td>
+                        <td className="min-w-0 overflow-hidden px-2 align-middle">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <CloudAssetThumbnail asset={asset} conversationId={cloudConversationId} />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-text-primary" title={asset.originalFilename}>{asset.originalFilename}</span>
+                              <span className="mt-0.5 block truncate text-xs text-text-muted">{getAssetTypeLabel(asset)}</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 align-middle text-[13px] tabular-nums text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</td>
+                        <td className="px-2 align-middle text-[13px] tabular-nums text-text-muted">{formatRelativeDate(new Date(asset.createdAt))}</td>
+                        <td className="px-2 align-middle">
+                          {!selectMode && <RowMenu asset={asset} onDownload={() => void downloadAsset(asset)} onTrash={() => void trashAsset(asset)} />}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {filtered.map((asset) => (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    onClick={() => (selectMode ? toggleSelected(asset.id) : void downloadAsset(asset))}
-                    className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-border/60 p-2 hover:bg-surface-hover"
-                  >
+                  <div key={asset.id} className={`group relative aspect-square min-w-0 rounded-xl border transition-colors ${selectedIds.has(asset.id) ? "border-brand-solid/45 bg-brand-soft/30" : "border-border/60 hover:bg-surface-hover"}`}>
                     {selectMode && (
-                      <span className="absolute left-2 top-2">
-                        <Checkbox checked={selectedIds.has(asset.id)} onChange={() => toggleSelected(asset.id)} aria-label={`Chọn ${asset.originalFilename}`} className="h-4 w-4" />
+                      <span className="absolute left-2 top-2 z-10">
+                        <Checkbox checked={selectedIds.has(asset.id)} onChange={() => toggleSelected(asset.id)} aria-label={`Chọn ${asset.originalFilename}`} containerClassName="w-auto" />
                       </span>
                     )}
-                    <FileTypeIcon type={getFileIconType(asset.mimeType, asset.originalFilename)} className="h-8 w-8" />
-                    <span className="line-clamp-2 w-full break-words text-center text-xs">{asset.originalFilename}</span>
-                    <span className="text-[11px] text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => (selectMode ? toggleSelected(asset.id) : void downloadAsset(asset))}
+                      aria-label={`${selectMode ? "Chọn" : "Tải"} ${asset.originalFilename}`}
+                      aria-pressed={selectMode ? selectedIds.has(asset.id) : undefined}
+                      className="flex h-full w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/30"
+                    >
+                      <CloudAssetThumbnail asset={asset} conversationId={cloudConversationId} size="grid" />
+                      <span className="line-clamp-2 w-full break-words text-center text-xs font-medium text-text-primary">{asset.originalFilename}</span>
+                      <span className="text-[11px] tabular-nums text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</span>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -417,7 +546,9 @@ export const CloudManageView: React.FC<{
 export const CloudManagePage: React.FC = () => {
   const [quota, setQuota] = useState<CloudQuota | null>(null);
   const [assets, setAssets] = useState<CloudAsset[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -425,13 +556,25 @@ export const CloudManagePage: React.FC = () => {
         cloudApi.ensure(),
         cloudApi.list({ includeTrashed: false, limit: 200 }),
       ]);
+      setConversationId(space.conversationId);
       setQuota(space.quota);
       setAssets(list.items);
+      setLoadError(null);
+    } catch {
+      setLoadError("Không thể tải dữ liệu Hacom Cloud.");
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const retry = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    void refresh();
+  }, [refresh]);
+
+  // Initial async fetch; state changes occur only after the network promise settles.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     const sync = () => { void refresh(); };
@@ -447,8 +590,17 @@ export const CloudManagePage: React.FC = () => {
     };
   }, [refresh]);
 
-  if (loading) return <PageSpinner />;
-  return <CloudManageView quota={quota} assets={assets} onChanged={refresh} />;
+  return (
+    <CloudManageView
+      quota={quota}
+      assets={assets}
+      onChanged={refresh}
+      loading={loading}
+      error={loadError}
+      onRetry={retry}
+      conversationId={conversationId}
+    />
+  );
 };
 
 export default CloudManagePage;

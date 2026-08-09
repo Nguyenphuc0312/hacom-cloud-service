@@ -57,9 +57,10 @@ const OfficeGlyph: React.FC<{
 }> = ({ color, label, title, className }) => (
   <svg
     viewBox="0 0 24 24"
-    // Mặc định chiếm trọn ô chứa (như Zalo); nơi nào cần cỡ cố định thì truyền
-    // className (vd "h-5 w-5") — đặt sau nên ghi đè được.
-    className={clsx("h-full w-full", className)}
+    // Chỉ dùng full-size khi caller không truyền kích thước. Ghép đồng thời
+    // `h-full w-full` với `h-* w-*` khiến thứ tự CSS của Tailwind thắng thứ tự
+    // class trong markup, từng làm glyph PDF giãn theo toàn bộ ô bảng.
+    className={className ?? "h-full w-full"}
     role="img"
     aria-label={title}
   >
@@ -203,7 +204,7 @@ export const FileTypeIcon: React.FC<FileTypeIconProps> = ({
   }
 
   const Icon = iconMap[type];
-  return <Icon className={clsx("h-6 w-6", colorMap[type], className)} />;
+  return <Icon className={clsx(className ?? "h-6 w-6", colorMap[type])} />;
 };
 
 export default FileTypeIcon;

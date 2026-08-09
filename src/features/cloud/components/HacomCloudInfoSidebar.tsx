@@ -141,8 +141,27 @@ export const CloudStorageCard: React.FC<{
   quota: CloudQuota | null;
   /** Bỏ trống khi card này đã nằm sẵn trong trang quản lý — không cần nút quay lại chính nó. */
   onManage?: () => void;
-}> = ({ quota, onManage }) => {
+  error?: string | null;
+  onRetry?: () => void;
+}> = ({ quota, onManage, error, onRetry }) => {
   if (!quota) {
+    if (error) {
+      return (
+        <section className="rounded-xl border border-border/70 bg-surface-hover/35 p-4">
+          <h3 className="text-sm font-semibold text-text-primary">Dung lượng lưu trữ</h3>
+          <p className="mt-2 text-xs text-text-muted">Không thể tải thông tin dung lượng.</p>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 text-sm font-medium text-brand-solid hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-solid"
+            >
+              Thử lại
+            </button>
+          ) : null}
+        </section>
+      );
+    }
     return <div className="h-[174px] animate-pulse rounded-xl border border-border/70 bg-surface-hover/50" aria-label="Đang tải dung lượng lưu trữ" />;
   }
 
@@ -158,7 +177,7 @@ export const CloudStorageCard: React.FC<{
         <h3 className="text-sm font-semibold">Dung lượng lưu trữ</h3>
         <span className="text-xs text-text-muted">{percent > 0 && percent < 0.1 ? "< 0,1%" : `${percent.toFixed(percent < 10 ? 1 : 0)}%`}</span>
       </div>
-      <p className="mt-2 text-base font-semibold">{formatBytes(used)} <span className="text-sm font-normal text-text-muted">đã dùng</span></p>
+      <p className="mt-2 text-base font-semibold text-text-primary">{formatBytes(used)} <span className="text-sm font-normal text-text-muted">đã dùng</span></p>
       <p className="text-xs text-text-muted">trên tổng dung lượng {formatBytes(quota.limitBytes)}</p>
       <StorageUsageBar usedBytes={used} limitBytes={quota.limitBytes} availableBytes={quota.availableBytes} usedByType={quota.usedByType} />
       {reservedNumber > 0 && <p className="mt-1 text-xs text-text-muted">Đang tải lên: {formatBytes(reservedNumber)} · Còn có thể dùng {formatBytes(quota.availableBytes)}</p>}
