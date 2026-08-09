@@ -55,6 +55,11 @@ const statusClass = (status: WorkflowStatus) => {
   return "border-slate-200 bg-slate-50 text-slate-700";
 };
 
+const currentApprovalStep = (request: LeaveRequest) =>
+  request.status === "SUBMITTED"
+    ? (request.approvalSteps?.find((step) => step.status === "SUBMITTED") ?? null)
+    : null;
+
 const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
@@ -131,6 +136,11 @@ const RequestRow: React.FC<{
       <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${statusClass(request.status)}`}>
         {statusLabel[request.status]}
       </span>
+      {currentApprovalStep(request) ? (
+        <div className="mt-1 text-xs text-[#64748b]">
+          Cap {currentApprovalStep(request)?.stepOrder}: {currentApprovalStep(request)?.stepName}
+        </div>
+      ) : null}
     </td>
     <td className="px-4 py-3 text-right">
       {request.status === "DRAFT" || request.status === "SUBMITTED" ? (
@@ -165,7 +175,9 @@ const ApprovalRow: React.FC<{
         </div>
       </div>
       <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-        Chờ duyệt
+        {currentApprovalStep(request)
+          ? `Cap ${currentApprovalStep(request)?.stepOrder}`
+          : "Cho duyet"}
       </span>
     </div>
     <div className="mt-2 text-sm text-[#475569]">

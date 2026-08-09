@@ -291,6 +291,19 @@ export interface LeaveRequest {
     employeeCode?: string | null;
     fullName?: string | null;
   } | null;
+  approvalSteps?: LeaveApprovalStep[];
+}
+
+export interface LeaveApprovalStep {
+  id: string;
+  leaveRequestId: string;
+  stepOrder: number;
+  stepCode: string;
+  stepName: string;
+  status: WorkflowStatus;
+  reviewerUserId?: string | null;
+  reviewedAt?: string | null;
+  note?: string | null;
 }
 
 export interface LeaveBalance {
