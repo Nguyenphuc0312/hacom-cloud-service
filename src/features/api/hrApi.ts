@@ -219,6 +219,44 @@ export interface MyTimesheetQuery {
   year: number;
 }
 
+export interface TeamTimesheetConfirmation {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  fullName: string;
+  unitName: string | null;
+  departmentName: string | null;
+  status: TimesheetConfirmationStatus;
+  confirmedAt: string | null;
+  disputedAt: string | null;
+  disputeNote: string | null;
+  snapshot: {
+    totalPaidDays: number | null;
+    totalLeaveDays: number | null;
+  };
+}
+
+export interface TeamTimesheetSummary {
+  total: number;
+  pending: number;
+  confirmed: number;
+  disputed: number;
+}
+
+export interface TeamTimesheetResponse {
+  period: MyTimesheetPeriod | null;
+  confirmations: TeamTimesheetConfirmation[];
+  summary: TeamTimesheetSummary;
+  reason?: "PERIOD_NOT_OPEN" | string;
+  message?: string | null;
+}
+
+export interface TeamTimesheetQuery {
+  periodId?: string;
+  month?: number;
+  year?: number;
+}
+
 const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
   payload && typeof payload === "object" && "success" in payload && payload.success === true
     ? (payload as { data: T }).data
@@ -293,6 +331,17 @@ export const hrApi = {
   ): Promise<MyTimesheetConfirmation> => {
     const response = await hrApiClient.post("/timesheet/me/dispute", params);
     return unwrapHrEnvelope<MyTimesheetConfirmation>(response.data);
+  },
+
+  getTeamTimesheet: async (
+    params: TeamTimesheetQuery,
+  ): Promise<TeamTimesheetResponse> => {
+    const query = new URLSearchParams();
+    if (params.periodId) query.set("periodId", params.periodId);
+    if (params.month) query.set("month", String(params.month));
+    if (params.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(`/team/timesheet?${query.toString()}`);
+    return unwrapHrEnvelope<TeamTimesheetResponse>(response.data);
   },
 };
 

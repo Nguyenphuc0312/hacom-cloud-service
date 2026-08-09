@@ -22,6 +22,7 @@ export const ROUTE_PATHS = {
   MAINTENANCE: "/maintenance",
   TASKS: "/tasks",
   TIMESHEET: "/timesheet",
+  TEAM_TIMESHEET: "/timesheet/team",
   CALENDAR: "/calendar",
   AI_ASSISTANT: "/ai-assistant",
   WORK_REPORT_DRAFTS: "/work-report-drafts",
