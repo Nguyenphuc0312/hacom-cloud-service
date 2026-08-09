@@ -63,7 +63,11 @@ test.describe.serial('Hacom Cloud browser state', () => {
     await expect(page.getByText(filename).first()).toBeVisible();
     expect(completeQuota?.reservedBytes).toBe('0');
     expect(BigInt(completeQuota?.usedBytes ?? '0')).toBeGreaterThan(0n);
-    await expect(page.getByRole('heading', { name: /Dung lượng lưu trữ/i })).toBeVisible();
+    const quotaHeading = page.getByRole('heading', { name: /Dung lượng lưu trữ/i });
+    if (!(await quotaHeading.isVisible())) {
+      await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
+    }
+    await expect(quotaHeading).toBeVisible();
     await page.reload();
     await expect(page.getByText(filename).first()).toBeVisible({ timeout: 20_000 });
   });
@@ -77,13 +81,22 @@ test.describe.serial('Hacom Cloud browser state', () => {
     });
     await expect(page.getByText(filename).first()).toBeVisible({ timeout: 20_000 });
 
-    await page.getByLabel(`Thao tác với ${filename}`).click();
+    const manageButton = page.getByRole('button', { name: /Xem và quản lý Hacom Cloud/i });
+    if (!(await manageButton.isVisible())) {
+      await page.getByRole('button', { name: 'Bật/tắt bảng thông tin' }).first().click();
+    }
+    await manageButton.click();
+    await page.waitForURL(/\/cloud\/manage$/);
+
+    const fileOptions = page.getByLabel(`Tùy chọn tệp ${filename}`);
+    await expect(fileOptions).toBeVisible({ timeout: 20_000 });
+    await fileOptions.click();
     await page.getByRole('menuitem', { name: 'Xóa' }).click();
-    const restoreButton = page.getByLabel(`Khôi phục ${filename}`);
-    await expect(restoreButton).toBeVisible();
-    await restoreButton.click();
-    await expect(page.getByLabel(`Thao tác với ${filename}`)).toBeVisible();
+    await expect(fileOptions).toBeHidden();
+
+    await page.getByRole('button', { name: 'Hoàn tác' }).click();
+    await expect(fileOptions).toBeVisible({ timeout: 20_000 });
     await page.reload();
-    await expect(page.getByLabel(`Thao tác với ${filename}`)).toBeVisible({ timeout: 20_000 });
+    await expect(fileOptions).toBeVisible({ timeout: 20_000 });
   });
 });

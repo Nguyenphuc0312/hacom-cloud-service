@@ -29,9 +29,9 @@ const composer = (page: Page) => page.locator('[data-testid="chat-composer-input
  */
 const infoPanelWidth = (page: Page) =>
   page.evaluate(() => {
-    const strong = Array.from(document.querySelectorAll('strong'))
+    const heading = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6, strong'))
       .find((el) => el.textContent?.trim() === 'Thông tin Hacom Cloud');
-    const aside = strong?.closest('aside');
+    const aside = heading?.closest('aside');
     return aside ? Math.round(aside.getBoundingClientRect().width) : 0;
   });
 

@@ -133,19 +133,26 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // fallback when the real server message (no attachment.url) replaces optimistic.
   const cachedBlobUrl = blobPreviewCache.get(attachment.id) ?? null;
 
-  // Always use the attachment's own URL as immediate fallback — shows before the batch
-  // thumbnail API responds and while the thumbnail pipeline is still processing.
-  // The batch thumbnail URL (when ready) takes priority via activeSource ordering.
-  const attachmentDirectUrl = resolvePublicResourceUrl(
-    attachment.thumbnailUrl ?? attachment.url,
-    // allowBlob: true lets the optimistic message display the local blob preview
-    // URL (from draft.previewUrl) before the server presigned URL arrives.
-    { context: 'image', allowBlob: true },
-  ) ?? cachedBlobUrl ?? null;
+  const attachmentThumbnailUrl = resolvePublicResourceUrl(
+    attachment.thumbnailUrl,
+    { context: "image", allowBlob: true },
+  );
+  const optimisticDirectUrl = attachment.url?.startsWith("blob:")
+    ? resolvePublicResourceUrl(attachment.url, {
+        context: "image",
+        allowBlob: true,
+      })
+    : null;
 
-  // Use thumbnail URL for display; fall back to attachment's own URL when batch API
-  // hasn't responded yet, is still processing, or has failed terminally.
-  const activeSource = thumbnailUrl?.url ?? attachmentDirectUrl ?? null;
+  // Timeline rendering is thumbnail-only. A persisted attachment's original URL
+  // must never be an eager fallback while the batch thumbnail request is pending.
+  // Optimistic local blobs remain available until the server message reconciles.
+  const activeSource =
+    thumbnailUrl?.url ??
+    attachmentThumbnailUrl ??
+    cachedBlobUrl ??
+    optimisticDirectUrl ??
+    null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
@@ -336,10 +343,49 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
               </button>
             </div>
           )}
-          {!isThumbnailPending && (
+          {!isThumbnailPending && !hasDisplayUrl && (
             <div className="absolute inset-0 flex items-center justify-center">
               <PhotoIcon className="h-12 w-12 text-text-muted" />
             </div>
+          )}
+
+          {hasDisplayUrl && (
+            <SafeImage
+              className={clsx(
+                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
+                isLoaded ? "opacity-100" : "opacity-0",
+                "hover:opacity-95",
+              )}
+              src={activeSource!}
+              alt={caption || attachment.fileName || t("chat:image.previewAlt")}
+              onClick={handleImageClick}
+              onLoad={(event, source, meta) => {
+                if (!activeSource) return;
+                const requestedAt = imageRequestedAtRef.current;
+                reportImagePerformance({
+                  kind: "image_painted",
+                  durationMs:
+                    requestedAt === null
+                      ? undefined
+                      : Math.round(performance.now() - requestedAt),
+                  width: event.currentTarget.naturalWidth,
+                  height: event.currentTarget.naturalHeight,
+                  renderedWidth: event.currentTarget.clientWidth,
+                  renderedHeight: event.currentTarget.clientHeight,
+                  decodeDurationMs: meta?.decodeDurationMs,
+                  ...getRedactedResourceTiming(source),
+                  outcome: "success",
+                });
+                setLoadedSource(activeSource);
+                setFailedSource((previous) =>
+                  previous === activeSource ? null : previous,
+                );
+              }}
+              onError={handleImageError}
+              fallback={null}
+              retryOnSignedUrlExpired
+              onRetrySource={() => void refreshThumbnail(true)}
+            />
           )}
 
           {/* HD badge */}
