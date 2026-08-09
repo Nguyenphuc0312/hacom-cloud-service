@@ -159,6 +159,71 @@ export interface AttendanceCalendarResponse {
   message?: string | null;
 }
 
+export type TimesheetPeriodStatus =
+  | "DRAFT"
+  | "PENDING_EMPLOYEE"
+  | "PENDING_HR"
+  | "CLOSED";
+
+export type TimesheetConfirmationStatus = "PENDING" | "CONFIRMED" | "DISPUTED";
+
+export interface MyTimesheetPeriod {
+  id: string;
+  month: number;
+  year: number;
+  status: TimesheetPeriodStatus;
+  confirmDeadline: string | null;
+}
+
+export interface MyTimesheetConfirmation {
+  id?: string;
+  periodId?: string;
+  employeeId?: string;
+  status: TimesheetConfirmationStatus;
+  confirmedAt: string | null;
+  disputeNote: string | null;
+  disputedAt?: string | null;
+  snapshotJson?: unknown;
+}
+
+export interface MyTimesheetDay {
+  date: string;
+  displaySymbol: string;
+  paidDays: number;
+  isWorkingDay: boolean;
+  holidayName: string | null;
+  firstPunch: string | null;
+  lastPunch: string | null;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  needsExplanation: boolean;
+}
+
+export interface MyTimesheetSummary {
+  totalPaidDays: number;
+  totalLeaveDays: number;
+  countBySymbol: Record<string, number>;
+}
+
+export interface MyTimesheetResponse {
+  period: MyTimesheetPeriod | null;
+  confirmation: MyTimesheetConfirmation | null;
+  days: MyTimesheetDay[];
+  summary: MyTimesheetSummary;
+  reason?: "PERIOD_NOT_OPEN" | "EMPLOYEE_NOT_LINKED" | string;
+  message?: string | null;
+}
+
+export interface MyTimesheetQuery {
+  month: number;
+  year: number;
+}
+
+const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
+  payload && typeof payload === "object" && "success" in payload && payload.success === true
+    ? (payload as { data: T }).data
+    : (payload as T);
+
 /**
  * HR API endpoints
  */
@@ -206,6 +271,28 @@ export const hrApi = {
     } catch {
       return false;
     }
+  },
+
+  getMyTimesheet: async (params: MyTimesheetQuery): Promise<MyTimesheetResponse> => {
+    const query = new URLSearchParams();
+    query.set("month", String(params.month));
+    query.set("year", String(params.year));
+    const response = await hrApiClient.get(`/timesheet/me?${query.toString()}`);
+    return unwrapHrEnvelope<MyTimesheetResponse>(response.data);
+  },
+
+  confirmMyTimesheet: async (
+    params: MyTimesheetQuery,
+  ): Promise<MyTimesheetConfirmation> => {
+    const response = await hrApiClient.post("/timesheet/me/confirm", params);
+    return unwrapHrEnvelope<MyTimesheetConfirmation>(response.data);
+  },
+
+  disputeMyTimesheet: async (
+    params: MyTimesheetQuery & { note: string },
+  ): Promise<MyTimesheetConfirmation> => {
+    const response = await hrApiClient.post("/timesheet/me/dispute", params);
+    return unwrapHrEnvelope<MyTimesheetConfirmation>(response.data);
   },
 };
 
