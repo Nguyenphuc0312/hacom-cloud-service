@@ -287,6 +287,9 @@ export interface LeaveRequest {
   totalDays: number;
   reason?: string | null;
   attachmentUrl?: string | null;
+  noticeRequiredDays?: number | null;
+  noticeActualDays?: number | null;
+  lateSubmission?: boolean;
   status: WorkflowStatus;
   approverId?: string | null;
   createdAt: string;

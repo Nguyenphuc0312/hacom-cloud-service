@@ -73,6 +73,16 @@ const halfDaySessionLabel = (value?: LeaveHalfDaySession | null) => {
   return "Ca ngay";
 };
 
+const NoticeWarning: React.FC<{ request: LeaveRequest }> = ({ request }) => {
+  if (!request.lateSubmission) return null;
+
+  return (
+    <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+      Gui muon: {request.noticeActualDays ?? "-"} / {request.noticeRequiredDays ?? "-"} ngay bao truoc
+    </div>
+  );
+};
+
 const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
@@ -152,6 +162,7 @@ const RequestRow: React.FC<{
       <div className="mt-1 text-xs text-[#64748b]">
         Buoi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
       </div>
+      <NoticeWarning request={request} />
     </td>
     <td className="min-w-[220px] px-4 py-3 text-sm text-[#475569]">
       {request.reason || "-"}
@@ -210,6 +221,7 @@ const ApprovalRow: React.FC<{
     <div className="mt-1 text-xs text-[#64748b]">
       Buoi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
     </div>
+    <NoticeWarning request={request} />
     {request.reason ? (
       <div className="mt-1 line-clamp-2 text-sm text-[#64748b]">{request.reason}</div>
     ) : null}
