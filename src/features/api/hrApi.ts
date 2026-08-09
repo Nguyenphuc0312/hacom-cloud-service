@@ -140,6 +140,7 @@ export interface AttendanceCalendarDay {
   fullName?: string | null;
   firstPunch?: string | null;
   lastPunch?: string | null;
+  displaySymbol?: string | null;
   totalTime?: string | null;
   totalMinutes?: number | null;
   classificationStatus?: ClassificationStatus | null;
@@ -158,6 +159,252 @@ export interface AttendanceCalendarResponse {
   reason?: string | null;
   message?: string | null;
 }
+
+export type TimesheetPeriodStatus =
+  | "DRAFT"
+  | "PENDING_EMPLOYEE"
+  | "PENDING_HR"
+  | "CLOSED";
+
+export type TimesheetConfirmationStatus = "PENDING" | "CONFIRMED" | "DISPUTED";
+
+export interface MyTimesheetPeriod {
+  id: string;
+  month: number;
+  year: number;
+  status: TimesheetPeriodStatus;
+  confirmDeadline: string | null;
+}
+
+export interface MyTimesheetConfirmation {
+  id?: string;
+  periodId?: string;
+  employeeId?: string;
+  status: TimesheetConfirmationStatus;
+  confirmedAt: string | null;
+  disputeNote: string | null;
+  disputedAt?: string | null;
+  snapshotJson?: unknown;
+}
+
+export interface MyTimesheetDay {
+  id?: string;
+  date: string;
+  displaySymbol: string;
+  paidDays: number;
+  isWorkingDay: boolean;
+  holidayName: string | null;
+  firstPunch: string | null;
+  lastPunch: string | null;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  needsExplanation: boolean;
+}
+
+export interface MyTimesheetSummary {
+  totalPaidDays: number;
+  totalLeaveDays: number;
+  countBySymbol: Record<string, number>;
+}
+
+export interface MyTimesheetResponse {
+  period: MyTimesheetPeriod | null;
+  confirmation: MyTimesheetConfirmation | null;
+  days: MyTimesheetDay[];
+  summary: MyTimesheetSummary;
+  reason?: "PERIOD_NOT_OPEN" | "EMPLOYEE_NOT_LINKED" | string;
+  message?: string | null;
+}
+
+export interface MyTimesheetQuery {
+  month: number;
+  year: number;
+}
+
+export interface TeamTimesheetConfirmation {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  fullName: string;
+  unitName: string | null;
+  departmentName: string | null;
+  status: TimesheetConfirmationStatus;
+  confirmedAt: string | null;
+  disputedAt: string | null;
+  disputeNote: string | null;
+  snapshot: {
+    totalPaidDays: number | null;
+    totalLeaveDays: number | null;
+  };
+}
+
+export interface TeamTimesheetSummary {
+  total: number;
+  pending: number;
+  confirmed: number;
+  disputed: number;
+}
+
+export interface TeamTimesheetResponse {
+  period: MyTimesheetPeriod | null;
+  confirmations: TeamTimesheetConfirmation[];
+  summary: TeamTimesheetSummary;
+  reason?: "PERIOD_NOT_OPEN" | string;
+  message?: string | null;
+}
+
+export interface TeamTimesheetQuery {
+  periodId?: string;
+  month?: number;
+  year?: number;
+}
+
+export type LeaveType =
+  | "ANNUAL"
+  | "SICK"
+  | "UNPAID"
+  | "MARRIAGE"
+  | "MATERNITY"
+  | "OTHER";
+
+export type WorkflowStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export type LeaveHalfDaySession = "FULL_DAY" | "MORNING" | "AFTERNOON";
+
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  startHalfDaySession?: LeaveHalfDaySession;
+  endHalfDaySession?: LeaveHalfDaySession;
+  totalDays: number;
+  reason?: string | null;
+  attachmentUrl?: string | null;
+  noticeRequiredDays?: number | null;
+  noticeActualDays?: number | null;
+  lateSubmission?: boolean;
+  status: WorkflowStatus;
+  approverId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employee?: {
+    id: string;
+    employeeCode?: string | null;
+    fullName?: string | null;
+  } | null;
+  approvalSteps?: LeaveApprovalStep[];
+}
+
+export interface LeaveApprovalStep {
+  id: string;
+  leaveRequestId: string;
+  stepOrder: number;
+  stepCode: string;
+  stepName: string;
+  status: WorkflowStatus;
+  reviewerUserId?: string | null;
+  reviewedAt?: string | null;
+  note?: string | null;
+}
+
+export interface LeaveBalance {
+  leaveType: Extract<LeaveType, "ANNUAL" | "SICK" | "UNPAID" | "OTHER">;
+  label: string;
+  entitlementDays: number | null;
+  usedDays: number;
+  pendingDays: number;
+  remainingDays: number | null;
+  source: "TIMESHEET_P_SYMBOL" | "APPROVED_LEAVE_REQUESTS" | string;
+  balanceStatus: "PENDING_HR_CSV_RECONCILIATION" | string;
+}
+
+export interface MyLeaveResponse {
+  year: number;
+  employeeId: string | null;
+  mode: "TRIAL_PENDING_CSV_RECONCILIATION" | "EMPLOYEE_NOT_LINKED" | string;
+  balances: LeaveBalance[];
+  requests: LeaveRequest[];
+  reason?: "EMPLOYEE_NOT_LINKED" | string;
+  message?: string | null;
+}
+
+export interface CreateMyLeaveRequestPayload {
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  startHalfDaySession?: LeaveHalfDaySession;
+  endHalfDaySession?: LeaveHalfDaySession;
+  totalDays: number;
+  reason?: string;
+  attachmentUrl?: string;
+}
+
+export interface LeaveRequestListResponse {
+  data: LeaveRequest[];
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export type AttendanceExplanationType =
+  | "MISSING_PUNCH"
+  | "LATE"
+  | "EARLY_LEAVE"
+  | "OUT_OF_OFFICE"
+  | "OTHER";
+
+export interface AttendanceExplanation {
+  id: string;
+  employeeId: string;
+  timesheetDayId: string;
+  type: AttendanceExplanationType;
+  reason: string;
+  status: WorkflowStatus;
+  reviewerId?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  employee?: {
+    employeeCode: string;
+    fullName: string;
+  };
+  timesheetDay?: {
+    id?: string;
+    workDate: string;
+    displaySymbol?: string | null;
+    firstPunch?: string | null;
+    lastPunch?: string | null;
+    needsExplanation?: boolean;
+    isLocked?: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAttendanceExplanationPayload {
+  timesheetDayId: string;
+  type: AttendanceExplanationType;
+  reason: string;
+}
+
+export interface AttendanceExplanationListResponse {
+  items: AttendanceExplanation[];
+  reason?: "EMPLOYEE_NOT_LINKED" | string;
+}
+
+const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
+  payload && typeof payload === "object" && "success" in payload && payload.success === true
+    ? (payload as { data: T }).data
+    : (payload as T);
 
 /**
  * HR API endpoints
@@ -206,6 +453,125 @@ export const hrApi = {
     } catch {
       return false;
     }
+  },
+
+  getMyTimesheet: async (params: MyTimesheetQuery): Promise<MyTimesheetResponse> => {
+    const query = new URLSearchParams();
+    query.set("month", String(params.month));
+    query.set("year", String(params.year));
+    const response = await hrApiClient.get(`/timesheet/me?${query.toString()}`);
+    return unwrapHrEnvelope<MyTimesheetResponse>(response.data);
+  },
+
+  confirmMyTimesheet: async (
+    params: MyTimesheetQuery,
+  ): Promise<MyTimesheetConfirmation> => {
+    const response = await hrApiClient.post("/timesheet/me/confirm", params);
+    return unwrapHrEnvelope<MyTimesheetConfirmation>(response.data);
+  },
+
+  disputeMyTimesheet: async (
+    params: MyTimesheetQuery & { note: string },
+  ): Promise<MyTimesheetConfirmation> => {
+    const response = await hrApiClient.post("/timesheet/me/dispute", params);
+    return unwrapHrEnvelope<MyTimesheetConfirmation>(response.data);
+  },
+
+  getTeamTimesheet: async (
+    params: TeamTimesheetQuery,
+  ): Promise<TeamTimesheetResponse> => {
+    const query = new URLSearchParams();
+    if (params.periodId) query.set("periodId", params.periodId);
+    if (params.month) query.set("month", String(params.month));
+    if (params.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(`/team/timesheet?${query.toString()}`);
+    return unwrapHrEnvelope<TeamTimesheetResponse>(response.data);
+  },
+
+  getMyLeave: async (params?: { year?: number }): Promise<MyLeaveResponse> => {
+    const query = new URLSearchParams();
+    if (params?.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(
+      `/leave/me${query.toString() ? `?${query.toString()}` : ""}`
+    );
+    return unwrapHrEnvelope<MyLeaveResponse>(response.data);
+  },
+
+  createMyLeaveRequest: async (
+    payload: CreateMyLeaveRequestPayload,
+  ): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post("/leave/me/requests", payload);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  cancelMyLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/me/requests/${id}/cancel`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  getPendingLeaveRequests: async (): Promise<LeaveRequestListResponse> => {
+    const query = new URLSearchParams({
+      status: "SUBMITTED",
+      page: "1",
+      pageSize: "5",
+    });
+    const response = await hrApiClient.get(`/leave/requests?${query.toString()}`);
+    return unwrapHrEnvelope<LeaveRequestListResponse>(response.data);
+  },
+
+  approveLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/requests/${id}/approve`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  rejectLeaveRequest: async (id: string): Promise<LeaveRequest> => {
+    const response = await hrApiClient.post(`/leave/requests/${id}/reject`);
+    return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  createAttendanceExplanation: async (
+    payload: CreateAttendanceExplanationPayload,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post("/attendance/explanations/me", payload);
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
+  },
+
+  getMyAttendanceExplanations: async (params?: {
+    month?: number;
+    year?: number;
+  }): Promise<AttendanceExplanationListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.month) query.set("month", String(params.month));
+    if (params?.year) query.set("year", String(params.year));
+    const response = await hrApiClient.get(
+      `/attendance/explanations/me${query.toString() ? `?${query.toString()}` : ""}`
+    );
+    return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
+  },
+
+  getPendingAttendanceExplanations: async (): Promise<AttendanceExplanationListResponse> => {
+    const response = await hrApiClient.get("/attendance/explanations/pending");
+    return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
+  },
+
+  approveAttendanceExplanation: async (
+    id: string,
+    note?: string,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post(`/attendance/explanations/${id}/approve`, {
+      note,
+    });
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
+  },
+
+  rejectAttendanceExplanation: async (
+    id: string,
+    note?: string,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post(`/attendance/explanations/${id}/reject`, {
+      note,
+    });
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 };
 
