@@ -140,6 +140,7 @@ export interface AttendanceCalendarDay {
   fullName?: string | null;
   firstPunch?: string | null;
   lastPunch?: string | null;
+  displaySymbol?: string | null;
   totalTime?: string | null;
   totalMinutes?: number | null;
   classificationStatus?: ClassificationStatus | null;

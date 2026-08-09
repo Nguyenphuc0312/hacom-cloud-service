@@ -41,6 +41,7 @@ interface AttendanceDay {
   date: string;
   firstPunch?: string | null;
   lastPunch?: string | null;
+  displaySymbol?: string | null;
   totalTime?: string | null;
 }
 
@@ -128,6 +129,7 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
+          const attendanceSymbol = attendance?.displaySymbol?.trim();
           const isWeekend = index >= 5;
           return (
             <button
@@ -164,7 +166,14 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
               </div>
               {/* Luôn giữ chỗ cho vùng chấm công để các cột cao bằng nhau (cân đối header) */}
               <div className="mt-0.5 h-[22px] space-y-px text-[9px] leading-tight text-emerald-600 dark:text-emerald-400">
-                {attendance?.firstPunch || attendance?.lastPunch ? (
+                {attendanceSymbol ? (
+                  <>
+                    <div className="truncate font-semibold">{attendanceSymbol}</div>
+                    <div className="truncate">
+                      {attendance?.firstPunch ?? "--:--"} - {attendance?.lastPunch ?? "--:--"}
+                    </div>
+                  </>
+                ) : attendance?.firstPunch || attendance?.lastPunch ? (
                   <>
                     <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
                     <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
