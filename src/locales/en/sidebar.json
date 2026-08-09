@@ -127,6 +127,7 @@
   "rail": {
     "messages": "Messages",
     "contacts": "Contacts",
+    "cloud": "Cloud",
     "tasks": "Tasks",
     "timesheet": "Timesheet",
     "leave": "Leave",

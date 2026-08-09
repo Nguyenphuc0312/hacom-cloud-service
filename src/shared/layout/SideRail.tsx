@@ -78,7 +78,7 @@ const railItems: SideRailItem[] = [
   },
   // Cloud của tôi là một hội thoại nên nó sống ở /chat/<id>; /cloud chỉ là lối tắt
   // giải id rồi chuyển hướng (dùng khi chưa biết id).
-  { id: "cloud", label: "Cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
+  { id: "cloud", label: "sidebar:rail.cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
   {
     id: "timesheet",
