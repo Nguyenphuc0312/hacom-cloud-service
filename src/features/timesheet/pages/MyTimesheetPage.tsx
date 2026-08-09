@@ -133,6 +133,31 @@ const DayCell: React.FC<{ day: MyTimesheetDay }> = ({ day }) => {
   );
 };
 
+const inferExplanationType = (day: MyTimesheetDay) => {
+  if (!day.firstPunch || !day.lastPunch) return "MISSING_PUNCH" as const;
+  if (day.lateMinutes > 0) return "LATE" as const;
+  if (day.earlyLeaveMinutes > 0) return "EARLY_LEAVE" as const;
+  return "OTHER" as const;
+};
+
+const ExplainableDayCell: React.FC<{
+  day: MyTimesheetDay;
+  onExplain: (day: MyTimesheetDay) => void;
+}> = ({ day, onExplain }) => (
+  <div className="relative">
+    <DayCell day={day} />
+    {day.needsExplanation && day.id ? (
+      <button
+        type="button"
+        className="absolute bottom-2 right-2 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 shadow-sm hover:bg-amber-50"
+        onClick={() => onExplain(day)}
+      >
+        Giải trình
+      </button>
+    ) : null}
+  </div>
+);
+
 const SummaryTile: React.FC<{ label: string; value: string; tone?: string }> = ({
   label,
   value,
@@ -158,6 +183,9 @@ export const MyTimesheetPage: React.FC = () => {
   });
   const [disputeNote, setDisputeNote] = React.useState("");
   const [submitting, setSubmitting] = React.useState<"confirm" | "dispute" | null>(null);
+  const [explainingDay, setExplainingDay] = React.useState<MyTimesheetDay | null>(null);
+  const [explanationReason, setExplanationReason] = React.useState("");
+  const [submittingExplanation, setSubmittingExplanation] = React.useState(false);
 
   const loadTimesheet = React.useCallback(async () => {
     setState((current) => ({ status: "loading", data: current.data, error: null }));
@@ -219,6 +247,33 @@ export const MyTimesheetPage: React.FC = () => {
       toast.error(extractErrorMessage(error));
     } finally {
       setSubmitting(null);
+    }
+  }
+
+  async function handleSubmitExplanation() {
+    if (!explainingDay?.id) {
+      toast.error("Không xác định được ngày cần giải trình.");
+      return;
+    }
+    if (explanationReason.trim().length < 5) {
+      toast.error("Nội dung giải trình quá ngắn.");
+      return;
+    }
+    setSubmittingExplanation(true);
+    try {
+      await hrApi.createAttendanceExplanation({
+        timesheetDayId: explainingDay.id,
+        type: inferExplanationType(explainingDay),
+        reason: explanationReason.trim(),
+      });
+      toast.success("Đã gửi giải trình chấm công.");
+      setExplainingDay(null);
+      setExplanationReason("");
+      await loadTimesheet();
+    } catch (error) {
+      toast.error(extractErrorMessage(error));
+    } finally {
+      setSubmittingExplanation(false);
     }
   }
 
@@ -341,7 +396,14 @@ export const MyTimesheetPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                 {days.map((day) => (
-                  <DayCell key={day.date} day={day} />
+                  <ExplainableDayCell
+                    key={day.date}
+                    day={day}
+                    onExplain={(item) => {
+                      setExplainingDay(item);
+                      setExplanationReason("");
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -408,6 +470,46 @@ export const MyTimesheetPage: React.FC = () => {
                 {submitting === "dispute" ? "Đang gửi" : "Gửi HR"}
               </button>
             </div>
+
+            {explainingDay ? (
+              <div className="rounded-lg border border-amber-200 bg-white p-4">
+                <div className="text-sm font-semibold text-[#0f172a]">
+                  Giải trình ngày {dayNumber(explainingDay.date)}
+                </div>
+                <div className="mt-2 text-xs text-[#64748b]">
+                  {explainingDay.firstPunch ?? "--:--"} - {explainingDay.lastPunch ?? "--:--"}
+                </div>
+                <textarea
+                  value={explanationReason}
+                  onChange={(event) => setExplanationReason(event.currentTarget.value)}
+                  rows={5}
+                  maxLength={1000}
+                  className="mt-3 w-full resize-none rounded-lg border border-[#d7dce3] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
+                  placeholder="Nội dung giải trình"
+                />
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#1565C0] px-4 text-sm font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+                    disabled={submittingExplanation}
+                    onClick={() => void handleSubmitExplanation()}
+                  >
+                    <Send size={16} aria-hidden="true" />
+                    {submittingExplanation ? "Đang gửi" : "Gửi"}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center rounded-lg border border-[#d7dce3] bg-white px-4 text-sm font-semibold text-[#334155] hover:bg-[#f8fbff]"
+                    onClick={() => {
+                      setExplainingDay(null);
+                      setExplanationReason("");
+                    }}
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </aside>
         </section>
       </div>

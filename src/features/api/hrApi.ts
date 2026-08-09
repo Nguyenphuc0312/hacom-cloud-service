@@ -188,6 +188,7 @@ export interface MyTimesheetConfirmation {
 }
 
 export interface MyTimesheetDay {
+  id?: string;
   date: string;
   displaySymbol: string;
   paidDays: number;
@@ -331,6 +332,33 @@ export interface LeaveRequestListResponse {
   };
 }
 
+export type AttendanceExplanationType =
+  | "MISSING_PUNCH"
+  | "LATE"
+  | "EARLY_LEAVE"
+  | "OUT_OF_OFFICE"
+  | "OTHER";
+
+export interface AttendanceExplanation {
+  id: string;
+  employeeId: string;
+  timesheetDayId: string;
+  type: AttendanceExplanationType;
+  reason: string;
+  status: WorkflowStatus;
+  reviewerId?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAttendanceExplanationPayload {
+  timesheetDayId: string;
+  type: AttendanceExplanationType;
+  reason: string;
+}
+
 const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
   payload && typeof payload === "object" && "success" in payload && payload.success === true
     ? (payload as { data: T }).data
@@ -457,6 +485,13 @@ export const hrApi = {
   rejectLeaveRequest: async (id: string): Promise<LeaveRequest> => {
     const response = await hrApiClient.post(`/leave/requests/${id}/reject`);
     return unwrapHrEnvelope<LeaveRequest>(response.data);
+  },
+
+  createAttendanceExplanation: async (
+    payload: CreateAttendanceExplanationPayload,
+  ): Promise<AttendanceExplanation> => {
+    const response = await hrApiClient.post("/attendance/explanations/me", payload);
+    return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 };
 
