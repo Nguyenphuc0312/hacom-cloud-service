@@ -127,19 +127,10 @@ for (const file of sourceTextFiles) {
 const rawConsoleRegex = /\bconsole\.(debug|info|log|warn|error)\s*\(/;
 const allowedConsoleFiles = new Set([
   "src/utils/logger.ts",
+  // Dedicated instrumentation/reporting wrappers. Production code should import
+  // these modules instead of calling console directly.
   "src/utils/apiPerfLogger.ts",
   "src/utils/errorReporter.ts",
-  "src/components/input/MessageInput.tsx",
-  "src/components/layout/ChatWindow.tsx",
-  "src/components/preview/PdfJsViewer.tsx",
-  "src/components/ui/UserSearchModal.tsx",
-  "src/features/audio/useAudioRecorder.ts",
-  "src/features/calendar/components/WeeklyCalendarWidget.tsx",
-  "src/features/calendar/hooks/useCalendarEventMutations.ts",
-  "src/features/calendar/pages/CalendarPage.tsx",
-  "src/features/chat/hooks/useChatUserSearch.ts",
-  "src/features/realtime/realtimeMiddleware.ts",
-  "src/stores/calendarStore.ts",
 ]);
 const blockingDialogRegex = /\bwindow\.(alert|confirm)\s*\(/;
 const rawErrorStackRegex = /\berror\.stack\b|\b\w+Error\.stack\b/;
@@ -148,9 +139,6 @@ const allowedErrorStackFiles = new Set([
   "src/components/error/AppErrorBoundary.tsx",
   "src/components/error/FeatureErrorBoundary.tsx",
   "src/utils/errorReporter.ts",
-]);
-const allowedBlockingDialogFiles = new Set([
-  "src/features/personal-ai/pages/PersonalAiWorkspacePage.tsx",
 ]);
 
 for (const file of sourceTextFiles) {
@@ -174,36 +162,69 @@ for (const file of sourceTextFiles) {
   }
 }
 
-const messageListCandidates = [
-  "src/components/chat/MessageList.tsx",
+const conversationViewportPath = join(
+  root,
   "src/components/chat/ConversationViewport.tsx",
+);
+const virtualTimelinePath = join(
+  root,
   "src/features/chat/simple-virtual-timeline/SimpleVirtualizedChatTimeline.tsx",
-];
-const messageListPath = messageListCandidates
-  .map((candidate) => join(root, candidate))
-  .find((candidate) => existsSync(candidate));
+);
 
-if (!messageListPath) {
-  fail("Chat timeline component is missing from the frontend source tree");
-} else {
-  const messageListText = readFileSync(messageListPath, "utf8");
+if (!existsSync(conversationViewportPath)) {
+  fail("Chat timeline gate target is missing: src/components/chat/ConversationViewport.tsx");
+}
+
+if (!existsSync(virtualTimelinePath)) {
+  fail(
+    "Chat timeline gate target is missing: src/features/chat/simple-virtual-timeline/SimpleVirtualizedChatTimeline.tsx",
+  );
+}
+
+const conversationViewportText = existsSync(conversationViewportPath)
+  ? readFileSync(conversationViewportPath, "utf8")
+  : "";
+const virtualTimelineText = existsSync(virtualTimelinePath)
+  ? readFileSync(virtualTimelinePath, "utf8")
+  : "";
+
+if (
+  !conversationViewportText.includes("useConversationMessagesRTK") ||
+  !conversationViewportText.includes("useConversationMessagesRTK(conversation.id)")
+) {
+  fail(
+    "ConversationViewport must read active timeline through useConversationMessagesRTK(conversation.id)",
+  );
+}
+
+if (
+  !conversationViewportText.includes("<SimpleVirtualizedChatTimeline") ||
+  !conversationViewportText.includes("messages={messages}")
+) {
+  fail("ConversationViewport must pass RTK messages into SimpleVirtualizedChatTimeline");
+}
+
+if (
+  !virtualTimelineText.includes("useConversationTimelineRows") ||
+  !virtualTimelineText.includes("useVirtualizer")
+) {
+  fail(
+    "SimpleVirtualizedChatTimeline must derive timeline rows and render through useVirtualizer",
+  );
+}
+
+for (const legacyTimelineSelector of [
+  "useMessagesByConversation",
+  "useCurrentMessages",
+  "useMessages(",
+]) {
   if (
-    !messageListText.includes("useConversationMessagesRTK") &&
-    !sourceTextFiles.some(
-      ({ text }) => text.includes("useConversationMessagesRTK"),
-    )
+    conversationViewportText.includes(legacyTimelineSelector) ||
+    virtualTimelineText.includes(legacyTimelineSelector)
   ) {
-    fail("Chat timeline must read active messages through useConversationMessagesRTK");
-  }
-
-  for (const legacyTimelineSelector of [
-    "useMessagesByConversation",
-    "useCurrentMessages",
-    "useMessages(",
-  ]) {
-    if (messageListText.includes(legacyTimelineSelector)) {
-      fail(`Chat timeline still references legacy message selector: ${legacyTimelineSelector}`);
-    }
+    fail(
+      `Production chat timeline still references legacy message selector: ${legacyTimelineSelector}`,
+    );
   }
 }
 

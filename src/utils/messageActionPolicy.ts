@@ -32,6 +32,11 @@ export interface MessageActionPolicyInput {
   canEdit?: boolean;
   /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
   canRecallOthers?: boolean;
+  /**
+   * Cloud cá nhân: media chiếm dung lượng giữ luồng xóa như thường (thùng rác);
+   * ghi chú/link chỉ có đúng 1 nút "Xóa" — bấm là mất vĩnh viễn.
+   */
+  isPersonalCloud?: boolean;
 }
 
 interface ActionCandidate {
@@ -96,6 +101,18 @@ const canEditMessage = (message: Message): boolean =>
   !isFailedMessage(message) &&
   Boolean(message.content?.trim());
 
+// Tin upload chiếm dung lượng Cloud (khớp mediaTypeFor của BE) — đi luồng
+// thùng rác như cũ; còn lại (ghi chú/link) xóa vĩnh viễn 1 thao tác.
+const CLOUD_MEDIA_TYPES = new Set<MessageType>([
+  MessageType.IMAGE,
+  MessageType.VIDEO,
+  MessageType.AUDIO,
+  MessageType.FILE,
+]);
+
+export const isCloudMediaMessage = (message: Pick<Message, "type">): boolean =>
+  CLOUD_MEDIA_TYPES.has(message.type);
+
 // Zalo rule: thu hồi chỉ trong 24h sau khi gửi; quá hạn chỉ còn "Xóa chỉ ở phía tôi".
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -115,6 +132,7 @@ const getActionCandidates = ({
   canDelete = false,
   canEdit = false,
   canRecallOthers = false,
+  isPersonalCloud = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -197,6 +215,18 @@ const getActionCandidates = ({
   }
 
   if (canDelete && canDeleteMessage(message)) {
+    if (isPersonalCloud && !isCloudMediaMessage(message)) {
+      // Cloud: ghi chú/link không chiếm dung lượng → đúng 1 nút "Xóa" (nhãn
+      // override ở MessageCluster), bấm là mất vĩnh viễn. Media rơi xuống
+      // nhánh thường bên dưới, giữ luồng thùng rác như cũ.
+      candidates.push({
+        id: "deleteForMe",
+        menuOrder: 3,
+        railEligible: false,
+        menuEligible: true,
+      });
+      return candidates;
+    }
     if (isOwn && isWithinRecallWindow(message)) {
       candidates.push({
         id: "recall",

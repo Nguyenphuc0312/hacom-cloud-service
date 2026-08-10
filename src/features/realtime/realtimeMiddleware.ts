@@ -21,6 +21,7 @@ import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessag
 import { useChatStore } from "../../stores";
 import { markChatPerformance } from "../../utils/chatPerformance";
 import { logMessageDebug } from "../../utils/messageDebug";
+import { logger } from "../../utils/logger";
 import {
   createRealtimeBatchCoordinator,
   type RealtimeBatchCoordinator,
@@ -262,7 +263,9 @@ export const realtimeMiddleware: Middleware<
 
   if (realtimeMessageUpdated.match(action)) {
     if (!action.payload.conversationId) {
-      console.warn("[realtimeMiddleware] realtimeMessageUpdated received without conversationId — skipped", action.payload);
+      logger.warn("realtime-middleware", "message_update_missing_conversation_id", {
+        payload: action.payload,
+      });
       return result;
     }
     const patch = storeApi.dispatch(

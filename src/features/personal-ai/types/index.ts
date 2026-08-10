@@ -72,6 +72,30 @@ export interface PersonalChatMessage {
    * nút "Xem chi tiết" thay cho markdown thuần. Rỗng/thiếu → render text thường.
    */
   calendarEvents?: CalendarEventRow[];
+  /**
+   * SSE `work_report_ai_draft_ready` — bản nháp AI đã dựng xong, render nút
+   * "Tải bản nháp AI (chỉ để đọc tham khảo)". Nút tải bằng fetch kèm token
+   * (endpoint đòi `Authorization`), KHÔNG phải link bấm được.
+   */
+  aiDraft?: WorkReportAiDraftReady;
+  /**
+   * Bản nháp đang dựng (SSE `work_report_ai_draft_waiting`) — render trạng thái
+   * + vòng poll `jobs/{job_id}`. Xong thì bị thay bằng `aiDraft`.
+   */
+  aiDraftPending?: WorkReportAiDraftPending;
+  /**
+   * SSE `done.mode === "personal_attachment_general"` — câu trả lời chỉ dựa trên
+   * tệp đính kèm tạm. Hiện nhãn nói rõ để user không tưởng AI đã đọc dữ liệu
+   * Công ty/Sources.
+   */
+  attachmentMode?: boolean;
+  /**
+   * Tệp user đính kèm cho CHÍNH lượt hỏi này — render thành chip trong bong bóng
+   * user (kiểu ChatGPT), thay vì nhét `[Tệp đính kèm: ...]` vào `content`. Là dữ
+   * liệu chứ không phải chữ, nên câu hỏi gửi lên BE sạch và tên file dài không
+   * phá layout bong bóng.
+   */
+  attachedFile?: { name: string; pages?: number };
 }
 
 /** Loại phạm vi một authorization báo cáo công việc (spec §3). */
@@ -171,6 +195,53 @@ export interface WorkReportScopeRequired {
   allowedScopeTypes?: WorkReportScopeType[];
 }
 
+/**
+ * SSE `work_report_ai_draft_ready` — BE đã dựng xong bản nháp AI báo cáo giao
+ * ban, gửi link tải. Phát ở CẢ hai luồng: gõ `#TBP_AITEST`, và (khi cờ
+ * `WORK_REPORT_AI_DRAFT_V3_SHADOW_ON_QUESTION_ENABLED` bật) khi TBP hỏi tổng
+ * hợp báo cáo bộ phận theo cách thường — luồng sau có thêm `read_only: true`
+ * và KHÔNG kèm bảng nháp trong transcript.
+ *
+ * Bản nháp chỉ để ĐỌC THAM KHẢO: nộp lại chính file này bằng `#TBP_baocao` sẽ
+ * bị BE từ chối (nhận diện bằng dấu nhúng trong file, đổi tên không qua được).
+ * Không có sự kiện này = bản nháp chưa dựng xong; câu trả lời vẫn trọn vẹn.
+ */
+export interface WorkReportAiDraftReady {
+  draft_id: string;
+  /** URL tải đã ghép sẵn host AI — dùng thẳng cho `downloadWorkReportDraft`. */
+  export_url: string;
+  export_format?: string;
+  /** true = bản nháp dựng ngầm theo câu hỏi thường (không phải luồng tag). */
+  read_only?: boolean;
+}
+
+/**
+ * SSE `work_report_ai_draft_waiting` — bản nháp đang dựng, BE gửi `job_id` để FE
+ * tự poll. Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có
+ * thể cần nhiều lượt LLM, vượt giới hạn chờ của SSE, nên `..._ready` thường
+ * KHÔNG kịp về trên chính stream đó. Giữ `job_id` và poll — tuyệt đối không bắt
+ * người dùng gõ lại tag.
+ */
+export interface WorkReportAiDraftWaiting {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+}
+
+/** Trạng thái vòng poll bản nháp, gắn vào message để render. */
+export interface WorkReportAiDraftPending {
+  job_id: string;
+  period_start?: string;
+  period_end?: string;
+  /**
+   * `polling` = đang tự poll; `timeout` = quá hạn chờ, hiện nút "Kiểm tra lại"
+   * (contract §Luồng màn hình mục 3); `failed` = job hỏng, hiện lỗi vận hành và
+   * KHÔNG tự tạo lại job.
+   */
+  state: "polling" | "timeout" | "failed";
+  error_message?: string;
+}
+
 /** Action mở chi tiết một sự kiện lịch (SSE `done.calendar_events[].detail_action`). */
 export interface CalendarEventAction {
   type: "calendar_event_detail";
@@ -206,6 +277,13 @@ export interface PersonalChatRequest {
   department_name?: string;
   org_unit?: string;
   document_ids?: string[];
+  /**
+   * Tệp đính kèm hỏi đáp TẠM. TÁCH BIỆT với `document_ids` (Sources) — không bao
+   * giờ gửi kèm nhau; kèm nhau là trộn nguồn, đúng thứ request cấm.
+   */
+  attachment_ids?: string[];
+  /** false = nói rõ lượt này không dùng Sources/NotebookLM. */
+  sources_enabled?: boolean;
 }
 
 export interface PersonalChatResponse {
@@ -218,6 +296,11 @@ export interface PersonalChatResponse {
   export_id?: string;
   /** SSE `done` — mảng sự kiện lịch khi câu trả lời là bảng lịch (xem CalendarEventRow). */
   calendar_events?: CalendarEventRow[];
+  /**
+   * SSE `done` — chế độ trả lời. `personal_attachment_general` = câu trả lời chỉ
+   * dựa trên tệp đính kèm tạm, không dùng dữ liệu Công ty/Sources.
+   */
+  mode?: string;
 }
 
 export interface UploadDocumentResponse {
@@ -233,6 +316,59 @@ export interface UploadDocumentResponse {
   download_url?: string;
   open_url?: string;
   reader_url?: string;
+}
+
+/**
+ * Tệp đính kèm hỏi đáp TẠM trong Trợ lý cá nhân.
+ *
+ * KHÔNG phải Sources/NotebookLM: tệp không vào thư viện, chỉ sống trong đúng một
+ * hội thoại và hết hạn theo `expires_at`. Định danh là `attachment_id` — tuyệt
+ * đối không trộn với `document_ids` của Sources.
+ * (FE__personal-general-attachment__request__07-08-26.md)
+ */
+export interface PersonalAttachment {
+  attachment_id: string;
+  filename: string;
+  pages?: number;
+  /** ISO time; hết hạn thì chip phải yêu cầu tải lại chứ không gửi ID chết. */
+  expires_at?: string;
+  mode?: string;
+  /**
+   * `session_id` BE trả ở response upload — session mà BE THỰC SỰ gắn tệp vào.
+   *
+   * Bắt buộc giữ: hội thoại mới chưa có `serverSessionId` nên FE upload bằng id
+   * cục bộ, BE tự sinh session thật và trả lại ở đây. Không lấy về thì lượt hỏi
+   * ngay sau đó gửi `session_id: null` + `new_conversation: true` → BE mở session
+   * KHÁC → tệp vừa upload nằm ở session cũ → "Không tìm thấy tệp đính kèm".
+   */
+  session_id?: string;
+  /**
+   * Tệp đã được dùng cho ít nhất một câu hỏi → KHÔNG hiện chip ở ô nhập nữa
+   * (tệp "đi luôn" sau khi hỏi, kiểu ChatGPT).
+   *
+   * Đánh dấu chứ KHÔNG xoá khỏi store: tệp vẫn là ngữ cảnh của hội thoại nên các
+   * câu hỏi sau vẫn phải gửi `attachment_ids` như hợp đồng. Xoá hẳn thì lượt sau
+   * gửi rỗng và chỉ chạy đúng nhờ BE tự nhớ theo session — dựa vào hành vi ngoài
+   * hợp đồng, BE đổi cách nhớ là hỏng ngầm.
+   */
+  consumed?: boolean;
+}
+
+/** Mode BE trả ở SSE `done` khi câu hỏi chạy trên tệp đính kèm tạm. */
+export const PERSONAL_ATTACHMENT_MODE = "personal_attachment_general";
+
+/**
+ * Tệp tạm đã quá `expires_at` chưa. Thiếu/không parse được `expires_at` → coi là
+ * CÒN HẠN: BE là bên quyết định thật, FE đoán "hết hạn" sẽ chặn oan một tệp dùng
+ * được. Chỉ chặn khi biết chắc đã quá hạn.
+ */
+export function isAttachmentExpired(
+  attachment: PersonalAttachment,
+  now: number = Date.now(),
+): boolean {
+  if (!attachment.expires_at) return false;
+  const at = Date.parse(attachment.expires_at);
+  return Number.isFinite(at) && at <= now;
 }
 
 export interface SelectSourcesRequest {

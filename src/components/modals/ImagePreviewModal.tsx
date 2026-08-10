@@ -13,6 +13,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { SafeImage } from "../common/SafeImage";
+import {
+  afterNextPaint,
+  markImagePerformanceMilestone,
+} from "../../utils/imagePerformanceTelemetry";
 
 export interface GalleryImage {
   url: string;
@@ -40,8 +44,8 @@ export interface ImagePreviewModalProps {
   sentAt?: Date | string;
   /** Open the full "Kho lưu trữ" panel — shown as the last filmstrip cell when the gallery exceeds the strip cap */
   onViewAll?: () => void;
-  /** Optional resolver for short-lived URLs owned by a feature such as Cloud. */
-  onDownload?: (image: GalleryImage) => Promise<string | undefined>;
+  /** Internal trace key only; never emitted in the telemetry payload. */
+  telemetryConversationKey?: string;
 }
 
 /** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
@@ -140,7 +144,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   senderAvatar,
   sentAt,
   onViewAll,
-  onDownload,
+  telemetryConversationKey,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
@@ -317,10 +321,8 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   const handleDownload = useCallback(async () => {
     if (!current?.url) return;
-    const resolvedUrl = onDownload ? await onDownload(current) : current.url;
-    if (!resolvedUrl) return;
     try {
-      const response = await fetch(resolvedUrl);
+      const response = await fetch(current.url);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -331,9 +333,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      if (resolvedUrl) window.open(resolvedUrl, "_blank", "noopener,noreferrer");
+      window.open(current.url, "_blank", "noopener,noreferrer");
     }
-  }, [current, onDownload]);
+  }, [current]);
 
   // Wheel-to-zoom via a NATIVE non-passive listener. React's onWheel is passive,
   // so its preventDefault() can't stop the browser's Ctrl+wheel page zoom — which
@@ -508,6 +510,19 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             )}
             style={{
               transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px) rotate(${rotation}deg)`,
+            }}
+            onLoad={(_event, _source, meta) => {
+              if (!telemetryConversationKey) return;
+              afterNextPaint(() => {
+                markImagePerformanceMilestone(
+                  telemetryConversationKey,
+                  "T10",
+                  {
+                    decodeDurationMs: meta?.decodeDurationMs,
+                    outcome: "success",
+                  },
+                );
+              });
             }}
             draggable={false}
             fallback={

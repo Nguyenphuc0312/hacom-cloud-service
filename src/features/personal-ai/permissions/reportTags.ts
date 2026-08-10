@@ -101,6 +101,32 @@ export const SUBMIT_REPORT_TAGS: readonly (ReportTagCommand & {
 ] as const;
 
 /**
+ * Bốn lệnh NỘP báo cáo thật. Tệp đi kèm một trong số này phải vào luồng nộp báo
+ * cáo, KHÔNG được gọi API tệp đính kèm tạm.
+ */
+const REPORT_SUBMISSION_COMMANDS = [
+  "#congviectuan",
+  "#baocaocongviec",
+  "#tbp_baocao",
+  "#lddv_baocao",
+] as const;
+
+/**
+ * Câu này có phải LỆNH NỘP báo cáo không?
+ *
+ * Không dò chuỗi `#` thô: request 07-08-26 nói rõ câu “Tóm tắt quy định về
+ * #TBP_baocao trong tệp” vẫn là hỏi đáp tệp. Chỉ tính là lệnh nộp khi tag đứng ở
+ * ĐẦU câu (cho phép khoảng trắng), đúng cách menu lệnh điền vào ô nhập — đó là
+ * cách duy nhất user thực sự khởi tạo một lượt nộp.
+ */
+export function isReportSubmissionText(text: string): boolean {
+  const trimmed = text.trim().toLowerCase();
+  return REPORT_SUBMISSION_COMMANDS.some(
+    (tag) => trimmed === tag || trimmed.startsWith(`${tag} `) || trimmed.startsWith(`${tag}\n`),
+  );
+}
+
+/**
  * Hình dạng TỐI THIỂU của profile mà quy tắc này cần. Nhận `unknown`-ish thay vì
  * type chặt vì `authStore.User` không khai báo field báo cáo công việc — chúng
  * đi qua `/auth/me` bằng spread (`normalizeUser`), nên ở runtime có nhưng ở

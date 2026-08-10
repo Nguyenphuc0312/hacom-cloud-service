@@ -313,6 +313,11 @@ export const MemberActionsMenu: React.FC<MemberActionsMenuProps> = ({
     </>
   );
 
+  // Don't render kebab if no actions are available.
+  if (actions.length === 0) {
+    return null;
+  }
+
   return (
     <div className={clsx("relative", className)}>
       <button

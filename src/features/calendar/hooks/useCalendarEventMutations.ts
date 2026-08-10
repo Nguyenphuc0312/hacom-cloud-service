@@ -14,15 +14,11 @@ import { useCalendarStore } from "../../../stores/calendarStore";
 import { hrCalendarApi } from "../../api/hrCalendarApi";
 import { toast } from "../../../utils/toast";
 import {
-  CALENDAR_ATTACHMENTS_ENABLED,
-  CALENDAR_ATTACHMENTS_USE_MOCK,
-} from "../../../config";
-import {
   uploadCalendarAttachments,
   splitCalendarAttachments,
   CalendarAttachmentUploadError,
 } from "../utils/uploadCalendarAttachment";
-import { mockSetEventAttachments } from "../utils/calendarAttachmentMockStore";
+import { logger } from "../../../utils/logger";
 import {
   meetingVisibilityToApi,
   personalVisibilityToApi,
@@ -62,26 +58,16 @@ const buildParticipantPayload = (
 
 /**
  * Từ attachments trong form: upload file mới, gộp với fileId cũ (remote) → full
- * desired set để BE reconcile. Trả undefined khi flag off HOẶC không có attachment
- * (bỏ field → BE không đụng tới attachments hiện có).
+ * desired set để BE reconcile. Không có attachment → mảng rỗng (bỏ field → BE
+ * không đụng tới attachments hiện có).
  */
 const resolveAttachmentFileIds = async (
   attachments: CalendarLocalAttachment[] | undefined,
 ): Promise<string[] | undefined> => {
-  if (!CALENDAR_ATTACHMENTS_ENABLED) return undefined;
   if (!attachments || attachments.length === 0) return [];
   const { filesToUpload, existingFileIds } = splitCalendarAttachments(attachments);
   const uploaded = await uploadCalendarAttachments(filesToUpload);
   return [...existingFileIds, ...uploaded.map((u) => u.fileId)];
-};
-
-/** MOCK: lưu mapping eventId → fileIds vào IndexedDB để list/detail hiển thị lại. */
-const persistMockAttachmentMapping = async (
-  eventId: string | undefined,
-  fileIds: string[] | undefined,
-): Promise<void> => {
-  if (!CALENDAR_ATTACHMENTS_USE_MOCK || !eventId || fileIds === undefined) return;
-  await mockSetEventAttachments(eventId, fileIds);
 };
 
 /** Toast lỗi thống nhất: phân biệt lỗi upload đính kèm với lỗi chung. */
@@ -143,13 +129,12 @@ export const useCalendarEventMutations = (
         });
         if (result) {
           // Toast thành công do calendarStore.createEvent phát — không lặp ở đây.
-          await persistMockAttachmentMapping(result.id, attachmentFileIds);
           onSuccess?.();
           return true;
         }
         return false;
       } catch (error) {
-        console.error("Failed to create meeting:", error);
+        logger.error("calendar", "create_meeting_failed", error);
         notifyError(error, "Không thể thêm lịch. Vui lòng thử lại.");
         return false;
       }
@@ -183,13 +168,12 @@ export const useCalendarEventMutations = (
         });
         if (success) {
           // Toast thành công do calendarStore.updateEvent phát.
-          await persistMockAttachmentMapping(data.id, attachmentFileIds);
           onSuccess?.();
           return true;
         }
         return false;
       } catch (error) {
-        console.error("Failed to update meeting:", error);
+        logger.error("calendar", "update_meeting_failed", error);
         notifyError(error, "Không thể cập nhật sự kiện");
         return false;
       }
@@ -215,13 +199,12 @@ export const useCalendarEventMutations = (
         });
         if (result) {
           // Toast thành công do calendarStore.createEvent phát.
-          await persistMockAttachmentMapping(result.id, attachmentFileIds);
           onSuccess?.();
           return true;
         }
         return false;
       } catch (error) {
-        console.error("Failed to create personal event:", error);
+        logger.error("calendar", "create_personal_event_failed", error);
         notifyError(error, "Không thể thêm lịch. Vui lòng thử lại.");
         return false;
       }
@@ -244,13 +227,12 @@ export const useCalendarEventMutations = (
         });
         if (success) {
           // Toast thành công do calendarStore.updateEvent phát.
-          await persistMockAttachmentMapping(data.id, attachmentFileIds);
           onSuccess?.();
           return true;
         }
         return false;
       } catch (error) {
-        console.error("Failed to update personal event:", error);
+        logger.error("calendar", "update_personal_event_failed", error);
         notifyError(error, "Không thể cập nhật sự kiện");
         return false;
       }
@@ -269,7 +251,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to delete event:", error);
+        logger.error("calendar", "delete_event_failed", error);
         toast.error("Không thể xóa lịch");
         return false;
       }
@@ -291,7 +273,7 @@ export const useCalendarEventMutations = (
         onSuccess?.();
         return true;
       } catch (error) {
-        console.error("Failed to update participant response:", error);
+        logger.error("calendar", "update_participant_response_failed", error);
         toast.error("Không thể cập nhật phản hồi");
         return false;
       }

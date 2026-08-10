@@ -15,6 +15,7 @@ import { store } from "../../../store";
 import { chatApi } from "../../api/chatApi";
 
 const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
+const RTKQ_CONVERSATION_WINDOW_LIMIT = 50;
 const OLDER_MESSAGES_PAGE_LIMIT = 30;
 const ADJACENT_PREFETCH_LIMIT = 20;
 
@@ -223,7 +224,10 @@ export const useConversationSession = ({
   // `getMessages:<conversationId>` so this shares the same cache entry with
   // useConversationMessagesRTK — no duplicate HTTP request.
   const { data: rtkqMessagesData } = useGetMessagesQuery(
-    { conversationId: selectedConversationId ?? "" },
+    {
+      conversationId: selectedConversationId ?? "",
+      limit: RTKQ_CONVERSATION_WINDOW_LIMIT,
+    },
     { skip: !isChatRtkqMessagesRuntimeEnabled() || !selectedConversationId },
   );
 

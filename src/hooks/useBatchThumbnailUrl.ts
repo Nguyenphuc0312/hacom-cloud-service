@@ -20,6 +20,10 @@ import { resolvePublicResourceUrl } from "../config";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { logger } from "../utils/logger";
 import { blobPreviewCache } from "../lib/blobPreviewCache";
+import {
+  markImagePerformanceMilestone,
+  reportImagePerformance,
+} from "../utils/imagePerformanceTelemetry";
 
 export interface ThumbnailUrlItem {
   fileId: string;
@@ -35,11 +39,13 @@ export interface ThumbnailUrlItem {
    * forbidden      — no access to this file.
    * error          — unexpected server error.
    */
-  status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'not_found' | 'forbidden' | 'error';
+  status: 'ready' | 'processing' | 'queued' | 'not_previewable' | 'failed' | 'fallback_original' | 'not_found' | 'forbidden' | 'error';
   /** Only set when a URL is returned (status = ready). */
   variant?: 'thumbnail' | 'preview' | 'original';
   width?: number | null;
   height?: number | null;
+  aspectRatio?: number | null;
+  placeholder?: string | null;
   mimeType?: string;
   fallbackReason?: string | null;
   /**
@@ -69,6 +75,11 @@ const PENDING_TTL_MS = 10_000; // negative cache for PENDING thumbnails
 const FAILED_TTL_MS = 60_000; // negative cache for not_found/forbidden/error
 const MAX_THUMBNAIL_CACHE_ENTRIES = 500;
 const MAX_PREVIEW_SIGNAL_KEYS = 500;
+// Must track chat-api-service MAX_THUMBNAIL_URL_BATCH_SIZE. The API remains
+// authoritative and rejects oversize batches instead of silently truncating.
+const MAX_BATCH_IDS = 20;
+const BATCH_WINDOW_MS = 16;
+const MAX_BATCH_REQUESTS_PER_CONVERSATION = 2;
 
 // Cache value = the resolved display item. The cache entry's expiry encodes
 // "refetch after" time, so ExpiringLruCache.get() returning undefined means
@@ -82,6 +93,24 @@ const inFlightBatchRequests = new Map<
   string,
   Promise<Record<string, ThumbnailUrlItem>>
 >();
+
+interface QueuedBatchRequest {
+  fileIds: string[];
+  queuedAtMs: number;
+  resolve: (items: Record<string, ThumbnailUrlItem>) => void;
+  reject: (error: unknown) => void;
+}
+
+interface ConversationBatchQueue {
+  pending: QueuedBatchRequest[];
+  timer: ReturnType<typeof setTimeout> | null;
+  active: number;
+}
+
+const conversationBatchQueues = new Map<string, ConversationBatchQueue>();
+
+const isTimelineBatchingEnabled = (): boolean =>
+  import.meta.env.VITE_WEB_IMAGE_TIMELINE_BATCHING_ENABLED !== "false";
 
 // --- Realtime preview signals (WebSocket-driven) ---------------------------
 // When the worker finishes a thumbnail it publishes `attachment:preview_ready`
@@ -218,6 +247,8 @@ const resolveItem = (raw: {
   variant?: ThumbnailUrlItem['variant'] | 'pending'; // accept legacy 'pending' defensively
   width?: number | null;
   height?: number | null;
+  aspectRatio?: number | null;
+  placeholder?: string | null;
   mimeType?: string;
   fallbackReason?: string | null;
   isRetryable?: boolean;    // present in new contract; absent in legacy responses
@@ -270,32 +301,140 @@ const readCachedUrls = (
   return { cached, missing };
 };
 
+const executeBatchFetch = async (
+  conversationId: string,
+  fileIds: string[],
+  telemetry: {
+    queueWaitMs?: number;
+    subscriberCount?: number;
+    deduplicatedIds?: number;
+  } = {},
+): Promise<Record<string, ThumbnailUrlItem>> => {
+  const startedAtMs = performance.now();
+  let outcome: 'success' | 'error' = 'error';
+  try {
+  const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
+  const payload = unwrapApiSuccess(response);
+  const resolved: Record<string, ThumbnailUrlItem> = {};
+  for (const raw of payload.items) {
+    const item = resolveItem(raw);
+    THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
+    resolved[item.fileId] = item;
+  }
+  outcome = 'success';
+  markImagePerformanceMilestone(conversationId, "T4", {
+    batchSize: fileIds.length,
+    outcome: "success",
+  });
+  return resolved;
+  } finally {
+    reportImagePerformance(conversationId, {
+      kind: 'batch_url_request',
+      batchSize: fileIds.length,
+      durationMs: Math.round(performance.now() - startedAtMs),
+      ...telemetry,
+      outcome,
+    });
+  }
+};
+
+const flushConversationQueue = (conversationId: string): void => {
+  const queue = conversationBatchQueues.get(conversationId);
+  if (!queue) return;
+  if (queue.timer) {
+    clearTimeout(queue.timer);
+    queue.timer = null;
+  }
+  if (queue.active >= MAX_BATCH_REQUESTS_PER_CONVERSATION || queue.pending.length === 0) return;
+
+  // Select complete callers greedily. A caller never has to wait for several
+  // HTTP responses, and at most MAX_BATCH_IDS unique IDs reach the API.
+  const selected: QueuedBatchRequest[] = [];
+  const selectedIds = new Set<string>();
+  const deferred: QueuedBatchRequest[] = [];
+  for (const request of queue.pending) {
+    const nextIds = request.fileIds.filter((id) => !selectedIds.has(id));
+    if (selected.length > 0 && selectedIds.size + nextIds.length > MAX_BATCH_IDS) {
+      deferred.push(request);
+      continue;
+    }
+    selected.push(request);
+    for (const id of nextIds) selectedIds.add(id);
+  }
+  queue.pending = deferred;
+  if (selected.length === 0) return;
+  queue.active += 1;
+  const queueWaitMs = Math.max(0, Date.now() - Math.min(...selected.map((request) => request.queuedAtMs)));
+  const requestedIds = selected.reduce(
+    (total, request) => total + request.fileIds.length,
+    0,
+  );
+
+  void executeBatchFetch(conversationId, [...selectedIds], {
+    queueWaitMs,
+    subscriberCount: selected.length,
+    deduplicatedIds: Math.max(0, requestedIds - selectedIds.size),
+  })
+    .then((results) => {
+      for (const request of selected) {
+        const requestResults: Record<string, ThumbnailUrlItem> = {};
+        for (const fileId of request.fileIds) {
+          const item = results[fileId];
+          if (item) requestResults[fileId] = item;
+        }
+        request.resolve(requestResults);
+      }
+    })
+    .catch((error) => {
+      for (const request of selected) request.reject(error);
+    })
+    .finally(() => {
+      const current = conversationBatchQueues.get(conversationId);
+      if (!current) return;
+      current.active -= 1;
+      if (current.pending.length > 0) {
+        current.timer = setTimeout(() => flushConversationQueue(conversationId), 0);
+      } else if (current.active === 0) {
+        conversationBatchQueues.delete(conversationId);
+      }
+    });
+};
+
+const enqueueBatchFetch = (
+  conversationId: string,
+  fileIds: string[],
+): Promise<Record<string, ThumbnailUrlItem>> => {
+  if (!isTimelineBatchingEnabled()) return executeBatchFetch(conversationId, fileIds);
+  return new Promise((resolve, reject) => {
+    const queue = conversationBatchQueues.get(conversationId) ?? {
+      pending: [],
+      timer: null,
+      active: 0,
+    };
+    queue.pending.push({ fileIds, queuedAtMs: Date.now(), resolve, reject });
+    conversationBatchQueues.set(conversationId, queue);
+    if (!queue.timer) {
+      queue.timer = setTimeout(() => flushConversationQueue(conversationId), BATCH_WINDOW_MS);
+    }
+  });
+};
+
 const dedupedBatchFetch = (
   conversationId: string,
   fileIds: string[],
 ): Promise<Record<string, ThumbnailUrlItem>> => {
   const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
   const existing = inFlightBatchRequests.get(key);
-  if (existing) return existing;
-
-  const request = (async () => {
-    const response = await fileApi.batchThumbnailUrls({
-      conversationId,
-      fileIds,
+  if (existing) {
+    reportImagePerformance(conversationId, {
+      kind: "inflight_dedupe",
+      deduplicatedIds: fileIds.length,
+      outcome: "success",
     });
-    const payload = unwrapApiSuccess(response);
-    const resolved: Record<string, ThumbnailUrlItem> = {};
-    for (const raw of payload.items) {
-      const item = resolveItem(raw);
-      THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
-      resolved[item.fileId] = item;
-    }
-    return resolved;
-  })()
-    .finally(() => {
-      inFlightBatchRequests.delete(key);
-    });
-
+    return existing;
+  }
+  const request = enqueueBatchFetch(conversationId, fileIds)
+    .finally(() => inFlightBatchRequests.delete(key));
   inFlightBatchRequests.set(key, request);
   return request;
 };
@@ -358,6 +497,13 @@ export const __thumbnailCacheTestUtils = {
   maxPreviewSignalKeys: MAX_PREVIEW_SIGNAL_KEYS,
   previewSignalKeyCount: () => previewSignalListeners.size,
   clearThumbnailCache: () => THUMBNAIL_CACHE.clear(),
+  clearBatchQueues: () => {
+    for (const queue of conversationBatchQueues.values()) {
+      if (queue.timer) clearTimeout(queue.timer);
+    }
+    conversationBatchQueues.clear();
+    inFlightBatchRequests.clear();
+  },
   clearPreviewSignalListeners: () => previewSignalListeners.clear(),
 };
 

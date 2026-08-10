@@ -6,10 +6,18 @@
  * → HTML table. Có tab chọn sheet nếu file nhiều sheet.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import {
+  ExclamationTriangleIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+} from "@heroicons/react/24/outline";
 import { sanitizeTableHtml } from "../../utils/sanitizeTableHtml";
+
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 2.5;
+const SCALE_STEP = 0.1;
 
 interface ExcelPreviewProps {
   url: string;
@@ -58,6 +66,7 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
   const [parsed, setParsed] = useState<ParsedWorkbook | null>(null);
   const [activeSheet, setActiveSheet] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +108,16 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
     [parsed, activeSheet],
   );
 
+  const zoomIn = useCallback(
+    () => setScale((s) => Math.min(MAX_SCALE, s + SCALE_STEP)),
+    [],
+  );
+  const zoomOut = useCallback(
+    () => setScale((s) => Math.max(MIN_SCALE, s - SCALE_STEP)),
+    [],
+  );
+  const resetZoom = useCallback(() => setScale(1), []);
+
   return (
     <div
       className={clsx(
@@ -108,27 +127,6 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
       onClick={(event) => event.stopPropagation()}
       aria-label={fileName}
     >
-      {/* Tab chọn sheet (chỉ hiện khi >1 sheet) */}
-      {parsed && parsed.sheetNames.length > 1 && (
-        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface-overlay px-2 py-1.5 scrollbar-hide">
-          {parsed.sheetNames.map((name, i) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => setActiveSheet(i)}
-              className={clsx(
-                "shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                i === activeSheet
-                  ? "bg-[#1565C0] text-white"
-                  : "text-text-secondary hover:bg-surface-hover",
-              )}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Nội dung */}
       <div className="min-h-0 flex-1 overflow-auto bg-white p-3">
         {error ? (
@@ -142,12 +140,66 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
           </div>
         ) : (
           // sheet_to_html trả bảng có sẵn style tối thiểu; bọc class để căn đẹp.
+          // Thu phóng bằng transform để không phải dựng lại bảng.
           <div
-            className="excel-preview-table text-sm text-gray-900"
+            className="excel-preview-table w-fit origin-top-left text-sm text-gray-900 transition-transform duration-150"
+            style={{ transform: `scale(${scale})` }}
             dangerouslySetInnerHTML={{ __html: activeHtml }}
           />
         )}
       </div>
+
+      {/* Thanh dưới: tab sheet bên trái + thu phóng bên phải (như Excel/Zalo) */}
+      {parsed && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-surface-overlay px-2 py-1.5">
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-hide">
+            {parsed.sheetNames.map((name, i) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setActiveSheet(i)}
+                className={clsx(
+                  "shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                  i === activeSheet
+                    ? "bg-[#1565C0] text-white"
+                    : "text-text-secondary hover:bg-surface-hover",
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={zoomOut}
+              disabled={scale <= MIN_SCALE}
+              className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+              aria-label="Thu nhỏ"
+            >
+              <MagnifyingGlassMinusIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={resetZoom}
+              className="min-w-[3rem] rounded-md px-1.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+              aria-label="Đặt lại thu phóng"
+            >
+              {Math.round(scale * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={zoomIn}
+              disabled={scale >= MAX_SCALE}
+              className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+              aria-label="Phóng to"
+            >
+              <MagnifyingGlassPlusIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { clsx } from "clsx";
+import { useClickOutside } from "../../../hooks";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
 
@@ -32,25 +33,11 @@ export const QuickReactBar: React.FC<QuickReactBarProps> = ({
       : "left-0";
   const barRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (!visible || !onClose) return;
-
-    const handleClick = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.addEventListener("mousedown", handleClick, true);
-    document.addEventListener("keydown", handleKey, true);
-    return () => {
-      document.removeEventListener("mousedown", handleClick, true);
-      document.removeEventListener("keydown", handleKey, true);
-    };
-  }, [visible, onClose]);
+  useClickOutside(barRef, () => onClose?.(), {
+    active: visible && Boolean(onClose),
+    escape: true,
+    capture: true,
+  });
 
   return (
     // Outer div dùng padding-bottom (không phải margin) làm cầu hover liền mạch

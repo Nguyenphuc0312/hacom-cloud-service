@@ -81,13 +81,24 @@ import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
 import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
-import { fileApi } from "../services/api";
+import { conversationApi, fileApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
-import { CloudConversationEntry } from "../features/cloud/components/CloudConversationEntry";
-import { ROUTE_PATHS } from "../router/paths";
+import {
+  cacheCloudConversationId,
+  isPersonalCloudConversation,
+  readCachedCloudConversationId,
+} from "../features/cloud/personalCloudPolicy";
+import { cloudApi } from "../features/cloud/api/cloudApi";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+const importCloudSurface = () =>
+  import("../features/cloud/components/CloudChatWorkspace");
+const PersonalCloudConversationSurface = React.lazy(() =>
+  importCloudSurface().then((module) => ({
+    default: module.PersonalCloudConversationSurface,
+  })),
+);
 const NewChatModal = React.lazy(
   () => import("../components/modals/NewChatModal"),
 );
@@ -417,6 +428,27 @@ const DeferredPanelFallback: React.FC = () => (
   </div>
 );
 
+/**
+ * Khung chờ của Cloud: giữ đúng bố cục header / timeline / composer để khi nội dung
+ * thật vào, không có cú nhảy layout. Dùng skeleton danh sách chung ở đây sẽ nhìn như
+ * một trang khác chớp qua rồi mới tới Cloud.
+ */
+const PersonalCloudSurfaceSkeleton: React.FC = () => (
+  <div className="flex h-full min-h-0 flex-col bg-surface" aria-busy="true">
+    <div className="flex min-h-[var(--app-header-height)] shrink-0 items-center gap-3 border-b border-border/70 px-4">
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-surface-hover" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-surface-hover" />
+        <div className="h-3 w-56 animate-pulse rounded bg-surface-hover" />
+      </div>
+    </div>
+    <div className="min-h-0 flex-1" />
+    <div className="shrink-0 border-t border-border/70 px-[var(--chat-lane-padding)] py-3">
+      <div className="mx-auto h-11 w-full max-w-[var(--chat-content-lane)] animate-pulse rounded-full bg-surface-hover" />
+    </div>
+  </div>
+);
+
 const DeferredModalFallback: React.FC = () => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
     <div
@@ -630,6 +662,56 @@ export const ChatPage: React.FC = () => {
 
   const isSelectedDirectConversation =
     isDirectConversation(selectedConversation);
+  // Cloud của tôi mở ngay tại /chat/<id> như mọi hội thoại khác (giống My Documents
+  // của Zalo). Thân hội thoại dùng PersonalCloudConversationSurface thay cho ChatWindow:
+  // upload/xóa của Cloud phải đi qua cloudApi để trừ đúng quota — đường upload chat
+  // thường không đụng bảng cloud_quotas.
+  //
+  // KHÔNG suy ra từ selectedConversation: backend chưa trả conversation Cloud trong
+  // /conversations (inbox projection không có dòng nào cho nó), nên selectedConversation
+  // rỗng và màn hình sẽ rơi vào trạng thái "chưa chọn hội thoại". Đối chiếu thẳng id
+  // Cloud lấy từ /cloud/ensure.
+  // Nhớ id qua localStorage: nếu chờ ensure() mới nhận ra đây là Cloud thì ChatPage
+  // kịp render ChatWindow (UI nhóm) rồi ~2s sau mới đổi sang Cloud — đúng hiện tượng
+  // "khựng một lúc xong mới nhảy qua". Đọc cache là đồng bộ nên lượt sau nhận ra ngay.
+  const [cloudConversationId, setCloudConversationId] = useState<string | null>(
+    () => readCachedCloudConversationId(),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    // Nạp sẵn chunk của Cloud: nếu để tới lúc bấm mới tải, Suspense thay khung chat
+    // bằng skeleton một nhịp — người dùng thấy như màn hình chớp.
+    void importCloudSurface();
+    void (async () => {
+      try {
+        // Có cache và conversation đã nằm trong store thì không cần gọi lại: ensure()
+        // ở đây chạy mỗi lần mount ChatPage, kể cả khi đang mở hội thoại thường.
+        const cached = readCachedCloudConversationId();
+        if (cached && useChatStore.getState().conversationById[cached]) return;
+
+        const space = await cloudApi.ensure();
+        if (cancelled) return;
+        setCloudConversationId(space.conversationId);
+        cacheCloudConversationId(space.conversationId);
+        // Ghim vào danh sách hội thoại: backend không trả nó trong /conversations
+        // nên phải nạp bằng id rồi merge vào store, nếu không sidebar sẽ không có dòng nào.
+        if (useChatStore.getState().conversationById[space.conversationId]) return;
+        const detail = await conversationApi.getConversationById(space.conversationId);
+        const payload = (detail as { data?: unknown })?.data ?? detail;
+        if (!cancelled && isCompleteConversation(payload)) addConversation(payload);
+      } catch {
+        // Cloud không dùng được thì chat vẫn phải chạy bình thường.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addConversation]);
+
+  const isRoutePersonalCloud = Boolean(
+    routeConversationId &&
+      (routeConversationId === cloudConversationId ||
+        (selectedConversation?.id === routeConversationId &&
+          isPersonalCloudConversation(selectedConversation))),
+  );
 
   // Get other user for direct chat
   const otherUser =
@@ -919,7 +1001,12 @@ export const ChatPage: React.FC = () => {
 
   if (routeConversationId !== prevRouteConversationId) {
     setPrevRouteConversationId(routeConversationId);
-    if (!routeConversationId && infoPanelMode === "conversation") {
+    // Đổi hội thoại thì panel "thông tin hội thoại" phải đóng, không chỉ khi rời
+    // hẳn khỏi /chat/:id. Trước đây giữ nguyên panel cũ nên sang Cloud là hiện
+    // CÙNG LÚC hai panel (GroupInfo cũ + panel Cloud), timeline bị bóp lệch, và
+    // GroupInfo còn gọi API nhóm lên id Cloud -> 400 "Target conversation is not
+    // a group" rồi văng ra màn lỗi 500.
+    if (infoPanelMode === "conversation") {
       setIsInfoPanelOpen(false);
     }
   }
@@ -1319,11 +1406,6 @@ export const ChatPage: React.FC = () => {
                 layoutState={sidebarLayoutState}
                 currentUser={currentUserSummary}
                 selectedId={routeConversationId}
-                leadingContent={
-                  <CloudConversationEntry
-                    onSelect={() => navigate(ROUTE_PATHS.CLOUD)}
-                  />
-                }
                 isLoadingMoreConversations={isLoadingMoreConversations}
                 hasMoreConversations={hasMoreConversations}
                 showConversationSkeleton={showConversationSkeleton}
@@ -1348,7 +1430,11 @@ export const ChatPage: React.FC = () => {
           !selectedConversation && "hidden md:flex",
         )}
       >
-        {selectedConversation ? (
+        {isRoutePersonalCloud ? (
+          <React.Suspense fallback={<PersonalCloudSurfaceSkeleton />}>
+            <PersonalCloudConversationSurface onBack={handleBack} conversationId={routeConversationId ?? undefined} />
+          </React.Suspense>
+        ) : selectedConversation ? (
           <ChatWindow
             layoutState={chatWindowLayoutState}
             conversation={selectedConversation}
@@ -1360,6 +1446,7 @@ export const ChatPage: React.FC = () => {
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
+            onCloseInfoPanel={closeInfoPanel}
             onBack={handleBack}
             onTyping={sessionHandleTyping}
             hasMoreMessages={sessionCurrentHasMore}
@@ -1404,9 +1491,12 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Info panel */}
+      {/* Route Cloud có panel riêng (HacomCloudInfoSidebar) nên panel của ChatPage
+          phải im lặng hoàn toàn — nhánh `Boolean(selectedConversation)` trước đây
+          không chặn nên hai panel cùng hiện khi chuyển từ nhóm sang Cloud. */}
       {(infoPanelMode === "self-profile" ||
-        (infoPanelMode === "conversation" && Boolean(routeConversationId)) ||
-        Boolean(selectedConversation)) && (
+        (infoPanelMode === "conversation" && Boolean(routeConversationId) && !isRoutePersonalCloud) ||
+        (Boolean(selectedConversation) && !isRoutePersonalCloud)) && (
           <div
             className={clsx(
               "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
@@ -1474,7 +1564,7 @@ export const ChatPage: React.FC = () => {
                     ) : (
                       <ProfileSkeleton />
                     )
-                  ) : selectedConversation ? (
+                  ) : selectedConversation && !isRoutePersonalCloud ? (
                     <GroupInfo
                       conversation={selectedConversation}
                       currentUserId={currentUserSummary.id}

@@ -10,12 +10,19 @@ export default {
       screens: { xs: "360px" },
       fontFamily: {
         sans: [
+          // Emoji — phải đứng đầu; xem @font-face trong src/index.css
+          '"Noto Color Emoji"',
           "var(--font-family-sans)",
           "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "sans-serif",
+          // Emoji fallback — xem chú thích ở body{} trong src/index.css
+          '"Apple Color Emoji"',
+          '"Segoe UI Emoji"',
+          '"Noto Color Emoji"',
+          '"Segoe UI Symbol"',
         ],
       },
       fontSize: {

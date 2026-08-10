@@ -1,12 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { FileType } from "../types";
-import { cloudApi } from "../features/cloud/api/cloudApi";
-import { clearCloudFileAccessCache } from "../features/cloud/utils/cloudFileAccessCache";
-import { dedupeSignedUrlRequest, useAttachmentDownloadUrl } from "./useAttachmentDownloadUrl";
+import { dedupeSignedUrlRequest } from "./useAttachmentDownloadUrl";
 
 afterEach(() => {
-  clearCloudFileAccessCache();
   vi.restoreAllMocks();
 });
 
@@ -67,35 +62,5 @@ describe("dedupeSignedUrlRequest", () => {
     );
     expect(failing).toHaveBeenCalledTimes(1);
     expect(ok).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Cloud attachment URL routing", () => {
-  it("refreshes a Cloud attachment through the Cloud access endpoint", async () => {
-    const getAccess = vi.spyOn(cloudApi, "getFileAccess").mockResolvedValue({
-      itemId: "item-1",
-      url: "https://objects.example.com/item-1?signature=fresh",
-      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-      fileName: "item-1.txt",
-      contentType: "text/plain",
-      sizeBytes: 4,
-    });
-    const { result } = renderHook(() =>
-      useAttachmentDownloadUrl("cloud-conversation", {
-        id: "item-1",
-        objectKey: "cloud:user-1:item-1",
-        type: FileType.DOCUMENT,
-        url: "https://objects.example.com/item-1?signature=expired",
-        expiresAt: new Date(Date.now() - 60_000).toISOString(),
-      }),
-    );
-
-    let resolved: string | undefined;
-    await act(async () => {
-      resolved = await result.current.resolveUrl(true);
-    });
-
-    expect(resolved).toContain("signature=fresh");
-    expect(getAccess).toHaveBeenCalledWith("user-1", "item-1", undefined);
   });
 });

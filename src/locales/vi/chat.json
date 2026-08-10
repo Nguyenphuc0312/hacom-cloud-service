@@ -275,6 +275,7 @@
   "attachmentTray": {
     "queued": "Đang chờ",
     "uploading": "Đang tải",
+    "completing": "Đang hoàn tất…",
     "ready": "Sẵn sàng",
     "failed": "Thất bại",
     "blocked": "Bị chặn",
@@ -330,7 +331,13 @@
   },
   "file": {
     "unknown": "Tệp không xác định",
-    "download": "Tải tệp"
+    "download": "Tải tệp",
+    "savedOnDevice": "Đã có trên máy",
+    "alreadyDownloaded": "Đã tải xuống",
+    "downloadToKeep": "Tải về để xem lâu dài",
+    "clickToPreview": "Nhấn để xem trước",
+    "showInFolder": "Mở thư mục chứa file",
+    "openFile": "Mở {{name}}"
   },
   "voice": {
     "recordingError": "Không thể ghi âm. Vui lòng thử lại.",

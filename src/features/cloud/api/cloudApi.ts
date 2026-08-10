@@ -1,422 +1,95 @@
-import { CLOUD_API_BASE_URL, CLOUD_HEALTH_URL } from "../../../config";
-import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
-import { getAccessToken } from "../../../services/tokenService";
+import axios from 'axios';
 import type {
-  CloudHealth,
-  CloudDeleteResult,
-  CloudFileAccess,
-  CloudItem,
-  CloudPage,
-  CloudQuota,
-  CloudQuotaRequest,
-  CloudTrashLifecycle,
-  CloudUploadComplete,
-  CloudUploadSession,
-} from "../types";
+  CancelCloudUploadDto,
+  CloudAssetDto,
+  CloudQuotaDto,
+  CloudSpaceDto,
+  CloudUploadInitiationDto,
+} from '@hacom/chat-shared-types';
+import { API_BASE_URL } from '../../../config';
+import { getAccessToken } from '../../../services/tokenService';
 
-interface CloudErrorEnvelope {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-}
+export type CloudAsset = CloudAssetDto;
+// Shared source đã có breakdown này nhưng package dist cục bộ có thể chưa được
+// build lại; giữ adapter optional để tương thích cả response cũ lẫn dist cũ.
+export type CloudQuota = CloudQuotaDto & {
+  usedByType?: { image: string; video: string; file: string; other: string };
+};
 
-interface CloudRequestOptions extends RequestInit {
-  userId: string;
-}
-
-interface CloudMutationOptions {
-  idempotencyKey?: string;
-  signal?: AbortSignal;
-}
-
-const mutationHeaders = (
-  idempotencyKey?: string,
-  contentType?: string,
-): Record<string, string> => ({
-  ...(contentType ? { "Content-Type": contentType } : {}),
-  "Idempotency-Key": idempotencyKey ?? `cloud-web-${crypto.randomUUID()}`,
+const client = axios.create({ baseURL: `${API_BASE_URL}/cloud`, timeout: 30_000 });
+client.interceptors.request.use((request) => {
+  const token = getAccessToken();
+  if (token) request.headers.Authorization = `Bearer ${token}`;
+  return request;
 });
 
-export class CloudApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly requestId?: string;
+const data = <T>(response: { data: { data: T } }): T => response.data.data;
 
-  constructor(input: {
-    status: number;
-    code: string;
-    message: string;
-    requestId?: string;
-  }) {
-    super(input.message);
-    this.name = "CloudApiError";
-    this.status = input.status;
-    this.code = input.code;
-    this.requestId = input.requestId;
-  }
-}
+/**
+ * ensure() được gọi từ nhiều nơi gần như cùng lúc (CloudPage giải id, ChatPage nhận
+ * diện route, Cloud surface lấy quota). Gộp các lời gọi trùng nhau trong cùng một
+ * nhịp thành một request — trước đây mở /cloud bắn tới 4 lần ensure liên tiếp.
+ */
+let inFlightEnsure: Promise<CloudSpaceDto> | null = null;
+const inFlightDeletes = new Map<string, Promise<CloudAsset>>();
 
-const joinPath = (base: string, path: string): string =>
-  `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
-
-const isCloudDemoMode = (): boolean => {
-  const env = import.meta.env as Record<string, string | boolean | undefined>;
-  return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
-};
-
-export const resolveCloudObjectUrl = (presignedUrl: string): string => {
-  if (!import.meta.env.DEV) return presignedUrl;
-
-  try {
-    const parsed = new URL(presignedUrl);
-    if (parsed.hostname.toLowerCase() !== "host.docker.internal") {
-      return presignedUrl;
-    }
-    const localPath = `/cloud-object${parsed.pathname}${parsed.search}`;
-    return typeof window === "undefined"
-      ? localPath
-      : new URL(localPath, window.location.origin).toString();
-  } catch {
-    return presignedUrl;
-  }
-};
-
-const parseJson = async <T>(response: Response): Promise<T> => {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new CloudApiError({
-      status: response.status,
-      code: "INVALID_RESPONSE",
-      message: "Cloud API returned a non-JSON response",
-      requestId: response.headers.get("x-request-id") ?? undefined,
-    });
-  }
-  return (await response.json()) as T;
-};
-
-const cloudRequest = async <T>(
-  path: string,
-  { userId, headers, ...options }: CloudRequestOptions,
-): Promise<T> => {
-  const request = (accessToken?: string): Promise<Response> => {
-    const requestHeaders = new Headers(headers);
-    requestHeaders.set("Accept", "application/json");
-    if (accessToken) {
-      requestHeaders.set("Authorization", `Bearer ${accessToken}`);
-    }
-    if (isCloudDemoMode() && userId) {
-      requestHeaders.set("X-Demo-User-ID", userId);
-    } else {
-      requestHeaders.delete("X-Demo-User-ID");
-    }
-    return fetch(joinPath(CLOUD_API_BASE_URL, path), {
-      ...options,
-      headers: requestHeaders,
-    });
-  };
-
-  let response = await request(getAccessToken() ?? undefined);
-  if (
-    (response.status === 401 || response.status === 403) &&
-    !isCloudDemoMode()
-  ) {
-    try {
-      const refreshedToken = await refreshAccessTokenShared("http_401");
-      response = await request(refreshedToken);
-    } catch {
-      // Preserve the original auth response and stable backend error code.
-    }
-  }
-
-  if (!response.ok) {
-    const payload = await parseJson<CloudErrorEnvelope>(response).catch(
-      (): CloudErrorEnvelope => ({}),
-    );
-    throw new CloudApiError({
-      status: response.status,
-      code: payload.error?.code ?? "CLOUD_REQUEST_FAILED",
-      message: payload.error?.message ?? "Cloud request failed",
-      requestId: response.headers.get("x-request-id") ?? undefined,
-    });
-  }
-
-  return parseJson<T>(response);
+export const runCloudDeleteSingleFlight = (
+  key: string,
+  operation: () => Promise<CloudAsset>,
+): Promise<CloudAsset> => {
+  const existing = inFlightDeletes.get(key);
+  if (existing) return existing;
+  const request = operation().finally(() => {
+    if (inFlightDeletes.get(key) === request) inFlightDeletes.delete(key);
+  });
+  inFlightDeletes.set(key, request);
+  return request;
 };
 
 export const cloudApi = {
-  async health(signal?: AbortSignal): Promise<CloudHealth> {
-    const response = await fetch(CLOUD_HEALTH_URL, {
-      headers: { Accept: "application/json" },
-      signal,
-    });
-    if (!response.ok) {
-      throw new CloudApiError({
-        status: response.status,
-        code: "CLOUD_UNAVAILABLE",
-        message: "Cloud service is unavailable",
-      });
-    }
-    return parseJson<CloudHealth>(response);
+  ensure: (): Promise<CloudSpaceDto> => {
+    if (inFlightEnsure) return inFlightEnsure;
+    inFlightEnsure = client
+      .post('/ensure')
+      .then(data<CloudSpaceDto>)
+      .finally(() => { inFlightEnsure = null; });
+    return inFlightEnsure;
   },
+  list: (params: { cursor?: string; limit?: number; q?: string; type?: string; includeTrashed?: boolean }) =>
+    client.get('/assets', { params }).then(data<{ items: CloudAsset[]; nextCursor: string | null }>),
+  note: (content: string) => client.post('/notes', { content }).then(data),
+  reserveUpload: (file: File, clientUploadId: string) => client.post('/uploads', {
+    filename: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    sizeBytes: file.size,
+    clientUploadId,
+  }, { headers: { 'Idempotency-Key': clientUploadId } }).then(data<CloudUploadInitiationDto>),
+  completeUpload: (uploadId: string) =>
+    client.post(`/uploads/${uploadId}/complete`).then(data<CloudAsset>),
+  cancelUpload: (uploadId: string) =>
+    client.post(`/uploads/${uploadId}/cancel`).then(data<CancelCloudUploadDto>),
+  trash: (assetId: string) => runCloudDeleteSingleFlight(
+    `asset:${assetId}`,
+    () => client.delete(`/assets/${encodeURIComponent(assetId)}`).then(data<CloudAsset>),
+  ),
+  trashByMessage: (messageId: string) =>
+    runCloudDeleteSingleFlight(
+      `message:${messageId}`,
+      () => client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
+    ),
+  restore: (assetId: string) => client.post(`/assets/${assetId}/restore`).then(data<CloudAsset>),
+  emptyTrash: () =>
+    client.post('/trash/empty').then(data<{ claimed: number; purged: number; failed: number }>),
+  download: (assetId: string) => client.get(`/assets/${assetId}/download`).then(data<{ url: string }>),
+  forward: (assetId: string, targetConversationId: string) =>
+    client.post(`/assets/${assetId}/forward`, { targetConversationId }).then(data),
+};
 
-  listItems(
-    userId: string,
-    options: {
-      cursor?: string;
-      limit?: number;
-      q?: string;
-      type?: CloudItem["type"];
-      signal?: AbortSignal;
-    } = {},
-  ): Promise<CloudPage> {
-    const query = new URLSearchParams();
-    query.set("limit", String(options.limit ?? 30));
-    if (options.cursor) query.set("cursor", options.cursor);
-    if (options.q) query.set("q", options.q);
-    if (options.type) query.set("type", options.type);
-    return cloudRequest<CloudPage>(`items?${query.toString()}`, {
-      userId,
-      signal: options.signal,
-    });
-  },
-
-  listTrash(
-    userId: string,
-    options: {
-      cursor?: string;
-      limit?: number;
-      q?: string;
-      type?: CloudItem["type"];
-      signal?: AbortSignal;
-    } = {},
-  ): Promise<CloudPage> {
-    const query = new URLSearchParams();
-    query.set("limit", String(options.limit ?? 30));
-    if (options.cursor) query.set("cursor", options.cursor);
-    if (options.q) query.set("q", options.q);
-    if (options.type) query.set("type", options.type);
-    return cloudRequest<CloudPage>(`trash?${query.toString()}`, {
-      userId,
-      signal: options.signal,
-    });
-  },
-
-  getItem(
-    userId: string,
-    itemId: string,
-    signal?: AbortSignal,
-  ): Promise<CloudItem> {
-    return cloudRequest<CloudItem>(`items/${encodeURIComponent(itemId)}`, {
-      userId,
-      signal,
-    });
-  },
-
-  async getFileAccess(
-    userId: string,
-    itemId: string,
-    signal?: AbortSignal,
-  ): Promise<CloudFileAccess> {
-    const access = await cloudRequest<CloudFileAccess>(
-      `items/${encodeURIComponent(itemId)}/access`,
-      { userId, signal },
-    );
-    return { ...access, url: resolveCloudObjectUrl(access.url) };
-  },
-
-  getQuota(userId: string, signal?: AbortSignal): Promise<CloudQuota> {
-    return cloudRequest<CloudQuota>("quota", { userId, signal });
-  },
-
-  getCurrentQuotaRequest(
-    userId: string,
-    signal?: AbortSignal,
-  ): Promise<CloudQuotaRequest> {
-    return cloudRequest<CloudQuotaRequest>("quota/requests/current", {
-      userId,
-      signal,
-    });
-  },
-
-  requestQuota(
-    userId: string,
-    requestedQuotaBytes: number,
-    reason?: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudQuotaRequest> {
-    return cloudRequest<CloudQuotaRequest>("quota/requests", {
-      userId,
-      method: "POST",
-      headers: mutationHeaders(options.idempotencyKey, "application/json"),
-      signal: options.signal,
-      body: JSON.stringify({
-        requestedQuotaBytes,
-        ...(reason?.trim() ? { reason: reason.trim() } : {}),
-      }),
-    });
-  },
-
-  createText(
-    userId: string,
-    content: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudItem> {
-    return cloudRequest<CloudItem>("texts", {
-      userId,
-      method: "POST",
-      headers: mutationHeaders(options.idempotencyKey, "application/json"),
-      signal: options.signal,
-      body: JSON.stringify({ content }),
-    });
-  },
-
-  createLink(
-    userId: string,
-    url: string,
-    title: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudItem> {
-    return cloudRequest<CloudItem>("links", {
-      userId,
-      method: "POST",
-      headers: mutationHeaders(options.idempotencyKey, "application/json"),
-      signal: options.signal,
-      body: JSON.stringify({ url, title }),
-    });
-  },
-
-  trashItem(
-    userId: string,
-    itemId: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudTrashLifecycle> {
-    return cloudRequest<CloudTrashLifecycle>(
-      `items/${encodeURIComponent(itemId)}/trash`,
-      {
-        userId,
-        method: "POST",
-        headers: mutationHeaders(options.idempotencyKey),
-        signal: options.signal,
-      },
-    );
-  },
-
-  restoreItem(
-    userId: string,
-    itemId: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudTrashLifecycle> {
-    return cloudRequest<CloudTrashLifecycle>(
-      `items/${encodeURIComponent(itemId)}/restore`,
-      {
-        userId,
-        method: "POST",
-        headers: mutationHeaders(options.idempotencyKey),
-        signal: options.signal,
-      },
-    );
-  },
-
-  permanentlyDeleteItem(
-    userId: string,
-    itemId: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudDeleteResult> {
-    return cloudRequest<CloudDeleteResult>(
-      `items/${encodeURIComponent(itemId)}`,
-      {
-        userId,
-        method: "DELETE",
-        headers: mutationHeaders(options.idempotencyKey),
-        signal: options.signal,
-      },
-    );
-  },
-
-  initiateUpload(
-    userId: string,
-    file: File,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudUploadSession> {
-    return cloudRequest<CloudUploadSession>("uploads", {
-      userId,
-      method: "POST",
-      headers: mutationHeaders(options.idempotencyKey, "application/json"),
-      signal: options.signal,
-      body: JSON.stringify({
-        fileName: file.name,
-        contentType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-      }),
-    });
-  },
-
-  uploadObject(
-    session: CloudUploadSession,
-    file: File,
-    onProgress: (percent: number) => void,
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open(session.method, resolveCloudObjectUrl(session.uploadUrl));
-      Object.entries(session.requiredHeaders).forEach(([name, value]) => {
-        request.setRequestHeader(name, value);
-      });
-      request.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable && event.total > 0) {
-          onProgress(Math.round((event.loaded / event.total) * 100));
-        }
-      });
-      request.addEventListener("load", () => {
-        if (request.status >= 200 && request.status < 300) {
-          onProgress(100);
-          resolve();
-          return;
-        }
-        reject(
-          new CloudApiError({
-            status: request.status,
-            code: "OBJECT_UPLOAD_FAILED",
-            message: "Object storage rejected the upload",
-          }),
-        );
-      });
-      request.addEventListener("error", () => {
-        reject(
-          new CloudApiError({
-            status: 0,
-            code: "OBJECT_UPLOAD_NETWORK_ERROR",
-            message: "Could not reach object storage",
-          }),
-        );
-      });
-      request.addEventListener("abort", () => {
-        reject(
-          new CloudApiError({
-            status: 0,
-            code: "OBJECT_UPLOAD_ABORTED",
-            message: "Upload was cancelled",
-          }),
-        );
-      });
-      request.send(file);
-    });
-  },
-
-  completeUpload(
-    userId: string,
-    sessionId: string,
-    options: CloudMutationOptions = {},
-  ): Promise<CloudUploadComplete> {
-    return cloudRequest<CloudUploadComplete>(
-      `uploads/${encodeURIComponent(sessionId)}/complete`,
-      {
-        userId,
-        method: "POST",
-        headers: mutationHeaders(options.idempotencyKey),
-        signal: options.signal,
-      },
-    );
-  },
+export const deleteCloudAssetForMessage = (
+  messageId: string,
+  assets: readonly CloudAsset[],
+  gateway: Pick<typeof cloudApi, 'trash' | 'trashByMessage'> = cloudApi,
+): Promise<CloudAsset> => {
+  const loaded = assets.find((asset) => asset.messageId === messageId && asset.status === 'available');
+  return loaded ? gateway.trash(loaded.id) : gateway.trashByMessage(messageId);
 };

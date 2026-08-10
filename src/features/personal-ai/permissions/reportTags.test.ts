@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getVisibleReportTags,
   hasWorkReportSubmit,
+  isReportSubmissionText,
   type ReportTagProfileLike,
 } from "./reportTags";
 
@@ -283,5 +284,34 @@ describe("hasWorkReportSubmit — luật THÔ của spec, giữ làm đường l
     expect(
       hasWorkReportSubmit({ workReportAuthorizations: [grant({ actions: ["READ"] })] }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Quyết định luồng của một tệp đính kèm. Sai ở đây là hậu quả thật: nhận nhầm
+ * thành lệnh nộp thì tệp bay lên báo cáo chính thức; bỏ sót lệnh nộp thì báo cáo
+ * lại rơi vào hỏi đáp tạm.
+ */
+describe("isReportSubmissionText", () => {
+  it("nhận 4 lệnh nộp thật khi đứng đầu câu", () => {
+    expect(isReportSubmissionText("#congviectuan")).toBe(true);
+    expect(isReportSubmissionText("#baocaocongviec")).toBe(true);
+    expect(isReportSubmissionText("#TBP_baocao")).toBe(true);
+    expect(isReportSubmissionText("#LDDV_baocao tuần này")).toBe(true);
+    expect(isReportSubmissionText("  #congviectuan  ")).toBe(true);
+    expect(isReportSubmissionText("#TBP_BaoCao")).toBe(true);
+  });
+
+  it("KHÔNG coi tag nhắc giữa câu là lệnh nộp (ca gài của request)", () => {
+    // Đây là ví dụ nêu thẳng trong request: vẫn phải là hỏi đáp tệp.
+    expect(isReportSubmissionText("Tóm tắt quy định về #TBP_baocao trong tệp")).toBe(false);
+    expect(isReportSubmissionText("Tệp này có giống #congviectuan không?")).toBe(false);
+  });
+
+  it("câu hỏi thường không phải lệnh nộp", () => {
+    expect(isReportSubmissionText("Tóm tắt tài liệu này")).toBe(false);
+    expect(isReportSubmissionText("")).toBe(false);
+    // #TCT_tonghop chỉ tổng hợp, không nộp gì cả.
+    expect(isReportSubmissionText("#TCT_tonghop")).toBe(false);
   });
 });

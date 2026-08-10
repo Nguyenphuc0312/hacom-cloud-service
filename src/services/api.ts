@@ -69,6 +69,19 @@ export const USERS_SEARCH_PAGE_SIZE = 20;
 export const USERS_BATCH_MAX_IDS = 50;
 export const FRIEND_SUGGESTIONS_PAGE_SIZE = 20;
 
+export interface ConversationLabelDto {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder?: number;
+  systemKey?: string | null;
+}
+
+export interface ConversationLabelStateDto {
+  labels: ConversationLabelDto[];
+  assignments: Record<string, string[]>;
+}
+
 const buildDirectDmTraceRequestId = (): string => {
   if (
     typeof crypto !== "undefined" &&
@@ -797,6 +810,74 @@ export const conversationApi = {
 
   deleteConversation: async (conversationId: string) => {
     await apiClient.delete(`/conversations/${conversationId}`);
+  },
+
+  getConversationLabels: async (): Promise<ConversationLabelStateDto> => {
+    const response = await apiClient.get<ApiResponse<ConversationLabelStateDto>>(
+      "/conversations/labels",
+    );
+    return unwrapApiSuccess(response.data);
+  },
+
+  createConversationLabel: async (data: {
+    name: string;
+    color: string;
+  }): Promise<ConversationLabelDto> => {
+    const response = await apiClient.post<ApiResponse<ConversationLabelDto>>(
+      "/conversations/labels",
+      data,
+    );
+    return unwrapApiSuccess(response.data);
+  },
+
+  updateConversationLabel: async (
+    labelId: string,
+    data: Partial<Pick<ConversationLabelDto, "name" | "color">>,
+  ): Promise<ConversationLabelDto> => {
+    const response = await apiClient.patch<ApiResponse<ConversationLabelDto>>(
+      `/conversations/labels/${labelId}`,
+      data,
+    );
+    return unwrapApiSuccess(response.data);
+  },
+
+  deleteConversationLabel: async (labelId: string): Promise<void> => {
+    await apiClient.delete(`/conversations/labels/${labelId}`);
+  },
+
+  restoreDefaultConversationLabels: async (): Promise<ConversationLabelDto[]> => {
+    const response = await apiClient.post<
+      ApiResponse<{ labels: ConversationLabelDto[] }>
+    >("/conversations/labels/restore-defaults");
+    return unwrapApiSuccess(response.data).labels;
+  },
+
+  setConversationLabels: async (
+    conversationId: string,
+    labelIds: string[],
+  ): Promise<{ conversationId: string; labelIds: string[] }> => {
+    const response = await apiClient.put<
+      ApiResponse<{ conversationId: string; labelIds: string[] }>
+    >(`/conversations/${conversationId}/labels`, { labelIds });
+    return unwrapApiSuccess(response.data);
+  },
+
+  setConversationPinned: async (
+    conversationId: string,
+    pinned: boolean,
+  ): Promise<{
+    conversationId: string;
+    pinnedAt: string | null;
+    pinOrder: number | null;
+  }> => {
+    const response = await apiClient.put<
+      ApiResponse<{
+        conversationId: string;
+        pinnedAt: string | null;
+        pinOrder: number | null;
+      }>
+    >(`/conversations/${conversationId}/pin`, { pinned });
+    return unwrapApiSuccess(response.data);
   },
 
   addMembers: async (conversationId: string, memberIds: string[]) => {
@@ -1558,11 +1639,17 @@ export const fileApi = {
     });
   },
 
-  getDownloadUrl: async (params: { 
-    conversationId: string; 
-    objectKey?: string; 
-    attachmentId?: string; 
-    signal?: AbortSignal; 
+  getDownloadUrl: async (params: {
+    conversationId: string;
+    objectKey?: string;
+    attachmentId?: string;
+    /**
+     * "view" xin URL hạn dài để xem tại chỗ (Office Online / PDF viewer) — người
+     * dùng có thể mở tài liệu hàng chục phút, URL hạn ngắn sẽ chết giữa chừng.
+     * Bỏ trống = tải về, hạn ngắn. Server cũ chưa hiểu sẽ bỏ qua tham số này.
+     */
+    mode?: "view";
+    signal?: AbortSignal;
   }) => {
     const response = await apiClient.get<ApiResponse<GetDownloadUrlResponse>>(
       "/files/download-url",
@@ -1571,10 +1658,11 @@ export const fileApi = {
           conversationId: params.conversationId,
           ...(params.objectKey ? { objectKey: params.objectKey } : {}),
           ...(params.attachmentId ? { attachmentId: params.attachmentId } : {}),
+          ...(params.mode ? { mode: params.mode } : {}),
         },
         signal: params.signal,
       },
-    ); 
+    );
     return response.data;
   },
 
@@ -1595,6 +1683,8 @@ export const fileApi = {
           variant?: 'thumbnail' | 'preview' | 'original';
           width?: number | null;
           height?: number | null;
+          aspectRatio?: number | null;
+          placeholder?: string | null;
           mimeType?: string;
           fallbackReason?: string | null;
           /** False = terminal state; client MUST NOT retry automatically. */

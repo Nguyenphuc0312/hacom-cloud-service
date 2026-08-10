@@ -6,19 +6,24 @@ import {
   BriefcaseIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
+  CloudIcon,
   Cog6ToothIcon,
+  ClipboardDocumentCheckIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
 import {
   BriefcaseIcon as BriefcaseSolid,
   CalendarDaysIcon as CalendarDaysSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
+  CloudIcon as CloudSolid,
   Cog6ToothIcon as Cog6ToothSolid,
+  ClipboardDocumentCheckIcon as ClipboardDocumentCheckSolid,
   SparklesIcon as SparklesSolid,
 } from "@heroicons/react/24/solid";
 import { Contact, HandHelping } from "lucide-react";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
+import { readCachedCloudConversationId } from "../../features/cloud/personalCloudPolicy";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useReminderStore } from "../../stores/reminderStore";
@@ -42,6 +47,14 @@ interface SideRailProps {
   onCurrentUserClick?: () => void;
 }
 
+/** Đường hiện tại của Cloud, nếu client đã biết id. */
+const cloudChatPath = (): string | null => {
+  const id = readCachedCloudConversationId();
+  return id ? `${ROUTE_PATHS.CHAT}/${id}` : null;
+};
+
+// Mục "Công & Phép" luôn có mặt ở rail kể cả khi module tắt — bấm vào ra màn
+// "đang phát triển" giống /tasks (route quyết định, xem router/config/privateRoutes).
 const railItems: SideRailItem[] = [
   {
     id: "messages",
@@ -50,9 +63,9 @@ const railItems: SideRailItem[] = [
     iconActive: ChatBubbleSolid,
     to: ROUTE_PATHS.CHAT,
     activeWhen: (pathname) =>
-      pathname === ROUTE_PATHS.CHAT ||
-      pathname.startsWith(`${ROUTE_PATHS.CHAT}/`) ||
-      pathname === ROUTE_PATHS.CLOUD,
+      // Cloud cũng sống dưới /chat/<id> nhưng có icon riêng — đừng sáng cả hai.
+      pathname !== cloudChatPath() &&
+      (pathname === ROUTE_PATHS.CHAT || pathname.startsWith(`${ROUTE_PATHS.CHAT}/`)),
   },
   {
     id: "contacts",
@@ -63,10 +76,37 @@ const railItems: SideRailItem[] = [
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
+  // Cloud của tôi là một hội thoại nên nó sống ở /chat/<id>; /cloud chỉ là lối tắt
+  // giải id rồi chuyển hướng (dùng khi chưa biết id).
+  { id: "cloud", label: "sidebar:rail.cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
+  {
+    // Công và Nghỉ phép nay chung một màn có tab, nên rail chỉ còn một mục —
+    // vẫn sáng khi đang ở /leave hoặc bảng công của nhóm.
+    id: "work",
+    label: "sidebar:rail.work",
+    icon: ClipboardDocumentCheckIcon,
+    iconActive: ClipboardDocumentCheckSolid,
+    to: ROUTE_PATHS.TIMESHEET,
+    activeWhen: (pathname) =>
+      pathname === ROUTE_PATHS.TIMESHEET ||
+      pathname === ROUTE_PATHS.TEAM_TIMESHEET ||
+      pathname === ROUTE_PATHS.LEAVE,
+  },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },
 ];
+
+
+/**
+ * Cloud trỏ thẳng tới /chat/<id> khi đã biết id, và sáng đèn khi đang mở đúng
+ * hội thoại đó. Chưa biết id thì vẫn dùng /cloud để giải rồi chuyển hướng.
+ */
+const resolveRailItem = (item: SideRailItem, cloudConversationId: string | null): SideRailItem => {
+  if (item.id !== "cloud" || !cloudConversationId) return item;
+  const cloudPath = `${ROUTE_PATHS.CHAT}/${cloudConversationId}`;
+  return { ...item, to: cloudPath, activeWhen: (pathname) => pathname === cloudPath };
+};
 
 const bottomItems: SideRailItem[] = [
   { id: "help", label: "sidebar:rail.help", icon: () => <HandHelping size={22} color="currentColor" strokeWidth={1.8} />, to: ROUTE_PATHS.HELP },
@@ -215,6 +255,10 @@ export const SideRail: React.FC<SideRailProps> = ({
     return undefined;
   };
 
+  // Đi thẳng /chat/<id> khi đã biết id Cloud. Qua /cloud là qua một route lazy khác,
+  // khiến Suspense của RootLayout thay CẢ màn hình bằng spinner — nhìn như nháy trắng.
+  const cloudConversationId = readCachedCloudConversationId();
+
   const getClickHandler = (itemId: string): (() => void) | undefined => {
     if (itemId === "ai-assistant") {
       return () => {
@@ -244,7 +288,7 @@ export const SideRail: React.FC<SideRailProps> = ({
         {railItems.map((item) => (
           <SideRailButton
             key={item.id}
-            item={item}
+            item={resolveRailItem(item, cloudConversationId)}
             isActive={
               activeModule === item.id || Boolean(item.activeWhen?.(pathname))
             }

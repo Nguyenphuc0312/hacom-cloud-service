@@ -23,6 +23,8 @@ import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import { SafeImage } from "../common/SafeImage";
 import { TextPreview, CsvPreview, DocumentPreview, ExcelPreview, WordPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
+import { OfficeOnlinePreview } from "../preview/OfficeOnlinePreview";
+import { isPubliclyFetchableUrl } from "../../utils/publicUrl";
 import type { PreviewType } from "../../utils/mimeRegistry";
 import {
   getMimePreviewType,
@@ -37,6 +39,7 @@ import {
   downloadResourceWithName,
   openResourceInNewTab,
 } from "../../utils/downloadFile";
+import { markFileDownloaded } from "../../utils/downloadedFiles";
 import { truncateFilename } from "../../utils/truncateFilename";
 
 interface FilePreviewModalProps {
@@ -88,6 +91,32 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       : "max-h-[88vh] max-w-[92vw]";
   const resetKey = `${currentIndex}:${secureUrl ?? ""}`;
   const [scaleState, setScaleState] = useState({ key: resetKey, value: 1 });
+
+  // Office Online hỏng (URL không công khai / quá hạn chờ) → rơi về tự render.
+  // Theo `resetKey` để đổi sang file khác là thử lại từ đầu, không mang theo
+  // thất bại của file trước.
+  const [officeOnlineState, setOfficeOnlineState] = useState({
+    key: resetKey,
+    failed: false,
+  });
+  const officeOnlineFailed =
+    officeOnlineState.key === resetKey && officeOnlineState.failed;
+
+  // Đã thử xin URL mới cho file này chưa. Chỉ thử ĐÚNG MỘT LẦN: nếu URL mới vẫn
+  // hỏng thì nguyên nhân không phải hết hạn, thử tiếp chỉ làm user chờ vô ích.
+  const retriedUrlRef = useRef<string | null>(null);
+
+  const handleOfficeOnlineUnavailable = useCallback(() => {
+    // Nguyên nhân hay gặp nhất là URL ký đã hết hạn (mở tài liệu đọc quá lâu).
+    // Xin URL mới rồi để viewer thử lại — giữ được bản xem chuẩn của Microsoft
+    // thay vì tụt xuống bản tự render kém hơn.
+    if (secureUrl && retriedUrlRef.current !== secureUrl) {
+      retriedUrlRef.current = secureUrl;
+      void onRefreshUrl();
+      return;
+    }
+    setOfficeOnlineState({ key: resetKey, failed: true });
+  }, [onRefreshUrl, resetKey, secureUrl]);
 
   // Get preview type from attachment
   const attachment = current?.attachment;
@@ -150,7 +179,11 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       secureUrl,
       fileName || `file-${Date.now()}.${extension.toLowerCase() || "bin"}`,
     );
-  }, [extension, fileName, secureUrl]);
+    // Cùng khoá với FileMessageCard để thẻ file ngoài timeline đổi trạng thái ngay.
+    markFileDownloaded(
+      attachment?.id || attachment?.objectKey || attachment?.url,
+    );
+  }, [attachment, extension, fileName, secureUrl]);
 
   const handleOpenInNewTab = useCallback(() => {
     if (!secureUrl) return;
@@ -387,7 +420,13 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    // Word .docx → render client-side (docx-preview), chạy được cả localhost.
+    // ── Tài liệu Office ─────────────────────────────────────────────────
+    //
+    // Thứ tự ưu tiên giống Zalo Web:
+    //  1. Microsoft Office Online — chính Microsoft render nên khớp 100% bố cục
+    //     gốc (merge cell, shape, phân trang). Cần URL công khai để MS tải được.
+    //  2. Tự render (docx-preview / SheetJS) — dùng khi (1) không khả dụng:
+    //     chạy localhost, mạng nội bộ, hoặc viewer quá hạn chờ.
     const ext = extension.toLowerCase();
     const isDocx =
       ext === "docx" || fileMimeType.includes("wordprocessingml");
@@ -396,18 +435,39 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       ext === "xls" ||
       fileMimeType.includes("spreadsheetml") ||
       fileMimeType.includes("ms-excel");
+    const isOfficeDoc =
+      previewType === "document" ||
+      previewType === "spreadsheet" ||
+      previewType === "presentation";
 
-    if (previewType === "document" && isDocx) {
-      return <WordPreview url={secureUrl} fileName={fileName} />;
-    }
+    if (isOfficeDoc) {
+      const canUseOfficeOnline =
+        !officeOnlineFailed && isPubliclyFetchableUrl(secureUrl);
 
-    // Excel .xlsx/.xls → render bảng client-side (SheetJS).
-    if (previewType === "spreadsheet" && isXlsx) {
-      return <ExcelPreview url={secureUrl} fileName={fileName} />;
-    }
+      if (canUseOfficeOnline) {
+        return (
+          <div
+            className="flex h-[85vh] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <OfficeOnlinePreview
+              url={secureUrl}
+              fileName={fileName}
+              onUnavailable={handleOfficeOnlineUnavailable}
+            />
+          </div>
+        );
+      }
 
-    // Còn lại (.doc cũ, .pptx, ODF…) → Office Online viewer + fallback card.
-    if (previewType === "document" || previewType === "spreadsheet" || previewType === "presentation") {
+      // Dự phòng theo đúng định dạng — chỉ .docx/.xlsx mới tự dựng lại được.
+      if (isDocx) {
+        return <WordPreview url={secureUrl} fileName={fileName} />;
+      }
+      if (isXlsx) {
+        return <ExcelPreview url={secureUrl} fileName={fileName} />;
+      }
+
+      // .doc cũ, .pptx, ODF… không tự render được → thẻ tải về.
       return (
         <DocumentPreview
           url={secureUrl}

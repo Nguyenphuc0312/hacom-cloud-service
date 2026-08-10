@@ -1,7 +1,7 @@
 # Hacom Cloud Phase 2 — Gate 4 Verification Report
 
-Date: 2026-08-07
-Branch: `feature/cloud-phase2-process4`
+Date: 2026-08-10
+Branch: `integration/cloud-phase2-main` (prepared for `origin/main`)
 Base implementation commit: `7821bdca`
 
 ## Verdict
@@ -90,3 +90,17 @@ permanently deleted after verification.
   report owned by Hacom Holding DX.
 
 No backend Hacom Holding DX code was changed during this verification.
+
+## Latest-main integration note
+
+`origin/main` advanced after the original Process 4 branch and now contains a
+newer Cloud presentation (`CloudChatWorkspace` and `CloudManagePage`). The
+integration keeps that latest-main implementation and removes the superseded
+legacy Cloud components from the older branch so the two API/UI generations do
+not coexist. The latest-main Cloud tests pass: 3 files and 11 tests. Lint also
+passes with 0 errors; the remaining typecheck blockers are the local
+`@hacom/chat-shared-types` distribution and existing non-Cloud Chat/Reminder/
+TipTap/Support Issue dependencies. The authenticated Chrome lifecycle recorded
+above is evidence for the earlier branch implementation; a fresh latest-main
+browser run requires the disposable Cloud/Auth runtimes and credentials, which
+were not running during this merge verification.

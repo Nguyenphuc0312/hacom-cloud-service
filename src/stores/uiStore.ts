@@ -13,6 +13,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export type Theme = "light" | "dark" | "system";
 export type ThemeBrand = "blue" | "green" | "purple";
 export type ChatDensity = "auto" | "comfortable" | "compact" | "expanded";
+export interface ConversationLabel {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder?: number;
+  systemKey?: string | null;
+}
 export type ModalType =
   | "createGroup"
   | "editProfile"
@@ -99,11 +106,51 @@ interface UIState {
   // Pinned conversations (client-side, persisted)
   pinnedConversationIds: string[];
   togglePinnedConversation: (conversationId: string) => void;
+
+  // Conversation labels (client-side, persisted)
+  conversationLabels: ConversationLabel[];
+  conversationLabelsByConversationId: Record<string, string[]>;
+  selectedConversationLabelIds: string[];
+  isConversationLabelManagerOpen: boolean;
+  openConversationLabelManager: () => void;
+  closeConversationLabelManager: () => void;
+  setConversationLabelState: (
+    labels: ConversationLabel[],
+    assignments?: Record<string, string[]>,
+  ) => void;
+  setConversationLabelAssignment: (conversationId: string, labelIds: string[]) => void;
+  setSelectedConversationLabelIds: (labelIds: string[]) => void;
+  clearSelectedConversationLabels: () => void;
+  toggleConversationLabel: (conversationId: string, labelId: string) => void;
+  addConversationLabel: (name: string, color: string) => void;
+  updateConversationLabel: (labelId: string, patch: Partial<Pick<ConversationLabel, "name" | "color">>) => void;
+  deleteConversationLabel: (labelId: string) => void;
+  restoreDefaultConversationLabels: () => void;
 }
 
 // ============================================
 // STORE
 // ============================================
+
+export const DEFAULT_CONVERSATION_LABELS: ConversationLabel[] = [
+  { id: "customer", name: "Khách hàng", color: "#e31b23" },
+  { id: "family", name: "Gia đình", color: "#e11dca" },
+  { id: "work", name: "Công việc", color: "#f97316" },
+  { id: "friends", name: "Bạn bè", color: "#f5b700" },
+  { id: "reply-later", name: "Trả lời sau", color: "#45c776" },
+  { id: "colleague", name: "Đồng nghiệp", color: "#0b74ff" },
+];
+
+const createLabelId = (): string => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `label-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const uniqueLabelIds = (labelIds: string[]): string[] =>
+  Array.from(new Set(labelIds.filter(Boolean)));
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -293,16 +340,179 @@ export const useUIStore = create<UIState>()(
         });
       },
 
+      // ============================================
+      // CONVERSATION LABELS
+      // ============================================
+      conversationLabels: DEFAULT_CONVERSATION_LABELS,
+      conversationLabelsByConversationId: {},
+      selectedConversationLabelIds: [],
+      isConversationLabelManagerOpen: false,
+
+      openConversationLabelManager: () => {
+        set({ isConversationLabelManagerOpen: true });
+      },
+
+      closeConversationLabelManager: () => {
+        set({ isConversationLabelManagerOpen: false });
+      },
+
+      setConversationLabelState: (labels, assignments = {}) => {
+        const labelIdSet = new Set(labels.map((label) => label.id));
+        set((state) => ({
+          conversationLabels: labels,
+          conversationLabelsByConversationId: Object.fromEntries(
+            Object.entries(assignments)
+              .map(([conversationId, labelIds]) => [
+                conversationId,
+                uniqueLabelIds(labelIds).filter((labelId) =>
+                  labelIdSet.has(labelId),
+                ),
+              ])
+              .filter(([, labelIds]) => labelIds.length > 0),
+          ),
+          selectedConversationLabelIds: state.selectedConversationLabelIds.filter(
+            (labelId) => labelIdSet.has(labelId),
+          ),
+        }));
+      },
+
+      setConversationLabelAssignment: (conversationId, labelIds) => {
+        set((state) => {
+          const nextAssignments = {
+            ...state.conversationLabelsByConversationId,
+          };
+          const nextLabelIds = uniqueLabelIds(labelIds);
+          if (nextLabelIds.length > 0) {
+            nextAssignments[conversationId] = nextLabelIds;
+          } else {
+            delete nextAssignments[conversationId];
+          }
+          return { conversationLabelsByConversationId: nextAssignments };
+        });
+      },
+
+      setSelectedConversationLabelIds: (labelIds) => {
+        set({ selectedConversationLabelIds: uniqueLabelIds(labelIds) });
+      },
+
+      clearSelectedConversationLabels: () => {
+        set({ selectedConversationLabelIds: [] });
+      },
+
+      toggleConversationLabel: (conversationId, labelId) => {
+        set((state) => {
+          const current = state.conversationLabelsByConversationId[conversationId] ?? [];
+          const next = current.includes(labelId)
+            ? current.filter((id) => id !== labelId)
+            : [...current, labelId];
+          const conversationLabelsByConversationId = {
+            ...state.conversationLabelsByConversationId,
+          };
+
+          if (next.length > 0) {
+            conversationLabelsByConversationId[conversationId] = next;
+          } else {
+            delete conversationLabelsByConversationId[conversationId];
+          }
+
+          return { conversationLabelsByConversationId };
+        });
+      },
+
+      addConversationLabel: (name, color) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+
+        set((state) => ({
+          conversationLabels: [
+            ...state.conversationLabels,
+            {
+              id: createLabelId(),
+              name: trimmedName,
+              color,
+            },
+          ],
+        }));
+      },
+
+      updateConversationLabel: (labelId, patch) => {
+        set((state) => ({
+          conversationLabels: state.conversationLabels.map((label) =>
+            label.id === labelId
+              ? {
+                  ...label,
+                  name: patch.name?.trim() || label.name,
+                  color: patch.color ?? label.color,
+                }
+              : label,
+          ),
+        }));
+      },
+
+      deleteConversationLabel: (labelId) => {
+        set((state) => {
+          const conversationLabelsByConversationId = Object.fromEntries(
+            Object.entries(state.conversationLabelsByConversationId)
+              .map(([conversationId, labelIds]) => [
+                conversationId,
+                labelIds.filter((id) => id !== labelId),
+              ])
+              .filter(([, labelIds]) => labelIds.length > 0),
+          );
+
+          return {
+            conversationLabels: state.conversationLabels.filter(
+              (label) => label.id !== labelId,
+            ),
+            selectedConversationLabelIds:
+              state.selectedConversationLabelIds.filter((id) => id !== labelId),
+            conversationLabelsByConversationId,
+          };
+        });
+      },
+
+      restoreDefaultConversationLabels: () => {
+        set((state) => {
+          const existingLabelIds = new Set(
+            state.conversationLabels.map((label) => label.id),
+          );
+          const missingLabels = DEFAULT_CONVERSATION_LABELS.filter(
+            (label) => !existingLabelIds.has(label.id),
+          );
+
+          if (missingLabels.length === 0) {
+            return state;
+          }
+
+          return {
+            conversationLabels: [...state.conversationLabels, ...missingLabels],
+          };
+        });
+      },
+
     }),
     {
       name: "ui-storage",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState;
+        }
+        const state = persistedState as Partial<UIState>;
+        return {
+          ...state,
+          pinnedConversationIds: [],
+          conversationLabels: DEFAULT_CONVERSATION_LABELS,
+          conversationLabelsByConversationId: {},
+          selectedConversationLabelIds: [],
+        };
+      },
       partialize: (state) => ({
         theme: state.theme,
         brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
         chatDensity: state.chatDensity,
-        pinnedConversationIds: state.pinnedConversationIds,
       }),
     },
   ),

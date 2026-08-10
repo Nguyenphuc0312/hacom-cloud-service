@@ -1,4 +1,5 @@
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { verifyDistAssets } from "./verify-dist-assets.mjs";
@@ -16,6 +17,33 @@ const forward = (stream, writer) => {
     combinedOutput += text;
     writer.write(chunk);
   });
+};
+
+const toKb = (bytes) => Math.round((bytes / 1024) * 100) / 100;
+
+const getAssetBudget = (file) => {
+  const isWorker = /(?:^|[.-])worker(?:[.-]|$)/i.test(file);
+  if (isWorker) {
+    return {
+      kind: "worker",
+      maxRawKb: 1500,
+      maxGzipKb: 450,
+    };
+  }
+
+  if (/^index-[\w-]+\.js$/.test(file)) {
+    return {
+      kind: "entry",
+      maxRawKb: 650,
+      maxGzipKb: 200,
+    };
+  }
+
+  return {
+    kind: "chunk",
+    maxRawKb: 500,
+    maxGzipKb: 175,
+  };
 };
 
 forward(child.stdout, process.stdout);
@@ -41,25 +69,28 @@ child.on("close", (code) => {
   const assetsDir = join(process.cwd(), "dist", "assets");
   const jsAssets = readdirSync(assetsDir)
     .filter((file) => file.endsWith(".js"))
-    // pdf.worker is a separately loaded third-party worker and is not part of
-    // the initial application bundle budget.
-    .filter((file) => !file.startsWith("pdf.worker."))
-    .map((file) => ({
-      file,
-      sizeKb: Math.round((statSync(join(assetsDir, file)).size / 1024) * 100) / 100,
-    }));
+    .map((file) => {
+      const assetPath = join(assetsDir, file);
+      return {
+        file,
+        rawKb: toKb(statSync(assetPath).size),
+        gzipKb: toKb(gzipSync(readFileSync(assetPath)).length),
+        budget: getAssetBudget(file),
+      };
+    });
 
-  const maxAssetSizeKb = 800;
   const oversizedAssets = jsAssets.filter(
-    (asset) => asset.sizeKb > maxAssetSizeKb,
+    (asset) =>
+      asset.rawKb > asset.budget.maxRawKb ||
+      asset.gzipKb > asset.budget.maxGzipKb,
   );
 
   if (oversizedAssets.length > 0) {
-    console.error(
-      `Build gate failed: JS asset exceeds ${maxAssetSizeKb} kB raw budget.`,
-    );
+    console.error("Build gate failed: JS asset exceeded its raw/gzip budget.");
     oversizedAssets.forEach((asset) => {
-      console.error(`- ${asset.file}: ${asset.sizeKb} kB`);
+      console.error(
+        `- ${asset.file} (${asset.budget.kind}): ${asset.rawKb} kB raw / ${asset.gzipKb} kB gzip; budget ${asset.budget.maxRawKb} kB raw / ${asset.budget.maxGzipKb} kB gzip`,
+      );
     });
     process.exit(1);
   }

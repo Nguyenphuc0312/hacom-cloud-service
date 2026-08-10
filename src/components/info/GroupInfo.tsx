@@ -38,18 +38,18 @@ import { MessageType, RoomMemberRole } from "../../types";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import { ReminderHistoryList } from "./ReminderHistoryList";
 import { CollapsibleSection } from "./CollapsibleSection";
-import { messageApi } from "../../services/api";
+import { conversationApi, messageApi } from "../../services/api";
 import {
   loadUserProfiles,
   invalidateUserProfileSummary,
 } from "../../services/userBatchLoader";
 import { resolvePublicResourceUrl } from "../../config";
 import { useChatStore, useGroupStore } from "../../stores";
-import { useUIStore } from "../../stores/uiStore";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
+import { formatCalendarDate } from "../../utils/formatTime";
 import { chatApi } from "../../features/chat/api/chatApi";
 import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
@@ -238,17 +238,47 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       .finally(() => setRemindersLoading(false));
   }, [conversation.id, loadVoterProfiles]);
 
-  const pinnedConversationIds = useUIStore((state) => state.pinnedConversationIds);
-  const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
-  const isPinned = pinnedConversationIds.includes(conversation.id);
+  const isPinned = Boolean(conversation.pinnedAt);
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
 
-  const handleTogglePin = useCallback(() => {
-    togglePinnedConversation(conversation.id);
-    toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
-  }, [isPinned, conversation.id, togglePinnedConversation]);
+  const handleTogglePin = useCallback(async () => {
+    const previousPinnedAt = conversation.pinnedAt ?? null;
+    const previousPinOrder = conversation.pinOrder ?? null;
+    const nextPinned = !isPinned;
+
+    updateConversation(conversation.id, {
+      pinnedAt: nextPinned ? new Date().toISOString() : null,
+      pinOrder: nextPinned ? 0 : null,
+      isPinned: nextPinned,
+    });
+
+    try {
+      const result = await conversationApi.setConversationPinned(
+        conversation.id,
+        nextPinned,
+      );
+      updateConversation(conversation.id, {
+        pinnedAt: result.pinnedAt,
+        pinOrder: result.pinOrder,
+        isPinned: Boolean(result.pinnedAt),
+      });
+    } catch (error) {
+      updateConversation(conversation.id, {
+        pinnedAt: previousPinnedAt,
+        pinOrder: previousPinOrder,
+        isPinned,
+      });
+      toast.error(extractApiError(error).message);
+    }
+  }, [
+    conversation.id,
+    conversation.pinOrder,
+    conversation.pinnedAt,
+    isPinned,
+    updateConversation,
+  ]);
 
   const inviteLinks = useGroupStore(
     (state) => state.inviteLinksByConversation[conversation.id] ?? EMPTY_INVITE_LINKS,
@@ -1118,7 +1148,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             <span className="truncate">{nameByUserId[msg.senderId] || msg.senderName}</span>
                             {msg.createdAt && (
                               <span className="shrink-0">
-                                · {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                                · {formatCalendarDate(new Date(msg.createdAt))}
                               </span>
                             )}
                           </div>

@@ -6,7 +6,8 @@ import { PersonalChatArea } from "../components/chat/PersonalChatArea";
 import { PersonalChatInput } from "../components/chat/PersonalChatInput";
 import { PersonalWorkspaceHeader } from "../components/layout/PersonalWorkspaceHeader";
 import { usePersonalChat } from "../hooks/usePersonalChat";
-import { matchLevelReportTag } from "../api/personalAiApi";
+import { matchLevelReportTag, deletePersonalAttachment, PersonalAiError } from "../api/personalAiApi";
+import { isReportSubmissionText } from "../permissions/reportTags";
 import { usePersonalDocuments } from "../hooks/usePersonalDocuments";
 import { usePersonalAiStore } from "../stores/personalAiStore";
 import { useAuthStore } from "../../../stores/authStore";
@@ -15,6 +16,14 @@ import { toast } from "../../../utils/toast";
 import { ConfirmDialog } from "../../../components/ui";
 
 const WEEKLY_REPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+
+/**
+ * Trần tệp hỏi đáp TẠM — BE chặn ở 10MB ("Tệp quá lớn (tối đa 10MB)").
+ *
+ * Phải chặn ở FE bằng ĐÚNG con số của BE: để 25MB như luồng nộp báo cáo thì tệp
+ * 10–25MB lọt qua, user chờ hết thời gian upload rồi mới nhận lỗi từ server.
+ */
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /** Lượt nộp file đang chờ user xác nhận (xem `pendingSubmit`). */
 interface PendingSubmit {
@@ -40,7 +49,10 @@ function describeSubmit(text: string, file: File): PendingSubmit {
       text,
       file,
       title: `Gửi ${tag.destination}?`,
-      message: `Tệp "${file.name}" sẽ được nộp ${tag.destinationLong}. Bản đã nộp của tuần này (nếu có) sẽ bị thay thế.`,
+      // Nhắc về bản nháp AI ngay ở đây: BE từ chối file do AI sinh (nhận diện
+      // bằng dấu nhúng trong file, đổi tên không qua được). Người dùng phải
+      // biết TRƯỚC khi tốn công gửi, không phải lúc bị chặn.
+      message: `Tệp "${file.name}" sẽ được nộp ${tag.destinationLong}. Bản đã nộp của tuần này (nếu có) sẽ bị thay thế.\n\nLưu ý: bản nháp AI (chỉ để đọc tham khảo) không dùng để nộp — hãy nộp file báo cáo do bộ phận tự lập.`,
       confirmText: "Gửi báo cáo",
     };
   }
@@ -67,6 +79,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     messages,
     isStreaming,
     isLoadingHistory,
+    hasOlderHistory,
+    isLoadingOlder,
+    loadOlderHistory,
     sendMessage,
     sendWithFile,
     sendLevelReportWithFile,
@@ -76,6 +91,16 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   const isSourcePanelOpen = usePersonalAiStore((s) => s.isSourcePanelOpen);
   const loadServerSessions = usePersonalAiStore((s) => s.loadServerSessions);
   const setOwnerId = usePersonalAiStore((s) => s.setOwnerId);
+  const removeAttachment = usePersonalAiStore((s) => s.removeAttachment);
+  const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
+  const activeConversation = usePersonalAiStore((s) =>
+    s.conversations.find((c) => c.id === s.activeConversationId),
+  );
+  // Chip của ĐÚNG hội thoại đang mở — không mang sang hội thoại khác.
+  // Bỏ tệp đã dùng cho một câu hỏi: hỏi xong là tệp "đi luôn" khỏi ô nhập, nó đã
+  // hiện trong bong bóng của lượt hỏi đó. Tệp vẫn nằm trong store nên các lượt
+  // sau vẫn gửi kèm `attachment_ids`.
+  const attachments = (activeConversation?.attachments ?? []).filter((a) => !a.consumed);
   const user = useAuthStore((s) => s.user);
 
   // Set ownerId ngay khi biết user — đảm bảo conversation mới luôn được gắn đúng chủ sở hữu
@@ -94,6 +119,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     const ac = new AbortController();
     fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
+        // Lượt gọi được dùng chung với AiAssistantPage (§4.8) nên không huỷ theo
+        // signal của riêng ai — tự bỏ kết quả khi đã rời màn hình.
+        if (ac.signal.aborted) return;
         if (sessions.length > 0) {
           loadServerSessions(sessions, employeeCode);
         }
@@ -105,7 +133,17 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.employeeCode, user?.employee_code]);
 
-  const [inputValue, setInputValue] = React.useState("");
+  /**
+   * Draft KHÔNG còn là state của page: mỗi ký tự gõ sẽ render lại cả danh sách
+   * message (§4.1). Page chỉ giữ hai lối tác động ngược vào ô nhập:
+   *  - `presetValue`: áp nội dung từ chip gợi ý;
+   *  - `clearInputRef`: xoá trắng, gọi đúng những chỗ trước kia `setInputValue("")`.
+   */
+  const [presetValue, setPresetValue] = useState("");
+  const clearInputRef = useRef<() => void>(() => {});
+  const handleRegisterClear = useCallback((clear: () => void) => {
+    clearInputRef.current = clear;
+  }, []);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   /**
@@ -128,6 +166,28 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     if (!isUploading) setPendingFile(null);
   }, [isUploading]);
 
+  /**
+   * Xoá chip tệp hỏi đáp tạm. Gọi BE TRƯỚC, chỉ bỏ chip khi BE trả 2xx — bỏ
+   * trước rồi lỗi sẽ khiến câu hỏi sau vẫn gửi kèm ID mà user tưởng đã xoá.
+   */
+  const handleRemoveAttachment = useCallback(
+    async (attachmentId: string) => {
+      const sessionId = activeConversation?.serverSessionId;
+      if (!sessionId || !activeConversationId) return;
+      try {
+        await deletePersonalAttachment(attachmentId, sessionId);
+        removeAttachment(activeConversationId, attachmentId);
+      } catch (err) {
+        toast.error(
+          err instanceof PersonalAiError && err.kind === "http"
+            ? err.message
+            : "Không xoá được tệp đính kèm. Vui lòng thử lại.",
+        );
+      }
+    },
+    [activeConversation?.serverSessionId, activeConversationId, removeAttachment],
+  );
+
   const handleSubmit = useCallback(
     async (text: string) => {
       // Mọi lượt gửi KÈM FILE đều là hành động không hoàn tác được (ghi đè bản
@@ -137,19 +197,41 @@ export const PersonalAiWorkspacePage: React.FC = () => {
       if (pendingFile) {
         // Đang nộp dở / đã mở hộp xác nhận → bỏ qua, không xếp chồng hai lượt.
         if (isUploading || pendingSubmit) return;
+        // Hỏi đáp tệp tạm KHÔNG phải hành động không hoàn tác được: tệp không rời
+        // khỏi hội thoại, không ghi đè báo cáo nào. Hộp xác nhận ở đây chỉ để
+        // chặn lượt NỘP, nên bỏ qua để không bắt user xác nhận vô cớ.
+        if (!isReportSubmissionText(text)) {
+          // Trần của luồng hỏi đáp tạm (10MB) THẤP HƠN luồng nộp báo cáo (25MB),
+          // mà lúc đính tệp chưa biết user sẽ đi luồng nào — nên chặn đúng ở đây,
+          // khi đã biết. Không chặn thì user chờ upload xong mới nhận lỗi BE.
+          if (pendingFile.size > ATTACHMENT_MAX_BYTES) {
+            toast.error(
+              `Tệp "${pendingFile.name}" quá lớn (hỏi đáp tệp tối đa 10MB). Vui lòng dùng tệp nhỏ hơn.`,
+            );
+            return;
+          }
+          setIsUploading(true);
+          clearInputRef.current();
+          const accepted = await sendWithFile(text, pendingFile);
+          if (accepted) setPendingFile(null);
+          setIsUploading(false);
+          setTimeout(() => textareaRef.current?.focus(), 0);
+          return;
+        }
         setPendingSubmit(describeSubmit(text, pendingFile));
         return;
       }
       // Tag nộp mà KHÔNG đính tệp → đây là lượt XEM, không nộp gì cả. Nói trước
       // để người quên đính tệp không tưởng là đã nộp xong.
-      if (matchLevelReportTag(text)) {
+      // Dùng parser lệnh: câu chỉ NHẮC tới tag giữa dòng không phải lượt xem báo cáo.
+      if (matchLevelReportTag(text) && isReportSubmissionText(text)) {
         toast.info("Đang xem báo cáo. Muốn nộp thì đính kèm tệp báo cáo rồi gửi lại.");
       }
-      setInputValue("");
+      clearInputRef.current();
       await sendMessage(text);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [sendMessage, pendingFile, isUploading, pendingSubmit],
+    [sendMessage, sendWithFile, pendingFile, isUploading, pendingSubmit],
   );
 
   /** Người dùng đã xác nhận gửi → thực sự nộp file. */
@@ -157,16 +239,18 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     const submit = pendingSubmit;
     if (!submit) return;
     setPendingSubmit(null);
-    setInputValue("");
-    setPendingFile(null);
+    clearInputRef.current();
     setIsUploading(true);
     // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) đi endpoint
     // riêng /api/level-reports/upload; BE tự thay bản cũ nếu nộp lại cùng tuần.
-    if (submit.kind === "level") {
-      await sendLevelReportWithFile(submit.text, submit.file);
-    } else {
-      await sendWithFile(submit.text, submit.file);
-    }
+    const accepted =
+      submit.kind === "level"
+        ? await sendLevelReportWithFile(submit.text, submit.file)
+        : await sendWithFile(submit.text, submit.file);
+    // Contract 07/08/26 §7.10: CHỈ xoá tệp đang chờ sau HTTP 2xx. Xoá sớm như
+    // trước khiến mọi lỗi (sai form, sai tuần, hết phiên, mất mạng) đều bắt user
+    // đi tìm và đính lại đúng file đó — trong khi lý do lỗi bảo họ "thử lại".
+    if (accepted) setPendingFile(null);
     setIsUploading(false);
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, [pendingSubmit, sendWithFile, sendLevelReportWithFile]);
@@ -179,7 +263,10 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   }, []);
 
   const handleSuggestionSelect = useCallback((value: string) => {
-    setInputValue(value);
+    // Preset phải ĐỔI thì composer mới áp lại — chọn đúng gợi ý hai lần liên
+    // tiếp mà giữ nguyên chuỗi sẽ không kích hoạt gì. Thêm khoảng trắng đuôi
+    // (bị trim khi gửi) để lần chọn thứ hai vẫn là giá trị mới.
+    setPresetValue((prev) => (prev === value ? `${value} ` : value));
     setTimeout(() => {
       const textarea = textareaRef.current;
       if (!textarea) return;
@@ -207,6 +294,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           isLoadingHistory={isLoadingHistory}
           isRagMode={isRagMode}
           onSuggestionSelect={handleSuggestionSelect}
+          hasOlderHistory={hasOlderHistory}
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={loadOlderHistory}
         />
 
         {/* Sticky input footer */}
@@ -214,8 +304,8 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           <div className="w-full">
             <PersonalChatInput
               ref={textareaRef}
-              value={inputValue}
-              onChange={setInputValue}
+              presetValue={presetValue}
+              onRegisterClear={handleRegisterClear}
               onSubmit={handleSubmit}
               onStop={stopStreaming}
               isStreaming={isStreaming}
@@ -224,6 +314,8 @@ export const PersonalAiWorkspacePage: React.FC = () => {
               onAttachFile={handleAttachFile}
               onRemoveFile={handleRemoveFile}
               isUploading={isUploading}
+              attachments={attachments}
+              onRemoveAttachment={handleRemoveAttachment}
             />
           </div>
         </div>

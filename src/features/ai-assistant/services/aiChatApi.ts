@@ -32,19 +32,36 @@ import type {
 } from "../types";
 import { isDownloadLinkLabel } from "../utils/weeklyReportFileLink";
 import { appendScopeToken } from "../../personal-ai/stores/workReportScopeStore";
+import {
+  readUploadFailureFromBody,
+  shouldRefreshAndRetry,
+  type UploadFailure,
+} from "../../../services/ai-chat/uploadFailure";
+import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinator";
 
 export class AiApiError extends Error {
   readonly status: number;
   readonly kind: "timeout" | "network" | "http";
+  /**
+   * Lý do BE trả trong body (contract FE 07/08/26 §2). `undefined` khi lỗi là
+   * timeout/mạng — khi đó không có response nào để đọc.
+   *
+   * Trước đây lớp này chỉ giữ status, nên `uploadPersonalWeeklyReport` vứt sạch
+   * `xhr.responseText` và mọi lỗi nghiệp vụ ("File sai form…", "File chứa công
+   * việc của nhiều tuần…") đều hiện thành một câu chung vô nghĩa.
+   */
+  readonly failure?: UploadFailure;
 
   constructor(
     status: number,
     kind: "timeout" | "network" | "http" = "http",
+    failure?: UploadFailure,
   ) {
-    super(`AI API error [${kind}]: ${status}`);
+    super(failure?.message ?? `AI API error [${kind}]: ${status}`);
     this.name = "AiApiError";
     this.status = status;
     this.kind = kind;
+    this.failure = failure;
   }
 }
 
@@ -320,8 +337,34 @@ function normalizeUploadResponse(value: unknown): WeeklyReportUploadResponse {
  * Upload weekly report file kèm câu hỏi lên endpoint AI cá nhân.
  * Dùng XHR để có upload progress; response (JSON hoặc SSE buffered)
  * sẽ được chuẩn hoá thành `AiChatResponse`.
+ *
+ * Contract FE 07/08/26 §4: 401 kèm `action=refresh_token_and_retry` → làm mới
+ * token và gửi lại ĐÚNG file/FormData này MỘT lần. Người dùng không phải chọn
+ * lại tệp chỉ vì token vừa hết hạn giữa lúc nộp. Không retry với 400/403/409/
+ * 429/5xx — đó là những lý do gửi lại y nguyên cũng hỏng y như cũ.
  */
-export function uploadPersonalWeeklyReport(
+export async function uploadPersonalWeeklyReport(
+  file: File,
+  body: WeeklyReportUploadRequest,
+  options?: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<WeeklyReportUploadResponse> {
+  try {
+    return await postPersonalWeeklyReport(file, body, options);
+  } catch (err) {
+    if (!(err instanceof AiApiError) || !err.failure || !shouldRefreshAndRetry(err.failure)) {
+      throw err;
+    }
+    // Đúng MỘT lần: 401 lần hai là hết phiên thật, retry tiếp chỉ thành vòng lặp.
+    const fresh = await refreshAccessTokenShared("http_401").catch(() => null);
+    if (!fresh) throw err;
+    return postPersonalWeeklyReport(file, body, options);
+  }
+}
+
+function postPersonalWeeklyReport(
   file: File,
   body: WeeklyReportUploadRequest,
   options?: {
@@ -401,7 +444,15 @@ export function uploadPersonalWeeklyReport(
         resolve(parseWeeklyReportUploadBody(text));
         return;
       }
-      reject(new AiApiError(status, "http"));
+      // §2: đọc body TRƯỚC khi quyết định câu hiển thị. BE trả lý do cụ thể
+      // (sai form, nhiều tuần, nộp thay người khác…) — nuốt nó là bug gốc.
+      reject(
+        new AiApiError(
+          status,
+          "http",
+          readUploadFailureFromBody(status, text, xhr.getResponseHeader("Retry-After")),
+        ),
+      );
     });
 
     xhr.addEventListener("error", () => {
@@ -1425,10 +1476,14 @@ export interface PersonalSessionMessage {
    * - `calendar_events`: mảng sự kiện lịch (kèm event_id) để render lại bảng
    *   lịch + nút "Xem chi tiết". Không có → bảng lịch về markdown, mất nút.
    *   (Xem contract: FE__calendar-chat-history-events__contract__09-07-26.md)
+   * - `work_report_ai_draft`: bản nháp AI đã dựng, để render lại nút tải sau
+   *   khi F5/mở lại hội thoại. Cùng shape với SSE `work_report_ai_draft_ready`.
+   *   (Xem request: FE__ai-draft-download-persistence__request__07-08-26.md)
    */
   metadata?: {
     exportable_table?: boolean;
     calendar_events?: unknown;
+    work_report_ai_draft?: unknown;
   } | null;
 }
 
@@ -1440,22 +1495,44 @@ export interface PersonalSessionMessage {
  * không còn gửi header `X-Employee-Code` / `X-User-Id`. Các field `employeeCode`
  * / `userId` trong options được giữ để tương thích chữ ký gọi (không dùng nữa).
  */
+/** Số message tải mỗi trang. `offset=0` là trang MỚI NHẤT, `offset=PAGE_SIZE`
+ * là trang cũ hơn kế tiếp — cùng semantics với tab Công ty. */
+export const PERSONAL_HISTORY_PAGE_SIZE = 40;
+
+export interface PersonalSessionMessagesPage {
+  messages: PersonalSessionMessage[];
+  /** Còn message cũ hơn ở server. */
+  hasMore: boolean;
+}
+
 export async function fetchPersonalSessionMessages(
   sessionId: string,
-  options?: { signal?: AbortSignal; employeeCode?: string; userId?: string },
-): Promise<PersonalSessionMessage[]> {
+  options?: {
+    signal?: AbortSignal;
+    employeeCode?: string;
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<PersonalSessionMessagesPage> {
+  // Không có limit thì BE trả TOÀN BỘ session — payload lớn là nguồn giật chính
+  // khi mở hội thoại dài (§5). Cùng endpoint với tab Công ty nên cùng tham số.
+  const limit = options?.limit ?? PERSONAL_HISTORY_PAGE_SIZE;
+  const offset = options?.offset ?? 0;
   const response = await fetchWithAuth(
-    `${BASE_URL}/api/sessions/${sessionId}`,
+    `${BASE_URL}/api/sessions/${sessionId}?limit=${limit}&offset=${offset}`,
     { method: "GET" },
     { signal: options?.signal, timeoutMs: TIMEOUT_MS },
   );
   if (!response.ok) throw new AiApiError(response.status, "http");
   const data = await response.json() as unknown;
   let messages: unknown[] = [];
+  let hasMoreFlag: unknown;
   if (Array.isArray(data)) {
     messages = data;
   } else if (data && typeof data === "object") {
     const obj = data as Record<string, unknown>;
+    hasMoreFlag = obj.has_more ?? obj.hasMore;
     if (Array.isArray(obj.messages)) messages = obj.messages;
     else if (Array.isArray(obj.data)) messages = obj.data;
     else if (Array.isArray(obj.items)) messages = obj.items;
@@ -1465,7 +1542,12 @@ export async function fetchPersonalSessionMessages(
       else if (Array.isArray(sess.data)) messages = sess.data;
     } else if (Array.isArray(obj.history)) messages = obj.history;
   }
-  return messages as PersonalSessionMessage[];
+  return {
+    messages: messages as PersonalSessionMessage[],
+    // BE trả `has_more`; thiếu field thì suy ra từ việc trang có đầy hay không.
+    hasMore:
+      typeof hasMoreFlag === "boolean" ? hasMoreFlag : messages.length >= limit,
+  };
 }
 
 /**
@@ -1473,13 +1555,35 @@ export async function fetchPersonalSessionMessages(
  * Dùng sau đăng nhập để tải lịch sử chat theo tài khoản thay vì localStorage.
  * BE tự lấy `employee_code` từ JWT Bearer token — không gửi header riêng nữa.
  */
-export async function fetchPersonalSessions(
-  options?: { signal?: AbortSignal },
+/**
+ * Lượt gọi đang bay của `fetchPersonalSessions` (§4.8).
+ *
+ * `AiAssistantPage` và `PersonalAiWorkspacePage` cùng gọi hàm này khi mở tab Cá
+ * nhân (page cha render page con), nên không gom thì mỗi lần mở là HAI request
+ * y hệt. Khoá ở tầng API để mọi caller đi chung một lượt, thay vì bắt từng
+ * component tự nhớ đã gọi hay chưa.
+ */
+let personalSessionsInFlight: Promise<PersonalSessionsResponse> | null = null;
+
+export function fetchPersonalSessions(
+  // `signal` giữ trong chữ ký cho khớp caller, nhưng CỐ Ý không dùng: xem dưới.
+  _options?: { signal?: AbortSignal },
 ): Promise<PersonalSessionsResponse> {
+  if (personalSessionsInFlight) return personalSessionsInFlight;
+  // KHÔNG truyền `signal` xuống lượt dùng chung: caller nào unmount trước cũng
+  // sẽ huỷ luôn dữ liệu của caller còn lại. Caller tự bỏ kết quả bằng cách kiểm
+  // tra `signal.aborted` trong `.then`. Lượt gọi tự chạy hết rồi nhả khoá.
+  personalSessionsInFlight = requestPersonalSessions().finally(() => {
+    personalSessionsInFlight = null;
+  });
+  return personalSessionsInFlight;
+}
+
+async function requestPersonalSessions(): Promise<PersonalSessionsResponse> {
   const response = await fetchWithAuth(
     `${BASE_URL}/api/personal/sessions`,
     { method: "GET" },
-    { signal: options?.signal, timeoutMs: TIMEOUT_MS },
+    { timeoutMs: TIMEOUT_MS },
   );
   if (!response.ok) {
     throw new AiApiError(response.status, "http");

@@ -10,6 +10,10 @@ import {
   fetchPersonalSessions,
   AiApiError,
 } from "../services/aiChatApi";
+import {
+  fallbackUploadMessage,
+  withRetryAfterHint,
+} from "../../../services/ai-chat/uploadFailure";
 import { useAiChatSessions, useAiChatHistory } from "../hooks/useAiChatQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
@@ -19,7 +23,7 @@ import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
 import { AiWeeklyReportFilesDialog } from "../components/AiWeeklyReportFilesDialog";
 import { toast } from "../../../utils/toast";
-import type { AiMessage } from "../types";
+import type { AiChatRequest, AiMessage } from "../types";
 import { PersonalAiWorkspacePage } from "../../personal-ai/pages/PersonalAiWorkspacePage";
 import { usePersonalAiStore } from "../../personal-ai/stores/personalAiStore";
 
@@ -86,6 +90,9 @@ export const AiAssistantPage: React.FC = () => {
     const ac = new AbortController();
     fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
+        // Lượt gọi được dùng chung với PersonalAiWorkspacePage (§4.8) nên không
+        // huỷ theo signal của riêng ai — tự bỏ kết quả khi đã rời màn hình.
+        if (ac.signal.aborted) return;
         if (sessions.length > 0) loadPersonalSessions(sessions, empCode);
       })
       .catch(() => {});
@@ -255,19 +262,22 @@ export const AiAssistantPage: React.FC = () => {
     [],
   );
 
-  /** Helper: mapping lỗi từ AiApiError sang message tiếng Việt. */
+  /**
+   * Helper: mapping lỗi từ AiApiError sang message hiển thị.
+   *
+   * Contract FE 07/08/26 §2: đã có HTTP response thì hiện NGUYÊN VĂN lý do BE
+   * trả (`err.failure.message`) — các câu cứng theo status đè mất lý do thật
+   * ("File sai form…", "File báo cáo này được xuất cho nhân viên khác…").
+   * Không có response (timeout/mạng) mới dùng câu kết nối chung.
+   */
   const describeApiError = useCallback(
     (err: unknown, fallback: string): string => {
       if (err instanceof AiApiError) {
         if (err.kind === "timeout") return t("chat.errorTimeout");
         if (err.kind === "network") return t("chat.errorNetwork");
+        if (err.failure) return withRetryAfterHint(err.failure);
         if (err.status === 422) return t("chat.error422");
-        if (err.status === 413)
-          return "Tệp vượt quá dung lượng cho phép của máy chủ.";
-        if (err.status === 415)
-          return "Định dạng tệp không được hỗ trợ.";
-        if (err.status === 401 || err.status === 403)
-          return "Bạn không có quyền sử dụng tính năng này.";
+        return fallbackUploadMessage(err.status);
       }
       return fallback;
     },
@@ -398,7 +408,7 @@ export const AiAssistantPage: React.FC = () => {
           const currentConv = useAiAssistantStore.getState().conversations.find((c) => c.id === currentId);
           const serverSessionId = currentConv?.serverSessionId ?? null;
 
-          const request: any = {
+          const request: AiChatRequest = {
             question: trimmed,
             session_id: serverSessionId,
             // new_conversation là bắt buộc theo hợp đồng BE:

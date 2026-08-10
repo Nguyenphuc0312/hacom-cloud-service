@@ -226,6 +226,8 @@ interface ChatWindowProps {
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
   onDeleteMessage?: (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => void | Promise<void>;
   onToggleInfoPanel: () => void;
+  /** Đóng panel thông tin (do ChatPage sở hữu) khi mở tìm kiếm/ghim. */
+  onCloseInfoPanel?: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
   hasMoreMessages?: boolean;
@@ -290,6 +292,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onEditMessage,
   onDeleteMessage,
   onToggleInfoPanel,
+  onCloseInfoPanel,
   onBack,
   onTyping,
   hasMoreMessages,
@@ -880,13 +883,30 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     slowModeUntil,
   ]);
 
-  const handleSearchClick = React.useCallback(() => {
-    setOverlayMode((prev) => (prev === "search" ? null : "search"));
-  }, []);
+  // Chỉ một panel bên phải được mở tại một thời điểm. overlayMode sống ở đây còn
+  // info panel sống ở ChatPage, nên phải chủ động đóng bên kia — nếu không cả hai
+  // cùng mở và bóp khung chat lại còn một dải hẹp.
+  const openOverlay = React.useCallback(
+    (mode: "search" | "pinned") => {
+      setOverlayMode((prev) => {
+        const next = prev === mode ? null : mode;
+        if (next) onCloseInfoPanel?.();
+        return next;
+      });
+    },
+    [onCloseInfoPanel],
+  );
 
-  const handlePinnedClick = React.useCallback(() => {
-    setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
-  }, []);
+  const handleSearchClick = React.useCallback(() => openOverlay("search"), [openOverlay]);
+  const handlePinnedClick = React.useCallback(() => openOverlay("pinned"), [openOverlay]);
+
+  // Ngược lại: bấm nút Thông tin thì overlay phải nhường chỗ. Đóng ngay tại chỗ bấm
+  // thay vì đồng bộ qua effect — effect sẽ setState trong lúc render (lint chặn) và
+  // gây thêm một lượt render thừa.
+  const handleToggleInfoPanelExclusive = React.useCallback(() => {
+    setOverlayMode(null);
+    onToggleInfoPanel();
+  }, [onToggleInfoPanel]);
 
   const handlePin = React.useCallback(
     (messageId: string) => {
@@ -1284,7 +1304,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         typingStatus={typingStatus}
         typingStatuses={typingStatuses}
         onBack={onBack}
-        onInfoClick={onToggleInfoPanel}
+        onInfoClick={handleToggleInfoPanelExclusive}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
         onSelectionMode={enterSelectionMode}
