@@ -116,6 +116,10 @@ jobs:
           VITE_CHAT_SIMPLE_TIMELINE_DEBUG: ${{ vars.VITE_CHAT_SIMPLE_TIMELINE_DEBUG }}
           VITE_CHAT_USE_LEGACY_TIMELINE: ${{ vars.VITE_CHAT_USE_LEGACY_TIMELINE }}
           VITE_HR_API_BASE_URL: ${{ vars.VITE_HR_API_BASE_URL }}
+          # Màn "Công & Phép": để trống vars → mặc định "false" (ẩn trên
+          # production). Nghiệm thu xong thì đặt vars.VITE_WORK_MODULE_ENABLED
+          # = "true", không cần sửa code.
+          VITE_WORK_MODULE_ENABLED: ${{ vars.VITE_WORK_MODULE_ENABLED }}
           SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
@@ -201,6 +205,7 @@ jobs:
           VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="$(trim "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG:-}")"; [[ -n "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" ]] || VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="false"
           VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="$(trim "${VITE_CHAT_USE_LEGACY_TIMELINE:-}")"; [[ -n "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" ]] || VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="false"
           VITE_HR_API_BASE_URL_CLEAN="$(trim "${VITE_HR_API_BASE_URL:-}")"
+          VITE_WORK_MODULE_ENABLED_CLEAN="$(trim "${VITE_WORK_MODULE_ENABLED:-}")"; [[ -n "${VITE_WORK_MODULE_ENABLED_CLEAN}" ]] || VITE_WORK_MODULE_ENABLED_CLEAN="false"
 
           # Whitelist values. Vite needs the literal "true" or "false".
           for v_name in \
@@ -292,6 +297,7 @@ jobs:
             printf 'VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN=%s\n' "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
             printf 'VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN=%s\n' "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
             printf 'VITE_HR_API_BASE_URL_CLEAN=%s\n' "${VITE_HR_API_BASE_URL_CLEAN}"
+            printf 'VITE_WORK_MODULE_ENABLED_CLEAN=%s\n' "${VITE_WORK_MODULE_ENABLED_CLEAN}"
             printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
             printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
@@ -373,6 +379,7 @@ jobs:
             --build-arg VITE_CHAT_SIMPLE_TIMELINE_DEBUG="${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" \
             --build-arg VITE_CHAT_USE_LEGACY_TIMELINE="${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" \
             --build-arg VITE_HR_API_BASE_URL="${VITE_HR_API_BASE_URL_CLEAN}" \
+            --build-arg VITE_WORK_MODULE_ENABLED="${VITE_WORK_MODULE_ENABLED_CLEAN}" \
             --tag "${IMAGE_REF}" \
             --push \
             .
