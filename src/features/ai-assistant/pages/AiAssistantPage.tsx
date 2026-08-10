@@ -90,6 +90,9 @@ export const AiAssistantPage: React.FC = () => {
     const ac = new AbortController();
     fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
+        // Lượt gọi được dùng chung với PersonalAiWorkspacePage (§4.8) nên không
+        // huỷ theo signal của riêng ai — tự bỏ kết quả khi đã rời màn hình.
+        if (ac.signal.aborted) return;
         if (sessions.length > 0) loadPersonalSessions(sessions, empCode);
       })
       .catch(() => {});
