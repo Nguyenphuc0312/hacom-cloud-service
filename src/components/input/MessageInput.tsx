@@ -1083,11 +1083,26 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
       const editor = tipTapRef.current?.getEditor();
       if (editor) {
-        // The freshly-typed "@query" is plain text right before the caret, so
-        // its ProseMirror length equals its char count.
-        const matchLength = mentionMatch.end - mentionMatch.start;
+        // Đo lại '@' NGAY LÚC CHÈN, không tin `mentionMatch` trong state.
+        // `mentionMatch` chụp ở nhịp onSelectionChange trước; gõ tiếng Việt thì
+        // IME còn commit thêm ký tự sau nhịp đó (Unikey bỏ dấu "Côn"→"Công").
+        // Dùng độ dài query cũ với caret mới thì `from` lệch đúng phần chênh,
+        // deleteRange cắt trượt và để lại mảnh chữ quanh chip — bug 10-08-26
+        // ("@Trần Đăng Công Đăng Công").
         const to = editor.state.selection.anchor;
-        const from = to - matchLength;
+        const $pos = editor.state.doc.resolve(to);
+        // Chỉ tìm trong khối chứa caret: '@' của dòng trên không phải của tag này.
+        // leafText=" " là BẮT BUỘC: chip là node atom, chiếm đúng 1 vị trí trong
+        // toạ độ khối. Bỏ tham số này thì chip đếm thành 0 ký tự và mọi tag đứng
+        // sau một chip sẽ chèn lệch 1.
+        const atOffset = $pos.parent
+          .textBetween(0, $pos.parentOffset, undefined, " ")
+          .lastIndexOf("@");
+        if (atOffset < 0) {
+          clearMentionState();
+          return;
+        }
+        const from = $pos.start() + atOffset;
         const isAll = candidate.id === "all";
         // Atomic chip either way (cursor steps over it, Backspace clears it):
         // blue for a user, amber for @all — matches the sent-bubble styling.

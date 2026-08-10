@@ -96,6 +96,19 @@ describe("buildMentionSegments — đường dò theo tên (tin nhắn cũ)", ()
     expect(segments).toEqual([{ text: "@Huy Hoàng ơi" }]);
   });
 
+  // Bất biến: ghép các segment lại phải ra ĐÚNG chuỗi gốc, không thừa không
+  // thiếu. Tag mơ hồ bị bỏ qua bằng `continue` mà không dời `lastIndex` — chỉ
+  // đúng khi còn tag khác đứng sau nó, nên khoá lại bằng test.
+  it("tag mơ hồ đứng trước tag khác không làm vỡ nội dung", () => {
+    const segments = buildMentionSegments("@Huy Hoàng và @Minh nhé", [
+      mention({ userId: "u1", displayName: "Nguyễn Thế Huy Hoàng" }),
+      mention({ userId: "u2", displayName: "Trần Huy Hoàng" }),
+      mention({ userId: "u3", displayName: "Minh" }),
+    ]);
+
+    expect(segments.map((s) => s.text).join("")).toBe("@Huy Hoàng và @Minh nhé");
+  });
+
   it("tên đầy đủ của người khác thắng đuôi tên", () => {
     const segments = buildMentionSegments("@Huy Hoàng ơi", [
       mention({ userId: "u1", displayName: "Nguyễn Thế Huy Hoàng" }),
