@@ -74,10 +74,25 @@ test.describe.serial('Hacom Cloud browser state', () => {
 
   test('moves an asset to trash and restores it through source-backed UI state', async () => {
     const filename = `browser-restore-${Date.now()}.txt`;
+    const completionResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/cloud/uploads/')
+      && response.url().endsWith('/complete')
+      && response.request().method() === 'POST',
+    );
     await page.locator('input[type="file"]').setInputFiles({
       name: filename,
       mimeType: 'text/plain',
       buffer: Buffer.from('restore fixture', 'utf8'),
+    });
+    const completed = await completionResponse;
+    expect(completed.ok()).toBe(true);
+    const completionBody = await completed.json() as {
+      data?: { messageId?: string; quota?: { usedBytes: string; reservedBytes: string } };
+    };
+    const messageId = completionBody.data?.messageId;
+    expect(messageId).toBeTruthy();
+    await expect(page.getByRole('listitem', { name: `${filename} - completing` })).toBeHidden({
+      timeout: 20_000,
     });
     await expect(page.getByText(filename).first()).toBeVisible({ timeout: 20_000 });
 
@@ -98,5 +113,42 @@ test.describe.serial('Hacom Cloud browser state', () => {
     await expect(fileOptions).toBeVisible({ timeout: 20_000 });
     await page.reload();
     await expect(fileOptions).toBeVisible({ timeout: 20_000 });
+
+    const deleteResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/cloud/assets/')
+      && response.request().method() === 'DELETE',
+    );
+    await fileOptions.click();
+    await page.getByRole('menuitem', { name: 'Xóa' }).click();
+    const deleted = await deleteResponse;
+    expect(deleted.ok()).toBe(true);
+    const deletedBody = await deleted.json() as {
+      data?: { quota?: { usedBytes: string; reservedBytes: string } };
+    };
+    await expect(fileOptions).toBeHidden();
+    await page.reload();
+    await expect(fileOptions).toBeHidden();
+
+    const retried = await page.evaluate(async (id) => {
+      const refreshToken = sessionStorage.getItem('refreshToken');
+      const refreshed = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Contract': '2' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const refreshedBody = await refreshed.json();
+      const accessToken = refreshedBody.data?.tokens?.accessToken
+        ?? refreshedBody.data?.accessToken;
+      const response = await fetch(`/api/v1/cloud/assets/by-message/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      return { ok: response.ok, body: await response.json() };
+    }, messageId as string) as {
+      ok: boolean;
+      body: { data?: { quota?: { usedBytes: string; reservedBytes: string } } };
+    };
+    expect(retried.ok).toBe(true);
+    expect(retried.body.data?.quota).toEqual(deletedBody.data?.quota);
   });
 });

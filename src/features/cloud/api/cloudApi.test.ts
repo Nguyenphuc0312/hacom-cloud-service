@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudAsset } from './cloudApi';
-import { deleteCloudAssetForMessage } from './cloudApi';
+import { deleteCloudAssetForMessage, runCloudDeleteSingleFlight } from './cloudApi';
 
 const asset = { id: 'asset-1', messageId: 'message-1', status: 'available' } as CloudAsset;
 
@@ -29,5 +29,23 @@ describe('deleteCloudAssetForMessage', () => {
     await deleteCloudAssetForMessage('message-filtered-out', [], gateway);
     expect(gateway.trashByMessage).toHaveBeenCalledWith('message-filtered-out');
     expect(gateway.trash).not.toHaveBeenCalled();
+  });
+});
+
+describe('runCloudDeleteSingleFlight', () => {
+  it('coalesces duplicate delete requests for the same Cloud item while allowing a later retry', async () => {
+    let resolveFirst!: (value: CloudAsset) => void;
+    const first = new Promise<CloudAsset>((resolve) => { resolveFirst = resolve; });
+    const operation = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce(asset);
+
+    const requestA = runCloudDeleteSingleFlight('message:message-1', operation);
+    const requestB = runCloudDeleteSingleFlight('message:message-1', operation);
+    expect(requestB).toBe(requestA);
+    expect(operation).toHaveBeenCalledTimes(1);
+
+    resolveFirst(asset);
+    await expect(Promise.all([requestA, requestB])).resolves.toEqual([asset, asset]);
+    await expect(runCloudDeleteSingleFlight('message:message-1', operation)).resolves.toBe(asset);
+    expect(operation).toHaveBeenCalledTimes(2);
   });
 });
