@@ -18,6 +18,7 @@ import {
   splitCalendarAttachments,
   CalendarAttachmentUploadError,
 } from "../utils/uploadCalendarAttachment";
+import { logger } from "../../../utils/logger";
 import {
   meetingVisibilityToApi,
   personalVisibilityToApi,
@@ -133,7 +134,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to create meeting:", error);
+        logger.error("calendar", "create_meeting_failed", error);
         notifyError(error, "Không thể thêm lịch. Vui lòng thử lại.");
         return false;
       }
@@ -172,7 +173,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to update meeting:", error);
+        logger.error("calendar", "update_meeting_failed", error);
         notifyError(error, "Không thể cập nhật sự kiện");
         return false;
       }
@@ -203,7 +204,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to create personal event:", error);
+        logger.error("calendar", "create_personal_event_failed", error);
         notifyError(error, "Không thể thêm lịch. Vui lòng thử lại.");
         return false;
       }
@@ -231,7 +232,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to update personal event:", error);
+        logger.error("calendar", "update_personal_event_failed", error);
         notifyError(error, "Không thể cập nhật sự kiện");
         return false;
       }
@@ -250,7 +251,7 @@ export const useCalendarEventMutations = (
         }
         return false;
       } catch (error) {
-        console.error("Failed to delete event:", error);
+        logger.error("calendar", "delete_event_failed", error);
         toast.error("Không thể xóa lịch");
         return false;
       }
@@ -272,7 +273,7 @@ export const useCalendarEventMutations = (
         onSuccess?.();
         return true;
       } catch (error) {
-        console.error("Failed to update participant response:", error);
+        logger.error("calendar", "update_participant_response_failed", error);
         toast.error("Không thể cập nhật phản hồi");
         return false;
       }

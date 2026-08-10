@@ -1,4 +1,5 @@
 import { AUTH_CONFIG } from "../config";
+import { logger } from "../utils/logger";
 
 const isBrowser = (): boolean =>
   typeof window !== "undefined" &&
@@ -21,10 +22,9 @@ if (
   import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "session"
 ) {
   // Build prod với cấu hình sai phải thấy ngay, không im lặng nuốt.
-  console.error(
-    "[security] VITE_REFRESH_TOKEN_STORAGE_MODE=session bị bỏ qua trong " +
-      "production build. Refresh token luôn dùng HttpOnly cookie.",
-  );
+  logger.error("security", "refresh_token_session_mode_ignored_in_production", {
+    requestedMode: import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE,
+  });
 }
 
 let inMemoryAccessToken: string | null = null;

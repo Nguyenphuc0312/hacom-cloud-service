@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import { hrCalendarApi, type HRCalendarEvent } from "../features/api/hrCalendarApi";
 import { toast } from "../utils/toast";
+import { logger } from "../utils/logger";
 import { registerStoreResetter } from "./storeResetRegistry";
 
 export type CalendarMode = "my" | "other" | "unit";
@@ -268,7 +269,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       // degrade gracefully WITHOUT logging the user out or claiming the chat
       // session expired. The chat app keeps working; only the calendar widget
       // shows a soft unavailable notice.
-      console.error("Failed to fetch calendar events:", error);
+      logger.warn("calendar-store", "fetch_events_failed", error);
       const axiosError = error as {
         response?: { status?: number; data?: { message?: string; errorCode?: string; code?: string } };
       };
@@ -346,7 +347,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       toast.success("Đã tạo sự kiện");
       return event;
     } catch (error) {
-      console.error("Failed to create event:", error);
+      logger.error("calendar-store", "create_event_failed", error);
       toast.error("Không thể tạo sự kiện");
       return null;
     }
@@ -365,7 +366,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       toast.success("Đã cập nhật sự kiện");
       return true;
     } catch (error) {
-      console.error("Failed to update event:", error);
+      logger.error("calendar-store", "update_event_failed", error);
       toast.error("Không thể cập nhật sự kiện");
       return false;
     }
@@ -384,7 +385,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       toast.success("Đã xóa sự kiện");
       return true;
     } catch (error) {
-      console.error("Failed to delete event:", error);
+      logger.error("calendar-store", "delete_event_failed", error);
       toast.error("Không thể xóa sự kiện");
       return false;
     }

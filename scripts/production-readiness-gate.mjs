@@ -125,12 +125,20 @@ for (const file of sourceTextFiles) {
 }
 
 const rawConsoleRegex = /\bconsole\.(debug|info|log|warn|error)\s*\(/;
-const allowedConsoleFiles = new Set(["src/utils/logger.ts"]);
+const allowedConsoleFiles = new Set([
+  "src/utils/logger.ts",
+  // Dedicated instrumentation/reporting wrappers. Production code should import
+  // these modules instead of calling console directly.
+  "src/utils/apiPerfLogger.ts",
+  "src/utils/errorReporter.ts",
+]);
 const blockingDialogRegex = /\bwindow\.(alert|confirm)\s*\(/;
 const rawErrorStackRegex = /\berror\.stack\b|\b\w+Error\.stack\b/;
 const allowedErrorStackFiles = new Set([
   "src/components/common/RouterErrorBoundary.tsx",
   "src/components/error/AppErrorBoundary.tsx",
+  "src/components/error/FeatureErrorBoundary.tsx",
+  "src/utils/errorReporter.ts",
 ]);
 
 for (const file of sourceTextFiles) {
@@ -154,11 +162,55 @@ for (const file of sourceTextFiles) {
   }
 }
 
-const messageListPath = join(root, "src/components/chat/MessageList.tsx");
-const messageListText = readFileSync(messageListPath, "utf8");
+const conversationViewportPath = join(
+  root,
+  "src/components/chat/ConversationViewport.tsx",
+);
+const virtualTimelinePath = join(
+  root,
+  "src/features/chat/simple-virtual-timeline/SimpleVirtualizedChatTimeline.tsx",
+);
 
-if (!messageListText.includes("useConversationMessagesRTK")) {
-  fail("MessageList must read active timeline through useConversationMessagesRTK");
+if (!existsSync(conversationViewportPath)) {
+  fail("Chat timeline gate target is missing: src/components/chat/ConversationViewport.tsx");
+}
+
+if (!existsSync(virtualTimelinePath)) {
+  fail(
+    "Chat timeline gate target is missing: src/features/chat/simple-virtual-timeline/SimpleVirtualizedChatTimeline.tsx",
+  );
+}
+
+const conversationViewportText = existsSync(conversationViewportPath)
+  ? readFileSync(conversationViewportPath, "utf8")
+  : "";
+const virtualTimelineText = existsSync(virtualTimelinePath)
+  ? readFileSync(virtualTimelinePath, "utf8")
+  : "";
+
+if (
+  !conversationViewportText.includes("useConversationMessagesRTK") ||
+  !conversationViewportText.includes("useConversationMessagesRTK(conversation.id)")
+) {
+  fail(
+    "ConversationViewport must read active timeline through useConversationMessagesRTK(conversation.id)",
+  );
+}
+
+if (
+  !conversationViewportText.includes("<SimpleVirtualizedChatTimeline") ||
+  !conversationViewportText.includes("messages={messages}")
+) {
+  fail("ConversationViewport must pass RTK messages into SimpleVirtualizedChatTimeline");
+}
+
+if (
+  !virtualTimelineText.includes("useConversationTimelineRows") ||
+  !virtualTimelineText.includes("useVirtualizer")
+) {
+  fail(
+    "SimpleVirtualizedChatTimeline must derive timeline rows and render through useVirtualizer",
+  );
 }
 
 for (const legacyTimelineSelector of [
@@ -166,8 +218,13 @@ for (const legacyTimelineSelector of [
   "useCurrentMessages",
   "useMessages(",
 ]) {
-  if (messageListText.includes(legacyTimelineSelector)) {
-    fail(`MessageList still references legacy message selector: ${legacyTimelineSelector}`);
+  if (
+    conversationViewportText.includes(legacyTimelineSelector) ||
+    virtualTimelineText.includes(legacyTimelineSelector)
+  ) {
+    fail(
+      `Production chat timeline still references legacy message selector: ${legacyTimelineSelector}`,
+    );
   }
 }
 

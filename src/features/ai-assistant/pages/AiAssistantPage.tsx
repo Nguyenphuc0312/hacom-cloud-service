@@ -23,7 +23,7 @@ import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
 import { AiWeeklyReportFilesDialog } from "../components/AiWeeklyReportFilesDialog";
 import { toast } from "../../../utils/toast";
-import type { AiMessage } from "../types";
+import type { AiChatRequest, AiMessage } from "../types";
 import { PersonalAiWorkspacePage } from "../../personal-ai/pages/PersonalAiWorkspacePage";
 import { usePersonalAiStore } from "../../personal-ai/stores/personalAiStore";
 
@@ -405,7 +405,7 @@ export const AiAssistantPage: React.FC = () => {
           const currentConv = useAiAssistantStore.getState().conversations.find((c) => c.id === currentId);
           const serverSessionId = currentConv?.serverSessionId ?? null;
 
-          const request: any = {
+          const request: AiChatRequest = {
             question: trimmed,
             session_id: serverSessionId,
             // new_conversation là bắt buộc theo hợp đồng BE:

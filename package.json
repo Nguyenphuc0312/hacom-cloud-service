@@ -11,7 +11,7 @@
     "verify:dist": "node scripts/verify-dist-assets.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run --exclude \"**/*.bench.test.*\"",
-    "test:perf:unit": "vitest run src/features/chat/performance/chatTimelinePerformance.bench.test.tsx",
+    "test:perf:unit": "vitest run src/utils/chatPerformanceSummary.test.ts",
     "test:chat-runtime": "vitest run src/features/chat/domain/messageMerge.test.ts src/features/chat/domain/messageMerge.readReceiptBatch.test.ts src/hooks/useMessageGrouping.inPlace.test.ts src/features/chat/hooks/useConversationTimelineRows.inPlace.test.tsx src/features/chat/simple-virtual-timeline/simpleMessageChange.test.ts src/features/chat/simple-virtual-timeline/useSimpleChatScroll.test.tsx src/features/chat/realtime/chatRealtimeAdapter.test.ts src/features/realtime/realtimeBatchCoordinator.test.ts src/hooks/useWebSocket.sync-machine.test.ts src/hooks/useSendMessage.test.tsx src/hooks/useUploadQueue.test.tsx src/features/chat/usecases/reaction-usecases.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:hacom-cloud": "playwright test -c playwright.hacom-cloud.config.ts",
