@@ -155,8 +155,8 @@ export const TeamTimesheetPage: React.FC = () => {
   };
 
   return (
-    <main className="min-h-full bg-[#eef2f7] text-[#0f172a]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-6">
+    <main className="h-full min-h-0 w-full overflow-y-auto bg-[#eef2f7] text-[#0f172a]">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-4 py-5 md:px-6">
         <header className="flex flex-col gap-4 border-b border-[#d7dce3] pb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-normal text-[#0f172a]">

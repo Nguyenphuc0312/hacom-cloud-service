@@ -51,6 +51,7 @@ import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { toast } from "../../../utils/toast";
+import { logger } from "../../../utils/logger";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
@@ -849,7 +850,7 @@ export const CalendarPage: React.FC = () => {
         // reason EMPLOYEE_NOT_LINKED / NO_ATTENDANCE_DATA → items rỗng → lịch trống (không có badge).
         setAttendanceData(data.items ?? []);
       } catch (error: unknown) {
-        console.error("Failed to fetch attendance:", error);
+        logger.warn("calendar", "attendance_fetch_failed", error);
         setAttendanceData([]);
       }
     };

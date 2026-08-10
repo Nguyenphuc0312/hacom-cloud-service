@@ -23,6 +23,7 @@ import {
   calculateLeaveDays,
   type LeaveDayPortion,
 } from "../utils/leaveDays";
+import { WorkPageShell } from "../../work/components/WorkPageShell";
 
 type LoadState =
   | { status: "idle" | "loading"; data: MyLeaveResponse | null; error: null }
@@ -68,9 +69,9 @@ const toHalfDaySession = (portion: LeaveDayPortion): LeaveHalfDaySession => {
 };
 
 const halfDaySessionLabel = (value?: LeaveHalfDaySession | null) => {
-  if (value === "MORNING") return "Sang";
-  if (value === "AFTERNOON") return "Chieu";
-  return "Ca ngay";
+  if (value === "MORNING") return "Sáng";
+  if (value === "AFTERNOON") return "Chiều";
+  return "Cả ngày";
 };
 
 const NoticeWarning: React.FC<{ request: LeaveRequest }> = ({ request }) => {
@@ -78,7 +79,7 @@ const NoticeWarning: React.FC<{ request: LeaveRequest }> = ({ request }) => {
 
   return (
     <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-      Gui muon: {request.noticeActualDays ?? "-"} / {request.noticeRequiredDays ?? "-"} ngay bao truoc
+      Gửi muộn: {request.noticeActualDays ?? "-"} / {request.noticeRequiredDays ?? "-"} ngày báo trước
     </div>
   );
 };
@@ -160,7 +161,7 @@ const RequestRow: React.FC<{
     <td className="min-w-[190px] px-4 py-3 text-sm text-[#475569]">
       {formatDate(request.startDate)} - {formatDate(request.endDate)}
       <div className="mt-1 text-xs text-[#64748b]">
-        Buoi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
+        Buổi: {halfDaySessionLabel(request.startHalfDaySession)} - {halfDaySessionLabel(request.endHalfDaySession)}
       </div>
       <NoticeWarning request={request} />
     </td>
@@ -173,7 +174,7 @@ const RequestRow: React.FC<{
       </span>
       {currentApprovalStep(request) ? (
         <div className="mt-1 text-xs text-[#64748b]">
-          Cap {currentApprovalStep(request)?.stepOrder}: {currentApprovalStep(request)?.stepName}
+          Cấp {currentApprovalStep(request)?.stepOrder}: {currentApprovalStep(request)?.stepName}
         </div>
       ) : null}
     </td>
@@ -211,8 +212,8 @@ const ApprovalRow: React.FC<{
       </div>
       <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
         {currentApprovalStep(request)
-          ? `Cap ${currentApprovalStep(request)?.stepOrder}`
-          : "Cho duyet"}
+          ? `Cấp ${currentApprovalStep(request)?.stepOrder}`
+          : "Chờ duyệt"}
       </span>
     </div>
     <div className="mt-2 text-sm text-[#475569]">
@@ -248,7 +249,7 @@ const ApprovalRow: React.FC<{
   </div>
 );
 
-export const MyLeavePage: React.FC = () => {
+export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) => {
   const [year, setYear] = React.useState(now.getFullYear());
   const [state, setState] = React.useState<LoadState>({
     status: "idle",
@@ -363,21 +364,23 @@ export const MyLeavePage: React.FC = () => {
     }
   }
 
-  return (
-    <main className="min-h-full bg-[#eef2f7] text-[#0f172a]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-6">
-        <header className="flex flex-col gap-4 border-b border-[#d7dce3] pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
+  const header = (
+    <header className="flex flex-col gap-4 border-b border-[#d7dce3] pb-4">
+      {tabBar}
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="md:pb-2">
+          {tabBar ? null : (
             <h1 className="text-2xl font-semibold tracking-normal text-[#0f172a]">
               Nghỉ phép của tôi
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#64748b]">
-              <span>Năm {year}</span>
-              <span aria-hidden="true">·</span>
-              <span>{data?.mode === "EMPLOYEE_NOT_LINKED" ? "Chưa liên kết HR" : "Quỹ phép đang đối chiếu"}</span>
-            </div>
+          )}
+          <div className={`flex flex-wrap items-center gap-2 text-sm text-[#64748b] ${tabBar ? "" : "mt-2"}`}>
+            <span>Năm {year}</span>
+            <span aria-hidden="true">·</span>
+            <span>{data?.mode === "EMPLOYEE_NOT_LINKED" ? "Chưa liên kết HR" : "Quỹ phép đang đối chiếu"}</span>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1 text-xs font-medium text-[#475569]">
               <span>Năm</span>
               <input
@@ -395,19 +398,23 @@ export const MyLeavePage: React.FC = () => {
               onClick={() => void loadLeave()}
               disabled={state.status === "loading"}
             >
-              <RefreshCcw size={16} aria-hidden="true" />
-              Tải lại
-            </button>
-          </div>
-        </header>
+            <RefreshCcw size={16} aria-hidden="true" />
+            Tải lại
+          </button>
+        </div>
+      </div>
+    </header>
+  );
 
-        {state.status === "error" ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {state.error}
-          </div>
-        ) : null}
+  return (
+    <WorkPageShell header={header}>
+      {state.status === "error" ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {state.error}
+        </div>
+      ) : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {balances.length > 0 ? (
@@ -539,12 +546,12 @@ export const MyLeavePage: React.FC = () => {
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-medium text-[#475569]">
-                  <span>Chung tu/URL</span>
+                  <span>Chứng từ/URL</span>
                   <input
                     type="url"
                     value={form.attachmentUrl}
                     onChange={(event) => setForm((current) => ({ ...current, attachmentUrl: event.currentTarget.value }))}
-                    placeholder="Bat buoc voi nghi om tu 3 ngay"
+                    placeholder="Bắt buộc với nghỉ ốm từ 3 ngày"
                     className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                   />
                 </label>
@@ -586,9 +593,8 @@ export const MyLeavePage: React.FC = () => {
               </section>
             ) : null}
           </aside>
-        </section>
-      </div>
-    </main>
+      </section>
+    </WorkPageShell>
   );
 };
 

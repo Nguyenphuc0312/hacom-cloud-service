@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import {
   BriefcaseIcon,
   CalendarDaysIcon,
-  CalendarIcon,
   ChatBubbleLeftRightIcon,
   CloudIcon,
   Cog6ToothIcon,
@@ -15,7 +14,6 @@ import {
 import {
   BriefcaseIcon as BriefcaseSolid,
   CalendarDaysIcon as CalendarDaysSolid,
-  CalendarIcon as CalendarSolid,
   ChatBubbleLeftRightIcon as ChatBubbleSolid,
   CloudIcon as CloudSolid,
   Cog6ToothIcon as Cog6ToothSolid,
@@ -78,21 +76,20 @@ const railItems: SideRailItem[] = [
   },
   // Cloud của tôi là một hội thoại nên nó sống ở /chat/<id>; /cloud chỉ là lối tắt
   // giải id rồi chuyển hướng (dùng khi chưa biết id).
-  { id: "cloud", label: "Cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
+  { id: "cloud", label: "sidebar:rail.cloud", icon: CloudIcon, iconActive: CloudSolid, to: ROUTE_PATHS.CLOUD },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, iconActive: BriefcaseSolid, to: ROUTE_PATHS.TASKS },
   {
-    id: "timesheet",
-    label: "sidebar:rail.timesheet",
+    // Công và Nghỉ phép nay chung một màn có tab, nên rail chỉ còn một mục —
+    // vẫn sáng khi đang ở /leave hoặc bảng công của nhóm.
+    id: "work",
+    label: "sidebar:rail.work",
     icon: ClipboardDocumentCheckIcon,
     iconActive: ClipboardDocumentCheckSolid,
     to: ROUTE_PATHS.TIMESHEET,
-  },
-  {
-    id: "leave",
-    label: "sidebar:rail.leave",
-    icon: CalendarIcon,
-    iconActive: CalendarSolid,
-    to: ROUTE_PATHS.LEAVE,
+    activeWhen: (pathname) =>
+      pathname === ROUTE_PATHS.TIMESHEET ||
+      pathname === ROUTE_PATHS.TEAM_TIMESHEET ||
+      pathname === ROUTE_PATHS.LEAVE,
   },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },

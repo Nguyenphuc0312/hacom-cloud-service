@@ -21,6 +21,7 @@ import {
   type TimesheetPeriodStatus,
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
+import { WorkPageShell } from "../../work/components/WorkPageShell";
 
 type LoadState =
   | { status: "idle" | "loading"; data: MyTimesheetResponse | null; error: null }
@@ -170,12 +171,14 @@ const ExplainableDayCell: React.FC<{
   day: MyTimesheetDay;
   onExplain: (day: MyTimesheetDay) => void;
 }> = ({ day, onExplain }) => (
-  <div className="relative">
+  // Nút xếp dưới ô, không absolute: bản absolute đè lên dòng giờ chấm công
+  // (08:05 - 17:35) làm mất thông tin ở đúng những ngày cần đọc kỹ nhất.
+  <div className="flex flex-col">
     <DayCell day={day} />
     {day.needsExplanation && day.id ? (
       <button
         type="button"
-        className="absolute bottom-2 right-2 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 shadow-sm hover:bg-amber-50"
+        className="mt-1 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50"
         onClick={() => onExplain(day)}
       >
         Giải trình
@@ -254,7 +257,7 @@ const PendingExplanationItem: React.FC<{
   </div>
 );
 
-export const MyTimesheetPage: React.FC = () => {
+export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) => {
   const [searchParams] = useSearchParams();
   const queryPeriod = periodFromQuery(searchParams.get("month"));
   const queryMonth = queryPeriod?.month;
@@ -408,25 +411,27 @@ export const MyTimesheetPage: React.FC = () => {
     }
   }
 
-  return (
-    <main className="min-h-full bg-[#eef2f7] text-[#0f172a]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-6">
-        <header className="flex flex-col gap-4 border-b border-[#d7dce3] pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
+  const header = (
+    <header className="flex flex-col gap-4 border-b border-[#d7dce3] pb-4">
+      {tabBar}
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="md:pb-2">
+          {tabBar ? null : (
             <h1 className="text-2xl font-semibold tracking-normal text-[#0f172a]">
               Công của tôi
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#64748b]">
-              <span>{formatMonthTitle(month, year)}</span>
-              {period ? (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>{periodStatusLabel[period.status]}</span>
-                </>
-              ) : null}
-            </div>
+          )}
+          <div className={`flex flex-wrap items-center gap-2 text-sm text-[#64748b] ${tabBar ? "" : "mt-2"}`}>
+            <span>{formatMonthTitle(month, year)}</span>
+            {period ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{periodStatusLabel[period.status]}</span>
+              </>
+            ) : null}
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#d7dce3] bg-white text-[#334155] hover:bg-[#f8fbff]"
@@ -477,19 +482,23 @@ export const MyTimesheetPage: React.FC = () => {
               to={ROUTE_PATHS.TEAM_TIMESHEET}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1565C0] px-3 text-sm font-semibold text-white hover:bg-[#1976D2]"
             >
-              <Users size={16} aria-hidden="true" />
-              Nhóm của tôi
-            </Link>
-          </div>
-        </header>
+            <Users size={16} aria-hidden="true" />
+            Nhóm của tôi
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
 
-        {state.status === "error" ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {state.error}
-          </div>
-        ) : null}
+  return (
+    <WorkPageShell header={header}>
+      {state.status === "error" ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {state.error}
+        </div>
+      ) : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <SummaryTile
@@ -681,9 +690,8 @@ export const MyTimesheetPage: React.FC = () => {
               </div>
             ) : null}
           </aside>
-        </section>
-      </div>
-    </main>
+      </section>
+    </WorkPageShell>
   );
 };
 
