@@ -16,6 +16,7 @@ import {
 import { useWeeklyReportFileActions } from "../hooks/useWeeklyReportFileActions";
 import { AiWeeklyReportFilePreviewModal } from "./AiWeeklyReportFilePreviewModal";
 import { toast } from "../../../utils/toast";
+import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
 
 interface AiWeeklyReportFilesDialogProps {
   isOpen: boolean;
@@ -49,6 +50,10 @@ export const AiWeeklyReportFilesDialog: React.FC<
   const [weekStart, setWeekStart] = useState("");
   const [weekEnd, setWeekEnd] = useState("");
   const [company, setCompany] = useState(defaultCompany);
+
+  // State giữ ISO cho API; ô nhập hiển thị dd/mm/yyyy.
+  const weekStartField = useIsoDateField(weekStart, setWeekStart);
+  const weekEndField = useIsoDateField(weekEnd, setWeekEnd);
 
   const {
     handleView,
@@ -137,20 +142,20 @@ export const AiWeeklyReportFilesDialog: React.FC<
               <span className="text-text-muted">
                 {t("weeklyReport.weekStart")}
               </span>
-              <input
-                type="date"
-                value={weekStart}
-                onChange={(e) => setWeekStart(e.target.value)}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-text-primary focus:border-border-strong focus:outline-none"
+              <DateFieldVN
+                {...weekStartField}
+                ariaLabel={t("weeklyReport.weekStart")}
+                wrapClassName="rounded-lg border border-border bg-surface pr-1 focus-within:border-border-strong"
+                className="w-full min-w-0 bg-transparent px-3 py-2 text-text-primary outline-none"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-text-muted">{t("weeklyReport.weekEnd")}</span>
-              <input
-                type="date"
-                value={weekEnd}
-                onChange={(e) => setWeekEnd(e.target.value)}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-text-primary focus:border-border-strong focus:outline-none"
+              <DateFieldVN
+                {...weekEndField}
+                ariaLabel={t("weeklyReport.weekEnd")}
+                wrapClassName="rounded-lg border border-border bg-surface pr-1 focus-within:border-border-strong"
+                className="w-full min-w-0 bg-transparent px-3 py-2 text-text-primary outline-none"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
