@@ -226,6 +226,19 @@ export const USE_AUTH_SERVICE =
     ? true
     : rawUseAuthService === "true";
 
+/**
+ * Feature flag: màn "Công & Phép" (/timesheet, /leave, /timesheet/team).
+ *
+ * Mặc định BẬT nên local/dev vẫn vào test bình thường; `.env.production` đặt
+ * "false" để tạm ẩn trên bản deploy cho tới khi nghiệm thu xong. Tắt thì rail
+ * bỏ mục đó và route hiện trang "đang phát triển" — không xoá code.
+ */
+const rawWorkModuleEnabled = import.meta.env.VITE_WORK_MODULE_ENABLED;
+export const WORK_MODULE_ENABLED =
+  rawWorkModuleEnabled === undefined || rawWorkModuleEnabled === ""
+    ? true
+    : rawWorkModuleEnabled === "true";
+
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 
