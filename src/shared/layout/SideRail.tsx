@@ -23,6 +23,7 @@ import {
 import { Contact, HandHelping } from "lucide-react";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
+import { WORK_MODULE_ENABLED } from "../../config";
 import { readCachedCloudConversationId } from "../../features/cloud/personalCloudPolicy";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
@@ -53,7 +54,7 @@ const cloudChatPath = (): string | null => {
   return id ? `${ROUTE_PATHS.CHAT}/${id}` : null;
 };
 
-const railItems: SideRailItem[] = [
+const allRailItems: SideRailItem[] = [
   {
     id: "messages",
     label: "sidebar:rail.messages",
@@ -94,6 +95,11 @@ const railItems: SideRailItem[] = [
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, iconActive: CalendarDaysSolid, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },
 ];
+
+// Tạm ẩn "Công & Phép" trên production; local vẫn thấy (flag mặc định bật).
+const railItems: SideRailItem[] = allRailItems.filter(
+  (item) => item.id !== "work" || WORK_MODULE_ENABLED,
+);
 
 /**
  * Cloud trỏ thẳng tới /chat/<id> khi đã biết id, và sáng đèn khi đang mở đúng
