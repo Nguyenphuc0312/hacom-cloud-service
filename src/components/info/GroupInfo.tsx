@@ -49,6 +49,7 @@ import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
+import { formatCalendarDate } from "../../utils/formatTime";
 import { chatApi } from "../../features/chat/api/chatApi";
 import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
@@ -1147,7 +1148,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             <span className="truncate">{nameByUserId[msg.senderId] || msg.senderName}</span>
                             {msg.createdAt && (
                               <span className="shrink-0">
-                                · {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                                · {formatCalendarDate(new Date(msg.createdAt))}
                               </span>
                             )}
                           </div>

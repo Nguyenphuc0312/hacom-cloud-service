@@ -21,6 +21,7 @@ import {
   type TimesheetPeriodStatus,
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
+import { formatCalendarDate } from "../../../utils/formatTime";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
 
 type LoadState =
@@ -75,10 +76,7 @@ const formatShortDate = (value?: string | null) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-  });
+  return formatCalendarDate(date);
 };
 
 const toInputMonth = (month: number, year: number) =>
@@ -566,7 +564,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar
                 <div className="flex items-center justify-between gap-3">
                   <span>Hạn xác nhận</span>
                   <span className="font-medium text-[#0f172a]">
-                    {period?.confirmDeadline ?? "-"}
+                    {formatShortDate(period?.confirmDeadline)}
                   </span>
                 </div>
               </div>

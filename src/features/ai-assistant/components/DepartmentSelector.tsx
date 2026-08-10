@@ -12,6 +12,7 @@ import type { DepartmentSelectionRequest, WorkReportRecord } from "../types";
 import { fetchWorkReports, fetchDepartments, AiApiError } from "../services/aiChatApi";
 import type { DepartmentListItem } from "../services/aiChatApi";
 import { WorkReportTable } from "./WorkReportTable";
+import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
 
 interface DepartmentSelectorProps {
   data: DepartmentSelectionRequest;
@@ -77,6 +78,16 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<WorkReportRecord[] | null>(null);
+
+  // State giữ ISO; ô hiển thị dd/mm/yyyy. Kẹp lại khoảng hợp lệ vì ô text không
+  // có min/max như native input.
+  const startDateField = useIsoDateField(startDate, (iso) =>
+    setStartDate(iso > endDate ? endDate : iso),
+  );
+  const endDateField = useIsoDateField(endDate, (iso) => {
+    const capped = iso > todayStr() ? todayStr() : iso;
+    setEndDate(capped < startDate ? startDate : capped);
+  });
 
   // Fetch danh sách phòng ban đầy đủ từ API
   useEffect(() => {
@@ -351,15 +362,17 @@ export const DepartmentSelector: React.FC<DepartmentSelectorProps> = ({ data, on
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <label className="text-[11px] text-text-secondary whitespace-nowrap">Từ ngày:</label>
-                  <input type="date" value={startDate} max={endDate} title="Từ ngày"
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="rounded-lg border border-border bg-transparent px-1.5 py-0.5 text-xs text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
+                  {/* Ô text dd/mm/yyyy: native input tự kẹp min/max, ô text thì
+                      không, nên kẹp lại bằng tay khi nhận giá trị. */}
+                  <DateFieldVN {...startDateField} ariaLabel="Từ ngày"
+                    wrapClassName="rounded-lg border border-border bg-transparent pr-0.5 focus-within:border-[#1976D2]/60"
+                    className="w-[86px] bg-transparent px-1.5 py-0.5 text-xs text-text-primary outline-none" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   <label className="text-[11px] text-text-secondary whitespace-nowrap">Đến ngày:</label>
-                  <input type="date" value={endDate} min={startDate} max={todayStr()} title="Đến ngày"
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="rounded-lg border border-border bg-transparent px-1.5 py-0.5 text-xs text-text-primary focus:outline-none focus:border-[#1976D2]/60 focus:ring-1 focus:ring-[#1565C0]/25" />
+                  <DateFieldVN {...endDateField} ariaLabel="Đến ngày"
+                    wrapClassName="rounded-lg border border-border bg-transparent pr-0.5 focus-within:border-[#1976D2]/60"
+                    className="w-[86px] bg-transparent px-1.5 py-0.5 text-xs text-text-primary outline-none" />
                 </div>
               </div>
 
