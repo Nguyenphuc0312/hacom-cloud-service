@@ -40,6 +40,9 @@ interface ChatHeaderProps {
   onVideoCallClick?: () => void;
   onSearchClick?: () => void;
   onPinnedClick?: () => void;
+  titleOverride?: string;
+  subtitleOverride?: string;
+  avatarOverride?: React.ReactNode;
   onSelectionMode?: () => void;
   className?: string;
 }
@@ -63,6 +66,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onVideoCallClick,
   onSearchClick,
   onPinnedClick,
+  titleOverride,
+  subtitleOverride,
+  avatarOverride,
   className,
 }) => {
   const { t } = useTranslation();
@@ -171,7 +177,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
             aria-label={t("chat:header.viewInfo")}
           >
-            {isDirect ? (
+            {avatarOverride ?? (isDirect ? (
               <Avatar
                 src={avatarSrc}
                 alt={displayName}
@@ -189,7 +195,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 alt={displayName}
                 className="chat-header-avatar"
               />
-            )}
+            ))}
           </button>
 
           <button
@@ -201,7 +207,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
           >
             <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
-              {displayName}
+              {titleOverride ?? displayName}
             </h2>
 
             {isTyping ? (
@@ -220,7 +226,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >
-                {statusText}
+                {subtitleOverride ?? statusText}
               </p>
             )}
           </button>

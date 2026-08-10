@@ -196,6 +196,17 @@ export const API_BASE_URL = resolveHttpBaseUrl(
   "/api/v1",
 );
 
+/** Hacom Cloud API, proxied locally during development. */
+export const CLOUD_API_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_API_BASE_URL,
+  "/cloud-api/api/v1/cloud",
+);
+
+export const CLOUD_HEALTH_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_CLOUD_HEALTH_URL,
+  "/cloud-api/health/ready",
+);
+
 /**
  * Auth service base URL (Stage 1 – body mode).
  * When USE_AUTH_SERVICE is true, auth calls (login/refresh/logout/me/…) go

@@ -124,7 +124,7 @@ const toSendMessageAttachments = (
       resolveUploadMimeTypeForFile({
         name: attachment.fileName || "attachment",
         type: "",
-      }) ||
+    }) ||
       "",
     fileSize: attachment.fileSize ?? 0,
     url: attachment.url,

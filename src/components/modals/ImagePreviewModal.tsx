@@ -40,6 +40,8 @@ export interface ImagePreviewModalProps {
   sentAt?: Date | string;
   /** Open the full "Kho lưu trữ" panel — shown as the last filmstrip cell when the gallery exceeds the strip cap */
   onViewAll?: () => void;
+  /** Optional resolver for short-lived URLs owned by a feature such as Cloud. */
+  onDownload?: (image: GalleryImage) => Promise<string | undefined>;
 }
 
 /** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
@@ -138,6 +140,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   senderAvatar,
   sentAt,
   onViewAll,
+  onDownload,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
@@ -149,6 +152,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const dragStartRef = useRef({ x: 0, y: 0 });
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   // Normalise to gallery array regardless of which props were used
   const gallery = useMemo<GalleryImage[]>(() => {
@@ -180,6 +184,46 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     } else {
       setMounted(false);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement;
+    const focusTimer = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusTimer);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [isOpen]);
 
   // Keep the card within the viewport when the window shrinks
@@ -273,8 +317,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   const handleDownload = useCallback(async () => {
     if (!current?.url) return;
+    const resolvedUrl = onDownload ? await onDownload(current) : current.url;
+    if (!resolvedUrl) return;
     try {
-      const response = await fetch(current.url);
+      const response = await fetch(resolvedUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -285,9 +331,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      if (current?.url) window.open(current.url, "_blank", "noopener,noreferrer");
+      if (resolvedUrl) window.open(resolvedUrl, "_blank", "noopener,noreferrer");
     }
-  }, [current]);
+  }, [current, onDownload]);
 
   // Wheel-to-zoom via a NATIVE non-passive listener. React's onWheel is passive,
   // so its preventDefault() can't stop the browser's Ctrl+wheel page zoom — which
@@ -390,6 +436,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
         )}
         style={cardSize ? { width: cardSize.w, height: cardSize.h } : undefined}
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={resolvedAlt}
+        tabIndex={-1}
       >
         {/* Corner resize handles — drag to grow/shrink (card stays centered) */}
         {(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => (

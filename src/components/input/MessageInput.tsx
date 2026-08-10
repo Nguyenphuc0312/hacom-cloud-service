@@ -175,6 +175,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     // Multi-file upload queue
     uploadDrafts,
     onAddFiles,
+    onSendAudio,
     onRemoveDraft,
     onCancelUpload: onCancelQueueUpload,
     onRetryUpload: onRetryQueueUpload,
@@ -290,6 +291,27 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         toast.warning(t("chat:audio.tooShort", { defaultValue: "Recording too short" }));
         return;
       }
+      const originalFileName = `voice-recording.${
+        clip.mimeType.includes("webm")
+          ? "webm"
+          : clip.mimeType.includes("mp4")
+            ? "m4a"
+            : "ogg"
+      }`;
+      if (onSendAudio) {
+        audioBeginUpload();
+        await onSendAudio(
+          new File([clip.blob], originalFileName, {
+            type: clip.mimeType,
+            lastModified: Date.now(),
+          }),
+        );
+        audioBeginFinalizingUpload();
+        audioBeginSending();
+        audioMarkSent();
+        toast.success(t("chat:voice.sendRecording", { defaultValue: "Sent" }));
+        return;
+      }
       const clientMessageId = (typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`) || `voice-${Date.now()}`;
@@ -300,13 +322,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         clientMessageId,
         durationMs: clip.durationMs,
       });
-      const originalFileName = `voice-recording.${
-        clip.mimeType.includes("webm")
-          ? "webm"
-          : clip.mimeType.includes("mp4")
-            ? "m4a"
-            : "ogg"
-      }`;
       audioBeginFinalizingUpload();
       audioBeginSending();
       await sendVoiceMessage({
@@ -349,7 +364,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioSendLockedRef.current = false;
     }
-  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, sendVoiceMessage, t]);
+  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();
@@ -1408,7 +1423,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
         {locationFlowState !== "idle" && (
           <div
-            className="absolute bottom-full right-3 z-30 mb-2 w-[min(340px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-2xl shadow-black/25 ring-1 ring-black/5"
+            className="absolute bottom-full right-3 z-30 mb-2 w-[min(340px,calc(100vw-24px))] max-w-[440px] sm:w-[min(440px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-border bg-surface-raised shadow-2xl shadow-black/25 ring-1 ring-black/5"
             role="dialog"
             aria-modal="false"
             aria-labelledby="composer-location-title"
@@ -1492,7 +1507,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   </button>
                   <button
                     type="button"
-                    className="h-9 flex-[1.4] rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-9 min-w-[108px] flex-[1.4] whitespace-nowrap rounded-lg bg-[#1565C0] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void confirmLocationSend()}
                     aria-label="Gửi vị trí"
                   >

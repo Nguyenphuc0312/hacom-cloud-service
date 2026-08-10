@@ -36,7 +36,18 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
     { autoResolve: false },
   );
 
-  const duration = attachment.duration || 0;
+  const [duration, setDuration] = useState(attachment.duration || 0);
+
+  const handleLoadedMetadata = () => {
+    const detectedDuration = audioRef.current?.duration;
+    if (
+      typeof detectedDuration === "number" &&
+      Number.isFinite(detectedDuration) &&
+      detectedDuration > 0
+    ) {
+      setDuration(detectedDuration);
+    }
+  };
 
   const togglePlay = async () => {
     const nextAudio = audioRef.current;
@@ -68,7 +79,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
       const current = audioRef.current.currentTime;
       const total = audioRef.current.duration || duration;
       setCurrentTime(current);
-      setProgress((current / total) * 100);
+      setProgress(total > 0 ? (current / total) * 100 : 0);
     }
   };
 
@@ -114,6 +125,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
       <audio
         ref={audioRef}
         src={resolvedUrl}
+        onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onError={handleAudioError}

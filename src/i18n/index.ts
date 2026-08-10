@@ -19,6 +19,7 @@ export const appNamespaces = [
   "friends",
   "group",
   "calendar",
+  "cloud",
   "aiAssistant",
   "tasks",
 ] as const;

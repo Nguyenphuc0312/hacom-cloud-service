@@ -92,6 +92,8 @@ export interface MessageInputProps {
   // ── Multi-file upload queue (from ChatWindow) ──
   uploadDrafts?: AttachmentDraft[];
   onAddFiles?: (files: File[]) => { errors?: string[] } | void;
+  /** Override the native Chat voice upload, e.g. for My Documents Cloud. */
+  onSendAudio?: (file: File) => Promise<void>;
   onRemoveDraft?: (localId: string) => void;
   onCancelUpload?: (localId: string) => void;
   onRetryUpload?: (localId: string) => void;

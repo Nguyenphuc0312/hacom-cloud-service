@@ -142,6 +142,7 @@ export default defineConfig(({ mode }) => {
   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
   const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
   const aiTarget   = resolveHttpTarget(env.VITE_DEV_AI_PROXY_TARGET,   "https://ai.hacomholdings.com.vn");
+  const cloudTarget = resolveHttpTarget(env.VITE_DEV_CLOUD_PROXY_TARGET, "http://localhost:8080");
 
   const shouldAnalyzeBundle = mode === "analyze";
 
@@ -315,6 +316,33 @@ export default defineConfig(({ mode }) => {
         // Auth must be listed before the generic /api/v1 rule
         "/api/v1/auth": httpProxy(authTarget),
         "/api/v1":      httpProxy(apiTarget),
+        "/cloud-api": {
+          ...httpProxy(cloudTarget),
+          rewrite: (requestPath: string) => requestPath.replace(/^\/cloud-api/, ""),
+        },
+        // The Cloud API runs in Docker and signs MinIO URLs with
+        // host.docker.internal. That hostname is container-facing and is not
+        // reachable from every Windows browser. Keep the signed Host header,
+        // but carry the object PUT through Vite to the host's MinIO port.
+        "/cloud-object": {
+          target: "http://localhost:9000",
+          changeOrigin: false,
+          secure: false,
+          rewrite: (requestPath: string) => requestPath.replace(/^\/cloud-object/, ""),
+          configure: (proxy: AnyProxy) => {
+            proxy.on(
+              "proxyReq",
+              (proxyReq: {
+                removeHeader: (name: string) => void;
+                setHeader: (name: string, value: string) => void;
+              }) => {
+                proxyReq.removeHeader("origin");
+                proxyReq.removeHeader("referer");
+                proxyReq.setHeader("host", "host.docker.internal:9000");
+              },
+            );
+          },
+        },
         "/ws":          wsProxy(wsTarget),
         // HR API proxy — rewrites /hr-api/* → /api/* on the HR service host
         "/hr-api": {

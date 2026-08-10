@@ -1,0 +1,246 @@
+{
+  "title": "My Documents",
+  "subtitle": "Personal content",
+  "common": {
+    "soon": "Soon",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "workspace": {
+    "title": "My Documents",
+    "description": "Content here is visible only to you and synced through your Hacom account.",
+    "introTitle": "Your private conversation",
+    "onlyYou": "Only you can see this",
+    "sidebarPreview": "Save content for yourself",
+    "phaseAction": "This action is planned for the next My Documents phase.",
+    "saving": "Saving content {{size}}",
+    "private": "Private",
+    "refresh": "Refresh"
+  },
+  "search": {
+    "placeholder": "Search My Documents",
+    "aria": "Search My Documents"
+  },
+  "navigation": {
+    "aria": "Filter My Documents content",
+    "all": "All",
+    "text": "Text",
+    "image": "Images",
+    "video": "Videos",
+    "audio": "Audio",
+    "file": "Files",
+    "link": "Links",
+    "folders": "Folders",
+    "shared": "Shared",
+    "trash": "Trash"
+  },
+  "quota": {
+    "aria": "Hacom Cloud storage",
+    "title": "Storage",
+    "loading": "Loading storage...",
+    "usage": "{{used}} of {{limit}} used",
+    "usageCompact": "{{used}} / {{limit}} used",
+    "reserved": "{{value}} reserved for uploads",
+    "of": " / {{limit}} used",
+    "active": "{{value}} active",
+    "trash": "{{value}} in trash",
+    "available": "{{value}} available"
+  },
+  "quotaRequest": {
+    "action": "Request more storage",
+    "title": "Request more Cloud storage",
+    "description": "Choose an approved storage tier. Your current limit changes only after review.",
+    "tier": "Requested storage limit",
+    "reason": "Reason (optional)",
+    "reasonPlaceholder": "Briefly explain why you need more storage",
+    "submit": "Submit request",
+    "submitted": "Your storage request was submitted.",
+    "requested": "Requested limit: {{value}}",
+    "pendingNotice": "Only one request can be pending at a time.",
+    "status": {
+      "pending": "Pending review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
+  },
+  "resources": {
+    "title": "Cloud resources",
+    "media": "Images/video",
+    "audio": "Audio",
+    "files": "Files",
+    "links": "Links",
+    "emptyMedia": "No images or videos",
+    "emptyAudio": "No audio",
+    "emptyFiles": "No files",
+    "emptyLinks": "No links",
+    "download": "Download",
+    "accessUnavailable": "Access URL unavailable"
+  },
+  "filePreview": {
+    "title": "Cloud file",
+    "download": "Download",
+    "unavailable": "Preview is unavailable.",
+    "loading": "Loading preview..."
+  },
+  "service": {
+    "checking": "Checking Cloud service",
+    "ready": "Cloud service is ready",
+    "offline": "Cloud service is unreachable"
+  },
+  "composer": {
+    "aria": "Choose content to save",
+    "tabs": {
+      "upload": "Upload",
+      "text": "Quick note",
+      "link": "Link"
+    },
+    "text": {
+      "placeholder": "Write something you want to remember...",
+      "aria": "Note content",
+      "hint": "Press Enter for a new line ? visible only to you",
+      "action": "Send"
+    },
+    "link": {
+      "urlLabel": "Link address",
+      "titleLabel": "Display name",
+      "titlePlaceholder": "Optional",
+      "action": "Save link"
+    },
+    "upload": {
+      "drop": "Drop a file here",
+      "limit": "Up to 100 MB per file",
+      "pick": "Choose file",
+      "remove": "Remove selected file",
+      "action": "Upload"
+    },
+    "errors": {
+      "emptyFile": "An empty file cannot be uploaded.",
+      "fileTooLarge": "This file exceeds the 100 MB limit.",
+      "fileRequired": "Choose a file first.",
+      "textRequired": "The note cannot be empty.",
+      "linkInvalid": "Enter a valid HTTP or HTTPS link."
+    }
+  },
+  "upload": {
+    "stage": {
+      "reserving": "Checking available storage...",
+      "uploading": "Uploading to object storage...",
+      "finalizing": "Confirming the upload...",
+      "processing": "Processing and verifying the file..."
+    }
+  },
+  "feed": {
+    "all": "Recent activity",
+    "image": "Saved images",
+    "file": "My files",
+    "text": "Notes",
+    "link": "Saved links",
+    "count": "{{count}} items shown",
+    "count_one": "{{count}} item shown",
+    "count_other": "{{count}} items shown",
+    "loadedOnly": "Searching loaded items"
+  },
+  "timeline": {
+    "unknownDate": "Unknown date",
+    "loadMore": "Load more",
+    "empty": {
+      "title": "Nothing here yet",
+      "description": "Send yourself a note, image, file, or link to get started."
+    }
+  },
+  "item": {
+    "untitledText": "Untitled note",
+    "untitledLink": "Saved link",
+    "untitledFile": "Untitled file",
+    "fileMetadata": "File ? {{size}}"
+  },
+  "type": {
+    "text": "Note",
+    "link": "Link",
+    "file": "File",
+    "image": "Image",
+    "video": "Video",
+    "audio": "Audio"
+  },
+  "status": {
+    "pending": "Pending",
+    "processing": "Processing",
+    "ready": "Ready",
+    "failed": "Failed",
+    "trashed": "In trash",
+    "deleting": "Deleting",
+    "deleted": "Permanently deleted"
+  },
+  "delete": {
+    "dialogTitle": "How would you like to delete this item?",
+    "permanentTitle": "Permanently delete this item?",
+    "moveToTrash": "Move to trash",
+    "moveToTrashDescription": "The item disappears from the conversation but continues to use storage.",
+    "retention": "Restorable for 24 hours",
+    "permanent": "Delete now",
+    "permanentDescription": "Release storage now. This action cannot be undone."
+  },
+  "trash": {
+    "headerSubtitle": "Items are automatically deleted after 24 hours",
+    "loading": "Loading Trash...",
+    "emptyTitle": "Trash is empty",
+    "emptyDescription": "Items moved here can be restored for 24 hours.",
+    "restore": "Restore",
+    "deletePermanently": "Delete permanently",
+    "preview": "Preview",
+    "emptyAction": "Empty Trash",
+    "emptyConfirm": "Permanently delete every item in Trash? This cannot be undone.",
+    "retentionNotice": "Items in Trash still use storage and are automatically deleted after 24 hours.",
+    "expired": "Restore window expired",
+    "hoursRemaining": "About {{count}} hours left",
+    "minutesRemaining": "About {{count}} minutes left"
+  },
+  "inspector": {
+    "title": "Hacom Cloud",
+    "details": "Item details",
+    "empty": {
+      "title": "Your private storage",
+      "description": "Select an item to inspect it. Data is currently isolated by user."
+    },
+    "capabilities": {
+      "private": "Per-user data isolation",
+      "hash": "Background file integrity checks",
+      "quota": "Server-controlled storage quota"
+    },
+    "metadata": {
+      "status": "Status",
+      "size": "Size",
+      "created": "Created",
+      "updated": "Updated",
+      "id": "Item ID"
+    },
+    "actions": {
+      "download": "Download",
+      "share": "Share"
+    },
+    "phaseLater": "Available in a later phase",
+    "phaseNote": "Download, sharing, and folders have no Phase 1 API, so they are explicitly disabled."
+  },
+  "toast": {
+    "textCreated": "Note saved.",
+    "linkCreated": "Link saved.",
+    "uploadStarted": "File uploaded and processing started.",
+    "movedToTrash": "Item moved to Trash.",
+    "restored": "Item restored.",
+    "permanentlyDeleted": "Item permanently deleted and storage released."
+  },
+  "errors": {
+    "user": "The current user could not be identified. Sign in again.",
+    "quota": "There is not enough Cloud storage for this action.",
+    "fileTooLarge": "This file exceeds the allowed limit.",
+    "driveInactive": "Your Cloud workspace is not active.",
+    "itemNotReady": "This item is still processing and cannot be deleted yet.",
+    "trashExpired": "The 24-hour restore window has expired.",
+    "invalidQuotaTier": "Choose one of the supported storage limits.",
+    "quotaRequestPending": "A storage request is already pending review.",
+    "trashUnavailable": "Trash is not supported by the current Cloud API. Content in My Documents is unaffected.",
+    "idempotencyConflict": "This action conflicts with an earlier request. Refresh and try again.",
+    "offline": "The Cloud service is unreachable. Check the local backend.",
+    "generic": "The Cloud action could not be completed. Please try again."
+  }
+}

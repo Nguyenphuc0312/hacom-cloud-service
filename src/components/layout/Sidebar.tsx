@@ -26,6 +26,7 @@ interface SidebarProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
   selectedId: string | null;
+  leadingContent?: React.ReactNode;
 
   isLoadingMoreConversations?: boolean;
   hasMoreConversations?: boolean;
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   layoutState,
   currentUser,
   selectedId,
+  leadingContent,
 
   isLoadingMoreConversations = false,
   hasMoreConversations = false,
@@ -143,10 +145,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div
           className={clsx(
-            "flex min-h-0 flex-1",
+            "flex min-h-0 flex-1 flex-col",
             layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
           )}
         >
+          {leadingContent}
           <RoomList
             layoutState={layoutState}
             conversationIds={conversationIds}
