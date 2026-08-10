@@ -480,7 +480,12 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                   <span>Loại nghỉ</span>
                   <select
                     value={form.leaveType}
-                    onChange={(event) => setForm((current) => ({ ...current, leaveType: event.currentTarget.value as LeaveType }))}
+                    onChange={(event) => {
+                      // Đọc value TRƯỚC khi vào updater: updater của setState chạy
+                      // sau, lúc đó React đã gỡ currentTarget → null.value nổ.
+                      const next = event.currentTarget.value as LeaveType;
+                      setForm((current) => ({ ...current, leaveType: next }));
+                    }}
                     className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                   >
                     {Object.entries(leaveTypeLabel).map(([value, label]) => (
@@ -532,7 +537,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                     <span>Buổi đầu</span>
                     <select
                       value={form.startPortion}
-                      onChange={(event) => setForm((current) => ({ ...current, startPortion: event.currentTarget.value as LeaveDayPortion }))}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value as LeaveDayPortion;
+                        setForm((current) => ({ ...current, startPortion: next }));
+                      }}
                       className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                     >
                       <option value="FULL">Cả ngày</option>
@@ -544,7 +552,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                     <span>Buổi cuối</span>
                     <select
                       value={form.endPortion}
-                      onChange={(event) => setForm((current) => ({ ...current, endPortion: event.currentTarget.value as LeaveDayPortion }))}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value as LeaveDayPortion;
+                        setForm((current) => ({ ...current, endPortion: next }));
+                      }}
                       className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                     >
                       <option value="FULL">Cả ngày</option>
@@ -557,7 +568,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                   <span>Lý do</span>
                   <textarea
                     value={form.reason}
-                    onChange={(event) => setForm((current) => ({ ...current, reason: event.currentTarget.value }))}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      setForm((current) => ({ ...current, reason: next }));
+                    }}
                     rows={4}
                     maxLength={1000}
                     className="resize-none rounded-lg border border-[#d7dce3] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
@@ -568,7 +582,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                   <input
                     type="url"
                     value={form.attachmentUrl}
-                    onChange={(event) => setForm((current) => ({ ...current, attachmentUrl: event.currentTarget.value }))}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      setForm((current) => ({ ...current, attachmentUrl: next }));
+                    }}
                     placeholder="Bắt buộc với nghỉ ốm từ 3 ngày"
                     className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                   />
