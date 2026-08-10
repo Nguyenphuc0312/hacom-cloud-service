@@ -17,6 +17,7 @@ import {
   type TimesheetPeriodStatus,
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
+import { formatCalendarDate, formatCalendarDateTime } from "../../../utils/formatTime";
 
 type LoadState =
   | { status: "idle" | "loading"; data: TeamTimesheetResponse | null; error: null }
@@ -67,12 +68,14 @@ const formatDateTime = (value: string | null) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatCalendarDateTime(date);
+};
+
+const formatShortDate = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatCalendarDate(date);
 };
 
 const SummaryTile: React.FC<{
@@ -169,7 +172,7 @@ export const TeamTimesheetPage: React.FC = () => {
                   <span aria-hidden="true">·</span>
                   <span>{periodStatusLabel[period.status]}</span>
                   <span aria-hidden="true">·</span>
-                  <span>Hạn {period.confirmDeadline ?? "-"}</span>
+                  <span>Hạn {formatShortDate(period.confirmDeadline)}</span>
                 </>
               ) : null}
             </div>

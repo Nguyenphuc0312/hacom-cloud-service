@@ -23,6 +23,8 @@ import {
   calculateLeaveDays,
   type LeaveDayPortion,
 } from "../utils/leaveDays";
+import { formatCalendarDate } from "../../../utils/formatTime";
+import { DateFieldVN, isoToVn, vnToIso } from "../../../components/ui/DateFieldVN";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
 
 type LoadState =
@@ -87,11 +89,7 @@ const NoticeWarning: React.FC<{ request: LeaveRequest }> = ({ request }) => {
 const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return formatCalendarDate(date);
 };
 
 const formatDays = (value: number | null | undefined) =>
@@ -267,6 +265,13 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
     endPortion: "FULL" as LeaveDayPortion,
     reason: "",
     attachmentUrl: "",
+  });
+
+  // Nháp dd/mm/yyyy cho hai ô ngày: giữ nguyên chữ đang gõ dở ("05/0…") thay vì
+  // ép về form (form chỉ nhận ISO hợp lệ, nếu không calculateLeaveDays sẽ vỡ).
+  const [dateDraft, setDateDraft] = React.useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
   });
 
   const totalDays = React.useMemo(
@@ -486,26 +491,39 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                   </select>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
+                  {/* State giữ ISO (BE nhận ISO, và so sánh chuỗi start>end chỉ
+                      đúng với ISO); chỉ lớp hiển thị là dd/mm/yyyy. */}
                   <label className="grid gap-1 text-sm font-medium text-[#475569]">
                     <span>Từ ngày</span>
-                    <input
-                      type="date"
-                      value={form.startDate}
-                      onChange={(event) => setForm((current) => ({
-                        ...current,
-                        startDate: event.currentTarget.value,
-                        endDate: current.endDate < event.currentTarget.value ? event.currentTarget.value : current.endDate,
-                      }))}
-                      className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
+                    <DateFieldVN
+                      value={dateDraft.start ?? isoToVn(form.startDate)}
+                      ariaLabel="Từ ngày"
+                      wrapClassName="h-10 rounded-lg border border-[#d7dce3] bg-white pr-1 focus-within:border-[#1976D2]"
+                      className="h-full w-full min-w-0 rounded-lg bg-transparent px-3 text-sm text-[#0f172a] outline-none"
+                      onChange={(vn) => {
+                        const iso = vnToIso(vn);
+                        setDateDraft((d) => ({ ...d, start: iso ? null : vn }));
+                        if (!iso) return;
+                        setForm((current) => ({
+                          ...current,
+                          startDate: iso,
+                          endDate: current.endDate < iso ? iso : current.endDate,
+                        }));
+                      }}
                     />
                   </label>
                   <label className="grid gap-1 text-sm font-medium text-[#475569]">
                     <span>Đến ngày</span>
-                    <input
-                      type="date"
-                      value={form.endDate}
-                      onChange={(event) => setForm((current) => ({ ...current, endDate: event.currentTarget.value }))}
-                      className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
+                    <DateFieldVN
+                      value={dateDraft.end ?? isoToVn(form.endDate)}
+                      ariaLabel="Đến ngày"
+                      wrapClassName="h-10 rounded-lg border border-[#d7dce3] bg-white pr-1 focus-within:border-[#1976D2]"
+                      className="h-full w-full min-w-0 rounded-lg bg-transparent px-3 text-sm text-[#0f172a] outline-none"
+                      onChange={(vn) => {
+                        const iso = vnToIso(vn);
+                        setDateDraft((d) => ({ ...d, end: iso ? null : vn }));
+                        if (iso) setForm((current) => ({ ...current, endDate: iso }));
+                      }}
                     />
                   </label>
                 </div>

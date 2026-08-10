@@ -10,6 +10,7 @@ import {
 import type { Task, TaskStatus } from "../types/task.types";
 import { TASK_PRIORITY_LABELS, TASK_PRIORITY_COLORS } from "../types/task.types";
 import { AssigneeAvatar } from "./AssigneePicker";
+import { formatCalendarDate } from "../../../utils/formatTime";
 
 const COLUMNS: Array<{ status: TaskStatus; label: string; color: string }> = [
   { status: 'TODO', label: 'Cần làm', color: 'border-t-gray-400' },
@@ -24,7 +25,8 @@ const isOverdue = (task: Task) =>
 
 const formatDate = (iso: string | null) => {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  // Có năm: hạn chót thiếu năm khiến việc quá hạn từ năm trước trông như sắp tới.
+  return formatCalendarDate(new Date(iso));
 };
 
 interface KanbanCardProps {

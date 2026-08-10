@@ -19,6 +19,7 @@ import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import type { WorkReportScope } from "../types";
 import { toast } from "../../../utils/toast";
 import { Button } from "../../../components/ui";
+import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
 
 /** Ngày hôm nay dạng YYYY-MM-DD theo giờ máy (input[type=date] dùng dạng này). */
 function todayIso(): string {
@@ -117,6 +118,16 @@ export const WorkReportDraftPage: React.FC = () => {
     setStage({ kind: "idle" });
     setIsApproved(false);
   }, []);
+
+  // State vẫn giữ ISO; ô nhập hiển thị dd/mm/yyyy cứng, không theo locale máy.
+  const periodStartField = useIsoDateField(periodStart, (iso) => {
+    setPeriodStart(iso);
+    resetDownstream();
+  });
+  const periodEndField = useIsoDateField(periodEnd, (iso) => {
+    setPeriodEnd(iso);
+    resetDownstream();
+  });
 
   const handlePreflight = useCallback(async () => {
     if (!periodCheck.ok) return;
@@ -264,24 +275,18 @@ export const WorkReportDraftPage: React.FC = () => {
             2. Kỳ báo cáo <span className="font-normal text-text-muted">(tối đa 31 ngày)</span>
           </h2>
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={periodStart}
-              onChange={(e) => {
-                setPeriodStart(e.target.value);
-                resetDownstream();
-              }}
-              className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/25"
+            <DateFieldVN
+              {...periodStartField}
+              ariaLabel="Từ ngày"
+              wrapClassName="rounded-lg border border-border bg-surface pr-1 focus-within:border-[#1976D2]/60"
+              className="w-[110px] bg-transparent px-3 py-2 text-sm text-text-primary outline-none"
             />
             <span className="text-text-muted">→</span>
-            <input
-              type="date"
-              value={periodEnd}
-              onChange={(e) => {
-                setPeriodEnd(e.target.value);
-                resetDownstream();
-              }}
-              className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-[#1976D2]/60 focus:outline-none focus:ring-2 focus:ring-[#1565C0]/25"
+            <DateFieldVN
+              {...periodEndField}
+              ariaLabel="Đến ngày"
+              wrapClassName="rounded-lg border border-border bg-surface pr-1 focus-within:border-[#1976D2]/60"
+              className="w-[110px] bg-transparent px-3 py-2 text-sm text-text-primary outline-none"
             />
             <Button
               type="button"
