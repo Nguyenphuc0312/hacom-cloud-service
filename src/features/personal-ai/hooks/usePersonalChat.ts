@@ -17,8 +17,10 @@ import {
   uploadPersonalWeeklyReport,
   AiApiError,
   fetchPersonalSessionMessages,
+  PERSONAL_HISTORY_PAGE_SIZE,
 } from "../../ai-assistant/services/aiChatApi";
-import { usePersonalAiStore } from "../stores/personalAiStore";
+import type { PersonalSessionMessage } from "../../ai-assistant/services/aiChatApi";
+import { usePersonalAiStore, flushPersonalStreamBuffer } from "../stores/personalAiStore";
 import {
   getScopeToken,
   handleScopeErrorStatus,
@@ -67,6 +69,67 @@ function resolveBackendDocumentIds(
   return Array.from(new Set(candidates));
 }
 
+/**
+ * Chuẩn hoá một trang lịch sử từ BE thành message hiển thị được.
+ *
+ * Dùng chung cho trang đầu và các trang cũ hơn (§5) — nếu chỉ trang đầu chuẩn
+ * hoá thì bảng báo cáo / hộp #baocaocv / nút tải bản nháp sẽ mất khi cuộn lên.
+ */
+function normalizeHistoryMessages(
+  fetched: PersonalSessionMessage[],
+): PersonalChatMessage[] {
+  // Backend trả thêm các role nội bộ của tool-calling:
+  // "assistant_tool_call" (content rỗng) và "tool" (kết quả tool). Đây
+  // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
+  // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
+  // user/assistant có nội dung thực.
+  const visible = fetched.filter(
+    (m) =>
+      (m.role === "user" || m.role === "assistant") &&
+      (m.content ?? "").trim().length > 0,
+  );
+  return visible.map((m, idx) => {
+    // Khôi phục hộp "Xem báo cáo công việc" (ReportTextBox) sau khi tải
+    // lịch sử: câu trả lời của #baocaocv (user thường) là text báo cáo,
+    // không có cờ trong metadata. Nhận diện bằng tin user liền trước là
+    // "#baocaocv". Loại trừ báo cáo dạng bảng của admin (có exportable_table).
+    const prev = visible[idx - 1];
+    const isReportRequest =
+      m.role === "assistant" &&
+      m.metadata?.exportable_table !== true &&
+      prev?.role === "user" &&
+      BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
+    // Render lại bảng lịch + nút "Xem chi tiết" sau khi F5 (tải lịch sử).
+    // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
+    // metadata — markdown text không chứa event_id nên không parse ngược được.
+    const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
+    // Nút "Tải bản nháp AI" phải sống qua F5 / mở lại hội thoại / tải thêm
+    // trang lịch sử. BE trả lại cùng shape với SSE ở
+    // `metadata.work_report_ai_draft` nên dựng lại y hệt, không parse link
+    // trong markdown (link đó cần Authorization, bấm thẳng không tải được).
+    const aiDraft = normalizeWorkReportAiDraft(m.metadata?.work_report_ai_draft);
+    return {
+      id: m.id || crypto.randomUUID(),
+      role: m.role as "user" | "assistant",
+      // Có nút tải rồi thì cắt link thô trong transcript: link cần
+      // Authorization nên bấm thẳng ra 401, để lại chỉ là lối tải hỏng
+      // nằm cạnh nút chạy được (request: đúng MỘT nút, không link thô).
+      content: aiDraft ? stripDraftExportLinks(m.content) : m.content,
+      timestamp: new Date(m.timestamp),
+      isStreaming: false as const,
+      thinkingPhase: null as null,
+      // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
+      ...(m.metadata?.exportable_table === true && { exportableTable: true }),
+      // Render lại hộp báo cáo công việc của #baocaocv.
+      ...(isReportRequest && { reportRequest: true as const }),
+      // Render lại bảng lịch (khi BE trả metadata.calendar_events).
+      ...(calendarEvents && { calendarEvents }),
+      // Render lại nút tải bản nháp AI (khi BE trả metadata.work_report_ai_draft).
+      ...(aiDraft && { aiDraft }),
+    };
+  });
+}
+
 export function usePersonalChat() {
   const user = useAuthStore((s) => s.user);
   const {
@@ -91,6 +154,19 @@ export function usePersonalChat() {
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  /**
+   * Còn lịch sử cũ hơn ở server (§5), LƯU KÈM hội thoại mà cờ này thuộc về.
+   * Không tách thành boolean rời + effect reset: đổi hội thoại giữa chừng sẽ có
+   * một nhịp cờ của cuộc CŨ còn hiệu lực ở cuộc MỚI → tải nhầm trang cũ của
+   * cuộc khác. Gắn liền id thì đọc ra là tự khớp, không cần dọn.
+   */
+  const [olderHistory, setOlderHistory] = useState<{
+    conversationId: string;
+    hasMore: boolean;
+  } | null>(null);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  /** Chặn hai lượt tải trang cũ chồng nhau. */
+  const loadOlderAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fetchedSessionIds = useRef(new Set<string>());
   /**
@@ -177,58 +253,10 @@ export function usePersonalChat() {
 
     const userId = user?.id ?? "";
     fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode, userId })
-      .then((fetched) => {
-        if (ac.signal.aborted || !fetched.length) return;
-        // Backend trả thêm các role nội bộ của tool-calling:
-        // "assistant_tool_call" (content rỗng) và "tool" (kết quả tool). Đây
-        // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
-        // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
-        // user/assistant có nội dung thực.
-        const visible = fetched.filter(
-          (m) =>
-            (m.role === "user" || m.role === "assistant") &&
-            (m.content ?? "").trim().length > 0,
-        );
-        const normalized = visible.map((m, idx) => {
-          // Khôi phục hộp "Xem báo cáo công việc" (ReportTextBox) sau khi tải
-          // lịch sử: câu trả lời của #baocaocv (user thường) là text báo cáo,
-          // không có cờ trong metadata. Nhận diện bằng tin user liền trước là
-          // "#baocaocv". Loại trừ báo cáo dạng bảng của admin (có exportable_table).
-          const prev = visible[idx - 1];
-          const isReportRequest =
-            m.role === "assistant" &&
-            m.metadata?.exportable_table !== true &&
-            prev?.role === "user" &&
-            BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
-          // Render lại bảng lịch + nút "Xem chi tiết" sau khi F5 (tải lịch sử).
-          // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
-          // metadata — markdown text không chứa event_id nên không parse ngược được.
-          const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
-          // Nút "Tải bản nháp AI" phải sống qua F5 / mở lại hội thoại / tải thêm
-          // trang lịch sử. BE trả lại cùng shape với SSE ở
-          // `metadata.work_report_ai_draft` nên dựng lại y hệt, không parse link
-          // trong markdown (link đó cần Authorization, bấm thẳng không tải được).
-          const aiDraft = normalizeWorkReportAiDraft(m.metadata?.work_report_ai_draft);
-          return {
-            id: m.id || crypto.randomUUID(),
-            role: m.role as "user" | "assistant",
-            // Có nút tải rồi thì cắt link thô trong transcript: link cần
-            // Authorization nên bấm thẳng ra 401, để lại chỉ là lối tải hỏng
-            // nằm cạnh nút chạy được (request: đúng MỘT nút, không link thô).
-            content: aiDraft ? stripDraftExportLinks(m.content) : m.content,
-            timestamp: new Date(m.timestamp),
-            isStreaming: false as const,
-            thinkingPhase: null as null,
-            // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
-            ...(m.metadata?.exportable_table === true && { exportableTable: true }),
-            // Render lại hộp báo cáo công việc của #baocaocv.
-            ...(isReportRequest && { reportRequest: true as const }),
-            // Render lại bảng lịch (khi BE trả metadata.calendar_events).
-            ...(calendarEvents && { calendarEvents }),
-            // Render lại nút tải bản nháp AI (khi BE trả metadata.work_report_ai_draft).
-            ...(aiDraft && { aiDraft }),
-          };
-        });
+      .then((page) => {
+        if (ac.signal.aborted || !page.messages.length) return;
+        setOlderHistory({ conversationId: activeConversationId, hasMore: page.hasMore });
+        const normalized = normalizeHistoryMessages(page.messages);
         if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
       })
@@ -254,6 +282,61 @@ export function usePersonalChat() {
     return () => ac.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
+
+  // Cờ chỉ có hiệu lực với ĐÚNG hội thoại đã ghi nó ra.
+  const hasOlderHistory =
+    !!olderHistory &&
+    !!activeConversationId &&
+    olderHistory.conversationId === activeConversationId &&
+    olderHistory.hasMore;
+
+  /**
+   * Tải trang lịch sử CŨ HƠN và prepend (§5). `offset` = số message đang có,
+   * đúng semantics của BE (`offset=0` là trang mới nhất).
+   */
+  const loadOlderHistory = useCallback(() => {
+    const serverSessionId = activeConversation?.serverSessionId;
+    const conversationId = activeConversationId;
+    if (!serverSessionId || !conversationId) return;
+    if (!hasOlderHistory || loadOlderAbortRef.current) return;
+
+    const offset = activeConversation?.messages.length ?? 0;
+    if (offset === 0) return;
+
+    const ac = new AbortController();
+    loadOlderAbortRef.current = ac;
+    setIsLoadingOlder(true);
+
+    fetchPersonalSessionMessages(serverSessionId, {
+      signal: ac.signal,
+      limit: PERSONAL_HISTORY_PAGE_SIZE,
+      offset,
+    })
+      .then((page) => {
+        if (ac.signal.aborted) return;
+        // Hội thoại đã đổi trong lúc chờ → bỏ kết quả, không ghi nhầm cuộc khác.
+        if (usePersonalAiStore.getState().activeConversationId !== conversationId) return;
+        const normalized = normalizeHistoryMessages(page.messages);
+        // Trang rỗng (BE hết dữ liệu) → chốt hết lịch sử, đừng gọi lại vô hạn.
+        setOlderHistory({
+          conversationId,
+          hasMore: normalized.length > 0 && page.hasMore,
+        });
+        if (normalized.length === 0) return;
+        loadMessagesForConversation(conversationId, normalized);
+      })
+      .catch(() => { /* Silent — giữ nguyên phần đang hiển thị */ })
+      .finally(() => {
+        if (loadOlderAbortRef.current === ac) loadOlderAbortRef.current = null;
+        if (!ac.signal.aborted) setIsLoadingOlder(false);
+      });
+  }, [
+    activeConversation?.serverSessionId,
+    activeConversation?.messages.length,
+    activeConversationId,
+    hasOlderHistory,
+    loadMessagesForConversation,
+  ]);
 
   const sendMessage = useCallback(
     async (
@@ -1178,6 +1261,9 @@ export function usePersonalChat() {
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // Bấm Dừng phải GIỮ phần đã stream: token của frame cuối còn treo trong
+    // buffer, không xả là mất chữ ngay trước mắt người dùng.
+    flushPersonalStreamBuffer();
     setIsStreaming(false);
   }, []);
 
@@ -1185,6 +1271,11 @@ export function usePersonalChat() {
     messages,
     isStreaming,
     isLoadingHistory,
+    /** Còn lịch sử cũ hơn ở server (§5). */
+    hasOlderHistory,
+    /** Đang tải trang cũ hơn (khác `isLoadingHistory` của trang đầu). */
+    isLoadingOlder,
+    loadOlderHistory,
     sendMessage,
     sendWithFile,
     sendLevelReportWithFile,

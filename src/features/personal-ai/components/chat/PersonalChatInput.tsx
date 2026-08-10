@@ -32,8 +32,17 @@ type HashCommand = ReportTagCommand;
 const WEEKLY_REPORT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv";
 
 interface PersonalChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
+  /**
+   * Nội dung áp từ NGOÀI (chip gợi ý). Chỉ dùng làm giá trị khởi tạo lại khi nó
+   * đổi — draft khi gõ là state nội bộ, không đẩy từng ký tự lên page cha (mỗi
+   * ký tự sẽ render lại toàn bộ danh sách message).
+   */
+  presetValue?: string;
+  /**
+   * Nhận hàm xoá trắng ô nhập. Page cha gọi nó đúng những chỗ trước kia gọi
+   * `setInputValue("")` — tức là chỉ khi lượt gửi THỰC SỰ đi.
+   */
+  onRegisterClear?: (clear: () => void) => void;
   onSubmit: (value: string) => void;
   onStop?: () => void;
   isStreaming?: boolean;
@@ -72,14 +81,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const PersonalChatInput = forwardRef<
+const PersonalChatInputImpl = forwardRef<
   HTMLTextAreaElement,
   PersonalChatInputProps
 >(
   (
     {
-      value,
-      onChange,
+      presetValue = "",
+      onRegisterClear,
       onSubmit,
       onStop,
       isStreaming = false,
@@ -92,6 +101,16 @@ export const PersonalChatInput = forwardRef<
     },
     ref,
   ) => {
+    // Draft là state NỘI BỘ: gõ một ký tự chỉ re-render component này, không kéo
+    // theo cả danh sách message ở page cha. Cùng pattern với AiPromptBox.
+    const [value, setValue] = useState(presetValue);
+    const lastPresetRef = useRef(presetValue);
+    if (presetValue !== lastPresetRef.current) {
+      // Preset đổi (bấm chip gợi ý) → áp vào ô nhập ngay trong render này.
+      lastPresetRef.current = presetValue;
+      setValue(presetValue);
+    }
+    const onChange = setValue;
     const { activeDocuments, isRagMode, handleToggleSource } =
       usePersonalDocuments();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +199,29 @@ export const PersonalChatInput = forwardRef<
       },
       [onChange, onSubmit, ref],
     );
+
+    /**
+     * Gửi draft hiện tại. KHÔNG tự xoá trắng ô nhập: chỉ page cha mới biết lượt
+     * này có thực sự đi hay không (lượt kèm tệp có thể dừng ở hộp xác nhận, và
+     * user bấm Huỷ thì phải còn nguyên câu hỏi vừa gõ). Cha gọi `clear()` qua
+     * `onRegisterClear` đúng ở những chỗ trước kia gọi `setInputValue("")`.
+     */
+    const submitDraft = useCallback(() => {
+      const trimmed = value.trim();
+      if (!trimmed || isStreaming || isUploading) return;
+      onSubmit(trimmed);
+    }, [value, isStreaming, isUploading, onSubmit]);
+
+    const clearDraft = useCallback(() => {
+      setValue("");
+      if (ref && "current" in ref && ref.current) {
+        ref.current.style.height = "52px";
+      }
+    }, [ref]);
+
+    useEffect(() => {
+      onRegisterClear?.(clearDraft);
+    }, [onRegisterClear, clearDraft]);
 
     useClickOutside(hashMenuRef, () => setHashMenuOpen(false), { active: hashMenuOpen });
 
@@ -270,13 +312,7 @@ export const PersonalChatInput = forwardRef<
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const trimmed = value.trim();
-        if (trimmed && !isStreaming && !isUploading) {
-          onSubmit(trimmed);
-          if (ref && "current" in ref && ref.current) {
-            ref.current.style.height = "52px";
-          }
-        }
+        submitDraft();
       }
     };
 
@@ -553,15 +589,7 @@ export const PersonalChatInput = forwardRef<
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    const trimmed = value.trim();
-                    if (canSend) {
-                      onSubmit(trimmed);
-                      if (ref && "current" in ref && ref.current) {
-                        ref.current.style.height = "52px";
-                      }
-                    }
-                  }}
+                  onClick={submitDraft}
                   disabled={!canSend}
                   className={clsx(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-150",
@@ -603,4 +631,8 @@ export const PersonalChatInput = forwardRef<
   },
 );
 
-PersonalChatInput.displayName = "PersonalChatInput";
+PersonalChatInputImpl.displayName = "PersonalChatInput";
+
+/** memo: page cha re-render mỗi frame streaming; composer không phụ thuộc
+ * messages nên chặn ở đây là chặn được re-render nặng nhất của ô nhập. */
+export const PersonalChatInput = React.memo(PersonalChatInputImpl);

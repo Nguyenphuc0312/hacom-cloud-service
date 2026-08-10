@@ -79,6 +79,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     messages,
     isStreaming,
     isLoadingHistory,
+    hasOlderHistory,
+    isLoadingOlder,
+    loadOlderHistory,
     sendMessage,
     sendWithFile,
     sendLevelReportWithFile,
@@ -116,6 +119,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     const ac = new AbortController();
     fetchPersonalSessions({ signal: ac.signal })
       .then(({ sessions }) => {
+        // Lượt gọi được dùng chung với AiAssistantPage (§4.8) nên không huỷ theo
+        // signal của riêng ai — tự bỏ kết quả khi đã rời màn hình.
+        if (ac.signal.aborted) return;
         if (sessions.length > 0) {
           loadServerSessions(sessions, employeeCode);
         }
@@ -127,7 +133,17 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.employeeCode, user?.employee_code]);
 
-  const [inputValue, setInputValue] = React.useState("");
+  /**
+   * Draft KHÔNG còn là state của page: mỗi ký tự gõ sẽ render lại cả danh sách
+   * message (§4.1). Page chỉ giữ hai lối tác động ngược vào ô nhập:
+   *  - `presetValue`: áp nội dung từ chip gợi ý;
+   *  - `clearInputRef`: xoá trắng, gọi đúng những chỗ trước kia `setInputValue("")`.
+   */
+  const [presetValue, setPresetValue] = useState("");
+  const clearInputRef = useRef<() => void>(() => {});
+  const handleRegisterClear = useCallback((clear: () => void) => {
+    clearInputRef.current = clear;
+  }, []);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   /**
@@ -195,7 +211,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
             return;
           }
           setIsUploading(true);
-          setInputValue("");
+          clearInputRef.current();
           const accepted = await sendWithFile(text, pendingFile);
           if (accepted) setPendingFile(null);
           setIsUploading(false);
@@ -211,7 +227,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
       if (matchLevelReportTag(text) && isReportSubmissionText(text)) {
         toast.info("Đang xem báo cáo. Muốn nộp thì đính kèm tệp báo cáo rồi gửi lại.");
       }
-      setInputValue("");
+      clearInputRef.current();
       await sendMessage(text);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
@@ -223,7 +239,7 @@ export const PersonalAiWorkspacePage: React.FC = () => {
     const submit = pendingSubmit;
     if (!submit) return;
     setPendingSubmit(null);
-    setInputValue("");
+    clearInputRef.current();
     setIsUploading(true);
     // Nộp file KÈM tag báo cáo cấp (#TBP_baocao / #LDDV_baocao) đi endpoint
     // riêng /api/level-reports/upload; BE tự thay bản cũ nếu nộp lại cùng tuần.
@@ -247,7 +263,10 @@ export const PersonalAiWorkspacePage: React.FC = () => {
   }, []);
 
   const handleSuggestionSelect = useCallback((value: string) => {
-    setInputValue(value);
+    // Preset phải ĐỔI thì composer mới áp lại — chọn đúng gợi ý hai lần liên
+    // tiếp mà giữ nguyên chuỗi sẽ không kích hoạt gì. Thêm khoảng trắng đuôi
+    // (bị trim khi gửi) để lần chọn thứ hai vẫn là giá trị mới.
+    setPresetValue((prev) => (prev === value ? `${value} ` : value));
     setTimeout(() => {
       const textarea = textareaRef.current;
       if (!textarea) return;
@@ -275,6 +294,9 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           isLoadingHistory={isLoadingHistory}
           isRagMode={isRagMode}
           onSuggestionSelect={handleSuggestionSelect}
+          hasOlderHistory={hasOlderHistory}
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={loadOlderHistory}
         />
 
         {/* Sticky input footer */}
@@ -282,8 +304,8 @@ export const PersonalAiWorkspacePage: React.FC = () => {
           <div className="w-full">
             <PersonalChatInput
               ref={textareaRef}
-              value={inputValue}
-              onChange={setInputValue}
+              presetValue={presetValue}
+              onRegisterClear={handleRegisterClear}
               onSubmit={handleSubmit}
               onStop={stopStreaming}
               isStreaming={isStreaming}

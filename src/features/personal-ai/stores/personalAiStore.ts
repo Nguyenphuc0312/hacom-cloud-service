@@ -107,6 +107,63 @@ interface PersonalAiState {
   clearStore: () => void;
 }
 
+/** Nối `chunk` vào message cuối. Giữ nguyên reference các message cũ để
+ * React.memo ở PersonalMessageBubble ăn được. */
+function applyStreamChunk(conversationId: string, chunk: string) {
+  return (s: PersonalAiState) => ({
+    conversations: s.conversations.map((c) => {
+      if (c.id !== conversationId) return c;
+      const last = c.messages[c.messages.length - 1];
+      if (!last || last.role !== "assistant") return c;
+      const messages = c.messages.slice();
+      messages[messages.length - 1] = {
+        ...last,
+        content: last.content + chunk,
+        isStreaming: true,
+      };
+      return { ...c, messages };
+    }),
+  });
+}
+
+// ── Buffer token streaming: gom token, flush 1 lần/animation frame ──
+let pendingConversationId: string | null = null;
+let pendingTokens = "";
+let pendingFrame: number | null = null;
+
+/** Đẩy buffer vào store ngay lập tức. Gọi khi stream xong/lỗi/huỷ hoặc khi ghi
+ * đè content để không mất token còn treo trong buffer. */
+export function flushPersonalStreamBuffer(): void {
+  if (pendingFrame !== null) {
+    cancelAnimationFrame(pendingFrame);
+    pendingFrame = null;
+  }
+  if (!pendingConversationId || !pendingTokens) {
+    pendingConversationId = null;
+    pendingTokens = "";
+    return;
+  }
+  const conversationId = pendingConversationId;
+  const chunk = pendingTokens;
+  pendingConversationId = null;
+  pendingTokens = "";
+  usePersonalAiStore.setState(applyStreamChunk(conversationId, chunk));
+}
+
+function bufferStreamToken(conversationId: string, token: string): void {
+  // Đổi hội thoại giữa chừng → xả buffer của cuộc cũ trước, không ghi nhầm.
+  if (pendingConversationId && pendingConversationId !== conversationId) {
+    flushPersonalStreamBuffer();
+  }
+  pendingConversationId = conversationId;
+  pendingTokens += token;
+  if (pendingFrame !== null) return;
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null;
+    flushPersonalStreamBuffer();
+  });
+}
+
 export const usePersonalAiStore = create<PersonalAiState>()(
   persist(
     (set) => ({
@@ -253,24 +310,16 @@ export const usePersonalAiStore = create<PersonalAiState>()(
         }));
       },
 
+      // Streaming token: gom vào buffer, flush 1 lần/animation frame. Không batch
+      // thì mỗi token là 1 set() → re-render toàn bộ danh sách message.
       appendToken: (conversationId, token) => {
-        set((s) => ({
-          conversations: s.conversations.map((c) => {
-            if (c.id !== conversationId) return c;
-            const messages = [...c.messages];
-            const last = messages[messages.length - 1];
-            if (!last || last.role !== "assistant") return c;
-            messages[messages.length - 1] = {
-              ...last,
-              content: last.content + token,
-              isStreaming: true,
-            };
-            return { ...c, messages };
-          }),
-        }));
+        bufferStreamToken(conversationId, token);
       },
 
       finalizeMessage: (conversationId, content, citations) => {
+        // Xả token còn treo trước khi ghi đè content, nếu không những token của
+        // frame cuối sẽ flush SAU và ghi đè mất nội dung final.
+        flushPersonalStreamBuffer();
         const now = new Date().toISOString();
         set((s) => ({
           conversations: s.conversations.map((c) => {
@@ -477,18 +526,22 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       loadMessagesForConversation: (conversationId, messages) => {
         set((s) => ({
-          conversations: s.conversations.map((c) =>
-            c.id === conversationId && c.messages.length === 0
-              ? {
-                  ...c,
-                  messages: messages.map((m) => ({
-                    ...m,
-                    isStreaming: false,
-                    thinkingPhase: null,
-                  })),
-                }
-              : c,
-          ),
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const incoming = messages.map((m) => ({
+              ...m,
+              isStreaming: false,
+              thinkingPhase: null,
+            }));
+            if (c.messages.length === 0) return { ...c, messages: incoming };
+            // Đã có message trên máy: chỉ nhận phần LỊCH SỬ CŨ HƠN chưa biết
+            // (trang trước từ pagination §5), giữ nguyên phần đang hiển thị để
+            // không đụng vào message đang stream và không phá memo của bubble.
+            const known = new Set(c.messages.map((m) => m.id));
+            const older = incoming.filter((m) => !known.has(m.id));
+            if (older.length === 0) return c;
+            return { ...c, messages: [...older, ...c.messages] };
+          }),
         }));
       },
 

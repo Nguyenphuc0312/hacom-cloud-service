@@ -70,7 +70,6 @@ import {
 
 interface PersonalMessageBubbleProps {
   message: PersonalChatMessage;
-  isLast?: boolean;
 }
 
 // Giữ class cột báo cáo do rehypeReportTableCols gán (col--date/org/mid/wide).
@@ -270,7 +269,7 @@ const StreamingCursor: React.FC = () => (
   <span className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] animate-[pulse_0.8s_ease-in-out_infinite] rounded-sm bg-text-primary" />
 );
 
-export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
+const PersonalMessageBubbleImpl: React.FC<PersonalMessageBubbleProps> = ({
   message,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -742,3 +741,10 @@ export const PersonalMessageBubble: React.FC<PersonalMessageBubbleProps> = ({
     </motion.div>
   );
 };
+
+/**
+ * memo theo reference cua `message`: store thay object CHI khi message do doi
+ * (cac message cu giu nguyen reference), nen so sanh nong o day la du de chan
+ * re-parse Markdown cua toan bo lich su o moi frame streaming.
+ */
+export const PersonalMessageBubble = React.memo(PersonalMessageBubbleImpl);
