@@ -31,6 +31,20 @@ const data = <T>(response: { data: { data: T } }): T => response.data.data;
  * nhịp thành một request — trước đây mở /cloud bắn tới 4 lần ensure liên tiếp.
  */
 let inFlightEnsure: Promise<CloudSpaceDto> | null = null;
+const inFlightDeletes = new Map<string, Promise<CloudAsset>>();
+
+export const runCloudDeleteSingleFlight = (
+  key: string,
+  operation: () => Promise<CloudAsset>,
+): Promise<CloudAsset> => {
+  const existing = inFlightDeletes.get(key);
+  if (existing) return existing;
+  const request = operation().finally(() => {
+    if (inFlightDeletes.get(key) === request) inFlightDeletes.delete(key);
+  });
+  inFlightDeletes.set(key, request);
+  return request;
+};
 
 export const cloudApi = {
   ensure: (): Promise<CloudSpaceDto> => {
@@ -54,9 +68,15 @@ export const cloudApi = {
     client.post(`/uploads/${uploadId}/complete`).then(data<CloudAsset>),
   cancelUpload: (uploadId: string) =>
     client.post(`/uploads/${uploadId}/cancel`).then(data<CancelCloudUploadDto>),
-  trash: (assetId: string) => client.delete(`/assets/${assetId}`).then(data<CloudAsset>),
+  trash: (assetId: string) => runCloudDeleteSingleFlight(
+    `asset:${assetId}`,
+    () => client.delete(`/assets/${encodeURIComponent(assetId)}`).then(data<CloudAsset>),
+  ),
   trashByMessage: (messageId: string) =>
-    client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
+    runCloudDeleteSingleFlight(
+      `message:${messageId}`,
+      () => client.delete(`/assets/by-message/${encodeURIComponent(messageId)}`).then(data<CloudAsset>),
+    ),
   restore: (assetId: string) => client.post(`/assets/${assetId}/restore`).then(data<CloudAsset>),
   emptyTrash: () =>
     client.post('/trash/empty').then(data<{ claimed: number; purged: number; failed: number }>),

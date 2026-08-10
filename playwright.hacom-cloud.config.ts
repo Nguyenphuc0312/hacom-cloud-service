@@ -25,6 +25,10 @@ export default defineConfig({
       VITE_DEV_API_PROXY_TARGET: apiTarget,
       VITE_DEV_AUTH_PROXY_TARGET: authTarget,
       VITE_DEV_WS_PROXY_TARGET: process.env.HACOM_CLOUD_WS_BASE_URL ?? 'http://127.0.0.1:8001',
+      // The disposable auth runtime returns refresh tokens in the response body.
+      // Persist them for page.goto()/reload coverage; production remains forced
+      // to HttpOnly-cookie mode by tokenService.
+      VITE_REFRESH_TOKEN_STORAGE_MODE: 'session',
     },
   },
 });
