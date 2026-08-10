@@ -111,6 +111,13 @@ const PersonalChatInputImpl = forwardRef<
       setValue(presetValue);
     }
     const onChange = setValue;
+    /**
+     * Vừa bấm Gửi nhưng cha chưa kịp bật `isStreaming` (còn đang `await`
+     * pre-flight). Giữ nút ở trạng thái "đang xử lý" ngay trong nhịp bấm để
+     * không gửi được lượt thứ hai — giống ChatGPT, nút đổi tức thì chứ không
+     * chờ mạng trả lời.
+     */
+    const [justSubmitted, setJustSubmitted] = useState(false);
     const { activeDocuments, isRagMode, handleToggleSource } =
       usePersonalDocuments();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -208,9 +215,31 @@ const PersonalChatInputImpl = forwardRef<
      */
     const submitDraft = useCallback(() => {
       const trimmed = value.trim();
-      if (!trimmed || isStreaming || isUploading) return;
+      if (!trimmed || isStreaming || isUploading || justSubmitted) return;
+      // Khoá NGAY trong cùng nhịp bấm. `isStreaming` của cha chỉ bật sau khi
+      // hook chạy qua pre-flight (`await /scopes`), nên trong khoảng đó nút vẫn
+      // là mũi tên gửi được — bấm liên tiếp là ra nhiều lượt hỏi trùng nhau.
+      setJustSubmitted(true);
       onSubmit(trimmed);
-    }, [value, isStreaming, isUploading, onSubmit]);
+    }, [value, isStreaming, isUploading, justSubmitted, onSubmit]);
+
+    /**
+     * Nhả cờ vừa-bấm-gửi.
+     *
+     * Hai lối ra: (1) cha đã bật `isStreaming`/`isUploading` → bàn giao, hai cờ
+     * kia lo tiếp; (2) lượt gửi kết thúc mà KHÔNG stream (BE hỏi phạm vi, bị
+     * chặn quyền, lỗi mạng) → không có tín hiệu nào để chờ, nên nhả sau một
+     * nhịp ngắn, nếu không ô nhập kẹt vĩnh viễn.
+     */
+    useEffect(() => {
+      if (!justSubmitted) return;
+      if (isStreaming || isUploading) {
+        setJustSubmitted(false);
+        return;
+      }
+      const timer = setTimeout(() => setJustSubmitted(false), 1500);
+      return () => clearTimeout(timer);
+    }, [justSubmitted, isStreaming, isUploading]);
 
     const clearDraft = useCallback(() => {
       setValue("");
@@ -342,7 +371,7 @@ const PersonalChatInputImpl = forwardRef<
     );
 
     const canSend =
-      value.trim().length > 0 && !isStreaming && !isUploading;
+      value.trim().length > 0 && !isStreaming && !isUploading && !justSubmitted;
     const attachDisabled = isStreaming || isUploading || !!pendingFile;
 
     const placeholder = pendingFile
@@ -560,7 +589,7 @@ const PersonalChatInputImpl = forwardRef<
                 onScroll={syncOverlayScroll}
                 placeholder={placeholder}
                 rows={1}
-                disabled={isStreaming || isUploading}
+                disabled={isStreaming || isUploading || justSubmitted}
                 className={clsx(
                   TEXT_BOX_CLASS,
                   "relative w-full resize-none bg-transparent text-transparent caret-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70",
@@ -572,7 +601,17 @@ const PersonalChatInputImpl = forwardRef<
 
             {/* Send / Stop */}
             <div className="flex items-center pr-3 pb-2">
-              {isStreaming ? (
+              {justSubmitted && !isStreaming ? (
+                // Khoảng giữa "vừa bấm" và "bắt đầu stream" (đang chạy
+                // pre-flight `/scopes`): hiện spinner để thấy rõ máy đang xử lý,
+                // thay vì nút xám trông như hỏng.
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-active text-text-muted"
+                  aria-label="Đang xử lý"
+                >
+                  <Loader2Icon size={16} strokeWidth={2.5} className="animate-spin" />
+                </div>
+              ) : isStreaming ? (
                 <button
                   type="button"
                   onClick={onStop}

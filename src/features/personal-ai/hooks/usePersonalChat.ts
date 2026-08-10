@@ -153,6 +153,17 @@ export function usePersonalChat() {
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
+  /**
+   * Khóa "đang xử lý một lượt gửi", đặt ĐỒNG BỘ ngay khi vào `sendMessage`.
+   *
+   * `isStreaming` là state nên trong closure của `useCallback` nó là giá trị của
+   * lần render trước, và giữa lúc kiểm tra với lúc `setIsStreaming(true)` còn có
+   * `await fetchWorkReportScopes(...)`. Bấm Gửi liên tiếp (hoặc Enter giữ) trong
+   * khoảng đó thì MỌI lượt đều thấy `isStreaming === false` và chạy tiếp — sinh
+   * ra n bong bóng hỏi, n thẻ "Chọn phạm vi" và n request y hệt, máy đơ dần.
+   * Ref cập nhật tức thì nên lượt thứ hai trở đi bị chặn ngay.
+   */
+  const isSendingRef = useRef(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   /**
    * Còn lịch sử cũ hơn ở server (§5), LƯU KÈM hội thoại mà cờ này thuộc về.
@@ -348,7 +359,10 @@ export function usePersonalChat() {
       attachedFile?: PersonalChatMessage["attachedFile"],
     ) => {
       const trimmed = promptText.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || isStreaming || isSendingRef.current) return;
+      // Khóa NGAY, trước mọi `await`: xem chú thích ở `isSendingRef`.
+      isSendingRef.current = true;
+      try {
 
       // Đọc TƯƠI: `sendWithFile` có thể vừa tạo hội thoại + ghi chip xong rồi gọi
       // thẳng vào đây trong CÙNG một lượt, lúc đó `activeConversationId` của
@@ -780,6 +794,11 @@ export function usePersonalChat() {
         setIsStreaming(false);
         abortRef.current = null;
       }
+      } finally {
+        // Nhả khóa ở MỌI lối ra, kể cả các nhánh `return` sớm của pre-flight
+        // (deny / pick / lỗi mạng) — không nhả thì ô nhập chết cứng.
+        isSendingRef.current = false;
+      }
     },
     [
       isStreaming,
@@ -835,7 +854,11 @@ export function usePersonalChat() {
   const sendWithFile = useCallback(
     async (question: string, file: File): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return false;
+      // Cùng lý do với `sendMessage`: chặn bấm Gửi liên tiếp trong lúc còn
+      // `await` upload. Nhánh uỷ thác cho `sendMessage` bên dưới tự nhả khóa
+      // trước khi gọi, nên không tự chặn chính mình.
+      if (!trimmed || isStreaming || isSendingRef.current) return false;
+      isSendingRef.current = true;
 
       let conversationId = activeConversationId;
       if (!conversationId) {
@@ -870,6 +893,7 @@ export function usePersonalChat() {
             isError: true,
           });
           // Giữ nguyên tệp + câu hỏi để user chọn lại luồng, không nuốt mất file.
+          isSendingRef.current = false;
           return false;
         }
 
@@ -905,12 +929,15 @@ export function usePersonalChat() {
           });
           setIsStreaming(false);
           abortRef.current = null;
+          isSendingRef.current = false;
           return false;
         }
         // Nhả cờ TRƯỚC khi gửi: `sendMessage` bỏ qua lượt gửi khi `isStreaming`
         // còn bật (guard đầu hàm) — quên nhả là câu hỏi biến mất không dấu vết.
         setIsStreaming(false);
         abortRef.current = null;
+        // Nhả luôn khóa chống bấm-liên-tiếp, vì `sendMessage` cũng kiểm tra nó.
+        isSendingRef.current = false;
         // Chip đã vào store; `sendMessage` đọc TƯƠI từ store nên thấy được
         // `attachment_ids` của lượt này. Kèm tên tệp để bong bóng user hiện chip.
         //
@@ -1008,6 +1035,7 @@ export function usePersonalChat() {
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+        isSendingRef.current = false;
       }
     },
     [
@@ -1038,7 +1066,11 @@ export function usePersonalChat() {
   const sendLevelReportWithFile = useCallback(
     async (question: string, file: File, scopeToken?: string): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return false;
+      // Chặn bấm Gửi liên tiếp trong lúc còn `await` pre-flight/upload — xem
+      // chú thích ở `isSendingRef`.
+      if (!trimmed || isStreaming || isSendingRef.current) return false;
+      isSendingRef.current = true;
+      try {
 
       let conversationId = activeConversationId;
       if (!conversationId) {
@@ -1219,6 +1251,10 @@ export function usePersonalChat() {
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+      }
+      } finally {
+        // Nhả khóa ở MỌI lối ra, kể cả các nhánh `return` sớm của pre-flight.
+        isSendingRef.current = false;
       }
     },
     [
