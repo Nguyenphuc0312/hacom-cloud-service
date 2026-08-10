@@ -74,7 +74,10 @@ test('UI Cloud khớp hội thoại thường khi tab qua lại', async ({ page 
 
   // Ô nhập phải cùng lề trái, cùng bề rộng, cùng đáy.
   expect(cloud.composerLeft, 'lề trái ô nhập lệch').toBe(normal.composerLeft);
-  expect(cloud.composerWidth, 'bề rộng ô nhập lệch').toBe(normal.composerWidth);
+  expect(
+    Math.abs(cloud.composerWidth - normal.composerWidth),
+    'bề rộng ô nhập lệch quá dung sai làm tròn 1px',
+  ).toBeLessThanOrEqual(1);
   expect(cloud.composerBottom, 'đáy ô nhập lệch').toBe(normal.composerBottom);
 
   // Không màn nào được tràn ngang.

@@ -1683,6 +1683,8 @@ export const fileApi = {
           variant?: 'thumbnail' | 'preview' | 'original';
           width?: number | null;
           height?: number | null;
+          aspectRatio?: number | null;
+          placeholder?: string | null;
           mimeType?: string;
           fallbackReason?: string | null;
           /** False = terminal state; client MUST NOT retry automatically. */

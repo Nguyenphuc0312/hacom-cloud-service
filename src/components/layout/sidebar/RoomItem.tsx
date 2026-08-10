@@ -56,6 +56,10 @@ import {
   ConversationLabelMarker,
 } from "./ConversationLabels";
 import type { ConversationLabel } from "../../../stores/uiStore";
+import {
+  getConversationMenuPosition,
+  type ConversationMenuPosition,
+} from "./conversationMenuPosition";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -251,7 +255,7 @@ const buildPreviewText = (
   );
 };
 
-const ConversationItemMenu: React.FC<{
+export const ConversationItemMenu: React.FC<{
   conversationId: string;
   isPinned: boolean;
   labels: ConversationLabel[];
@@ -274,6 +278,8 @@ const ConversationItemMenu: React.FC<{
   const [open, setOpen] = useState(false);
   const [labelSubmenuOpen, setLabelSubmenuOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [menuPosition, setMenuPosition] =
+    useState<ConversationMenuPosition | null>(null);
   const [labelSubmenuPosition, setLabelSubmenuPosition] = useState({
     left: 0,
     top: 0,
@@ -283,6 +289,32 @@ const ConversationItemMenu: React.FC<{
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const labelSubmenuRef = React.useRef<HTMLDivElement | null>(null);
   const labelSubmenuCloseTimerRef = React.useRef<number | null>(null);
+
+  const updateMenuPosition = React.useCallback(() => {
+    const buttonRect = buttonRef.current?.getBoundingClientRect();
+    const menuRect = menuRef.current?.getBoundingClientRect();
+    if (!buttonRect || !menuRect) return;
+
+    setMenuPosition(
+      getConversationMenuPosition(
+        buttonRect,
+        { width: menuRect.width, height: menuRect.height },
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open) return undefined;
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -326,6 +358,9 @@ const ConversationItemMenu: React.FC<{
   );
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setMenuPosition(null);
+    }
     setOpen(nextOpen);
     if (!nextOpen) {
       setLabelSubmenuOpen(false);
@@ -389,12 +424,17 @@ const ConversationItemMenu: React.FC<{
         <EllipsisHorizontalIcon className="h-5 w-5" />
       </button>
 
-      {open ? (
+      {open && typeof document !== "undefined" ? createPortal(
         <div
           ref={menuRef}
           role="menu"
           onClick={(event) => event.stopPropagation()}
-          className="absolute right-0 top-full z-dropdown mt-1 w-72 overflow-visible rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3"
+          className="fixed z-[1000] w-72 overflow-visible rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3"
+          style={{
+            left: menuPosition?.left ?? 0,
+            top: menuPosition?.top ?? 0,
+            visibility: menuPosition ? "visible" : "hidden",
+          }}
         >
           <button
             type="button"
@@ -506,7 +546,8 @@ const ConversationItemMenu: React.FC<{
             <TrashIcon className="h-4 w-4" />
             <span>{t("sidebar:labels.deleteConversation")}</span>
           </button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
