@@ -229,9 +229,13 @@ export const USE_AUTH_SERVICE =
 /**
  * Feature flag: màn "Công & Phép" (/timesheet, /leave, /timesheet/team).
  *
- * Mặc định BẬT nên local/dev vẫn vào test bình thường; `.env.production` đặt
- * "false" để tạm ẩn trên bản deploy cho tới khi nghiệm thu xong. Tắt thì rail
- * bỏ mục đó và route hiện trang "đang phát triển" — không xoá code.
+ * Mặc định BẬT nên local/dev vẫn vào test bình thường. Bản deploy chạy trong
+ * Docker (workflow xoá `.env.*` khỏi build context) nên giá trị production đến
+ * từ build-arg `VITE_WORK_MODULE_ENABLED`, mặc định "false" ở Dockerfile —
+ * `.env.production` chỉ còn tác dụng khi build ngoài Docker.
+ *
+ * Tắt thì rail VẪN giữ mục đó, chỉ route hiện trang "đang phát triển" giống
+ * /tasks — không xoá code.
  */
 const rawWorkModuleEnabled = import.meta.env.VITE_WORK_MODULE_ENABLED;
 export const WORK_MODULE_ENABLED =

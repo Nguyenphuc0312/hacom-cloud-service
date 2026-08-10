@@ -23,7 +23,6 @@ import {
 import { Contact, HandHelping } from "lucide-react";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
-import { WORK_MODULE_ENABLED } from "../../config";
 import { readCachedCloudConversationId } from "../../features/cloud/personalCloudPolicy";
 import { useChatStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
@@ -54,7 +53,9 @@ const cloudChatPath = (): string | null => {
   return id ? `${ROUTE_PATHS.CHAT}/${id}` : null;
 };
 
-const allRailItems: SideRailItem[] = [
+// Mục "Công & Phép" luôn có mặt ở rail kể cả khi module tắt — bấm vào ra màn
+// "đang phát triển" giống /tasks (route quyết định, xem router/config/privateRoutes).
+const railItems: SideRailItem[] = [
   {
     id: "messages",
     label: "sidebar:rail.messages",
@@ -96,10 +97,6 @@ const allRailItems: SideRailItem[] = [
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, iconActive: SparklesSolid, to: ROUTE_PATHS.AI_ASSISTANT },
 ];
 
-// Tạm ẩn "Công & Phép" trên production; local vẫn thấy (flag mặc định bật).
-const railItems: SideRailItem[] = allRailItems.filter(
-  (item) => item.id !== "work" || WORK_MODULE_ENABLED,
-);
 
 /**
  * Cloud trỏ thẳng tới /chat/<id> khi đã biết id, và sáng đèn khi đang mở đúng
