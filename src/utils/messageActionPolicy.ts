@@ -32,10 +32,7 @@ export interface MessageActionPolicyInput {
   canEdit?: boolean;
   /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
   canRecallOthers?: boolean;
-  /**
-   * Cloud cá nhân: media chiếm dung lượng giữ luồng xóa như thường (thùng rác);
-   * ghi chú/link chỉ có đúng 1 nút "Xóa" — bấm là mất vĩnh viễn.
-   */
+  /** Cloud cá nhân chỉ có đúng 1 nút "Xóa" trong menu tin nhắn. */
   isPersonalCloud?: boolean;
 }
 
@@ -101,8 +98,7 @@ const canEditMessage = (message: Message): boolean =>
   !isFailedMessage(message) &&
   Boolean(message.content?.trim());
 
-// Tin upload chiếm dung lượng Cloud (khớp mediaTypeFor của BE) — đi luồng
-// thùng rác như cũ; còn lại (ghi chú/link) xóa vĩnh viễn 1 thao tác.
+// Tin upload chiếm dung lượng Cloud (khớp mediaTypeFor của BE).
 const CLOUD_MEDIA_TYPES = new Set<MessageType>([
   MessageType.IMAGE,
   MessageType.VIDEO,
@@ -215,10 +211,7 @@ const getActionCandidates = ({
   }
 
   if (canDelete && canDeleteMessage(message)) {
-    if (isPersonalCloud && !isCloudMediaMessage(message)) {
-      // Cloud: ghi chú/link không chiếm dung lượng → đúng 1 nút "Xóa" (nhãn
-      // override ở MessageCluster), bấm là mất vĩnh viễn. Media rơi xuống
-      // nhánh thường bên dưới, giữ luồng thùng rác như cũ.
+    if (isPersonalCloud) {
       candidates.push({
         id: "deleteForMe",
         menuOrder: 3,

@@ -133,7 +133,7 @@ describe("resolveMessageActions", () => {
     ).toEqual(["copy", "select", "adminDelete", "deleteForMe"]);
   });
 
-  it("Cloud cá nhân: media giữ luồng xóa như cũ (thu hồi + xóa phía tôi)", () => {
+  it("Cloud cá nhân: media cũng chỉ có đúng 1 nút Xóa", () => {
     expect(
       resolveMessageActions({
         message: message({ type: MessageType.IMAGE, content: "" }),
@@ -143,10 +143,10 @@ describe("resolveMessageActions", () => {
         canDelete: true,
         isPersonalCloud: true,
       }).menuActions,
-    ).toEqual(["pin", "recall", "deleteForMe"]);
+    ).toEqual(["pin", "deleteForMe"]);
   });
 
-  it("Cloud cá nhân: text/link có đúng 1 nút Xóa (mất vĩnh viễn), không thu hồi", () => {
+  it("Cloud cá nhân: text/link có đúng 1 nút Xóa, không thu hồi", () => {
     const menuActions = resolveMessageActions({
       message: message(),
       isOwn: true,

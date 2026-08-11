@@ -9,6 +9,7 @@ import {
   PhotoIcon,
   DocumentIcon,
   LinkIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { Skeleton, toast } from "../../ui";
@@ -66,6 +67,10 @@ const GROUP_CONVERSATION_TYPES = new Set<string>([
   "public",
   "channel",
 ]);
+const PERSONAL_CLOUD_CONVERSATION_TYPES = new Set<string>([
+  "PERSONAL_CLOUD",
+  "personal_cloud",
+]);
 
 type ForwardableResource =
   | ConversationResourcesMediaItem
@@ -118,11 +123,21 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   const conversationType = useChatStore(
     (state) => state.conversationById[conversationId]?.type,
   );
-  const recallLabel = GROUP_CONVERSATION_TYPES.has(String(conversationType))
-    ? "Xóa cho cả nhóm (Thu hồi)"
-    : "Xóa cho cả hai phía (Thu hồi)";
+  const isPersonalCloud = PERSONAL_CLOUD_CONVERSATION_TYPES.has(String(conversationType));
+  const recallLabel = isPersonalCloud
+    ? "Xóa"
+    : GROUP_CONVERSATION_TYPES.has(String(conversationType))
+      ? "Xóa cho cả nhóm (Thu hồi)"
+      : "Xóa cho cả hai phía (Thu hồi)";
   const [activeTab, setActiveTab] = useState<SharedContentTab>("media");
   const [modalOpen, setModalOpen] = useState(false);
+  const [zaloOpenSections, setZaloOpenSections] = useState<
+    Record<SharedContentTab, boolean>
+  >({
+    media: true,
+    files: true,
+    links: true,
+  });
   const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
   const [hiddenMessageIds, setHiddenMessageIds] = useState<Set<string>>(
     () => new Set(),
@@ -134,6 +149,21 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
     null,
   );
+
+  useEffect(() => {
+    setZaloOpenSections({
+      media: true,
+      files: true,
+      links: true,
+    });
+  }, [conversationId]);
+
+  const toggleZaloSection = useCallback((tab: SharedContentTab) => {
+    setZaloOpenSections((prev) => ({
+      ...prev,
+      [tab]: !prev[tab],
+    }));
+  }, []);
 
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
@@ -332,7 +362,8 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
         <ZaloResourceSection
           title="Ảnh/Video"
-          onOpen={() => onOpenAll?.("media")}
+          open={zaloOpenSections.media}
+          onToggle={() => toggleZaloSection("media")}
         >
           {mediaPreview.length > 0 ? (
             <DrawerMediaTab
@@ -346,6 +377,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               onJumpToMessage={onJumpToMessage}
               onDeleted={handleResourceDeleted}
               recallLabel={recallLabel}
+              isPersonalCloud={isPersonalCloud}
               onViewAll={() => onOpenAll?.("media")}
             />
           ) : (
@@ -366,7 +398,8 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
         <ZaloResourceSection
           title="File"
-          onOpen={() => onOpenAll?.("files")}
+          open={zaloOpenSections.files}
+          onToggle={() => toggleZaloSection("files")}
         >
           {filesPreview.length > 0 ? (
             <>
@@ -395,7 +428,8 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
         <ZaloResourceSection
           title="Link"
-          onOpen={() => onOpenAll?.("links")}
+          open={zaloOpenSections.links}
+          onToggle={() => toggleZaloSection("links")}
         >
           {linksPreview.length > 0 ? (
             <>
@@ -529,6 +563,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               onJumpToMessage={onJumpToMessage}
               onDeleted={handleResourceDeleted}
               recallLabel={recallLabel}
+              isPersonalCloud={isPersonalCloud}
               onViewAll={() => {
                 setActiveTab("media");
                 setModalOpen(true);
@@ -595,19 +630,25 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
 const ZaloResourceSection: React.FC<{
   title: string;
-  onOpen: () => void;
+  open: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
-}> = ({ title, onOpen, children }) => (
+}> = ({ title, open, onToggle, children }) => (
   <section className="bg-surface px-5 py-4">
     <button
       type="button"
-      onClick={onOpen}
+      onClick={onToggle}
+      aria-expanded={open}
       className="mb-3 flex w-full items-center justify-between text-left"
     >
       <span className="text-[18px] font-semibold text-text-primary">{title}</span>
-      <ChevronRightIcon className="h-5 w-5 text-text-muted" />
+      {open ? (
+        <ChevronDownIcon className="h-5 w-5 text-text-muted" />
+      ) : (
+        <ChevronRightIcon className="h-5 w-5 text-text-muted" />
+      )}
     </button>
-    {children}
+    {open ? children : null}
   </section>
 );
 
@@ -624,6 +665,7 @@ const DrawerMediaTab: React.FC<{
   onJumpToMessage?: (messageId: string) => void;
   onDeleted: (messageId: string) => void;
   recallLabel: string;
+  isPersonalCloud: boolean;
   onViewAll: () => void;
 }> = ({
   conversationId,
@@ -636,6 +678,7 @@ const DrawerMediaTab: React.FC<{
   onJumpToMessage,
   onDeleted,
   recallLabel,
+  isPersonalCloud,
   onViewAll,
 }) => {
   // When total > preview limit, replace last slot with "+N" overlay
@@ -690,6 +733,7 @@ const DrawerMediaTab: React.FC<{
           onJumpToMessage={onJumpToMessage}
           onDeleted={onDeleted}
           recallLabel={recallLabel}
+          isPersonalCloud={isPersonalCloud}
         />
       ))}
       {showOverlay && (
@@ -729,6 +773,7 @@ const DrawerMediaThumb: React.FC<{
   onJumpToMessage?: (messageId: string) => void;
   onDeleted: (messageId: string) => void;
   recallLabel: string;
+  isPersonalCloud: boolean;
 }> = React.memo(({
   conversationId,
   item,
@@ -740,6 +785,7 @@ const DrawerMediaThumb: React.FC<{
   onJumpToMessage,
   onDeleted,
   recallLabel,
+  isPersonalCloud,
 }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
@@ -931,20 +977,32 @@ const DrawerMediaThumb: React.FC<{
             Lưu về máy
           </MediaMenuButton>
           <div className="my-2 border-t border-border" />
-          <MediaMenuButton
-            tone="danger"
-            onClick={() => void handleDelete("FOR_ME")}
-            disabled={isBusy}
-          >
-            Xóa chỉ ở phía tôi
-          </MediaMenuButton>
-          <MediaMenuButton
-            tone="danger"
-            onClick={() => void handleDelete("FOR_EVERYONE")}
-            disabled={isBusy}
-          >
-            {recallLabel}
-          </MediaMenuButton>
+          {isPersonalCloud ? (
+            <MediaMenuButton
+              tone="danger"
+              onClick={() => void handleDelete("FOR_ME")}
+              disabled={isBusy}
+            >
+              Xóa
+            </MediaMenuButton>
+          ) : (
+            <>
+              <MediaMenuButton
+                tone="danger"
+                onClick={() => void handleDelete("FOR_ME")}
+                disabled={isBusy}
+              >
+                Xóa chỉ ở phía tôi
+              </MediaMenuButton>
+              <MediaMenuButton
+                tone="danger"
+                onClick={() => void handleDelete("FOR_EVERYONE")}
+                disabled={isBusy}
+              >
+                {recallLabel}
+              </MediaMenuButton>
+            </>
+          )}
         </div>
       ) : null}
     </div>

@@ -1896,13 +1896,10 @@ const InfoNavRow: React.FC<{
     </div>
     {expanded === undefined ? (
       <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
+    ) : expanded ? (
+      <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" />
     ) : (
-      <ChevronDownIcon
-        className={clsx(
-          "h-4 w-4 shrink-0 text-text-muted transition-transform",
-          expanded && "rotate-180",
-        )}
-      />
+      <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
     )}
   </button>
 );
