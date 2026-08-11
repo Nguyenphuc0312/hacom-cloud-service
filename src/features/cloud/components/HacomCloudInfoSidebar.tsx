@@ -303,7 +303,6 @@ export const RecentFileList: React.FC<{
   );
 };
 
-/** Hero Cloud: ghim hội thoại nằm trong menu `...` ở danh sách hội thoại. */
 export const CloudIdentity: React.FC = () => {
   return (
     <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
@@ -326,7 +325,17 @@ export const HacomCloudInfoSidebar: React.FC<{
   error?: string | null;
   onChanged: () => Promise<void> | void;
   onRetry?: () => void;
-}> = ({ open, onClose, quota, assets, conversationId, loading = false, error, onChanged, onRetry }) => {
+}> = ({
+  open,
+  onClose,
+  quota,
+  assets,
+  conversationId,
+  loading = false,
+  error,
+  onChanged,
+  onRetry,
+}) => {
   const navigate = useNavigate();
   // Zalo My Documents: "Chọn" bật chế độ chọn (checkbox mọc trên từng dòng + thanh hành
   // động thay header) chứ không phải checkbox nằm sẵn cạnh "Chọn tất cả" mọi lúc.
@@ -367,7 +376,7 @@ export const HacomCloudInfoSidebar: React.FC<{
 
   return (
     <>
-      <aside className={`${open ? "translate-x-0 lg:w-[388px] lg:min-w-[360px] lg:max-w-[420px] lg:border-l" : "translate-x-full lg:w-0 lg:min-w-0 lg:border-l-0"} fixed inset-y-0 right-0 z-40 flex w-full overflow-hidden border-l border-border/70 bg-surface shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:shrink-0 lg:shadow-none lg:transition-[width]`} aria-hidden={!open}>
+      <aside className="flex h-full w-full min-w-0 overflow-hidden bg-surface" aria-hidden={!open}>
         <div className="flex h-full w-full flex-col">
           <header className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
             <h3 className="text-title-sm text-text-primary">Thông tin Hacom Cloud</h3>
@@ -386,7 +395,7 @@ export const HacomCloudInfoSidebar: React.FC<{
                     riêng nữa (chốt với user 07-08-26). */}
                 {conversationId ? (
                   <React.Suspense fallback={<div className="h-44 animate-pulse rounded-xl bg-surface-hover" />}>
-                    <CloudSharedResources conversationId={conversationId} />
+                    <CloudSharedResources conversationId={conversationId} variant="zalo" />
                   </React.Suspense>
                 ) : null}
                 <CollapsibleSection

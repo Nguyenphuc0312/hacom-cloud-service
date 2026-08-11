@@ -7,6 +7,7 @@ import {
   Download,
   File,
   FileImage,
+  Forward,
   Grid3x2,
   List,
   Mic,
@@ -33,6 +34,10 @@ import wsManager from "../../../lib/socket";
 import { SafeImage } from "../../../components/common/SafeImage";
 import { useBatchThumbnailUrl } from "../../../hooks/useBatchThumbnailUrl";
 import { useInViewport } from "../../../hooks/useInViewport";
+import { ForwardModal } from "../../../components/chat/ForwardModal";
+import type { Message } from "../../../types";
+import { MessageStatus, MessageType } from "../../../types";
+import { useAuthStore } from "../../../stores";
 
 type MediaFilter = "all" | "image" | "video" | "file" | "audio";
 type SortKey = "date_desc" | "date_asc" | "size_desc" | "size_asc";
@@ -82,6 +87,42 @@ const getAssetTypeLabel = (asset: CloudAsset): string => {
     case "audio": return "Âm thanh";
     default: return "Tệp";
   }
+};
+
+const getAssetMessageType = (asset: CloudAsset): MessageType => {
+  if (asset.mediaType === "image") return MessageType.IMAGE;
+  if (asset.mediaType === "video") return MessageType.VIDEO;
+  return MessageType.FILE;
+};
+
+const buildCloudAssetForwardMessage = (
+  conversationId: string,
+  currentUserId: string,
+  asset: CloudAsset,
+): Message | null => {
+  const attachmentId = asset.attachmentId;
+  if (!asset.messageId || !attachmentId) return null;
+
+  const type = getAssetMessageType(asset);
+  return {
+    id: asset.messageId,
+    conversationId,
+    senderId: currentUserId,
+    content: "",
+    type,
+    status: MessageStatus.SENT,
+    createdAt: asset.createdAt,
+    updatedAt: asset.createdAt,
+    attachments: [
+      {
+        id: attachmentId,
+        type,
+        fileName: asset.originalFilename,
+        mimeType: asset.mimeType,
+        fileSize: Number(asset.sizeBytes) || 0,
+      },
+    ],
+  } as unknown as Message;
 };
 
 const CloudAssetThumbnail: React.FC<{
@@ -180,7 +221,12 @@ const SortDropdown: React.FC<{ value: SortKey; onChange: (key: SortKey) => void 
   );
 };
 
-const RowMenu: React.FC<{ asset: CloudAsset; onDownload: () => void; onTrash: () => void }> = ({ asset, onDownload, onTrash }) => {
+const RowMenu: React.FC<{
+  asset: CloudAsset;
+  onDownload: () => void;
+  onForward: () => void;
+  onTrash: () => void;
+}> = ({ asset, onDownload, onForward, onTrash }) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -202,6 +248,9 @@ const RowMenu: React.FC<{ asset: CloudAsset; onDownload: () => void; onTrash: ()
         <div className="absolute right-0 z-20 mt-1.5 w-44 rounded-xl border border-border bg-surface p-1.5 shadow-lg" role="menu">
           <button type="button" role="menuitem" className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/30" onClick={() => { onDownload(); setOpen(false); }}>
             <Download className="h-4 w-4" />Lưu về máy
+          </button>
+          <button type="button" role="menuitem" className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/30" onClick={() => { onForward(); setOpen(false); }}>
+            <Forward className="h-4 w-4" />Chia sẻ
           </button>
           <div className="my-1 border-t border-border/70" />
           <button type="button" role="menuitem" className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-danger transition-colors hover:bg-danger/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-danger/25" onClick={() => { onTrash(); setOpen(false); }}>
@@ -228,6 +277,7 @@ export const CloudManageView: React.FC<{
   conversationId?: string | null;
 }> = ({ quota, assets, onChanged, loading = false, error = null, onRetry, conversationId }) => {
   const navigate = useNavigate();
+  const currentUserId = useAuthStore((state) => state.user?.id ?? "");
   const cachedConversationId = useMemo(() => readCachedCloudConversationId(), []);
   const cloudConversationId = conversationId ?? cachedConversationId;
   const [filter, setFilter] = useState<MediaFilter>("all");
@@ -236,6 +286,7 @@ export const CloudManageView: React.FC<{
   const [query, setQuery] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -285,6 +336,19 @@ export const CloudManageView: React.FC<{
       toast.error(extractApiError(error).message);
     }
   };
+
+  const forwardAsset = useCallback((asset: CloudAsset) => {
+    if (!cloudConversationId || !currentUserId) {
+      toast.error("Không thể chia sẻ mục này");
+      return;
+    }
+    const message = buildCloudAssetForwardMessage(cloudConversationId, currentUserId, asset);
+    if (!message) {
+      toast.error("Mục này chưa sẵn sàng để chia sẻ");
+      return;
+    }
+    setForwardMessage(message);
+  }, [cloudConversationId, currentUserId]);
 
   const downloadSelected = async () => {
     for (const asset of selected) {
@@ -495,7 +559,14 @@ export const CloudManageView: React.FC<{
                         <td className="px-2 align-middle text-[13px] tabular-nums text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</td>
                         <td className="px-2 align-middle text-[13px] tabular-nums text-text-muted">{formatRelativeDate(new Date(asset.createdAt))}</td>
                         <td className="px-2 align-middle">
-                          {!selectMode && <RowMenu asset={asset} onDownload={() => void downloadAsset(asset)} onTrash={() => void trashAsset(asset)} />}
+                          {!selectMode && (
+                            <RowMenu
+                              asset={asset}
+                              onDownload={() => void downloadAsset(asset)}
+                              onForward={() => forwardAsset(asset)}
+                              onTrash={() => void trashAsset(asset)}
+                            />
+                          )}
                         </td>
                       </tr>
                     );
@@ -522,6 +593,16 @@ export const CloudManageView: React.FC<{
                       <span className="line-clamp-2 w-full break-words text-center text-xs font-medium text-text-primary">{asset.originalFilename}</span>
                       <span className="text-[11px] tabular-nums text-text-muted">{formatFileSize(Number(asset.sizeBytes) || 0)}</span>
                     </button>
+                    {!selectMode && (
+                      <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
+                        <RowMenu
+                          asset={asset}
+                          onDownload={() => void downloadAsset(asset)}
+                          onForward={() => forwardAsset(asset)}
+                          onTrash={() => void trashAsset(asset)}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -539,6 +620,13 @@ export const CloudManageView: React.FC<{
         variant="danger"
         isLoading={busy}
       />
+      {forwardMessage && currentUserId ? (
+        <ForwardModal
+          messages={[forwardMessage]}
+          currentUserId={currentUserId}
+          onClose={() => setForwardMessage(null)}
+        />
+      ) : null}
     </AppPage>
   );
 };
