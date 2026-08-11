@@ -1253,7 +1253,7 @@ const DrawerFileRow: React.FC<{
             <FileTypeIcon
               type={iconType}
               fileName={item.fileName}
-              variant="tile"
+              variant="outline"
               className="h-10 w-10"
             />
           </div>
@@ -1374,7 +1374,7 @@ const DrawerFileRow: React.FC<{
         <FileTypeIcon
           type={iconType}
           fileName={item.fileName}
-          variant="tile"
+          variant="outline"
           className="h-8 w-8"
         />
       </div>
