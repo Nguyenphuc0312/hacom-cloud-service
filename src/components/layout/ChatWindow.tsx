@@ -1457,9 +1457,9 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           scrim), matching the info panel behaviour */}
       <div
         className={clsx(
-          "h-full shrink-0 overflow-hidden border-border/60 transition-[width] duration-300 ease-out",
+          "h-full shrink-0 overflow-hidden bg-surface transition-[width] duration-300 ease-out",
           overlayMode === "search" || overlayMode === "pinned"
-            ? "w-full max-w-[var(--app-inspector-width)] border-l"
+            ? "w-full max-w-[var(--app-inspector-width)] border-l border-border/70"
             : "w-0 border-l-0",
         )}
         aria-hidden={
@@ -1475,7 +1475,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               onSelectMessage={handleJumpToMessage}
               onNavigateToMessageId={handleNavigateToMessage}
               onClose={() => setOverlayMode(null)}
-              className="h-full w-[var(--app-inspector-width)]"
+              className="h-full w-full"
             />
           </React.Suspense>
         )}
@@ -1490,7 +1490,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               onClose={() => setOverlayMode(null)}
               onJumpToMessage={handleJumpToMessage}
               onUnpin={(message) => togglePin({ ...message, isPinned: true })}
-              className="h-full w-[var(--app-inspector-width)]"
+              className="h-full w-full"
             />
           </React.Suspense>
         )}
