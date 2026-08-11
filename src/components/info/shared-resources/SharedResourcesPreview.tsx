@@ -934,7 +934,7 @@ const DrawerMediaThumb: React.FC<{
     if (isBusy) return;
     setIsBusy(true);
     try {
-      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud, item.fileId);
       toast.success(
         result === "already-in-cloud"
           ? "Nội dung đã ở Cloud của tôi"
@@ -1225,7 +1225,7 @@ const DrawerFileRow: React.FC<{
     if (isBusy) return;
     setIsBusy(true);
     try {
-      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud, item.fileId);
       toast.success(
         result === "already-in-cloud"
           ? "Nội dung đã ở Cloud của tôi"
@@ -1253,7 +1253,7 @@ const DrawerFileRow: React.FC<{
             <FileTypeIcon
               type={iconType}
               fileName={item.fileName}
-              variant="tile"
+              variant="outline"
               className="h-10 w-10"
             />
           </div>
@@ -1374,7 +1374,7 @@ const DrawerFileRow: React.FC<{
         <FileTypeIcon
           type={iconType}
           fileName={item.fileName}
-          variant="tile"
+          variant="outline"
           className="h-8 w-8"
         />
       </div>

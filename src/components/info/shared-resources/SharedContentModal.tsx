@@ -787,7 +787,7 @@ const ModalMediaThumb: React.FC<{
     if (isBusy) return;
     setIsBusy(true);
     try {
-      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud, item.fileId);
       toast.success(
         result === "already-in-cloud"
           ? "Nội dung đã ở Cloud của tôi"
@@ -1103,7 +1103,7 @@ const ModalFileRow: React.FC<{
     if (isBusy) return;
     setIsBusy(true);
     try {
-      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud, item.fileId);
       toast.success(
         result === "already-in-cloud"
           ? "Nội dung đã ở Cloud của tôi"
@@ -1134,21 +1134,21 @@ const ModalFileRow: React.FC<{
         title={item.fileName}
         className="flex min-h-[62px] w-full items-center gap-3 px-3 py-2.5 text-left disabled:opacity-60"
       >
-      <FileTypeIcon
-        type={iconType}
-        fileName={item.fileName}
-        variant="tile"
-        className="h-10 w-10 shrink-0"
-      />
-      <div className="min-w-0 flex-1 pr-20">
-        <FileName
-          name={item.fileName}
-          className="text-sm font-semibold text-text-primary"
+        <FileTypeIcon
+          type={iconType}
+          fileName={item.fileName}
+          variant="outline"
+          className="h-10 w-10 shrink-0"
         />
-        <p className="truncate text-xs text-text-muted">
-          {formatFileSize(item.sizeBytes)} · {senderName} · {date}
-        </p>
-      </div>
+        <div className="min-w-0 flex-1 pr-20">
+          <FileName
+            name={item.fileName}
+            className="text-sm font-semibold text-text-primary"
+          />
+          <p className="truncate text-xs text-text-muted">
+            {formatFileSize(item.sizeBytes)} · {senderName} · {date}
+          </p>
+        </div>
       </button>
 
       <StorageHoverActions

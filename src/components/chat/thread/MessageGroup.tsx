@@ -122,6 +122,7 @@ interface MessageGroupProps {
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   viewerCanRecallOthers?: boolean;
+  isPersonalCloud?: boolean;
   expandedLongMessageIds: Set<string>;
   onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
@@ -235,6 +236,7 @@ interface MessageGroupItemProps {
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   viewerCanRecallOthers?: boolean;
+  isPersonalCloud?: boolean;
   expandedLongMessageIds: Set<string>;
   onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
@@ -292,6 +294,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
+  isPersonalCloud = false,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,
@@ -574,6 +577,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canDelete: Boolean(onDelete),
           canEdit: Boolean(onEdit),
           canRecallOthers: viewerCanRecallOthers,
+          isPersonalCloud,
         }),
       [
         coarsePointer,
@@ -584,6 +588,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         onEdit,
         onForward,
         onPin,
+        isPersonalCloud,
         onStartSelectionMode,
         onToggleSelect,
         viewerCanRecallOthers,
@@ -1051,6 +1056,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           anchorRect={menuAnchorRect ?? undefined}
           onAction={handleAction}
           onClose={() => setIsActionSheetOpen(false)}
+          actionLabelOverrides={
+            isPersonalCloud
+              ? { deleteForMe: t("chat:message.actions.delete", { defaultValue: "Xóa" }) }
+              : undefined
+          }
         />
 
         {/* Mobile emoji picker — full-screen overlay shown via long-press action sheet */}
@@ -1095,6 +1105,7 @@ const areEqualMessageGroupItemProps = (
     previous.onNavigateToMessage === next.onNavigateToMessage &&
     previous.currentUsername === next.currentUsername &&
     previous.viewerCanRecallOthers === next.viewerCanRecallOthers &&
+    previous.isPersonalCloud === next.isPersonalCloud &&
     previous.onToggleLongMessageExpand === next.onToggleLongMessageExpand &&
     isMessageInserted(previous.insertedMessageKeys, previousMessage) ===
       isMessageInserted(next.insertedMessageKeys, nextMessage) &&
@@ -1127,6 +1138,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
+  isPersonalCloud = false,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,
@@ -1233,6 +1245,7 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               onNavigateToMessage={onNavigateToMessage}
               currentUsername={currentUsername}
               viewerCanRecallOthers={viewerCanRecallOthers}
+              isPersonalCloud={isPersonalCloud}
               expandedLongMessageIds={expandedLongMessageIds}
               onToggleLongMessageExpand={onToggleLongMessageExpand}
               insertedMessageKeys={insertedMessageKeys}

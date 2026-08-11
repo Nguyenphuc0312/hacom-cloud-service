@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   Copy,
   CornerUpLeft,
+  Download,
   Forward,
   ListChecks,
   MoreHorizontal,
@@ -94,6 +95,14 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         id: "copy",
         label: translateActionLabel("copy", "chat:message.actions.copy"),
         icon: Copy,
+      },
+      downloadAttachment: {
+        id: "downloadAttachment",
+        label: translateActionLabel(
+          "downloadAttachment",
+          "chat:message.actions.saveToDevice",
+        ),
+        icon: Download,
       },
       retry: {
         id: "retry",
