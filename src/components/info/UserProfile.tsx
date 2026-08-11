@@ -1007,6 +1007,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               conversationId={conversationId}
               defaultTab={storageDefaultTab}
               onBack={() => setDirectPanel("main")}
+              onJumpToMessage={onJumpToMessage}
             />
           ) : directPanel === "reminders" ? (
             <DirectReminderPanel

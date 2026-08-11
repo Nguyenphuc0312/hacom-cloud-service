@@ -797,6 +797,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           conversationId={conversation.id}
           defaultTab={storageDefaultTab}
           onBack={() => setActivePanel("main")}
+          onJumpToMessage={onJumpToMessage}
         />
       ) : activePanel === "members" ? (
         <GroupMembersPanel

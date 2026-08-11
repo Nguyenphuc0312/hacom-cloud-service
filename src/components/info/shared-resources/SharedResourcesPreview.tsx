@@ -46,6 +46,7 @@ import {
   subscribeDownloadedFiles,
 } from "../../../utils/downloadedFiles";
 import { buildResourceDeleteMenuItems } from "./resourceMenuPolicy";
+import { saveResourceMessageToCloud } from "./resourceCloudActions";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -75,9 +76,11 @@ const PERSONAL_CLOUD_CONVERSATION_TYPES = new Set<string>([
 
 type ForwardableResource =
   | ConversationResourcesMediaItem
-  | ConversationResourcesFileItem;
+  | ConversationResourcesFileItem
+  | ConversationResourcesLinkItem;
 
 const getResourceMessageType = (item: ForwardableResource): MessageType => {
+  if ("url" in item) return MessageType.TEXT;
   if (item.mimeType.startsWith("image/")) return MessageType.IMAGE;
   if (item.mimeType.startsWith("video/")) return MessageType.VIDEO;
   return MessageType.FILE;
@@ -88,6 +91,20 @@ const buildResourceForwardMessage = (
   item: ForwardableResource,
 ): Message => {
   const type = getResourceMessageType(item);
+  if ("url" in item) {
+    return {
+      id: item.messageId,
+      conversationId,
+      senderId: item.senderId,
+      content: item.url,
+      type,
+      status: MessageStatus.SENT,
+      createdAt: item.createdAt,
+      updatedAt: item.createdAt,
+      attachments: [],
+    } as unknown as Message;
+  }
+
   const media = item as ConversationResourcesMediaItem;
   return {
     id: item.messageId,
@@ -438,7 +455,15 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         >
           {linksPreview.length > 0 ? (
             <>
-              <DrawerLinksTab items={linksPreview} variant="zalo" />
+              <DrawerLinksTab
+                items={linksPreview}
+                variant="zalo"
+                onForward={handleForwardResource}
+                onJumpToMessage={onJumpToMessage}
+                onDeleted={handleResourceDeleted}
+                recallLabel={recallLabel}
+                isPersonalCloud={isPersonalCloud}
+              />
               {linksTotal > 0 && (
                 <button
                   type="button"
@@ -587,7 +612,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             />
           )}
           {activeTab === "links" && (
-            <DrawerLinksTab items={linksPreview} />
+            <DrawerLinksTab
+              items={linksPreview}
+              onForward={handleForwardResource}
+              onJumpToMessage={onJumpToMessage}
+              onDeleted={handleResourceDeleted}
+              recallLabel={recallLabel}
+              isPersonalCloud={isPersonalCloud}
+            />
           )}
         </div>
 
@@ -624,6 +656,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         onClose={() => setModalOpen(false)}
         conversationId={conversationId}
         defaultTab={activeTab}
+        onJumpToMessage={onJumpToMessage}
       />
 
       {forwardMessage && currentUserId ? (
@@ -897,9 +930,22 @@ const DrawerMediaThumb: React.FC<{
     setMenuOpen(false);
   };
 
-  const handleSaveToMyDocuments = () => {
-    setMenuOpen(false);
-    toast.error("Chưa hỗ trợ lưu vào Cloud của tôi từ kho lưu trữ");
+  const handleSaveToMyDocuments = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      toast.success(
+        result === "already-in-cloud"
+          ? "Nội dung đã ở Cloud của tôi"
+          : "Đã lưu vào Cloud của tôi",
+      );
+    } catch {
+      toast.error("Không thể lưu vào Cloud của tôi");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
   };
 
   return (
@@ -1175,9 +1221,22 @@ const DrawerFileRow: React.FC<{
     setMenuOpen(false);
   };
 
-  const handleSaveToMyDocuments = () => {
-    setMenuOpen(false);
-    toast.error("Chưa hỗ trợ lưu vào Cloud của tôi từ kho lưu trữ");
+  const handleSaveToMyDocuments = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      toast.success(
+        result === "already-in-cloud"
+          ? "Nội dung đã ở Cloud của tôi"
+          : "Đã lưu vào Cloud của tôi",
+      );
+    } catch {
+      toast.error("Không thể lưu vào Cloud của tôi");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
   };
 
   if (variant === "zalo") {
@@ -1337,7 +1396,20 @@ const DrawerFileRow: React.FC<{
 const DrawerLinksTab: React.FC<{
   items: ConversationResourcesLinkItem[];
   variant?: "card" | "zalo";
-}> = ({ items, variant = "card" }) => {
+  onForward: (item: ConversationResourcesLinkItem) => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted?: (messageId: string) => void;
+  recallLabel?: string;
+  isPersonalCloud?: boolean;
+}> = ({
+  items,
+  variant = "card",
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel = "Xóa cho cả hai phía (Thu hồi)",
+  isPersonalCloud = false,
+}) => {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -1350,7 +1422,16 @@ const DrawerLinksTab: React.FC<{
   return (
     <div className="space-y-0.5">
       {items.map((item) => (
-        <DrawerLinkRow key={item.messageId} item={item} variant={variant} />
+        <DrawerLinkRow
+          key={item.messageId}
+          item={item}
+          variant={variant}
+          onForward={() => onForward(item)}
+          onJumpToMessage={onJumpToMessage}
+          onDeleted={onDeleted}
+          recallLabel={recallLabel}
+          isPersonalCloud={isPersonalCloud}
+        />
       ))}
     </div>
   );
@@ -1359,37 +1440,209 @@ const DrawerLinksTab: React.FC<{
 const DrawerLinkRow: React.FC<{
   item: ConversationResourcesLinkItem;
   variant?: "card" | "zalo";
+  onForward: () => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted?: (messageId: string) => void;
+  recallLabel: string;
+  isPersonalCloud: boolean;
 }> = ({
   item,
   variant = "card",
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel,
+  isPersonalCloud,
 }) => {
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeMenu = () => setMenuOpen(false);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [menuOpen]);
+
+  const openLink = () => {
+    window.open(item.url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopy = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      await navigator.clipboard?.writeText(item.url);
+      toast.success("Đã sao chép liên kết");
+    } catch {
+      toast.error("Không thể sao chép liên kết này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleSaveToMyDocuments = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const result = await saveResourceMessageToCloud(item.messageId, isPersonalCloud);
+      toast.success(
+        result === "already-in-cloud"
+          ? "Nội dung đã ở Cloud của tôi"
+          : "Đã lưu vào Cloud của tôi",
+      );
+    } catch {
+      toast.error("Không thể lưu vào Cloud của tôi");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleJumpToMessage = () => {
+    onJumpToMessage?.(item.messageId);
+    setMenuOpen(false);
+  };
+
+  const handleSaveToMachine = () => {
+    const safeName =
+      Array.from(item.domain)
+        .map((char) => {
+          const code = char.charCodeAt(0);
+          return code < 32 || '<>:"/\\|?*'.includes(char) ? "-" : char;
+        })
+        .join("") || "link";
+    const blob = new Blob([item.url], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeName}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setMenuOpen(false);
+  };
+
+  const handleDelete = async (mode: "FOR_ME" | "FOR_EVERYONE") => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      await messageApi.deleteMessage(item.messageId, { mode });
+      onDeleted?.(item.messageId);
+      toast.success(
+        mode === "FOR_EVERYONE"
+          ? "Đã thu hồi tin nhắn"
+          : isPersonalCloud
+            ? "Đã xóa"
+            : "Đã xóa ở phía bạn",
+      );
+    } catch {
+      toast.error("Không thể xóa nội dung này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
 
   if (variant === "zalo") {
     return (
-      <a
-        href={item.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex min-h-[66px] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-surface-hover"
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#d5d9e0] bg-[#eef0f4]">
-          <LinkIcon className="h-5 w-5 text-text-primary" />
+      <div className="group relative rounded-md transition-colors hover:bg-surface-hover">
+        <button
+          type="button"
+          onClick={openLink}
+          title={item.url}
+          className="flex min-h-[66px] w-full items-center gap-3 px-1 py-2 text-left"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#d5d9e0] bg-[#eef0f4]">
+            <LinkIcon className="h-5 w-5 text-text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">{item.domain}</p>
+            <p className="truncate text-[13px] leading-5 text-[#0068ff]">{item.url}</p>
+            {senderName ? (
+              <p className="hidden truncate text-[12px] leading-5 text-text-muted min-[430px]:block">
+                {senderName}
+              </p>
+            ) : null}
+          </div>
+          <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted group-hover:opacity-0">
+            {date}
+          </span>
+        </button>
+
+        <div className="pointer-events-none absolute right-0 top-1 hidden h-9 items-center rounded-md border border-border bg-surface shadow-elev2 group-hover:flex">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onForward();
+            }}
+            title="Chia sẻ"
+            aria-label="Chia sẻ"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-l-md text-text-primary hover:bg-surface-hover"
+          >
+            <ArrowUturnRightIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            title="Thêm"
+            aria-label="Thêm"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-r-md text-text-primary hover:bg-surface-hover"
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenuOpen((value) => !value);
+            }}
+          >
+            <EllipsisHorizontalIcon className="h-5 w-5" />
+          </button>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">{item.domain}</p>
-          <p className="truncate text-[13px] leading-5 text-[#0068ff]">{item.url}</p>
-          {senderName ? (
-            <p className="hidden truncate text-[12px] leading-5 text-text-muted min-[430px]:block">
-              {senderName}
-            </p>
-          ) : null}
-        </div>
-        <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted">
-          {date}
-        </span>
-      </a>
+
+        {menuOpen ? (
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2"
+          >
+            <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+              Copy
+            </MediaMenuButton>
+            <MediaMenuButton
+              onClick={() => {
+                setMenuOpen(false);
+                onForward();
+              }}
+            >
+              Chia sẻ
+            </MediaMenuButton>
+            <MediaMenuButton onClick={handleSaveToMyDocuments}>
+              Lưu vào Cloud của tôi
+            </MediaMenuButton>
+            <MediaMenuButton
+              onClick={handleJumpToMessage}
+              disabled={!onJumpToMessage}
+            >
+              Xem tin nhắn gốc
+            </MediaMenuButton>
+            <MediaMenuButton onClick={handleSaveToMachine}>
+              Lưu về máy
+            </MediaMenuButton>
+            <div className="my-2 border-t border-border" />
+            {buildResourceDeleteMenuItems(isPersonalCloud, recallLabel).map((action) => (
+              <MediaMenuButton
+                key={action.mode}
+                tone="danger"
+                onClick={() => void handleDelete(action.mode)}
+                disabled={isBusy}
+              >
+                {action.label}
+              </MediaMenuButton>
+            ))}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
