@@ -207,7 +207,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
         cùng cách phủ toàn màn ở mobile — để Cloud không lệch so với hội thoại thường. */}
     {searchOpen && conversationId ? (
       <React.Suspense fallback={null}>
-        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,400px)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
+        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,24rem)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
           <SearchPanel
             conversationId={conversationId}
             onSelectMessage={() => setSearchOpen(false)}
@@ -220,7 +220,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     ) : null}
     {pinnedOpen && conversationId && user ? (
       <React.Suspense fallback={null}>
-        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,400px)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
+        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,24rem)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
           <PinnedMessagesPanel
             pinnedMessages={pinnedMessages}
             isLoading={pinnedLoading}
