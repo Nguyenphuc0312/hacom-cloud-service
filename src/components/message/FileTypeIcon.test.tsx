@@ -32,7 +32,7 @@ describe("FileTypeIcon", () => {
     expect(icon?.classList.contains("w-6")).toBe(false);
   });
 
-  it("renders Excel as a Zalo-style outline document in file lists", () => {
+  it("can render Excel as a Zalo-style outline document", () => {
     const { container } = render(
       <FileTypeIcon
         type="spreadsheet"
@@ -46,6 +46,20 @@ describe("FileTypeIcon", () => {
     expect(icon?.getAttribute("aria-label")).toBe("Excel");
     expect(container.querySelector("rect")).toBeNull();
     expect(icon?.querySelectorAll("path").length).toBeGreaterThan(0);
+  });
+
+  it("renders Excel as a solid tile when file rows need stronger Office labels", () => {
+    const { container } = render(
+      <FileTypeIcon
+        type="spreadsheet"
+        fileName="bang-ke.xlsx"
+        variant="tile"
+        className="h-10 w-10"
+      />,
+    );
+
+    expect(container.querySelector("rect")).not.toBeNull();
+    expect(container.querySelector("text")?.textContent).toBe("X");
   });
 
   it("renders Word as a solid tile in message bubbles", () => {

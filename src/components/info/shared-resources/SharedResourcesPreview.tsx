@@ -45,6 +45,7 @@ import {
   markFileDownloaded,
   subscribeDownloadedFiles,
 } from "../../../utils/downloadedFiles";
+import { buildResourceDeleteMenuItems } from "./resourceMenuPolicy";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -408,6 +409,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
                 conversationId={conversationId}
                 variant="zalo"
                 onForward={handleForwardResource}
+                onJumpToMessage={onJumpToMessage}
+                onDeleted={handleResourceDeleted}
+                recallLabel={recallLabel}
+                isPersonalCloud={isPersonalCloud}
               />
               {filesTotal > 0 && (
                 <button
@@ -575,6 +580,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               items={filesPreview}
               conversationId={conversationId}
               onForward={handleForwardResource}
+              onJumpToMessage={onJumpToMessage}
+              onDeleted={handleResourceDeleted}
+              recallLabel={recallLabel}
+              isPersonalCloud={isPersonalCloud}
             />
           )}
           {activeTab === "links" && (
@@ -890,7 +899,7 @@ const DrawerMediaThumb: React.FC<{
 
   const handleSaveToMyDocuments = () => {
     setMenuOpen(false);
-    toast.error("Chưa hỗ trợ lưu vào My Documents từ kho lưu trữ");
+    toast.error("Chưa hỗ trợ lưu vào Cloud của tôi từ kho lưu trữ");
   };
 
   return (
@@ -965,7 +974,7 @@ const DrawerMediaThumb: React.FC<{
             Chia sẻ
           </MediaMenuButton>
           <MediaMenuButton onClick={handleSaveToMyDocuments}>
-            Lưu vào My Documents
+            Lưu vào Cloud của tôi
           </MediaMenuButton>
           <MediaMenuButton
             onClick={handleJumpToMessage}
@@ -977,32 +986,16 @@ const DrawerMediaThumb: React.FC<{
             Lưu về máy
           </MediaMenuButton>
           <div className="my-2 border-t border-border" />
-          {isPersonalCloud ? (
+          {buildResourceDeleteMenuItems(isPersonalCloud, recallLabel).map((action) => (
             <MediaMenuButton
+              key={action.mode}
               tone="danger"
-              onClick={() => void handleDelete("FOR_ME")}
+              onClick={() => void handleDelete(action.mode)}
               disabled={isBusy}
             >
-              Xóa
+              {action.label}
             </MediaMenuButton>
-          ) : (
-            <>
-              <MediaMenuButton
-                tone="danger"
-                onClick={() => void handleDelete("FOR_ME")}
-                disabled={isBusy}
-              >
-                Xóa chỉ ở phía tôi
-              </MediaMenuButton>
-              <MediaMenuButton
-                tone="danger"
-                onClick={() => void handleDelete("FOR_EVERYONE")}
-                disabled={isBusy}
-              >
-                {recallLabel}
-              </MediaMenuButton>
-            </>
-          )}
+          ))}
         </div>
       ) : null}
     </div>
@@ -1035,7 +1028,20 @@ const DrawerFilesTab: React.FC<{
   conversationId: string;
   variant?: "card" | "zalo";
   onForward: (item: ConversationResourcesFileItem) => void;
-}> = ({ items, conversationId, variant = "card", onForward }) => {
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted?: (messageId: string) => void;
+  recallLabel?: string;
+  isPersonalCloud?: boolean;
+}> = ({
+  items,
+  conversationId,
+  variant = "card",
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel = "Xóa cho cả hai phía (Thu hồi)",
+  isPersonalCloud = false,
+}) => {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -1054,6 +1060,10 @@ const DrawerFilesTab: React.FC<{
           conversationId={conversationId}
           variant={variant}
           onForward={() => onForward(item)}
+          onJumpToMessage={onJumpToMessage}
+          onDeleted={onDeleted}
+          recallLabel={recallLabel}
+          isPersonalCloud={isPersonalCloud}
         />
       ))}
     </div>
@@ -1065,16 +1075,38 @@ const DrawerFileRow: React.FC<{
   conversationId: string;
   variant?: "card" | "zalo";
   onForward: () => void;
-}> = ({ item, conversationId, variant = "card", onForward }) => {
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted?: (messageId: string) => void;
+  recallLabel: string;
+  isPersonalCloud: boolean;
+}> = ({
+  item,
+  conversationId,
+  variant = "card",
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel,
+  isPersonalCloud,
+}) => {
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
   const isDownloaded = React.useSyncExternalStore(
     subscribeDownloadedFiles,
     () => isFileDownloaded(item.fileId),
     () => false,
   );
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeMenu = () => setMenuOpen(false);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [menuOpen]);
 
   const getFileDownloadUrl = async (): Promise<string | null> => {
     const res = await fileApi.getDownloadUrl({
@@ -1086,7 +1118,7 @@ const DrawerFileRow: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isDownloading) return;
+    if (isDownloading || isBusy) return;
     setIsDownloading(true);
     try {
       const url = await getFileDownloadUrl();
@@ -1099,6 +1131,53 @@ const DrawerFileRow: React.FC<{
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleCopy = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const url = await getFileDownloadUrl();
+      if (!url) return;
+      await navigator.clipboard?.writeText(url);
+      toast.success("Đã sao chép liên kết");
+    } catch {
+      toast.error("Không thể sao chép nội dung này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleDelete = async (mode: "FOR_ME" | "FOR_EVERYONE") => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      await messageApi.deleteMessage(item.messageId, { mode });
+      onDeleted?.(item.messageId);
+      toast.success(
+        mode === "FOR_EVERYONE"
+          ? "Đã thu hồi tin nhắn"
+          : isPersonalCloud
+            ? "Đã xóa"
+            : "Đã xóa ở phía bạn",
+      );
+    } catch {
+      toast.error("Không thể xóa nội dung này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleJumpToMessage = () => {
+    onJumpToMessage?.(item.messageId);
+    setMenuOpen(false);
+  };
+
+  const handleSaveToMyDocuments = () => {
+    setMenuOpen(false);
+    toast.error("Chưa hỗ trợ lưu vào Cloud của tôi từ kho lưu trữ");
   };
 
   if (variant === "zalo") {
@@ -1115,7 +1194,7 @@ const DrawerFileRow: React.FC<{
             <FileTypeIcon
               type={iconType}
               fileName={item.fileName}
-              variant="outline"
+              variant="tile"
               className="h-10 w-10"
             />
           </div>
@@ -1167,14 +1246,59 @@ const DrawerFileRow: React.FC<{
           </button>
           <button
             type="button"
-            onClick={(event) => event.stopPropagation()}
             title="Thêm"
             aria-label="Thêm"
             className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-r-md text-text-primary hover:bg-surface-hover"
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenuOpen((value) => !value);
+            }}
           >
             <EllipsisHorizontalIcon className="h-5 w-5" />
           </button>
         </div>
+
+        {menuOpen ? (
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2"
+          >
+            <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+              Copy
+            </MediaMenuButton>
+            <MediaMenuButton
+              onClick={() => {
+                setMenuOpen(false);
+                onForward();
+              }}
+            >
+              Chia sẻ
+            </MediaMenuButton>
+            <MediaMenuButton onClick={handleSaveToMyDocuments}>
+              Lưu vào Cloud của tôi
+            </MediaMenuButton>
+            <MediaMenuButton
+              onClick={handleJumpToMessage}
+              disabled={!onJumpToMessage}
+            >
+              Xem tin nhắn gốc
+            </MediaMenuButton>
+            <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy || isDownloading}>
+              Lưu về máy
+            </MediaMenuButton>
+            <div className="my-2 border-t border-border" />
+            {buildResourceDeleteMenuItems(isPersonalCloud, recallLabel).map((action) => (
+              <MediaMenuButton
+                key={action.mode}
+                tone="danger"
+                onClick={() => void handleDelete(action.mode)}
+                disabled={isBusy}
+              >
+                {action.label}
+              </MediaMenuButton>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -1191,7 +1315,7 @@ const DrawerFileRow: React.FC<{
         <FileTypeIcon
           type={iconType}
           fileName={item.fileName}
-          variant="outline"
+          variant="tile"
           className="h-8 w-8"
         />
       </div>

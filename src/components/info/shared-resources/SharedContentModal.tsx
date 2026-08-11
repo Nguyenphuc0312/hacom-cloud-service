@@ -630,7 +630,7 @@ const ModalFileRow: React.FC<{
       <FileTypeIcon
         type={iconType}
         fileName={item.fileName}
-        variant="outline"
+        variant="tile"
         className="h-10 w-10 shrink-0"
       />
       <div className="min-w-0 flex-1">
