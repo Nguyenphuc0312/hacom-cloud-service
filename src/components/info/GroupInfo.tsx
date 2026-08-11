@@ -2554,7 +2554,7 @@ const GroupBoardPanel: React.FC<{
     (showReminders && remindersLoading);
 
   return (
-    <div className="flex h-full flex-col bg-[hsl(var(--chat-panel-bg))]">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-l border-border/70 bg-[hsl(var(--chat-panel-bg))]">
       <PanelHeader
         title="Bảng tin nhóm"
         onBack={onBack}
@@ -2578,20 +2578,20 @@ const GroupBoardPanel: React.FC<{
           </div>
         }
       />
-      <div className="flex h-[58px] shrink-0 border-b border-border bg-surface px-0">
+      <div className="flex h-14 shrink-0 border-b border-border bg-surface">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => onBoardTabChange(tab.key)}
             className={clsx(
-              "relative flex h-full flex-1 items-center justify-center text-[16px] font-semibold transition-colors",
+              "relative flex h-full min-w-0 flex-1 items-center justify-center px-1 text-[15px] font-semibold transition-colors",
               boardTab === tab.key
                 ? "text-[#005ae0]"
                 : "text-text-secondary hover:text-text-primary",
             )}
           >
-            {tab.label}
+            <span className="truncate">{tab.label}</span>
             {boardTab === tab.key && (
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#0068ff]" />
             )}
