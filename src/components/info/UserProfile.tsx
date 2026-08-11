@@ -1046,6 +1046,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 setStorageDefaultTab(tab);
                 setDirectPanel("storage");
               }}
+              onJumpToMessage={onJumpToMessage}
               onToggleHidden={() =>
                 isHiddenLocally
                   ? void handleSetConversationHidden(false)
@@ -1403,7 +1404,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
               {conversationContext === "direct" && conversationId && (
                 <section className="space-y-2">
-                  <SharedResourcesPreview conversationId={conversationId} />
+                  <SharedResourcesPreview
+                    conversationId={conversationId}
+                    onJumpToMessage={onJumpToMessage}
+                  />
                 </section>
               )}
 
@@ -1618,6 +1622,7 @@ const DirectConversationInfoPanel: React.FC<{
   onOpenReminders: () => void;
   onOpenCommonGroups: () => void;
   onOpenStorage: (tab: SharedContentTab) => void;
+  onJumpToMessage?: (messageId: string) => void;
   onToggleHidden: () => void;
   onDeleteHistory: () => void;
 }> = ({
@@ -1639,6 +1644,7 @@ const DirectConversationInfoPanel: React.FC<{
   onOpenReminders,
   onOpenCommonGroups,
   onOpenStorage,
+  onJumpToMessage,
   onToggleHidden,
   onDeleteHistory,
 }) => {
@@ -1712,6 +1718,7 @@ const DirectConversationInfoPanel: React.FC<{
           conversationId={conversationId}
           variant="zalo"
           onOpenAll={onOpenStorage}
+          onJumpToMessage={onJumpToMessage}
         />
 
         <div className="h-2.5 bg-[#eef0f4]" />

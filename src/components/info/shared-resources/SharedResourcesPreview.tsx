@@ -11,7 +11,7 @@ import {
   LinkIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
-import { Skeleton } from "../../ui";
+import { Skeleton, toast } from "../../ui";
 import {
   useGetConversationSidebarSummaryQuery,
 } from "../../../features/api/chatApi";
@@ -20,10 +20,13 @@ import type {
   ConversationResourcesFileItem,
   ConversationResourcesLinkItem,
 } from "../../../features/api/chatApi";
+import { ForwardModal } from "../../chat/ForwardModal";
+import type { Message } from "../../../types";
+import { MessageStatus, MessageType, RoomType } from "../../../types";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import { FileTypeIcon } from "../../message/FileTypeIcon";
 import { formatRelativeDate } from "../../../utils/formatTime";
-import { fileApi } from "../../../services/api";
+import { fileApi, messageApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
@@ -35,6 +38,7 @@ import type { SharedContentTab } from "./SharedContentModal";
 import { FileName } from "../../common/FileName";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { useResolvedName } from "../../../stores/enrichedProfileStore";
+import { useAuthStore, useChatStore } from "../../../stores";
 import {
   isFileDownloaded,
   markFileDownloaded,
@@ -45,19 +49,84 @@ interface SharedResourcesPreviewProps {
   conversationId: string;
   variant?: "card" | "zalo";
   onOpenAll?: (tab: SharedContentTab) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 const DRAWER_MEDIA_PREVIEW = 6;
 const DRAWER_FILES_PREVIEW = 4;
 const DRAWER_LINKS_PREVIEW = 3;
+const GROUP_CONVERSATION_TYPES = new Set<string>([
+  RoomType.GROUP,
+  RoomType.PUBLIC,
+  RoomType.CHANNEL,
+  "GROUP",
+  "PUBLIC",
+  "CHANNEL",
+  "group",
+  "public",
+  "channel",
+]);
+
+type ForwardableResource =
+  | ConversationResourcesMediaItem
+  | ConversationResourcesFileItem;
+
+const getResourceMessageType = (item: ForwardableResource): MessageType => {
+  if (item.mimeType.startsWith("image/")) return MessageType.IMAGE;
+  if (item.mimeType.startsWith("video/")) return MessageType.VIDEO;
+  return MessageType.FILE;
+};
+
+const buildResourceForwardMessage = (
+  conversationId: string,
+  item: ForwardableResource,
+): Message => {
+  const type = getResourceMessageType(item);
+  const media = item as ConversationResourcesMediaItem;
+  return {
+    id: item.messageId,
+    conversationId,
+    senderId: item.senderId,
+    content: "",
+    type,
+    status: MessageStatus.SENT,
+    createdAt: item.createdAt,
+    updatedAt: item.createdAt,
+    attachments: [
+      {
+        id: item.fileId,
+        type,
+        fileName: item.fileName,
+        mimeType: item.mimeType,
+        fileSize: item.sizeBytes,
+        width: "width" in item ? media.width ?? undefined : undefined,
+        height: "height" in item ? media.height ?? undefined : undefined,
+        duration: "durationMs" in item ? media.durationMs ?? undefined : undefined,
+        thumbnailUrl: "thumbnailUrl" in item ? media.thumbnailUrl ?? undefined : undefined,
+      },
+    ],
+  } as unknown as Message;
+};
 
 export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   conversationId,
   variant = "card",
   onOpenAll,
+  onJumpToMessage,
 }) => {
+  const currentUserId = useAuthStore((state) => state.user?.id ?? "");
+  const conversationType = useChatStore(
+    (state) => state.conversationById[conversationId]?.type,
+  );
+  const recallLabel = GROUP_CONVERSATION_TYPES.has(String(conversationType))
+    ? "Xóa cho cả nhóm (Thu hồi)"
+    : "Xóa cho cả hai phía (Thu hồi)";
   const [activeTab, setActiveTab] = useState<SharedContentTab>("media");
   const [modalOpen, setModalOpen] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [lightbox, setLightbox] = useState<{
     images: Array<{ url: string; alt?: string }>;
     index: number;
@@ -84,11 +153,16 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   // Memoize mediaPreview to create stable reference
   // This prevents useEffect from re-firing when the array reference changes
   const mediaPreview = useMemo(() => {
-    return data?.media.preview.slice(0, DRAWER_MEDIA_PREVIEW) ?? [];
-  }, [data?.media.preview]);
+    return (
+      data?.media.preview
+        .filter((item) => !hiddenMessageIds.has(item.messageId))
+        .slice(0, DRAWER_MEDIA_PREVIEW) ?? []
+    );
+  }, [data?.media.preview, hiddenMessageIds]);
 
   const filesPreview = useMemo(() => {
     return (data?.files.preview ?? [])
+      .filter((item) => !hiddenMessageIds.has(item.messageId))
       .filter(
         (f) =>
           !f.mimeType.startsWith("image/") &&
@@ -96,11 +170,15 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
           !f.mimeType.startsWith("audio/"),
       )
       .slice(0, DRAWER_FILES_PREVIEW);
-  }, [data?.files.preview]);
+  }, [data?.files.preview, hiddenMessageIds]);
 
   const linksPreview = useMemo(() => {
-    return data?.links.preview.slice(0, DRAWER_LINKS_PREVIEW) ?? [];
-  }, [data?.links.preview]);
+    return (
+      data?.links.preview
+        .filter((item) => !hiddenMessageIds.has(item.messageId))
+        .slice(0, DRAWER_LINKS_PREVIEW) ?? []
+    );
+  }, [data?.links.preview, hiddenMessageIds]);
 
   // Memoize thumbnailUrls to ensure stable reference
   const thumbnailUrls = useMemo(() => {
@@ -146,7 +224,24 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("media");
     setUrlCache({ forConversationId: conversationId, urls: {} });
+    setForwardMessage(null);
+    setHiddenMessageIds(new Set());
   }, [conversationId]);
+
+  const handleForwardResource = useCallback(
+    (item: ForwardableResource) => {
+      setForwardMessage(buildResourceForwardMessage(conversationId, item));
+    },
+    [conversationId],
+  );
+
+  const handleResourceDeleted = useCallback((messageId: string) => {
+    setHiddenMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+  }, []);
 
   // Batch thumbnail loading for drawer media preview (only when media tab is
   // active). Delegates to the SHARED thumbnail cache/dedupe so files already
@@ -247,6 +342,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               thumbnailUrls={thumbnailUrls}
               onImageOpen={(index, images) => setLightbox({ images, index })}
               onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
+              onForward={handleForwardResource}
+              onJumpToMessage={onJumpToMessage}
+              onDeleted={handleResourceDeleted}
+              recallLabel={recallLabel}
               onViewAll={() => onOpenAll?.("media")}
             />
           ) : (
@@ -275,6 +374,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
                 items={filesPreview}
                 conversationId={conversationId}
                 variant="zalo"
+                onForward={handleForwardResource}
               />
               {filesTotal > 0 && (
                 <button
@@ -330,6 +430,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
           url={video?.url ?? null}
           fileName={video?.fileName}
         />
+
+        {forwardMessage && currentUserId ? (
+          <ForwardModal
+            messages={[forwardMessage]}
+            currentUserId={currentUserId}
+            onClose={() => setForwardMessage(null)}
+          />
+        ) : null}
       </div>
     );
   }
@@ -417,6 +525,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
               thumbnailUrls={thumbnailUrls}
               onImageOpen={(index, images) => setLightbox({ images, index })}
               onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
+              onForward={handleForwardResource}
+              onJumpToMessage={onJumpToMessage}
+              onDeleted={handleResourceDeleted}
+              recallLabel={recallLabel}
               onViewAll={() => {
                 setActiveTab("media");
                 setModalOpen(true);
@@ -427,6 +539,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             <DrawerFilesTab
               items={filesPreview}
               conversationId={conversationId}
+              onForward={handleForwardResource}
             />
           )}
           {activeTab === "links" && (
@@ -468,6 +581,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         conversationId={conversationId}
         defaultTab={activeTab}
       />
+
+      {forwardMessage && currentUserId ? (
+        <ForwardModal
+          messages={[forwardMessage]}
+          currentUserId={currentUserId}
+          onClose={() => setForwardMessage(null)}
+        />
+      ) : null}
     </>
   );
 };
@@ -499,6 +620,10 @@ const DrawerMediaTab: React.FC<{
   thumbnailUrls: Record<string, string>;
   onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
   onVideoOpen: (url: string, fileName?: string) => void;
+  onForward: (item: ConversationResourcesMediaItem) => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted: (messageId: string) => void;
+  recallLabel: string;
   onViewAll: () => void;
 }> = ({
   conversationId,
@@ -507,6 +632,10 @@ const DrawerMediaTab: React.FC<{
   thumbnailUrls,
   onImageOpen,
   onVideoOpen,
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel,
   onViewAll,
 }) => {
   // When total > preview limit, replace last slot with "+N" overlay
@@ -548,14 +677,19 @@ const DrawerMediaTab: React.FC<{
 
   return (
     <div className="grid grid-cols-3 gap-1">
-      {visibleItems.map((item) => (
+      {visibleItems.map((item, index) => (
         <DrawerMediaThumb
           key={`${item.messageId}-${item.fileId}`}
           conversationId={conversationId}
           item={item}
           fallbackUrl={thumbnailUrls[item.fileId] ?? null}
+          menuAlign={index % 3 === 2 ? "right" : "left"}
           onImageClick={(url) => handleThumbClick(item.fileId, url)}
           onVideoOpen={onVideoOpen}
+          onForward={() => onForward(item)}
+          onJumpToMessage={onJumpToMessage}
+          onDeleted={onDeleted}
+          recallLabel={recallLabel}
         />
       ))}
       {showOverlay && (
@@ -588,14 +722,48 @@ const DrawerMediaThumb: React.FC<{
   conversationId: string;
   item: ConversationResourcesMediaItem;
   fallbackUrl: string | null;
+  menuAlign: "left" | "right";
   onImageClick: (url: string) => void;
   onVideoOpen: (url: string, fileName?: string) => void;
-}> = React.memo(({ conversationId, item, fallbackUrl, onImageClick, onVideoOpen }) => {
+  onForward: () => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onDeleted: (messageId: string) => void;
+  recallLabel: string;
+}> = React.memo(({
+  conversationId,
+  item,
+  fallbackUrl,
+  menuAlign,
+  onImageClick,
+  onVideoOpen,
+  onForward,
+  onJumpToMessage,
+  onDeleted,
+  recallLabel,
+}) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
   const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
   const canOpen = true;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeMenu = () => setMenuOpen(false);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [menuOpen]);
+
+  const getDownloadUrl = async (): Promise<string | null> => {
+    const res = await fileApi.getDownloadUrl({
+      conversationId,
+      attachmentId: item.fileId,
+    });
+    const payload = unwrapApiSuccess(res);
+    return payload.url || null;
+  };
 
   const handleClick = async () => {
     // Videos must be played from their resolved source — the thumbnail (src) is
@@ -617,26 +785,190 @@ const DrawerMediaThumb: React.FC<{
     if (src) onImageClick(src);
   };
 
+  const handleCopy = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const url = await getDownloadUrl();
+      if (!url) return;
+      await navigator.clipboard?.writeText(url);
+      toast.success("Đã sao chép liên kết");
+    } catch {
+      toast.error("Không thể sao chép nội dung này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const url = await getDownloadUrl();
+      if (url) {
+        await downloadResourceWithName(url, item.fileName);
+        markFileDownloaded(item.fileId);
+      }
+    } catch {
+      toast.error("Không thể lưu về máy");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleDelete = async (mode: "FOR_ME" | "FOR_EVERYONE") => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      await messageApi.deleteMessage(item.messageId, { mode });
+      onDeleted(item.messageId);
+      toast.success(
+        mode === "FOR_EVERYONE"
+          ? "Đã thu hồi tin nhắn"
+          : "Đã xóa ở phía bạn",
+      );
+    } catch {
+      toast.error("Không thể xóa nội dung này");
+    } finally {
+      setIsBusy(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleJumpToMessage = () => {
+    onJumpToMessage?.(item.messageId);
+    setMenuOpen(false);
+  };
+
+  const handleSaveToMyDocuments = () => {
+    setMenuOpen(false);
+    toast.error("Chưa hỗ trợ lưu vào My Documents từ kho lưu trữ");
+  };
+
   return (
-    <button
-      type="button"
-      disabled={!canOpen}
-      onClick={() => void handleClick()}
-      className={clsx(
-        "group relative aspect-square overflow-hidden rounded-md bg-surface-overlay",
-        canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
-      )}
-      aria-label={item.fileName}
-    >
-      <MediaThumbnail
-        attachment={item}
-        src={src}
-        variant="grid"
-        imageClassName="transition-transform duration-200 group-hover:scale-105"
-      />
-    </button>
+    <div className="group relative aspect-square rounded-md">
+      <button
+        type="button"
+        disabled={!canOpen}
+        onClick={() => void handleClick()}
+        className={clsx(
+          "absolute inset-0 overflow-hidden rounded-md bg-surface-overlay",
+          canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
+        )}
+        aria-label={item.fileName}
+      >
+        <MediaThumbnail
+          attachment={item}
+          src={src}
+          variant="grid"
+          imageClassName="transition-transform duration-200 group-hover:scale-105"
+        />
+      </button>
+
+      <div
+        className={clsx(
+          "absolute left-2 top-2 z-20 hidden h-8 items-center rounded-md bg-white shadow-elev2 ring-1 ring-black/10 group-hover:flex",
+          menuOpen && "flex",
+        )}
+      >
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onForward();
+          }}
+          title="Chia sẻ"
+          aria-label="Chia sẻ"
+          className="flex h-8 w-9 items-center justify-center rounded-l-md text-text-primary hover:bg-surface-hover"
+        >
+          <ArrowUturnRightIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setMenuOpen((value) => !value);
+          }}
+          title="Thêm"
+          aria-label="Thêm"
+          className="flex h-8 w-9 items-center justify-center rounded-r-md text-text-primary hover:bg-surface-hover"
+        >
+          <EllipsisHorizontalIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      {menuOpen ? (
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className={clsx(
+            "absolute top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2",
+            menuAlign === "right" ? "right-0" : "left-0",
+          )}
+        >
+          <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+            Copy
+          </MediaMenuButton>
+          <MediaMenuButton
+            onClick={() => {
+              setMenuOpen(false);
+              onForward();
+            }}
+          >
+            Chia sẻ
+          </MediaMenuButton>
+          <MediaMenuButton onClick={handleSaveToMyDocuments}>
+            Lưu vào My Documents
+          </MediaMenuButton>
+          <MediaMenuButton
+            onClick={handleJumpToMessage}
+            disabled={!onJumpToMessage}
+          >
+            Xem tin nhắn gốc
+          </MediaMenuButton>
+          <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy}>
+            Lưu về máy
+          </MediaMenuButton>
+          <div className="my-2 border-t border-border" />
+          <MediaMenuButton
+            tone="danger"
+            onClick={() => void handleDelete("FOR_ME")}
+            disabled={isBusy}
+          >
+            Xóa chỉ ở phía tôi
+          </MediaMenuButton>
+          <MediaMenuButton
+            tone="danger"
+            onClick={() => void handleDelete("FOR_EVERYONE")}
+            disabled={isBusy}
+          >
+            {recallLabel}
+          </MediaMenuButton>
+        </div>
+      ) : null}
+    </div>
   );
 });
+
+const MediaMenuButton: React.FC<{
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger";
+}> = ({ children, onClick, disabled = false, tone = "default" }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    className={clsx(
+      "block w-full px-5 py-2.5 text-left leading-5 transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50",
+      tone === "danger" ? "text-[#d93025]" : "text-text-primary",
+    )}
+  >
+    {children}
+  </button>
+);
 
 // ─── Drawer Files Tab ─────────────────────────────────────────────────────────
 
@@ -644,7 +976,8 @@ const DrawerFilesTab: React.FC<{
   items: ConversationResourcesFileItem[];
   conversationId: string;
   variant?: "card" | "zalo";
-}> = ({ items, conversationId, variant = "card" }) => {
+  onForward: (item: ConversationResourcesFileItem) => void;
+}> = ({ items, conversationId, variant = "card", onForward }) => {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -662,6 +995,7 @@ const DrawerFilesTab: React.FC<{
           item={item}
           conversationId={conversationId}
           variant={variant}
+          onForward={() => onForward(item)}
         />
       ))}
     </div>
@@ -672,12 +1006,12 @@ const DrawerFileRow: React.FC<{
   item: ConversationResourcesFileItem;
   conversationId: string;
   variant?: "card" | "zalo";
-}> = ({ item, conversationId, variant = "card" }) => {
+  onForward: () => void;
+}> = ({ item, conversationId, variant = "card", onForward }) => {
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
   const isDownloaded = React.useSyncExternalStore(
     subscribeDownloadedFiles,
     () => isFileDownloaded(item.fileId),
@@ -694,7 +1028,7 @@ const DrawerFileRow: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isDownloading || isSharing) return;
+    if (isDownloading) return;
     setIsDownloading(true);
     try {
       const url = await getFileDownloadUrl();
@@ -709,36 +1043,13 @@ const DrawerFileRow: React.FC<{
     }
   };
 
-  const handleShare = async () => {
-    if (isDownloading || isSharing) return;
-    setIsSharing(true);
-    try {
-      const url = await getFileDownloadUrl();
-      if (!url) return;
-      const share = navigator.share?.bind(navigator);
-      if (share) {
-        await share({
-          title: item.fileName,
-          text: item.fileName,
-          url,
-        });
-        return;
-      }
-      await navigator.clipboard?.writeText(url);
-    } catch {
-      // silent — user can retry from the action tray
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
   if (variant === "zalo") {
     return (
       <div className="group relative rounded-md transition-colors hover:bg-surface-hover">
         <button
           type="button"
           onClick={() => void handleDownload()}
-          disabled={isDownloading || isSharing}
+          disabled={isDownloading}
           title={item.fileName}
           className="flex min-h-[64px] w-full items-center gap-3 px-1 py-2 text-left disabled:opacity-60"
         >
@@ -771,7 +1082,7 @@ const DrawerFileRow: React.FC<{
               event.stopPropagation();
               void handleDownload();
             }}
-            disabled={isDownloading || isSharing}
+            disabled={isDownloading}
             title="Tải xuống"
             aria-label="Tải xuống"
             className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-l-md text-text-primary hover:bg-surface-hover disabled:opacity-60"
@@ -782,9 +1093,9 @@ const DrawerFileRow: React.FC<{
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              void handleShare();
+              onForward();
             }}
-            disabled={isDownloading || isSharing}
+            disabled={isDownloading}
             title="Chia sẻ"
             aria-label="Chia sẻ"
             className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover disabled:opacity-60"

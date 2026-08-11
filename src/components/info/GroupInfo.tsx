@@ -1132,6 +1132,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           conversationId={conversation.id}
           variant="zalo"
           onOpenAll={openStoragePanel}
+          onJumpToMessage={onJumpToMessage}
         />
 
         <div className="border-t-8 border-[#eef0f4] bg-surface">
@@ -1297,7 +1298,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </CollapsibleSection>
 
           {/* Shared Resources */}
-          <SharedResourcesPreview conversationId={conversation.id} />
+          <SharedResourcesPreview
+            conversationId={conversation.id}
+            onJumpToMessage={onJumpToMessage}
+          />
 
           {/* ── Polls Section ── */}
           <div ref={pollsSectionRef}>
