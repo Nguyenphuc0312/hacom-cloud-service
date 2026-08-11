@@ -880,6 +880,40 @@ export const conversationApi = {
     return unwrapApiSuccess(response.data);
   },
 
+  setConversationMuted: async (
+    conversationId: string,
+    data: { muted: boolean; muteUntil: string | null },
+  ): Promise<{
+    conversationId: string;
+    muteUntil: string | null;
+    notificationLevel: "all" | "mute";
+  }> => {
+    const response = await apiClient.put<
+      ApiResponse<{
+        conversationId: string;
+        muteUntil: string | null;
+        notificationLevel: "all" | "mute";
+      }>
+    >(`/conversations/${conversationId}/mute`, data);
+    return unwrapApiSuccess(response.data);
+  },
+
+  setConversationHidden: async (
+    conversationId: string,
+    hidden: boolean,
+  ): Promise<{
+    conversationId: string;
+    hiddenAt: string | null;
+  }> => {
+    const response = await apiClient.put<
+      ApiResponse<{
+        conversationId: string;
+        hiddenAt: string | null;
+      }>
+    >(`/conversations/${conversationId}/hidden`, { hidden });
+    return unwrapApiSuccess(response.data);
+  },
+
   addMembers: async (conversationId: string, memberIds: string[]) => {
     // Backend expects a single userId per request, so add sequentially.
     for (const userId of memberIds) {

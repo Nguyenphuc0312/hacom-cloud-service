@@ -5,6 +5,8 @@ import {
   DocumentIcon,
   LinkIcon,
   MagnifyingGlassIcon,
+  ArrowLeftIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { Modal, Skeleton } from "../../ui";
 import {
@@ -39,6 +41,12 @@ interface SharedContentModalProps {
   onClose: () => void;
   conversationId: string;
   defaultTab?: SharedContentTab;
+}
+
+interface SharedContentPanelProps {
+  conversationId: string;
+  defaultTab?: SharedContentTab;
+  onBack: () => void;
 }
 
 const MODAL_MEDIA_PAGE_SIZE = 18;
@@ -126,6 +134,101 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
         fileName={video?.fileName}
       />
     </>
+  );
+};
+
+export const SharedContentPanel: React.FC<SharedContentPanelProps> = ({
+  conversationId,
+  defaultTab = "media",
+  onBack,
+}) => {
+  const [activeTab, setActiveTab] = useState<SharedContentTab>(defaultTab);
+  const [lightbox, setLightbox] = useState<{
+    images: Array<{ url: string; alt?: string }>;
+    index: number;
+  } | null>(null);
+  const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab, conversationId]);
+
+  const tabs: { key: SharedContentTab; label: string }[] = [
+    { key: "media", label: "Ảnh/Video" },
+    { key: "files", label: "Files" },
+    { key: "links", label: "Links" },
+  ];
+
+  return (
+    <div className="flex h-full flex-col bg-surface">
+      <div className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="icon-button-surface h-9 w-9"
+          aria-label="Quay lại"
+        >
+          <ArrowLeftIcon className="h-5 w-5" />
+        </button>
+        <h3 className="text-title-sm text-text-primary">Kho lưu trữ</h3>
+        <button
+          type="button"
+          className="h-9 px-2 text-sm font-semibold text-text-primary"
+        >
+          Chọn
+        </button>
+      </div>
+
+      <div className="flex shrink-0 border-b border-border px-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={clsx(
+              "flex h-14 flex-1 items-center justify-center border-b-2 text-[15px] font-semibold transition-colors",
+              activeTab === tab.key
+                ? "border-[#0068ff] text-[#005ae0]"
+                : "border-transparent text-text-secondary hover:text-text-primary",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {activeTab === "media" && (
+          <ModalMediaTab
+            conversationId={conversationId}
+            onImageOpen={(index, images) => setLightbox({ images, index })}
+            onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
+          />
+        )}
+        {activeTab === "files" && (
+          <ModalFilesTab conversationId={conversationId} />
+        )}
+        {activeTab === "links" && (
+          <ModalLinksTab conversationId={conversationId} />
+        )}
+      </div>
+
+      <ImagePreviewModal
+        isOpen={lightbox !== null}
+        onClose={() => setLightbox(null)}
+        images={lightbox?.images}
+        initialIndex={lightbox?.index ?? 0}
+      />
+
+      <VideoPlayerModal
+        isOpen={video !== null}
+        onClose={() => setVideo(null)}
+        url={video?.url ?? null}
+        fileName={video?.fileName}
+      />
+    </div>
   );
 };
 
@@ -238,26 +341,39 @@ const ModalMediaTab: React.FC<{
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-1 p-3 sm:grid-cols-4">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square rounded-md" />
-        ))}
+      <div className="p-4">
+        <ResourceFilterBar />
+        <div className="mt-6 grid grid-cols-3 gap-2">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-square rounded-md" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
-        <PhotoIcon className="h-12 w-12" />
-        <p className="text-sm">Chưa có ảnh hoặc video nào được chia sẻ</p>
+      <div className="p-4">
+        <ResourceFilterBar />
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
+          <PhotoIcon className="h-12 w-12" />
+          <p className="text-sm">Chưa có ảnh hoặc video nào được chia sẻ</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-3">
-      <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
+    <div className="p-4">
+      <ResourceFilterBar />
+      <h4 className="mt-6 text-base font-semibold text-text-primary">
+        Ngày {new Date(items[0]?.createdAt ?? Date.now()).toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "long",
+        })}
+      </h4>
+      <div className="mt-3 grid grid-cols-3 gap-2">
         {items.map((item) => (
           <ModalMediaThumb
             key={`${item.messageId}-${item.fileId}`}
@@ -270,7 +386,7 @@ const ModalMediaTab: React.FC<{
         ))}
       </div>
       {isFetching && (
-        <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-4">
+        <div className="mt-2 grid grid-cols-3 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="aspect-square rounded-md" />
           ))}
@@ -300,6 +416,21 @@ const ModalMediaTab: React.FC<{
     </div>
   );
 };
+
+const ResourceFilterBar: React.FC = () => (
+  <div className="flex items-center gap-3">
+    {["Người gửi", "Ngày gửi"].map((label) => (
+      <button
+        key={label}
+        type="button"
+        className="inline-flex h-8 min-w-[132px] items-center justify-between gap-2 rounded-full bg-[#e8eaee] px-4 text-sm font-medium text-text-secondary"
+      >
+        <span>{label}</span>
+        <ChevronDownIcon className="h-4 w-4" />
+      </button>
+    ))}
+  </div>
+);
 
 const ModalMediaThumb: React.FC<{
   conversationId: string;
@@ -514,9 +645,13 @@ const ModalFileRow: React.FC<{
 
 const ModalLinksTab: React.FC<{ conversationId: string }> = ({ conversationId }) => {
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 200);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setPage(1); }, [conversationId]);
+  useEffect(() => { setPage(1); }, [conversationId, debouncedSearch]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setSearchInput(""); }, [conversationId]);
 
   const { data, isLoading, isFetching } = useGetConversationLinksQuery(
     { conversationId, page, limit: MODAL_LINKS_PAGE_SIZE },
@@ -524,35 +659,57 @@ const ModalLinksTab: React.FC<{ conversationId: string }> = ({ conversationId })
   );
 
   const hasNext = data?.pagination.hasNext ?? false;
-  const items = data?.data ?? [];
+  const items = (data?.data ?? []).filter((item) => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return true;
+    return item.domain.toLowerCase().includes(q) || item.url.toLowerCase().includes(q);
+  });
 
   if (isLoading) {
     return (
-      <div className="space-y-2 p-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 px-2 py-2">
-            <Skeleton className="h-10 w-10 rounded-xl" />
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-3 w-1/2" />
-              <Skeleton className="h-3 w-3/4" />
+      <div className="p-4">
+        <LinkSearchBar value={searchInput} onChange={setSearchInput} />
+        <ResourceFilterBar />
+        <div className="mt-6 space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-2 py-2">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
-        <LinkIcon className="h-12 w-12" />
-        <p className="text-sm">Chưa có liên kết nào được chia sẻ</p>
+      <div className="p-4">
+        <LinkSearchBar value={searchInput} onChange={setSearchInput} />
+        <ResourceFilterBar />
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
+          <LinkIcon className="h-12 w-12" />
+          <p className="text-sm">
+            {debouncedSearch ? "Không tìm thấy link phù hợp" : "Chưa có liên kết nào được chia sẻ"}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      <LinkSearchBar value={searchInput} onChange={setSearchInput} />
+      <ResourceFilterBar />
+      <h4 className="mt-4 text-base font-semibold text-text-primary">
+        Ngày {new Date(items[0]?.createdAt ?? Date.now()).toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "long",
+        })}
+      </h4>
       <div className="space-y-0.5">
         {items.map((item) => (
           <ModalLinkRow key={item.messageId} item={item} />
@@ -582,6 +739,22 @@ const ModalLinksTab: React.FC<{ conversationId: string }> = ({ conversationId })
     </div>
   );
 };
+
+const LinkSearchBar: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ value, onChange }) => (
+  <div className="relative mb-4">
+    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Tìm kiếm link"
+      className="h-9 w-full rounded-full border border-border bg-surface pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-[#0068ff] focus:outline-none focus:ring-2 focus:ring-[#0068ff]/15"
+    />
+  </div>
+);
 
 const ModalLinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
   item,

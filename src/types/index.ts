@@ -170,6 +170,9 @@ export type Conversation = Omit<
   lastMessageStatus?: "pending" | "sent" | "failed" | null;
   pinnedAt?: Date | string | null;
   pinOrder?: number | null;
+  muteUntil?: Date | string | null;
+  notificationLevel?: "all" | "mentions_only" | "mute" | null;
+  hiddenAt?: Date | string | null;
   labelIds?: string[];
   membershipState?: "active" | "left" | "removed" | "banned" | "deleted";
   summaryVersion?: number;

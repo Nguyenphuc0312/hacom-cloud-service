@@ -5,6 +5,7 @@ import {
   CheckIcon,
   UserPlusIcon,
   ArrowRightOnRectangleIcon,
+  ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
   LinkIcon,
   ClipboardDocumentIcon,
@@ -15,6 +16,9 @@ import {
   ShieldCheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ArrowLeftIcon,
+  EllipsisHorizontalIcon,
+  PlusIcon,
   BellIcon,
   BellSlashIcon,
   TrashIcon,
@@ -22,6 +26,9 @@ import {
   ClockIcon,
   LockClosedIcon,
   TrophyIcon,
+  Cog6ToothIcon,
+  CalendarDaysIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline";
 import { SquarePen, Pin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +38,7 @@ import {
   ConfirmDialog,
   DirectorySkeleton,
   Input,
+  Modal,
   toast,
 } from "../ui";
 import type { Conversation, Message } from "../../types";
@@ -55,11 +63,13 @@ import { useGroupAvatarUpload } from "./useGroupAvatarUpload";
 import { useGroupInviteLinks } from "./useGroupInviteLinks";
 import { useGroupRename } from "./useGroupRename";
 import { asStringValue as asString } from "../../utils/payloadGuards";
+import { getMessagePreview } from "../../utils/messageHelpers";
 import {
   useGroupMembers,
   resolveMemberName,
   type GroupMember,
 } from "./useGroupMembers";
+import { usePinnedMessages } from "../../hooks/usePinnedMessages";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   canAddGroupMembers,
@@ -83,8 +93,23 @@ import {
   DeleteGroupModal,
 } from "../../features/chat/components/group-members";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
+import {
+  SharedContentPanel,
+  type SharedContentTab,
+} from "./shared-resources/SharedContentModal";
 import { UserProfile } from "./UserProfile";
 import { DraggableProfileModal } from "./DraggableProfileModal";
+import {
+  PollCreateDialog,
+  type PollCreatePayload,
+} from "../../features/chat/components/PollCreateDialog";
+import {
+  ReminderCreateDialog,
+  type ReminderCreatePayload,
+} from "../../features/chat/components/ReminderCreateDialog";
+import {
+  useSendMessageMutation,
+} from "../../features/api/chatApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -105,6 +130,9 @@ type ModalMemberTarget = { memberId: string; memberName: string } | null;
 
 const MEMBER_PREVIEW_COUNT = 8;
 const POLL_PREVIEW_COUNT = 3;
+
+type GroupInfoPanel = "main" | "members" | "board" | "reminders" | "storage" | "manage";
+type BoardTab = "all" | "pinned" | "notes" | "polls";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -141,6 +169,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
   const [isLeaveGroupConfirmOpen, setIsLeaveGroupConfirmOpen] = useState(false);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
+  const [activePanel, setActivePanel] = useState<GroupInfoPanel>("main");
+  const [storageDefaultTab, setStorageDefaultTab] = useState<SharedContentTab>("media");
+  const [boardTab, setBoardTab] = useState<BoardTab>("all");
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
+  const [isReminderDialogOpen, setIsReminderDialogOpen] = useState(false);
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [isMuteConfirmOpen, setIsMuteConfirmOpen] = useState(false);
+  const [muteDuration, setMuteDuration] = useState("1h");
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // New modal states
@@ -159,6 +196,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   // UI quick-action toggles (local state)
   const [isMuted, setIsMuted] = useState(false);
+  const [sendPanelMessage] = useSendMessageMutation();
 
   // "tên gợi nhớ" (alias) map — wins over a poll's stored senderName.
   const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
@@ -173,6 +211,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [remindersLoading, setRemindersLoading] = React.useState(false);
   const pollsSectionRef = React.useRef<HTMLDivElement>(null);
   const remindersSectionRef = React.useRef<HTMLDivElement>(null);
+  const {
+    pinnedMessages,
+    isLoading: pinnedMessagesLoading,
+  } = usePinnedMessages(conversation.id);
 
   // Merge-load voter profiles (same robust path as PollMessage card) so a single
   // expired avatar can be re-signed via onImageError without dropping the rest.
@@ -205,7 +247,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     [loadVoterProfiles],
   );
 
-  React.useEffect(() => {
+  const reloadBoardItems = React.useCallback(() => {
     if (!conversation.id) return;
     setPollsShowAll(false);
     setPollsLoading(true);
@@ -214,7 +256,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       .then((res) => {
         const messages = unwrapApiSuccess(res)?.messages ?? [];
         setPolls(messages);
-        // Batch-load all voter profiles across all polls
         const allIds = [
           ...new Set(
             messages.flatMap((msg) => {
@@ -237,6 +278,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       .catch(() => setReminders([]))
       .finally(() => setRemindersLoading(false));
   }, [conversation.id, loadVoterProfiles]);
+
+  React.useEffect(() => {
+    reloadBoardItems();
+  }, [reloadBoardItems]);
 
   const isPinned = Boolean(conversation.pinnedAt);
 
@@ -386,7 +431,105 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     setMemberSearch("");
     setMemberFilterRole("all");
     setMembersShowAll(false);
+    setActivePanel("main");
+    setBoardTab("all");
   }, [conversation.id, conversation.name, resetGroupAvatar]);
+
+  const openStoragePanel = useCallback((tab: SharedContentTab) => {
+    setStorageDefaultTab(tab);
+    setActivePanel("storage");
+  }, []);
+
+  const makeClientMessageId = useCallback((prefix: string) => {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }, []);
+
+  const handleCreatePanelPoll = useCallback(
+    (payload: PollCreatePayload, options: { pinToTop: boolean }) => {
+      const clientMessageId = makeClientMessageId("poll");
+      sendPanelMessage({
+        conversationId: conversation.id,
+        clientMessageId,
+        localId: `temp-${clientMessageId}`,
+        content: payload.question,
+        type: MessageType.POLL,
+        poll: payload,
+        senderId: currentUserId,
+      })
+        .unwrap()
+        .then((created) => {
+          toast.success("Đã tạo bình chọn");
+          reloadBoardItems();
+          if (options.pinToTop && created?.id) {
+            messageApi.pinMessage(created.id).catch(() => {
+              toast.error("Không thể ghim bình chọn");
+            });
+          }
+        })
+        .catch(() => {
+          toast.error("Không thể tạo bình chọn");
+        });
+    },
+    [conversation.id, currentUserId, makeClientMessageId, reloadBoardItems, sendPanelMessage],
+  );
+
+  const handleCreatePanelReminder = useCallback(
+    (payload: ReminderCreatePayload) => {
+      const clientMessageId = makeClientMessageId("reminder");
+      sendPanelMessage({
+        conversationId: conversation.id,
+        clientMessageId,
+        localId: `temp-${clientMessageId}`,
+        content: payload.content,
+        type: MessageType.REMINDER,
+        reminder: {
+          content: payload.content,
+          remindAt: payload.reminderDate.toISOString(),
+          repeat: payload.repeatType,
+        },
+        senderId: currentUserId,
+      })
+        .unwrap()
+        .then(() => {
+          toast.success("Đã tạo nhắc hẹn");
+          reloadBoardItems();
+        })
+        .catch(() => {
+          toast.error("Không thể tạo nhắc hẹn");
+        });
+    },
+    [conversation.id, currentUserId, makeClientMessageId, reloadBoardItems, sendPanelMessage],
+  );
+
+  const handleCreatePanelNote = useCallback(
+    (payload: { content: string; pinToTop: boolean }) => {
+      const clientMessageId = makeClientMessageId("note");
+      sendPanelMessage({
+        conversationId: conversation.id,
+        clientMessageId,
+        localId: `temp-${clientMessageId}`,
+        content: payload.content,
+        type: MessageType.TEXT,
+        senderId: currentUserId,
+      })
+        .unwrap()
+        .then((created) => {
+          toast.success("Đã tạo ghi chú");
+          if (payload.pinToTop && created?.id) {
+            messageApi.pinMessage(created.id).catch(() => {
+              toast.error("Không thể ghim ghi chú");
+            });
+          }
+        })
+        .catch(() => {
+          toast.error("Không thể tạo ghi chú");
+        });
+    },
+    [conversation.id, currentUserId, makeClientMessageId, sendPanelMessage],
+  );
 
 
   React.useEffect(() => {
@@ -457,7 +600,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await chatApi.group.addMember(conversation.id, userId);
         await refreshGroupState();
-        setShowAddMember(false);
         toast.success(t("profile:toast.memberAdded"));
       } catch (error) {
         toast.error(extractApiError(error).message || t("profile:toast.memberAddFailed"));
@@ -649,6 +791,106 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
+      {activePanel === "storage" ? (
+        <SharedContentPanel
+          conversationId={conversation.id}
+          defaultTab={storageDefaultTab}
+          onBack={() => setActivePanel("main")}
+        />
+      ) : activePanel === "members" ? (
+        <GroupMembersPanel
+          title="Thành viên"
+          members={filteredMembers}
+          allMembers={members}
+          isLoading={isLoadingMembers}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          capabilities={groupCapabilities}
+          actingMemberId={actingMemberId}
+          canAddMembers={canAddMembers}
+          isSubmitting={isSubmitting}
+          onBack={() => setActivePanel("main")}
+          onAddMember={() => setShowAddMember(true)}
+          onMemberClick={(memberId) => setViewingMemberId(memberId)}
+          onMakeAdmin={(memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            if (member) void handleToggleMemberRole(member);
+          }}
+          onRemoveAdmin={(memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            if (member) void handleToggleMemberRole(member);
+          }}
+          onTransferOwnership={(memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            if (member) handleTransferOwnership(member);
+          }}
+          onBanMember={(memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            if (member) handleBanMember(member);
+          }}
+          onRemoveMember={(memberId) => {
+            const member = members.find((m) => m.id === memberId);
+            if (member) handleRemoveMember(member);
+          }}
+        />
+      ) : activePanel === "reminders" ? (
+        <ReminderPanel
+          reminders={reminders}
+          loading={remindersLoading}
+          onBack={() => setActivePanel("main")}
+          onCreate={() => setIsReminderDialogOpen(true)}
+          onJumpToMessage={onJumpToMessage}
+          onOpenCalendar={() => navigate("/calendar")}
+        />
+      ) : activePanel === "board" ? (
+        <GroupBoardPanel
+          boardTab={boardTab}
+          onBoardTabChange={setBoardTab}
+          menuOpen={boardMenuOpen}
+          onMenuOpenChange={setBoardMenuOpen}
+          pinnedMessages={pinnedMessages}
+          pinnedMessagesLoading={pinnedMessagesLoading}
+          currentUserId={currentUserId}
+          polls={polls}
+          pollsLoading={pollsLoading}
+          pollsShowAll={pollsShowAll}
+          onPollsShowAllChange={setPollsShowAll}
+          reminders={reminders}
+          remindersLoading={remindersLoading}
+          voterProfilesMap={voterProfilesMap}
+          nameByUserId={nameByUserId}
+          onBack={() => setActivePanel("main")}
+          onCreatePoll={() => {
+            setBoardMenuOpen(false);
+            setIsPollDialogOpen(true);
+          }}
+          onCreateReminder={() => {
+            setBoardMenuOpen(false);
+            setActivePanel("reminders");
+            setIsReminderDialogOpen(true);
+          }}
+          onCreateNote={() => {
+            setBoardMenuOpen(false);
+            setIsNoteDialogOpen(true);
+          }}
+          onJumpToMessage={onJumpToMessage}
+          onOpenCalendar={() => navigate("/calendar")}
+          onVoterAvatarError={handleVoterAvatarError}
+        />
+      ) : activePanel === "manage" ? (
+        <GroupManagePanel
+          inviteLinks={inviteLinks}
+          pendingJoinRequestsCount={pendingJoinRequestsCount}
+          onBack={() => setActivePanel("main")}
+          onCopyInvite={(value) => void inviteLinksControl.copyLink(value)}
+          onCreateInvite={inviteLinksControl.openForm}
+          onBlockList={() => {
+            setSecurityExpanded(true);
+            setActivePanel("main");
+          }}
+        />
+      ) : (
+        <>
 
       {/* ── Sticky Header ── (matches UserProfile so the divider lines up with the chat header) */}
       <div className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
@@ -763,25 +1005,31 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         </div>
 
         {/* ── Quick Actions Row ── */}
-        <div className="bg-surface px-4 pb-5">
-          <div className="flex flex-wrap justify-center gap-2">
+        <div className="bg-surface px-5 pb-5">
+          <div className="grid grid-cols-4 gap-2">
             {/* Mute / Unmute */}
             <button
               type="button"
-              onClick={() => setIsMuted((p) => !p)}
-              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              onClick={() => {
+                if (isMuted) {
+                  setIsMuted(false);
+                  return;
+                }
+                setIsMuteConfirmOpen(true);
+              }}
+              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
               aria-label={isMuted ? "Bật thông báo nhóm" : "Tắt thông báo nhóm"}
             >
               <div className={clsx(
                 "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                isMuted ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15",
+                isMuted ? "bg-[#e8ebf0]" : "bg-[#e8f2ff] group-hover:bg-[#dcebff]",
               )}>
                 {isMuted
                   ? <BellSlashIcon className="h-5 w-5 text-text-secondary" />
                   : <BellIcon className="h-5 w-5 text-primary" />
                 }
               </div>
-              <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
                 {isMuted ? "Bật thông báo" : "Tắt thông báo"}
               </span>
             </button>
@@ -790,16 +1038,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <button
               type="button"
               onClick={() => { void handleTogglePin(); }}
-              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
               aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
               <div className={clsx(
                 "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15",
+                isPinned ? "bg-[#e8ebf0]" : "bg-[#eef1f5] group-hover:bg-[#e4e8ef]",
               )}>
                 <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
               </div>
-              <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
                 {isPinned ? "Bỏ ghim" : "Ghim nhóm"}
               </span>
             </button>
@@ -807,27 +1055,41 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             {/* Add Member */}
             {canAddMembers && (
               <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setShowAddMember((p) => !p)}
-                className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
-                aria-label="Thêm thành viên vào nhóm"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/15">
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setShowAddMember((p) => !p)}
+                className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors disabled:opacity-60"
+              aria-label="Thêm thành viên vào nhóm"
+            >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef1f5] transition-colors group-hover:bg-[#e4e8ef]">
                   <UserPlusIcon className="h-5 w-5 text-primary" />
                 </div>
-                <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+                <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
                   {t("profile:groupInfo.addMember")}
                 </span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => setActivePanel("manage")}
+              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
+              aria-label="Quản lý nhóm"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef1f5] transition-colors group-hover:bg-[#e4e8ef]">
+                <Cog6ToothIcon className="h-5 w-5 text-primary" />
+              </div>
+              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
+                Quản lý nhóm
+              </span>
+            </button>
 
             {/* Join Requests (admin only, if pending) */}
             {isAdmin && pendingJoinRequestsCount > 0 && (
               <button
                 type="button"
                 onClick={() => setSecurityExpanded(true)}
-                className="group relative flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+                className="group relative flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
                 aria-label={`${pendingJoinRequestsCount} yêu cầu vào nhóm đang chờ`}
               >
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 transition-colors group-hover:bg-warning/15">
@@ -836,7 +1098,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     {pendingJoinRequestsCount}
                   </span>
                 </div>
-                <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+                <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
                   Yêu cầu vào
                 </span>
               </button>
@@ -844,8 +1106,76 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
         </div>
 
+        <div className="border-t-8 border-[#eef0f4] bg-surface">
+          <InfoNavRow
+            title={t("profile:groupInfo.sections.members")}
+            icon={<UsersIcon className="h-6 w-6" />}
+            meta={`${participantCount} thành viên`}
+            onClick={() => setActivePanel("members")}
+          />
+        </div>
+
+        <div className="border-t-8 border-[#eef0f4] bg-surface">
+          <InfoNavRow
+            title="Bảng tin nhóm"
+            icon={<ClipboardDocumentListIcon className="h-6 w-6" />}
+            onClick={() => setActivePanel("board")}
+          />
+          <InfoNavRow
+            title="Danh sách nhắc hẹn"
+            icon={<ClockIcon className="h-6 w-6" />}
+            onClick={() => setActivePanel("reminders")}
+          />
+        </div>
+
+        <SharedResourcesPreview
+          conversationId={conversation.id}
+          variant="zalo"
+          onOpenAll={openStoragePanel}
+        />
+
+        <div className="border-t-8 border-[#eef0f4] bg-surface">
+          <InfoNavRow
+            title="Thiết lập bảo mật"
+            icon={<ShieldCheckIcon className="h-6 w-6" />}
+            expanded={securityExpanded}
+            onClick={() => setSecurityExpanded((p) => !p)}
+          />
+          {securityExpanded && (
+            <div className="border-t border-border/60 px-5 py-3">
+              <div className="flex items-center gap-3 py-2">
+                <NoSymbolIcon className="h-6 w-6 text-text-primary" />
+                <span className="flex-1 text-[15px] text-text-primary">Ẩn trò chuyện</span>
+                <button
+                  type="button"
+                  className="relative h-6 w-11 rounded-full bg-[#b8b8b8]"
+                  aria-label="Ẩn trò chuyện"
+                >
+                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t-8 border-[#eef0f4] bg-surface py-3">
+          <DangerActionRow
+            icon={<TrashIcon className="h-6 w-6" />}
+            label="Xóa lịch sử trò chuyện"
+            danger
+          />
+          {canLeaveCurrentGroup && (
+            <DangerActionRow
+              icon={<ArrowRightOnRectangleIcon className="h-6 w-6" />}
+              label={t("profile:groupInfo.leaveGroup")}
+              danger
+              onClick={() => void handleLeaveGroup()}
+            />
+          )}
+        </div>
+
         {/* ── Sections ── */}
-        <div className="space-y-2 px-3 pb-6">
+        <div className="hidden">
 
           {/* Members Section */}
           <CollapsibleSection
@@ -1448,6 +1778,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* Hidden file input */}
       <input
@@ -1530,6 +1862,35 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         isLoading={isConfirmActionPending}
       />
 
+      <PollCreateDialog
+        isOpen={isPollDialogOpen}
+        onClose={() => setIsPollDialogOpen(false)}
+        onSubmit={handleCreatePanelPoll}
+      />
+
+      <ReminderCreateDialog
+        isOpen={isReminderDialogOpen}
+        onClose={() => setIsReminderDialogOpen(false)}
+        onSubmit={handleCreatePanelReminder}
+      />
+
+      <NoteCreateDialog
+        isOpen={isNoteDialogOpen}
+        onClose={() => setIsNoteDialogOpen(false)}
+        onSubmit={handleCreatePanelNote}
+      />
+
+      <MuteConversationDialog
+        isOpen={isMuteConfirmOpen}
+        value={muteDuration}
+        onChange={setMuteDuration}
+        onClose={() => setIsMuteConfirmOpen(false)}
+        onConfirm={() => {
+          setIsMuted(true);
+          setIsMuteConfirmOpen(false);
+        }}
+      />
+
       {/* Member profile modal */}
       {viewingMemberId && (
         <DraggableProfileModal onClose={() => setViewingMemberId(null)}>
@@ -1545,6 +1906,1109 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             onStartConversation={onStartConversation}
           />
         </DraggableProfileModal>
+      )}
+    </div>
+  );
+};
+
+const InfoNavRow: React.FC<{
+  title: string;
+  icon?: React.ReactNode;
+  meta?: string;
+  expanded?: boolean;
+  onClick: () => void;
+}> = ({ title, icon, meta, expanded, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex min-h-[60px] w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-hover"
+  >
+    {icon && <span className="shrink-0 text-text-primary">{icon}</span>}
+    <div className="min-w-0 flex-1">
+      <p className="truncate text-[16px] font-semibold text-text-primary">{title}</p>
+      {meta && <p className="mt-1 text-[15px] text-text-secondary">{meta}</p>}
+    </div>
+    {expanded === undefined ? (
+      <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
+    ) : (
+      <ChevronDownIcon
+        className={clsx(
+          "h-4 w-4 shrink-0 text-text-muted transition-transform",
+          expanded && "rotate-180",
+        )}
+      />
+    )}
+  </button>
+);
+
+const DangerActionRow: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  danger?: boolean;
+  onClick?: () => void;
+}> = ({ icon, label, danger = false, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      "flex min-h-[56px] w-full items-center gap-4 px-7 py-3 text-left text-[15px] transition-colors hover:bg-surface-hover",
+      danger ? "text-red-600" : "text-text-primary",
+    )}
+  >
+    <span className="shrink-0">{icon}</span>
+    <span>{label}</span>
+  </button>
+);
+
+const NoteCreateDialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (payload: { content: string; pinToTop: boolean }) => void;
+}> = ({ isOpen, onClose, onSubmit }) => {
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [content, setContent] = React.useState("");
+  const [pinToTop, setPinToTop] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setContent("");
+    setPinToTop(false);
+  }, [isOpen]);
+
+  const canSubmit = content.trim().length > 0;
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      showCloseButton={false}
+      contentClassName="max-w-[552px] rounded"
+      bodyClassName="p-0"
+      initialFocusRef={textareaRef}
+      footer={
+        <div className="flex items-center justify-end gap-4 px-5 pb-4 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-12 rounded bg-[#e5e7eb] px-6 text-[17px] font-semibold text-text-primary hover:bg-[#dfe2e7]"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => {
+              if (!canSubmit) return;
+              onSubmit({ content: content.trim(), pinToTop });
+              onClose();
+            }}
+            className={clsx(
+              "h-12 rounded px-6 text-[17px] font-semibold transition-colors",
+              canSubmit
+                ? "bg-[#8ec1ff] text-white hover:bg-[#69aaff]"
+                : "cursor-not-allowed bg-[#a8cdfb] text-white/80",
+            )}
+          >
+            Tạo ghi chú
+          </button>
+        </div>
+      }
+    >
+      <div className="flex h-[60px] items-center justify-between border-b border-border px-5">
+        <h2 className="text-[20px] font-semibold text-text-primary">
+          Tạo ghi chú
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-10 w-10 items-center justify-center rounded text-text-primary hover:bg-surface-hover"
+          aria-label="Đóng"
+        >
+          <XMarkIcon className="h-7 w-7" />
+        </button>
+      </div>
+
+      <div className="px-5 py-5">
+        <label className="mb-2 block text-[17px] font-medium text-text-primary">
+          Nội dung
+        </label>
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={8}
+          placeholder="Nhập nội dung mới hoặc dán link"
+          className="h-[226px] w-full resize-none rounded border border-[#0068ff] bg-surface px-3 py-3 text-[17px] leading-6 text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#0068ff]/15"
+        />
+
+        <button
+          type="button"
+          onClick={() => setPinToTop((value) => !value)}
+          className="mt-5 flex items-center gap-4 text-left text-[17px] text-text-primary"
+        >
+          <span
+            className={clsx(
+              "flex h-6 w-6 items-center justify-center rounded border",
+              pinToTop
+                ? "border-[#0068ff] bg-[#0068ff] text-white"
+                : "border-border bg-surface text-transparent",
+            )}
+          >
+            <CheckIcon className="h-4 w-4 stroke-[3]" />
+          </span>
+          <span>Ghim lên đầu trò chuyện</span>
+        </button>
+      </div>
+    </Modal>
+  );
+};
+
+const MUTE_OPTIONS = [
+  { value: "1h", label: "Trong 1 giờ" },
+  { value: "4h", label: "Trong 4 giờ" },
+  { value: "8am", label: "Cho đến 8:00 AM" },
+  { value: "until-open", label: "Cho đến khi được mở lại" },
+];
+
+const MuteConversationDialog: React.FC<{
+  isOpen: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ isOpen, value, onChange, onClose, onConfirm }) => (
+  <Modal
+    isOpen={isOpen}
+    onClose={onClose}
+    size="md"
+    showCloseButton={false}
+    contentClassName="max-w-[502px] rounded"
+    bodyClassName="p-0"
+    footer={
+      <div className="flex items-center justify-end gap-5 px-5 pb-5 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-12 rounded bg-[#e5e7eb] px-6 text-[18px] font-semibold text-text-primary hover:bg-[#dfe2e7]"
+        >
+          Hủy
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="h-12 rounded bg-[#0068ff] px-6 text-[18px] font-semibold text-white hover:bg-[#005ae0]"
+        >
+          Đồng ý
+        </button>
+      </div>
+    }
+  >
+    <div className="flex h-[60px] items-center justify-between border-b border-border px-5">
+      <h2 className="text-[20px] font-semibold text-text-primary">Xác nhận</h2>
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex h-10 w-10 items-center justify-center rounded text-text-primary hover:bg-surface-hover"
+        aria-label="Đóng"
+      >
+        <XMarkIcon className="h-7 w-7" />
+      </button>
+    </div>
+
+    <div className="px-5 py-5">
+      <p className="mb-5 text-[17px] text-text-primary">
+        Bạn có chắc muốn tắt thông báo hội thoại này:
+      </p>
+      <div className="space-y-4">
+        {MUTE_OPTIONS.map((option) => {
+          const checked = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className="flex w-full items-center gap-2 text-left text-[17px] text-text-primary"
+            >
+              <span
+                className={clsx(
+                  "flex h-5 w-5 items-center justify-center rounded-full border",
+                  checked ? "border-[#0068ff]" : "border-[#cfd3d9]",
+                )}
+              >
+                {checked && <span className="h-3 w-3 rounded-full bg-[#0068ff]" />}
+              </span>
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  </Modal>
+);
+
+const PanelHeader: React.FC<{
+  title: string;
+  onBack: () => void;
+  right?: React.ReactNode;
+}> = ({ title, onBack, right }) => (
+  <div className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
+    <button
+      type="button"
+      onClick={onBack}
+      className="icon-button-surface h-9 w-9"
+      aria-label="Quay lại"
+    >
+      <ArrowLeftIcon className="h-5 w-5" />
+    </button>
+    <h3 className="text-title-sm text-text-primary">{title}</h3>
+    <div className="flex h-9 min-w-9 items-center justify-end">{right}</div>
+  </div>
+);
+
+const GroupMembersPanel: React.FC<{
+  title: string;
+  members: GroupMember[];
+  allMembers: GroupMember[];
+  isLoading: boolean;
+  currentUserId: string;
+  currentUserRole: RoomMemberRole;
+  capabilities: React.ComponentProps<typeof MembersList>["capabilities"];
+  actingMemberId: string | null;
+  canAddMembers: boolean;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onAddMember: () => void;
+  onMakeAdmin: (memberId: string) => void;
+  onRemoveAdmin: (memberId: string) => void;
+  onTransferOwnership: (memberId: string) => void;
+  onBanMember: (memberId: string) => void;
+  onRemoveMember: (memberId: string) => void;
+  onMemberClick: (memberId: string) => void;
+}> = ({
+  title,
+  members,
+  allMembers,
+  isLoading,
+  currentUserId,
+  currentUserRole,
+  capabilities,
+  actingMemberId,
+  canAddMembers,
+  isSubmitting,
+  onBack,
+  onAddMember,
+  onMakeAdmin,
+  onRemoveAdmin,
+  onTransferOwnership,
+  onBanMember,
+  onRemoveMember,
+  onMemberClick,
+}) => (
+  <div className="flex h-full flex-col bg-surface">
+    <PanelHeader title={title} onBack={onBack} />
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="px-5 py-5">
+        {canAddMembers && (
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={onAddMember}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e4e7ec] text-[16px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7] disabled:opacity-60"
+          >
+            <UserPlusIcon className="h-5 w-5" />
+            Thêm thành viên
+          </button>
+        )}
+      </div>
+      <div className="flex items-center justify-between px-5 pb-3">
+        <span className="text-[15px] font-semibold text-text-primary">
+          Danh sách thành viên ({allMembers.length})
+        </span>
+        <EllipsisHorizontalIcon className="h-6 w-6 text-text-primary" />
+      </div>
+      <MembersList
+        members={members}
+        isLoading={isLoading}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
+        capabilities={capabilities}
+        actingMemberId={actingMemberId}
+        onMakeAdmin={onMakeAdmin}
+        onRemoveAdmin={onRemoveAdmin}
+        onTransferOwnership={onTransferOwnership}
+        onBanMember={onBanMember}
+        onRemoveMember={onRemoveMember}
+        onMemberClick={onMemberClick}
+        className="border-t border-border/50"
+      />
+    </div>
+  </div>
+);
+
+const ReminderPanel: React.FC<{
+  reminders: Message[];
+  loading: boolean;
+  onBack: () => void;
+  onCreate: () => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onOpenCalendar: () => void;
+}> = ({ reminders, loading, onBack, onCreate, onJumpToMessage, onOpenCalendar }) => (
+  <div className="flex h-full flex-col bg-surface">
+    <PanelHeader
+      title="Danh sách nhắc hẹn"
+      onBack={onBack}
+      right={
+        <button
+          type="button"
+          onClick={onCreate}
+          className="icon-button-surface h-9 w-9 text-[#0068ff]"
+          aria-label="Tạo nhắc hẹn"
+        >
+          <PlusIcon className="h-6 w-6" />
+        </button>
+      }
+    />
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+      {loading || reminders.length > 0 ? (
+        <ReminderHistoryList
+          reminders={reminders}
+          loading={loading}
+          onJumpToMessage={onJumpToMessage}
+          onOpenCalendar={onOpenCalendar}
+        />
+      ) : (
+        <div className="flex flex-col items-center pt-8 text-center">
+          <CalendarDaysIcon className="h-28 w-28 text-[#dfeaff]" strokeWidth={1.4} />
+          <p className="mt-7 max-w-[260px] text-[15px] leading-6 text-text-secondary">
+            Chưa có nhắc hẹn nào được chia sẻ trong hội thoại này
+          </p>
+          <button
+            type="button"
+            onClick={onCreate}
+            className="mt-6 flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e5f1ff] text-[16px] font-semibold text-[#005ae0] hover:bg-[#d9ebff]"
+          >
+            <ClockIcon className="h-5 w-5" />
+            Tạo nhắc hẹn
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const GroupManagePanel: React.FC<{
+  inviteLinks: InviteLinkItem[];
+  pendingJoinRequestsCount: number;
+  onBack: () => void;
+  onCopyInvite: (value: string) => void;
+  onCreateInvite: () => void;
+  onBlockList: () => void;
+}> = ({
+  inviteLinks,
+  pendingJoinRequestsCount,
+  onBack,
+  onCopyInvite,
+  onCreateInvite,
+  onBlockList,
+}) => {
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [permissions, setPermissions] = React.useState({
+    rename: false,
+    pin: true,
+    createNoteReminder: false,
+    createPoll: true,
+    sendMessage: false,
+  });
+  const [approvalMode, setApprovalMode] = React.useState(false);
+  const [markOwnerMessages, setMarkOwnerMessages] = React.useState(true);
+  const [readRecent, setReadRecent] = React.useState(true);
+  const [allowJoinLink, setAllowJoinLink] = React.useState(true);
+
+  const invite = inviteLinks.find((link) => !link.revokedAt);
+  const inviteValue = invite?.inviteUrl || invite?.token || invite?.tokenPreview || "";
+
+  const updatePermission = (key: keyof typeof permissions) => {
+    setPermissions((current) => ({ ...current, [key]: !current[key] }));
+  };
+
+  React.useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, []);
+
+  return (
+    <div className="flex h-full flex-col bg-surface">
+      <PanelHeader title="Quản lý nhóm" onBack={onBack} />
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <section className="px-6 py-4">
+          <h4 className="mb-4 text-[15px] font-semibold leading-5 text-text-primary">
+            Cho phép các thành viên trong nhóm:
+          </h4>
+          <div className="space-y-4">
+            <PermissionRow
+              label="Thay đổi tên & ảnh đại diện của nhóm"
+              checked={permissions.rename}
+              onChange={() => updatePermission("rename")}
+            />
+            <PermissionRow
+              label="Ghim tin nhắn, ghi chú, bình chọn lên đầu hội thoại"
+              checked={permissions.pin}
+              onChange={() => updatePermission("pin")}
+            />
+            <PermissionRow
+              label="Tạo mới ghi chú, nhắc hẹn"
+              checked={permissions.createNoteReminder}
+              onChange={() => updatePermission("createNoteReminder")}
+            />
+            <PermissionRow
+              label="Tạo mới bình chọn"
+              checked={permissions.createPoll}
+              onChange={() => updatePermission("createPoll")}
+            />
+            <PermissionRow
+              label="Gửi tin nhắn"
+              checked={permissions.sendMessage}
+              onChange={() => updatePermission("sendMessage")}
+            />
+          </div>
+        </section>
+
+        <div className="h-2 bg-[#eef0f4]" />
+
+        <section className="divide-y divide-[#e1e4ea] px-6">
+          <ManageToggleRow
+            label="Chế độ phê duyệt thành viên mới"
+            checked={approvalMode}
+            onChange={setApprovalMode}
+            hint
+            badge={pendingJoinRequestsCount > 0 ? pendingJoinRequestsCount : undefined}
+          />
+          <ManageToggleRow
+            label="Đánh dấu tin nhắn từ trưởng/phó nhóm"
+            checked={markOwnerMessages}
+            onChange={setMarkOwnerMessages}
+            hint
+          />
+          <ManageToggleRow
+            label="Cho phép thành viên mới đọc tin nhắn gần nhất"
+            checked={readRecent}
+            onChange={setReadRecent}
+            hint
+          />
+          <div className="py-4">
+            <ManageToggleRow
+              label="Cho phép dùng link tham gia nhóm"
+              checked={allowJoinLink}
+              onChange={setAllowJoinLink}
+              hint
+              compact
+            />
+            {allowJoinLink && (
+              <div className="mt-3 flex h-10 items-center gap-3 rounded bg-[#eef6ff] px-4">
+                {inviteValue ? (
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#005ae0]">
+                    {invite?.inviteUrl || inviteValue}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onCreateInvite}
+                    className="min-w-0 flex-1 text-left text-[14px] font-semibold text-[#005ae0]"
+                  >
+                    Tạo link tham gia nhóm
+                  </button>
+                )}
+                {inviteValue && (
+                  <button
+                    type="button"
+                    onClick={() => onCopyInvite(inviteValue)}
+                    className="text-[#0068ff] hover:text-[#005ae0]"
+                    aria-label="Sao chép link"
+                  >
+                    <ClipboardDocumentIcon className="h-5 w-5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-[#0068ff] hover:text-[#005ae0]"
+                  aria-label="Chia sẻ link"
+                >
+                  <ArrowRightOnRectangleIcon className="h-5 w-5 rotate-180" />
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="h-2 bg-[#eef0f4]" />
+
+        <button
+          type="button"
+          onClick={onBlockList}
+          className="flex min-h-[58px] w-full items-center gap-3 px-6 text-left text-[15px] text-text-primary hover:bg-surface-hover"
+        >
+          <UsersIcon className="h-6 w-6" />
+          <span>Chặn khỏi nhóm</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PermissionRow: React.FC<{
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+}> = ({ label, checked, onChange }) => (
+  <button
+    type="button"
+    onClick={onChange}
+    className="flex w-full items-center gap-3 text-left"
+  >
+    <span className="min-w-0 flex-1 text-[15px] leading-5 text-text-primary">
+      {label}
+    </span>
+    <span
+      className={clsx(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+        checked
+          ? "border-[#0068ff] bg-[#0068ff] text-white"
+          : "border-[#d8dbe0] bg-surface text-transparent",
+      )}
+    >
+      <CheckIcon className="h-3.5 w-3.5 stroke-[3]" />
+    </span>
+  </button>
+);
+
+const ManageToggleRow: React.FC<{
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  hint?: boolean;
+  badge?: number;
+  compact?: boolean;
+}> = ({ label, checked, onChange, hint = false, badge, compact = false }) => (
+  <div className={clsx("flex items-center gap-4", compact ? "py-0" : "py-4")}>
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2 text-[15px] font-semibold leading-5 text-text-primary">
+        <span className="min-w-0">{label}</span>
+        {hint && (
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-text-muted text-[10px] font-semibold text-text-muted">
+            ?
+          </span>
+        )}
+        {badge && (
+          <span className="rounded-full bg-danger px-1.5 py-0.5 text-[11px] font-bold text-white">
+            {badge}
+          </span>
+        )}
+      </div>
+    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={clsx(
+        "relative h-6 w-10 shrink-0 rounded-full transition-colors",
+        checked ? "bg-[#0068ff]" : "bg-[#b8b8b8]",
+      )}
+    >
+      <span
+        className={clsx(
+          "absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+          checked ? "translate-x-5" : "translate-x-1",
+        )}
+      />
+    </button>
+  </div>
+);
+
+const GroupBoardPanel: React.FC<{
+  boardTab: BoardTab;
+  onBoardTabChange: (tab: BoardTab) => void;
+  menuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
+  pinnedMessages: Message[];
+  pinnedMessagesLoading: boolean;
+  currentUserId: string;
+  polls: Message[];
+  pollsLoading: boolean;
+  pollsShowAll: boolean;
+  onPollsShowAllChange: (value: boolean | ((prev: boolean) => boolean)) => void;
+  reminders: Message[];
+  remindersLoading: boolean;
+  voterProfilesMap: Record<string, { name: string; avatar: string | null }>;
+  nameByUserId: Record<string, string>;
+  onBack: () => void;
+  onCreatePoll: () => void;
+  onCreateReminder: () => void;
+  onCreateNote: () => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onOpenCalendar: () => void;
+  onVoterAvatarError: (userId: string) => void;
+}> = ({
+  boardTab,
+  onBoardTabChange,
+  menuOpen,
+  onMenuOpenChange,
+  pinnedMessages,
+  pinnedMessagesLoading,
+  currentUserId,
+  polls,
+  pollsLoading,
+  pollsShowAll,
+  onPollsShowAllChange,
+  reminders,
+  remindersLoading,
+  voterProfilesMap,
+  nameByUserId,
+  onBack,
+  onCreatePoll,
+  onCreateReminder,
+  onCreateNote,
+  onJumpToMessage,
+  onOpenCalendar,
+  onVoterAvatarError,
+}) => {
+  const tabs: { key: BoardTab; label: string }[] = [
+    { key: "all", label: "Tất cả" },
+    { key: "pinned", label: "Tin ghim" },
+    { key: "notes", label: "Ghi chú" },
+    { key: "polls", label: "Bình chọn" },
+  ];
+  const showPinned = boardTab === "all" || boardTab === "pinned";
+  const showPolls = boardTab === "all" || boardTab === "polls";
+  const showReminders = boardTab === "all";
+  const hasContent =
+    (showPinned && pinnedMessages.length > 0) ||
+    (showPolls && polls.length > 0) ||
+    (showReminders && reminders.length > 0);
+  const isLoadingBoard =
+    (showPinned && pinnedMessagesLoading) ||
+    (showPolls && pollsLoading) ||
+    (showReminders && remindersLoading);
+
+  return (
+    <div className="flex h-full flex-col bg-[hsl(var(--chat-panel-bg))]">
+      <PanelHeader
+        title="Bảng tin nhóm"
+        onBack={onBack}
+        right={
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => onMenuOpenChange(!menuOpen)}
+              className="icon-button-surface h-9 w-9 text-[#0068ff]"
+              aria-label="Thêm bảng tin"
+            >
+              <PlusIcon className="h-7 w-7" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-lg border border-border bg-surface py-2 shadow-elev3">
+                <MenuAction onClick={onCreatePoll}>Tạo bình chọn</MenuAction>
+                <MenuAction onClick={onCreateNote}>Tạo ghi chú</MenuAction>
+                <MenuAction onClick={onCreateReminder}>Tạo nhắc hẹn</MenuAction>
+              </div>
+            )}
+          </div>
+        }
+      />
+      <div className="flex h-[58px] shrink-0 border-b border-border bg-surface px-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onBoardTabChange(tab.key)}
+            className={clsx(
+              "relative flex h-full flex-1 items-center justify-center text-[16px] font-semibold transition-colors",
+              boardTab === tab.key
+                ? "text-[#005ae0]"
+                : "text-text-secondary hover:text-text-primary",
+            )}
+          >
+            {tab.label}
+            {boardTab === tab.key && (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#0068ff]" />
+            )}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+        {!hasContent && !isLoadingBoard ? (
+          <BoardEmptyState
+            onCreatePoll={onCreatePoll}
+            onCreateNote={onCreateNote}
+            showPollButton={boardTab === "all" || boardTab === "polls"}
+          />
+        ) : (
+          <div className="space-y-5">
+            {boardTab === "all" ? (
+              <>
+                <PollPreviewList
+                  polls={polls}
+                  loading={pollsLoading}
+                  showAll={false}
+                  startIndex={0}
+                  limit={1}
+                  showMoreButton={false}
+                  onShowAllChange={onPollsShowAllChange}
+                  voterProfilesMap={voterProfilesMap}
+                  currentUserId={currentUserId}
+                  onJumpToMessage={onJumpToMessage}
+                  onVoterAvatarError={onVoterAvatarError}
+                />
+                <PinnedBoardList
+                  messages={pinnedMessages}
+                  loading={pinnedMessagesLoading}
+                  nameByUserId={nameByUserId}
+                  currentUserId={currentUserId}
+                  onJumpToMessage={onJumpToMessage}
+                />
+                <PollPreviewList
+                  polls={polls}
+                  loading={false}
+                  showAll={pollsShowAll}
+                  startIndex={1}
+                  limit={2}
+                  showMoreButton
+                  onShowAllChange={onPollsShowAllChange}
+                  voterProfilesMap={voterProfilesMap}
+                  currentUserId={currentUserId}
+                  onJumpToMessage={onJumpToMessage}
+                  onVoterAvatarError={onVoterAvatarError}
+                />
+              </>
+            ) : (
+              <>
+                {showPolls && (
+                  <PollPreviewList
+                    polls={polls}
+                    loading={pollsLoading}
+                    showAll
+                    showMoreButton={false}
+                    onShowAllChange={onPollsShowAllChange}
+                    voterProfilesMap={voterProfilesMap}
+                    currentUserId={currentUserId}
+                    onJumpToMessage={onJumpToMessage}
+                    onVoterAvatarError={onVoterAvatarError}
+                  />
+                )}
+                {showPinned && (
+                  <PinnedBoardList
+                    messages={pinnedMessages}
+                    loading={pinnedMessagesLoading}
+                    nameByUserId={nameByUserId}
+                    currentUserId={currentUserId}
+                    onJumpToMessage={onJumpToMessage}
+                  />
+                )}
+              </>
+            )}
+            {showReminders && (
+              <ReminderHistoryList
+                reminders={reminders}
+                loading={remindersLoading}
+                onJumpToMessage={onJumpToMessage}
+                onOpenCalendar={onOpenCalendar}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MenuAction: React.FC<{
+  children: React.ReactNode;
+  onClick: () => void;
+}> = ({ children, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="block w-full px-5 py-2.5 text-left text-[15px] text-text-primary hover:bg-surface-hover"
+  >
+    {children}
+  </button>
+);
+
+const PinnedBoardList: React.FC<{
+  messages: Message[];
+  loading: boolean;
+  nameByUserId: Record<string, string>;
+  currentUserId: string;
+  onJumpToMessage?: (messageId: string) => void;
+}> = ({ messages, loading, nameByUserId, currentUserId, onJumpToMessage }) => {
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="animate-pulse rounded border border-border bg-surface p-4">
+            <div className="mb-3 h-4 w-2/3 rounded bg-surface-active" />
+            <div className="h-3 w-full rounded bg-surface-active/70" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (messages.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      {messages.slice(0, 4).map((message) => {
+        const senderName =
+          nameByUserId[message.senderId] || message.senderName || "Người gửi";
+        const preview = getMessagePreview(message, currentUserId, 110);
+        const senderAvatar =
+          (message as { senderAvatar?: string; senderAvatarUrl?: string }).senderAvatar ||
+          (message as { senderAvatar?: string; senderAvatarUrl?: string }).senderAvatarUrl;
+        return (
+          <button
+            key={message.id}
+            type="button"
+            onClick={() => onJumpToMessage?.(message.id)}
+            className="w-full rounded border border-[#d8dbe0] bg-surface p-4 text-left transition-colors hover:bg-surface-hover/60"
+          >
+            <div className="flex items-start gap-3">
+              <Avatar
+                src={senderAvatar}
+                alt={senderName}
+                size="lg"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
+                  {senderName}
+                </p>
+                <div className="mt-1 flex items-center gap-2 text-[14px] text-text-secondary">
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#0068ff]" />
+                  <span>Tin ghim</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="truncate text-[15px] font-semibold text-text-primary">
+                {senderName}
+              </p>
+              <p className="mt-2 line-clamp-2 text-[14px] leading-5 text-text-primary">
+                {preview}
+              </p>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 text-[14px] text-text-secondary">
+              {message.createdAt ? (
+                <span>{formatCalendarDate(new Date(message.createdAt))}</span>
+              ) : null}
+              <span className="text-border">|</span>
+              <span className="font-semibold text-[#0068ff]">
+                Xem tin nhắn gốc
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
+const BoardEmptyState: React.FC<{
+  onCreatePoll: () => void;
+  onCreateNote: () => void;
+  showPollButton: boolean;
+}> = ({ onCreatePoll, onCreateNote, showPollButton }) => (
+  <div className="flex flex-col items-center pt-2 text-center">
+    <ClipboardDocumentListIcon className="h-32 w-32 text-[#dff3ff]" strokeWidth={1.25} />
+    <p className="mt-6 max-w-[260px] text-[15px] leading-6 text-text-primary">
+      Các thông báo và bình chọn mới sẽ xuất hiện tại đây
+    </p>
+    {showPollButton && (
+      <button
+        type="button"
+        onClick={onCreatePoll}
+        className="mt-8 flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e5f1ff] text-[16px] font-semibold text-[#005ae0] hover:bg-[#d9ebff]"
+      >
+        <ChartBarIcon className="h-5 w-5" />
+        Tạo bình chọn
+      </button>
+    )}
+    <button
+      type="button"
+      onClick={onCreateNote}
+      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e5f1ff] text-[16px] font-semibold text-[#005ae0] hover:bg-[#d9ebff]"
+    >
+      <ClockIcon className="h-5 w-5" />
+      Tạo ghi chú
+    </button>
+  </div>
+);
+
+const PollPreviewList: React.FC<{
+  polls: Message[];
+  loading: boolean;
+  showAll: boolean;
+  startIndex?: number;
+  limit?: number;
+  showMoreButton?: boolean;
+  onShowAllChange: (value: boolean | ((prev: boolean) => boolean)) => void;
+  voterProfilesMap: Record<string, { name: string; avatar: string | null }>;
+  currentUserId: string;
+  onJumpToMessage?: (messageId: string) => void;
+  onVoterAvatarError: (userId: string) => void;
+}> = ({
+  polls,
+  loading,
+  showAll,
+  startIndex = 0,
+  limit,
+  showMoreButton = true,
+  onShowAllChange,
+  currentUserId,
+  onJumpToMessage,
+}) => {
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="animate-pulse rounded border border-border bg-surface p-4">
+            <div className="mb-4 h-5 w-4/5 rounded bg-surface-active" />
+            <div className="mb-2 h-11 w-full rounded bg-surface-active/70" />
+            <div className="h-11 w-full rounded bg-surface-active/70" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (polls.length === 0) return null;
+  if (startIndex >= polls.length) return null;
+
+  const collapsedLimit = limit ?? POLL_PREVIEW_COUNT;
+  const visiblePolls = showAll
+    ? polls.slice(startIndex)
+    : polls.slice(startIndex, startIndex + collapsedLimit);
+  const hasHiddenPolls = polls.length > startIndex + collapsedLimit;
+
+  return (
+    <div className="space-y-4">
+      {visiblePolls.map((msg) => {
+        const poll = (msg.metadata as { poll?: PollInfo } | null | undefined)?.poll;
+        if (!poll) return null;
+        const endsAt = (poll as unknown as { endsAt?: string | Date | null }).endsAt;
+        const endLabel = endsAt
+          ? `Kết thúc lúc ${formatCalendarDate(new Date(endsAt))}`
+          : poll.isClosed
+            ? `Kết thúc lúc ${formatCalendarDate(new Date(msg.createdAt ?? Date.now()))}`
+            : "Đang mở";
+        const visibleOptions = poll.options.slice(0, 3);
+
+        return (
+          <div
+            key={msg.id}
+            role={onJumpToMessage ? "button" : undefined}
+            tabIndex={onJumpToMessage ? 0 : undefined}
+            onClick={onJumpToMessage ? () => onJumpToMessage(msg.id) : undefined}
+            onKeyDown={
+              onJumpToMessage
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onJumpToMessage(msg.id);
+                    }
+                  }
+                : undefined
+            }
+            className={clsx(
+              "rounded border border-[#d8dbe0] bg-surface p-4 transition-colors hover:border-[#b9c1cf]",
+              onJumpToMessage &&
+                "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1565C0]/30",
+            )}
+          >
+            <p className="line-clamp-2 text-[20px] font-semibold leading-7 text-text-primary">
+              {poll.question}
+            </p>
+            <p className="mt-3 text-[15px] leading-5 text-text-secondary">
+              {endLabel}
+            </p>
+            <p className="mt-3 text-[15px] leading-5 text-text-secondary">
+              {poll.allowMultiple ? "Chọn nhiều phương án" : "Chọn một phương án"}
+            </p>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onJumpToMessage?.(msg.id);
+              }}
+              className="mt-5 inline-flex items-center gap-2 text-[15px] font-medium text-[#0068ff] hover:underline"
+            >
+              {poll.totalVotes} người bình chọn
+              <ChevronRightIcon className="h-4 w-4 stroke-[3]" />
+            </button>
+
+            <div className="mt-4 space-y-3">
+              {visibleOptions.map((opt) => {
+                const pct = poll.totalVotes > 0
+                  ? Math.round((opt.votes / poll.totalVotes) * 100)
+                  : 0;
+                const isSelected = (opt.voterIds ?? []).includes(currentUserId);
+                return (
+                  <div key={opt.id} className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-3">
+                    <div className="relative h-11 overflow-hidden rounded bg-[#e6e8ed]">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-[#c7e1ff] transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                      <div className="relative flex h-full items-center gap-2 px-3">
+                        <span className="min-w-0 flex-1 truncate text-[16px] text-text-primary">
+                          {opt.text}
+                        </span>
+                        {isSelected && (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0068ff] text-white">
+                            <CheckIcon className="h-3.5 w-3.5 stroke-[3]" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-right text-[16px] text-text-primary tabular-nums">
+                      {opt.votes}
+                    </span>
+                  </div>
+                );
+              })}
+              {poll.options.length > visibleOptions.length && (
+                <p className="text-[16px] text-text-muted">
+                  * Còn {poll.options.length - visibleOptions.length} lựa chọn khác
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onJumpToMessage?.(msg.id);
+              }}
+              className="mt-4 flex h-10 w-full items-center justify-center rounded border border-[#0068ff] text-[18px] font-semibold text-[#005ae0] hover:bg-[#eef6ff]"
+            >
+              Đổi lựa chọn
+            </button>
+          </div>
+        );
+      })}
+      {showMoreButton && hasHiddenPolls && (
+        <button
+          type="button"
+          onClick={() => onShowAllChange((p) => !p)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium text-[#1565C0] transition-colors hover:bg-[#1565C0]/[0.08]"
+        >
+          {showAll ? (
+            <>Thu gọn <ChevronDownIcon className="h-3.5 w-3.5" /></>
+          ) : (
+            <>Xem tất cả {polls.length} bình chọn <ChevronRightIcon className="h-3.5 w-3.5" /></>
+          )}
+        </button>
       )}
     </div>
   );

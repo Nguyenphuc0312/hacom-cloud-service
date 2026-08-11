@@ -4,6 +4,7 @@ import {
   PhotoIcon,
   DocumentIcon,
   LinkIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { Skeleton } from "../../ui";
 import {
@@ -32,6 +33,8 @@ import { useResolvedName } from "../../../stores/enrichedProfileStore";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
+  variant?: "card" | "zalo";
+  onOpenAll?: (tab: SharedContentTab) => void;
 }
 
 const DRAWER_MEDIA_PREVIEW = 6;
@@ -40,6 +43,8 @@ const DRAWER_LINKS_PREVIEW = 3;
 
 export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   conversationId,
+  variant = "card",
+  onOpenAll,
 }) => {
   const [activeTab, setActiveTab] = useState<SharedContentTab>("media");
   const [modalOpen, setModalOpen] = useState(false);
@@ -176,7 +181,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, thumbnailFileIdsKey, conversationId]);
 
-  if (isLoading) {
+  if (isLoading && variant === "card") {
     return (
       <div className="overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="flex items-center justify-between px-4 py-3">
@@ -193,10 +198,128 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     );
   }
 
+  if (isLoading && variant === "zalo") {
+    return (
+      <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
+        {["Ảnh/Video", "File", "Link"].map((label) => (
+          <div key={label} className="px-5 py-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[16px] font-semibold text-text-primary">{label}</span>
+              <ChevronRightIcon className="h-4 w-4 text-text-muted" />
+            </div>
+            <Skeleton className="mt-3 h-16 w-full rounded-md" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (isError) {
     return (
       <div className="rounded-2xl border border-border bg-surface px-4 py-6 text-center text-sm text-text-muted">
         Không thể tải dữ liệu lưu trữ
+      </div>
+    );
+  }
+
+  if (variant === "zalo") {
+    return (
+      <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
+        <ZaloResourceSection
+          title="Ảnh/Video"
+          onOpen={() => onOpenAll?.("media")}
+        >
+          {mediaPreview.length > 0 ? (
+            <DrawerMediaTab
+              conversationId={conversationId}
+              items={mediaPreview}
+              total={mediaTotal}
+              thumbnailUrls={thumbnailUrls}
+              onImageOpen={(index, images) => setLightbox({ images, index })}
+              onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
+              onViewAll={() => onOpenAll?.("media")}
+            />
+          ) : (
+            <p className="py-4 text-center text-sm text-text-muted">
+              Chưa có ảnh hoặc video nào
+            </p>
+          )}
+          {mediaTotal > 0 && (
+            <button
+              type="button"
+              onClick={() => onOpenAll?.("media")}
+              className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+            >
+              Xem tất cả
+            </button>
+          )}
+        </ZaloResourceSection>
+
+        <ZaloResourceSection
+          title="File"
+          onOpen={() => onOpenAll?.("files")}
+        >
+          {filesPreview.length > 0 ? (
+            <>
+              <DrawerFilesTab
+                items={filesPreview}
+                conversationId={conversationId}
+                variant="zalo"
+              />
+              {filesTotal > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAll?.("files")}
+                  className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+                >
+                  Xem tất cả
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="py-4 text-center text-sm text-text-muted">
+              Chưa có File được chia sẻ trong hội thoại này
+            </p>
+          )}
+        </ZaloResourceSection>
+
+        <ZaloResourceSection
+          title="Link"
+          onOpen={() => onOpenAll?.("links")}
+        >
+          {linksPreview.length > 0 ? (
+            <>
+              <DrawerLinksTab items={linksPreview} variant="zalo" />
+              {linksTotal > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAll?.("links")}
+                  className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+                >
+                  Xem tất cả
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="py-4 text-center text-sm text-text-muted">
+              Chưa có link nào được chia sẻ
+            </p>
+          )}
+        </ZaloResourceSection>
+
+        <ImagePreviewModal
+          isOpen={lightbox !== null}
+          onClose={() => setLightbox(null)}
+          images={lightbox?.images}
+          initialIndex={lightbox?.index ?? 0}
+        />
+
+        <VideoPlayerModal
+          isOpen={video !== null}
+          onClose={() => setVideo(null)}
+          url={video?.url ?? null}
+          fileName={video?.fileName}
+        />
       </div>
     );
   }
@@ -338,6 +461,24 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     </>
   );
 };
+
+const ZaloResourceSection: React.FC<{
+  title: string;
+  onOpen: () => void;
+  children: React.ReactNode;
+}> = ({ title, onOpen, children }) => (
+  <section className="bg-surface px-5 py-4">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mb-3 flex w-full items-center justify-between text-left"
+    >
+      <span className="text-[18px] font-semibold text-text-primary">{title}</span>
+      <ChevronRightIcon className="h-5 w-5 text-text-muted" />
+    </button>
+    {children}
+  </section>
+);
 
 // ─── Drawer Media Tab ─────────────────────────────────────────────────────────
 
@@ -492,7 +633,8 @@ const DrawerMediaThumb: React.FC<{
 const DrawerFilesTab: React.FC<{
   items: ConversationResourcesFileItem[];
   conversationId: string;
-}> = ({ items, conversationId }) => {
+  variant?: "card" | "zalo";
+}> = ({ items, conversationId, variant = "card" }) => {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -509,6 +651,7 @@ const DrawerFilesTab: React.FC<{
           key={`${item.messageId}-${item.fileId}`}
           item={item}
           conversationId={conversationId}
+          variant={variant}
         />
       ))}
     </div>
@@ -518,7 +661,8 @@ const DrawerFilesTab: React.FC<{
 const DrawerFileRow: React.FC<{
   item: ConversationResourcesFileItem;
   conversationId: string;
-}> = ({ item, conversationId }) => {
+  variant?: "card" | "zalo";
+}> = ({ item, conversationId, variant = "card" }) => {
   const iconType = getFileIconType(item.mimeType, item.fileName);
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
@@ -542,6 +686,34 @@ const DrawerFileRow: React.FC<{
       setIsDownloading(false);
     }
   };
+
+  if (variant === "zalo") {
+    return (
+      <button
+        type="button"
+        onClick={() => void handleDownload()}
+        disabled={isDownloading}
+        title={item.fileName}
+        className="flex min-h-[64px] w-full items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center">
+          <FileTypeIcon type={iconType} className="h-10 w-10" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
+            {item.fileName}
+          </p>
+          <p className="truncate text-[12px] leading-5 text-text-muted">
+            {formatFileSize(item.sizeBytes)}
+            {senderName ? <span className="hidden min-[430px]:inline"> · {senderName}</span> : null}
+          </p>
+        </div>
+        <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted">
+          {date}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button
@@ -571,7 +743,8 @@ const DrawerFileRow: React.FC<{
 
 const DrawerLinksTab: React.FC<{
   items: ConversationResourcesLinkItem[];
-}> = ({ items }) => {
+  variant?: "card" | "zalo";
+}> = ({ items, variant = "card" }) => {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-text-muted">
@@ -584,17 +757,48 @@ const DrawerLinksTab: React.FC<{
   return (
     <div className="space-y-0.5">
       {items.map((item) => (
-        <DrawerLinkRow key={item.messageId} item={item} />
+        <DrawerLinkRow key={item.messageId} item={item} variant={variant} />
       ))}
     </div>
   );
 };
 
-const DrawerLinkRow: React.FC<{ item: ConversationResourcesLinkItem }> = ({
+const DrawerLinkRow: React.FC<{
+  item: ConversationResourcesLinkItem;
+  variant?: "card" | "zalo";
+}> = ({
   item,
+  variant = "card",
 }) => {
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
+
+  if (variant === "zalo") {
+    return (
+      <a
+        href={item.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex min-h-[66px] items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-surface-hover"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#d5d9e0] bg-[#eef0f4]">
+          <LinkIcon className="h-5 w-5 text-text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">{item.domain}</p>
+          <p className="truncate text-[13px] leading-5 text-[#0068ff]">{item.url}</p>
+          {senderName ? (
+            <p className="hidden truncate text-[12px] leading-5 text-text-muted min-[430px]:block">
+              {senderName}
+            </p>
+          ) : null}
+        </div>
+        <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted">
+          {date}
+        </span>
+      </a>
+    );
+  }
 
   return (
     <a
