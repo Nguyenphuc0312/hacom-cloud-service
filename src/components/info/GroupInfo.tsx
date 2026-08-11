@@ -172,6 +172,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
   const [activePanel, setActivePanel] = useState<GroupInfoPanel>("main");
   const [storageDefaultTab, setStorageDefaultTab] = useState<SharedContentTab>("media");
+  const [groupBoardExpanded, setGroupBoardExpanded] = useState(true);
   const [boardTab, setBoardTab] = useState<BoardTab>("all");
   const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
@@ -866,11 +867,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             setBoardMenuOpen(false);
             setIsPollDialogOpen(true);
           }}
-          onCreateReminder={() => {
-            setBoardMenuOpen(false);
-            setActivePanel("reminders");
-            setIsReminderDialogOpen(true);
-          }}
           onCreateNote={() => {
             setBoardMenuOpen(false);
             setIsNoteDialogOpen(true);
@@ -1081,14 +1077,26 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="border-t-8 border-[#eef0f4] bg-surface">
           <InfoNavRow
             title="Bảng tin nhóm"
-            icon={<ClipboardDocumentListIcon className="h-6 w-6" />}
-            onClick={() => setActivePanel("board")}
+            expanded={groupBoardExpanded}
+            onClick={() => setGroupBoardExpanded((p) => !p)}
           />
-          <InfoNavRow
-            title="Danh sách nhắc hẹn"
-            icon={<ClockIcon className="h-6 w-6" />}
-            onClick={() => setActivePanel("reminders")}
-          />
+          {groupBoardExpanded && (
+            <div className="divide-y divide-border/60 border-t border-border/60">
+              <InfoActionRow
+                title="Danh sách nhắc hẹn"
+                icon={<ClockIcon className="h-6 w-6" />}
+                onClick={() => setActivePanel("reminders")}
+              />
+              <InfoActionRow
+                title="Ghi chú, ghim, bình chọn"
+                icon={<ClipboardDocumentListIcon className="h-6 w-6" />}
+                onClick={() => {
+                  setBoardTab("all");
+                  setActivePanel("board");
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <SharedResourcesPreview
@@ -1901,7 +1909,24 @@ const InfoNavRow: React.FC<{
       <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" />
     ) : (
       <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
-    )}
+  )}
+</button>
+);
+
+const InfoActionRow: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}> = ({ title, icon, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex min-h-[58px] w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-hover"
+  >
+    <span className="shrink-0 text-text-primary">{icon}</span>
+    <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text-primary">
+      {title}
+    </span>
   </button>
 );
 
@@ -2507,7 +2532,6 @@ const GroupBoardPanel: React.FC<{
   nameByUserId: Record<string, string>;
   onBack: () => void;
   onCreatePoll: () => void;
-  onCreateReminder: () => void;
   onCreateNote: () => void;
   onJumpToMessage?: (messageId: string) => void;
   onOpenCalendar: () => void;
@@ -2530,7 +2554,6 @@ const GroupBoardPanel: React.FC<{
   nameByUserId,
   onBack,
   onCreatePoll,
-  onCreateReminder,
   onCreateNote,
   onJumpToMessage,
   onOpenCalendar,
@@ -2573,7 +2596,6 @@ const GroupBoardPanel: React.FC<{
               <div className="absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-lg border border-border bg-surface py-2 shadow-elev3">
                 <MenuAction onClick={onCreatePoll}>Tạo bình chọn</MenuAction>
                 <MenuAction onClick={onCreateNote}>Tạo ghi chú</MenuAction>
-                <MenuAction onClick={onCreateReminder}>Tạo nhắc hẹn</MenuAction>
               </div>
             )}
           </div>
