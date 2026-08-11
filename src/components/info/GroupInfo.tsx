@@ -110,6 +110,7 @@ import {
 import {
   useSendMessageMutation,
 } from "../../features/api/chatApi";
+import { InfoQuickActionButton } from "./InfoQuickActionButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1008,8 +1009,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="bg-surface px-5 pb-5">
           <div className="grid grid-cols-4 gap-2">
             {/* Mute / Unmute */}
-            <button
-              type="button"
+            <InfoQuickActionButton
               onClick={() => {
                 if (isMuted) {
                   setIsMuted(false);
@@ -1017,91 +1017,53 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 }
                 setIsMuteConfirmOpen(true);
               }}
-              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
-              aria-label={isMuted ? "Bật thông báo nhóm" : "Tắt thông báo nhóm"}
-            >
-              <div className={clsx(
-                "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                isMuted ? "bg-[#e8ebf0]" : "bg-[#e8f2ff] group-hover:bg-[#dcebff]",
-              )}>
-                {isMuted
-                  ? <BellSlashIcon className="h-5 w-5 text-text-secondary" />
-                  : <BellIcon className="h-5 w-5 text-primary" />
-                }
-              </div>
-              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                {isMuted ? "Bật thông báo" : "Tắt thông báo"}
-              </span>
-            </button>
+              ariaLabel={isMuted ? "Bật thông báo nhóm" : "Tắt thông báo nhóm"}
+              icon={isMuted ? <BellSlashIcon className="h-5 w-5" /> : <BellIcon className="h-5 w-5" />}
+              label={isMuted ? "Bật thông báo" : "Tắt thông báo"}
+              active={isMuted}
+            />
 
             {/* Pin / Unpin */}
-            <button
-              type="button"
+            <InfoQuickActionButton
               onClick={() => { void handleTogglePin(); }}
-              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
-              aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
-            >
-              <div className={clsx(
-                "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                isPinned ? "bg-[#e8ebf0]" : "bg-[#eef1f5] group-hover:bg-[#e4e8ef]",
-              )}>
-                <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
-              </div>
-              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                {isPinned ? "Bỏ ghim" : "Ghim nhóm"}
-              </span>
-            </button>
+              ariaLabel={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+              icon={<Pin size={20} color="currentColor" strokeWidth={1.5} />}
+              label={isPinned ? "Bỏ ghim" : "Ghim nhóm"}
+              active={isPinned}
+            />
 
             {/* Add Member */}
             {canAddMembers && (
-              <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => setShowAddMember((p) => !p)}
-                className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors disabled:opacity-60"
-              aria-label="Thêm thành viên vào nhóm"
-            >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef1f5] transition-colors group-hover:bg-[#e4e8ef]">
-                  <UserPlusIcon className="h-5 w-5 text-primary" />
-                </div>
-                <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                  {t("profile:groupInfo.addMember")}
-                </span>
-              </button>
+              <InfoQuickActionButton
+                disabled={isSubmitting}
+                onClick={() => setShowAddMember((p) => !p)}
+                ariaLabel="Thêm thành viên vào nhóm"
+                icon={<UserPlusIcon className="h-5 w-5" />}
+                label={t("profile:groupInfo.addMember")}
+              />
             )}
 
-            <button
-              type="button"
+            <InfoQuickActionButton
               onClick={() => setActivePanel("manage")}
-              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
-              aria-label="Quản lý nhóm"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef1f5] transition-colors group-hover:bg-[#e4e8ef]">
-                <Cog6ToothIcon className="h-5 w-5 text-primary" />
-              </div>
-              <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                Quản lý nhóm
-              </span>
-            </button>
+              ariaLabel="Quản lý nhóm"
+              icon={<Cog6ToothIcon className="h-5 w-5" />}
+              label="Quản lý nhóm"
+            />
 
             {/* Join Requests (admin only, if pending) */}
             {isAdmin && pendingJoinRequestsCount > 0 && (
-              <button
-                type="button"
+              <InfoQuickActionButton
                 onClick={() => setSecurityExpanded(true)}
-                className="group relative flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 transition-colors"
-                aria-label={`${pendingJoinRequestsCount} yêu cầu vào nhóm đang chờ`}
-              >
-                <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 transition-colors group-hover:bg-warning/15">
-                  <UsersIcon className="h-5 w-5 text-warning" />
+                ariaLabel={`${pendingJoinRequestsCount} yêu cầu vào nhóm đang chờ`}
+                icon={<UsersIcon className="h-5 w-5" />}
+                label="Yêu cầu vào"
+                warning
+                badge={
                   <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-bold text-white">
                     {pendingJoinRequestsCount}
                   </span>
-                </div>
-                <span className="min-h-[32px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                  Yêu cầu vào
-                </span>
-              </button>
+                }
+              />
             )}
           </div>
         </div>

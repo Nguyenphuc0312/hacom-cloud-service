@@ -89,6 +89,8 @@ import {
   type ReminderCreatePayload,
 } from "../../features/chat/components/ReminderCreateDialog";
 import { createGroupConversationUseCase } from "../../features/chat/usecases/createGroupConversation";
+import { InfoQuickActionButton } from "./InfoQuickActionButton";
+import { Pin } from "lucide-react";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -1492,38 +1494,49 @@ const DirectPanelHeader: React.FC<{
   onBack?: () => void;
   onClose?: () => void;
   right?: React.ReactNode;
-}> = ({ title, onBack, onClose, right }) => (
-  <div className="flex h-[86px] shrink-0 items-center border-b border-border bg-surface px-4">
-    <div className="flex w-12 justify-start">
-      {onBack ? (
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center rounded text-text-primary hover:bg-surface-hover"
-          aria-label="Quay lại"
-        >
-          <ArrowLeftIcon className="h-6 w-6" />
-        </button>
-      ) : null}
-    </div>
-    <h2 className="min-w-0 flex-1 text-center text-[24px] font-semibold text-text-primary">
-      {title}
-    </h2>
-    <div className="flex w-12 justify-end">
-      {right ??
-        (onClose ? (
+}> = ({ title, onBack, onClose, right }) => {
+  if (onBack) {
+    return (
+      <div className="app-page-header flex min-h-[var(--app-header-height)] shrink-0 items-center border-b border-border bg-surface px-4 py-2.5">
+        <div className="flex w-10 justify-start">
           <button
             type="button"
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded text-text-primary hover:bg-surface-hover"
-            aria-label="Đóng"
+            onClick={onBack}
+            className="icon-button-surface h-9 w-9"
+            aria-label="Quay lại"
           >
-            <XMarkIcon className="h-6 w-6" />
+            <ArrowLeftIcon className="h-5 w-5" />
           </button>
-        ) : null)}
+        </div>
+        <h2 className="min-w-0 flex-1 truncate text-center text-title-sm text-text-primary">
+          {title}
+        </h2>
+        <div className="flex w-10 justify-end">{right}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-page-header flex min-h-[var(--app-header-height)] shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5">
+      <h2 className="min-w-0 truncate text-title-sm text-text-primary">
+        {title}
+      </h2>
+      <div className="flex shrink-0 justify-end">
+        {right ??
+          (onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="icon-button-surface h-9 w-9"
+              aria-label="Đóng"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          ) : null)}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const DirectActionButton: React.FC<{
   icon: React.ReactNode;
@@ -1531,21 +1544,12 @@ const DirectActionButton: React.FC<{
   active?: boolean;
   onClick: () => void;
 }> = ({ icon, label, active = false, onClick }) => (
-  <button
-    type="button"
+  <InfoQuickActionButton
+    icon={icon}
+    label={label}
+    active={active}
     onClick={onClick}
-    className="flex min-w-0 flex-col items-center gap-2 text-center text-[13px] font-medium leading-4 text-text-secondary transition-colors hover:text-text-primary"
-  >
-    <span
-      className={clsx(
-        "flex h-10 w-10 items-center justify-center rounded-full",
-        active ? "bg-[#dcebff] text-[#0068ff]" : "bg-[#eef1f5] text-text-primary",
-      )}
-    >
-      {icon}
-    </span>
-    <span className="min-h-[32px] max-w-[86px] whitespace-normal">{label}</span>
-  </button>
+  />
 );
 
 const DirectNavRow: React.FC<{
@@ -1654,7 +1658,7 @@ const DirectConversationInfoPanel: React.FC<{
     <>
       <DirectPanelHeader title="Thông tin hội thoại" onClose={onClose} />
       <div className="min-h-0 flex-1 overflow-y-auto bg-[hsl(var(--chat-panel-bg))]">
-        <section className="bg-surface px-5 pb-5 pt-7 text-center">
+        <section className="bg-surface px-5 pb-5 pt-6 text-center">
           <Avatar
             src={user?.avatar}
             alt={avatarAlt}
@@ -1662,18 +1666,18 @@ const DirectConversationInfoPanel: React.FC<{
             status={effectiveStatus}
             showStatus
           />
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <h3 className="min-w-0 truncate text-[22px] font-semibold text-text-primary">
+          <div className="mt-4 flex items-center justify-center gap-1.5">
+            <h3 className="line-clamp-2 max-w-[220px] text-base font-bold text-text-primary">
               {displayName}
             </h3>
             {onEditAlias ? (
               <button
                 type="button"
                 onClick={onEditAlias}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef1f5] text-text-primary hover:bg-[#e4e8ee]"
+                className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 aria-label="Đổi tên gợi nhớ"
               >
-                <PencilSquareIcon className="h-4 w-4" />
+                <PencilSquareIcon className="h-3.5 w-3.5" />
               </button>
             ) : null}
           </div>
@@ -1686,7 +1690,7 @@ const DirectConversationInfoPanel: React.FC<{
               onClick={onToggleMute}
             />
             <DirectActionButton
-              icon={<PlusIcon className="h-5 w-5 rotate-45" />}
+              icon={<Pin size={20} color="currentColor" strokeWidth={1.5} />}
               label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
               active={isPinned}
               onClick={onTogglePin}
