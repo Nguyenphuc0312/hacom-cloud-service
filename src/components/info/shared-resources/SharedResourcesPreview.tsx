@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import clsx from "clsx";
 import {
+  ArrowDownTrayIcon,
+  ArrowUturnRightIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  EllipsisHorizontalIcon,
   PhotoIcon,
   DocumentIcon,
   LinkIcon,
@@ -30,6 +35,11 @@ import type { SharedContentTab } from "./SharedContentModal";
 import { FileName } from "../../common/FileName";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { useResolvedName } from "../../../stores/enrichedProfileStore";
+import {
+  isFileDownloaded,
+  markFileDownloaded,
+  subscribeDownloadedFiles,
+} from "../../../utils/downloadedFiles";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -667,18 +677,30 @@ const DrawerFileRow: React.FC<{
   const date = formatRelativeDate(new Date(item.createdAt));
   const senderName = useResolvedName(item.senderId, item.senderName);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const isDownloaded = React.useSyncExternalStore(
+    subscribeDownloadedFiles,
+    () => isFileDownloaded(item.fileId),
+    () => false,
+  );
+
+  const getFileDownloadUrl = async (): Promise<string | null> => {
+    const res = await fileApi.getDownloadUrl({
+      conversationId,
+      attachmentId: item.fileId,
+    });
+    const payload = unwrapApiSuccess(res);
+    return payload.url || null;
+  };
 
   const handleDownload = async () => {
-    if (isDownloading) return;
+    if (isDownloading || isSharing) return;
     setIsDownloading(true);
     try {
-      const res = await fileApi.getDownloadUrl({
-        conversationId,
-        attachmentId: item.fileId,
-      });
-      const payload = unwrapApiSuccess(res);
-      if (payload.url) {
-        await downloadResourceWithName(payload.url, item.fileName);
+      const url = await getFileDownloadUrl();
+      if (url) {
+        await downloadResourceWithName(url, item.fileName);
+        markFileDownloaded(item.fileId);
       }
     } catch {
       // silent — user can retry
@@ -687,31 +709,99 @@ const DrawerFileRow: React.FC<{
     }
   };
 
+  const handleShare = async () => {
+    if (isDownloading || isSharing) return;
+    setIsSharing(true);
+    try {
+      const url = await getFileDownloadUrl();
+      if (!url) return;
+      const share = navigator.share?.bind(navigator);
+      if (share) {
+        await share({
+          title: item.fileName,
+          text: item.fileName,
+          url,
+        });
+        return;
+      }
+      await navigator.clipboard?.writeText(url);
+    } catch {
+      // silent — user can retry from the action tray
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   if (variant === "zalo") {
     return (
-      <button
-        type="button"
-        onClick={() => void handleDownload()}
-        disabled={isDownloading}
-        title={item.fileName}
-        className="flex min-h-[64px] w-full items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center">
-          <FileTypeIcon type={iconType} className="h-10 w-10" />
+      <div className="group relative rounded-md transition-colors hover:bg-surface-hover">
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={isDownloading || isSharing}
+          title={item.fileName}
+          className="flex min-h-[64px] w-full items-center gap-3 px-1 py-2 text-left disabled:opacity-60"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center">
+            <FileTypeIcon type={iconType} className="h-10 w-10" />
+          </div>
+          <div className="min-w-0 flex-1 pr-2">
+            <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
+              {item.fileName}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] leading-5 text-text-muted">
+              <span>{formatFileSize(item.sizeBytes)}</span>
+              {isDownloaded ? (
+                <CheckCircleIcon className="h-4 w-4 shrink-0 text-[#20a563]" />
+              ) : (
+                <ClockIcon className="h-4 w-4 shrink-0 text-[#0068ff]" />
+              )}
+              {senderName ? <span className="hidden truncate min-[430px]:inline">· {senderName}</span> : null}
+            </p>
+          </div>
+          <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted group-hover:opacity-0">
+            {date}
+          </span>
+        </button>
+
+        <div className="pointer-events-none absolute right-0 top-1 hidden h-9 items-center rounded-md border border-border bg-surface shadow-elev2 group-hover:flex">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleDownload();
+            }}
+            disabled={isDownloading || isSharing}
+            title="Tải xuống"
+            aria-label="Tải xuống"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-l-md text-text-primary hover:bg-surface-hover disabled:opacity-60"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleShare();
+            }}
+            disabled={isDownloading || isSharing}
+            title="Chia sẻ"
+            aria-label="Chia sẻ"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover disabled:opacity-60"
+          >
+            <ArrowUturnRightIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => event.stopPropagation()}
+            title="Thêm"
+            aria-label="Thêm"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-r-md text-text-primary hover:bg-surface-hover"
+          >
+            <EllipsisHorizontalIcon className="h-5 w-5" />
+          </button>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
-            {item.fileName}
-          </p>
-          <p className="truncate text-[12px] leading-5 text-text-muted">
-            {formatFileSize(item.sizeBytes)}
-            {senderName ? <span className="hidden min-[430px]:inline"> · {senderName}</span> : null}
-          </p>
-        </div>
-        <span className="ml-2 max-w-[96px] shrink-0 truncate text-right text-[12px] text-text-muted">
-          {date}
-        </span>
-      </button>
+      </div>
     );
   }
 
