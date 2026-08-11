@@ -154,7 +154,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-surface-overlay px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
             <div className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colorClass)}>
-              <FileTypeIcon type={iconType} className="h-5 w-5" />
+              <FileTypeIcon
+                type={iconType}
+                fileName={fileName}
+                variant="outline"
+                className="h-5 w-5"
+              />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
@@ -211,7 +216,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     >
       <div className="flex items-start gap-4">
         <div className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", colorClass)}>
-          <FileTypeIcon type={iconType} className="h-6 w-6" />
+          <FileTypeIcon
+            type={iconType}
+            fileName={fileName}
+            variant="outline"
+            className="h-6 w-6"
+          />
         </div>
         <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-medium text-text-primary" title={fileName}>

@@ -627,7 +627,12 @@ const ModalFileRow: React.FC<{
       title={item.fileName}
       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
     >
-      <FileTypeIcon type={iconType} className="h-10 w-10 shrink-0" />
+      <FileTypeIcon
+        type={iconType}
+        fileName={item.fileName}
+        variant="outline"
+        className="h-10 w-10 shrink-0"
+      />
       <div className="min-w-0 flex-1">
         <FileName
           name={item.fileName}

@@ -104,7 +104,12 @@ const FileResultRow: React.FC<{
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 focus-visible:ring-inset",
       )}
     >
-      <FileTypeIcon type={iconType} className="h-9 w-9 shrink-0" />
+      <FileTypeIcon
+        type={iconType}
+        fileName={item.fileName}
+        variant="outline"
+        className="h-9 w-9 shrink-0"
+      />
       <div className="min-w-0 flex-1">
         <FileName
           name={item.fileName}

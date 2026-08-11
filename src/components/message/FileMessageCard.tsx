@@ -508,7 +508,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       {/* Icon — khối đặc chiếm trọn ô, cỡ 48px như Zalo (không nền nhạt bao ngoài
           cho các loại Office, vì glyph đã là khối màu). */}
       <div className="flex h-12 w-12 shrink-0 items-center justify-center transition-transform duration-200 group-hover/file:scale-105">
-        <FileTypeIcon type={iconType} fileName={attachment.fileName} />
+        <FileTypeIcon type={iconType} fileName={attachment.fileName} variant="tile" />
       </div>
 
       {/* File info — nền thẻ luôn trắng nên màu chữ không phụ thuộc isOwn nữa. */}

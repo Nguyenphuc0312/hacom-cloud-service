@@ -114,9 +114,19 @@ export const SourceCard: React.FC<SourceCardProps> = ({
         {isUploading ? (
           <Loader2Icon size={18} strokeWidth={2} className="animate-spin text-text-muted" />
         ) : isError ? (
-          <FileTypeIcon type={getFileIconTypeByName(document.name)} className="h-[18px] w-[18px] text-danger" />
+          <FileTypeIcon
+            type={getFileIconTypeByName(document.name)}
+            fileName={document.name}
+            variant="outline"
+            className="h-[18px] w-[18px] text-danger"
+          />
         ) : (
-          <FileTypeIcon type={getFileIconTypeByName(document.name)} className="h-[18px] w-[18px]" />
+          <FileTypeIcon
+            type={getFileIconTypeByName(document.name)}
+            fileName={document.name}
+            variant="outline"
+            className="h-[18px] w-[18px]"
+          />
         )}
       </div>
 

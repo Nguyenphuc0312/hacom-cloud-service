@@ -1112,7 +1112,12 @@ const DrawerFileRow: React.FC<{
           className="flex min-h-[64px] w-full items-center gap-3 px-1 py-2 text-left disabled:opacity-60"
         >
           <div className="flex h-11 w-11 shrink-0 items-center justify-center">
-            <FileTypeIcon type={iconType} className="h-10 w-10" />
+            <FileTypeIcon
+              type={iconType}
+              fileName={item.fileName}
+              variant="outline"
+              className="h-10 w-10"
+            />
           </div>
           <div className="min-w-0 flex-1 pr-2">
             <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
@@ -1183,7 +1188,12 @@ const DrawerFileRow: React.FC<{
       className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
     >
       <div className="shrink-0">
-        <FileTypeIcon type={iconType} className="h-8 w-8" />
+        <FileTypeIcon
+          type={iconType}
+          fileName={item.fileName}
+          variant="outline"
+          className="h-8 w-8"
+        />
       </div>
       <div className="min-w-0 flex-1">
         <FileName

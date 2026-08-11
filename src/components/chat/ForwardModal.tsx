@@ -111,6 +111,7 @@ interface ForwardPreview {
   meta?: string;
   /** Colored file-type icon when there's no thumbnail. */
   iconType?: FileIconType;
+  fileName?: string;
   /** Image/video: source conversation + attachment id to fetch a thumbnail. */
   imageSource?: { conversationId: string; attachmentId: string };
 }
@@ -129,7 +130,8 @@ const ForwardThumb: React.FC<{
   source: { conversationId: string; attachmentId: string };
   alt: string;
   fallbackIcon: FileIconType;
-}> = ({ source, alt, fallbackIcon }) => {
+  fileName?: string;
+}> = ({ source, alt, fallbackIcon, fileName }) => {
   const { url } = usePreviewUrl(source.conversationId, source.attachmentId, {
     autoFetch: true,
   });
@@ -144,7 +146,7 @@ const ForwardThumb: React.FC<{
       />
     );
   }
-  return <FileTypeIcon type={fallbackIcon} />;
+  return <FileTypeIcon type={fallbackIcon} fileName={fileName} variant="tile" />;
 };
 
 /**
@@ -186,6 +188,7 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
       text: attachment.fileName || "Tệp đính kèm",
       meta: attachment.fileSize ? formatFileSize(attachment.fileSize) : undefined,
       iconType: getFileIconType(attachment.mimeType, attachment.fileName),
+      fileName: attachment.fileName,
       imageSource:
         (isImage || isVideo) && msg.conversationId
           ? { conversationId: msg.conversationId, attachmentId: attachment.id }
@@ -542,9 +545,14 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                       source={preview.imageSource}
                       alt={preview.text}
                       fallbackIcon={preview.iconType ?? "generic"}
+                      fileName={preview.fileName}
                     />
                   ) : (
-                    <FileTypeIcon type={preview.iconType ?? "generic"} />
+                    <FileTypeIcon
+                      type={preview.iconType ?? "generic"}
+                      fileName={preview.fileName}
+                      variant="tile"
+                    />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">

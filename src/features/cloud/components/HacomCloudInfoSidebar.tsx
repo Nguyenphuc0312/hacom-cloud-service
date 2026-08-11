@@ -44,7 +44,12 @@ const isDocumentLikePreview = (asset: CloudAsset) =>
   /drawio|diagram|screenshot|document|pdf/i.test(asset.originalFilename) || asset.mimeType.includes("pdf");
 
 const fileIcon = (asset: CloudAsset) => (
-  <FileTypeIcon type={getFileIconType(asset.mimeType, asset.originalFilename)} className="h-5 w-5" />
+  <FileTypeIcon
+    type={getFileIconType(asset.mimeType, asset.originalFilename)}
+    fileName={asset.originalFilename}
+    variant="outline"
+    className="h-5 w-5"
+  />
 );
 
 const CloudEmptyState: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
