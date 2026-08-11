@@ -39,6 +39,8 @@ import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
+import { useAttachmentDownloadUrl } from "../../../hooks/useAttachmentDownloadUrl";
 import { toast } from "../../ui";
 import { logger } from "../../../utils/logger";
 
@@ -261,6 +263,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     void retrySendMessage(message).catch(() => undefined);
   }, [message, retrySendMessage]);
 
+  const firstAttachment = React.useMemo(
+    () => message.attachments?.[0],
+    [message.attachments],
+  );
+  const { resolveUrl: resolveAttachmentDownloadUrl } = useAttachmentDownloadUrl(
+    message.conversationId,
+    firstAttachment,
+  );
+
   const openActions = React.useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
       if (event) {
@@ -314,6 +325,25 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     closeActions();
   }, [closeActions, message, t]);
 
+  const handleAttachmentDownload = React.useCallback(async () => {
+    if (!firstAttachment) {
+      closeActions();
+      return;
+    }
+    const downloadUrl = await resolveAttachmentDownloadUrl(true);
+    if (!downloadUrl) {
+      toast.error(
+        t("chat:file.downloadError", {
+          defaultValue: "Không thể tải file",
+        }),
+      );
+      closeActions();
+      return;
+    }
+    await downloadResourceWithName(downloadUrl, firstAttachment.fileName);
+    closeActions();
+  }, [closeActions, firstAttachment, resolveAttachmentDownloadUrl, t]);
+
   const isPersonalCloud = isPersonalCloudConversation({ type: conversationType });
 
   const actionPolicy = React.useMemo(
@@ -364,6 +394,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           break;
         case "copy":
           void handleCopy();
+          break;
+        case "downloadAttachment":
+          void handleAttachmentDownload();
           break;
         case "retry":
           handleRetry();
@@ -422,6 +455,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     [
       closeActions,
       handleCopy,
+      handleAttachmentDownload,
       handleRetry,
       isActionsOpen,
       message,

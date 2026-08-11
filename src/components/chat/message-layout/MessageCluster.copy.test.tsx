@@ -170,6 +170,33 @@ describe("MessageCluster copy action", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows Save to device for file attachment messages", () => {
+    const { container } = renderCluster(
+      baseMessage({
+        type: MessageType.FILE,
+        content: "",
+        attachments: [
+          {
+            id: "file-1",
+            fileName: "Bao-cao-tien-do.docx",
+            fileSize: 1024,
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        ],
+        forwardInfo: {
+          sourceConversationId: "source-conv",
+          sourceMessageId: "source-msg",
+          originalSenderId: "sender-1",
+          originalSenderName: "Nguoi gui",
+        },
+      }),
+    );
+
+    openMoreMenu(container);
+
+    expect(screen.getByRole("menuitem", { name: "Lưu về máy" })).toBeInTheDocument();
+  });
+
   it("shows an error toast when clipboard write fails", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     vi.stubGlobal("navigator", { clipboard: { writeText } });

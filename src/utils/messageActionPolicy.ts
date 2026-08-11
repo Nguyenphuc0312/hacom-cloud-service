@@ -8,6 +8,7 @@ export type MessageActionId =
   | "reply"
   | "forward"
   | "copy"
+  | "downloadAttachment"
   | "retry"
   | "pin"
   | "unpin"
@@ -51,6 +52,9 @@ export interface MessageActionPolicyResult {
 
 const canCopyMessage = (message: Message): boolean =>
   getCopyableMessageText(message) !== null;
+
+const canDownloadAttachment = (message: Message): boolean =>
+  Array.isArray(message.attachments) && message.attachments.length > 0;
 
 const canReactToMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM &&
@@ -166,6 +170,15 @@ const getActionCandidates = ({
       railOrder: 3,
       menuOrder: 0,
       railEligible: true,
+      menuEligible: true,
+    });
+  }
+
+  if (canDownloadAttachment(message)) {
+    candidates.push({
+      id: "downloadAttachment",
+      menuOrder: 0.5,
+      railEligible: false,
       menuEligible: true,
     });
   }
