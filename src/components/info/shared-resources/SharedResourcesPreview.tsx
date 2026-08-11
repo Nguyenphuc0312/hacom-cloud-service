@@ -355,9 +355,9 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     return (
       <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
         {["Ảnh/Video", "File", "Link"].map((label) => (
-          <div key={label} className="px-5 py-4">
+          <div key={label} className="px-5 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-[16px] font-semibold text-text-primary">{label}</span>
+              <span className="text-[15px] font-semibold text-text-primary">{label}</span>
               <ChevronRightIcon className="h-4 w-4 text-text-muted" />
             </div>
             <Skeleton className="mt-3 h-16 w-full rounded-md" />
@@ -407,7 +407,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
             <button
               type="button"
               onClick={() => onOpenAll?.("media")}
-              className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+              className="mt-3 h-9 w-full rounded bg-[#e4e7ec] text-[14px] font-semibold text-text-primary hover:bg-[#dde1e7]"
             >
               Xem tất cả
             </button>
@@ -435,7 +435,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenAll?.("files")}
-                  className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+                  className="mt-3 h-9 w-full rounded bg-[#e4e7ec] text-[14px] font-semibold text-text-primary hover:bg-[#dde1e7]"
                 >
                   Xem tất cả
                 </button>
@@ -468,7 +468,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenAll?.("links")}
-                  className="mt-4 h-10 w-full rounded bg-[#e4e7ec] text-[15px] font-semibold text-text-primary hover:bg-[#dde1e7]"
+                  className="mt-3 h-9 w-full rounded bg-[#e4e7ec] text-[14px] font-semibold text-text-primary hover:bg-[#dde1e7]"
                 >
                   Xem tất cả
                 </button>
@@ -676,18 +676,18 @@ const ZaloResourceSection: React.FC<{
   onToggle: () => void;
   children: React.ReactNode;
 }> = ({ title, open, onToggle, children }) => (
-  <section className="bg-surface px-5 py-4">
+  <section className="bg-surface px-5 py-3">
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className="mb-3 flex w-full items-center justify-between text-left"
+      className="mb-2.5 flex w-full items-center justify-between text-left"
     >
-      <span className="text-[18px] font-semibold text-text-primary">{title}</span>
+      <span className="text-[16px] font-semibold text-text-primary">{title}</span>
       {open ? (
-        <ChevronDownIcon className="h-5 w-5 text-text-muted" />
+        <ChevronDownIcon className="h-4 w-4 text-text-muted" />
       ) : (
-        <ChevronRightIcon className="h-5 w-5 text-text-muted" />
+        <ChevronRightIcon className="h-4 w-4 text-text-muted" />
       )}
     </button>
     {open ? children : null}
@@ -1004,7 +1004,7 @@ const DrawerMediaThumb: React.FC<{
         <div
           onClick={(event) => event.stopPropagation()}
           className={clsx(
-            "absolute top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2",
+            "absolute top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[14px] shadow-elev2",
             menuAlign === "right" ? "right-0" : "left-0",
           )}
         >
@@ -1258,7 +1258,7 @@ const DrawerFileRow: React.FC<{
             />
           </div>
           <div className="min-w-0 flex-1 pr-2">
-            <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
+            <p className="truncate text-[14px] font-semibold leading-5 text-text-primary">
               {item.fileName}
             </p>
             <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] leading-5 text-text-muted">
@@ -1320,7 +1320,7 @@ const DrawerFileRow: React.FC<{
         {menuOpen ? (
           <div
             onClick={(event) => event.stopPropagation()}
-            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2"
+            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[14px] shadow-elev2"
           >
             <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
               Copy
@@ -1561,7 +1561,7 @@ const DrawerLinkRow: React.FC<{
             <LinkIcon className="h-5 w-5 text-text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">{item.domain}</p>
+            <p className="truncate text-[14px] font-semibold leading-5 text-text-primary">{item.domain}</p>
             <p className="truncate text-[13px] leading-5 text-[#0068ff]">{item.url}</p>
             {senderName ? (
               <p className="hidden truncate text-[12px] leading-5 text-text-muted min-[430px]:block">
@@ -1604,7 +1604,7 @@ const DrawerLinkRow: React.FC<{
         {menuOpen ? (
           <div
             onClick={(event) => event.stopPropagation()}
-            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[15px] shadow-elev2"
+            className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[14px] shadow-elev2"
           >
             <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
               Copy

@@ -1567,20 +1567,20 @@ const DirectNavRow: React.FC<{
     onClick={onClick}
     disabled={disabled || !onClick}
     className={clsx(
-      "flex min-h-[58px] w-full items-center gap-3 bg-surface px-5 text-left transition-colors",
+      "flex min-h-[52px] w-full items-center gap-3 bg-surface px-5 py-2 text-left transition-colors",
       onClick && !disabled ? "hover:bg-surface-hover" : "cursor-default",
       disabled && "opacity-50",
     )}
   >
-    <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center", danger ? "text-[#d91f1f]" : "text-text-primary")}>
+    <span className={clsx("flex h-7 w-7 shrink-0 items-center justify-center [&_svg]:h-5 [&_svg]:w-5", danger ? "text-[#d91f1f]" : "text-text-primary")}>
       {icon}
     </span>
     <span className="min-w-0 flex-1">
-      <span className={clsx("block truncate text-[16px]", danger ? "text-[#d91f1f]" : "text-text-primary")}>
+      <span className={clsx("block truncate text-[15px]", danger ? "text-[#d91f1f]" : "text-text-primary")}>
         {label}
       </span>
       {subtitle ? (
-        <span className="mt-0.5 block truncate text-[14px] text-text-muted">
+        <span className="mt-0.5 block truncate text-[13px] text-text-muted">
           {subtitle}
         </span>
       ) : null}
@@ -1597,9 +1597,9 @@ const DirectSectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
-    className="flex h-[58px] w-full items-center justify-between bg-surface px-5 text-left"
+    className="flex h-[52px] w-full items-center justify-between bg-surface px-5 text-left"
   >
-    <span className="text-[18px] font-semibold text-text-primary">{title}</span>
+    <span className="text-[16px] font-semibold text-text-primary">{title}</span>
     {open ? (
       <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
     ) : (

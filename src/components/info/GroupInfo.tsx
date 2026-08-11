@@ -1896,12 +1896,12 @@ const InfoNavRow: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className="flex min-h-[60px] w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-hover"
+    className="flex min-h-[54px] w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-hover"
   >
-    {icon && <span className="shrink-0 text-text-primary">{icon}</span>}
+    {icon && <span className="shrink-0 text-text-primary [&_svg]:h-5 [&_svg]:w-5">{icon}</span>}
     <div className="min-w-0 flex-1">
-      <p className="truncate text-[16px] font-semibold text-text-primary">{title}</p>
-      {meta && <p className="mt-1 text-[15px] text-text-secondary">{meta}</p>}
+      <p className="truncate text-[15px] font-semibold text-text-primary">{title}</p>
+      {meta && <p className="mt-0.5 text-[13px] text-text-secondary">{meta}</p>}
     </div>
     {expanded === undefined ? (
       <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" />
@@ -1921,10 +1921,10 @@ const InfoActionRow: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className="flex min-h-[58px] w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-hover"
+    className="flex min-h-[52px] w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-hover"
   >
-    <span className="shrink-0 text-text-primary">{icon}</span>
-    <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text-primary">
+    <span className="shrink-0 text-text-primary [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
+    <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-text-primary">
       {title}
     </span>
   </button>
@@ -1940,11 +1940,11 @@ const DangerActionRow: React.FC<{
     type="button"
     onClick={onClick}
     className={clsx(
-      "flex min-h-[56px] w-full items-center gap-4 px-7 py-3 text-left text-[15px] transition-colors hover:bg-surface-hover",
+      "flex min-h-[52px] w-full items-center gap-3 px-5 py-2.5 text-left text-[14px] transition-colors hover:bg-surface-hover",
       danger ? "text-red-600" : "text-text-primary",
     )}
   >
-    <span className="shrink-0">{icon}</span>
+    <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
     <span>{label}</span>
   </button>
 );
