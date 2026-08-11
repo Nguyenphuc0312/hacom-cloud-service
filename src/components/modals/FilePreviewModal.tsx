@@ -299,7 +299,12 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
     >
       <div className="flex items-start gap-4">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-text-inverse/10">
-          <FileTypeIcon type={iconType} className="h-6 w-6" />
+          <FileTypeIcon
+            type={iconType}
+            fileName={fileName}
+            variant="outline"
+            className="h-6 w-6"
+          />
         </div>
         <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
@@ -621,7 +626,12 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-text-inverse/10">
-            <FileTypeIcon type={iconType} className="h-5 w-5" />
+            <FileTypeIcon
+              type={iconType}
+              fileName={fileName}
+              variant="outline"
+              className="h-5 w-5"
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>

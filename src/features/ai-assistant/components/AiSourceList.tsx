@@ -58,6 +58,8 @@ export const AiSourceList: React.FC<AiSourceListProps> = ({ sources }) => {
               <div className="shrink-0 flex items-center justify-center w-5 h-5 rounded bg-surface-hover mt-0.5">
                 <FileTypeIcon
                   type={getFileIconTypeByName(getSourceFileName(source))}
+                  fileName={getSourceFileName(source)}
+                  variant="outline"
                   className="h-3 w-3"
                 />
               </div>

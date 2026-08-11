@@ -224,6 +224,8 @@ export const AiSourcePanel: React.FC = () => {
               <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-hover flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                 <FileTypeIcon
                   type={getFileIconTypeByName(getSourceFileName(source))}
+                  fileName={getSourceFileName(source)}
+                  variant="outline"
                   className="h-5 w-5"
                 />
               </div>

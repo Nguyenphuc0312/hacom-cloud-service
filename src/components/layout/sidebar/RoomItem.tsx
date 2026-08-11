@@ -257,6 +257,7 @@ const buildPreviewText = (
 
 export const ConversationItemMenu: React.FC<{
   conversationId: string;
+  isPersonalCloud: boolean;
   isPinned: boolean;
   labels: ConversationLabel[];
   assignedLabelIds: string[];
@@ -266,6 +267,7 @@ export const ConversationItemMenu: React.FC<{
   onOpenLabelManager: () => void;
 }> = ({
   conversationId,
+  isPersonalCloud,
   isPinned,
   labels,
   assignedLabelIds,
@@ -517,35 +519,39 @@ export const ConversationItemMenu: React.FC<{
             ) : null}
           </div>
 
-          <div className="my-1 border-t border-border/70" />
+          {!isPersonalCloud ? (
+            <>
+              <div className="my-1 border-t border-border/70" />
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={async () => {
-              if (isDeleting) return;
-              setIsDeleting(true);
-              try {
-                await conversationApi.deleteConversation(conversationId);
-                onDeleteConversation(conversationId);
-                toast.success(t("sidebar:labels.deleteConversationSuccess"));
-              } catch (error) {
-                toast.error(
-                  extractApiError(error).message ||
-                    t("sidebar:labels.deleteConversationFailed"),
-                );
-              } finally {
-                setIsDeleting(false);
-                setOpen(false);
-                setLabelSubmenuOpen(false);
-              }
-            }}
-            disabled={isDeleting}
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60"
-          >
-            <TrashIcon className="h-4 w-4" />
-            <span>{t("sidebar:labels.deleteConversation")}</span>
-          </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={async () => {
+                  if (isDeleting) return;
+                  setIsDeleting(true);
+                  try {
+                    await conversationApi.deleteConversation(conversationId);
+                    onDeleteConversation(conversationId);
+                    toast.success(t("sidebar:labels.deleteConversationSuccess"));
+                  } catch (error) {
+                    toast.error(
+                      extractApiError(error).message ||
+                        t("sidebar:labels.deleteConversationFailed"),
+                    );
+                  } finally {
+                    setIsDeleting(false);
+                    setOpen(false);
+                    setLabelSubmenuOpen(false);
+                  }
+                }}
+                disabled={isDeleting}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60"
+              >
+                <TrashIcon className="h-4 w-4" />
+                <span>{t("sidebar:labels.deleteConversation")}</span>
+              </button>
+            </>
+          ) : null}
         </div>,
         document.body,
       ) : null}
@@ -767,6 +773,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       <div className="absolute right-1 top-1">
         <ConversationItemMenu
           conversationId={conversation.id}
+          isPersonalCloud={isPersonalCloud}
           isPinned={isPinned}
           labels={labels}
           assignedLabelIds={assignedLabelIds}

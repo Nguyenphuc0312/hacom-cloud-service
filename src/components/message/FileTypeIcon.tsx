@@ -26,6 +26,11 @@ import type { FileIconType } from "../../utils/formatFileSize";
 interface FileTypeIconProps {
   type: FileIconType;
   /**
+   * auto keeps the old behavior. tile is for message bubbles. outline is for
+   * storage/file lists where Zalo uses thin document icons for Word/Excel/PPT.
+   */
+  variant?: "auto" | "tile" | "outline";
+  /**
    * Tên file, để phân biệt Office thật với các loại dùng chung `type`.
    *
    * Cần thiết vì `getFileIconType` gộp `.txt/.md/.rtf` vào `document` và `.csv`
@@ -79,6 +84,46 @@ const OfficeGlyph: React.FC<{
     >
       {label}
     </text>
+  </svg>
+);
+
+const OutlineFileGlyph: React.FC<{
+  color: string;
+  title: string;
+  className?: string;
+}> = ({ color, title, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={className ?? "h-6 w-6"}
+    style={{ color }}
+    role="img"
+    aria-label={title}
+    fill="none"
+  >
+    <path
+      d="M6 2.75h8.25L19 7.5v13.75H6z"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M14.25 2.75V7.5H19"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 13.25h6"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+    />
+    <path
+      d="M9 17h4.25"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
@@ -155,6 +200,9 @@ const TYPE_COLORS: Partial<Record<FileIconType, string>> = {
 const glyphLabelFromExt = (ext: string): string =>
   ext.slice(0, 4).toUpperCase();
 
+const fileExt = (fileName: string | undefined): string =>
+  fileName?.toLowerCase().split(".").pop() ?? "";
+
 /**
  * Chọn glyph khối cho file, hoặc `null` để dùng icon outline.
  *
@@ -165,8 +213,9 @@ const glyphLabelFromExt = (ext: string): string =>
 function resolveOfficeGlyph(
   type: FileIconType,
   fileName: string | undefined,
+  allowTypeFallback = false,
 ): OfficeGlyphSpec | null {
-  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
+  const ext = fileExt(fileName);
 
   // 1. Office / PDF — màu thương hiệu, nhãn cố định.
   if (ext && EXT_GLYPHS[ext]) return EXT_GLYPHS[ext];
@@ -183,15 +232,67 @@ function resolveOfficeGlyph(
   }
 
   // 3. Không có tên file: PDF là loại duy nhất `type` đủ tin cậy để tự quyết.
+  if (allowTypeFallback) {
+    if (type === "spreadsheet") return EXCEL;
+    if (type === "presentation") return POWERPOINT;
+    if (type === "document") return WORD;
+  }
+
   return type === "pdf" ? PDF : null;
+}
+
+function resolveOutlineGlyph(
+  type: FileIconType,
+  fileName: string | undefined,
+): { color: string; title: string } | null {
+  const ext = fileExt(fileName);
+  if (ext === "pdf" || type === "pdf") return null;
+
+  if (["xls", "xlsx", "xlsm", "csv"].includes(ext) || type === "spreadsheet") {
+    return { color: "#16A34A", title: "Excel" };
+  }
+  if (["doc", "docx", "txt", "rtf", "md"].includes(ext) || type === "document") {
+    return { color: "#3B82F6", title: "Word" };
+  }
+  if (["ppt", "pptx", "pps", "ppsx"].includes(ext) || type === "presentation") {
+    return { color: "#F97316", title: "PowerPoint" };
+  }
+
+  return null;
 }
 
 export const FileTypeIcon: React.FC<FileTypeIconProps> = ({
   type,
+  variant = "auto",
   fileName,
   className,
 }) => {
-  const office = resolveOfficeGlyph(type, fileName);
+  if (variant === "outline") {
+    const pdf = resolveOfficeGlyph(type, fileName);
+    if (pdf?.title === "PDF") {
+      return (
+        <OfficeGlyph
+          color={pdf.color}
+          label={pdf.label}
+          title={pdf.title}
+          className={className}
+        />
+      );
+    }
+
+    const outline = resolveOutlineGlyph(type, fileName);
+    if (outline) {
+      return (
+        <OutlineFileGlyph
+          color={outline.color}
+          title={outline.title}
+          className={className}
+        />
+      );
+    }
+  }
+
+  const office = resolveOfficeGlyph(type, fileName, variant === "tile");
   if (office) {
     return (
       <OfficeGlyph

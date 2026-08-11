@@ -87,7 +87,7 @@
   --app-page-narrow-max: 56rem;
   --app-sidebar-width: 320px;
   --app-sidebar-width-compact: 288px;
-  --app-inspector-width: 360px;
+  --app-inspector-width: 344px;
   --app-rail-width: 248px;
   --layout-panel-min: 280px;
   --layout-panel-max: 420px;
@@ -2116,12 +2116,12 @@ input[type="password"]::-ms-clear {
   }
 }
 
-/* Màn lớn (27–32 inch, ≥1920px): nới sidebar, info panel và gutter để bố cục
+/* Màn lớn (27–32 inch, ≥1920px): nới sidebar/gutter vừa đủ để bố cục
    cân đối thay vì dồn hết không gian thừa vào khung chat. Lane nội dung chat
    đã được giới hạn riêng qua data-chat-layout-profile="desktop-wide". */
 @media (min-width: 1920px) {
   :root {
-    --app-inspector-width: 400px;
+    --app-inspector-width: 384px;
     --hc-sidebar-width: clamp(340px, 19vw, 440px);
     --app-shell-gutter: 32px;
   }

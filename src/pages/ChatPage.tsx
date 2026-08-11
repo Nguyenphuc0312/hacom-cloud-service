@@ -1499,10 +1499,10 @@ export const ChatPage: React.FC = () => {
         (Boolean(selectedConversation) && !isRoutePersonalCloud)) && (
           <div
             className={clsx(
-              "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
+              "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu border-l transition-[transform,border-color] duration-300 ease-out sm:max-w-[min(24rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
               isInfoPanelOpen
-                ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
-                : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
+                ? "translate-x-0 border-border/70 xl:w-[var(--app-inspector-width)]"
+                : "translate-x-full border-border/0 xl:w-0",
             )}
             aria-hidden={!isInfoPanelOpen}
           >
