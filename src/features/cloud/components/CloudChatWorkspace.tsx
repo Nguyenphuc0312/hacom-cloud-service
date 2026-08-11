@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import clsx from "clsx";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput, type MessageInputHandle } from "../../../components/input/MessageInput";
@@ -68,7 +69,12 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [refresh]);
   useEffect(() => {
     const sync = () => { void refresh(); };
     wsManager.on("cloud:asset:created", sync);
@@ -88,10 +94,18 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const conversation = useChatStore((state) => (conversationId ? state.conversationById[conversationId] : undefined));
   const { pinnedMessages, isLoading: pinnedLoading, error: pinnedError, togglePin } = usePinnedMessages(conversationId || null);
   const viewportMetrics = useMobileViewportMetrics();
+  const sidePanelMode =
+    searchOpen && conversationId
+      ? "search"
+      : pinnedOpen && conversationId && user
+        ? "pinned"
+        : infoOpen
+          ? "info"
+          : null;
   // Panel mở thì lane phải hẹp lại đúng như hội thoại thường (with-panel).
   const layoutState: ChatLayoutState = viewportMetrics.width < 768
     ? "mobile"
-    : (infoOpen || searchOpen || pinnedOpen) ? "with-panel" : "normal";
+    : sidePanelMode ? "with-panel" : "normal";
   const layoutProfile = useMemo(
     () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
     [layoutState, viewportMetrics.width],
@@ -205,35 +219,52 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
     </main>
     {/* Panel tìm kiếm dùng đúng khung của panel thông tin: cùng bề rộng, cùng đường viền,
         cùng cách phủ toàn màn ở mobile — để Cloud không lệch so với hội thoại thường. */}
-    {searchOpen && conversationId ? (
-      <React.Suspense fallback={null}>
-        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,24rem)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
-          <SearchPanel
-            conversationId={conversationId}
-            onSelectMessage={() => setSearchOpen(false)}
-            onNavigateToMessageId={() => setSearchOpen(false)}
-            onClose={() => setSearchOpen(false)}
-            className="h-full w-full"
-          />
-        </aside>
-      </React.Suspense>
-    ) : null}
-    {pinnedOpen && conversationId && user ? (
-      <React.Suspense fallback={null}>
-        <aside className="fixed inset-y-0 right-0 z-40 flex w-[min(100vw,24rem)] shrink-0 border-l border-border/70 bg-surface shadow-xl lg:static lg:z-auto lg:w-[var(--app-inspector-width)] lg:shadow-none">
-          <PinnedMessagesPanel
-            pinnedMessages={pinnedMessages}
-            isLoading={pinnedLoading}
-            error={pinnedError}
-            currentUserId={user.id}
-            onClose={() => setPinnedOpen(false)}
-            onUnpin={togglePin}
-            className="h-full w-full"
-          />
-        </aside>
-      </React.Suspense>
-    ) : null}
-    <HacomCloudInfoSidebar open={infoOpen && !searchOpen && !pinnedOpen} onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} />
+    <div
+      className={clsx(
+        "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu border-l bg-surface transition-[transform,border-color] duration-300 ease-out sm:max-w-[min(24rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:shrink-0 lg:overflow-hidden lg:shadow-none lg:transition-[width,border-color]",
+        sidePanelMode
+          ? "translate-x-0 border-border/70 shadow-xl lg:w-[var(--app-inspector-width)]"
+          : "pointer-events-none translate-x-full border-border/0 lg:w-0",
+      )}
+      aria-hidden={!sidePanelMode}
+    >
+      <div
+        className={clsx(
+          "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out lg:absolute lg:inset-y-0 lg:right-0 lg:w-[var(--app-inspector-width)]",
+          sidePanelMode
+            ? "translate-x-0 opacity-100"
+            : "translate-x-4 opacity-0 lg:translate-x-6",
+        )}
+      >
+        {sidePanelMode === "search" && conversationId ? (
+          <React.Suspense fallback={null}>
+            <SearchPanel
+              conversationId={conversationId}
+              onSelectMessage={() => setSearchOpen(false)}
+              onNavigateToMessageId={() => setSearchOpen(false)}
+              onClose={() => setSearchOpen(false)}
+              className="h-full w-full"
+            />
+          </React.Suspense>
+        ) : null}
+        {sidePanelMode === "pinned" && conversationId && user ? (
+          <React.Suspense fallback={null}>
+            <PinnedMessagesPanel
+              pinnedMessages={pinnedMessages}
+              isLoading={pinnedLoading}
+              error={pinnedError}
+              currentUserId={user.id}
+              onClose={() => setPinnedOpen(false)}
+              onUnpin={togglePin}
+              className="h-full w-full"
+            />
+          </React.Suspense>
+        ) : null}
+        {sidePanelMode === "info" ? (
+          <HacomCloudInfoSidebar open onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} />
+        ) : null}
+      </div>
+    </div>
     {filePreview.isOpen && <FilePreviewModal isOpen current={filePreview.current} secureUrl={filePreview.secureUrl} isLoadingUrl={filePreview.isLoadingUrl} urlError={filePreview.urlError} currentIndex={filePreview.currentIndex} totalItems={filePreview.totalItems} hasPrev={filePreview.hasPrev} hasNext={filePreview.hasNext} onClose={filePreview.close} onPrev={filePreview.prev} onNext={filePreview.next} onRefreshUrl={filePreview.refreshUrl} />}
     {forwardMessage && user ? <ForwardModal messages={[forwardMessage]} currentUserId={user.id} onClose={() => setForwardMessage(null)} /> : null}
   </section>;

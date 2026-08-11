@@ -367,7 +367,7 @@ export const HacomCloudInfoSidebar: React.FC<{
 
   return (
     <>
-      <aside className={`${open ? "translate-x-0 lg:w-[388px] lg:min-w-[360px] lg:max-w-[420px] lg:border-l" : "translate-x-full lg:w-0 lg:min-w-0 lg:border-l-0"} fixed inset-y-0 right-0 z-40 flex w-full overflow-hidden border-l border-border/70 bg-surface shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:shrink-0 lg:shadow-none lg:transition-[width]`} aria-hidden={!open}>
+      <aside className="flex h-full w-full min-w-0 overflow-hidden bg-surface" aria-hidden={!open}>
         <div className="flex h-full w-full flex-col">
           <header className="app-page-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5">
             <h3 className="text-title-sm text-text-primary">Thông tin Hacom Cloud</h3>
