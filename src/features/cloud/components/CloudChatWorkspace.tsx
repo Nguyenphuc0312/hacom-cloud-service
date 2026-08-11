@@ -261,7 +261,17 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
           </React.Suspense>
         ) : null}
         {sidePanelMode === "info" ? (
-          <HacomCloudInfoSidebar open onClose={() => setInfoOpen(false)} quota={space?.quota ?? null} assets={assets} conversationId={conversationId} loading={!space && !error} error={error} onChanged={refresh} onRetry={() => { void refresh(); }} />
+          <HacomCloudInfoSidebar
+            open
+            onClose={() => setInfoOpen(false)}
+            quota={space?.quota ?? null}
+            assets={assets}
+            conversationId={conversationId}
+            loading={!space && !error}
+            error={error}
+            onChanged={refresh}
+            onRetry={() => { void refresh(); }}
+          />
         ) : null}
       </div>
     </div>

@@ -303,7 +303,6 @@ export const RecentFileList: React.FC<{
   );
 };
 
-/** Hero Cloud: ghim hội thoại nằm trong menu `...` ở danh sách hội thoại. */
 export const CloudIdentity: React.FC = () => {
   return (
     <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
@@ -326,7 +325,17 @@ export const HacomCloudInfoSidebar: React.FC<{
   error?: string | null;
   onChanged: () => Promise<void> | void;
   onRetry?: () => void;
-}> = ({ open, onClose, quota, assets, conversationId, loading = false, error, onChanged, onRetry }) => {
+}> = ({
+  open,
+  onClose,
+  quota,
+  assets,
+  conversationId,
+  loading = false,
+  error,
+  onChanged,
+  onRetry,
+}) => {
   const navigate = useNavigate();
   // Zalo My Documents: "Chọn" bật chế độ chọn (checkbox mọc trên từng dòng + thanh hành
   // động thay header) chứ không phải checkbox nằm sẵn cạnh "Chọn tất cả" mọi lúc.
