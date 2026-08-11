@@ -395,7 +395,7 @@ export const HacomCloudInfoSidebar: React.FC<{
                     riêng nữa (chốt với user 07-08-26). */}
                 {conversationId ? (
                   <React.Suspense fallback={<div className="h-44 animate-pulse rounded-xl bg-surface-hover" />}>
-                    <CloudSharedResources conversationId={conversationId} />
+                    <CloudSharedResources conversationId={conversationId} variant="zalo" />
                   </React.Suspense>
                 ) : null}
                 <CollapsibleSection
