@@ -35,6 +35,7 @@ import {
   logMessageDebug,
 } from "../../../utils/messageDebug";
 import { ScrollToLatestButton } from "./ScrollToLatestButton";
+import { isPersonalCloudConversation } from "../../cloud/personalCloudPolicy";
 
 export interface SimpleVirtualizedChatTimelineProps {
   conversationId: string;
@@ -245,6 +246,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   jumpNonce,
 }) => {
   const { t } = useTranslation();
+  const isPersonalCloud = isPersonalCloudConversation({ type: conversationType });
   const timelineItems = useConversationTimelineRows({
     messages: messages as Message[],
     currentUserId,
@@ -619,6 +621,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
                         viewerCanRecallOthers={viewerCanRecallOthers}
+                        isPersonalCloud={isPersonalCloud}
                         expandedLongMessageIds={expandedLongMessageIds}
                         onToggleLongMessageExpand={toggleLongMessageExpand}
                         insertedMessageKeys={EMPTY_INSERTED}
