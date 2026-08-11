@@ -81,6 +81,11 @@ export const cloudApi = {
   emptyTrash: () =>
     client.post('/trash/empty').then(data<{ claimed: number; purged: number; failed: number }>),
   download: (assetId: string) => client.get(`/assets/${assetId}/download`).then(data<{ url: string }>),
+  saveMessage: (messageId: string, fileId?: string) =>
+    client.post('/assets/from-message', {
+      messageId,
+      ...(fileId ? { fileId } : {}),
+    }).then(data<{ message: unknown; assets: CloudAsset[] }>),
   forward: (assetId: string, targetConversationId: string) =>
     client.post(`/assets/${assetId}/forward`, { targetConversationId }).then(data),
 };
