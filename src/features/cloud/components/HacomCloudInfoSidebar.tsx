@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Play,
   RotateCcw,
-  Pin,
   Trash2,
   Video,
   X,
@@ -19,9 +18,7 @@ import {
 import type { CloudAsset, CloudQuota } from "../api/cloudApi";
 import { cloudApi } from "../api/cloudApi";
 import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
-import { useChatStore } from "../../../stores";
 import { toast } from "../../../components/ui";
-import { conversationApi } from "../../../services/api";
 import { extractApiError } from "../../../lib/apiContract";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { CloudSharedResources } from "./CloudSharedResources";
@@ -301,75 +298,16 @@ export const RecentFileList: React.FC<{
   );
 };
 
-/** Hero + thao tác nhanh, dựng theo đúng khuôn của GroupInfo/UserProfile.
- *  Hai loại ghim khác nhau và cùng tồn tại như hội thoại thường:
- *  - ghim TIN NHẮN: nút trên ChatHeader, cạnh tìm kiếm;
- *  - ghim HỘI THOẠI (đưa Cloud lên đầu sidebar): nút dưới đây. */
-export const CloudIdentity: React.FC<{ conversationId: string }> = ({ conversationId }) => {
-  const conversation = useChatStore((state) => state.conversationById[conversationId]);
-  const updateConversation = useChatStore((state) => state.updateConversation);
-  const isPinned = Boolean(conversation?.pinnedAt);
-
-  const handleTogglePin = async () => {
-    const previousPinnedAt = conversation?.pinnedAt ?? null;
-    const previousPinOrder = conversation?.pinOrder ?? null;
-    const nextPinned = !isPinned;
-
-    updateConversation(conversationId, {
-      pinnedAt: nextPinned ? new Date().toISOString() : null,
-      pinOrder: nextPinned ? 0 : null,
-      isPinned: nextPinned,
-    });
-
-    try {
-      const result = await conversationApi.setConversationPinned(
-        conversationId,
-        nextPinned,
-      );
-      updateConversation(conversationId, {
-        pinnedAt: result.pinnedAt,
-        pinOrder: result.pinOrder,
-        isPinned: Boolean(result.pinnedAt),
-      });
-    } catch (error) {
-      updateConversation(conversationId, {
-        pinnedAt: previousPinnedAt,
-        pinOrder: previousPinOrder,
-        isPinned,
-      });
-      toast.error(extractApiError(error).message);
-    }
-  };
-
+/** Hero Cloud: ghim hội thoại nằm trong menu `...` ở danh sách hội thoại. */
+export const CloudIdentity: React.FC = () => {
   return (
-    <>
-      <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
-        <div className="mb-4">
-          <PersonalCloudAvatar size="lg" />
-        </div>
-        <h2 className="text-base font-bold text-text-primary">Cloud của tôi</h2>
-        <p className="mt-1 text-xs text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
+    <div className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
+      <div className="mb-4">
+        <PersonalCloudAvatar size="lg" />
       </div>
-
-      <div className="bg-surface px-4 pb-5">
-        <div className="flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => { void handleTogglePin(); }}
-            disabled={!conversationId}
-            className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover disabled:opacity-50"
-            aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
-          >
-            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15"}`}>
-              <Pin size={20} color="currentColor" strokeWidth={1.5} className={isPinned ? "text-text-secondary" : "text-primary"} />
-            </div>
-            <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
-              {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
-            </span>
-          </button>
-        </div>
-      </div>
-    </>
+      <h2 className="text-base font-bold text-text-primary">Cloud của tôi</h2>
+      <p className="mt-1 text-xs text-text-muted">Lưu trữ và truy cập nhanh nội dung quan trọng của bạn</p>
+    </div>
   );
 };
 
@@ -434,7 +372,7 @@ export const HacomCloudInfoSidebar: React.FC<{
             <div className="space-y-4 p-4" aria-label="Đang tải thông tin Hacom Cloud"><div className="h-[72px] animate-pulse rounded-xl bg-surface-hover" /><div className="h-44 animate-pulse rounded-xl bg-surface-hover" /><div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="aspect-square animate-pulse rounded-lg bg-surface-hover" />)}</div>{[1, 2, 3].map((item) => <div key={item} className="h-[60px] animate-pulse rounded-lg bg-surface-hover" />)}</div>
           ) : (
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
-              <CloudIdentity conversationId={conversationId} />
+              <CloudIdentity />
               <div className="space-y-4 px-4 pr-5">
                 <CloudStorageCard quota={quota} onManage={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)} />
                 {/* Kho lưu trữ dùng ĐÚNG component của panel thông tin nhóm: tab ngang
