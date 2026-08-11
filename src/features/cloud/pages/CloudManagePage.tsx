@@ -108,6 +108,7 @@ const CloudAssetThumbnail: React.FC<{
       <FileTypeIcon
         type={getFileIconType(asset.mimeType, asset.originalFilename)}
         fileName={asset.originalFilename}
+        variant="outline"
         className="h-7 w-7 shrink-0"
       />
     </span>

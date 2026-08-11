@@ -255,6 +255,8 @@ const FileRow: React.FC<{
   <RowButton onClick={onClick}>
     <FileTypeIcon
       type={getFileIconType(file.mimeType, file.fileName)}
+      fileName={file.fileName}
+      variant="outline"
       className="h-9 w-9 shrink-0"
     />
     <div className="min-w-0 flex-1">

@@ -9,21 +9,48 @@ import {
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   EnvelopeIcon,
+  EyeSlashIcon,
   IdentificationIcon,
+  ArrowLeftIcon,
   ClockIcon,
+  BellIcon,
+  BellSlashIcon,
+  MagnifyingGlassIcon,
+  PhotoIcon,
   PencilSquareIcon,
   PhoneIcon,
+  PlusIcon,
+  TrashIcon,
+  UserGroupIcon,
   UserPlusIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { Avatar } from "../common/Avatar";
-import { Button, ConfirmDialog, PanelSection, ProfileSkeleton, toast } from "../ui";
+import {
+  Button,
+  ConfirmDialog,
+  DirectorySkeleton,
+  Modal,
+  PanelSection,
+  ProfileSkeleton,
+  toast,
+} from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
-import { useAuthStore, usePresenceStore, resolveLivePresenceStatus } from "../../stores";
+import {
+  useAuthStore,
+  useChatStore,
+  usePresenceStore,
+  resolveLivePresenceStatus,
+} from "../../stores";
 import { useMyProfile } from "../../features/profile/useMyProfile";
-import { useGetUserProfileQuery } from "../../features/api/chatApi";
+import {
+  useGetUserProfileQuery,
+  useSendMessageMutation,
+} from "../../features/api/chatApi";
 import {
   formatJoinDate,
   resolveEmploymentStatusLabel,
@@ -32,21 +59,38 @@ import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
 import { extractApiError } from "../../lib/apiContract";
 import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
-import type { Message, UserSummary } from "../../types";
+import type { Conversation, Message, UserSummary } from "../../types";
 import { MessageType, UserStatus } from "../../types";
-import { messageApi } from "../../services/api";
+import { conversationApi, messageApi } from "../../services/api";
 import { unwrapApiSuccess } from "../../lib/apiContract";
 import { ReminderHistoryList } from "./ReminderHistoryList";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 import { formatCalendarDate, formatCalendarDateTime } from "../../utils/formatTime";
 import { SharedResourcesPreview } from "./shared-resources/SharedResourcesPreview";
+import {
+  SharedContentPanel,
+  type SharedContentTab,
+} from "./shared-resources/SharedContentModal";
 import { resolvePublicResourceUrl } from "../../config";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { friendshipApi } from "../../services/api";
+import {
+  type ChatSearchUser,
+  isGroupMemberEligible,
+  useChatUserSearch,
+  useFriendSuggestions,
+} from "../../features/chat/hooks/useChatUserSearch";
+import {
+  ReminderCreateDialog,
+  type ReminderCreatePayload,
+} from "../../features/chat/components/ReminderCreateDialog";
+import { createGroupConversationUseCase } from "../../features/chat/usecases/createGroupConversation";
+import { InfoQuickActionButton } from "./InfoQuickActionButton";
+import { Pin } from "lucide-react";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -178,6 +222,76 @@ const badgeToneByRelationship: Record<string, string> = {
 const statCardClass =
   "app-page-subtle rounded-lg px-3 py-2.5 transition-colors";
 
+type DirectInfoPanel = "main" | "reminders" | "storage" | "commonGroups";
+type MuteDurationValue = "1h" | "4h" | "8am" | "until-open";
+
+const DIRECT_FILTERS = [
+  "Tất cả",
+  "Khách hàng",
+  "Gia đình",
+  "Công việc",
+  "Bạn bè",
+  "Trả lời sau",
+];
+
+const removeDiacritics = (value: string): string =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const groupSearchUsers = (users: ChatSearchUser[]) => {
+  const recent = users.slice(0, 5);
+  const rest = users.slice(5);
+  const groups: Array<{ label: string; items: ChatSearchUser[] }> = [];
+  if (recent.length > 0) {
+    groups.push({ label: "Trò chuyện gần đây", items: recent });
+  }
+
+  const byInitial = new Map<string, ChatSearchUser[]>();
+  for (const user of rest) {
+    const name = user.alias || user.displayName || user.username || "";
+    const initial = removeDiacritics(name.trim().charAt(0).toUpperCase()) || "#";
+    const label = /^[A-Z]$/.test(initial) ? initial : "#";
+    byInitial.set(label, [...(byInitial.get(label) ?? []), user]);
+  }
+
+  for (const label of Array.from(byInitial.keys()).sort()) {
+    groups.push({ label, items: byInitial.get(label) ?? [] });
+  }
+
+  return groups;
+};
+
+const getParticipantUserId = (participant: unknown): string | null => {
+  if (!participant || typeof participant !== "object") return null;
+  const record = participant as Record<string, unknown>;
+  const raw = record.userId ?? record.id;
+  return typeof raw === "string" && raw.trim() ? raw : null;
+};
+
+const isGroupConversation = (conversation: Conversation): boolean =>
+  String(conversation.type).toLowerCase() === "group";
+
+const getConversationTitle = (conversation: Conversation): string =>
+  conversation.displayName ||
+  (conversation as unknown as { title?: string }).title ||
+  (conversation as unknown as { name?: string }).name ||
+  "Nhóm";
+
+const resolveMuteUntil = (value: MuteDurationValue): string | null => {
+  if (value === "until-open") return null;
+  const date = new Date();
+  if (value === "1h") {
+    date.setHours(date.getHours() + 1);
+    return date.toISOString();
+  }
+  if (value === "4h") {
+    date.setHours(date.getHours() + 4);
+    return date.toISOString();
+  }
+  date.setDate(date.getDate() + 1);
+  date.setHours(8, 0, 0, 0);
+  return date.toISOString();
+};
+
 const readUserValue = (
   u: ProfileUser | null | undefined,
   ...keys: string[]
@@ -208,6 +322,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const { t } = useTranslation(["profile", "common", "friends"]);
   const authUser = useAuthStore((state) => state.user);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  const selectedConversation = useChatStore((state) =>
+    conversationId ? state.conversationById[conversationId] : undefined,
+  );
+  const conversations = useChatStore((state) => state.conversations);
+  const updateConversation = useChatStore((state) => state.updateConversation);
+  const addConversation = useChatStore((state) => state.addConversation);
+  const removeConversation = useChatStore((state) => state.removeConversation);
+  const selectConversation = useChatStore((state) => state.selectConversation);
   const resolvedInitialUser = React.useMemo(
     () =>
       initialUser && initialUser.id === userId
@@ -236,7 +358,43 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   // Reminder history for 1-1 DMs — in-chat reminder cards live as REMINDER messages.
   const [reminders, setReminders] = React.useState<Message[]>([]);
   const [remindersLoading, setRemindersLoading] = React.useState(false);
+  const [sendMessage] = useSendMessageMutation();
+  const [directPanel, setDirectPanel] = React.useState<DirectInfoPanel>("main");
+  const [storageDefaultTab, setStorageDefaultTab] =
+    React.useState<SharedContentTab>("media");
+  const [isMuted, setIsMuted] = React.useState(false);
+  const [isMuteDialogOpen, setIsMuteDialogOpen] = React.useState(false);
+  const [isPinEntryOpen, setIsPinEntryOpen] = React.useState(false);
+  const [isHiddenLocally, setIsHiddenLocally] = React.useState(false);
+  const [isUpdatingHidden, setIsUpdatingHidden] = React.useState(false);
+  const [isCreateReminderOpen, setIsCreateReminderOpen] = React.useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = React.useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] =
+    React.useState(false);
+  const [isDeleteHistoryConfirmOpen, setIsDeleteHistoryConfirmOpen] =
+    React.useState(false);
+  const isConversationPinned = Boolean(selectedConversation?.pinnedAt);
   const showReminders = conversationContext === "direct" && Boolean(conversationId);
+
+  React.useEffect(() => {
+    if (conversationContext !== "direct") return;
+    const muteUntil = selectedConversation?.muteUntil
+      ? new Date(selectedConversation.muteUntil).getTime()
+      : null;
+    const muted =
+      selectedConversation?.notificationLevel === "mute" ||
+      (typeof muteUntil === "number" && muteUntil > Date.now());
+    setIsMuted(Boolean(muted));
+  }, [
+    conversationContext,
+    selectedConversation?.muteUntil,
+    selectedConversation?.notificationLevel,
+  ]);
+
+  React.useEffect(() => {
+    if (conversationContext !== "direct") return;
+    setIsHiddenLocally(Boolean(selectedConversation?.hiddenAt));
+  }, [conversationContext, selectedConversation?.hiddenAt]);
   React.useEffect(() => {
     if (!showReminders || !conversationId) return;
     setRemindersLoading(true);
@@ -468,6 +626,236 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }, [aliasInput, relationship, t, userId]);
 
+  const commonGroups = React.useMemo(
+    () =>
+      conversations.filter((conversation) => {
+        if (!isGroupConversation(conversation)) return false;
+        const participantIds = new Set(
+          (conversation.participants ?? [])
+            .map((participant) => getParticipantUserId(participant))
+            .filter((id): id is string => Boolean(id)),
+        );
+        return participantIds.has(userId) && participantIds.has(currentUserId);
+      }),
+    [conversations, currentUserId, userId],
+  );
+
+  const myCommonGroups = React.useMemo(
+    () =>
+      commonGroups.filter((conversation) => {
+        const createdBy = (conversation as unknown as { createdBy?: string }).createdBy;
+        const role = conversation.currentUserRole;
+        return (
+          createdBy === currentUserId ||
+          role === "owner" ||
+          role === "admin"
+        );
+      }),
+    [commonGroups, currentUserId],
+  );
+
+  const handleToggleDirectPin = React.useCallback(async () => {
+    if (!conversationId) return;
+    const previousPinnedAt = selectedConversation?.pinnedAt ?? null;
+    const previousPinOrder = selectedConversation?.pinOrder ?? null;
+    const nextPinned = !isConversationPinned;
+
+    updateConversation(conversationId, {
+      pinnedAt: nextPinned ? new Date().toISOString() : null,
+      pinOrder: nextPinned ? 0 : null,
+      isPinned: nextPinned,
+    } as Partial<Conversation>);
+
+    try {
+      const result = await conversationApi.setConversationPinned(
+        conversationId,
+        nextPinned,
+      );
+      updateConversation(conversationId, {
+        pinnedAt: result.pinnedAt,
+        pinOrder: result.pinOrder,
+        isPinned: Boolean(result.pinnedAt),
+      } as Partial<Conversation>);
+      toast.success(nextPinned ? "Đã ghim hội thoại" : "Đã bỏ ghim hội thoại");
+    } catch (error) {
+      updateConversation(conversationId, {
+        pinnedAt: previousPinnedAt,
+        pinOrder: previousPinOrder,
+        isPinned: isConversationPinned,
+      } as Partial<Conversation>);
+      toast.error(extractApiError(error).message || "Không thể cập nhật ghim");
+    }
+  }, [
+    conversationId,
+    isConversationPinned,
+    selectedConversation?.pinOrder,
+    selectedConversation?.pinnedAt,
+    updateConversation,
+  ]);
+
+  const handleMuteConversation = React.useCallback(
+    async (value: MuteDurationValue) => {
+      if (!conversationId) return;
+      const muteUntil = resolveMuteUntil(value);
+      setIsMuted(true);
+      setIsMuteDialogOpen(false);
+      try {
+        const result = await conversationApi.setConversationMuted(conversationId, {
+          muted: true,
+          muteUntil,
+        });
+        updateConversation(conversationId, {
+          muteUntil: result.muteUntil,
+          notificationLevel: result.notificationLevel,
+        } as Partial<Conversation>);
+        toast.success("Đã tắt thông báo hội thoại");
+      } catch (error) {
+        setIsMuted(false);
+        toast.error(extractApiError(error).message || "Không thể tắt thông báo");
+      }
+    },
+    [conversationId, updateConversation],
+  );
+
+  const handleUnmuteConversation = React.useCallback(async () => {
+    if (!conversationId) return;
+    setIsMuted(false);
+    try {
+      const result = await conversationApi.setConversationMuted(conversationId, {
+        muted: false,
+        muteUntil: null,
+      });
+      updateConversation(conversationId, {
+        muteUntil: result.muteUntil,
+        notificationLevel: result.notificationLevel,
+      } as Partial<Conversation>);
+      toast.success("Đã bật thông báo hội thoại");
+    } catch (error) {
+      setIsMuted(true);
+      toast.error(extractApiError(error).message || "Không thể bật thông báo");
+    }
+  }, [conversationId, updateConversation]);
+
+  const handleCreateDirectReminder = React.useCallback(
+    async (payload: ReminderCreatePayload) => {
+      if (!conversationId) return;
+      const trimmed = payload.content.trim();
+      if (!trimmed) return;
+
+      const response = await sendMessage({
+        conversationId,
+        clientMessageId: `reminder-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 9)}`,
+        content: trimmed,
+        type: MessageType.REMINDER,
+        localId: `temp-reminder-${Date.now()}`,
+        reminder: {
+          content: trimmed,
+          remindAt: payload.reminderDate.toISOString(),
+          repeat: payload.repeatType,
+        },
+        senderId: currentUserId,
+      }).unwrap();
+
+      const created = response;
+      if (created) {
+        setReminders((current) => [created, ...current]);
+      }
+      toast.success("Đã tạo nhắc hẹn");
+      setIsCreateReminderOpen(false);
+    },
+    [conversationId, currentUserId, sendMessage],
+  );
+
+  const handleCreateGroupFromDirect = React.useCallback(
+    async (name: string, memberIds: string[]) => {
+      const uniqueMemberIds = Array.from(new Set([userId, ...memberIds]));
+      const response = await createGroupConversationUseCase({
+        name,
+        memberIds: uniqueMemberIds,
+      });
+      const created = unwrapApiSuccess(response);
+      addConversation(created);
+      selectConversation(created.id);
+      toast.success("Đã tạo nhóm trò chuyện");
+      setIsCreateGroupOpen(false);
+    },
+    [addConversation, selectConversation, userId],
+  );
+
+  const handleDeleteConversationHistory = React.useCallback(async () => {
+    if (!conversationId || isDeletingConversation) return;
+    setIsDeletingConversation(true);
+    try {
+      await conversationApi.deleteConversation(conversationId);
+      removeConversation(conversationId);
+      selectConversation(null);
+      toast.success("Đã xóa lịch sử trò chuyện");
+      setIsDeleteHistoryConfirmOpen(false);
+      onClose();
+    } catch (error) {
+      toast.error(extractApiError(error).message || "Không thể xóa lịch sử trò chuyện");
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }, [
+    conversationId,
+    isDeletingConversation,
+    onClose,
+    removeConversation,
+    selectConversation,
+  ]);
+
+  const handleSetConversationHidden = React.useCallback(
+    async (hidden: boolean) => {
+      if (!conversationId || isUpdatingHidden) return;
+      const previousHiddenAt = selectedConversation?.hiddenAt ?? null;
+      const optimisticHiddenAt = hidden ? new Date().toISOString() : null;
+
+      setIsUpdatingHidden(true);
+      setIsHiddenLocally(hidden);
+      updateConversation(conversationId, {
+        hiddenAt: optimisticHiddenAt,
+      } as Partial<Conversation>);
+
+      try {
+        const result = await conversationApi.setConversationHidden(
+          conversationId,
+          hidden,
+        );
+        updateConversation(conversationId, {
+          hiddenAt: result.hiddenAt,
+        } as Partial<Conversation>);
+
+        if (hidden) {
+          removeConversation(conversationId);
+          selectConversation(null);
+          onClose();
+        }
+
+        toast.success(hidden ? "Đã ẩn trò chuyện" : "Đã bỏ ẩn trò chuyện");
+      } catch (error) {
+        setIsHiddenLocally(Boolean(previousHiddenAt));
+        updateConversation(conversationId, {
+          hiddenAt: previousHiddenAt,
+        } as Partial<Conversation>);
+        toast.error(extractApiError(error).message || "Không thể cập nhật ẩn trò chuyện");
+      } finally {
+        setIsUpdatingHidden(false);
+      }
+    },
+    [
+      conversationId,
+      isUpdatingHidden,
+      onClose,
+      removeConversation,
+      selectConversation,
+      selectedConversation?.hiddenAt,
+      updateConversation,
+    ],
+  );
+
   const renderActions = () => {
     if (relationship.kind === "self") {
       return (
@@ -602,6 +990,126 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       </div>
     );
   };
+
+  if (conversationContext === "direct" && conversationId) {
+    const directTitle = currentAlias || displayName || "Thông tin hội thoại";
+
+    return (
+      <>
+        <div
+          className={clsx(
+            "flex h-full flex-col bg-[hsl(var(--chat-panel-bg))]",
+            className,
+          )}
+        >
+          {directPanel === "storage" ? (
+            <SharedContentPanel
+              conversationId={conversationId}
+              defaultTab={storageDefaultTab}
+              onBack={() => setDirectPanel("main")}
+              onJumpToMessage={onJumpToMessage}
+            />
+          ) : directPanel === "reminders" ? (
+            <DirectReminderPanel
+              reminders={reminders}
+              loading={remindersLoading}
+              onBack={() => setDirectPanel("main")}
+              onCreate={() => setIsCreateReminderOpen(true)}
+              onJumpToMessage={onJumpToMessage}
+              onOpenCalendar={() => navigate("/calendar")}
+            />
+          ) : directPanel === "commonGroups" ? (
+            <CommonGroupsPanel
+              groups={commonGroups}
+              myGroups={myCommonGroups}
+              onBack={() => setDirectPanel("main")}
+              onAddToGroup={() => setIsCreateGroupOpen(true)}
+            />
+          ) : (
+            <DirectConversationInfoPanel
+              user={user}
+              conversationId={conversationId}
+              displayName={directTitle}
+              avatarAlt={displayName}
+              effectiveStatus={effectiveStatus}
+              isMuted={isMuted}
+              isPinned={isConversationPinned}
+              isHidden={isHiddenLocally}
+              commonGroupCount={commonGroups.length}
+              onClose={onClose}
+              onEditAlias={relationship.kind === "friend" ? startEditAlias : undefined}
+              onToggleMute={() =>
+                isMuted ? void handleUnmuteConversation() : setIsMuteDialogOpen(true)
+              }
+              onTogglePin={() => void handleToggleDirectPin()}
+              onCreateGroup={() => setIsCreateGroupOpen(true)}
+              onOpenReminders={() => setDirectPanel("reminders")}
+              onOpenCommonGroups={() => setDirectPanel("commonGroups")}
+              onOpenStorage={(tab) => {
+                setStorageDefaultTab(tab);
+                setDirectPanel("storage");
+              }}
+              onJumpToMessage={onJumpToMessage}
+              onToggleHidden={() =>
+                isHiddenLocally
+                  ? void handleSetConversationHidden(false)
+                  : setIsPinEntryOpen(true)
+              }
+              hiddenUpdating={isUpdatingHidden}
+              onDeleteHistory={() => setIsDeleteHistoryConfirmOpen(true)}
+            />
+          )}
+        </div>
+
+        <MuteConversationDialog
+          isOpen={isMuteDialogOpen}
+          onClose={() => setIsMuteDialogOpen(false)}
+          onConfirm={(value) => void handleMuteConversation(value)}
+        />
+
+        <PinEntryDialog
+          isOpen={isPinEntryOpen}
+          onClose={() => setIsPinEntryOpen(false)}
+          onConfirm={() => {
+            setIsPinEntryOpen(false);
+            void handleSetConversationHidden(true);
+          }}
+        />
+
+        <CreateDirectGroupDialog
+          isOpen={isCreateGroupOpen}
+          initialUser={{
+            id: userId,
+            displayName: displayName,
+            username: user?.username,
+            avatarUrl: user?.avatar,
+          }}
+          currentUserId={currentUserId}
+          onClose={() => setIsCreateGroupOpen(false)}
+          onCreateGroup={handleCreateGroupFromDirect}
+        />
+
+        <ReminderCreateDialog
+          isOpen={isCreateReminderOpen}
+          onClose={() => setIsCreateReminderOpen(false)}
+          onSubmit={(payload) => void handleCreateDirectReminder(payload)}
+        />
+
+        <ConfirmDialog
+          isOpen={isDeleteHistoryConfirmOpen}
+          onClose={() => {
+            if (!isDeletingConversation) setIsDeleteHistoryConfirmOpen(false);
+          }}
+          onConfirm={() => void handleDeleteConversationHistory()}
+          title="Xóa lịch sử trò chuyện"
+          message="Bạn có chắc muốn xóa lịch sử trò chuyện này trên thiết bị của mình?"
+          confirmText="Xóa"
+          variant="danger"
+          isLoading={isDeletingConversation}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -899,7 +1407,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
               {conversationContext === "direct" && conversationId && (
                 <section className="space-y-2">
-                  <SharedResourcesPreview conversationId={conversationId} />
+                  <SharedResourcesPreview
+                    conversationId={conversationId}
+                    onJumpToMessage={onJumpToMessage}
+                  />
                 </section>
               )}
 
@@ -976,6 +1487,896 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         isLoading={actingKey === "unfriend"}
       />
     </>
+  );
+};
+
+const DirectPanelHeader: React.FC<{
+  title: string;
+  onBack?: () => void;
+  onClose?: () => void;
+  right?: React.ReactNode;
+}> = ({ title, onBack, onClose, right }) => {
+  if (onBack) {
+    return (
+      <div className="app-page-header flex min-h-[var(--app-header-height)] shrink-0 items-center border-b border-border bg-surface px-4 py-2.5">
+        <div className="flex w-10 justify-start">
+          <button
+            type="button"
+            onClick={onBack}
+            className="icon-button-surface h-9 w-9"
+            aria-label="Quay lại"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+        </div>
+        <h2 className="min-w-0 flex-1 truncate text-center text-title-sm text-text-primary">
+          {title}
+        </h2>
+        <div className="flex w-10 justify-end">{right}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-page-header flex min-h-[var(--app-header-height)] shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5">
+      <h2 className="min-w-0 truncate text-title-sm text-text-primary">
+        {title}
+      </h2>
+      <div className="flex shrink-0 justify-end">
+        {right ??
+          (onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="icon-button-surface h-9 w-9"
+              aria-label="Đóng"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          ) : null)}
+      </div>
+    </div>
+  );
+};
+
+const DirectActionButton: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}> = ({ icon, label, active = false, onClick }) => (
+  <InfoQuickActionButton
+    icon={icon}
+    label={label}
+    active={active}
+    onClick={onClick}
+  />
+);
+
+const DirectNavRow: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  subtitle?: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  trailing?: React.ReactNode;
+}> = ({ icon, label, subtitle, danger = false, disabled = false, onClick, trailing }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled || !onClick}
+    className={clsx(
+      "flex min-h-[58px] w-full items-center gap-3 bg-surface px-5 text-left transition-colors",
+      onClick && !disabled ? "hover:bg-surface-hover" : "cursor-default",
+      disabled && "opacity-50",
+    )}
+  >
+    <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center", danger ? "text-[#d91f1f]" : "text-text-primary")}>
+      {icon}
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className={clsx("block truncate text-[16px]", danger ? "text-[#d91f1f]" : "text-text-primary")}>
+        {label}
+      </span>
+      {subtitle ? (
+        <span className="mt-0.5 block truncate text-[14px] text-text-muted">
+          {subtitle}
+        </span>
+      ) : null}
+    </span>
+    {trailing}
+  </button>
+);
+
+const DirectSectionHeader: React.FC<{
+  title: string;
+  open?: boolean;
+  onToggle?: () => void;
+}> = ({ title, open = true, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="flex h-[58px] w-full items-center justify-between bg-surface px-5 text-left"
+  >
+    <span className="text-[18px] font-semibold text-text-primary">{title}</span>
+    {open ? (
+      <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+    ) : (
+      <ChevronRightIcon className="h-5 w-5 text-text-secondary" />
+    )}
+  </button>
+);
+
+const DirectConversationInfoPanel: React.FC<{
+  user: ProfileUser | null;
+  conversationId: string;
+  displayName: string;
+  avatarAlt: string;
+  effectiveStatus: UserStatus;
+  isMuted: boolean;
+  isPinned: boolean;
+  isHidden: boolean;
+  hiddenUpdating?: boolean;
+  commonGroupCount: number;
+  onClose: () => void;
+  onEditAlias?: () => void;
+  onToggleMute: () => void;
+  onTogglePin: () => void;
+  onCreateGroup: () => void;
+  onOpenReminders: () => void;
+  onOpenCommonGroups: () => void;
+  onOpenStorage: (tab: SharedContentTab) => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onToggleHidden: () => void;
+  onDeleteHistory: () => void;
+}> = ({
+  user,
+  conversationId,
+  displayName,
+  avatarAlt,
+  effectiveStatus,
+  isMuted,
+  isPinned,
+  isHidden,
+  hiddenUpdating = false,
+  commonGroupCount,
+  onClose,
+  onEditAlias,
+  onToggleMute,
+  onTogglePin,
+  onCreateGroup,
+  onOpenReminders,
+  onOpenCommonGroups,
+  onOpenStorage,
+  onJumpToMessage,
+  onToggleHidden,
+  onDeleteHistory,
+}) => {
+  const [securityOpen, setSecurityOpen] = React.useState(true);
+
+  return (
+    <>
+      <DirectPanelHeader title="Thông tin hội thoại" onClose={onClose} />
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[hsl(var(--chat-panel-bg))]">
+        <section className="bg-surface px-5 pb-5 pt-6 text-center">
+          <Avatar
+            src={user?.avatar}
+            alt={avatarAlt}
+            size="xl"
+            status={effectiveStatus}
+            showStatus
+          />
+          <div className="mt-4 flex items-center justify-center gap-1.5">
+            <h3 className="line-clamp-2 max-w-[220px] text-base font-bold text-text-primary">
+              {displayName}
+            </h3>
+            {onEditAlias ? (
+              <button
+                type="button"
+                onClick={onEditAlias}
+                className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                aria-label="Đổi tên gợi nhớ"
+              >
+                <PencilSquareIcon className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <DirectActionButton
+              icon={isMuted ? <BellSlashIcon className="h-5 w-5" /> : <BellIcon className="h-5 w-5" />}
+              label={isMuted ? "Bật thông báo" : "Tắt thông báo"}
+              active={isMuted}
+              onClick={onToggleMute}
+            />
+            <DirectActionButton
+              icon={<Pin size={20} color="currentColor" strokeWidth={1.5} />}
+              label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+              active={isPinned}
+              onClick={onTogglePin}
+            />
+            <DirectActionButton
+              icon={<UserPlusIcon className="h-5 w-5" />}
+              label="Tạo nhóm trò chuyện"
+              onClick={onCreateGroup}
+            />
+          </div>
+        </section>
+
+        <div className="h-2.5 bg-[#eef0f4]" />
+        <section className="bg-surface py-1">
+          <DirectNavRow
+            icon={<ClockIcon className="h-7 w-7" />}
+            label="Danh sách nhắc hẹn"
+            onClick={onOpenReminders}
+          />
+          <DirectNavRow
+            icon={<UserGroupIcon className="h-7 w-7" />}
+            label={`${commonGroupCount} nhóm chung`}
+            onClick={onOpenCommonGroups}
+          />
+        </section>
+
+        <div className="h-2.5 bg-[#eef0f4]" />
+        <SharedResourcesPreview
+          conversationId={conversationId}
+          variant="zalo"
+          onOpenAll={onOpenStorage}
+          onJumpToMessage={onJumpToMessage}
+        />
+
+        <div className="h-2.5 bg-[#eef0f4]" />
+        <section className="bg-surface">
+          <DirectSectionHeader
+            title="Thiết lập bảo mật"
+            open={securityOpen}
+            onToggle={() => setSecurityOpen((value) => !value)}
+          />
+          {securityOpen ? (
+            <DirectNavRow
+              icon={<EyeSlashIcon className="h-6 w-6" />}
+              label="Ẩn trò chuyện"
+              onClick={onToggleHidden}
+              disabled={hiddenUpdating}
+              trailing={<ZaloSwitch checked={isHidden} />}
+            />
+          ) : null}
+        </section>
+
+        <div className="h-2.5 bg-[#eef0f4]" />
+        <section className="bg-surface pb-7">
+          <DirectNavRow
+            icon={<TrashIcon className="h-6 w-6" />}
+            label="Xóa lịch sử trò chuyện"
+            danger
+            onClick={onDeleteHistory}
+          />
+        </section>
+      </div>
+    </>
+  );
+};
+
+const ZaloSwitch: React.FC<{ checked: boolean }> = ({ checked }) => (
+  <span
+    className={clsx(
+      "relative h-7 w-12 rounded-full transition-colors",
+      checked ? "bg-[#0068ff]" : "bg-[#b9bcc2]",
+    )}
+  >
+    <span
+      className={clsx(
+        "absolute top-1 h-5 w-5 rounded-full bg-white transition-transform",
+        checked ? "translate-x-6" : "translate-x-1",
+      )}
+    />
+  </span>
+);
+
+const DirectReminderPanel: React.FC<{
+  reminders: Message[];
+  loading: boolean;
+  onBack: () => void;
+  onCreate: () => void;
+  onJumpToMessage?: (messageId: string) => void;
+  onOpenCalendar: () => void;
+}> = ({ reminders, loading, onBack, onCreate, onJumpToMessage, onOpenCalendar }) => (
+  <>
+    <DirectPanelHeader
+      title="Danh sách nhắc hẹn"
+      onBack={onBack}
+      right={
+        <button
+          type="button"
+          onClick={onCreate}
+          className="flex h-11 w-11 items-center justify-center rounded text-[#0068ff] hover:bg-surface-hover"
+          aria-label="Tạo nhắc hẹn"
+        >
+          <PlusIcon className="h-8 w-8" />
+        </button>
+      }
+    />
+    <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-5 py-6">
+      {reminders.length > 0 || loading ? (
+        <ReminderHistoryList
+          reminders={reminders}
+          loading={loading}
+          onJumpToMessage={onJumpToMessage}
+          onOpenCalendar={onOpenCalendar}
+        />
+      ) : (
+        <div className="flex flex-col items-center pt-2 text-center">
+          <div className="flex h-44 w-44 items-center justify-center text-[#e6f0ff]">
+            <CalendarDaysIcon className="h-40 w-40 stroke-[1.2]" />
+          </div>
+          <p className="mt-5 max-w-[260px] text-[17px] leading-7 text-text-secondary">
+            Chưa có nhắc hẹn nào được chia sẻ trong hội thoại này
+          </p>
+          <button
+            type="button"
+            onClick={onCreate}
+            className="mt-7 flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e5f1ff] text-[20px] font-semibold text-[#005ae0] hover:bg-[#d8eaff]"
+          >
+            <ClockIcon className="h-5 w-5" />
+            Tạo nhắc hẹn
+          </button>
+        </div>
+      )}
+    </div>
+  </>
+);
+
+const CommonGroupsPanel: React.FC<{
+  groups: Conversation[];
+  myGroups: Conversation[];
+  onBack: () => void;
+  onAddToGroup: () => void;
+}> = ({ groups, myGroups, onBack, onAddToGroup }) => {
+  const [tab, setTab] = React.useState<"all" | "mine">("all");
+  const visibleGroups = tab === "all" ? groups : myGroups;
+
+  return (
+    <>
+      <DirectPanelHeader
+        title="Nhóm chung"
+        onBack={onBack}
+        right={<button className="text-[18px] font-semibold text-text-primary">Chọn nhiều</button>}
+      />
+      <div className="flex h-[62px] shrink-0 border-b border-border bg-surface px-8">
+        {[
+          ["all", "Tất cả"],
+          ["mine", "Nhóm của tôi"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key as "all" | "mine")}
+            className={clsx(
+              "relative flex-1 text-[18px] font-semibold",
+              tab === key ? "text-[#0068ff]" : "text-text-muted",
+            )}
+          >
+            {label}
+            {tab === key ? (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#0068ff]" />
+            ) : null}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-7 py-4">
+        {visibleGroups.length === 0 ? (
+          <p className="py-10 text-center text-sm text-text-muted">
+            Chưa có nhóm chung
+          </p>
+        ) : (
+          visibleGroups.map((conversation) => (
+            <div
+              key={conversation.id}
+              className="flex h-[78px] items-center gap-4"
+            >
+              <GroupAvatarStack conversation={conversation} />
+              <p className="min-w-0 flex-1 truncate text-[18px] text-text-primary">
+                {getConversationTitle(conversation)}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+      <div className="border-t border-border bg-surface px-7 py-4">
+        <button
+          type="button"
+          onClick={onAddToGroup}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded bg-[#e1e5eb] text-[20px] font-semibold text-text-primary hover:bg-[#d9dee6]"
+        >
+          <UserPlusIcon className="h-5 w-5" />
+          Thêm vào nhóm
+        </button>
+      </div>
+    </>
+  );
+};
+
+const GroupAvatarStack: React.FC<{ conversation: Conversation }> = ({ conversation }) => {
+  const participants = conversation.participants ?? [];
+  const first = participants[0] as unknown as { avatar?: string; avatarUrl?: string; name?: string; displayName?: string } | undefined;
+  const second = participants[1] as unknown as { avatar?: string; avatarUrl?: string; name?: string; displayName?: string } | undefined;
+  const count = conversation.participantCount ?? participants.length;
+
+  return (
+    <div className="relative h-12 w-12 shrink-0">
+      <Avatar
+        src={first?.avatar || first?.avatarUrl || conversation.displayAvatar || undefined}
+        alt={first?.displayName || first?.name || getConversationTitle(conversation)}
+        size="md"
+      />
+      {second ? (
+        <div className="absolute -bottom-1 -right-1 rounded-full bg-surface">
+          <Avatar
+            src={second.avatar || second.avatarUrl}
+            alt={second.displayName || second.name || ""}
+            size="sm"
+          />
+        </div>
+      ) : null}
+      {count > 2 ? (
+        <span className="absolute -bottom-2 -right-2 flex h-7 min-w-7 items-center justify-center rounded-full border border-border bg-[#eef1f5] px-1 text-xs font-semibold text-text-primary">
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
+const MuteConversationDialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (value: MuteDurationValue) => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  const [value, setValue] = React.useState<MuteDurationValue>("1h");
+  const options: Array<[MuteDurationValue, string]> = [
+    ["1h", "Trong 1 giờ"],
+    ["4h", "Trong 4 giờ"],
+    ["8am", "Cho đến 8:00 AM"],
+    ["until-open", "Cho đến khi được mở lại"],
+  ];
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      size="md"
+      contentClassName="max-w-[502px] rounded"
+      bodyClassName="p-0"
+    >
+      <DialogHeader title="Xác nhận" onClose={onClose} />
+      <div className="px-6 py-5">
+        <p className="mb-4 text-[17px] text-text-primary">
+          Bạn có chắc muốn tắt thông báo hội thoại này:
+        </p>
+        <div className="space-y-3">
+          {options.map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 text-[17px] text-text-primary">
+              <input
+                type="radio"
+                checked={value === key}
+                onChange={() => setValue(key)}
+                className="h-5 w-5"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <DialogFooter
+          cancelLabel="Hủy"
+          confirmLabel="Đồng ý"
+          onCancel={onClose}
+          onConfirm={() => onConfirm(value)}
+          confirmEnabled
+        />
+      </div>
+    </Modal>
+  );
+};
+
+const PinEntryDialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  const [pin, setPin] = React.useState("");
+  const inputs = React.useRef<Array<HTMLInputElement | null>>([]);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setPin("");
+      return;
+    }
+    setTimeout(() => inputs.current[0]?.focus(), 0);
+  }, [isOpen]);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      size="lg"
+      contentClassName="max-w-[478px] rounded"
+      bodyClassName="p-0"
+    >
+      <DialogHeader title="Nhập mã PIN để ẩn trò chuyện" onClose={onClose} />
+      <div className="px-8 pb-16 pt-9 text-center">
+        <div className="flex justify-center gap-3">
+          {[0, 1, 2, 3].map((index) => (
+            <input
+              key={index}
+              ref={(node) => {
+                inputs.current[index] = node;
+              }}
+              value={pin[index] ?? ""}
+              maxLength={1}
+              inputMode="numeric"
+              onChange={(event) => {
+                const digit = event.target.value.replace(/\D/g, "").slice(-1);
+                const next = `${pin.slice(0, index)}${digit}${pin.slice(index + 1)}`.slice(0, 4);
+                setPin(next);
+                if (digit && index < 3) inputs.current[index + 1]?.focus();
+                if (next.length === 4) onConfirm();
+              }}
+              className="h-[68px] w-[54px] rounded border border-border text-center text-2xl font-semibold focus:border-[#0068ff] focus:outline-none"
+            />
+          ))}
+        </div>
+        <p className="mt-8 text-[15px] text-text-primary">
+          Quên mã PIN? Bạn phải{" "}
+          <button type="button" className="text-[#0068ff] underline">
+            cài đặt lại mã.
+          </button>
+        </p>
+      </div>
+    </Modal>
+  );
+};
+
+const DialogHeader: React.FC<{ title: string; onClose: () => void }> = ({
+  title,
+  onClose,
+}) => (
+  <div className="flex h-[62px] items-center justify-between border-b border-border px-5">
+    <h2 className="text-[20px] font-semibold text-text-primary">{title}</h2>
+    <button
+      type="button"
+      onClick={onClose}
+      className="flex h-10 w-10 items-center justify-center rounded text-text-primary hover:bg-surface-hover"
+      aria-label="Đóng"
+    >
+      <XMarkIcon className="h-7 w-7" />
+    </button>
+  </div>
+);
+
+const DialogFooter: React.FC<{
+  cancelLabel: string;
+  confirmLabel: string;
+  confirmEnabled: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}> = ({ cancelLabel, confirmLabel, confirmEnabled, onCancel, onConfirm }) => (
+  <div className="mt-8 flex justify-end gap-4">
+    <button
+      type="button"
+      onClick={onCancel}
+      className="h-12 rounded bg-[#e5e7eb] px-7 text-[17px] font-semibold text-text-primary hover:bg-[#dfe2e7]"
+    >
+      {cancelLabel}
+    </button>
+    <button
+      type="button"
+      onClick={onConfirm}
+      disabled={!confirmEnabled}
+      className={clsx(
+        "h-12 rounded px-7 text-[17px] font-semibold text-white",
+        confirmEnabled
+          ? "bg-[#0068ff] hover:bg-[#005ae0]"
+          : "cursor-not-allowed bg-[#9dc7ff] text-white/85",
+      )}
+    >
+      {confirmLabel}
+    </button>
+  </div>
+);
+
+const CreateDirectGroupDialog: React.FC<{
+  isOpen: boolean;
+  initialUser: {
+    id: string;
+    displayName?: string;
+    username?: string;
+    avatarUrl?: string;
+  };
+  currentUserId: string;
+  onClose: () => void;
+  onCreateGroup: (name: string, memberIds: string[]) => Promise<void>;
+}> = ({ isOpen, initialUser, currentUserId, onClose, onCreateGroup }) => {
+  const [groupName, setGroupName] = React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [activeFilter, setActiveFilter] = React.useState("Tất cả");
+  const [selectedById, setSelectedById] = React.useState<Record<string, ChatSearchUser>>({});
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const isSearchActive = searchQuery.trim().length >= 2;
+  const excludeUserIds = React.useMemo(
+    () => [currentUserId, initialUser.id],
+    [currentUserId, initialUser.id],
+  );
+
+  const { results, isLoading: isSearching, errorMessage, debouncedQuery } =
+    useChatUserSearch(searchQuery, {
+      enabled: isOpen && isSearchActive,
+      limit: 60,
+      excludeUserIds,
+    });
+  const { suggestions, isLoading: isFriendsLoading } = useFriendSuggestions({
+    enabled: isOpen && !isSearchActive,
+    limit: 80,
+  });
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setGroupName("");
+    setSearchQuery("");
+    setActiveFilter("Tất cả");
+    setSelectedById({
+      [initialUser.id]: {
+        id: initialUser.id,
+        username: initialUser.username || initialUser.displayName || initialUser.id,
+        displayName: initialUser.displayName,
+        avatarUrl: initialUser.avatarUrl,
+        isFriend: true,
+        friendshipStatus: "accepted",
+      } as ChatSearchUser,
+    });
+    setIsSubmitting(false);
+  }, [initialUser, isOpen]);
+
+  const users = React.useMemo(() => {
+    const excluded = new Set(excludeUserIds);
+    const source = isSearchActive ? results : suggestions;
+    return source.filter((user) => !excluded.has(user.id));
+  }, [excludeUserIds, isSearchActive, results, suggestions]);
+  const groupedUsers = React.useMemo(() => groupSearchUsers(users), [users]);
+  const selectedUsers = React.useMemo(
+    () => Object.values(selectedById),
+    [selectedById],
+  );
+  const loading = isSearchActive ? isSearching : isFriendsLoading;
+  const canCreate = groupName.trim().length > 0 && selectedUsers.length > 0;
+
+  const toggleUser = React.useCallback((user: ChatSearchUser) => {
+    if (!isGroupMemberEligible(user)) return;
+    setSelectedById((current) => {
+      if (current[user.id]) {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      }
+      return { ...current, [user.id]: user };
+    });
+  }, []);
+
+  const handleConfirm = React.useCallback(async () => {
+    if (!canCreate || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onCreateGroup(
+        groupName.trim(),
+        selectedUsers.map((user) => user.id),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [canCreate, groupName, isSubmitting, onCreateGroup, selectedUsers]);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      size="xl"
+      contentClassName="max-w-[652px] rounded"
+      bodyClassName="p-0"
+      footer={
+        <div className="flex items-center justify-end gap-4 border-t border-border px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="h-12 rounded bg-[#e5e7eb] px-7 text-[17px] font-semibold text-text-primary hover:bg-[#dfe2e7] disabled:opacity-60"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConfirm()}
+            disabled={!canCreate || isSubmitting}
+            className={clsx(
+              "h-12 rounded px-7 text-[17px] font-semibold text-white",
+              canCreate && !isSubmitting
+                ? "bg-[#0068ff] hover:bg-[#005ae0]"
+                : "cursor-not-allowed bg-[#9dc7ff] text-white/85",
+            )}
+          >
+            Tạo nhóm
+          </button>
+        </div>
+      }
+    >
+      <DialogHeader title="Tạo nhóm" onClose={onClose} />
+      <div className="px-5 pt-5">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-text-muted"
+            aria-label="Chọn ảnh nhóm"
+          >
+            <PhotoIcon className="h-6 w-6" />
+          </button>
+          <input
+            value={groupName}
+            onChange={(event) => setGroupName(event.target.value)}
+            placeholder="Nhập tên nhóm..."
+            className="h-12 min-w-0 flex-1 border-0 border-b border-[#0068ff] bg-transparent text-[17px] text-text-primary placeholder:text-text-muted focus:outline-none"
+          />
+        </div>
+
+        <div className="relative mt-5">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Nhập tên, số điện thoại, hoặc danh sách số điện thoại"
+            className="h-12 w-full rounded-full border border-border bg-surface pl-12 pr-4 text-[17px] text-text-primary placeholder:text-text-muted focus:border-[#0068ff] focus:outline-none"
+          />
+        </div>
+
+        <div className="mt-5 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none]">
+          {DIRECT_FILTERS.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setActiveFilter(filter)}
+              className={clsx(
+                "h-8 shrink-0 rounded-full px-4 text-[15px] font-medium transition-colors",
+                activeFilter === filter
+                  ? "bg-[#0068ff] text-white"
+                  : "bg-[#e4e7ec] text-text-secondary hover:bg-[#dce1e8]",
+              )}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-5 mt-4 border-t border-border" />
+      <div className="grid h-[590px] grid-cols-[minmax(0,1fr)_230px] px-5">
+        <div className="min-h-0 overflow-y-auto py-3 pr-4">
+          {loading ? (
+            <DirectorySkeleton count={7} />
+          ) : errorMessage ? (
+            <p className="py-3 text-sm text-danger">{errorMessage}</p>
+          ) : users.length === 0 ? (
+            <p className="py-12 text-center text-sm text-text-muted">
+              {debouncedQuery.trim().length >= 2
+                ? "Không tìm thấy người phù hợp"
+                : "Không có bạn bè phù hợp"}
+            </p>
+          ) : (
+            groupedUsers.map((group) => (
+              <div key={group.label}>
+                <div className="px-1 py-3 text-[17px] font-semibold text-text-primary">
+                  {group.label}
+                </div>
+                {group.items.map((user) => (
+                  <SelectableContactRow
+                    key={user.id}
+                    user={user}
+                    selected={Boolean(selectedById[user.id])}
+                    disabled={!isGroupMemberEligible(user)}
+                    onToggle={() => toggleUser(user)}
+                  />
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="my-3 min-h-0 border-l border-border pl-4">
+          <div className="h-full rounded border border-border px-3 py-4">
+            <p className="text-[17px] font-semibold text-text-primary">
+              Đã chọn{" "}
+              <span className="rounded bg-[#e5f1ff] px-1.5 text-[#0068ff]">
+                {selectedUsers.length}/100
+              </span>
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {selectedUsers.map((user) => {
+                const name = user.displayName || user.username || user.id;
+                return (
+                  <span
+                    key={user.id}
+                    className="flex max-w-full items-center gap-2 rounded-full bg-[#dcebff] py-1 pl-1 pr-2 text-[15px] text-[#005ae0]"
+                  >
+                    <Avatar src={user.avatarUrl} alt={name} size="sm" />
+                    <span className="min-w-0 max-w-[124px] truncate">{name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (user.id === initialUser.id) return;
+                        setSelectedById((current) => {
+                          const next = { ...current };
+                          delete next[user.id];
+                          return next;
+                        });
+                      }}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0068ff] text-white"
+                      aria-label={`Bỏ chọn ${name}`}
+                    >
+                      <XMarkIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const SelectableContactRow: React.FC<{
+  user: ChatSearchUser;
+  selected: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}> = ({ user, selected, disabled, onToggle }) => {
+  const name = user.alias || user.displayName || user.username || user.id;
+  const secondary =
+    disabled && !isGroupMemberEligible(user)
+      ? "Chỉ bạn bè mới có thể thêm"
+      : user.departmentName || user.employeeCode || "";
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <span
+        className={clsx(
+          "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border",
+          selected
+            ? "border-[#0068ff] bg-[#0068ff] text-white"
+            : "border-[#b8bec8] bg-surface text-transparent",
+        )}
+      >
+        <CheckIcon className="h-4 w-4 stroke-[3]" />
+      </span>
+      <Avatar src={user.avatarUrl} alt={name} size="lg" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[17px] font-medium text-text-primary">
+          {name}
+        </span>
+        {secondary ? (
+          <span className="mt-0.5 block truncate text-[14px] text-text-muted">
+            {secondary}
+          </span>
+        ) : null}
+      </span>
+    </button>
   );
 };
 

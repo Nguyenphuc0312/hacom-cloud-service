@@ -187,7 +187,12 @@ const AttachmentCard: React.FC<{
         </button>
       ) : (
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-hover">
-          <FileTypeIcon type={iconType} className="h-6 w-6" />
+          <FileTypeIcon
+            type={iconType}
+            fileName={filename}
+            variant="outline"
+            className="h-6 w-6"
+          />
         </div>
       )}
 
@@ -524,6 +529,8 @@ export const CalendarAttachmentZone: React.FC<Props> = ({
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-hover">
                   <FileTypeIcon
                     type={getIconTypeFromPreviewType(getMimePreviewType(a.mimeType, a.name))}
+                    fileName={a.name}
+                    variant="outline"
                     className="h-5 w-5"
                   />
                 </div>
