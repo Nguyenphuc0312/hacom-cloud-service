@@ -262,4 +262,23 @@ describe("cloudApi", () => {
       /^cloud-web-/,
     );
   });
+
+  it("adds idempotency keys to content and upload completion mutations", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ id: "text-1", type: "text" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "link-1", type: "link" }))
+      .mockResolvedValueOnce(
+        jsonResponse({ item: { id: "file-1" }, job: { type: "hash_file" } }),
+      );
+
+    await cloudApi.createText(userId, "note");
+    await cloudApi.createLink(userId, "https://hacom.vn", "Hacom");
+    await cloudApi.completeUpload(userId, "session-1");
+
+    for (const [, options] of fetchMock.mock.calls) {
+      expect((options?.headers as Headers).get("Idempotency-Key")).toMatch(
+        /^cloud-web-/,
+      );
+    }
+  });
 });

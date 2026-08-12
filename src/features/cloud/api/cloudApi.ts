@@ -47,6 +47,14 @@ export class CloudApiError extends Error {
 const joinPath = (base: string, path: string): string =>
   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
+const createMutationHeaders = (
+  headers: HeadersInit = {},
+): Headers => {
+  const result = new Headers(headers);
+  result.set("Idempotency-Key", `cloud-web-${crypto.randomUUID()}`);
+  return result;
+};
+
 const isCloudDemoMode = (): boolean => {
   const env = import.meta.env as Record<string, string | boolean | undefined>;
   return env.DEV === true && env["VITE_CLOUD_DEMO_MODE"] === "true";
@@ -234,10 +242,7 @@ export const cloudApi = {
     return cloudRequest<CloudQuotaRequest>("quota/requests", {
       userId,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
-      },
+      headers: createMutationHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         requestedQuotaBytes,
         ...(reason?.trim() ? { reason: reason.trim() } : {}),
@@ -249,7 +254,7 @@ export const cloudApi = {
     return cloudRequest<CloudItem>("texts", {
       userId,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createMutationHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ content }),
     });
   },
@@ -258,7 +263,7 @@ export const cloudApi = {
     return cloudRequest<CloudItem>("links", {
       userId,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createMutationHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ url, title }),
     });
   },
@@ -269,7 +274,7 @@ export const cloudApi = {
       {
         userId,
         method: "POST",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: createMutationHeaders(),
       },
     );
   },
@@ -280,7 +285,7 @@ export const cloudApi = {
       {
         userId,
         method: "POST",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: createMutationHeaders(),
       },
     );
   },
@@ -294,7 +299,7 @@ export const cloudApi = {
       {
         userId,
         method: "DELETE",
-        headers: { "Idempotency-Key": `cloud-web-${crypto.randomUUID()}` },
+        headers: createMutationHeaders(),
       },
     );
   },
@@ -303,10 +308,7 @@ export const cloudApi = {
     return cloudRequest<CloudUploadSession>("uploads", {
       userId,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `cloud-web-${crypto.randomUUID()}`,
-      },
+      headers: createMutationHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "application/octet-stream",
@@ -376,6 +378,7 @@ export const cloudApi = {
       {
         userId,
         method: "POST",
+        headers: createMutationHeaders(),
       },
     );
   },

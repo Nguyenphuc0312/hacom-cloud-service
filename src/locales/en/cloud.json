@@ -26,6 +26,8 @@
     "all": "All",
     "text": "Text",
     "image": "Images",
+    "video": "Video",
+    "audio": "Audio",
     "file": "Files",
     "link": "Links",
     "folders": "Folders",
@@ -166,6 +168,10 @@
     "emptyDescription": "Items moved here can be restored for 24 hours.",
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
+    "preview": "Preview",
+    "emptyAll": "Empty Trash",
+    "emptyAllTitle": "Permanently delete everything in Trash?",
+    "emptyAllDescription": "All items will be permanently deleted and storage will be released. This cannot be undone.",
     "retentionNotice": "Items in Trash still use storage and are automatically deleted after 24 hours.",
     "expired": "Restore window expired",
     "hoursRemaining": "About {{count}} hours left",
@@ -203,7 +209,8 @@
     "uploadStarted": "File uploaded and processing started.",
     "movedToTrash": "Item moved to Trash.",
     "restored": "Item restored.",
-    "permanentlyDeleted": "Item permanently deleted and storage released."
+    "permanentlyDeleted": "Item permanently deleted and storage released.",
+    "trashEmptied": "Trash emptied."
   },
   "errors": {
     "user": "The current user could not be identified. Sign in again.",

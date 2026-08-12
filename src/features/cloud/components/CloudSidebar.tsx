@@ -4,9 +4,11 @@ import { useTranslation } from "react-i18next";
 import {
   Clock3,
   FileText,
+  FileVideo,
   FolderOpen,
   HardDrive,
   Image,
+  AudioLines,
   Link2,
   LoaderCircle,
   Search,
@@ -39,6 +41,8 @@ const filterIcons = {
   all: Clock3,
   text: StickyNote,
   image: Image,
+  video: FileVideo,
+  audio: AudioLines,
   file: FileText,
   link: Link2,
 } satisfies Record<CloudFilter, React.ComponentType<{ className?: string }>>;
@@ -60,9 +64,9 @@ export const CloudSidebar: React.FC<CloudSidebarProps> = ({
     all: items.length,
     text: items.filter((item) => item.type === "text").length,
     image: items.filter((item) => item.type === "image").length,
-    file: items.filter((item) =>
-      ["file", "video", "audio"].includes(item.type),
-    ).length,
+    video: items.filter((item) => item.type === "video").length,
+    audio: items.filter((item) => item.type === "audio").length,
+    file: items.filter((item) => item.type === "file").length,
     link: items.filter((item) => item.type === "link").length,
   };
 

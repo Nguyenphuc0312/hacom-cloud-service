@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cloudApi, CloudApiError } from "../api/cloudApi";
-import type { CloudItem, CloudQuota } from "../types";
+import type { CloudItem, CloudPage, CloudQuota } from "../types";
 import { useCloudWorkspace } from "./useCloudWorkspace";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -97,5 +97,85 @@ describe("useCloudWorkspace trash lifecycle", () => {
     expect(result.current.trashItems).toEqual([]);
     expect(result.current.quota).toEqual(activeQuota);
     expect(quotaSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("forwards a type filter and ignores an older pagination response", async () => {
+    let resolveOlderPage: ((page: CloudPage) => void) | undefined;
+    const listItems = vi.spyOn(cloudApi, "listItems").mockImplementation(
+      async (_user, options = {}) => {
+        if (options.cursor) {
+          return new Promise((resolve) => {
+            resolveOlderPage = resolve;
+          });
+        }
+        return options.q === "new"
+          ? { items: [{ ...activeItem, id: "new-item" }] }
+          : { items: [activeItem], nextCursor: "older" };
+      },
+    );
+    vi.spyOn(cloudApi, "listTrash").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(activeQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({ status: 404, code: "NOT_FOUND", message: "none" }),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ query }: { query: string }) => useCloudWorkspace(userId, query, "file"),
+      { initialProps: { query: "" } },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(listItems).toHaveBeenCalledWith(
+      userId,
+      expect.objectContaining({ type: "file" }),
+    );
+
+    await act(async () => {
+      void result.current.loadMore();
+    });
+    await waitFor(() => expect(result.current.isLoadingMore).toBe(true));
+    rerender({ query: "new" });
+    await waitFor(() =>
+      expect(result.current.items.map((item) => item.id)).toEqual(["new-item"]),
+    );
+    resolveOlderPage?.({ items: [{ ...activeItem, id: "stale-item" }] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.items.map((item) => item.id)).not.toContain("stale-item");
+  });
+
+  it("empties every trash page and refreshes canonical state", async () => {
+    const secondTrashItem = { ...trashedItem, id: "trash-2" };
+    const listTrash = vi
+      .spyOn(cloudApi, "listTrash")
+      .mockResolvedValueOnce({ items: [trashedItem] })
+      .mockResolvedValueOnce({ items: [trashedItem], nextCursor: "next" })
+      .mockResolvedValueOnce({ items: [secondTrashItem] })
+      .mockResolvedValueOnce({ items: [] });
+    vi.spyOn(cloudApi, "listItems").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(trashQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({ status: 404, code: "NOT_FOUND", message: "none" }),
+    );
+    const deleteSpy = vi
+      .spyOn(cloudApi, "permanentlyDeleteItem")
+      .mockResolvedValue({ itemId: "deleted", status: "deleted", async: false });
+
+    const { result } = renderHook(() => useCloudWorkspace(userId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => {
+      await result.current.emptyTrash();
+    });
+
+    expect(listTrash).toHaveBeenCalledTimes(4);
+    expect(deleteSpy).toHaveBeenCalledWith(userId, trashedItem.id);
+    expect(deleteSpy).toHaveBeenCalledWith(userId, secondTrashItem.id);
+    expect(result.current.trashItems).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Clock3, RotateCcw, Trash2 } from "lucide-react";
+import { Clock3, Eye, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -20,6 +20,8 @@ interface CloudTrashTimelineProps {
   isMutating: boolean;
   onRestore: (itemId: string) => Promise<void>;
   onDelete: (item: CloudItem) => void;
+  onPreview: (item: CloudItem) => void;
+  onEmptyTrash: () => void;
   onLoadMore: () => void;
 }
 
@@ -31,6 +33,8 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
   isMutating,
   onRestore,
   onDelete,
+  onPreview,
+  onEmptyTrash,
   onLoadMore,
 }) => {
   const { t } = useTranslation("cloud");
@@ -56,6 +60,20 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
   return (
     <div className="cloud-trash-timeline">
       <ConversationLane className="space-y-3 py-5">
+        {items.length > 0 ? (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isMutating}
+              className="text-danger hover:text-danger"
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              onClick={onEmptyTrash}
+            >
+              {t("trash.emptyAll")}
+            </Button>
+          </div>
+        ) : null}
         {items.length === 0 ? (
           <div className="cloud-trash-empty">
             <Trash2 className="h-7 w-7" aria-hidden />
@@ -81,7 +99,11 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                     count: countdown.minutes,
                   });
             return (
-              <article key={item.id} className="cloud-trash-message">
+              <article
+                key={item.id}
+                className="cloud-trash-message"
+                data-testid={`cloud-trash-item-${item.id}`}
+              >
                 <div className="cloud-trash-message__body">
                   <CloudItemIcon type={item.type} />
                   <div className="min-w-0 flex-1">
@@ -97,6 +119,15 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                   </div>
                 </div>
                 <div className="cloud-trash-message__actions">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={isMutating || (item.type !== "text" && item.type !== "link" && !item.accessUrl)}
+                    leftIcon={<Eye className="h-3.5 w-3.5" />}
+                    onClick={() => onPreview(item)}
+                  >
+                    {t("trash.preview")}
+                  </Button>
                   <Button
                     size="xs"
                     variant="brand-outline"

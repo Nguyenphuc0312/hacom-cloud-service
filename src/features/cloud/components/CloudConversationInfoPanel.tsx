@@ -55,9 +55,12 @@ export const CloudConversationInfoPanel: React.FC<
           "Lưu trữ và truy cập nhanh những nội dung quan trọng của bạn trên Hacom Cloud",
         storage: "Dung lượng lưu trữ",
         active: "Đang sử dụng",
+        reserved: "Đang giữ cho upload",
         free: "Trống",
         requestQuota: "Yêu cầu cấp thêm dung lượng",
         quotaPending: "Yêu cầu tăng quota đang chờ duyệt",
+        quotaApproved: "Yêu cầu tăng quota đã được duyệt",
+        quotaRejected: "Yêu cầu tăng quota đã bị từ chối",
       }
     : {
         title: "Conversation information",
@@ -69,9 +72,12 @@ export const CloudConversationInfoPanel: React.FC<
           "Store and quickly access your important content on Hacom Cloud",
         storage: "Storage",
         active: "In use",
+        reserved: "Reserved for uploads",
         free: "Free",
         requestQuota: "Request more storage",
         quotaPending: "Quota request is pending",
+        quotaApproved: "Quota request was approved",
+        quotaRejected: "Quota request was rejected",
       };
 
   const limitBytes = quota?.limitBytes ?? 0;
@@ -129,8 +135,8 @@ export const CloudConversationInfoPanel: React.FC<
               aria-hidden
             />
             <span
-              className="bg-[#B8BEC9]"
-              style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }}
+              className="bg-[#8B5CF6]"
+              style={{ width: `${percent(quota?.reservedBytes ?? 0)}%` }}
               aria-hidden
             />
           </div>
@@ -141,7 +147,11 @@ export const CloudConversationInfoPanel: React.FC<
             </span>
             <span className="flex items-center gap-1.5">
               <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
-              {labels.trash}
+              {labels.trash} · {formatBytes(quota?.trashBytes ?? 0)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="h-2.5 w-2.5 rounded-full bg-[#8B5CF6]" />
+              {labels.reserved} · {formatBytes(quota?.reservedBytes ?? 0)}
             </span>
             <span className="flex items-center gap-1.5">
               <i className="h-2.5 w-2.5 rounded-full bg-[#B8BEC9]" />
@@ -153,7 +163,11 @@ export const CloudConversationInfoPanel: React.FC<
               <p className="text-xs leading-5 text-text-secondary">
                 {quotaRequest?.status === "pending"
                   ? labels.quotaPending
-                  : labels.requestQuota}
+                  : quotaRequest?.status === "approved"
+                    ? labels.quotaApproved
+                    : quotaRequest?.status === "rejected"
+                      ? labels.quotaRejected
+                      : labels.requestQuota}
               </p>
               {quotaRequest?.status !== "pending" ? (
                 <button

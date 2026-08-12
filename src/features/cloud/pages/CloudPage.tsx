@@ -23,7 +23,8 @@ import {
   type GalleryImage,
 } from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
-import { InlineNotice, toast } from "../../../components/ui";
+import { FilePreviewModal } from "../../../components/modals/FilePreviewModal";
+import { InlineNotice, Modal, toast } from "../../../components/ui";
 import { SimpleVirtualizedChatTimeline } from "../../chat/simple-virtual-timeline";
 import { useResponsive } from "../../../responsive/responsive";
 import { AppShell, ModuleSidebar } from "../../../shared/layout";
@@ -31,6 +32,7 @@ import { useAuthStore } from "../../../stores/authStore";
 import { useChatStore } from "../../../stores/chatStore";
 import {
   RoomType,
+  FileType,
   UserStatus,
   type Attachment,
   type Conversation,
@@ -46,19 +48,20 @@ import {
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
+import { CloudEmptyTrashDialog } from "../components/CloudEmptyTrashDialog";
 import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
-import type { CloudItem, CloudViewMode } from "../types";
+import type { CloudFilter, CloudItem, CloudViewMode } from "../types";
 import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
 import {
   formatBytes,
-  getCloudItemPreview,
   getCloudItemTitle,
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
 import { shouldPromptQuotaRequest } from "../utils/cloudQuota";
+import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
@@ -122,7 +125,10 @@ export default function CloudPage() {
   const deferredSearch = useDeferredValue(search);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<CloudViewMode>("active");
+  const [filter, setFilter] = useState<CloudFilter>("all");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
+  const [trashPreview, setTrashPreview] = useState<CloudItem | null>(null);
+  const [isEmptyTrashOpen, setIsEmptyTrashOpen] = useState(false);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
   const [videoPreview, setVideoPreview] = useState<{
@@ -132,10 +138,10 @@ export default function CloudPage() {
   const [imagePreview, setImagePreview] =
     useState<ImageClickPayload | null>(null);
   const cloudUserId = resolveCloudUserId(authUser?.id);
-  const workspace = useCloudWorkspace(cloudUserId, deferredSearch);
+  const workspace = useCloudWorkspace(cloudUserId, deferredSearch, filter);
   const showQuotaRequest =
     shouldPromptQuotaRequest(workspace.quota, workspace.quotaRequest) ||
-    workspace.quotaRequest?.status === "pending";
+    Boolean(workspace.quotaRequest);
   const fetchConversations = useChatStore((state) => state.fetchConversations);
   const hasFetchedConversationsOnce = useChatStore(
     (state) => state.hasFetchedConversationsOnce,
@@ -321,34 +327,18 @@ export default function CloudPage() {
     return index >= 0 ? index : imagePreview.initialIndex ?? 0;
   }, [imagePreview, previewGallery]);
 
-  const visibleMessages = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    if (!query) return messages;
-    return messages.filter((message) => {
-      const attachmentNames =
-        message.attachments
-          ?.map((attachment) => attachment.fileName ?? "")
-          .join(" ") ?? "";
-      return `${message.plainText ?? message.content} ${attachmentNames}`
-        .toLocaleLowerCase()
-        .includes(query);
-    });
-  }, [messages, search]);
+  const visibleMessages = messages;
+  const visibleTrashItems = workspace.trashItems;
 
-  const visibleTrashItems = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    if (!query) return workspace.trashItems;
-    return workspace.trashItems.filter((item) => {
-      const title = getCloudItemTitle(item, {
-        text: t("item.untitledText"),
-        link: t("item.untitledLink"),
-        file: t("item.untitledFile"),
-      });
-      return `${title} ${getCloudItemPreview(item)}`
-        .toLocaleLowerCase()
-        .includes(query);
-    });
-  }, [search, t, workspace.trashItems]);
+  const filters: CloudFilter[] = [
+    "all",
+    "text",
+    "link",
+    "image",
+    "video",
+    "audio",
+    "file",
+  ];
 
   const showPhaseNotice = useCallback(() => {
     toast.info(t("workspace.phaseAction"));
@@ -476,6 +466,45 @@ export default function CloudPage() {
     [t, workspace],
   );
 
+  const handleTrashPreview = useCallback((item: CloudItem) => {
+    if (item.type === "image" && item.accessUrl) {
+      setImagePreview({
+        url: item.accessUrl,
+        alt: item.title,
+        groupKey: item.id,
+        sentAt: item.createdAt,
+      });
+      return;
+    }
+    if (item.type === "video" && item.accessUrl) {
+      setVideoPreview({ url: item.accessUrl, fileName: item.title });
+      return;
+    }
+    setTrashPreview(item);
+  }, []);
+
+  const trashPreviewAttachment = useMemo<Attachment | null>(() => {
+    if (!trashPreview || ["text", "link"].includes(trashPreview.type)) return null;
+    const type =
+      trashPreview.type === "image"
+        ? FileType.IMAGE
+        : trashPreview.type === "video"
+          ? FileType.VIDEO
+          : trashPreview.type === "audio"
+            ? FileType.AUDIO
+            : FileType.DOCUMENT;
+    return {
+      id: trashPreview.id,
+      objectKey: `cloud:${trashPreview.id}`,
+      type,
+      fileName: trashPreview.title ?? t("item.untitledFile"),
+      fileSize: trashPreview.sizeBytes,
+      mimeType: trashPreview.contentType ?? "application/octet-stream",
+      url: trashPreview.accessUrl,
+      expiresAt: trashPreview.accessExpiresAt,
+    } as Attachment;
+  }, [t, trashPreview]);
+
   return (
     <AppShell
       className="chat-page-shell cloud-chat-page"
@@ -540,6 +569,7 @@ export default function CloudPage() {
                     aria-hidden
                   />
                   <input
+                    data-testid="cloud-search-input"
                     autoFocus
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -562,6 +592,32 @@ export default function CloudPage() {
               </ConversationLane>
             </div>
           ) : null}
+
+          <ConversationLane className="border-b border-border/60 bg-surface py-2">
+            <div
+              className="flex gap-2 overflow-x-auto"
+              role="group"
+              aria-label={t("navigation.aria")}
+              data-testid="cloud-type-filters"
+            >
+              {filters.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                  className={clsx(
+                    "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    filter === value
+                      ? "bg-brand-soft text-brand-solid"
+                      : "bg-surface-muted text-text-secondary hover:bg-surface-hover",
+                  )}
+                >
+                  {t(`navigation.${value}`)}
+                </button>
+              ))}
+            </div>
+          </ConversationLane>
 
           {workspace.error ? (
             <ConversationLane className="pt-3">
@@ -613,6 +669,8 @@ export default function CloudPage() {
               isMutating={workspace.isMutating}
               onRestore={handleRestore}
               onDelete={setDeleteTarget}
+              onPreview={handleTrashPreview}
+              onEmptyTrash={() => setIsEmptyTrashOpen(true)}
               onLoadMore={() => workspace.loadMoreTrash()}
             />
           )}
@@ -733,6 +791,61 @@ export default function CloudPage() {
         onSubmit={async (requestedQuotaBytes, reason) => {
           await workspace.requestQuota(requestedQuotaBytes, reason);
           toast.success(t("quotaRequest.submitted"));
+        }}
+      />
+      <CloudEmptyTrashDialog
+        isOpen={isEmptyTrashOpen}
+        isLoading={workspace.isMutating}
+        onClose={() => setIsEmptyTrashOpen(false)}
+        onConfirm={async () => {
+          await workspace.emptyTrash();
+          setIsEmptyTrashOpen(false);
+          toast.success(t("toast.trashEmptied"));
+        }}
+      />
+      <Modal
+        isOpen={trashPreview !== null && ["text", "link"].includes(trashPreview.type)}
+        onClose={() => setTrashPreview(null)}
+        title={trashPreview?.title ?? t("trash.preview")}
+        size="md"
+      >
+        <div className="whitespace-pre-wrap break-words text-sm text-text-primary">
+          {trashPreview?.type === "link" ? (
+            <a href={trashPreview.url} target="_blank" rel="noreferrer" className="text-brand-solid underline">
+              {trashPreview.url}
+            </a>
+          ) : (
+            trashPreview?.content
+          )}
+        </div>
+      </Modal>
+      <FilePreviewModal
+        isOpen={trashPreviewAttachment !== null}
+        onClose={() => setTrashPreview(null)}
+        current={trashPreviewAttachment ? {
+          attachment: trashPreviewAttachment,
+          conversationId: CLOUD_CONVERSATION_ID,
+          messageId: trashPreview?.id,
+          previewType: "unknown",
+        } : null}
+        currentIndex={0}
+        totalItems={trashPreviewAttachment ? 1 : 0}
+        secureUrl={trashPreview?.accessUrl ?? null}
+        isLoadingUrl={false}
+        urlError={trashPreviewAttachment && !trashPreview?.accessUrl ? t("errors.itemNotReady") : null}
+        hasPrev={false}
+        hasNext={false}
+        onPrev={() => undefined}
+        onNext={() => undefined}
+        onRefreshUrl={async () => {
+          if (!cloudUserId || !trashPreview) return;
+          const access = await getCachedCloudFileAccess(cloudUserId, trashPreview.id, { force: true });
+          setTrashPreview((current) => current?.id === trashPreview.id ? {
+            ...current,
+            accessUrl: access.url,
+            accessExpiresAt: access.expiresAt,
+            contentType: access.contentType,
+          } : current);
         }}
       />
       <VideoPlayerModal

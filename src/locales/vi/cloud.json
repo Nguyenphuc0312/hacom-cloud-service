@@ -26,6 +26,8 @@
     "all": "Tất cả",
     "text": "Văn bản",
     "image": "Ảnh",
+    "video": "Video",
+    "audio": "Âm thanh",
     "file": "Tệp",
     "link": "Liên kết",
     "folders": "Thư mục",
@@ -162,6 +164,10 @@
     "emptyDescription": "Mục bạn đưa vào đây có thể được khôi phục trong 24 giờ.",
     "restore": "Khôi phục",
     "deletePermanently": "Xóa vĩnh viễn",
+    "preview": "Xem trước",
+    "emptyAll": "Dọn sạch Thùng rác",
+    "emptyAllTitle": "Xóa vĩnh viễn toàn bộ Thùng rác?",
+    "emptyAllDescription": "Tất cả mục sẽ bị xóa vĩnh viễn và giải phóng dung lượng. Thao tác này không thể hoàn tác.",
     "retentionNotice": "Mục trong Thùng rác vẫn tính vào dung lượng và sẽ tự xóa sau 24 giờ.",
     "expired": "Đã hết hạn khôi phục",
     "hoursRemaining": "Còn khoảng {{count}} giờ",
@@ -196,7 +202,8 @@
     "uploadStarted": "Tệp đã tải lên và đang được xử lý.",
     "movedToTrash": "Đã đưa mục vào Thùng rác.",
     "restored": "Đã khôi phục mục.",
-    "permanentlyDeleted": "Đã xóa vĩnh viễn và giải phóng dung lượng."
+    "permanentlyDeleted": "Đã xóa vĩnh viễn và giải phóng dung lượng.",
+    "trashEmptied": "Đã dọn sạch Thùng rác."
   },
   "errors": {
     "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.",
