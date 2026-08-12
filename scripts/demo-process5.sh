@@ -17,7 +17,10 @@ if [ -f .env ]; then
   set +a
 fi
 
-BASE_URL=${PROCESS5_BASE_URL:-http://localhost:8080}
+BASE_URL=${PROCESS5_BASE_URL:-http://127.0.0.1:18080}
+API_ADDR=${PROCESS5_API_ADDR:-:18080}
+REUSE_API=${PROCESS5_REUSE_API:-false}
+WORKER_METRICS_ADDR=${PROCESS5_WORKER_METRICS_ADDR:-127.0.0.1:19091}
 DEMO_USER_ID=${PROCESS5_DEMO_USER_ID:-11111111-1111-4111-8111-111111111111}
 OTHER_USER_ID=${PROCESS5_OTHER_USER_ID:-22222222-2222-4222-8222-222222222222}
 DEMO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/hacom-process5-demo.XXXXXX")
@@ -37,20 +40,31 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if ! curl --silent --fail "$BASE_URL/health/live" >/dev/null 2>&1; then
-  echo "[1/7] Starting API"
-  go run ./cmd/api >"$DEMO_DIR/api.log" 2>&1 &
-  API_PID=$!
+if curl --silent --fail "$BASE_URL/health/live" >/dev/null 2>&1; then
+  if [ "$REUSE_API" != true ]; then
+    echo "Process 5 demo refused to reuse an unverified API at $BASE_URL." >&2
+    echo "Stop it, choose PROCESS5_API_ADDR/PROCESS5_BASE_URL, or explicitly set PROCESS5_REUSE_API=true." >&2
+    exit 2
+  fi
+  echo "[1/7] Reusing the explicitly approved API at $BASE_URL"
 else
-  echo "[1/7] Reusing the API already running at $BASE_URL"
+  echo "[1/7] Starting API"
+  API_ADDR="$API_ADDR" go run ./cmd/api >"$DEMO_DIR/api.log" 2>&1 &
+  API_PID=$!
 fi
 
 echo "[2/7] Starting Worker"
-WORKER_ID=process5-demo-worker go run ./cmd/worker >"$DEMO_DIR/worker.log" 2>&1 &
+WORKER_ID=process5-demo-worker \
+WORKER_METRICS_ADDR="$WORKER_METRICS_ADDR" \
+  go run ./cmd/worker >"$DEMO_DIR/worker.log" 2>&1 &
 WORKER_PID=$!
 
 ready=false
 for _ in $(seq 1 30); do
+  if ! kill -0 "$WORKER_PID" >/dev/null 2>&1; then
+    echo "Worker exited before API readiness; check metrics address and runtime configuration." >&2
+    exit 1
+  fi
   if curl --silent --fail "$BASE_URL/health/ready" >/dev/null 2>&1; then
     ready=true
     break
@@ -105,6 +119,10 @@ cloud_request \
 echo "[5/7] Waiting for Worker to hash the file"
 item_status=
 for _ in $(seq 1 30); do
+  if ! kill -0 "$WORKER_PID" >/dev/null 2>&1; then
+    echo "Worker exited before completing the hash job." >&2
+    exit 1
+  fi
   item_response=$(cloud_request "$BASE_URL/api/v1/cloud/items/$item_id")
   item_status=$(printf '%s' "$item_response" | jq -r '.status')
   if [ "$item_status" = "ready" ]; then

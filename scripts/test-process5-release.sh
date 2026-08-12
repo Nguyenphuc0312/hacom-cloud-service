@@ -41,7 +41,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/9] Starting PostgreSQL and MinIO"
+echo "[1/10] Starting PostgreSQL and MinIO"
 compose up -d postgres minio minio-init
 
 ready=false
@@ -58,11 +58,11 @@ if [ "$ready" != true ]; then
   exit 1
 fi
 
-echo "[2/9] Creating a clean release database"
+echo "[2/10] Creating a clean release database"
 cleanup
 compose exec -T postgres createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 
-echo "[3/9] Migrating up and verifying schema"
+echo "[3/10] Migrating up and verifying schema"
 migrate -path migrations -database "$TEST_DATABASE_URL" up
 compose exec -T postgres psql \
   -v ON_ERROR_STOP=1 \
@@ -70,7 +70,7 @@ compose exec -T postgres psql \
   -d "$TEST_DB_NAME" \
   -f /dev/stdin < scripts/verify-schema.sql
 
-echo "[4/9] Proving down-one/up-one migration recovery"
+echo "[4/10] Proving down-one/up-one migration recovery"
 migrate -path migrations -database "$TEST_DATABASE_URL" down 1
 migrate -path migrations -database "$TEST_DATABASE_URL" up 1
 compose exec -T postgres psql \
@@ -79,7 +79,7 @@ compose exec -T postgres psql \
   -d "$TEST_DB_NAME" \
   -f /dev/stdin < scripts/verify-schema.sql
 
-echo "[5/9] Checking Go formatting"
+echo "[5/10] Checking Go formatting"
 unformatted=$(gofmt -l ./cmd ./internal)
 if [ -n "$unformatted" ]; then
   echo "The following Go files are not formatted:" >&2
@@ -87,7 +87,7 @@ if [ -n "$unformatted" ]; then
   exit 1
 fi
 
-echo "[6/9] Running race, concurrency, reconciliation and regression tests"
+echo "[6/10] Running race, concurrency, reconciliation and regression tests"
 # PostgreSQL integration packages share one release database. Run packages
 # serially so one package's queue fixture cannot be claimed by another package.
 GOCACHE="$GO_CACHE_DIR" \
@@ -95,7 +95,7 @@ TEST_DATABASE_URL="$TEST_DATABASE_URL" \
 TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
 go test -p 1 -race -count=1 ./...
 
-echo "[7/9] Replaying the owned Process 5 reconciliation fixture"
+echo "[7/10] Replaying the owned Process 5 reconciliation fixture"
 # Later gates retain append-only audit evidence after the shared test suite, so
 # that database is intentionally not a complete production snapshot. Re-run
 # the dedicated lifecycle case that owns its fixture and asserts quota/ledger,
@@ -106,10 +106,13 @@ TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
 go test -race -count=1 ./internal/repository \
   -run '^TestProcess5ReconcilesMixedContentUploadAndExpiry$'
 
-echo "[8/9] Running static analysis"
+echo "[8/10] Running static analysis"
 GOCACHE="$GO_CACHE_DIR" go vet ./...
 
-echo "[9/9] Building API and Worker"
+echo "[9/10] Scanning reachable Go dependencies"
+GOCACHE="$GO_CACHE_DIR" go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+echo "[10/10] Building API and Worker"
 GOCACHE="$GO_CACHE_DIR" go build ./...
 
-echo "Gate 5 PASSED: clean migration, rollback recovery, schema, race, integration, vet and build."
+echo "Gate 5 PASSED: migration, recovery, schema, race, reconciliation, vet, vulnerability scan and build."
