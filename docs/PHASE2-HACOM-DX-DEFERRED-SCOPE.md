@@ -1,6 +1,6 @@
 # Phase 2 — Báo cáo phạm vi tạm hoãn do phụ thuộc Hacom Holding DX
 
-Ngày chốt: 05/08/2026  
+Ngày cập nhật: 12/08/2026
 Phạm vi được phép hiện tại: `hacom-cloud-service` và frontend `chat-web-client`  
 Trạng thái: **frontend đã mở lại; các backend Hacom Holding DX vẫn tạm hoãn**
 
@@ -125,3 +125,17 @@ Nhóm tiếp tục Phase 2 trong `hacom-cloud-service` và `chat-web-client`; m�
 chí Auth/Infrastructure/Admin/Notification backend và live cross-service vẫn
 giữ **DEFERRED/PENDING**, không coi local demo hay frontend pass là bằng chứng
 production.
+
+## 8. Ví dụ dễ hiểu cho phần còn phụ thuộc
+
+- Người dùng bấm “Yêu cầu thêm dung lượng”: Cloud có thể ghi request `pending`,
+  nhưng Admin Service phải quyết định `approved` hoặc `rejected`. Cloud không
+  được tự sửa quota để thay Admin.
+- Người dùng đăng nhập Hacom rồi mở Cloud: Auth Service phải phát token đúng
+  chuẩn và gateway phải chuyển token/request đúng tuyến. Cloud không thể lấy
+  mật khẩu hay tự ký token thay Auth.
+- Người dùng gửi request quota và chờ thông báo: Cloud có thể tạo outbox/event,
+  nhưng notification service phải giao thông báo thật và xử lý retry.
+- Người dùng mở Cloud từ public frontend: Infrastructure phải cấu hình route,
+  CORS, rate limit và header stripping. Chạy local thành công không chứng minh
+  public gateway đã đúng.

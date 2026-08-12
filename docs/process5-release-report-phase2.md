@@ -1,45 +1,35 @@
-# Hacom Cloud — Process 5 release report (Phase 2)
+# Hacom Cloud — Process 5 release report
 
-Date: 2026-08-07  
-Release status: **PASS — local release candidate**
+Ngày: 12/08/2026
+Trạng thái: **Release branch pushed; production approval chưa được cấp**
 
-## Release SHAs
+## Source revisions
 
-- Backend: `integration/phase-2-gates-1-3 @ d0f0d650`
-- Frontend: `integration/phase-2-gates-1-3-frontend @ af91a644`
+- Backend: `integration/phase-2-process-5-release @ 0f18ef4b6fd32c591a954dfc57f2970f9a1199f1`
+- Frontend: `integration/phase-2-process-5-release-web @ 41c348967b02900885e00e8c993cc2abf583c07d`
+- Shared Types: `8f5effe8be115e69b0d0cb7f4a79f36ec5c14bc4`
 
-These SHAs identify the code tested. The release documentation commit is tracked
-separately by Git and must be recorded when this document is committed.
+## Verification
 
-## What was verified
+| Hạng mục | Kết quả |
+|---|---|
+| Frontend typecheck | PASS |
+| Frontend lint | PASS, 0 error; 52 warning baseline |
+| Frontend production build/asset gate | PASS |
+| Frontend unit suite | PASS: 133 files, 1 skipped; 1,108 tests, 7 skipped |
+| Cloud targeted tests | PASS: 35 tests |
+| Frontend production dependency audit | PASS: 0 vulnerability |
+| Backend race suite | PASS: `go test -p 1 -race -count=1 ./...` |
+| Backend vet/build | PASS |
+| Live E2E | Spec có và skip mặc định; chưa chạy live phiên này |
+| Full Docker migration/MinIO release script | PENDING: Docker daemon chưa chạy |
 
-1. PostgreSQL migrations 1–11 run on an empty database, roll back one migration,
-   and reapply it without manual data edits.
-2. Backend race/integration tests pass against PostgreSQL and MinIO; `go vet` and
-   `go build` pass in the Go 1.25 container.
-3. Trash 24-hour retention, restore/purge races, quota ledger invariants, search
-   cursor binding, quota request idempotency and audit boundaries pass.
-4. Frontend typecheck, lint (0 errors), production build, unit suite, performance
-   benchmark and static production gate pass.
-5. Browser smoke E2E covers `/chat/my-documents` and the `/cloud-api/health/ready`
-   proxy. The performance smoke is below the 3-second local budget.
-6. The Process 5 Postman collection passes in a Docker Newman runner without
-   printing presigned URLs.
+Không được diễn giải bảng trên thành production go-live approval. Cần chạy lại
+`./scripts/test-process5-release.sh` sau khi Docker daemon hoạt động, rồi thực
+hiện E2E trong môi trường integration được cấp quyền.
 
-## Gate decision
+## Gate boundary
 
-Gate 5 is **PASS for the Cloud-owned local release candidate**. No BLOCKER or
-MAJOR finding remains in the tested scope.
-
-This is not a production deployment approval. Production Auth/JWKS authority,
-Admin Service permission refresh, notification transport, gateway hardening and
-live cross-service E2E require the owning Hacom DX services and are explicitly
-listed as deferred handoffs.
-
-## Artifacts
-
-- Acceptance matrix: [`process5-acceptance-matrix.md`](process5-acceptance-matrix.md)
-- Demo: [`process5-demo-script-phase2.md`](process5-demo-script-phase2.md)
-- Slides: [`process5-slide-outline-phase2.md`](process5-slide-outline-phase2.md)
-- Deployment/rollback: [`process5-deployment-rollback.md`](process5-deployment-rollback.md)
-- API/OpenAPI/Postman index: [`process5-api-openapi-postman.md`](process5-api-openapi-postman.md)
+Cloud-owned source và frontend release branch đã sẵn sàng để review/PR. Các
+phụ thuộc production bên ngoài vẫn là `DEFERRED/PENDING`: Auth/JWKS, gateway,
+Admin quota review, notification, Shared Types publication và cross-service E2E.
