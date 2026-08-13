@@ -857,6 +857,14 @@ button.cloud-delete-choice--danger:hover {
     opacity 120ms ease;
 }
 
+.cloud-trash-message__menu-wrap {
+  order: -1;
+}
+
+.cloud-trash-message__restore {
+  order: 1;
+}
+
 .cloud-trash-message__restore:hover:not(:disabled),
 .cloud-trash-message__more:hover:not(:disabled),
 .cloud-trash-message__more[aria-expanded="true"] {
