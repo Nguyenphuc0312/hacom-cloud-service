@@ -1386,6 +1386,7 @@ export default function CloudPage() {
                 onViewModeChange={handleViewModeChange}
                 showStorage
                 onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
+                onRestoreTrashItem={handleRestore}
                 onClose={() => setIsInfoPanelOpen(false)}
               />
             )}

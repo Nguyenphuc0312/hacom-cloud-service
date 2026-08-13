@@ -15,6 +15,7 @@ interface CloudConversationInfoPanelProps {
   onViewModeChange: (mode: CloudViewMode) => void;
   onClose: () => void;
   onManageCloud?: () => void;
+  onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
   /** Hide quota storage details while the dedicated Trash view is active. */
   showStorage?: boolean;
 }
@@ -27,7 +28,7 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({ items, trashItems, quota, viewMode, onViewModeChange, onClose, onManageCloud, showStorage = true }) => {
+> = ({ items, trashItems, quota, viewMode, onViewModeChange, onClose, onManageCloud, onRestoreTrashItem, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
@@ -101,7 +102,7 @@ export const CloudConversationInfoPanel: React.FC<
     limitBytes > 0 ? Math.min(100, Math.max(0, (bytes / limitBytes) * 100)) : 0;
 
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-surface" aria-label={labels.title}>
+    <aside className="relative flex h-full min-h-0 flex-col bg-surface" aria-label={labels.title}>
       <header className="flex min-h-[var(--app-header-height)] items-center justify-between border-b border-border/70 px-5">
         <h2 className="text-[16px] font-semibold text-text-primary">{labels.title}</h2>
         <button
@@ -160,16 +161,19 @@ export const CloudConversationInfoPanel: React.FC<
           ) : null}
         </section> : null}
 
-        <section className="border-b border-border/60 p-4">
+        <section className="hidden">
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => onViewModeChange("active")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "active" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.all} · {items.length}</button>
             <button type="button" onClick={() => onViewModeChange("trash")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "trash" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.trash} · {trashItems.length}</button>
           </div>
         </section>
 
-        <section className="border-b border-border/60 p-4">
-          <CloudResourcesPreview items={items} />
-        </section>
+        <CloudResourcesPreview
+          items={items}
+          trashItems={trashItems}
+          onViewTrash={() => onViewModeChange("trash")}
+          onRestoreTrashItem={onRestoreTrashItem}
+        />
       </div>
     </aside>
   );
