@@ -128,18 +128,18 @@ export default function CloudManagePage() {
         </aside>
 
         <section className="min-w-0 rounded-3xl border border-[#E1E6ED] bg-white p-8">
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             {cards.map((card) => (
               <button
                 type="button"
                 key={card.type}
                 onClick={() => setFilter(filter === card.type ? "all" : card.type)}
-                className={`flex min-h-[108px] items-center gap-5 rounded-3xl border px-5 text-left transition-colors ${filter === card.type ? "border-[#1976D2] bg-[#EFF6FF]" : "border-[#E1E6ED] hover:bg-[#F8FAFC]"}`}
+                className={`flex min-h-[88px] items-center gap-3 rounded-2xl border px-3 text-left transition-colors ${filter === card.type ? "border-[#1976D2] bg-[#EFF6FF]" : "border-[#E1E6ED] hover:bg-[#F8FAFC]"}`}
               >
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F4F7] text-[#64748B]">{card.icon}</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F4F7] text-[#64748B]">{card.icon}</span>
                 <span>
-                  <span className="block text-xl font-semibold">{card.label}</span>
-                  <span className="text-base text-[#64748B]">
+                  <span className="block text-base font-semibold leading-tight">{card.label}</span>
+                  <span className="text-sm text-[#64748B]">
                     {formatBytes(card.type === "all"
                       ? workspace.items.reduce((total, item) => total + item.sizeBytes, 0)
                       : bytesFor(card.type))}
