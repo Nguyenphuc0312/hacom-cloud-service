@@ -311,13 +311,23 @@ export const FileTypeIcon: React.FC<FileTypeIconProps> = ({
   className,
 }) => {
   if (variant === "outline") {
-    const pdf = resolveOfficeGlyph(type, fileName);
-    if (pdf?.title === "PDF") {
+    // Mọi file có đuôi rõ ràng đều dùng khối màu đặc, giống hệt `tile`.
+    // Trước commit 9c26b9da cả danh sách đã như vậy; việc tách riêng kiểu
+    // "giấy viền mảnh" cho Office khiến PDF nổi hẳn lên còn .docx/.xlsx chìm
+    // xuống — cùng một danh sách mà hai phong cách icon. `resolveOfficeGlyph`
+    // lo cả Office/PDF (màu thương hiệu) lẫn phần còn lại (màu theo nhóm,
+    // nhãn là đuôi file: ZIP, PNG, MP4…).
+    //
+    // Vẫn để lọt xuống `resolveOutlineGlyph` các trường hợp không có đuôi
+    // đáng tin — .txt/.csv gộp chung `type` với Word/Excel, gắn nhãn "W" cho
+    // một file .txt là gán sai loại, nên chúng giữ giấy trơn.
+    const solid = resolveOfficeGlyph(type, fileName);
+    if (solid) {
       return (
         <OfficeGlyph
-          color={pdf.color}
-          label={pdf.label}
-          title={pdf.title}
+          color={solid.color}
+          label={solid.label}
+          title={solid.title}
           className={className}
         />
       );
