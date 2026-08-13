@@ -10,6 +10,7 @@ import type {
 } from "../types";
 
 const PROCESSING_REFRESH_MS = 2_000;
+const INITIAL_LOAD_RETRY_DELAYS_MS = [150, 400];
 
 interface CloudWorkspaceState {
   items: CloudItem[];
@@ -116,6 +117,29 @@ const hydrateMediaAccess = async (
     }),
   );
 
+const waitForRetry = (delayMs: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The request was aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(resolve, delayMs);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("The request was aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+
+const isOptionalEndpointMissing = (error: unknown): boolean =>
+  error instanceof CloudApiError &&
+  [404, 405, 501].includes(error.status);
+
+const emptyCloudPage = (): CloudPage => ({ items: [], nextCursor: undefined });
+
 export const useCloudWorkspace = (
   userId: string | undefined,
   searchQuery = "",
@@ -151,23 +175,54 @@ export const useCloudWorkspace = (
 
       try {
         const query = searchQuery.trim() || undefined;
-        const [page, trashPage, quota, quotaRequest, health] =
-          await Promise.all([
-            cloudApi.listItems(userId, { signal, q: query }),
-            cloudApi.listTrash(userId, { signal, q: query }),
-            cloudApi.getQuota(userId, signal),
-            cloudApi
-              .getCurrentQuotaRequest(userId, signal)
-              .catch((error: unknown): CloudQuotaRequest | null => {
-                if (error instanceof CloudApiError && error.status === 404)
-                  return null;
+        let bundle: [
+          CloudPage,
+          CloudPage,
+          CloudQuota | null,
+          CloudQuotaRequest | null,
+          CloudHealth,
+        ] | undefined;
+        let lastError: unknown;
+        for (let attempt = 0; attempt <= INITIAL_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+          try {
+          bundle = await Promise.all([
+              cloudApi.listItems(userId, { signal, q: query }),
+              // Trash/quota were introduced after the first Cloud rollout.
+              // A gateway serving an older contract must not blank the active
+              // My Documents timeline; treat only missing-method responses as
+              // optional while still surfacing auth/network failures.
+              cloudApi
+                .listTrash(userId, { signal, q: query })
+                .catch((error: unknown): CloudPage => {
+                  if (isOptionalEndpointMissing(error)) return emptyCloudPage();
+                  throw error;
+                }),
+              cloudApi.getQuota(userId, signal).catch((error: unknown) => {
+                if (isOptionalEndpointMissing(error)) return null;
                 throw error;
               }),
-            cloudApi.health(signal).catch((): CloudHealth => ({
-              status: "DOWN",
-              service: "hacom-cloud-api",
-            })),
+              cloudApi
+                .getCurrentQuotaRequest(userId, signal)
+                .catch((error: unknown): CloudQuotaRequest | null => {
+                  if (isOptionalEndpointMissing(error)) return null;
+                  throw error;
+                }),
+              cloudApi.health(signal).catch((): CloudHealth => ({
+                status: "DOWN",
+                service: "hacom-cloud-api",
+              })),
           ]);
+            break;
+          } catch (error) {
+            lastError = error;
+            if (signal?.aborted || attempt >= INITIAL_LOAD_RETRY_DELAYS_MS.length) {
+              throw error;
+            }
+            await waitForRetry(INITIAL_LOAD_RETRY_DELAYS_MS[attempt], signal);
+          }
+        }
+        if (!bundle) throw lastError ?? new Error("Cloud data unavailable");
+        const [page, trashPage, quota, quotaRequest, health] = bundle;
         const hydratedItems = await hydrateMediaAccess(
           page.items,
           userId,
@@ -429,12 +484,44 @@ export const useCloudWorkspace = (
       setState((current) => ({ ...current, isMutating: true, error: null }));
       try {
         await cloudApi.trashItem(userId, itemId);
+        // Move the item locally as soon as the server accepts the transition.
+        // This keeps the Trash count and list correct even when the read model
+        // is eventually consistent immediately after POST /trash.
+        const movedAt = new Date().toISOString();
+        let locallyMoved: CloudItem | undefined;
+        setState((current) => {
+          const item = current.items.find((candidate) => candidate.id === itemId);
+          if (!item) return { ...current, isMutating: false };
+          const trashedItem: CloudItem = {
+            ...item,
+            status: "trashed",
+            deletedAt: item.deletedAt ?? movedAt,
+            purgeAfter: item.purgeAfter ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          };
+          locallyMoved = trashedItem;
+          return {
+            ...current,
+            items: current.items.filter((candidate) => candidate.id !== itemId),
+            trashItems: mergeTrashItems(current.trashItems, [trashedItem]),
+            isMutating: false,
+          };
+        });
         await loadInitial(undefined, true);
+        // A read immediately after the mutation can still return the old
+        // active projection. Re-apply the accepted transition after refresh
+        // so links/files cannot disappear from Trash during that window.
+        if (locallyMoved && mountedRef.current) {
+          setState((current) => ({
+            ...current,
+            items: current.items.filter((candidate) => candidate.id !== itemId),
+            trashItems: mergeTrashItems(
+              current.trashItems.filter((candidate) => candidate.id !== itemId),
+              [current.trashItems.find((candidate) => candidate.id === itemId) ?? locallyMoved!],
+            ),
+            isMutating: false,
+          }));
+        }
         if (!mountedRef.current) return;
-        setState((current) => ({
-          ...current,
-          isMutating: false,
-        }));
       } catch (error) {
         if (!mountedRef.current) return;
         const cloudError = asCloudError(error);
@@ -455,12 +542,37 @@ export const useCloudWorkspace = (
       setState((current) => ({ ...current, isMutating: true, error: null }));
       try {
         await cloudApi.restoreItem(userId, itemId);
+        let locallyRestored: CloudItem | undefined;
+        setState((current) => {
+          const item = current.trashItems.find((candidate) => candidate.id === itemId);
+          if (!item) return { ...current, isMutating: false };
+          const restoredItem: CloudItem = {
+            ...item,
+            status: "ready",
+            deletedAt: undefined,
+            purgeAfter: undefined,
+          };
+          locallyRestored = restoredItem;
+          return {
+            ...current,
+            trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
+            items: mergeItems(current.items, [restoredItem]),
+            isMutating: false,
+          };
+        });
         await loadInitial(undefined, true);
+        if (locallyRestored && mountedRef.current) {
+          setState((current) => ({
+            ...current,
+            trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
+            items: mergeItems(
+              current.items.filter((candidate) => candidate.id !== itemId),
+              [current.items.find((candidate) => candidate.id === itemId) ?? locallyRestored!],
+            ),
+            isMutating: false,
+          }));
+        }
         if (!mountedRef.current) return;
-        setState((current) => ({
-          ...current,
-          isMutating: false,
-        }));
       } catch (error) {
         if (!mountedRef.current) return;
         const cloudError = asCloudError(error);
@@ -481,12 +593,20 @@ export const useCloudWorkspace = (
       setState((current) => ({ ...current, isMutating: true, error: null }));
       try {
         await cloudApi.permanentlyDeleteItem(userId, itemId);
-        await loadInitial(undefined, true);
-        if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
+          trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
           isMutating: false,
         }));
+        await loadInitial(undefined, true);
+        if (mountedRef.current) {
+          setState((current) => ({
+            ...current,
+            trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
+            isMutating: false,
+          }));
+        }
+        if (!mountedRef.current) return;
       } catch (error) {
         if (!mountedRef.current) return;
         const cloudError = asCloudError(error);

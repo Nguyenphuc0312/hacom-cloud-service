@@ -239,7 +239,33 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   }, []);
   const primarySendLockedRef = React.useRef(false);
   const isMountedRef = React.useRef(true);
+  const focusAfterSendRef = React.useRef(false);
   const [pendingLinkPreview, setPendingLinkPreview] = React.useState<import("../message/linkPreviewUtils").LinkPreviewMeta | null>(null);
+
+  // Clicking the send button moves focus to the button. Mark the editor for
+  // refocus after the clear transaction and after any temporary disabled state
+  // from the upload/save request has ended.
+  const restoreComposerFocus = React.useCallback(() => {
+    focusAfterSendRef.current = true;
+  }, []);
+
+  React.useEffect(() => {
+    if (!focusAfterSendRef.current || disabled || typeof window === "undefined") {
+      return;
+    }
+
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        if (!isMountedRef.current || disabled || !focusAfterSendRef.current) {
+          return;
+        }
+        tipTapRef.current?.focus({ scrollIntoView: false });
+        focusAfterSendRef.current = false;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [disabled, draftValue, valueResetKey]);
 
   // ---- Audio recording flow ----
   const {
@@ -822,6 +848,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     scheduleComposerResize();
     clearMentionState();
     stopTypingNow();
+    restoreComposerFocus();
     setLiveRegionMessage(
       result === "queued"
         ? t("chat:composer.queuedAnnouncement")
@@ -836,6 +863,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     pendingLinkPreview,
     scheduleComposerResize,
     optimisticAnnouncement,
+    restoreComposerFocus,
     sendTextMessage,
     stopTypingNow,
     t,
@@ -889,6 +917,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         scheduleComposerResize();
         clearMentionState();
         stopTypingNow();
+        restoreComposerFocus();
         setLiveRegionMessage(optimisticAnnouncement);
         return;
       }
@@ -909,6 +938,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     onChange,
     onSend,
     releasePrimarySendLock,
+    restoreComposerFocus,
     scheduleComposerResize,
     stopTypingNow,
     submitDisabled,
@@ -1575,6 +1605,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               onClearAll={onClearAllDrafts}
               hasUploadingDrafts={hasUploadingDrafts}
               hasFailedDrafts={hasFailedDrafts}
+              hasReadyDrafts={hasReadyDrafts}
             />
           )}
 

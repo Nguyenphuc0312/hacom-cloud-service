@@ -44,6 +44,7 @@ export const MessageItemWrapper: React.FC<MessageItemWrapperProps> = ({
     <div
       data-testid={`message-item-${messageId}`}
       data-message-id={messageId}
+      data-message-selected={isSelected ? "true" : "false"}
       data-render-probe="message-item"
       className={clsx(
         messageSpacingClass,

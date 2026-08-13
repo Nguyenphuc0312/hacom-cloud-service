@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { ArrowRight, FolderOpen, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { CloudItem, CloudQuota, CloudViewMode } from "../types";
 import { formatBytes } from "../utils/cloudFormat";
@@ -14,6 +14,9 @@ interface CloudConversationInfoPanelProps {
   viewMode: CloudViewMode;
   onViewModeChange: (mode: CloudViewMode) => void;
   onClose: () => void;
+  onManageCloud?: () => void;
+  /** Hide quota storage details while the dedicated Trash view is active. */
+  showStorage?: boolean;
 }
 
 const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
@@ -24,14 +27,7 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({
-  items,
-  trashItems,
-  quota,
-  viewMode,
-  onViewModeChange,
-  onClose,
-}) => {
+> = ({ items, trashItems, quota, viewMode, onViewModeChange, onClose, onManageCloud, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
@@ -44,10 +40,10 @@ export const CloudConversationInfoPanel: React.FC<
         description:
           "Lưu trữ và truy cập nhanh những nội dung quan trọng của bạn trên Hacom Cloud",
         storage: "Dung lượng lưu trữ",
-        imageVideo: "Ảnh/Video",
+        image: "Ảnh",
+        video: "Video",
         file: "File",
-        link: "Link",
-        free: "Trống",
+        manage: "Xem và quản lý Hacom Cloud",
       }
     : {
         title: "Conversation information",
@@ -58,34 +54,46 @@ export const CloudConversationInfoPanel: React.FC<
         description:
           "Store and quickly access your important content on Hacom Cloud",
         storage: "Storage",
-        imageVideo: "Photos/Videos",
+        image: "Photos",
+        video: "Videos",
         file: "Files",
-        link: "Links",
-        free: "Free",
+        manage: "View and manage Hacom Cloud",
       };
 
+  // Link bytes remain part of the storage bar, but Link and Free are
+  // intentionally omitted from the legend per the My Documents UI contract.
   const categories = useMemo(
     () => [
       {
-        key: "media",
-        label: labels.imageVideo,
+        key: "image",
+        label: labels.image,
         color: "#22A06B",
-        bytes: typeBytes(items, ["image", "video"]),
+        bytes: typeBytes(items, ["image"]),
+        showLegend: true,
+      },
+      {
+        key: "video",
+        label: labels.video,
+        color: "#2F80ED",
+        bytes: typeBytes(items, ["video"]),
+        showLegend: true,
       },
       {
         key: "file",
         label: labels.file,
         color: "#F5B700",
         bytes: typeBytes(items, ["file"]),
+        showLegend: true,
       },
       {
         key: "link",
-        label: labels.link,
+        label: "Link",
         color: "#4F7DD9",
         bytes: typeBytes(items, ["link"]),
+        showLegend: false,
       },
     ],
-    [items, labels.file, labels.imageVideo, labels.link],
+    [items, labels.file, labels.image, labels.video],
   );
 
   const limitBytes = quota?.limitBytes ?? 0;
@@ -95,9 +103,7 @@ export const CloudConversationInfoPanel: React.FC<
   return (
     <aside className="flex h-full min-h-0 flex-col bg-surface" aria-label={labels.title}>
       <header className="flex min-h-[var(--app-header-height)] items-center justify-between border-b border-border/70 px-5">
-        <h2 className="text-[16px] font-semibold text-text-primary">
-          {labels.title}
-        </h2>
+        <h2 className="text-[16px] font-semibold text-text-primary">{labels.title}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -111,50 +117,26 @@ export const CloudConversationInfoPanel: React.FC<
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <section className="flex flex-col items-center border-b border-border/60 px-6 py-7 text-center">
           <CloudConversationAvatar size="lg" />
-          <h3 className="mt-4 text-[18px] font-semibold text-text-primary">
-            {labels.workspace}
-          </h3>
-          <p className="mt-2 max-w-[19rem] text-[13px] leading-5 text-text-muted">
-            {labels.description}
-          </p>
+          <h3 className="mt-4 text-[18px] font-semibold text-text-primary">{labels.workspace}</h3>
+          <p className="mt-2 max-w-[19rem] text-[13px] leading-5 text-text-muted">{labels.description}</p>
         </section>
 
-        <section className="border-b border-border/60 px-5 py-5">
+        {showStorage ? <section className="border-b border-border/60 px-5 py-5">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[13px] font-semibold text-text-primary">
-              {labels.storage}
-            </h3>
+            <h3 className="text-[13px] font-semibold text-text-primary">{labels.storage}</h3>
             <span className="text-[12px] font-semibold text-text-primary">
               {formatBytes(quota?.usedBytes ?? 0)} / {formatBytes(limitBytes)}
             </span>
           </div>
-          <div
-            className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted"
-            aria-label={labels.storage}
-          >
+          <div className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted" aria-label={labels.storage}>
             {categories.map((category) => (
-              <span
-                key={category.key}
-                style={{
-                  width: `${percent(category.bytes)}%`,
-                  backgroundColor: category.color,
-                }}
-                aria-hidden
-              />
+              <span key={category.key} style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }} aria-hidden />
             ))}
-            <span
-              className="bg-[#F97316]"
-              style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }}
-              aria-hidden
-            />
-            <span
-              className="bg-[#B8BEC9]"
-              style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }}
-              aria-hidden
-            />
+            <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
+            <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-text-muted">
-            {categories.map((category) => (
+            {categories.filter((category) => category.showLegend).map((category) => (
               <span key={category.key} className="flex items-center gap-1.5">
                 <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
                 {category.label}
@@ -164,39 +146,24 @@ export const CloudConversationInfoPanel: React.FC<
               <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
               {labels.trash}
             </span>
-            <span className="flex items-center gap-1.5">
-              <i className="h-2.5 w-2.5 rounded-full bg-[#B8BEC9]" />
-              {labels.free} · {formatBytes(quota?.availableBytes ?? 0)}
-            </span>
           </div>
-        </section>
+          {onManageCloud ? (
+            <button
+              type="button"
+              onClick={onManageCloud}
+              className="mt-5 flex w-full items-center gap-3 rounded-full border border-[#9BC5F5] px-4 py-3 text-left text-[15px] font-medium text-[#1565C0] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
+            >
+              <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            </button>
+          ) : null}
+        </section> : null}
 
         <section className="border-b border-border/60 p-4">
           <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onViewModeChange("active")}
-              className={clsx(
-                "rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast",
-                viewMode === "active"
-                  ? "border-brand-solid/30 bg-brand-soft text-brand-solid"
-                  : "border-border/70 text-text-secondary hover:bg-surface-hover",
-              )}
-            >
-              {labels.all} · {items.length}
-            </button>
-            <button
-              type="button"
-              onClick={() => onViewModeChange("trash")}
-              className={clsx(
-                "rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast",
-                viewMode === "trash"
-                  ? "border-brand-solid/30 bg-brand-soft text-brand-solid"
-                  : "border-border/70 text-text-secondary hover:bg-surface-hover",
-              )}
-            >
-              {labels.trash} · {trashItems.length}
-            </button>
+            <button type="button" onClick={() => onViewModeChange("active")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "active" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.all} · {items.length}</button>
+            <button type="button" onClick={() => onViewModeChange("trash")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "trash" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.trash} · {trashItems.length}</button>
           </div>
         </section>
 

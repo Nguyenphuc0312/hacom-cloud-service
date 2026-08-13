@@ -89,6 +89,27 @@ describe("cloud message adapter", () => {
     });
   });
 
+  it("keeps MP4 items selectable as video messages", () => {
+    const message = cloudItemToMessage(
+      createItem({
+        type: "video",
+        title: "screen-recording.mp4",
+        accessUrl: "/cloud-object/screen-recording.mp4?sig=1",
+        contentType: "video/mp4",
+      }),
+      currentUser,
+      { link: "Liên kết", file: "Tệp" },
+    );
+
+    expect(message.type).toBe(MessageType.VIDEO);
+    expect(message.attachments?.[0]).toMatchObject({
+      type: "video",
+      fileName: "screen-recording.mp4",
+      mimeType: "video/mp4",
+      url: "/cloud-object/screen-recording.mp4?sig=1",
+    });
+  });
+
   it("orders Cloud items chronologically for the native chat timeline", () => {
     const newer = createItem({
       id: "33333333-3333-4333-8333-333333333333",

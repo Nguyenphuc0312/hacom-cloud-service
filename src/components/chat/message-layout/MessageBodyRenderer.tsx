@@ -535,6 +535,11 @@ const MessageBodyRendererComponent: React.FC<MessageBodyRendererProps> = ({
             : null}
         </div>
       );
+    // Video messages carry the same attachment payload as file messages, but
+    // have their own semantic type. Render them through FileMessageCard so MP4
+    // (and other supported video formats) get the native thumbnail/play UI
+    // instead of falling through to the plain-text renderer.
+    case MessageType.VIDEO:
     case MessageType.FILE:
       return (
         <div className="space-y-2">

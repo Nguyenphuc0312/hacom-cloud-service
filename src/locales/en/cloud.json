@@ -215,7 +215,7 @@
     "invalidQuotaTier": "Choose one of the supported storage limits.",
     "quotaRequestPending": "A storage request is already pending review.",
     "idempotencyConflict": "This action conflicts with an earlier request. Refresh and try again.",
-    "offline": "The Cloud service is unreachable. Check the local backend.",
+    "offline": "The Cloud service is unreachable. Check the Hacom Chat connection.",
     "generic": "The Cloud action could not be completed. Please try again."
   }
 }

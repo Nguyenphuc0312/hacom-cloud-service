@@ -208,7 +208,7 @@
     "invalidQuotaTier": "Hãy chọn một hạn mức dung lượng được hỗ trợ.",
     "quotaRequestPending": "Đã có một yêu cầu tăng dung lượng đang chờ duyệt.",
     "idempotencyConflict": "Thao tác xung đột với yêu cầu trước đó. Hãy làm mới rồi thử lại.",
-    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra backend local.",
+    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra kết nối Hacom Chat.",
     "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
   }
 }
