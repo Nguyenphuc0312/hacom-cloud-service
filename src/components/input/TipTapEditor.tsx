@@ -149,15 +149,24 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
     //  - leafText: must match renderText in mentionNode.ts, i.e. `sendLabel || label`.
     //    A chip is one ProseMirror position but many characters of text, and with an
     //    alias label/sendLabel differ in length.
+    //  - hardBreak: Shift+Enter chèn <br> NẰM TRONG cùng một <p>, nên nó không
+    //    phải ranh giới block và `blockSeparator` không áp dụng. `getText()` vẫn
+    //    serialise nó thành "\n", còn `textBetween` mặc định đếm 0 → caret thiếu
+    //    đúng 1 ký tự cho MỖI lần Shift+Enter. Hệ quả: gõ "@" ở dòng thứ hai trở
+    //    đi thì caret trỏ lệch, `buildMentionMatch` không thấy '@' và panel tag
+    //    KHÔNG BAO GIỜ bung. Kiểm chứng 13-08-26: "k1 dòng một\ndòng hai@" dài 21
+    //    nhưng caret báo 20, ký tự tại caret-1 là "i" thay vì "@".
     const emitSelection = React.useCallback((e: Editor) => {
       if (!onSelectionChangeRef.current) return;
       const text = e.getText();
       const anchor = e.state.selection.anchor;
-      const before = e.state.doc.textBetween(0, anchor, GET_TEXT_BLOCK_SEPARATOR, (leaf) =>
-        leaf.type.name === MentionChip.name
-          ? `@${leaf.attrs.sendLabel || leaf.attrs.label}`
-          : "",
-      );
+      const before = e.state.doc.textBetween(0, anchor, GET_TEXT_BLOCK_SEPARATOR, (leaf) => {
+        if (leaf.type.name === MentionChip.name) {
+          return `@${leaf.attrs.sendLabel || leaf.attrs.label}`;
+        }
+        if (leaf.type.name === "hardBreak") return "\n";
+        return "";
+      });
       const caretOffset = Math.max(0, Math.min(before.length, text.length));
       onSelectionChangeRef.current(text, caretOffset);
     }, []);
