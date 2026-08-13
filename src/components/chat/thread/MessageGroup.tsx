@@ -790,13 +790,19 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             // Tin của mình: thanh công cụ ở trên-trái bubble (giữ nguyên).
             // Tin người khác: hạ xuống phải-dưới bubble, gần giờ (17:23).
             isOwn ? "top-1 right-full mr-2" : "bottom-0 left-full ml-2",
-            (isHovered || isActionSheetOpen)
+            (cloudTrashMode || isHovered || isActionSheetOpen)
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
           <div className={clsx(cloudTrashMode && "flex flex-col items-center gap-1")}>
           <MessageActionBar
+            className={clsx(
+              cloudTrashMode &&
+                !isHovered &&
+                !isActionSheetOpen &&
+                "pointer-events-none opacity-0",
+            )}
             onReact={
               hasInlineAction("react") && !isSelectionMode
                 ? handleReactionSelect
