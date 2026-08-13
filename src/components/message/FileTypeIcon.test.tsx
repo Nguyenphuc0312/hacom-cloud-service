@@ -32,7 +32,7 @@ describe("FileTypeIcon", () => {
     expect(icon?.classList.contains("w-6")).toBe(false);
   });
 
-  it("can render Excel as a Zalo-style outline document", () => {
+  it("renders outline Excel as a solid brand tile", () => {
     const { container } = render(
       <FileTypeIcon
         type="spreadsheet"
@@ -44,18 +44,18 @@ describe("FileTypeIcon", () => {
 
     const icon = container.querySelector("svg");
     expect(icon?.getAttribute("aria-label")).toBe("Excel");
-    expect(container.querySelector("rect")).toBeNull();
-    expect(icon?.querySelectorAll("path").length).toBeGreaterThan(0);
+    expect(container.querySelector("rect")?.getAttribute("fill")).toBe("#217346");
+    expect(container.querySelector("text")?.textContent).toBe("X");
   });
 
-  // Regression: outline Word/Excel/PPT used to render a bare sheet with no
-  // letter, so in the shared-files sidebar a .docx and a .xlsx were visually
-  // identical while the PDF beside them kept its red glyph.
+  // Real Office files match PDF's solid tile in the storage list. Two icon
+  // styles side by side made PDF jump out while .docx/.xlsx receded; the
+  // brand colour carries the type, so a glance is enough to tell them apart.
   it.each([
-    ["bang-ke.xlsx", "Excel", "X"],
-    ["huong-dan.docx", "Word", "W"],
-    ["slide.pptx", "PowerPoint", "P"],
-  ])("labels outline %s as %s", (fileName, title, label) => {
+    ["bang-ke.xlsx", "Excel", "X", "#217346"],
+    ["huong-dan.docx", "Word", "W", "#2B579A"],
+    ["slide.pptx", "PowerPoint", "P", "#D24726"],
+  ])("renders outline %s as a solid %s tile", (fileName, title, label, fill) => {
     const { container } = render(
       <FileTypeIcon type="generic" fileName={fileName} variant="outline" />,
     );
@@ -63,8 +63,36 @@ describe("FileTypeIcon", () => {
     const icon = container.querySelector("svg");
     expect(icon?.getAttribute("aria-label")).toBe(title);
     expect(container.querySelector("text")?.textContent).toBe(label);
-    // Still the thin sheet outline, not a solid Office tile.
-    expect(container.querySelector("rect")).toBeNull();
+    expect(container.querySelector("rect")?.getAttribute("fill")).toBe(fill);
+  });
+
+  // Non-Office files carry the same solid tile, labelled with the extension.
+  it.each([
+    ["ban-giao.zip", "ZIP", "archive"],
+    ["anh.png", "PNG", "image"],
+    ["clip.mp4", "MP4", "video"],
+  ])("renders outline %s as a solid tile labelled %s", (fileName, label, type) => {
+    const { container } = render(
+      <FileTypeIcon
+        type={type as React.ComponentProps<typeof FileTypeIcon>["type"]}
+        fileName={fileName}
+        variant="outline"
+      />,
+    );
+
+    expect(container.querySelector("rect")).not.toBeNull();
+    expect(container.querySelector("text")?.textContent).toBe(label);
+  });
+
+  // .csv shares the "spreadsheet" type with .xlsx but is not Excel, so it gets
+  // its own CSV tile rather than borrowing Excel's "X".
+  it("labels .csv as CSV, never as Excel", () => {
+    const { container } = render(
+      <FileTypeIcon type="spreadsheet" fileName="du-lieu.csv" variant="outline" />,
+    );
+
+    expect(container.querySelector("svg")?.getAttribute("aria-label")).toBe("CSV");
+    expect(container.querySelector("text")?.textContent).toBe("CSV");
   });
 
   // A generic mimeType (application/octet-stream) collapses the icon type to
@@ -82,8 +110,18 @@ describe("FileTypeIcon", () => {
       <FileTypeIcon type="document" fileName="ghi-chu.txt" variant="outline" />,
     );
 
+    // TXT, not "W" — .txt shares the "document" type with .docx but is not Word.
+    expect(container.querySelector("svg")?.getAttribute("aria-label")).toBe("TXT");
+    expect(container.querySelector("text")?.textContent).toBe("TXT");
+  });
+
+  // No filename → no extension to trust. The thin sheet is the safe fallback:
+  // a solid "W" tile on an unknown attachment would claim a type we don't know.
+  it("falls back to the thin sheet when the filename is missing", () => {
+    const { container } = render(<FileTypeIcon type="document" variant="outline" />);
+
+    expect(container.querySelector("rect")).toBeNull();
     expect(container.querySelector("svg")?.getAttribute("aria-label")).toBe("Word");
-    expect(container.querySelector("text")).toBeNull();
   });
 
   it("keeps PDF as a solid red glyph in the outline variant", () => {
