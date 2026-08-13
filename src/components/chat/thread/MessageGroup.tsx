@@ -602,6 +602,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
       if (cloudTrashMode) {
         allowed.clear();
         allowed.add("deleteForMe");
+        allowed.add("select");
       }
       const menuActions = resolved.menuActions.filter((id) => allowed.has(id));
       // The default chat policy exposes forwarding on the quick rail only.

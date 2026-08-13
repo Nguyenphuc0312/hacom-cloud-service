@@ -13,6 +13,7 @@ import {
   Search,
   Share2,
   Trash2,
+  RotateCcw,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -492,10 +493,8 @@ export default function CloudPage() {
   }, [location.pathname, navigate]);
 
   useEffect(() => {
-    if (viewMode !== "active") {
-      setIsSelectionMode(false);
-      setSelectedMessageIds(new Set());
-    }
+    setIsSelectionMode(false);
+    setSelectedMessageIds(new Set());
   }, [viewMode]);
 
   const enterSelectionMode = useCallback(() => {
@@ -554,7 +553,8 @@ export default function CloudPage() {
       if (!target || target.closest("button,input,select,textarea")) return;
       const row = target.closest<HTMLElement>("[data-message-id]");
       const messageId = row?.dataset.messageId;
-      if (!messageId || !messages.some((message) => message.id === messageId)) {
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
       const selection: CloudSelectionDrag = {
@@ -606,7 +606,8 @@ export default function CloudPage() {
       const row = target?.closest<HTMLElement>("[data-message-id]");
       const messageId = row?.dataset.messageId;
       if (!messageId || drag.visited.has(messageId)) return;
-      if (!messages.some((message) => message.id === messageId)) return;
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!selectableMessages.some((message) => message.id === messageId)) return;
       drag.visited.add(messageId);
       setMessageSelected(messageId, drag.selecting);
       event.preventDefault();
@@ -624,7 +625,8 @@ export default function CloudPage() {
       }
       const row = target.closest<HTMLElement>("[data-message-id]");
       const messageId = row?.dataset.messageId;
-      if (!messageId || !messages.some((message) => message.id === messageId)) {
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
       event.preventDefault();
@@ -645,7 +647,7 @@ export default function CloudPage() {
       document.removeEventListener("click", handleSelectionClick, true);
       finishDrag();
     };
-  }, [enterSelectionMode, messages, setMessageSelected, toggleMessageSelection]);
+  }, [enterSelectionMode, messages, setMessageSelected, toggleMessageSelection, trashMessages, viewMode]);
 
   const handleAddFiles = useCallback(
     (files: File[]) => {
@@ -839,6 +841,10 @@ export default function CloudPage() {
     () => cloudItems.filter((item) => selectedMessageIds.has(item.id)),
     [cloudItems, selectedMessageIds],
   );
+  const selectedTrashItems = useMemo(
+    () => cloudTrashItems.filter((item) => selectedMessageIds.has(item.id)),
+    [cloudTrashItems, selectedMessageIds],
+  );
 
   const handleDeleteSelected = useCallback(async () => {
     if (selectedCloudItems.length === 0) {
@@ -849,6 +855,30 @@ export default function CloudPage() {
     setSelectedDeleteItems(selectedCloudItems);
     setDeleteTarget(selectedCloudItems[0]);
   }, [captureTimelineScroll, cloudItems, exitSelectionMode, selectedCloudItems, selectedMessages]);
+
+  const handleTrashDeleteSelected = useCallback(() => {
+    if (selectedTrashItems.length === 0) {
+      exitSelectionMode();
+      return;
+    }
+    captureTimelineScroll();
+    setSelectedDeleteItems(selectedTrashItems);
+    setDeleteTarget(selectedTrashItems[0]);
+  }, [captureTimelineScroll, exitSelectionMode, selectedTrashItems]);
+
+  const handleRestoreSelected = useCallback(async () => {
+    if (selectedTrashItems.length === 0) {
+      exitSelectionMode();
+      return;
+    }
+    try {
+      for (const item of selectedTrashItems) {
+        await handleRestore(item.id);
+      }
+    } finally {
+      exitSelectionMode();
+    }
+  }, [exitSelectionMode, handleRestore, selectedTrashItems]);
 
   const handleDialogTrash = useCallback(async (itemId: string) => {
     const items = selectedDeleteItems.length > 0 ? selectedDeleteItems : [{ id: itemId } as CloudItem];
@@ -1107,9 +1137,7 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            {viewMode === "active" ? (
-              <>
-              {isSelectionMode ? (
+            {isSelectionMode ? (
               <div
                 className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 bg-surface px-3 py-2 shadow-sm"
                 role="toolbar"
@@ -1142,14 +1170,29 @@ export default function CloudPage() {
                     <Share2 className="h-4 w-4" aria-hidden />
                     <span className="hidden sm:inline">Chia sẻ</span>
                   </button>
+                  {viewMode === "trash" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRestoreSelected()}
+                      disabled={selectedMessageIds.size === 0 || workspace.isMutating}
+                      className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-4 w-4" aria-hidden />
+                      <span className="hidden sm:inline">Khôi phục</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => void handleDeleteSelected()}
+                    onClick={() => void (viewMode === "trash" ? handleTrashDeleteSelected() : handleDeleteSelected())}
                     disabled={selectedMessageIds.size === 0 || workspace.isMutating}
                     className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
-                    <span className="hidden sm:inline">{t("chat:message.actions.delete", { defaultValue: "Xóa" })}</span>
+                    <span className="hidden sm:inline">
+                      {viewMode === "trash"
+                        ? "Xóa vĩnh viễn"
+                        : t("chat:message.actions.delete", { defaultValue: "Xóa" })}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -1161,6 +1204,7 @@ export default function CloudPage() {
                 </div>
               </div>
               ) : null}
+            {viewMode === "active" ? (
               <MessageInput
                 value={draft}
                 valueResetKey={draftResetKey}
@@ -1189,7 +1233,6 @@ export default function CloudPage() {
                 )}
                 hasReadyDrafts={pendingAttachments.length > 0}
               />
-              </>
             ) : (
               <div className="cloud-trash-retention-note">
                 <ConversationLane>
