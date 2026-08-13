@@ -104,5 +104,7 @@ export function getFileIconType(
   fileName: string | undefined,
 ): FileIconType {
   const previewType = getPreviewType(mimeType, fileName);
-  return PREVIEW_TO_ICON_MAP[previewType] ?? "unknown";
+  // "unknown" is not a FileIconType member — an unmapped preview type must fall
+  // back to "generic", which is the real catch-all in the icon/color maps.
+  return PREVIEW_TO_ICON_MAP[previewType] ?? "generic";
 }
