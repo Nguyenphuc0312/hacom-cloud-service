@@ -832,10 +832,10 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-message__controls {
   display: flex;
   order: -1;
-  flex: 0 0 30px;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: flex-end;
-  flex-direction: column;
+  justify-content: center;
+  flex-direction: row;
   gap: 4px;
   padding: 0;
 }
@@ -843,8 +843,8 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-message__restore,
 .cloud-trash-message__more {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
   border: 1px solid hsl(var(--color-border-strong));

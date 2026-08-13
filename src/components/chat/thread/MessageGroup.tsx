@@ -796,13 +796,8 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           )}
         >
           <div className={clsx(cloudTrashMode && "flex flex-col items-center gap-1")}>
+          {(!cloudTrashMode || isHovered || isActionSheetOpen) ? (
           <MessageActionBar
-            className={clsx(
-              cloudTrashMode &&
-                !isHovered &&
-                !isActionSheetOpen &&
-                "pointer-events-none opacity-0",
-            )}
             onReact={
               hasInlineAction("react") && !isSelectionMode
                 ? handleReactionSelect
@@ -835,6 +830,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                 : undefined
             }
           />
+          ) : null}
           {cloudTrashMode && onRestoreCloudItem ? (
             <button
               type="button"
