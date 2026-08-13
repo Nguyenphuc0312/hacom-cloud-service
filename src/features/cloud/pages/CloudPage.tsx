@@ -274,6 +274,7 @@ export default function CloudPage() {
             link: t("item.untitledLink"),
             file: t("item.untitledFile"),
           }),
+          fileName: item.title?.trim() || t("item.untitledFile"),
           senderName: currentUser.displayName,
           senderAvatar: currentUser.avatar,
           sentAt: item.createdAt,
@@ -309,6 +310,7 @@ export default function CloudPage() {
       {
         url: imagePreview.url,
         alt: imagePreview.alt,
+        fileName: imagePreview.alt,
         senderName: imagePreview.senderName ?? currentUser.displayName,
         senderAvatar: imagePreview.senderAvatar ?? currentUser.avatar,
         sentAt: imagePreview.sentAt,

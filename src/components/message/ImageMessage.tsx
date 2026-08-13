@@ -539,6 +539,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
         onClose={handleClose}
         imageUrl={lightboxUrl ?? undefined}
         alt={attachment.fileName}
+        fileName={attachment.fileName}
         senderName={senderName}
         senderAvatar={senderAvatar}
         sentAt={sentAt}

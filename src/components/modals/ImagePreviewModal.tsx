@@ -13,10 +13,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { SafeImage } from "../common/SafeImage";
+import { downloadResourceWithName } from "../../utils/downloadFile";
 
 export interface GalleryImage {
   url: string;
   alt?: string;
+  /** Original upload name used when downloading the image. */
+  fileName?: string;
   senderName?: string;
   senderAvatar?: string;
   sentAt?: Date | string;
@@ -30,6 +33,7 @@ export interface ImagePreviewModalProps {
   /** Single-image mode (backward-compatible) */
   imageUrl?: string;
   alt?: string;
+  fileName?: string;
   /** Gallery mode: pass all images + which one to open */
   images?: GalleryImage[];
   initialIndex?: number;
@@ -131,6 +135,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   onClose,
   imageUrl,
   alt,
+  fileName,
   images,
   initialIndex = 0,
   onIndexChange,
@@ -153,9 +158,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   // Normalise to gallery array regardless of which props were used
   const gallery = useMemo<GalleryImage[]>(() => {
     if (images && images.length > 0) return images;
-    if (imageUrl) return [{ url: imageUrl, alt, senderName, senderAvatar, sentAt }];
+    if (imageUrl) {
+      return [{ url: imageUrl, alt, fileName, senderName, senderAvatar, sentAt }];
+    }
     return [];
-  }, [images, imageUrl, alt, senderName, senderAvatar, sentAt]);
+  }, [images, imageUrl, alt, fileName, senderName, senderAvatar, sentAt]);
 
   const current = gallery[currentIndex] ?? gallery[0];
   const hasPrev = currentIndex > 0;
@@ -273,20 +280,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   const handleDownload = useCallback(async () => {
     if (!current?.url) return;
-    try {
-      const response = await fetch(current.url);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `image-${Date.now()}.${blob.type.split("/")[1] || "jpg"}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      if (current?.url) window.open(current.url, "_blank");
-    }
+    await downloadResourceWithName(
+      current.url,
+      current.fileName?.trim() || current.alt?.trim() || `image-${Date.now()}`,
+    );
   }, [current]);
 
   // Wheel-to-zoom via a NATIVE non-passive listener. React's onWheel is passive,
@@ -364,7 +361,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   if (!isOpen || !current || typeof document === "undefined") return null;
 
-  const resolvedAlt = current.alt ?? t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
+  const resolvedAlt = current.alt ?? current.fileName ?? t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
   const { scale, x, y, rotation } = zoom;
 
   const resolvedSenderName = current.senderName ?? "";

@@ -68,6 +68,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         .map((item) => ({
           url: item.accessUrl!,
           alt: itemTitle(item),
+          fileName: itemTitle(item),
           senderName,
           senderAvatar,
           sentAt: item.createdAt,
