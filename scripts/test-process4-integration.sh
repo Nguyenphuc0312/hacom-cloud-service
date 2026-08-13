@@ -41,8 +41,16 @@ docker compose -f deployments/docker-compose.yml exec -T postgres \
   createdb -U "$POSTGRES_USER" "$TEST_DB_NAME"
 
 migrate -path migrations -database "$TEST_DATABASE_URL" up
+# Integration packages share this clean Gate 4 database. Keep the production
+# Worker bootstrap test in its own go test process so it cannot claim jobs
+# created by another package's repository tests.
+PROCESS4_BOOTSTRAP_PACKAGE="$(go list ./cmd/worker)"
+PROCESS4_OTHER_PACKAGES="$(go list ./... | grep -Fvx "$PROCESS4_BOOTSTRAP_PACKAGE")"
 TEST_DATABASE_URL="$TEST_DATABASE_URL" \
 TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
-go test -race -count=1 ./...
+go test -race -count=1 $PROCESS4_OTHER_PACKAGES
+TEST_DATABASE_URL="$TEST_DATABASE_URL" \
+TEST_MINIO_ENDPOINT="$TEST_MINIO_ENDPOINT" \
+go test -race -count=1 "$PROCESS4_BOOTSTRAP_PACKAGE"
 
 echo "Process 4 PostgreSQL, MinIO, Worker lifecycle and regression tests passed."
