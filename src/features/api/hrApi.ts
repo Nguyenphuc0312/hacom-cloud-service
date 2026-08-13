@@ -76,7 +76,7 @@ const createHrApiClient = (): AxiosInstance => {
       config.headers.Authorization = `Bearer ${token}`;
       return config;
     },
-    (error) => Promise.reject(error)
+    (error) => Promise.reject(error),
   );
 
   // Response interceptor for error handling.
@@ -90,7 +90,9 @@ const createHrApiClient = (): AxiosInstance => {
         response.data.trimStart().startsWith("<!doctype html")
       ) {
         return Promise.reject(
-          new Error("HR_API_HTML_RESPONSE: received HTML instead of JSON — check VITE_HR_API_BASE_URL")
+          new Error(
+            "HR_API_HTML_RESPONSE: received HTML instead of JSON — check VITE_HR_API_BASE_URL",
+          ),
         );
       }
       return response;
@@ -98,20 +100,28 @@ const createHrApiClient = (): AxiosInstance => {
     (error) => {
       const status = error.response?.status as number | undefined;
       const errorCode =
-        (error.response?.data as { errorCode?: string; code?: string } | undefined)
-          ?.errorCode ??
-        (error.response?.data as { errorCode?: string; code?: string } | undefined)
-          ?.code;
+        (
+          error.response?.data as
+            { errorCode?: string; code?: string } | undefined
+        )?.errorCode ??
+        (
+          error.response?.data as
+            { errorCode?: string; code?: string } | undefined
+        )?.code;
       if (status === 401 || status === 403) {
         // Logged for diagnostics only. This is NOT treated as a chat session
         // failure — HRM is optional and the chat/auth clients own logout.
-        logger.warn("hr-api", "optional_feature_auth_error_ignored_for_session", {
-          status,
-          errorCode: errorCode ?? null,
-        });
+        logger.warn(
+          "hr-api",
+          "optional_feature_auth_error_ignored_for_session",
+          {
+            status,
+            errorCode: errorCode ?? null,
+          },
+        );
       }
       return Promise.reject(error);
-    }
+    },
   );
 
   return client;
@@ -122,7 +132,8 @@ export const hrApiClient = createHrApiClient();
 /**
  * Attendance calendar types
  */
-export type ClassificationStatus = "PASS" | "WARNING" | "REVIEW_REQUIRED" | "ESCALATED";
+export type ClassificationStatus =
+  "PASS" | "WARNING" | "REVIEW_REQUIRED" | "ESCALATED";
 export type ClassificationColor = "green" | "yellow" | "orange" | "red";
 export type ExceptionStatus =
   | "NONE"
@@ -161,10 +172,7 @@ export interface AttendanceCalendarResponse {
 }
 
 export type TimesheetPeriodStatus =
-  | "DRAFT"
-  | "PENDING_EMPLOYEE"
-  | "PENDING_HR"
-  | "CLOSED";
+  "DRAFT" | "PENDING_EMPLOYEE" | "PENDING_HR" | "CLOSED";
 
 export type TimesheetConfirmationStatus = "PENDING" | "CONFIRMED" | "DISPUTED";
 
@@ -190,6 +198,8 @@ export interface MyTimesheetConfirmation {
 export interface MyTimesheetDay {
   id?: string;
   date: string;
+  /** Server-owned day source. `UNASSIGNED` is not absence; `HOLIDAY_UNPAID` is a non-working unpaid holiday. */
+  source?: string | null;
   displaySymbol: string;
   paidDays: number;
   isWorkingDay: boolean;
@@ -260,19 +270,10 @@ export interface TeamTimesheetQuery {
 }
 
 export type LeaveType =
-  | "ANNUAL"
-  | "SICK"
-  | "UNPAID"
-  | "MARRIAGE"
-  | "MATERNITY"
-  | "OTHER";
+  "ANNUAL" | "SICK" | "UNPAID" | "MARRIAGE" | "MATERNITY" | "OTHER";
 
 export type WorkflowStatus =
-  | "DRAFT"
-  | "SUBMITTED"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELLED";
+  "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export type LeaveHalfDaySession = "FULL_DAY" | "MORNING" | "AFTERNOON";
 
@@ -300,6 +301,8 @@ export interface LeaveRequest {
     fullName?: string | null;
   } | null;
   approvalSteps?: LeaveApprovalStep[];
+  /** Server-selected step that is actionable by the signed-in reviewer. */
+  currentApprovalStep?: LeaveApprovalStep | null;
 }
 
 export interface LeaveApprovalStep {
@@ -309,9 +312,33 @@ export interface LeaveApprovalStep {
   stepCode: string;
   stepName: string;
   status: WorkflowStatus;
-  reviewerUserId?: string | null;
+  /** Immutable reviewer binding captured when the leave request was submitted. */
+  assignedReviewerUserId?: string | null;
   reviewedAt?: string | null;
   note?: string | null;
+}
+
+export interface PendingLeaveApprovalsResponse {
+  items: LeaveRequest[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+/**
+ * `buildListResponse` from HR API deliberately uses `data`, unlike a few
+ * older list endpoints that return `items`. Normalize at this boundary so the
+ * reviewer inbox is never silently empty after the API interceptor unwraps.
+ */
+interface PendingLeaveApprovalsApiPayload {
+  data?: LeaveRequest[];
+  items?: LeaveRequest[];
+  pagination: PendingLeaveApprovalsResponse["pagination"];
 }
 
 export interface LeaveBalance {
@@ -346,22 +373,8 @@ export interface CreateMyLeaveRequestPayload {
   attachmentUrl?: string;
 }
 
-export interface LeaveRequestListResponse {
-  data: LeaveRequest[];
-  pagination?: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
 export type AttendanceExplanationType =
-  | "MISSING_PUNCH"
-  | "LATE"
-  | "EARLY_LEAVE"
-  | "OUT_OF_OFFICE"
-  | "OTHER";
+  "MISSING_PUNCH" | "LATE" | "EARLY_LEAVE" | "OUT_OF_OFFICE" | "OTHER";
 
 export interface AttendanceExplanation {
   id: string;
@@ -401,8 +414,13 @@ export interface AttendanceExplanationListResponse {
   reason?: "EMPLOYEE_NOT_LINKED" | string;
 }
 
-const unwrapHrEnvelope = <T,>(payload: ({ success?: boolean; data?: T } & T)): T =>
-  payload && typeof payload === "object" && "success" in payload && payload.success === true
+const unwrapHrEnvelope = <T>(
+  payload: { success?: boolean; data?: T } & T,
+): T =>
+  payload &&
+  typeof payload === "object" &&
+  "success" in payload &&
+  payload.success === true
     ? (payload as { data: T }).data
     : (payload as T);
 
@@ -423,24 +441,38 @@ export const hrApi = {
     const queryString = query.toString();
 
     const response = await hrApiClient.get(
-      `/attendance/calendar/me${queryString ? `?${queryString}` : ""}`
+      `/attendance/calendar/me${queryString ? `?${queryString}` : ""}`,
     );
     // Unwrap standard envelope: { success: true, statusCode, data: <payload> }
-    const body = response.data as { success?: boolean; data?: AttendanceCalendarResponse } & AttendanceCalendarResponse;
-    return (body?.success === true && body.data !== undefined ? body.data : body) as AttendanceCalendarResponse;
+    const body = response.data as {
+      success?: boolean;
+      data?: AttendanceCalendarResponse;
+    } & AttendanceCalendarResponse;
+    return (
+      body?.success === true && body.data !== undefined ? body.data : body
+    ) as AttendanceCalendarResponse;
   },
 
   /**
    * Get attendance detail for a specific date
    */
-  getMyAttendanceDay: async (date: string): Promise<AttendanceCalendarDay | null> => {
-    const response = await hrApiClient.get(
-      `/attendance/calendar/me/${date}`
-    );
-    const body = response.data as { success?: boolean; data?: AttendanceCalendarDay | null } & (AttendanceCalendarDay | null);
-    return (body && typeof body === 'object' && 'success' in body && (body as { success?: boolean }).success === true
-      ? (body as { success?: boolean; data?: AttendanceCalendarDay | null }).data ?? null
-      : body) as AttendanceCalendarDay | null;
+  getMyAttendanceDay: async (
+    date: string,
+  ): Promise<AttendanceCalendarDay | null> => {
+    const response = await hrApiClient.get(`/attendance/calendar/me/${date}`);
+    const body = response.data as {
+      success?: boolean;
+      data?: AttendanceCalendarDay | null;
+    } & (AttendanceCalendarDay | null);
+    return (
+      body &&
+      typeof body === "object" &&
+      "success" in body &&
+      (body as { success?: boolean }).success === true
+        ? ((body as { success?: boolean; data?: AttendanceCalendarDay | null })
+            .data ?? null)
+        : body
+    ) as AttendanceCalendarDay | null;
   },
 
   /**
@@ -455,7 +487,9 @@ export const hrApi = {
     }
   },
 
-  getMyTimesheet: async (params: MyTimesheetQuery): Promise<MyTimesheetResponse> => {
+  getMyTimesheet: async (
+    params: MyTimesheetQuery,
+  ): Promise<MyTimesheetResponse> => {
     const query = new URLSearchParams();
     query.set("month", String(params.month));
     query.set("year", String(params.year));
@@ -484,7 +518,9 @@ export const hrApi = {
     if (params.periodId) query.set("periodId", params.periodId);
     if (params.month) query.set("month", String(params.month));
     if (params.year) query.set("year", String(params.year));
-    const response = await hrApiClient.get(`/team/timesheet?${query.toString()}`);
+    const response = await hrApiClient.get(
+      `/team/timesheet?${query.toString()}`,
+    );
     return unwrapHrEnvelope<TeamTimesheetResponse>(response.data);
   },
 
@@ -492,7 +528,7 @@ export const hrApi = {
     const query = new URLSearchParams();
     if (params?.year) query.set("year", String(params.year));
     const response = await hrApiClient.get(
-      `/leave/me${query.toString() ? `?${query.toString()}` : ""}`
+      `/leave/me${query.toString() ? `?${query.toString()}` : ""}`,
     );
     return unwrapHrEnvelope<MyLeaveResponse>(response.data);
   },
@@ -509,14 +545,22 @@ export const hrApi = {
     return unwrapHrEnvelope<LeaveRequest>(response.data);
   },
 
-  getPendingLeaveRequests: async (): Promise<LeaveRequestListResponse> => {
-    const query = new URLSearchParams({
-      status: "SUBMITTED",
-      page: "1",
-      pageSize: "5",
-    });
-    const response = await hrApiClient.get(`/leave/requests?${query.toString()}`);
-    return unwrapHrEnvelope<LeaveRequestListResponse>(response.data);
+  getPendingLeaveApprovals: async (
+    params: { page?: number; pageSize?: number } = {},
+  ): Promise<PendingLeaveApprovalsResponse> => {
+    const query = new URLSearchParams();
+    if (params.page) query.set("page", String(params.page));
+    if (params.pageSize) query.set("pageSize", String(params.pageSize));
+    const response = await hrApiClient.get(
+      `/leave/requests/pending-approval${query.toString() ? `?${query.toString()}` : ""}`,
+    );
+    const payload = unwrapHrEnvelope<PendingLeaveApprovalsApiPayload>(
+      response.data,
+    );
+    return {
+      items: payload.items ?? payload.data ?? [],
+      pagination: payload.pagination,
+    };
   },
 
   approveLeaveRequest: async (id: string): Promise<LeaveRequest> => {
@@ -532,7 +576,10 @@ export const hrApi = {
   createAttendanceExplanation: async (
     payload: CreateAttendanceExplanationPayload,
   ): Promise<AttendanceExplanation> => {
-    const response = await hrApiClient.post("/attendance/explanations/me", payload);
+    const response = await hrApiClient.post(
+      "/attendance/explanations/me",
+      payload,
+    );
     return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 
@@ -544,23 +591,29 @@ export const hrApi = {
     if (params?.month) query.set("month", String(params.month));
     if (params?.year) query.set("year", String(params.year));
     const response = await hrApiClient.get(
-      `/attendance/explanations/me${query.toString() ? `?${query.toString()}` : ""}`
+      `/attendance/explanations/me${query.toString() ? `?${query.toString()}` : ""}`,
     );
     return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
   },
 
-  getPendingAttendanceExplanations: async (): Promise<AttendanceExplanationListResponse> => {
-    const response = await hrApiClient.get("/attendance/explanations/pending");
-    return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
-  },
+  getPendingAttendanceExplanations:
+    async (): Promise<AttendanceExplanationListResponse> => {
+      const response = await hrApiClient.get(
+        "/attendance/explanations/pending",
+      );
+      return unwrapHrEnvelope<AttendanceExplanationListResponse>(response.data);
+    },
 
   approveAttendanceExplanation: async (
     id: string,
     note?: string,
   ): Promise<AttendanceExplanation> => {
-    const response = await hrApiClient.post(`/attendance/explanations/${id}/approve`, {
-      note,
-    });
+    const response = await hrApiClient.post(
+      `/attendance/explanations/${id}/approve`,
+      {
+        note,
+      },
+    );
     return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 
@@ -568,9 +621,12 @@ export const hrApi = {
     id: string,
     note?: string,
   ): Promise<AttendanceExplanation> => {
-    const response = await hrApiClient.post(`/attendance/explanations/${id}/reject`, {
-      note,
-    });
+    const response = await hrApiClient.post(
+      `/attendance/explanations/${id}/reject`,
+      {
+        note,
+      },
+    );
     return unwrapHrEnvelope<AttendanceExplanation>(response.data);
   },
 };

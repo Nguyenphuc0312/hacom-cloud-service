@@ -17,12 +17,14 @@ import {
   type LeaveRequest,
   type LeaveType,
   type MyLeaveResponse,
+  type PendingLeaveApprovalsResponse,
   type WorkflowStatus,
 } from "../../api/hrApi";
 import {
   calculateLeaveDays,
   type LeaveDayPortion,
 } from "../utils/leaveDays";
+import { getLeaveDurationErrorMessage } from "../utils/leaveDurationErrorMessage";
 import {
   collectBlockingIssues,
   getNoticeStatus,
@@ -38,6 +40,7 @@ type LoadState =
   | { status: "error"; data: MyLeaveResponse | null; error: string };
 
 const now = new Date();
+const pendingApprovalPageSize = 50;
 const today = now.toISOString().slice(0, 10);
 
 const leaveTypeLabel: Record<LeaveType, string> = {
@@ -66,7 +69,7 @@ const statusClass = (status: WorkflowStatus) => {
 
 const currentApprovalStep = (request: LeaveRequest) =>
   request.status === "SUBMITTED"
-    ? (request.approvalSteps?.find((step) => step.status === "SUBMITTED") ?? null)
+    ? (request.currentApprovalStep ?? request.approvalSteps?.find((step) => step.status === "SUBMITTED") ?? null)
     : null;
 
 const toHalfDaySession = (portion: LeaveDayPortion): LeaveHalfDaySession => {
@@ -114,6 +117,8 @@ const formatDays = (value: number | null | undefined) =>
   value === null || value === undefined ? "-" : value.toLocaleString("vi-VN");
 
 const extractErrorMessage = (error: unknown) => {
+  const leaveDurationMessage = getLeaveDurationErrorMessage(error);
+  if (leaveDurationMessage) return leaveDurationMessage;
   const status = (error as { response?: { status?: number } })?.response?.status;
   const message = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
   const normalizedMessage = Array.isArray(message) ? message.join(" ") : (message ?? "");
@@ -288,7 +293,8 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
     data: null,
     error: null,
   });
-  const [approvals, setApprovals] = React.useState<LeaveRequest[] | null>(null);
+  const [approvals, setApprovals] = React.useState<PendingLeaveApprovalsResponse | null>(null);
+  const [approvalPage, setApprovalPage] = React.useState(1);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [form, setForm] = React.useState({
@@ -342,16 +348,21 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
   );
   const showLateNotice = Boolean(notice?.lateSubmission) && dateIssues.length === 0;
 
-  const loadApprovals = React.useCallback(async () => {
+  const loadApprovals = React.useCallback(async (page = 1) => {
     try {
-      const pending = await hrApi.getPendingLeaveRequests();
-      setApprovals(pending.data ?? []);
+      const pending = await hrApi.getPendingLeaveApprovals({
+        page,
+        pageSize: pendingApprovalPageSize,
+      });
+      setApprovals(pending);
+      return pending;
     } catch {
       setApprovals(null);
+      return null;
     }
   }, []);
 
-  const loadLeave = React.useCallback(async () => {
+  const loadLeave = React.useCallback(async (refreshApprovals = true) => {
     setState((current) => ({ status: "loading", data: current.data, error: null }));
     try {
       const data = await hrApi.getMyLeave({ year });
@@ -363,8 +374,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
         error: extractErrorMessage(error),
       }));
     }
-    void loadApprovals();
-  }, [loadApprovals, year]);
+    if (refreshApprovals) {
+      void loadApprovals(approvalPage);
+    }
+  }, [approvalPage, loadApprovals, year]);
 
   React.useEffect(() => {
     void loadLeave();
@@ -428,7 +441,16 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
         await hrApi.rejectLeaveRequest(request.id);
         toast.success("Đã từ chối đơn nghỉ phép.");
       }
-      await Promise.all([loadLeave(), loadApprovals()]);
+      await loadLeave(false);
+      const refreshed = await loadApprovals(approvalPage);
+      if (
+        refreshed?.items.length === 0 &&
+        refreshed.pagination.hasPreviousPage
+      ) {
+        const previousPage = approvalPage - 1;
+        setApprovalPage(previousPage);
+        await loadApprovals(previousPage);
+      }
     } catch (error) {
       toast.error(extractErrorMessage(error));
     } finally {
@@ -722,12 +744,12 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
               <section className="rounded-lg border border-[#d7dce3] bg-white p-4">
                 <h2 className="text-sm font-semibold text-[#0f172a]">Duyệt nhanh</h2>
                 <div className="mt-3 space-y-2">
-                  {approvals.length === 0 ? (
+                  {approvals.items.length === 0 ? (
                     <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fbff] px-3 py-6 text-center text-sm text-[#64748b]">
                       Không có đơn chờ duyệt.
                     </div>
                   ) : (
-                    approvals.map((request) => (
+                    approvals.items.map((request) => (
                       <ApprovalRow
                         key={request.id}
                         request={request}
@@ -738,6 +760,39 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                     ))
                   )}
                 </div>
+                {approvals.pagination.totalPages > 1 ? (
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#e2e8f0] pt-3 text-xs text-[#64748b]">
+                    <span>
+                      Trang {approvals.pagination.page}/{approvals.pagination.totalPages} · {approvals.pagination.total} đơn
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md border border-[#d7dce3] px-2 py-1 font-medium text-[#475569] hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+                        disabled={!approvals.pagination.hasPreviousPage || busyId !== null}
+                        onClick={() => {
+                          const previousPage = approvals.pagination.page - 1;
+                          setApprovalPage(previousPage);
+                          void loadApprovals(previousPage);
+                        }}
+                      >
+                        Trước
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-[#d7dce3] px-2 py-1 font-medium text-[#475569] hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+                        disabled={!approvals.pagination.hasNextPage || busyId !== null}
+                        onClick={() => {
+                          const nextPage = approvals.pagination.page + 1;
+                          setApprovalPage(nextPage);
+                          void loadApprovals(nextPage);
+                        }}
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </aside>
