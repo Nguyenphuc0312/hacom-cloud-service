@@ -20,6 +20,18 @@ export interface UserIdentityCandidate {
 
 export interface ResolveUserDisplayNameOptions {
   allowLegacyFallback?: boolean;
+  /**
+   * Trust `displayName` even when it looks like a system identifier.
+   *
+   * The identifier heuristic exists to hide inherited machine values (employee
+   * code "HC888892" projected into displayName). That reasoning does not hold
+   * for the signed-in user's own profile: a name they just typed and saved is
+   * an intentional choice, so discarding it makes the edit look like it silently
+   * failed — the name simply snaps back to the HR legal name.
+   *
+   * Only set this where the value is known to be self-authored.
+   */
+  trustDisplayName?: boolean;
 }
 
 const asString = (value: unknown): string => {
@@ -84,7 +96,7 @@ export const resolveUserDisplayName = (
     displayName &&
     !looksLikeEmail(displayName) &&
     !looksLikeUuid(displayName) &&
-    !looksLikeIdentifier(displayName);
+    (options.trustDisplayName || !looksLikeIdentifier(displayName));
 
   if (displayNameIsUsable) {
     return displayName;
