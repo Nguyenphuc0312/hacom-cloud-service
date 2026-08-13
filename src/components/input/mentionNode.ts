@@ -78,6 +78,23 @@ export const MentionChip = Node.create({
 const chipText = (attrs: { sendLabel?: string; label?: string }): string =>
   `@${attrs.sendLabel || attrs.label || ""}`;
 
+/**
+ * Chữ một node lá đóng góp vào `getText()` — phải khớp TUYỆT ĐỐI cách
+ * `getText()` serialise, nếu không offset của mọi tag phía sau đều lệch.
+ *
+ * `hardBreak` (Shift+Enter) nằm trong cùng một block nên `blockSeparator` không
+ * áp dụng cho nó, nhưng `getText()` vẫn đổi nó thành "\n". Không khai báo ở đây
+ * thì `textBetween` đếm 0 và mỗi lần Shift+Enter làm tag phía sau lệch 1 ký tự.
+ */
+const leafTextForOffset = (leaf: {
+  type: { name: string };
+  attrs: { sendLabel?: string; label?: string };
+}): string => {
+  if (leaf.type.name === MentionChip.name) return chipText(leaf.attrs);
+  if (leaf.type.name === "hardBreak") return "\n";
+  return "";
+};
+
 export interface MentionRange {
   userId: string;
   /** Code point, gồm cả '@'. */
@@ -102,8 +119,11 @@ export const collectMentionRanges = (
   const ranges: MentionRange[] = [];
   editor.state.doc.descendants((node, pos) => {
     if (node.type.name !== MentionChip.name || !node.attrs.id) return;
-    const before = editor.state.doc.textBetween(0, pos, blockSeparator, (leaf) =>
-      leaf.type.name === MentionChip.name ? chipText(leaf.attrs) : "",
+    const before = editor.state.doc.textBetween(
+      0,
+      pos,
+      blockSeparator,
+      leafTextForOffset,
     );
     ranges.push({
       userId: String(node.attrs.id),

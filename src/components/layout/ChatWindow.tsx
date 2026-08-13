@@ -1075,6 +1075,14 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   >({});
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
+    // Chat 1-1 KHÔNG có tag @ — giống Zalo. Chỉ có hai người, tag người đang
+    // nói chuyện trực tiếp chẳng để làm gì: họ nhận thông báo mọi tin rồi.
+    // Trả mảng rỗng là panel không bao giờ bung, nên gõ "@" trong chat 1-1
+    // (email, giá "50@kg"…) không còn bị chắn phím Enter.
+    if (isDirectConversation(conversation)) {
+      return [];
+    }
+
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
       : [];
@@ -1148,8 +1156,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         };
       });
 
-    // Add @all candidate for group conversations (non-direct/private)
-    if (!isDirectConversation(conversation) && individualCandidates.length >= 1) {
+    // Tới đây chắc chắn là nhóm (chat 1-1 đã return rỗng ở trên) → có "@all".
+    if (individualCandidates.length >= 1) {
       return [
         {
           id: "all",

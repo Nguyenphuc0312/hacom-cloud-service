@@ -594,6 +594,44 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         viewerCanRecallOthers,
       ],
     );
+    /**
+     * Chuột phải vào tin → mở đúng menu hành động, neo tại con trỏ. Đây là cách
+     * người dùng Zalo quen dùng nhất để Sao chép / Trả lời / Thu hồi; trước đây
+     * web chỉ có nút "…" hiện khi rê chuột, nên chuột phải rơi vào menu mặc
+     * định của trình duyệt và mọi thao tác quen tay đều trượt.
+     *
+     * Ba trường hợp CỐ Ý nhường lại cho trình duyệt:
+     *  - Đang bôi đen chữ: người dùng cần "Copy" của trình duyệt để chép đúng
+     *    phần đã chọn (Zalo cũng nhường).
+     *  - Bấm vào link/ảnh/video/audio: menu gốc có "Lưu ảnh", "Mở tab mới"…
+     *  - Không còn hành động nào khả dụng: `MessageActions` tự render null khi
+     *    danh sách rỗng, chặn ở đây thì nuốt phím chuột mà chẳng mở được gì.
+     */
+    const handleContextMenu = React.useCallback(
+      (event: React.MouseEvent<HTMLElement>) => {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && selection.toString().trim()) {
+          return;
+        }
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("a, img, video, audio")) {
+          return;
+        }
+        if (actionPolicy.menuActions.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        setMenuAnchorRect({
+          left: event.clientX,
+          top: event.clientY,
+          bottom: event.clientY,
+        });
+        setIsActionSheetOpen(true);
+      },
+      [actionPolicy.menuActions.length],
+    );
+
     const threadCount = getThreadCount(message);
     const isRichBubble =
       message.type !== "text" ||
@@ -802,6 +840,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             setIsHovered(false);
           }
         }}
+        onContextMenu={handleContextMenu}
         data-testid={`message-item-${message.id}`}
         data-message-id={message.id}
         data-render-probe="message-item"

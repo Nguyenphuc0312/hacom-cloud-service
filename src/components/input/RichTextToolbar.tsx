@@ -16,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { Editor } from "@tiptap/react";
 import { TextColorPicker } from "./TextColorPicker";
+import { SpecialSymbolPicker } from "./SpecialSymbolPicker";
 
 interface RichTextToolbarProps {
   editor: Editor | null;
@@ -39,9 +40,13 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
   const colorButtonRef = React.useRef<HTMLButtonElement>(null);
   const [colorPickerAnchor, setColorPickerAnchor] = React.useState<{ bottom: number; left: number } | null>(null);
+  const [isSymbolPickerOpen, setIsSymbolPickerOpen] = React.useState(false);
+  const symbolButtonRef = React.useRef<HTMLButtonElement>(null);
+  const [symbolPickerAnchor, setSymbolPickerAnchor] = React.useState<{ bottom: number; left: number } | null>(null);
   // disabled can flip true while the popover is open (e.g. composer sends
   // mid-pick) — gate the render directly instead of syncing state in an effect.
   const showColorPicker = isColorPickerOpen && !disabled;
+  const showSymbolPicker = isSymbolPickerOpen && !disabled;
 
   const toggleColorPicker = () => {
     if (!isColorPickerOpen && colorButtonRef.current) {
@@ -51,7 +56,22 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
       // `absolute` popover would get clipped by that scroll container.
       setColorPickerAnchor({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
     }
+    // Hai bảng cùng bung một lúc thì che nhau — mở cái này đóng cái kia.
+    setIsSymbolPickerOpen(false);
     setIsColorPickerOpen((prev) => !prev);
+  };
+
+  const toggleSymbolPicker = () => {
+    if (!isSymbolPickerOpen && symbolButtonRef.current) {
+      const rect = symbolButtonRef.current.getBoundingClientRect();
+      // Bảng ký hiệu rộng 18rem (w-72). Neo mép trái theo nút nhưng kéo lùi vào
+      // trong nếu sắp tràn khỏi màn hình, để không bị cắt mất cột bên phải.
+      const width = 288;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      setSymbolPickerAnchor({ bottom: window.innerHeight - rect.top + 8, left });
+    }
+    setIsColorPickerOpen(false);
+    setIsSymbolPickerOpen((prev) => !prev);
   };
 
   if (!editor) return null;
@@ -140,6 +160,23 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
           disabled || !hasFormatting,
         )}
 
+        {/* Ký hiệu đặc biệt: ₫ % ° × → ✓ … — những ký tự không gõ thẳng được
+            trên bàn phím tiếng Việt, trước đây phải sang Word/web khác copy về. */}
+        <button
+          ref={symbolButtonRef}
+          type="button"
+          title="Ký hiệu đặc biệt"
+          aria-label="Ký hiệu đặc biệt"
+          aria-haspopup="menu"
+          aria-expanded={showSymbolPicker}
+          disabled={disabled}
+          onClick={toggleSymbolPicker}
+          data-testid="composer-symbol-button"
+          className={clsx(buttonBase, showSymbolPicker && activeClass)}
+        >
+          <span className="text-[13px] font-semibold leading-none">Ω</span>
+        </button>
+
         <div className="mx-1 h-4 w-px shrink-0 bg-border/50" />
 
         {btn(
@@ -196,6 +233,19 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
       >
         <ArrowsPointingInIcon className="h-4 w-4" />
       </button>
+
+      {showSymbolPicker && symbolPickerAnchor && (
+        <SpecialSymbolPicker
+          onSelect={(symbol) => {
+            // insertContent tại vị trí con trỏ hiện tại, giữ nguyên định dạng
+            // đang bật — chèn xong vẫn ở trong ô nhập để gõ tiếp ngay.
+            editor.chain().focus().insertContent(symbol).run();
+          }}
+          onClose={() => setIsSymbolPickerOpen(false)}
+          className="fixed z-dropdown"
+          style={{ bottom: symbolPickerAnchor.bottom, left: symbolPickerAnchor.left }}
+        />
+      )}
 
       {showColorPicker && colorPickerAnchor && (
         <TextColorPicker
