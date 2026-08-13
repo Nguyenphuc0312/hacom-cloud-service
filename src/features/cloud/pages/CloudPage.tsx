@@ -44,7 +44,6 @@ import {
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
-import { CloudTrashTimeline } from "../components/CloudTrashTimeline";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
 import type { CloudItem, CloudViewMode } from "../types";
@@ -367,6 +366,15 @@ export default function CloudPage() {
         .includes(query);
     });
   }, [cloudTrashItems, search, t]);
+
+  const trashMessages = useMemo(
+    () =>
+      cloudItemsToMessages(visibleTrashItems, currentUser, {
+        link: t("item.untitledLink"),
+        file: t("item.untitledFile"),
+      }),
+    [currentUser, t, visibleTrashItems],
+  );
 
   const showPhaseNotice = useCallback(() => {
     toast.info(t("workspace.phaseAction"));
@@ -780,6 +788,20 @@ export default function CloudPage() {
     [captureTimelineScroll, workspace.items],
   );
 
+  const handleTrashPermanentDeleteRequest = useCallback(
+    (messageId: string) => {
+      const item = workspace.trashItems.find(
+        (candidate) => candidate.id === messageId,
+      );
+      if (item) {
+        captureTimelineScroll();
+        setSelectedDeleteItems([]);
+        setDeleteTarget(item);
+      }
+    },
+    [captureTimelineScroll, workspace.trashItems],
+  );
+
   // Cloud media messages are not chat-store drafts, so the generic chat
   // retry action cannot resend them. Reconcile the Cloud read model instead;
   // this rehydrates a newly completed upload and clears transient failures
@@ -1041,19 +1063,28 @@ export default function CloudPage() {
               className="min-h-0 flex-1"
             />
           ) : (
-            <CloudTrashTimeline
-              items={visibleTrashItems}
-              isLoading={workspace.isLoadingTrash}
-              isLoadingMore={workspace.isLoadingMoreTrash}
+            <SimpleVirtualizedChatTimeline
+              conversationId={CLOUD_CONVERSATION_ID}
+              conversationType={conversation.type}
+              currentUserId={currentUser.id}
+              messages={trashMessages}
+              onReply={noopMessageAction}
+              onReact={noopMessageIdAction}
+              onForward={noopMessageAction}
+              onPin={noopMessageIdAction}
+              onEdit={noopMessageAction}
+              onDelete={handleTrashPermanentDeleteRequest}
+              onRetry={handleRetryCloudMessage}
+              cloudMessageActionsOnly
+              cloudTrashMode
+              onRestoreCloudItem={handleRestore}
               hasMore={Boolean(workspace.trashNextCursor)}
-              isMutating={workspace.isMutating}
-              onRestore={handleRestore}
-              onDelete={(item) => {
-                captureTimelineScroll();
-                setSelectedDeleteItems([]);
-                setDeleteTarget(item);
-              }}
+              isLoadingMore={workspace.isLoadingMoreTrash}
+              isInitialLoading={workspace.isLoadingTrash}
               onLoadMore={() => workspace.loadMoreTrash()}
+              density="comfortable"
+              layoutState={layoutState}
+              className="min-h-0 flex-1"
             />
           )}
 

@@ -55,6 +55,9 @@ export interface SimpleVirtualizedChatTimelineProps {
   onRetry?: (message: Message) => void | Promise<void>;
   /** Restrict each message menu to the My Documents Cloud actions. */
   cloudMessageActionsOnly?: boolean;
+  /** Render trashed Cloud items with the normal chat bubble and restore action. */
+  cloudTrashMode?: boolean;
+  onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
   viewerCanRecallOthers?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -229,6 +232,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   onDelete,
   onRetry,
   cloudMessageActionsOnly,
+  cloudTrashMode,
+  onRestoreCloudItem,
   onImageClick,
   onFilePreview,
   hasMore,
@@ -617,6 +622,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onDelete={onDelete}
                         onRetry={onRetry}
                         cloudMessageActionsOnly={cloudMessageActionsOnly}
+                        cloudTrashMode={cloudTrashMode}
+                        onRestoreCloudItem={onRestoreCloudItem}
                         onImageClick={wrappedOnImageClick}
                         onFilePreview={onFilePreview}
                         density={density}

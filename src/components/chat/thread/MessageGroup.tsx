@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { createPortal } from "react-dom";
-import { Plus } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 import { MessageActions } from "../../message/MessageActions";
 import { MessageEditHistoryModal } from "../../message/MessageEditHistoryModal";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
@@ -116,6 +116,9 @@ interface MessageGroupProps {
   onRetry?: (message: Message) => void | Promise<void>;
   /** My Documents uses a deliberately small, Cloud-specific action menu. */
   cloudMessageActionsOnly?: boolean;
+  /** Render a trashed Cloud item as a normal bubble with restore control. */
+  cloudTrashMode?: boolean;
+  onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
@@ -232,6 +235,8 @@ interface MessageGroupItemProps {
   ) => void | Promise<void>;
   onRetry?: (message: Message) => void | Promise<void>;
   cloudMessageActionsOnly?: boolean;
+  cloudTrashMode?: boolean;
+  onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode: boolean;
@@ -291,6 +296,8 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onDelete,
   onRetry,
   cloudMessageActionsOnly = false,
+  cloudTrashMode = false,
+  onRestoreCloudItem,
   onImageClick,
   onFilePreview,
   isSelectionMode,
@@ -592,6 +599,10 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         "deleteForMe",
         "forward",
       ]);
+      if (cloudTrashMode) {
+        allowed.clear();
+        allowed.add("deleteForMe");
+      }
       const menuActions = resolved.menuActions.filter((id) => allowed.has(id));
       // The default chat policy exposes forwarding on the quick rail only.
       // My Documents intentionally hides that rail, so retain it explicitly
@@ -621,6 +632,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     }, [
         coarsePointer,
         cloudMessageActionsOnly,
+        cloudTrashMode,
         isOwn,
         isSelectionMode,
         message,
@@ -778,11 +790,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             // Tin của mình: thanh công cụ ở trên-trái bubble (giữ nguyên).
             // Tin người khác: hạ xuống phải-dưới bubble, gần giờ (17:23).
             isOwn ? "top-1 right-full mr-2" : "bottom-0 left-full ml-2",
-            (isHovered || isActionSheetOpen)
+            (cloudTrashMode || isHovered || isActionSheetOpen)
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
+          <div className={clsx(cloudTrashMode && "flex flex-col items-center gap-1")}>
           <MessageActionBar
             onReact={
               hasInlineAction("react") && !isSelectionMode
@@ -816,6 +829,20 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                 : undefined
             }
           />
+          {cloudTrashMode && onRestoreCloudItem ? (
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-overlay text-primary ring-1 ring-border transition-colors hover:bg-surface-hover disabled:opacity-50"
+              aria-label="Khôi phục"
+              title="Khôi phục"
+              onClick={() => {
+                void Promise.resolve(onRestoreCloudItem(message.id)).catch(() => undefined);
+              }}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+          </div>
         </div>
       ) : null;
 
@@ -869,7 +896,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             "min-w-0 max-w-full flex flex-col",
             isPoll ? "items-center" : isOwn ? "items-end" : "items-start",
           )}>
-            <div className="relative">
+          <div className="relative">
               {actionRail}
               {/* Wrapper inline để pill absolute neo đúng vào bubble */}
               <div className={clsx("relative inline-block", (message.reactions?.length ?? 0) > 0 && "mb-2")}>
@@ -1095,7 +1122,12 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           mode={coarsePointer ? "sheet" : "dropdown"}
           actions={actionPolicy.menuActions}
           actionLabelOverrides={
-            cloudMessageActionsOnly ? { forward: "Chia sẻ" } : undefined
+            cloudMessageActionsOnly
+              ? {
+                  forward: "Chia sẻ",
+                  ...(cloudTrashMode ? { deleteForMe: "Xóa vĩnh viễn" } : {}),
+                }
+              : undefined
           }
           isOpen={isActionSheetOpen}
           anchorRect={menuAnchorRect ?? undefined}
@@ -1137,6 +1169,9 @@ const areEqualMessageGroupItemProps = (
     previous.onEdit === next.onEdit &&
     previous.onDelete === next.onDelete &&
     previous.onRetry === next.onRetry &&
+    previous.cloudMessageActionsOnly === next.cloudMessageActionsOnly &&
+    previous.cloudTrashMode === next.cloudTrashMode &&
+    previous.onRestoreCloudItem === next.onRestoreCloudItem &&
     previous.onImageClick === next.onImageClick &&
     previous.onFilePreview === next.onFilePreview &&
     previous.isSelectionMode === next.isSelectionMode &&
@@ -1171,6 +1206,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   onDelete,
   onRetry,
   cloudMessageActionsOnly,
+  cloudTrashMode,
+  onRestoreCloudItem,
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
@@ -1279,6 +1316,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               onDelete={onDelete}
               onRetry={onRetry}
               cloudMessageActionsOnly={cloudMessageActionsOnly}
+              cloudTrashMode={cloudTrashMode}
+              onRestoreCloudItem={onRestoreCloudItem}
               onImageClick={onImageClick}
               onFilePreview={onFilePreview}
               isSelectionMode={isSelectionMode}
