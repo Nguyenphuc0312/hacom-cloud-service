@@ -763,6 +763,9 @@ button.cloud-delete-choice--danger:hover {
 
 .cloud-trash-message {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   width: min(620px, 92%);
   margin-left: auto;
   overflow: visible;
@@ -770,6 +773,8 @@ button.cloud-delete-choice--danger:hover {
 
 .cloud-trash-message__bubble {
   position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   border: 1px solid hsl(var(--color-primary) / 0.14);
   border-radius: 16px 16px 4px 16px;
@@ -826,11 +831,13 @@ button.cloud-delete-choice--danger:hover {
 
 .cloud-trash-message__controls {
   display: flex;
+  order: -1;
+  flex: 0 0 30px;
   align-items: center;
   justify-content: flex-end;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 2px 0;
+  padding: 0;
 }
 
 .cloud-trash-message__restore,
