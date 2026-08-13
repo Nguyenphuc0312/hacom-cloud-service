@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Clock3, RotateCcw, Trash2 } from "lucide-react";
+import { Clock3, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -35,6 +35,7 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
 }) => {
   const { t } = useTranslation("cloud");
   const [now, setNow] = useState(0);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     const initialTimeoutId = window.setTimeout(() => setNow(Date.now()), 0);
@@ -80,44 +81,70 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                 : t("trash.minutesRemaining", {
                     count: countdown.minutes,
                   });
+            const isMenuOpen = openMenuId === item.id;
             return (
               <article key={item.id} className="cloud-trash-message">
-                <div className="cloud-trash-message__body">
-                  <CloudItemIcon type={item.type} />
-                  <div className="min-w-0 flex-1">
-                    <h3>{title}</h3>
-                    {preview ? <p>{preview}</p> : null}
-                    <div className="cloud-trash-message__meta">
-                      <span>{formatBytes(item.sizeBytes)}</span>
-                      <span>
-                        <Clock3 className="h-3.5 w-3.5" aria-hidden />
-                        {remaining}
-                      </span>
+                <div className="cloud-trash-message__bubble">
+                  <div className="cloud-trash-message__body">
+                    <CloudItemIcon type={item.type} />
+                    <div className="min-w-0 flex-1">
+                      <h3>{title}</h3>
+                      {preview ? <p>{preview}</p> : null}
+                      <div className="cloud-trash-message__meta">
+                        <span>{formatBytes(item.sizeBytes)}</span>
+                        <span>
+                          <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                          {remaining}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className="cloud-trash-message__time">
+                    {item.deletedAt ? new Date(item.deletedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null}
+                  </div>
                 </div>
-                <div className="cloud-trash-message__actions">
-                  <Button
-                    size="xs"
-                    variant="brand-outline"
+                <div className="cloud-trash-message__controls">
+                  <button
+                    type="button"
+                    className="cloud-trash-message__restore"
+                    aria-label={t("trash.restore")}
+                    title={t("trash.restore")}
                     disabled={isMutating || countdown.expired}
-                    leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
                     onClick={() => {
                       void onRestore(item.id).catch(() => undefined);
                     }}
                   >
-                    {t("trash.restore")}
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    disabled={isMutating}
-                    className="text-danger hover:text-danger"
-                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                    onClick={() => onDelete(item)}
-                  >
-                    {t("trash.deletePermanently")}
-                  </Button>
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                  </button>
+                  <div className="cloud-trash-message__menu-wrap">
+                    <button
+                      type="button"
+                      className="cloud-trash-message__more"
+                      aria-label={t("trash.deletePermanently")}
+                      aria-expanded={isMenuOpen}
+                      title={t("trash.deletePermanently")}
+                      disabled={isMutating}
+                      onClick={() => setOpenMenuId(isMenuOpen ? null : item.id)}
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden />
+                    </button>
+                    {isMenuOpen ? (
+                      <div className="cloud-trash-message__menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="cloud-trash-message__menu-item"
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            onDelete(item);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                          {t("trash.deletePermanently")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             );

@@ -762,13 +762,19 @@ button.cloud-delete-choice--danger:hover {
 }
 
 .cloud-trash-message {
+  position: relative;
   width: min(620px, 92%);
   margin-left: auto;
+  overflow: visible;
+}
+
+.cloud-trash-message__bubble {
+  position: relative;
   overflow: hidden;
-  border: 1px solid hsl(var(--color-border));
-  border-radius: 14px 14px 4px 14px;
-  background: hsl(var(--color-surface));
-  box-shadow: 0 2px 8px hsl(var(--color-text-primary) / 0.06);
+  border: 1px solid hsl(var(--color-primary) / 0.14);
+  border-radius: 16px 16px 4px 16px;
+  background: hsl(var(--color-primary) / 0.12);
+  box-shadow: 0 2px 8px hsl(var(--color-text-primary) / 0.05);
 }
 
 .cloud-trash-message__body {
@@ -811,13 +817,81 @@ button.cloud-delete-choice--danger:hover {
   gap: 4px;
 }
 
-.cloud-trash-message__actions {
+.cloud-trash-message__time {
+  padding: 0 14px 8px;
+  color: hsl(var(--color-text-muted));
+  font-size: 10px;
+  text-align: right;
+}
+
+.cloud-trash-message__controls {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  border-top: 1px solid hsl(var(--color-border) / 0.7);
-  padding: 7px 10px;
-  background: hsl(var(--color-background) / 0.42);
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 2px 0;
+}
+
+.cloud-trash-message__restore,
+.cloud-trash-message__more {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--color-border-strong));
+  border-radius: 999px;
+  background: hsl(var(--color-surface));
+  color: hsl(var(--color-primary));
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+.cloud-trash-message__restore:hover:not(:disabled),
+.cloud-trash-message__more:hover:not(:disabled),
+.cloud-trash-message__more[aria-expanded="true"] {
+  background: hsl(var(--color-primary) / 0.12);
+}
+
+.cloud-trash-message__restore:disabled,
+.cloud-trash-message__more:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cloud-trash-message__menu-wrap {
+  position: relative;
+}
+
+.cloud-trash-message__menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  min-width: 176px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--color-border));
+  border-radius: 10px;
+  background: hsl(var(--color-surface));
+  box-shadow: var(--shadow-lg);
+}
+
+.cloud-trash-message__menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  color: hsl(var(--color-danger));
+  font-size: 12px;
+  text-align: left;
+}
+
+.cloud-trash-message__menu-item:hover {
+  background: hsl(var(--color-danger) / 0.08);
 }
 
 .cloud-trash-empty {
@@ -869,9 +943,7 @@ button.cloud-delete-choice--danger:hover {
     width: 96%;
   }
 
-  .cloud-trash-message__actions {
-    flex-wrap: wrap;
-  }
+  .cloud-trash-message__controls { padding-right: 2px; }
 }
 
 @media (max-width: 1320px) {
