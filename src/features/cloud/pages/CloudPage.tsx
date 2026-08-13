@@ -939,15 +939,22 @@ export default function CloudPage() {
   }, [exitSelectionMode, handlePermanentDelete, restoreTimelineScroll, selectedDeleteItems]);
 
   const getSelectedShareText = useCallback(
-    () =>
-      selectedMessages
+    () => {
+      const messagesForShare =
+        viewMode === "trash"
+          ? trashMessages.filter((message) => selectedMessageIds.has(message.id))
+          : selectedMessages;
+      return messagesForShare
         .map((message) => {
-          const item = cloudItems.find((candidate) => candidate.id === message.id);
+          const item = [...cloudItems, ...cloudTrashItems].find(
+            (candidate) => candidate.id === message.id,
+          );
           return item?.url || item?.content || item?.title || message.plainText || message.content || message.attachments?.[0]?.fileName || "";
         })
         .filter(Boolean)
-        .join("\n"),
-    [cloudItems, selectedMessages],
+        .join("\n");
+    },
+    [cloudItems, cloudTrashItems, selectedMessageIds, selectedMessages, trashMessages, viewMode],
   );
 
   const handleCopySelected = useCallback(async () => {
