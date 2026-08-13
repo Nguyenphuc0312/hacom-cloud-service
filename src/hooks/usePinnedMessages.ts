@@ -16,6 +16,35 @@ import { useAppDispatch } from "../store/hooks";
 import { chatApi } from "../features/api/chatApi";
 import type { Message } from "../types";
 
+const LOCAL_PIN_DEMO = import.meta.env.VITE_LOCAL_PIN_DEMO === "true";
+const LOCAL_PIN_STORAGE_KEY = "hacom.local.pinned-messages.v1";
+
+const readLocalPins = (conversationId: string): Message[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PIN_STORAGE_KEY);
+    const data = raw ? (JSON.parse(raw) as Record<string, Message[]>) : {};
+    return Array.isArray(data[conversationId]) ? data[conversationId] : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalPins = (conversationId: string, messages: Message[]): void => {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PIN_STORAGE_KEY);
+    const data = raw ? (JSON.parse(raw) as Record<string, Message[]>) : {};
+    data[conversationId] = messages;
+    window.localStorage.setItem(LOCAL_PIN_STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(
+      new CustomEvent("local:pins:updated", { detail: { conversationId } }),
+    );
+  } catch {
+    // Local demo storage is best-effort; the in-memory state still works.
+  }
+};
+
 interface UsePinnedMessagesReturn {
   pinnedMessages: Message[];
   isLoading: boolean;
@@ -75,6 +104,15 @@ export const usePinnedMessages = (
     if (!conversationId) return;
     setIsLoading(true);
     setError(null);
+
+    if (LOCAL_PIN_DEMO) {
+      const messages = readLocalPins(conversationId);
+      setPinnedMessages(messages);
+      syncPinnedFlags(messages);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await messageApi.getPinnedMessages(conversationId);
       if (response.success) {
@@ -100,6 +138,24 @@ export const usePinnedMessages = (
       fetchPinned();
     }
   }, [conversationId, fetchPinned]);
+
+  useEffect(() => {
+    if (!LOCAL_PIN_DEMO || !conversationId || typeof window === "undefined") {
+      return;
+    }
+
+    const refresh = () => {
+      const messages = readLocalPins(conversationId);
+      setPinnedMessages(messages);
+      syncPinnedFlags(messages);
+    };
+    window.addEventListener("local:pins:updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("local:pins:updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [conversationId, syncPinnedFlags]);
 
   useEffect(() => {
     if (!conversationId || typeof window === "undefined") return;
@@ -136,6 +192,20 @@ export const usePinnedMessages = (
         ]);
       }
       patchIsPinned(message.id, !isPinned);
+
+      if (LOCAL_PIN_DEMO) {
+        const next = isPinned
+          ? readLocalPins(conversationId).filter((item) => item.id !== message.id)
+          : [
+              { ...message, isPinned: true },
+              ...readLocalPins(conversationId).filter(
+                (item) => item.id !== message.id,
+              ),
+            ];
+        writeLocalPins(conversationId, next);
+        setError(null);
+        return true;
+      }
 
       try {
         if (isPinned) {

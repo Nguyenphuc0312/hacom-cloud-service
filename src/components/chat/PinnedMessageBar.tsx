@@ -9,7 +9,6 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
-import { ConversationLane } from "../layout/ConversationLane";
 import { getMessagePreview } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import type { Message } from "../../types";
@@ -43,34 +42,27 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
 
   return (
     <div
-      className={clsx(
-        "pinned-message-bar border-b border-border/70 bg-surface",
-        className,
-      )}
+      className={clsx("pinned-message-bar border-b border-border/70 bg-surface", className)}
     >
-      <ConversationLane>
-        <div className="flex min-h-[44px] items-center gap-2 py-1.5">
+      <div className="flex min-h-[64px] items-center gap-3 px-5 py-2">
           <button
             type="button"
             onClick={() => onJumpToMessage?.(latest)}
             className={clsx(
-              "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1 text-left",
-              "transition-micro hover:bg-surface-hover/50",
+              "flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left",
+              "transition-micro hover:bg-surface-hover/60",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
             aria-label={t("chat:pinned.jumpTo", {
               defaultValue: "Đi tới tin nhắn",
             })}
           >
-            <Pin
-              className="h-[18px] w-[18px] shrink-0 text-brand-solid"
-              strokeWidth={1.5}
-            />
+            <Pin className="h-5 w-5 shrink-0 text-brand-solid" strokeWidth={1.8} />
             <span className="flex min-w-0 flex-col">
-              <span className="text-[11px] font-medium leading-4 text-brand-solid">
+              <span className="text-[13px] font-semibold leading-5 text-brand-solid">
                 {t("chat:pinned.title", { defaultValue: "Tin nhắn ghim" })}
               </span>
-              <span className="truncate text-xs leading-4 text-text-secondary">
+              <span className="truncate text-[13px] leading-5 text-text-secondary">
                 {senderName ? (
                   <span className="font-medium text-text-primary">
                     {senderName}:{" "}
@@ -81,12 +73,12 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             </span>
           </button>
 
-          {count > 1 && onOpenList && (
+          {onOpenList && (
             <button
               type="button"
               onClick={onOpenList}
               className={clsx(
-                "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-white",
+                "flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full px-2 text-sm font-bold text-white",
                 "bg-brand-solid transition-micro hover:brightness-105 active:scale-95",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light/40",
               )}
@@ -98,7 +90,6 @@ export const PinnedMessageBar: React.FC<PinnedMessageBarProps> = ({
             </button>
           )}
         </div>
-      </ConversationLane>
     </div>
   );
 };

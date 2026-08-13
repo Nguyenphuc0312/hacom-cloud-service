@@ -57,6 +57,7 @@ const createAttachment = (item: CloudItem, fallbackName: string): Attachment => 
   fileSize: item.sizeBytes,
   mimeType: item.contentType || "application/octet-stream",
   url: item.accessUrl,
+  expiresAt: item.accessExpiresAt,
   thumbnailUrl: item.type === "image" ? item.accessUrl : undefined,
 });
 

@@ -38,6 +38,7 @@ import {
   useDeleteMessageMutation,
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
+import { Pin } from "lucide-react";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -70,6 +71,7 @@ interface RoomItemViewProps {
   onDragOver: (event: React.DragEvent<HTMLButtonElement>) => void;
   onDragLeave: (event: React.DragEvent<HTMLButtonElement>) => void;
   onDrop: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onTogglePin: () => void;
 }
 
 type RoomItemVisualState =
@@ -245,6 +247,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   onDragOver,
   onDragLeave,
   onDrop,
+  onTogglePin,
 }) => {
   const { t } = useTranslation();
   const isDense = layoutState !== "normal";
@@ -396,6 +399,30 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           )}
         >
           <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTogglePin();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onTogglePin();
+              }
+            }}
+            title={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+            aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+            className={clsx(
+              "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-micro",
+              "hover:bg-surface-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+              isPinned && "text-primary",
+            )}
+          >
+            <Pin size={15} strokeWidth={1.8} />
+          </span>
+          <span
             className={clsx(
               "inline-flex items-center rounded-full font-medium tabular-nums",
               isDense
@@ -472,6 +499,7 @@ export const RoomItemContainer = React.memo(
     const isPinned = useUIStore(
       useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
     );
+    const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
     // Unsent draft preview ("Chưa gửi") — hidden on the active room since its
     // composer is already visible. Draft lives in chatUiStore (sessionStorage).
     const draftText = useChatUiStore(
@@ -681,6 +709,10 @@ export const RoomItemContainer = React.memo(
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onTogglePin={() => {
+          togglePinnedConversation(conversationId);
+          toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+        }}
       />
     );
   },

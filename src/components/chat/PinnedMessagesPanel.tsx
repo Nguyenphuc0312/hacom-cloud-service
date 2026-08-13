@@ -96,14 +96,14 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
               <div
                 key={message.id}
                 className={clsx(
-                  "group relative flex items-start gap-3 border-b border-border/30 px-4 py-3",
+                  "group relative flex min-h-[78px] items-center gap-3 border-b border-border/40 px-5 py-3",
                   "transition-micro hover:bg-surface-hover/60",
                 )}
               >
                 <button
                   type="button"
                   onClick={() => onJumpToMessage?.(message)}
-                  className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none"
                   aria-label={t("chat:pinned.jumpTo", {
                     defaultValue: "Đi tới tin nhắn",
                   })}
@@ -111,18 +111,18 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
                   <Avatar
                     src={message.senderAvatar}
                     alt={senderName}
-                    size="sm"
+                    size="md"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-xs font-semibold text-text-primary">
+                      <span className="truncate text-sm font-medium text-text-primary">
                         {senderName}
                       </span>
-                      <span className="shrink-0 text-[11px] text-text-muted">
+                        <span className="shrink-0 text-xs text-text-muted">
                         {formatRelativeTime(new Date(message.createdAt))}
                       </span>
                     </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-text-secondary">
+                    <p className="mt-0.5 line-clamp-1 text-sm leading-5 text-text-secondary">
                       {preview}
                     </p>
                   </div>
@@ -135,7 +135,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
                     className={clsx(
                       "shrink-0 rounded-md p-1.5 text-text-muted",
                       "transition-micro hover:bg-danger/10 hover:text-danger active:scale-95",
-                      "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
+                      "opacity-100",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     )}
                     title={t("chat:pinned.unpin", { defaultValue: "Bỏ ghim" })}

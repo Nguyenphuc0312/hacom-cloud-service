@@ -76,8 +76,11 @@ describe("CloudConversationInfoPanel", () => {
         items={[item, textItem, linkItem, imageItem, audioItem]}
         trashItems={[trashItem]}
         quota={quota}
+        quotaRequest={null}
+        showQuotaRequest={false}
         viewMode="active"
         onViewModeChange={onViewModeChange}
+        onRequestQuota={vi.fn()}
         onClose={onClose}
       />,
     );
@@ -104,5 +107,30 @@ describe("CloudConversationInfoPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /close|đóng/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the quota request action only when Cloud marks the quota as near limit", () => {
+    const onRequestQuota = vi.fn();
+
+    render(
+      <CloudConversationInfoPanel
+        items={[]}
+        trashItems={[]}
+        quota={quota}
+        quotaRequest={null}
+        showQuotaRequest
+        viewMode="active"
+        onViewModeChange={vi.fn()}
+        onRequestQuota={onRequestQuota}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Request more storage|Yêu cầu cấp thêm dung lượng/i,
+      }),
+    );
+    expect(onRequestQuota).toHaveBeenCalledTimes(1);
   });
 });

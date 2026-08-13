@@ -8,6 +8,7 @@ import type {
   CloudQuotaRequest,
   CloudUploadProgress,
 } from "../types";
+import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 
 const PROCESSING_REFRESH_MS = 2_000;
 const INITIAL_LOAD_RETRY_DELAYS_MS = [150, 400];
@@ -89,33 +90,52 @@ const mergeTrashItems = (
   });
 };
 
+const ACCESS_REQUEST_CONCURRENCY = 4;
+
 const hydrateMediaAccess = async (
   items: CloudItem[],
   userId: string,
   signal?: AbortSignal,
-): Promise<CloudItem[]> =>
-  Promise.all(
-    items.map(async (item) => {
-      if (
-        !(["image", "video", "audio", "file"] as CloudItem["type"][]).includes(
+): Promise<CloudItem[]> => {
+  const hydrated = [...items];
+  const candidates = items
+    .map((item, index) => ({ item, index }))
+    .filter(
+      ({ item }) =>
+        (["image", "video", "audio", "file"] as CloudItem["type"][]).includes(
           item.type,
-        ) || item.status !== "ready"
-      ) {
-        return item;
-      }
+        ) && item.status === "ready",
+    );
+  let nextIndex = 0;
+
+  const hydrateNext = async (): Promise<void> => {
+    while (nextIndex < candidates.length) {
+      const candidate = candidates[nextIndex++];
+      if (signal?.aborted) return;
       try {
-        const access = await cloudApi.getFileAccess(userId, item.id, signal);
-        return {
-          ...item,
+        const access = await getCachedCloudFileAccess(userId, candidate.item.id, {
+          signal,
+        });
+        hydrated[candidate.index] = {
+          ...candidate.item,
           accessUrl: access.url,
+          accessExpiresAt: access.expiresAt,
           contentType: access.contentType,
         };
       } catch {
-        // Keep the timeline usable if a single preview URL cannot be minted.
-        return item;
+        hydrated[candidate.index] = candidate.item;
       }
-    }),
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(ACCESS_REQUEST_CONCURRENCY, candidates.length) },
+      () => hydrateNext(),
+    ),
   );
+  return hydrated;
+};
 
 const waitForRetry = (delayMs: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {

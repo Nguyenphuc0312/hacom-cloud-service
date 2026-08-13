@@ -80,6 +80,7 @@
       "deleteForEveryone": "Thu hồi",
       "deleteForEveryoneAdmin": "Xóa ở mọi người",
       "pin": "Ghim tin nhắn",
+      "pinSelected": "Ghim tin đã chọn",
       "unpin": "Bỏ ghim",
       "save": "Lưu tin nhắn",
       "unsave": "Bỏ lưu",
@@ -176,7 +177,13 @@
     "title": "Tin nhắn ghim",
     "empty": "Chưa có tin nhắn ghim",
     "jumpTo": "Đi tới tin nhắn",
-    "unpin": "Bỏ ghim"
+    "unpin": "Bỏ ghim",
+    "pinSelectedSuccess": "Đã ghim {{count}} tin nhắn",
+    "notice": "Bạn đã ghim tin nhắn",
+    "view": "Xem",
+    "copy": "Copy",
+    "openPanel": "Mở bảng tin nhóm",
+    "moreActions": "Thêm thao tác"
   },
   "selection": {
     "enter": "Chọn tin nhắn",

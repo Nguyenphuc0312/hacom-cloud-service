@@ -321,7 +321,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isCoarsePointer: coarsePointer,
         isSelectionMode,
         canRetry: isFailedMessage(message),
-        canPin: viewerCanPin,
+        // ChatWindow provides the real pin transport. When the backend is the
+        // authority for permissions, keep the action visible so a permitted
+        // member can use it and a denied request can show the server reason.
+        canPin: viewerCanPin ?? Boolean(onPin),
         isPinned: message.isPinned === true,
         canForward: Boolean(onForward),
         canSelect: Boolean(onStartSelectionMode && onToggleSelect),
@@ -339,6 +342,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       onForward,
       onStartSelectionMode,
       onToggleSelect,
+      onPin,
       viewerCanPin,
       viewerCanRecallOthers,
     ],
