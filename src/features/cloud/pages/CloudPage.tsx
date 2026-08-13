@@ -882,16 +882,12 @@ export default function CloudPage() {
 
   const handleDialogTrash = useCallback(async (itemId: string) => {
     const items = selectedDeleteItems.length > 0 ? selectedDeleteItems : [{ id: itemId } as CloudItem];
-    // Process the batch in a deterministic order. Running mutations with
-    // Promise.all lets each refresh race the others and the last stale
-    // response can make it look as if only one item was moved. Failed uploads
-    // Only ready items can enter Trash. Failed/processing entries are kept in
-    // the selection instead of making a rejected request abort the batch.
-    const trashable = items.filter((item) => item.status === "ready");
-    const blocked = items.filter((item) => item.status !== "ready");
-    const remaining: CloudItem[] = [...blocked];
+    // Process every selected item in deterministic order. The Cloud API owns
+    // the state-machine decision; the UI must not reject an image/file merely
+    // because its read model is still processing after upload.
+    const remaining: CloudItem[] = [];
     try {
-      for (const item of trashable) {
+      for (const item of items) {
         try {
           await handleTrash(item.id);
         } catch {
@@ -904,9 +900,6 @@ export default function CloudPage() {
     if (remaining.length > 0) {
       setSelectedDeleteItems(remaining);
       setDeleteTarget(remaining[0]);
-      if (blocked.length > 0) {
-        toast.error("Một số mục chưa sẵn sàng để đưa vào thùng rác.");
-      }
       throw new Error("Some selected items still require permanent deletion");
     }
     setSelectedDeleteItems([]);
