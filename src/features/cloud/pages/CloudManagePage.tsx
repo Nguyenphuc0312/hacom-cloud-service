@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   FileImage,
   FileText,
+  Files,
   Grid2X2,
   List,
   Mic,
@@ -78,7 +79,8 @@ export default function CloudManagePage() {
       .filter((item) => item.type === kind)
       .reduce((total, item) => total + item.sizeBytes, 0);
 
-  const cards: Array<{ type: CloudItem["type"]; label: string; icon: React.ReactNode }> = [
+  const cards: Array<{ type: Filter; label: string; icon: React.ReactNode }> = [
+    { type: "all", label: "Tất cả", icon: <Files className="h-6 w-6" aria-hidden /> },
     { type: "image", label: "Ảnh", icon: typeIcon.image },
     { type: "video", label: "Video", icon: typeIcon.video },
     { type: "file", label: "File", icon: typeIcon.file },
@@ -137,7 +139,11 @@ export default function CloudManagePage() {
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F4F7] text-[#64748B]">{card.icon}</span>
                 <span>
                   <span className="block text-xl font-semibold">{card.label}</span>
-                  <span className="text-base text-[#64748B]">{formatBytes(bytesFor(card.type))}</span>
+                  <span className="text-base text-[#64748B]">
+                    {formatBytes(card.type === "all"
+                      ? workspace.items.reduce((total, item) => total + item.sizeBytes, 0)
+                      : bytesFor(card.type))}
+                  </span>
                 </span>
               </button>
             ))}
