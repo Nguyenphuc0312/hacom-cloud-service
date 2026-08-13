@@ -1647,12 +1647,14 @@ button.cloud-delete-choice--danger:hover {
 }
 
 .cloud-selection-mode .cloud-selected-bubble {
-  filter: brightness(0.9) saturate(1.12);
+  /* Match the regular chat selection affordance: darken only the bubble,
+     without adding an outer border or changing the message layout. */
+  filter: brightness(0.78) saturate(1.2);
   transition: filter 120ms ease;
 }
 
 .cloud-selection-mode .cloud-selected-bubble:hover {
-  filter: brightness(0.82) saturate(1.18);
+  filter: brightness(0.72) saturate(1.24);
 }
 
 .cloud-selection-mode .chat-scroll-container,
