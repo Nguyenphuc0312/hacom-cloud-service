@@ -90,9 +90,15 @@ export const useMyProfile = (options?: { enabled?: boolean }): MyProfile => {
     // HRM is authoritative for the legal name. Feed it into name resolution via
     // `fullNameFromHr` so a real HR name always wins over an empty or code-like
     // chat-api displayName.
+    //
+    // `trustDisplayName` because this is the signed-in user's *own* profile: a
+    // displayName here is one they typed and saved themselves. Without it, a
+    // self-chosen name containing a digit and no space (e.g. "Nhat123") trips
+    // the system-identifier heuristic and is replaced by the HR legal name, so
+    // renaming yourself appears to do nothing despite the success toast.
     const displayName = resolveUserDisplayName(
       user ? { ...user, fullNameFromHr } : null,
-      { allowLegacyFallback: true },
+      { allowLegacyFallback: true, trustDisplayName: true },
     );
 
     return {

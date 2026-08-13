@@ -343,8 +343,10 @@ export const SettingsPage: React.FC = () => {
           badge={
             currentUser ? (
               <span className="hidden rounded-full bg-[#1976D2]/10 px-2 py-1 text-[11px] font-semibold text-[#1565C0] sm:inline-flex">
+                {/* Own profile: trust the self-authored name (see useMyProfile). */}
                 {resolveUserDisplayName(currentUser, {
                   allowLegacyFallback: true,
+                  trustDisplayName: true,
                 })}
               </span>
             ) : null
