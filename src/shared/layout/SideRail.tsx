@@ -52,7 +52,9 @@ const railItems: SideRailItem[] = [
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.CHAT ||
       pathname.startsWith(`${ROUTE_PATHS.CHAT}/`) ||
-      pathname === ROUTE_PATHS.CLOUD,
+      pathname === ROUTE_PATHS.CLOUD ||
+      pathname === ROUTE_PATHS.CLOUD_TRASH ||
+      pathname === ROUTE_PATHS.CLOUD_MANAGE,
   },
   {
     id: "contacts",

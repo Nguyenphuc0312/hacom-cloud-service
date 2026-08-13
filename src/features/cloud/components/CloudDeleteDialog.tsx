@@ -3,7 +3,6 @@ import { Clock3, Trash2, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Modal } from "../../../components/ui";
 import type { CloudItem } from "../types";
-import { getCloudItemTitle } from "../utils/cloudFormat";
 
 interface CloudDeleteDialogProps {
   item: CloudItem | null;
@@ -26,14 +25,6 @@ export const CloudDeleteDialog: React.FC<CloudDeleteDialogProps> = ({
   const [pendingAction, setPendingAction] = useState<"trash" | "delete" | null>(
     null,
   );
-  const title = item
-    ? getCloudItemTitle(item, {
-        text: t("item.untitledText"),
-        link: t("item.untitledLink"),
-        file: t("item.untitledFile"),
-      })
-    : "";
-
   const runAction = async (action: "trash" | "delete") => {
     if (!item) return;
     setPendingAction(action);
@@ -58,7 +49,6 @@ export const CloudDeleteDialog: React.FC<CloudDeleteDialogProps> = ({
       title={
         permanentOnly ? t("delete.permanentTitle") : t("delete.dialogTitle")
       }
-      description={title}
       size="sm"
       closeOnOverlayClick={!isLoading && pendingAction === null}
       closeOnEsc={!isLoading && pendingAction === null}

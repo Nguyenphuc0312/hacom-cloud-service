@@ -111,6 +111,21 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       }) ?? undefined,
     [attachment.mimeType, attachment.thumbnailUrl],
   );
+  const directMediaUrl = useMemo(
+    () => {
+      const source = attachment.url ?? attachment.downloadUrl;
+      // Cloud dev access URLs are intentionally proxied by Vite. Keep this
+      // same-origin path intact instead of resolving it against the chat file
+      // host, otherwise local MP4 playback is sent to the wrong origin.
+      if (source?.startsWith("/cloud-object/")) return source;
+      return (
+        resolvePublicResourceUrl(source, {
+          context: "media",
+        }) ?? undefined
+      );
+    },
+    [attachment.downloadUrl, attachment.url],
+  );
 
   // Thumbnail URL: use thumbnail if available, otherwise resolve on-demand only
   const { url: resolvedThumbnailUrl, isLoading: isThumbLoading, resolveUrl: resolveThumbnailUrl } =
@@ -370,12 +385,25 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             defaultValue: "Play video",
           })}
         >
-          <MediaThumbnail
-            attachment={attachment}
-            src={attachment.thumbnailUrl}
-            variant="message"
-            className="absolute inset-0 h-full w-full rounded-lg"
-          />
+          {directMediaUrl ? (
+            <video
+              src={directMediaUrl}
+              className="absolute inset-0 h-full w-full rounded-lg object-contain"
+              controls
+              preload="metadata"
+              playsInline
+              aria-label={attachment.fileName || t("chat:filePreview.playVideo", {
+                defaultValue: "Play video",
+              })}
+            />
+          ) : (
+            <MediaThumbnail
+              attachment={attachment}
+              src={attachment.thumbnailUrl}
+              variant="message"
+              className="absolute inset-0 h-full w-full rounded-lg"
+            />
+          )}
         </div>
 
         {/* Info bar */}

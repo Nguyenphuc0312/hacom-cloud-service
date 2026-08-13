@@ -39,6 +39,10 @@ export const SendButton: React.FC<SendButtonProps> = ({
     <button
       type="button"
       onClick={onClick}
+      // Keep the TipTap editor focused when sending with the mouse. This is
+      // the same composer behavior used by Hacom Chat: the caret remains in
+      // the text field so the next message can be typed immediately.
+      onMouseDown={(event) => event.preventDefault()}
       disabled={disabled}
       className={clsx(
         "chat-composer-send inline-flex h-10 w-10 items-center justify-center rounded-full border transition-micro",

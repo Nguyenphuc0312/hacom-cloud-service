@@ -128,9 +128,20 @@ const cloudRequest = async <T>(
     const payload = await parseJson<CloudErrorEnvelope>(response).catch(
       (): CloudErrorEnvelope => ({}),
     );
+    // Some gateway/auth responses have an empty body. Keep those failures
+    // distinguishable from a generic Cloud error so the UI can guide the
+    // user back through Hacom Chat authentication instead of showing a
+    // misleading retry-only message.
+    const responseCode =
+      payload.error?.code ??
+      (response.status === 401 || response.status === 403
+        ? "CLOUD_AUTH_REQUIRED"
+        : response.status >= 500
+          ? "CLOUD_UNAVAILABLE"
+          : "CLOUD_REQUEST_FAILED");
     throw new CloudApiError({
       status: response.status,
-      code: payload.error?.code ?? "CLOUD_REQUEST_FAILED",
+      code: responseCode,
       message: payload.error?.message ?? "Cloud request failed",
       requestId: response.headers.get("x-request-id") ?? undefined,
     });

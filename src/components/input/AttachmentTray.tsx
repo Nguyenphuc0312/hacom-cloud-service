@@ -27,6 +27,7 @@ interface AttachmentTrayProps {
   onClearAll: () => void;
   hasUploadingDrafts: boolean;
   hasFailedDrafts: boolean;
+  hasReadyDrafts?: boolean;
   className?: string;
 }
 
@@ -38,6 +39,7 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
   onClearAll,
   hasUploadingDrafts,
   hasFailedDrafts,
+  hasReadyDrafts = false,
   className,
 }) => {
   const { t } = useTranslation();
@@ -88,7 +90,7 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
           )}
           {!hasUploadingDrafts &&
             !hasFailedDrafts &&
-            readyCount === drafts.length && (
+            (readyCount === drafts.length || hasReadyDrafts) && (
               <span className="text-success">
                 {t("chat:attachmentTray.allReadyStatus", {
                   defaultValue: "All ready",

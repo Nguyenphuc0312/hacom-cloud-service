@@ -51,6 +51,10 @@ export interface SimpleVirtualizedChatTimelineProps {
     mode?: "FOR_ME" | "FOR_EVERYONE",
     context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
+  /** Override the default chat retry for transport-specific messages. */
+  onRetry?: (message: Message) => void | Promise<void>;
+  /** Restrict each message menu to the My Documents Cloud actions. */
+  cloudMessageActionsOnly?: boolean;
   viewerCanRecallOthers?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -223,6 +227,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   onPin,
   onEdit,
   onDelete,
+  onRetry,
+  cloudMessageActionsOnly,
   onImageClick,
   onFilePreview,
   hasMore,
@@ -609,6 +615,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onPin={onPin}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        onRetry={onRetry}
+                        cloudMessageActionsOnly={cloudMessageActionsOnly}
                         onImageClick={wrappedOnImageClick}
                         onFilePreview={onFilePreview}
                         density={density}

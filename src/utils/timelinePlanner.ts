@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "../types";
+import { MessageType, type Conversation, type Message } from "../types";
 import { isSameDay } from "./formatTime";
 import {
   getMessageSemanticFamily,
@@ -10,6 +10,13 @@ import {
 } from "./messageTimeline";
 
 const DEFAULT_MAJOR_PAUSE_MS = 8 * 60 * 1000;
+
+// Media bubbles carry their own visual surface and are often grouped with a
+// nearby text message. Keep their timestamp visible even when they are not the
+// final item in that group, matching the regular Hacom Chat media treatment
+// (e.g. image/video thumbnail followed by “vài giây ✓”).
+const isMediaMessage = (message: Message): boolean =>
+  message.type === MessageType.IMAGE || message.type === MessageType.VIDEO;
 
 export type ClusterBreakReason =
   | "sender"
@@ -388,8 +395,8 @@ export const buildTimelineItems = ({
       // "Đã chỉnh sửa" thuộc về TỪNG tin, không gộp theo cụm: nếu chỉ tin cuối
       // cụm render meta thì nhãn của tin bị sửa ở giữa cụm biến mất và người đọc
       // hiểu nhầm là tin cuối mới bị sửa → sai thông tin.
-      showMeta: isGroupEnd || Boolean(message.isEdited),
-      showStatus: isOwn && isGroupEnd,
+      showMeta: isGroupEnd || isMediaMessage(message) || Boolean(message.isEdited),
+      showStatus: isOwn && (isGroupEnd || isMediaMessage(message)),
       spacingToken: getSpacingToken(afterBreak.mergeLevel),
       isGroupStart,
       isGroupEnd,

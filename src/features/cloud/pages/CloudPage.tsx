@@ -62,12 +62,21 @@ import {
 import { resolveCloudUserId } from "../utils/cloudIdentity";
 import { shouldPromptQuotaRequest } from "../utils/cloudQuota";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
+import { ROUTE_PATHS } from "../../../router/paths";
 import "../styles/cloud.css";
 
 const getErrorTranslationKey = (code: string): string => {
   switch (code) {
     case "DEMO_USER_REQUIRED":
     case "CLOUD_USER_MISSING":
+    case "CLOUD_AUTH_REQUIRED":
+    case "UNAUTHORIZED":
+    case "FORBIDDEN":
+    case "AUTH_REQUIRED":
+    case "INVALID_ACCESS_TOKEN":
+    case "TOKEN_EXPIRED":
+    case "SESSION_REVOKED":
+    case "ACCOUNT_NOT_ACTIVE":
       return "errors.user";
     case "QUOTA_EXCEEDED":
       return "errors.quota";
@@ -88,6 +97,13 @@ const getErrorTranslationKey = (code: string): string => {
     case "OBJECT_UPLOAD_NETWORK_ERROR":
     case "CLOUD_NETWORK_ERROR":
     case "CLOUD_UNAVAILABLE":
+    case "AUTH_AUTHORITY_UNAVAILABLE":
+    case "CLOUD_REQUEST_FAILED":
+    case "SERVICE_UNAVAILABLE":
+    case "DEPENDENCY_UNAVAILABLE":
+    case "DATABASE_UNAVAILABLE":
+    case "CLOUD_NOT_READY":
+    case "INTERNAL_ERROR":
       return "errors.offline";
     default:
       return "errors.generic";
@@ -762,6 +778,7 @@ export default function CloudPage() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onRequestQuota={() => setIsQuotaRequestOpen(true)}
+              onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
               onClose={() => setIsInfoPanelOpen(false)}
             />
           </div>

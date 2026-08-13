@@ -86,7 +86,9 @@ describe("CloudConversationInfoPanel", () => {
     );
 
     expect(screen.getByText("My Documents")).not.toBeNull();
-    expect(screen.getByText(/Free|Trống/)).not.toBeNull();
+    expect(screen.getByText("Ảnh", { exact: true })).not.toBeNull();
+    expect(screen.getByText("Video", { exact: true })).not.toBeNull();
+    expect(screen.queryByText(/^Trống$|^Free$/)).toBeNull();
     expect(screen.queryByText(/Request more storage|Yêu cầu tăng dung lượng/)).toBeNull();
 
     expect(screen.getByText("Kho lưu trữ")).not.toBeNull();

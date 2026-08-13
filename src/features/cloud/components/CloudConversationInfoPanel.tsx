@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
-import { CirclePlus, X } from "lucide-react";
+import { ArrowRight, CirclePlus, FolderOpen, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type {
   CloudItem,
@@ -25,6 +25,9 @@ interface CloudConversationInfoPanelProps {
   onViewModeChange: (mode: CloudViewMode) => void;
   onRequestQuota: () => void;
   onClose: () => void;
+  onManageCloud?: () => void;
+  /** Hide storage details while a dedicated management view is active. */
+  showStorage?: boolean;
 }
 
 export const CloudConversationInfoPanel: React.FC<
@@ -41,6 +44,8 @@ export const CloudConversationInfoPanel: React.FC<
   onViewModeChange,
   onRequestQuota,
   onClose,
+  onManageCloud,
+  showStorage = true,
 }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
@@ -61,6 +66,10 @@ export const CloudConversationInfoPanel: React.FC<
         quotaPending: "Yêu cầu tăng quota đang chờ duyệt",
         quotaApproved: "Yêu cầu tăng quota đã được duyệt",
         quotaRejected: "Yêu cầu tăng quota đã bị từ chối",
+        image: "Ảnh",
+        video: "Video",
+        file: "File",
+        manage: "Xem và quản lý Hacom Cloud",
       }
     : {
         title: "Conversation information",
@@ -78,7 +87,29 @@ export const CloudConversationInfoPanel: React.FC<
         quotaPending: "Quota request is pending",
         quotaApproved: "Quota request was approved",
         quotaRejected: "Quota request was rejected",
+        image: "Photos",
+        video: "Videos",
+        file: "Files",
+        manage: "View and manage Hacom Cloud",
       };
+
+  const categories = useMemo(
+    () => {
+      const typeBytes = (types: CloudItem["type"][]): number =>
+        items.reduce(
+          (total, item) =>
+            total + (types.includes(item.type) ? item.sizeBytes : 0),
+          0,
+        );
+      return [
+        { key: "image", label: labels.image, color: "#22A06B", bytes: typeBytes(["image"]) },
+        { key: "video", label: labels.video, color: "#2F80ED", bytes: typeBytes(["video"]) },
+        { key: "file", label: labels.file, color: "#F5B700", bytes: typeBytes(["file"]) },
+        { key: "link", label: "Link", color: "#4F7DD9", bytes: typeBytes(["link"]), showLegend: false },
+      ];
+    },
+    [items, labels.file, labels.image, labels.video],
+  );
 
   const limitBytes = quota?.limitBytes ?? 0;
   const percent = (bytes: number): number =>
@@ -111,7 +142,7 @@ export const CloudConversationInfoPanel: React.FC<
           </p>
         </section>
 
-        <section className="border-b border-border/60 px-5 py-5">
+        {showStorage ? <section className="border-b border-border/60 px-5 py-5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[13px] font-semibold text-text-primary">
               {labels.storage}
@@ -140,6 +171,17 @@ export const CloudConversationInfoPanel: React.FC<
               aria-hidden
             />
           </div>
+          {onManageCloud ? (
+            <button
+              type="button"
+              onClick={onManageCloud}
+              className="mt-5 flex w-full items-center gap-3 rounded-full border border-[#9BC5F5] px-4 py-3 text-left text-[15px] font-medium text-[#1565C0] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
+            >
+              <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            </button>
+          ) : null}
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-text-muted">
             <span className="flex items-center gap-1.5">
               <i className="h-2.5 w-2.5 rounded-full bg-[#22A06B]" />
@@ -157,6 +199,13 @@ export const CloudConversationInfoPanel: React.FC<
               <i className="h-2.5 w-2.5 rounded-full bg-[#B8BEC9]" />
               {labels.free} · {formatBytes(quota?.availableBytes ?? 0)}
             </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-text-muted">
+            {categories.map((category) => (
+              <span key={category.key} className="truncate">
+                <span>{category.label}</span>: {formatBytes(category.bytes)}
+              </span>
+            ))}
           </div>
           {showQuotaRequest ? (
             <div className="mt-4 rounded-xl border border-brand-solid/20 bg-brand-soft/50 p-3">
@@ -181,7 +230,7 @@ export const CloudConversationInfoPanel: React.FC<
               ) : null}
             </div>
           ) : null}
-        </section>
+        </section> : null}
 
         <section className="border-b border-border/60 p-4">
           <div className="grid grid-cols-2 gap-2">

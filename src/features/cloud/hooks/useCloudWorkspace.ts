@@ -15,6 +15,7 @@ import {
 } from "../utils/cloudFileAccessCache";
 
 const PROCESSING_REFRESH_MS = 2_000;
+const INITIAL_LOAD_RETRY_DELAYS_MS = [150, 400];
 
 interface CloudWorkspaceState {
   items: CloudItem[];
@@ -94,6 +95,28 @@ const mergeTrashItems = (
 };
 
 const ACCESS_REQUEST_CONCURRENCY = 4;
+
+const waitForRetry = (delayMs: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The request was aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(resolve, delayMs);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("The request was aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+
+const isOptionalEndpointMissing = (error: unknown): boolean =>
+  error instanceof CloudApiError && [404, 405, 501].includes(error.status);
+
+const emptyCloudPage = (): CloudPage => ({ items: [], nextCursor: undefined });
 
 const hydrateMediaAccess = async (
   items: CloudItem[],
@@ -188,23 +211,59 @@ export const useCloudWorkspace = (
       try {
         const query = searchQuery.trim() || undefined;
         const type = itemType === "all" ? undefined : itemType;
-        const [page, trashPage, quota, quotaRequest, health] =
-          await Promise.all([
-            cloudApi.listItems(userId, { signal, q: query, type }),
-            cloudApi.listTrash(userId, { signal, q: query, type }),
-            cloudApi.getQuota(userId, signal),
-            cloudApi
-              .getCurrentQuotaRequest(userId, signal)
-              .catch((error: unknown): CloudQuotaRequest | null => {
-                if (error instanceof CloudApiError && error.status === 404)
-                  return null;
+        let bundle:
+          | [
+              CloudPage,
+              CloudPage,
+              CloudQuota | null,
+              CloudQuotaRequest | null,
+              CloudHealth,
+            ]
+          | undefined;
+        let lastError: unknown;
+        for (
+          let attempt = 0;
+          attempt <= INITIAL_LOAD_RETRY_DELAYS_MS.length;
+          attempt += 1
+        ) {
+          try {
+            bundle = await Promise.all([
+              cloudApi.listItems(userId, { signal, q: query, type }),
+              cloudApi.listTrash(userId, { signal, q: query, type }).catch(
+                (error: unknown): CloudPage => {
+                  if (isOptionalEndpointMissing(error)) return emptyCloudPage();
+                  throw error;
+                },
+              ),
+              cloudApi.getQuota(userId, signal).catch((error: unknown) => {
+                if (isOptionalEndpointMissing(error)) return null;
                 throw error;
               }),
-            cloudApi.health(signal).catch((): CloudHealth => ({
-              status: "DOWN",
-              service: "hacom-cloud-api",
-            })),
-          ]);
+              cloudApi
+                .getCurrentQuotaRequest(userId, signal)
+                .catch((error: unknown): CloudQuotaRequest | null => {
+                  if (isOptionalEndpointMissing(error)) return null;
+                  throw error;
+                }),
+              cloudApi.health(signal).catch((): CloudHealth => ({
+                status: "DOWN",
+                service: "hacom-cloud-api",
+              })),
+            ]);
+            break;
+          } catch (error) {
+            lastError = error;
+            if (
+              signal?.aborted ||
+              attempt >= INITIAL_LOAD_RETRY_DELAYS_MS.length
+            ) {
+              throw error;
+            }
+            await waitForRetry(INITIAL_LOAD_RETRY_DELAYS_MS[attempt], signal);
+          }
+        }
+        if (!bundle) throw lastError ?? new Error("Cloud data unavailable");
+        const [page, trashPage, quota, quotaRequest, health] = bundle;
         const hydratedItems = await hydrateMediaAccess(
           page.items,
           userId,
@@ -521,10 +580,45 @@ export const useCloudWorkspace = (
       try {
         await cloudApi.trashItem(userId, itemId);
         invalidateCloudFileAccess(userId, itemId);
+        const movedAt = new Date().toISOString();
+        let locallyMoved: CloudItem | undefined;
+        setState((current) => {
+          const item = current.items.find((candidate) => candidate.id === itemId);
+          if (!item) return current;
+          const trashedItem: CloudItem = {
+            ...item,
+            status: "trashed",
+            deletedAt: item.deletedAt ?? movedAt,
+            // This is presentation-only fallback. The server remains the
+            // source of truth for the actual 24-hour retention boundary.
+            purgeAfter:
+              item.purgeAfter ??
+              new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          };
+          locallyMoved = trashedItem;
+          return {
+            ...current,
+            items: current.items.filter((candidate) => candidate.id !== itemId),
+            trashItems: mergeTrashItems(current.trashItems, [trashedItem]),
+          };
+        });
         await loadInitial(undefined, true);
         if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
+          ...(locallyMoved
+            ? {
+                items: current.items.filter((candidate) => candidate.id !== itemId),
+                trashItems: mergeTrashItems(
+                  current.trashItems.filter((candidate) => candidate.id !== itemId),
+                  [
+                    current.trashItems.find(
+                      (candidate) => candidate.id === itemId,
+                    ) ?? locallyMoved,
+                  ],
+                ),
+              }
+            : {}),
           isMutating: false,
         }));
       } catch (error) {
@@ -548,10 +642,40 @@ export const useCloudWorkspace = (
       try {
         await cloudApi.restoreItem(userId, itemId);
         invalidateCloudFileAccess(userId, itemId);
+        let locallyRestored: CloudItem | undefined;
+        setState((current) => {
+          const item = current.trashItems.find((candidate) => candidate.id === itemId);
+          if (!item) return current;
+          const restoredItem: CloudItem = {
+            ...item,
+            status: "ready",
+            deletedAt: undefined,
+            purgeAfter: undefined,
+          };
+          locallyRestored = restoredItem;
+          return {
+            ...current,
+            trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
+            items: mergeItems(current.items, [restoredItem]),
+          };
+        });
         await loadInitial(undefined, true);
         if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
+          ...(locallyRestored
+            ? {
+                trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
+                items: mergeItems(
+                  current.items.filter((candidate) => candidate.id !== itemId),
+                  [
+                    current.items.find(
+                      (candidate) => candidate.id === itemId,
+                    ) ?? locallyRestored,
+                  ],
+                ),
+              }
+            : {}),
           isMutating: false,
         }));
       } catch (error) {

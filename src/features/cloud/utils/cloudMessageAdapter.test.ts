@@ -104,6 +104,7 @@ describe("cloud message adapter", () => {
     expect(message.type).toBe(MessageType.VIDEO);
     expect(message.attachments?.[0]).toMatchObject({
       type: "video",
+      fileName: "demo.mp4",
       mimeType: "video/mp4",
       url: "http://localhost:5100/cloud-object/demo.mp4?signed=1",
     });

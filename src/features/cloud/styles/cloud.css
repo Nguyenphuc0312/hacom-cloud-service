@@ -1539,6 +1539,40 @@ button.cloud-delete-choice--danger:hover {
   box-shadow: var(--shadow-xs);
 }
 
+/* My Documents uses drag-to-select rather than checkbox selection. The shared
+   timeline still mounts its selection controls, so hide only those controls
+   inside the Cloud conversation while keeping selection state and toolbar. */
+.cloud-selection-mode input[type="checkbox"] {
+  display: none;
+}
+
+.cloud-selection-mode [data-message-selected="true"] {
+  position: relative;
+  background: transparent;
+  filter: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.cloud-selection-mode [data-message-selected="true"]:hover {
+  background: transparent;
+  filter: none;
+}
+
+.cloud-selection-mode .cloud-selected-bubble {
+  filter: brightness(0.9) saturate(1.12);
+  transition: filter 120ms ease;
+}
+
+.cloud-selection-mode .cloud-selected-bubble:hover {
+  filter: brightness(0.82) saturate(1.18);
+}
+
+.cloud-selection-mode .chat-scroll-container,
+.cloud-selection-mode .chat-scroll-container * {
+  user-select: none;
+}
+
 @media (max-width: 767px) {
   .cloud-chat-page .cloud-chat-module-sidebar {
     display: none;

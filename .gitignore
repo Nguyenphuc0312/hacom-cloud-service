@@ -37,3 +37,4 @@ lint_output.txt
 vite-dev*.log
 lint-current.json
 test-current.json
+test-results/

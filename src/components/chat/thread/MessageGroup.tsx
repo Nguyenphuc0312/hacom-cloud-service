@@ -112,6 +112,10 @@ interface MessageGroupProps {
     mode?: "FOR_ME" | "FOR_EVERYONE",
     context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
+  /** Optional transport-specific retry handler (for example Cloud uploads). */
+  onRetry?: (message: Message) => void | Promise<void>;
+  /** My Documents uses a deliberately small, Cloud-specific action menu. */
+  cloudMessageActionsOnly?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
@@ -226,6 +230,8 @@ interface MessageGroupItemProps {
     mode?: "FOR_ME" | "FOR_EVERYONE",
     context?: "ADMIN_DELETE",
   ) => void | Promise<void>;
+  onRetry?: (message: Message) => void | Promise<void>;
+  cloudMessageActionsOnly?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode: boolean;
@@ -283,6 +289,8 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   onPin,
   onEdit,
   onDelete,
+  onRetry,
+  cloudMessageActionsOnly = false,
   onImageClick,
   onFilePreview,
   isSelectionMode,
@@ -559,9 +567,8 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
       onToggleLongMessageExpand(message.id);
     }, [message.id, onToggleLongMessageExpand]);
 
-    const actionPolicy = React.useMemo(
-      () =>
-        resolveMessageActions({
+    const actionPolicy = React.useMemo(() => {
+      const resolved = resolveMessageActions({
           message,
           isOwn,
           isCoarsePointer: coarsePointer,
@@ -574,9 +581,46 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canDelete: Boolean(onDelete),
           canEdit: Boolean(onEdit),
           canRecallOthers: viewerCanRecallOthers,
-        }),
-      [
+        });
+
+      if (!cloudMessageActionsOnly) return resolved;
+
+      const allowed = new Set<MessageActionId>([
+        "pin",
+        "unpin",
+        "select",
+        "deleteForMe",
+        "forward",
+      ]);
+      const menuActions = resolved.menuActions.filter((id) => allowed.has(id));
+      // The default chat policy exposes forwarding on the quick rail only.
+      // My Documents intentionally hides that rail, so retain it explicitly
+      // in the three-dot menu as the user-facing "Chia sẻ" action.
+      if (
+        onForward &&
+        !menuActions.includes("forward") &&
+        message.type !== MessageType.SYSTEM &&
+        !message.isDeleted
+      ) {
+        menuActions.unshift("forward");
+      }
+      // Failed Cloud uploads are intentionally not deletable by the generic
+      // chat policy, but My Documents must still offer cleanup for them.
+      if (
+        onDelete &&
+        !menuActions.includes("deleteForMe") &&
+        message.type !== MessageType.SYSTEM &&
+        !message.isDeleted
+      ) {
+        menuActions.push("deleteForMe");
+      }
+      return {
+        railActions: menuActions.length > 0 ? (["more"] as MessageActionId[]) : [],
+        menuActions,
+      };
+    }, [
         coarsePointer,
+        cloudMessageActionsOnly,
         isOwn,
         isSelectionMode,
         message,
@@ -587,8 +631,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         onStartSelectionMode,
         onToggleSelect,
         viewerCanRecallOthers,
-      ],
-    );
+      ]);
     const threadCount = getThreadCount(message);
     const isRichBubble =
       message.type !== "text" ||
@@ -799,6 +842,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         }}
         data-testid={`message-item-${message.id}`}
         data-message-id={message.id}
+        data-message-selected={isSelected ? "true" : "false"}
         data-render-probe="message-item"
       >
         {isSelectionMode && (
@@ -836,6 +880,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
               hasError={isFailedMessage(message)}
               isHighlighted={isHighlighted}
               bare={isPoll}
+              className={isSelected ? "cloud-selected-bubble" : undefined}
             >
               {showSenderName && senderDisplayName && !isPoll && (
                 <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
@@ -991,7 +1036,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
                   density="comfortable"
                   layout="inline"
                   onRetry={() => {
-                    void retrySendMessage(message).catch(() => undefined);
+                    void Promise.resolve(
+                      onRetry ? onRetry(message) : retrySendMessage(message),
+                    ).catch(() => undefined);
                   }}
                   onViewEditHistory={
                     message.isEdited
@@ -1047,6 +1094,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         <MessageActions
           mode={coarsePointer ? "sheet" : "dropdown"}
           actions={actionPolicy.menuActions}
+          actionLabelOverrides={
+            cloudMessageActionsOnly ? { forward: "Chia sẻ" } : undefined
+          }
           isOpen={isActionSheetOpen}
           anchorRect={menuAnchorRect ?? undefined}
           onAction={handleAction}
@@ -1086,6 +1136,7 @@ const areEqualMessageGroupItemProps = (
     previous.onPin === next.onPin &&
     previous.onEdit === next.onEdit &&
     previous.onDelete === next.onDelete &&
+    previous.onRetry === next.onRetry &&
     previous.onImageClick === next.onImageClick &&
     previous.onFilePreview === next.onFilePreview &&
     previous.isSelectionMode === next.isSelectionMode &&
@@ -1118,6 +1169,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   onPin,
   onEdit,
   onDelete,
+  onRetry,
+  cloudMessageActionsOnly,
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
@@ -1224,6 +1277,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               onPin={onPin}
               onEdit={onEdit}
               onDelete={onDelete}
+              onRetry={onRetry}
+              cloudMessageActionsOnly={cloudMessageActionsOnly}
               onImageClick={onImageClick}
               onFilePreview={onFilePreview}
               isSelectionMode={isSelectionMode}

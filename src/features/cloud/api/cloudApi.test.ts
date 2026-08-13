@@ -129,6 +129,21 @@ describe("cloudApi", () => {
     });
   });
 
+  it("classifies an empty unauthorized response for the UI", async () => {
+    vi.stubEnv("VITE_CLOUD_DEMO_MODE", "false");
+    vi.mocked(refreshAccessTokenShared).mockRejectedValue(new Error("expired"));
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 401 }));
+
+    const error = await cloudApi
+      .listItems(userId)
+      .catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      status: 401,
+      code: "CLOUD_AUTH_REQUIRED",
+    });
+  });
+
   it("sends the auth-store bearer token without the demo header in production mode", async () => {
     vi.stubEnv("VITE_CLOUD_DEMO_MODE", "false");
     vi.mocked(getAccessToken).mockReturnValue("access-token");

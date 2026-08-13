@@ -71,4 +71,15 @@ describe("timelinePlanner edited-message meta", () => {
     expect(rows[0].showStatus).toBe(false);
     expect(rows[1].showStatus).toBe(true);
   });
+
+  it("keeps timestamp and sent check visible for media inside a cluster", () => {
+    const rows = messageRows([
+      text(1, { type: MessageType.IMAGE }),
+      text(2, { type: MessageType.IMAGE }),
+      text(3, { type: MessageType.IMAGE }),
+    ]);
+
+    expect(rows[0]).toMatchObject({ isGroupEnd: false, showMeta: true });
+    expect(rows[0].showStatus).toBe(true);
+  });
 });
