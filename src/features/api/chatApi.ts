@@ -660,14 +660,19 @@ export const chatApi = createApi({
             // BE nhận cả `string[]` (cũ) lẫn `{userId, offset, length}[]` (contract
             // mention-ranges). Có range thì gửi dạng object để BE lưu vị trí tag;
             // không có thì giữ nguyên string[] như trước.
-            // "all" vẫn loại: BE tự fan-out @all từ sentinel riêng.
-            mentions: input.mentions
-              ?.filter((m) => m.userId !== "all")
-              .map((m) =>
-                typeof m.offset === "number" && typeof m.length === "number"
-                  ? { userId: m.userId, offset: m.offset, length: m.length }
-                  : m.userId,
-              ),
+            //
+            // "all" PHẢI được gửi lên, không lọc bỏ. BE dùng chính sentinel này để
+            // nở ra toàn bộ thành viên (`message-write.service.ts:104-118`:
+            // hasMentionAll → notificationTargets = mọi member đang active).
+            // Lọc mất ở đây thì payload không còn mention nào, BE không có gì để
+            // fan-out — tag @all hiện đúng pill trong ô nhập nhưng KHÔNG ai nhận
+            // thông báo. Kiểm chứng 13-08-26: tin "@all họp lúc 3h" lưu xuống với
+            // `mentions: []`.
+            mentions: input.mentions?.map((m) =>
+              typeof m.offset === "number" && typeof m.length === "number"
+                ? { userId: m.userId, offset: m.offset, length: m.length }
+                : m.userId,
+            ),
             attachments: input.attachments,
             audio: input.audio,
             location: input.location,

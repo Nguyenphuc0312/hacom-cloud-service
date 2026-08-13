@@ -177,7 +177,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret, match } = lastMatch(onSelectionChange);
@@ -196,7 +199,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret } = lastMatch(onSelectionChange);
@@ -219,7 +225,7 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@Quố");
+      ref.current!.insertAtCursor(" @Quố");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { match } = lastMatch(onSelectionChange);

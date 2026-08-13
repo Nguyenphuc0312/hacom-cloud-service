@@ -204,11 +204,7 @@ export const ComposerMentionPanel: React.FC<ComposerMentionPanelProps> = ({
         "p-1",
       )}
     >
-      {mentionSuggestions.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-text-muted">
-          {t("chat:composer.noMentionResults")}
-        </p>
-      ) : shouldVirtualize ? (
+      {shouldVirtualize ? (
         <div
           style={{ height: virtualizer.getTotalSize(), position: "relative" }}
         >

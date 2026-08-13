@@ -62,7 +62,11 @@ import { ComposerLinkPreview } from "./MessageInput/ComposerLinkPreview";
 import { ComposerActionBar } from "./MessageInput/ComposerActionBar";
 import { ComposerLengthFooter } from "./MessageInput/ComposerLengthFooter";
 import { COMPOSER_VISUAL_STATE_MAP } from "./MessageInput/constants";
-import { buildMentionMatch, normalizeMentionCandidates } from "./MessageInput/utils";
+import {
+  buildMentionMatch,
+  filterMentionCandidates,
+  normalizeMentionCandidates,
+} from "./MessageInput/utils";
 import type {
   MentionCandidate,
   MessageInputHandle,
@@ -475,33 +479,22 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       (candidate) => !taggedIds.has(candidate.id),
     );
 
-    const query = deferredMentionQuery.trim().toLowerCase();
-    // Show every remaining member (Zalo-style) — no cap. The panel scrolls on
-    // overflow. ponytail: one Avatar per member; fine for normal groups. If
-    // groups grow to hundreds, virtualize the list instead of capping.
-    if (!query) {
-      return available;
-    }
-
-    return available.filter((candidate) => {
-      const username = candidate.username.toLowerCase();
-      const displayName = candidate.displayName?.toLowerCase() || "";
-      const fullName = candidate.fullName?.toLowerCase() || "";
-      const employeeCode = candidate.employeeCode?.toLowerCase() || "";
-      // Match the viewer's alias too — they search by the name they know.
-      const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
-      return (
-        username.includes(query) ||
-        displayName.includes(query) ||
-        fullName.includes(query) ||
-        employeeCode.includes(query) ||
-        aliasLabel.includes(query)
-      );
-    });
+    // Lọc bỏ dấu + xếp hạng (khớp đầu tên lên trên) — xem
+    // `filterMentionCandidates`. Show every remaining member (Zalo-style) — no
+    // cap. The panel scrolls on overflow. ponytail: one Avatar per member; fine
+    // for normal groups. If groups grow to hundreds, virtualize the list.
+    return filterMentionCandidates(available, deferredMentionQuery);
     // draftValue: chip inserts/deletes change it, so tagged ids re-read then.
   }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates, draftValue]);
 
-  const showMentionPanel = Boolean(mentionMatch) && !disabled;
+  // Không còn ai khớp thì ĐÓNG hẳn panel, đúng như Zalo — không hiện khung
+  // "không có kết quả" treo lơ lửng.
+  //
+  // Đây không chỉ là chuyện thẩm mỹ: panel còn mở là còn nuốt phím Enter (Enter
+  // lúc đó = "chọn người đang bôi đậm"). Gõ "@abcxyz" không ra ai rồi bấm Enter
+  // thì tin nhắn KHÔNG gửi được và không rõ vì sao — panel rỗng vẫn chặn phím.
+  const showMentionPanel =
+    Boolean(mentionMatch) && !disabled && mentionSuggestions.length > 0;
 
   const clearMentionState = React.useCallback(() => {
     setMentionMatch(null);
