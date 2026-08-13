@@ -6,7 +6,7 @@ import { VideoPlayerModal } from "../../../components/info/shared-resources/Vide
 import type { CloudItem } from "../types";
 import { formatBytes, getCloudItemTitle } from "../utils/cloudFormat";
 
-type ResourceTab = "all" | "media" | "files" | "links";
+type ResourceTab = "media" | "files" | "links";
 
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
@@ -22,7 +22,7 @@ const itemTitle = (item: CloudItem): string =>
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
 }) => {
-  const [activeTab, setActiveTab] = useState<ResourceTab>("all");
+  const [activeTab, setActiveTab] = useState<ResourceTab>("media");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [video, setVideo] = useState<CloudItem | null>(null);
 
@@ -38,7 +38,6 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     () => items.filter((item) => item.type === "link"),
     [items],
   );
-  const allItems = useMemo(() => [...media, ...files, ...links], [files, links, media]);
   const images = useMemo(
     () =>
       media
@@ -48,7 +47,6 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   );
 
   const tabs: Array<{ key: ResourceTab; label: string; count: number }> = [
-    { key: "all", label: "Tất cả", count: allItems.length },
     { key: "media", label: "Ảnh/Video", count: media.length },
     { key: "files", label: "File", count: files.length },
     { key: "links", label: "Link", count: links.length },
@@ -96,56 +94,6 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         </div>
 
         <div className="min-h-28 p-3">
-          {activeTab === "all" ? (
-            allItems.length > 0 ? (
-              <div className="space-y-1.5">
-                {allItems.map((item) => {
-                  const title = itemTitle(item);
-                  if (item.type === "image" || item.type === "video") {
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        disabled={!item.accessUrl}
-                        onClick={() => item.type === "video" ? setVideo(item) : openImage(item)}
-                        className="group flex w-full items-center gap-2 rounded-lg p-2 text-left transition-colors hover:bg-surface-hover disabled:cursor-default"
-                      >
-                        <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-overlay">
-                          {item.accessUrl ? (
-                            item.type === "image" ? (
-                              <img src={item.accessUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
-                            ) : (
-                              <video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" />
-                            )
-                          ) : <ImageIcon className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-text-muted" />}
-                          {item.type === "video" ? <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-white" fill="currentColor" /> : null}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">{title}</span>
-                        <span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span>
-                      </button>
-                    );
-                  }
-                  if (item.type === "link") {
-                    return (
-                      <a key={item.id} href={item.url ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-surface-hover">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">{title}</span>
-                        <span className="text-[11px] text-text-muted">Link</span>
-                      </a>
-                    );
-                  }
-                  return (
-                    <a key={item.id} href={item.accessUrl ?? undefined} download={title} className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-surface-hover">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileText className="h-5 w-5" /></span>
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">{title}</span>
-                      <span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span>
-                    </a>
-                  );
-                })}
-              </div>
-            ) : <EmptyState icon={<FileText />} label="Chưa có nội dung" />
-          ) : null}
-
           {activeTab === "media" ? (
             media.length > 0 ? (
               <div className="grid grid-cols-3 gap-1.5">
