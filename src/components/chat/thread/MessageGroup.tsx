@@ -795,7 +795,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
-          <div className={clsx(cloudTrashMode && "flex flex-col items-center gap-1")}>
+          <div className={clsx(cloudTrashMode && "flex flex-row items-center gap-1")}>
           {(!cloudTrashMode || isHovered || isActionSheetOpen) ? (
           <MessageActionBar
             onReact={
