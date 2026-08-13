@@ -48,6 +48,53 @@ describe("FileTypeIcon", () => {
     expect(icon?.querySelectorAll("path").length).toBeGreaterThan(0);
   });
 
+  // Regression: outline Word/Excel/PPT used to render a bare sheet with no
+  // letter, so in the shared-files sidebar a .docx and a .xlsx were visually
+  // identical while the PDF beside them kept its red glyph.
+  it.each([
+    ["bang-ke.xlsx", "Excel", "X"],
+    ["huong-dan.docx", "Word", "W"],
+    ["slide.pptx", "PowerPoint", "P"],
+  ])("labels outline %s as %s", (fileName, title, label) => {
+    const { container } = render(
+      <FileTypeIcon type="generic" fileName={fileName} variant="outline" />,
+    );
+
+    const icon = container.querySelector("svg");
+    expect(icon?.getAttribute("aria-label")).toBe(title);
+    expect(container.querySelector("text")?.textContent).toBe(label);
+    // Still the thin sheet outline, not a solid Office tile.
+    expect(container.querySelector("rect")).toBeNull();
+  });
+
+  // A generic mimeType (application/octet-stream) collapses the icon type to
+  // "generic", so the extension is the only remaining signal for Office files.
+  it("recognises Office files even when the icon type is generic", () => {
+    const { container } = render(
+      <FileTypeIcon type="generic" fileName="bao-cao.xlsx" variant="tile" />,
+    );
+
+    expect(container.querySelector("text")?.textContent).toBe("X");
+  });
+
+  it("does not label a .txt file as Word in the outline variant", () => {
+    const { container } = render(
+      <FileTypeIcon type="document" fileName="ghi-chu.txt" variant="outline" />,
+    );
+
+    expect(container.querySelector("svg")?.getAttribute("aria-label")).toBe("Word");
+    expect(container.querySelector("text")).toBeNull();
+  });
+
+  it("keeps PDF as a solid red glyph in the outline variant", () => {
+    const { container } = render(
+      <FileTypeIcon type="pdf" fileName="quyet-dinh.pdf" variant="outline" />,
+    );
+
+    expect(container.querySelector("rect")?.getAttribute("fill")).toBe("#D32F2F");
+    expect(container.querySelector("text")?.textContent).toBe("PDF");
+  });
+
   it("renders Excel as a solid tile when file rows need stronger Office labels", () => {
     const { container } = render(
       <FileTypeIcon

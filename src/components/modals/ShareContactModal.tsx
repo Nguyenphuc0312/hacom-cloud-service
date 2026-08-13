@@ -68,7 +68,10 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
   // username), never the raw employee code alone.
   const displayName =
     (currentUser && nameByUserId[currentUser.id]) ||
-    (currentUser ? resolveUserDisplayName(currentUser) : "");
+    // Own profile: trust the self-authored name (see useMyProfile).
+    (currentUser
+      ? resolveUserDisplayName(currentUser, { trustDisplayName: true })
+      : "");
 
   const [activeTab, setActiveTab] = useState<TabKey>("my");
   const [query, setQuery] = useState("");

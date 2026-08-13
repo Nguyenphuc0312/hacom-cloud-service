@@ -87,11 +87,20 @@ const OfficeGlyph: React.FC<{
   </svg>
 );
 
+/**
+ * Tờ giấy viền mảnh kiểu Zalo, có chữ W/X/P ở giữa.
+ *
+ * Chữ là phần bắt buộc: nếu chỉ có khung giấy trơn thì Word và Excel trông y
+ * hệt nhau, trong khi PDF cạnh bên lại là khối đỏ đặc — danh sách file mất hẳn
+ * dấu hiệu nhận biết loại. Có chữ thì vẫn giữ được nét mảnh mà đọc ra loại file
+ * ngay, đúng như bản trước đây.
+ */
 const OutlineFileGlyph: React.FC<{
   color: string;
   title: string;
+  label?: string;
   className?: string;
-}> = ({ color, title, className }) => (
+}> = ({ color, title, label, className }) => (
   <svg
     viewBox="0 0 24 24"
     className={className ?? "h-6 w-6"}
@@ -112,18 +121,36 @@ const OutlineFileGlyph: React.FC<{
       strokeWidth="1.85"
       strokeLinejoin="round"
     />
-    <path
-      d="M9 13.25h6"
-      stroke="currentColor"
-      strokeWidth="1.85"
-      strokeLinecap="round"
-    />
-    <path
-      d="M9 17h4.25"
-      stroke="currentColor"
-      strokeWidth="1.85"
-      strokeLinecap="round"
-    />
+    {label ? (
+      <text
+        x="12.5"
+        y="15.5"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="currentColor"
+        stroke="none"
+        fontSize="9"
+        fontWeight="700"
+        fontFamily="Segoe UI, system-ui, sans-serif"
+      >
+        {label}
+      </text>
+    ) : (
+      <>
+        <path
+          d="M9 13.25h6"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+        <path
+          d="M9 17h4.25"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+      </>
+    )}
   </svg>
 );
 
@@ -244,17 +271,33 @@ function resolveOfficeGlyph(
 function resolveOutlineGlyph(
   type: FileIconType,
   fileName: string | undefined,
-): { color: string; title: string } | null {
+): { color: string; title: string; label?: string } | null {
   const ext = fileExt(fileName);
   if (ext === "pdf" || type === "pdf") return null;
 
-  if (["xls", "xlsx", "xlsm", "csv"].includes(ext) || type === "spreadsheet") {
+  // Ưu tiên đuôi file: `type` gộp .txt/.md vào `document` và .csv vào
+  // `spreadsheet`, nên chỉ file Office thật mới được gắn chữ W/X/P. Với upload
+  // trả về mimeType chung chung (application/octet-stream → type `generic`),
+  // đuôi file là căn cứ duy nhất còn lại để nhận ra Office.
+  if (["xls", "xlsx", "xlsm"].includes(ext)) {
+    return { color: "#16A34A", title: "Excel", label: "X" };
+  }
+  if (["doc", "docx", "dot", "dotx"].includes(ext)) {
+    return { color: "#3B82F6", title: "Word", label: "W" };
+  }
+  if (["ppt", "pptx", "pps", "ppsx"].includes(ext)) {
+    return { color: "#F97316", title: "PowerPoint", label: "P" };
+  }
+
+  // Không có đuôi rõ ràng thì vẫn giữ màu theo nhóm, nhưng để giấy trơn —
+  // gắn nhãn "W" cho một file .txt sẽ là gán sai loại.
+  if (["csv"].includes(ext) || type === "spreadsheet") {
     return { color: "#16A34A", title: "Excel" };
   }
-  if (["doc", "docx", "txt", "rtf", "md"].includes(ext) || type === "document") {
+  if (["txt", "rtf", "md"].includes(ext) || type === "document") {
     return { color: "#3B82F6", title: "Word" };
   }
-  if (["ppt", "pptx", "pps", "ppsx"].includes(ext) || type === "presentation") {
+  if (type === "presentation") {
     return { color: "#F97316", title: "PowerPoint" };
   }
 
@@ -286,6 +329,7 @@ export const FileTypeIcon: React.FC<FileTypeIconProps> = ({
         <OutlineFileGlyph
           color={outline.color}
           title={outline.title}
+          label={outline.label}
           className={className}
         />
       );

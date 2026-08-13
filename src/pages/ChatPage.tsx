@@ -650,8 +650,11 @@ export const ChatPage: React.FC = () => {
           id: user.id,
           username: user.username,
           displayName:
-            resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
-            user.username,
+            // Own profile: trust the self-authored name (see useMyProfile).
+            resolveUserDisplayName(user, {
+              allowLegacyFallback: true,
+              trustDisplayName: true,
+            }) || user.username,
           avatar: user.avatar,
           status: user.status as UserStatus,
           isBot: false,
