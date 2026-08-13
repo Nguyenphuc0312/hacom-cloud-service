@@ -290,6 +290,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     hideRail(true);
   }, [hideRail]);
 
+
   const handleCopy = React.useCallback(async () => {
     const text = getCopyableMessageText(message);
     if (!text) {
@@ -471,6 +472,44 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     ],
   );
 
+  /**
+   * Chuột phải vào tin → mở đúng menu hành động, neo tại con trỏ. Đây là cách
+   * người dùng Zalo quen dùng nhất để Sao chép / Trả lời / Thu hồi; trước đây
+   * web chỉ có nút "…" hiện khi rê chuột, nên chuột phải rơi vào menu mặc định
+   * của trình duyệt và mọi thao tác quen tay đều trượt.
+   *
+   * Ba trường hợp CỐ Ý nhường lại cho trình duyệt:
+   *  - Đang bôi đen chữ: người dùng cần "Copy" của trình duyệt để chép đúng
+   *    phần đã chọn (Zalo cũng nhường).
+   *  - Bấm vào link/ảnh/video/audio: menu gốc có "Lưu ảnh", "Mở tab mới"…
+   *  - Không còn hành động nào khả dụng: `MessageActions` tự render null khi
+   *    danh sách rỗng, chặn ở đây thì nuốt phím chuột mà chẳng mở được gì.
+   */
+  const handleContextMenu = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString().trim()) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("a, img, video, audio")) {
+        return;
+      }
+      if (actionPolicy.menuActions.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      setMenuAnchorRect({
+        left: event.clientX,
+        top: event.clientY,
+        bottom: event.clientY,
+      });
+      setIsActionsOpen(true);
+    },
+    [actionPolicy.menuActions.length],
+  );
+
   const handlePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (!coarsePointer || event.pointerType === "mouse") return;
@@ -516,6 +555,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       className={clsx("group/message-cluster w-full", className)}
       onMouseEnter={handleClusterMouseEnter}
       onMouseLeave={handleClusterMouseLeave}
+      onContextMenu={handleContextMenu}
       onFocusCapture={() => setIsHovered(true)}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;

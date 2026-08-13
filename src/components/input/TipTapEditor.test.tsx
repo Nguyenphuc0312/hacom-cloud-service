@@ -177,7 +177,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret, match } = lastMatch(onSelectionChange);
@@ -196,7 +199,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret } = lastMatch(onSelectionChange);
@@ -219,11 +225,58 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@Quố");
+      ref.current!.insertAtCursor(" @Quố");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { match } = lastMatch(onSelectionChange);
       expect(match?.query).toBe("Quố");
+    });
+
+    /**
+     * Bug 13-08-26: Shift+Enter chèn <br> NẰM TRONG cùng một <p>, nên nó không
+     * phải ranh giới block và `blockSeparator` không áp dụng. `getText()` vẫn
+     * đổi nó thành "\n" còn `textBetween` đếm 0 → caret thiếu 1 ký tự cho MỖI
+     * lần Shift+Enter, và panel tag không bao giờ bung từ dòng thứ hai trở đi.
+     * Đo được trên web thật: text dài 21, caret báo 20, ký tự tại caret-1 là
+     * "i" thay vì "@".
+     */
+    it("caret đúng sau Shift+Enter (hard break trong cùng một đoạn)", async () => {
+      const { onSelectionChange, ref } = await setup();
+
+      seedParagraphs(ref, "<p>dòng một<br>dòng hai&nbsp;</p>");
+      ref.current!.getEditor()!.commands.focus("end");
+
+      onSelectionChange.mockClear();
+      ref.current!.insertAtCursor("@");
+      await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
+
+      const { text, caret, match } = lastMatch(onSelectionChange);
+      // Caret phải trỏ đúng cuối chuỗi, không thiếu ký tự vì <br>.
+      expect(caret).toBe(text.length);
+      expect(text[caret - 1]).toBe("@");
+      expect(match).not.toBeNull();
+      expect(match!.query).toBe("");
+    });
+
+    it("mention range đúng khi có hard break đứng trước chip", async () => {
+      const { ref } = await setup();
+
+      seedParagraphs(ref, "<p>dòng một<br>dòng hai </p>");
+      const editor = ref.current!.getEditor()!;
+      editor.commands.focus("end");
+      ref.current!.insertMentionChip(
+        { from: editor.state.selection.anchor, to: editor.state.selection.anchor },
+        { id: "u9", label: "Quốc", sendLabel: "Vũ Minh Quốc" },
+      );
+
+      const text = ref.current!.getText();
+      const [range] = ref.current!.getMentionRanges();
+      expect(range).toBeTruthy();
+      // Offset phải cắt ra đúng chữ của chip trong chuỗi getText().
+      const cut = Array.from(text)
+        .slice(range.offset, range.offset + range.length)
+        .join("");
+      expect(cut).toBe("@Vũ Minh Quốc");
     });
   });
 });
