@@ -1,7 +1,7 @@
 /**
  * @fileoverview SelectionToolbar
  * Floating toolbar displayed when message selection mode is active.
- * Allows bulk actions: delete, forward, copy.
+ * Allows bulk actions: pin, delete, forward, copy.
  */
 
 import React from "react";
@@ -11,6 +11,7 @@ import {
   TrashIcon,
   ArrowUturnRightIcon,
   ClipboardDocumentIcon,
+  MapPinIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 
@@ -19,6 +20,7 @@ interface SelectionToolbarProps {
   onDelete: () => void;
   onForward?: () => void;
   onCopy: () => void;
+  onPin?: () => void;
   onCancel: () => void;
   className?: string;
 }
@@ -28,6 +30,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   onDelete,
   onForward,
   onCopy,
+  onPin,
   onCancel,
   className,
 }) => {
@@ -51,6 +54,18 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
               defaultValue: "Forward",
             }),
             onClick: onForward,
+          },
+        ]
+      : []),
+    ...(onPin
+      ? [
+          {
+            id: "pin",
+            icon: MapPinIcon,
+            label: t("chat:message.actions.pinSelected", {
+              defaultValue: "Ghim tin đã chọn",
+            }),
+            onClick: onPin,
           },
         ]
       : []),

@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
 import { PinnedMessageBar } from "../chat/PinnedMessageBar";
@@ -47,7 +48,7 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { getConversationDisplayName, getOtherParticipant } from "../../utils/messageHelpers";
+import { getConversationDisplayName, getMessagePreview, getOtherParticipant } from "../../utils/messageHelpers";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
@@ -507,6 +508,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     isLoading: isPinnedLoading,
     error: pinnedError,
   } = usePinnedMessages(conversation.id);
+  const [pinNotice, setPinNotice] = React.useState<Message | null>(null);
+  const pinNoticeTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => () => {
+    if (pinNoticeTimerRef.current !== null) {
+      window.clearTimeout(pinNoticeTimerRef.current);
+    }
+  }, []);
 
   const handleSend = React.useCallback(
     (content?: string, fileMeta?: unknown, type?: string) => {
@@ -829,11 +838,24 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   }, []);
 
   const handlePin = React.useCallback(
-    (messageId: string) => {
+    async (messageId: string) => {
       const msg = rtkChatApi.endpoints.getMessages
         .select({ conversationId: conversation.id })(store.getState())
         .data?.messages.find((m) => m.id === messageId);
-      if (msg) void togglePin(msg);
+      if (!msg) return false;
+      const wasPinned = msg.isPinned === true;
+      const succeeded = await togglePin(msg);
+      if (succeeded && !wasPinned) {
+        setPinNotice(msg);
+        if (pinNoticeTimerRef.current !== null) {
+          window.clearTimeout(pinNoticeTimerRef.current);
+        }
+        pinNoticeTimerRef.current = window.setTimeout(() => {
+          setPinNotice(null);
+          pinNoticeTimerRef.current = null;
+        }, 7000);
+      }
+      return succeeded;
     },
     [conversation.id, togglePin],
   );
@@ -1190,6 +1212,37 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     exitSelectionMode();
   }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
+  const handleSelectionPin = React.useCallback(async () => {
+    const cachedMessages =
+      rtkChatApi.endpoints.getMessages
+        .select({ conversationId: conversation.id })(store.getState())
+        .data?.messages ?? [];
+
+    const isSelectedMessage = (message: Message) =>
+      [message.id, message.localId, message.stableId, message.clientMessageId].some(
+        (id) => typeof id === "string" && selectedMessageIds.has(id),
+      );
+
+    const messagesToPin = cachedMessages.filter(
+      (message) => isSelectedMessage(message) && !message.isPinned,
+    );
+
+    let pinnedCount = 0;
+    for (const message of messagesToPin) {
+      if (await togglePin(message)) pinnedCount += 1;
+    }
+
+    if (pinnedCount > 0) {
+      toast.success(
+        t("chat:pinned.pinSelectedSuccess", {
+          count: pinnedCount,
+          defaultValue: "Đã ghim {{count}} tin nhắn",
+        }),
+      );
+    }
+    exitSelectionMode();
+  }, [conversation.id, selectedMessageIds, togglePin, exitSelectionMode, t]);
+
   const currentUsername = currentUser.username;
   const dmPartnerUserId = isDirectConversation(conversation)
     ? getOtherParticipant(conversation, currentUser.id)?.id
@@ -1271,6 +1324,28 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         />
       </FeatureErrorBoundary>
 
+      {pinNotice && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-20 z-[56] flex justify-center px-4">
+          <div className="pointer-events-auto flex max-w-[min(38rem,100%)] items-center gap-2 rounded-full border border-border/70 bg-surface px-3.5 py-2 text-sm text-text-secondary shadow-elev2">
+            <Pin className="h-4 w-4 shrink-0 text-brand-solid" strokeWidth={1.8} />
+            <span className="truncate">
+              {t("chat:pinned.notice", { defaultValue: "Bạn đã ghim tin nhắn" })}{" "}
+              <span className="font-medium text-text-primary">{getMessagePreview(pinNotice, currentUser.id, 48)}</span>
+            </span>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-brand-solid hover:underline"
+              onClick={() => {
+                handleJumpToMessage(pinNotice);
+                setPinNotice(null);
+              }}
+            >
+              {t("chat:pinned.view", { defaultValue: "Xem" })}
+            </button>
+          </div>
+        </div>
+      )}
+
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
           <div
@@ -1304,6 +1379,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             onDelete={handleSelectionDelete}
             onForward={handleForwardSelected}
             onCopy={handleSelectionCopy}
+            onPin={handleSelectionPin}
             onCancel={exitSelectionMode}
           />
         )}
@@ -1402,7 +1478,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
 
         {overlayMode === "pinned" && (
           <React.Suspense fallback={<OverlayPanelFallback />}>
-            <PinnedMessagesPanel
+        <PinnedMessagesPanel
               pinnedMessages={pinnedMessages}
               isLoading={isPinnedLoading}
               error={pinnedError}
