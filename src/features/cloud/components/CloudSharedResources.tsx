@@ -14,4 +14,11 @@ export const CloudSharedResources = React.lazy(() =>
   })),
 );
 
+/** Modal "Xem tất cả" mở từ các mục trên — lazy như trên, cùng lý do tách file. */
+export const CloudSharedContentModal = React.lazy(() =>
+  import("../../../components/info/shared-resources/SharedContentModal").then((m) => ({
+    default: m.SharedContentModal,
+  })),
+);
+
 export default CloudSharedResources;

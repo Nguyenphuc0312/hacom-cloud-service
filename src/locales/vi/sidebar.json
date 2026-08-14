@@ -47,7 +47,8 @@
       "to": "Đến ngày",
       "cancel": "Hủy",
       "confirm": "Xác nhận",
-      "clear": "Xóa lọc"
+      "clear": "Xóa lọc",
+      "noSenders": "Không tìm thấy người gửi"
     },
     "fileType": {
       "all": "Tất cả",
