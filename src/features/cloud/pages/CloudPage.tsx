@@ -147,13 +147,57 @@ const isStandaloneHttpUrl = (value: string): boolean => {
   }
 };
 
+/**
+ * My Documents selection actions are available only for an uninterrupted
+ * range of message frames. A pointer can jump over a row, so checking only
+ * the selected count is not sufficient.
+ */
+const isContiguousMessageSelection = (
+  orderedMessages: Message[],
+  selectedIds: Set<string>,
+): boolean => {
+  if (selectedIds.size < 2) return false;
+
+  const selectedIndexes = orderedMessages.reduce<number[]>(
+    (indexes, message, index) => {
+      if (selectedIds.has(message.id)) indexes.push(index);
+      return indexes;
+    },
+    [],
+  );
+
+  return (
+    selectedIndexes.length === selectedIds.size &&
+    selectedIndexes.every(
+      (index, position) => position === 0 || index === selectedIndexes[position - 1] + 1,
+    )
+  );
+};
+
+const getMessageRangeIds = (
+  orderedMessages: Message[],
+  startId: string,
+  endId: string,
+): string[] => {
+  const startIndex = orderedMessages.findIndex((message) => message.id === startId);
+  const endIndex = orderedMessages.findIndex((message) => message.id === endId);
+  if (startIndex < 0 || endIndex < 0) return [];
+
+  const lowerIndex = Math.min(startIndex, endIndex);
+  const upperIndex = Math.max(startIndex, endIndex);
+  return orderedMessages
+    .slice(lowerIndex, upperIndex + 1)
+    .map((message) => message.id);
+};
+
 type CloudSelectionDrag = {
   startId: string;
   startX: number;
   startY: number;
   active: boolean;
   selecting: boolean;
-  visited: Set<string>;
+  baseSelection: Set<string>;
+  lastMessageId?: string;
   holdTimer?: number;
 };
 
@@ -511,15 +555,6 @@ export default function CloudPage() {
     });
   }, []);
 
-  const setMessageSelected = useCallback((messageId: string, selected: boolean) => {
-    setSelectedMessageIds((current) => {
-      const next = new Set(current);
-      if (selected) next.add(messageId);
-      else next.delete(messageId);
-      return next;
-    });
-  }, []);
-
   const exitSelectionMode = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
@@ -545,6 +580,24 @@ export default function CloudPage() {
       document.body.style.userSelect = "";
     };
 
+    const applySelectionRange = (drag: CloudSelectionDrag, messageId: string) => {
+      if (drag.lastMessageId === messageId) return;
+
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      const rangeIds = getMessageRangeIds(selectableMessages, drag.startId, messageId);
+      if (rangeIds.length === 0) return;
+
+      drag.lastMessageId = messageId;
+      setSelectedMessageIds(() => {
+        const next = new Set(drag.baseSelection);
+        for (const rangeId of rangeIds) {
+          if (drag.selecting) next.add(rangeId);
+          else next.delete(rangeId);
+        }
+        return next;
+      });
+    };
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const target = event.target as HTMLElement | null;
@@ -557,27 +610,32 @@ export default function CloudPage() {
       if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
+      const isTextSelectionTarget = Boolean(target.closest(".chat-message-text"));
       const selection: CloudSelectionDrag = {
         startId: messageId,
         startX: event.clientX,
         startY: event.clientY,
         active: false,
         selecting: !selectedMessageIdsRef.current.has(messageId),
-        visited: new Set([messageId]),
+        baseSelection: new Set(selectedMessageIdsRef.current),
       };
       // Desktop users commonly hold a message instead of dragging. Start the
       // same selection mode after a short hold, while preserving normal click
-      // behavior for a quick release.
-      selection.holdTimer = window.setTimeout(() => {
-        const current = selectionDragRef.current;
-        if (current !== selection) return;
-        current.active = true;
-        document.body.style.userSelect = "none";
-        window.getSelection()?.removeAllRanges();
-        enterSelectionMode();
-        setMessageSelected(current.startId, current.selecting);
-        suppressSelectionClickRef.current = true;
-      }, 450);
+      // behavior for a quick release. Text starts intentionally do not use a
+      // hold timer, so a slow native text selection is never converted into a
+      // whole-message selection.
+      if (!isTextSelectionTarget) {
+        selection.holdTimer = window.setTimeout(() => {
+          const current = selectionDragRef.current;
+          if (current !== selection) return;
+          current.active = true;
+          document.body.style.userSelect = "none";
+          window.getSelection()?.removeAllRanges();
+          enterSelectionMode();
+          applySelectionRange(current, current.startId);
+          suppressSelectionClickRef.current = true;
+        }, 450);
+      }
       selectionDragRef.current = selection;
     };
 
@@ -592,6 +650,18 @@ export default function CloudPage() {
         event.clientX - drag.startX,
         event.clientY - drag.startY,
       );
+
+      const target = event.target as HTMLElement | null;
+      const row = target?.closest<HTMLElement>("[data-message-id]");
+      const messageId = row?.dataset.messageId;
+      if (!messageId) return;
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!selectableMessages.some((message) => message.id === messageId)) return;
+
+      // Keep native browser text selection while the pointer remains inside
+      // the message where the gesture started. Message selection begins only
+      // after the pointer enters another message frame.
+      if (!drag.active && messageId === drag.startId) return;
       if (!drag.active && distance < 8) return;
 
       if (!drag.active) {
@@ -599,17 +669,10 @@ export default function CloudPage() {
         document.body.style.userSelect = "none";
         window.getSelection()?.removeAllRanges();
         enterSelectionMode();
-        setMessageSelected(drag.startId, drag.selecting);
+        applySelectionRange(drag, drag.startId);
       }
 
-      const target = event.target as HTMLElement | null;
-      const row = target?.closest<HTMLElement>("[data-message-id]");
-      const messageId = row?.dataset.messageId;
-      if (!messageId || drag.visited.has(messageId)) return;
-      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      if (!selectableMessages.some((message) => message.id === messageId)) return;
-      drag.visited.add(messageId);
-      setMessageSelected(messageId, drag.selecting);
+      applySelectionRange(drag, messageId);
       event.preventDefault();
     };
 
@@ -647,7 +710,7 @@ export default function CloudPage() {
       document.removeEventListener("click", handleSelectionClick, true);
       finishDrag();
     };
-  }, [enterSelectionMode, messages, setMessageSelected, toggleMessageSelection, trashMessages, viewMode]);
+  }, [enterSelectionMode, messages, toggleMessageSelection, trashMessages, viewMode]);
 
   const handleAddFiles = useCallback(
     (files: File[]) => {
@@ -844,6 +907,14 @@ export default function CloudPage() {
   const selectedTrashItems = useMemo(
     () => cloudTrashItems.filter((item) => selectedMessageIds.has(item.id)),
     [cloudTrashItems, selectedMessageIds],
+  );
+  const hasContiguousSelection = useMemo(
+    () =>
+      isContiguousMessageSelection(
+        viewMode === "trash" ? trashMessages : messages,
+        selectedMessageIds,
+      ),
+    [messages, selectedMessageIds, trashMessages, viewMode],
   );
 
   const handleDeleteSelected = useCallback(async () => {
@@ -1137,7 +1208,7 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            {isSelectionMode ? (
+            {isSelectionMode && hasContiguousSelection ? (
               <div
                 className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 bg-surface px-3 py-2 shadow-sm"
                 role="toolbar"
