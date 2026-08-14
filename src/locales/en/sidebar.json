@@ -47,7 +47,8 @@
       "to": "To",
       "cancel": "Cancel",
       "confirm": "Confirm",
-      "clear": "Clear filters"
+      "clear": "Clear filters",
+      "noSenders": "No matching sender"
     },
     "fileType": {
       "all": "All",

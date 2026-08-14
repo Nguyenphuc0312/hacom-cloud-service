@@ -21,7 +21,8 @@ import { usePreviewUrl } from "../../../hooks/usePreviewUrl";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
-import { CloudSharedResources } from "./CloudSharedResources";
+import { CloudSharedResources, CloudSharedContentModal } from "./CloudSharedResources";
+import type { SharedContentTab } from "../../../components/info/shared-resources/SharedContentModal";
 import { CollapsibleSection } from "../../../components/info/CollapsibleSection";
 import { FileTypeIcon } from "../../../components/message/FileTypeIcon";
 import { ConfirmDialog } from "../../../components/ui";
@@ -342,6 +343,8 @@ export const HacomCloudInfoSidebar: React.FC<{
   const [trashSelectMode, setTrashSelectMode] = useState(false);
   const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
   const [emptyingTrash, setEmptyingTrash] = useState(false);
+  // Which "Kho lưu trữ" tab the full modal opens on; null = modal closed.
+  const [archiveTab, setArchiveTab] = useState<SharedContentTab | null>(null);
   const trashed = useMemo(() => assets.filter((asset) => asset.status === "trashed" || asset.status === "purge_failed"), [assets]);
   const trashedTotalBytes = useMemo(
     () => trashed.reduce((sum, asset) => sum + (Number(asset.sizeBytes) || 0), 0),
@@ -395,7 +398,14 @@ export const HacomCloudInfoSidebar: React.FC<{
                     riêng nữa (chốt với user 07-08-26). */}
                 {conversationId ? (
                   <React.Suspense fallback={<div className="h-44 animate-pulse rounded-xl bg-surface-hover" />}>
-                    <CloudSharedResources conversationId={conversationId} variant="zalo" />
+                    <CloudSharedResources
+                      conversationId={conversationId}
+                      variant="zalo"
+                      // Without this the "Xem tất cả" buttons render but do
+                      // nothing: onOpenAll is optional, so the call site
+                      // silently no-ops instead of failing to compile.
+                      onOpenAll={setArchiveTab}
+                    />
                   </React.Suspense>
                 ) : null}
                 <CollapsibleSection
@@ -486,6 +496,16 @@ export const HacomCloudInfoSidebar: React.FC<{
         variant="danger"
         isLoading={emptyingTrash}
       />
+      {archiveTab && conversationId ? (
+        <React.Suspense fallback={null}>
+          <CloudSharedContentModal
+            isOpen
+            conversationId={conversationId}
+            defaultTab={archiveTab}
+            onClose={() => setArchiveTab(null)}
+          />
+        </React.Suspense>
+      ) : null}
     </>
   );
 };

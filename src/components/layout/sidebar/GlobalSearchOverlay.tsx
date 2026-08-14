@@ -19,10 +19,14 @@ import {
   UserIcon,
   CalendarIcon,
   DocumentIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
+
+import {
+  FilterChip,
+  Popover,
+  DateRangeFields,
+} from "../../common/resource-filter/FilterControls";
+import { isoToDisplay } from "../../common/resource-filter/dateRange";
 
 import { Avatar } from "../../common/Avatar";
 import { FileTypeIcon } from "../../message/FileTypeIcon";
@@ -275,224 +279,18 @@ const FileRow: React.FC<{
 
 // --- filter controls (messages + files) --------------------------------------
 
-const FilterChip: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-}> = ({ icon, label, active, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={clsx(
-      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-micro",
-      active
-        ? "border-[#1976D2]/50 bg-[#1976D2]/8 text-[#1565C0]"
-        : "border-border/70 bg-surface text-text-secondary hover:bg-surface-overlay",
-    )}
-  >
-    <span className="flex h-4 w-4 items-center justify-center">{icon}</span>
-    <span className="max-w-[9rem] truncate">{label}</span>
-    <ChevronDownIcon className="h-3.5 w-3.5 opacity-70" />
-  </button>
-);
-
-/**
- * A small popover under its trigger. `align="right"` anchors to the trigger's
- * right edge so it opens leftward — needed for chips near the panel's right
- * edge (the sidebar is narrow and clips overflow, so a left-aligned popover
- * would be cut off).
- */
-const Popover: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  align?: "left" | "right";
-  children: React.ReactNode;
-}> = ({ open, onClose, align = "left", children }) => {
-  if (!open) return null;
-  return (
-    <>
-      <div className="fixed inset-0 z-dropdown" onClick={onClose} aria-hidden />
-      <div
-        className={clsx(
-          "absolute top-full z-dropdown mt-1.5 min-w-[220px] rounded-lg border border-border/70 bg-surface p-1.5 shadow-lg",
-          align === "right" ? "right-0" : "left-0",
-        )}
-      >
-        {children}
-      </div>
-    </>
-  );
-};
+// The date helpers moved to components/common/resource-filter/dateRange so the
+// shared-resources modal can use them too; re-exported here for existing
+// importers.
+export {
+  isoToDisplay,
+  displayToIso,
+  buildMonthCells,
+} from "../../common/resource-filter/dateRange";
 
 // --- main overlay ------------------------------------------------------------
 
 const PREVIEW_COUNT = 5;
-
-// --- date helpers (dd/mm/yyyy display, yyyy-mm-dd internal) -------------------
-
-/** yyyy-mm-dd → dd/mm/yyyy (empty string if not a full ISO day). */
-export const isoToDisplay = (iso: string): string => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
-};
-
-/** dd/mm/yyyy → yyyy-mm-dd, or null if incomplete/invalid. */
-export const displayToIso = (display: string): string | null => {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(display.trim());
-  if (!m) return null;
-  const [, dd, mm, yyyy] = m;
-  const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  // Reject overflow like 31/02 (Date rolls it over).
-  if (d.getDate() !== Number(dd) || d.getMonth() + 1 !== Number(mm)) return null;
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-/** Insert `/` separators as the user types digits (dd/mm/yyyy). */
-const maskDateInput = (raw: string): string => {
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)];
-  return parts.filter((p) => p.length > 0).join("/");
-};
-
-const pad2 = (n: number): string => String(n).padStart(2, "0");
-const toIso = (y: number, m0: number, d: number): string =>
-  `${y}-${pad2(m0 + 1)}-${pad2(d)}`;
-
-// --- mini month calendar (self-contained; no picker lib) ---------------------
-
-const WEEKDAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-const MONTH_LABEL = (y: number, m0: number) => `Tháng ${m0 + 1}, ${y}`;
-
-interface MiniMonthCalendarProps {
-  /** Currently selected range (ISO yyyy-mm-dd) for highlighting. */
-  from: string | null;
-  to: string | null;
-  /** Month to show first (ISO of any day in it), defaults to `from` or today. */
-  initialIso?: string | null;
-  onPick: (iso: string) => void;
-}
-
-/** Build the 6×7 grid of days for the month containing (year, month0). */
-export const buildMonthCells = (
-  year: number,
-  month0: number,
-): Array<{ iso: string; day: number; inMonth: boolean }> => {
-  const firstDow = new Date(year, month0, 1).getDay(); // 0=CN
-  const daysInMonth = new Date(year, month0 + 1, 0).getDate();
-  const cells: Array<{ iso: string; day: number; inMonth: boolean }> = [];
-
-  // Leading days from previous month
-  const prevDays = new Date(year, month0, 0).getDate();
-  for (let i = firstDow - 1; i >= 0; i -= 1) {
-    const d = prevDays - i;
-    const m = month0 - 1;
-    const y = m < 0 ? year - 1 : year;
-    cells.push({ iso: toIso(y, (m + 12) % 12, d), day: d, inMonth: false });
-  }
-  // Current month
-  for (let d = 1; d <= daysInMonth; d += 1) {
-    cells.push({ iso: toIso(year, month0, d), day: d, inMonth: true });
-  }
-  // Trailing to fill 6 rows (42 cells)
-  let next = 1;
-  while (cells.length < 42) {
-    const m = month0 + 1;
-    const y = m > 11 ? year + 1 : year;
-    cells.push({ iso: toIso(y, m % 12, next), day: next, inMonth: false });
-    next += 1;
-  }
-  return cells;
-};
-
-const MiniMonthCalendar: React.FC<MiniMonthCalendarProps> = ({
-  from,
-  to,
-  initialIso,
-  onPick,
-}) => {
-  const seed = initialIso || from || new Date().toISOString().slice(0, 10);
-  const seedDate = new Date(`${seed}T00:00:00`);
-  const [view, setView] = useState(() => ({
-    year: seedDate.getFullYear(),
-    month0: seedDate.getMonth(),
-  }));
-
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const cells = buildMonthCells(view.year, view.month0);
-
-  const inRange = (iso: string): boolean =>
-    Boolean(from && to && iso >= from && iso <= to);
-  const isEndpoint = (iso: string): boolean => iso === from || iso === to;
-
-  const step = (delta: number) =>
-    setView((v) => {
-      const d = new Date(v.year, v.month0 + delta, 1);
-      return { year: d.getFullYear(), month0: d.getMonth() };
-    });
-
-  return (
-    <div className="w-[240px] select-none px-1 pb-1">
-      <div className="mb-1.5 flex items-center justify-between px-1">
-        <span className="text-[13px] font-semibold text-text-primary">
-          {MONTH_LABEL(view.year, view.month0)}
-        </span>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={() => step(-1)}
-            className="inline-flex h-6 w-6 items-center justify-center rounded text-text-muted transition-micro hover:bg-surface-overlay hover:text-text-primary"
-            aria-label="Tháng trước"
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => step(1)}
-            className="inline-flex h-6 w-6 items-center justify-center rounded text-text-muted transition-micro hover:bg-surface-overlay hover:text-text-primary"
-            aria-label="Tháng sau"
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-7 gap-y-1 text-center">
-        {WEEKDAY_LABELS.map((w) => (
-          <span key={w} className="text-[11px] font-medium text-text-muted">
-            {w}
-          </span>
-        ))}
-        {cells.map((cell) => {
-          const selected = isEndpoint(cell.iso);
-          const ranged = inRange(cell.iso) && !selected;
-          const isToday = cell.iso === todayIso;
-          return (
-            <button
-              key={cell.iso}
-              type="button"
-              onClick={() => onPick(cell.iso)}
-              className={clsx(
-                "mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[12px] transition-micro",
-                selected
-                  ? "bg-[#1565C0] font-semibold text-[#E7E9EB]"
-                  : ranged
-                    ? "bg-[#1976D2]/12 text-text-primary"
-                    : cell.inMonth
-                      ? "text-text-primary hover:bg-surface-overlay"
-                      : "text-text-muted/60 hover:bg-surface-overlay",
-                !selected && isToday && "ring-1 ring-[#1976D2]/60",
-              )}
-            >
-              {cell.day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
   currentUser,
@@ -1231,116 +1029,6 @@ const FilesTab: React.FC<FilesTabProps> = ({
           />
         ))
       )}
-    </div>
-  );
-};
-
-// --- date range (dd/mm/yyyy text inputs — native <input type=date> shows the
-// browser-locale format (mm/dd/yyyy in en) and can't be forced to dd/mm/yyyy,
-// so we use masked text inputs and keep yyyy-mm-dd as the internal value) ------
-
-const DateRangeFields: React.FC<{
-  from: string | null;
-  to: string | null;
-  onApply: (from: string | null, to: string | null) => void;
-  onCancel: () => void;
-}> = ({ from, to, onApply, onCancel }) => {
-  const { t } = useTranslation();
-  const [localFrom, setLocalFrom] = useState(isoToDisplay(from ?? ""));
-  const [localTo, setLocalTo] = useState(isoToDisplay(to ?? ""));
-
-  const fromInvalid = localFrom.length > 0 && displayToIso(localFrom) === null;
-  const toInvalid = localTo.length > 0 && displayToIso(localTo) === null;
-
-  const fromIso = displayToIso(localFrom);
-  const toIsoVal = displayToIso(localTo);
-
-  // Calendar range pick: no from (or a complete range already) → start over
-  // with this day as from; otherwise close the range (swap if picked earlier).
-  const handlePick = (iso: string) => {
-    if (!fromIso || (fromIso && toIsoVal)) {
-      setLocalFrom(isoToDisplay(iso));
-      setLocalTo("");
-      return;
-    }
-    if (iso < fromIso) {
-      setLocalTo(localFrom);
-      setLocalFrom(isoToDisplay(iso));
-    } else {
-      setLocalTo(isoToDisplay(iso));
-    }
-  };
-
-  const inputClass = (invalid: boolean) =>
-    clsx(
-      "w-full rounded-md border bg-background px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none",
-      invalid
-        ? "border-danger/70 focus:border-danger"
-        : "border-border/70 focus:border-[#1976D2]/60",
-    );
-
-  return (
-    <div className="w-[248px] p-1.5">
-      <p className="px-1 pb-1.5 text-[12px] font-medium text-text-secondary">
-        {t("sidebar:globalSearch.filter.pickRange")}
-      </p>
-      <div className="mb-2 flex gap-1.5 px-1">
-        <label className="block flex-1">
-          <span className="mb-0.5 block text-[11px] text-text-muted">
-            {t("sidebar:globalSearch.filter.from")}
-          </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="dd/mm/yyyy"
-            value={localFrom}
-            onChange={(e) => setLocalFrom(maskDateInput(e.target.value))}
-            className={inputClass(fromInvalid)}
-          />
-        </label>
-        <label className="block flex-1">
-          <span className="mb-0.5 block text-[11px] text-text-muted">
-            {t("sidebar:globalSearch.filter.to")}
-          </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="dd/mm/yyyy"
-            value={localTo}
-            onChange={(e) => setLocalTo(maskDateInput(e.target.value))}
-            className={inputClass(toInvalid)}
-          />
-        </label>
-      </div>
-
-      <div className="mb-1.5 border-t border-border/50 pt-1.5">
-        <MiniMonthCalendar
-          from={fromIso}
-          to={toIsoVal}
-          initialIso={fromIso ?? toIsoVal}
-          onPick={handlePick}
-        />
-      </div>
-
-      <div className="flex justify-end gap-1.5 px-1">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md px-3 py-1.5 text-[13px] font-medium text-text-secondary transition-micro hover:bg-surface-overlay"
-        >
-          {t("sidebar:globalSearch.filter.cancel")}
-        </button>
-        <button
-          type="button"
-          disabled={fromInvalid || toInvalid}
-          onClick={() =>
-            onApply(displayToIso(localFrom), displayToIso(localTo))
-          }
-          className="rounded-md bg-[#1565C0] px-3 py-1.5 text-[13px] font-medium text-[#E7E9EB] transition-micro hover:bg-[#1976D2] disabled:opacity-50"
-        >
-          {t("sidebar:globalSearch.filter.confirm")}
-        </button>
-      </div>
     </div>
   );
 };
