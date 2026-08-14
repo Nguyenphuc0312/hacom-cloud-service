@@ -171,6 +171,12 @@ importers:
       postcss:
         specifier: ^8.5.25
         version: 8.5.26
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0
+      remark-rehype:
+        specifier: 11.1.2
+        version: 11.1.2
       rollup-plugin-visualizer:
         specifier: ^5.12.0
         version: 5.14.0(rollup@4.60.3)
@@ -183,6 +189,9 @@ importers:
       typescript-eslint:
         specifier: ^8.46.4
         version: 8.59.2(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3)
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
       vite:
         specifier: ^7.3.6
         version: 7.3.6(@types/node@24.12.2)(jiti@1.21.7)
