@@ -7,8 +7,11 @@
  *  - Xếp event trùng giờ vào các cột (overlap layout, tối đa `maxCols` cột).
  *  - Tiện ích tuần (Monday-based) + số tuần ISO.
  *
- * Quy ước thời gian: render ISO (UTC) → local qua `new Date(...).getHours()/getMinutes()`,
- * KHÔNG slice chuỗi (lệch 7h ở VN). Xem APIcalendar.md mục 8.
+ * Quy ước thời gian: giờ/ngày hiển thị lấy theo MÚI GIỜ CỦA SỰ KIỆN
+ * (`HRCalendarEvent.timezone`), đã được `calendarEventMapping` quy sẵn vào
+ * `date`/`time`/`endDate`/`endTime`. KHÔNG đọc lại `startAt` bằng
+ * `getHours()` (ra giờ máy → lệch khi mở ở nước ngoài) và KHÔNG slice chuỗi ISO
+ * (ra giờ UTC → lệch 7h ở VN). Xem APIcalendar.md mục 8 + `eventTimeZone.ts`.
  */
 
 import type { CalendarEvent, ExtendedCalendarEvent } from "../data/calendarEvents";
@@ -27,21 +30,68 @@ const sameLocalDay = (a: Date, b: Date): boolean =>
 const localDayStartMs = (d: Date): number =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
-/** Date bắt đầu của event (ưu tiên ISO startAt; fallback chuỗi `event.date`). */
-const eventStartDate = (event: CalendarEvent): Date | null => {
-  const ext = event as ExtendedCalendarEvent;
-  const d = ext.startAt ? new Date(ext.startAt) : new Date(`${event.date}T00:00:00`);
+/**
+ * Ngày (00:00) của event để xếp vào ô lưới lịch.
+ *
+ * ƯU TIÊN `event.date` — chuỗi YYYY-MM-DD đã được `mapHrmEventToCalendarEvent`
+ * quy về ĐÚNG múi giờ của sự kiện. Đọc thẳng `startAt` bằng `new Date(...)` là
+ * lấy giờ MÁY: cuộc họp 08:00 giờ VN mở ở New York thành 21:00 hôm trước, nên
+ * event nhảy sang ô ngày hôm trước trên lưới.
+ *
+ * `T00:00:00` (không hậu tố Z) được JS hiểu là 00:00 giờ máy — đúng ý ở đây, vì
+ * ô lưới cũng dựng bằng `new Date(y, m, d)` tức cũng theo giờ máy. Hai bên cùng
+ * hệ quy chiếu nên phép so ngày là chính xác ở mọi múi giờ.
+ */
+const dateOnlyFromString = (value: string | undefined): Date | null => {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-/** Date kết thúc của event (ưu tiên ISO endAt; fallback = ngày bắt đầu). */
+/** Date bắt đầu của event (ưu tiên `event.date` đã chuẩn hoá; fallback ISO). */
+const eventStartDate = (event: CalendarEvent): Date | null => {
+  const fromDate = dateOnlyFromString(event.date);
+  if (fromDate) return fromDate;
+
+  const ext = event as ExtendedCalendarEvent;
+  if (!ext.startAt) return null;
+  const d = new Date(ext.startAt);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/** Date kết thúc của event (ưu tiên `endDate` đã chuẩn hoá; fallback ISO endAt). */
 const eventEndDate = (event: CalendarEvent): Date | null => {
   const ext = event as ExtendedCalendarEvent;
+  const fromDate = dateOnlyFromString(ext.endDate);
+  if (fromDate) return fromDate;
+
   if (ext.endAt) {
     const d = new Date(ext.endAt);
     if (!Number.isNaN(d.getTime())) return d;
   }
   return eventStartDate(event);
+};
+
+/**
+ * Sự kiện kết thúc ĐÚNG 00:00 (theo giờ tường của chính nó) — thực chất đã hết ở
+ * ngày hôm trước, nên không tô sang ô ngày kế tiếp.
+ *
+ * KHÔNG suy ra từ `eventEndDate`: hàm đó nay trả về ngày thuần (00:00) đã chuẩn
+ * hoá, nên `getHours()` luôn bằng 0 và mọi sự kiện nhiều ngày sẽ bị cắt mất ngày
+ * cuối. Ưu tiên `endTime` — giờ tường mapper đã tính theo đúng múi giờ sự kiện.
+ */
+const endsAtMidnight = (event: CalendarEvent): boolean => {
+  const ext = event as ExtendedCalendarEvent;
+  if (!ext.endAt) return false;
+
+  if (typeof ext.endTime === "string" && TIME_RE.test(ext.endTime)) {
+    return ext.endTime.startsWith("00:00");
+  }
+
+  // Event chưa qua mapper (dữ liệu tĩnh/cũ): đành đọc theo giờ máy.
+  const parsed = new Date(ext.endAt);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getHours() === 0 && parsed.getMinutes() === 0;
 };
 
 /**
@@ -56,7 +106,7 @@ export const eventOccursOnDay = (event: CalendarEvent, day: Date): boolean => {
   const dayMs = localDayStartMs(day);
   const startMs = localDayStartMs(start);
   const endMs = localDayStartMs(end);
-  if (dayMs === endMs && dayMs > startMs && end.getHours() === 0 && end.getMinutes() === 0) {
+  if (dayMs === endMs && dayMs > startMs && endsAtMidnight(event)) {
     return false;
   }
   return dayMs >= startMs && dayMs <= endMs;
