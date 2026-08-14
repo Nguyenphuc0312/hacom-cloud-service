@@ -766,9 +766,9 @@ export const CalendarPage: React.FC = () => {
       return {
         id: event.id,
         title: event.title,
-        date: toLocalDateString(event.startAt),
-        startTime: toLocalTimeString(event.startAt),
-        endTime: toLocalTimeString(event.endAt),
+        date: toLocalDateString(event.startAt, event.timezone),
+        startTime: toLocalTimeString(event.startAt, event.timezone),
+        endTime: toLocalTimeString(event.endAt, event.timezone),
         chairman: meta.meetingChairman ?? "",
         participants: participantNames,
         format: meta.meetingFormat === "online" ? "online" : "offline",

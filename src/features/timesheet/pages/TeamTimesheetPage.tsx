@@ -17,7 +17,11 @@ import {
   type TimesheetPeriodStatus,
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
-import { formatCalendarDate, formatCalendarDateTime } from "../../../utils/formatTime";
+import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
+import {
+  formatWorkDate,
+  formatWorkDateTime,
+} from "../../work/utils/workDatePresentation";
 
 type LoadState =
   | { status: "idle" | "loading"; data: TeamTimesheetResponse | null; error: null }
@@ -39,17 +43,6 @@ const confirmationStatusLabel: Record<TimesheetConfirmationStatus, string> = {
   DISPUTED: "Khiếu nại",
 };
 
-const toInputMonth = (month: number, year: number) =>
-  `${year}-${String(month).padStart(2, "0")}`;
-
-const fromInputMonth = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  return {
-    month: Number.isFinite(month) && month >= 1 && month <= 12 ? month : now.getMonth() + 1,
-    year: Number.isFinite(year) && year >= 2020 && year <= 2100 ? year : now.getFullYear(),
-  };
-};
-
 const extractErrorMessage = (error: unknown) => {
   const status = (error as { response?: { status?: number } })?.response?.status;
   if (status === 401 || status === 403) {
@@ -64,19 +57,9 @@ const statusClass = (status: TimesheetConfirmationStatus) => {
   return "border-slate-200 bg-slate-50 text-slate-700";
 };
 
-const formatDateTime = (value: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return formatCalendarDateTime(date);
-};
+const formatDateTime = (value: string | null) => formatWorkDateTime(value);
 
-const formatShortDate = (value?: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return formatCalendarDate(date);
-};
+const formatShortDate = (value?: string | null) => formatWorkDate(value);
 
 const SummaryTile: React.FC<{
   label: string;
@@ -166,7 +149,7 @@ export const TeamTimesheetPage: React.FC = () => {
               Nhóm của tôi
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#64748b]">
-              <span>Tháng {month}/{year}</span>
+              <span>Tháng {String(month).padStart(2, "0")}/{year}</span>
               {period ? (
                 <>
                   <span aria-hidden="true">·</span>
@@ -190,19 +173,12 @@ export const TeamTimesheetPage: React.FC = () => {
             >
               <ChevronLeft size={18} aria-hidden="true" />
             </button>
-            <label className="grid gap-1 text-xs font-medium text-[#475569]">
-              <span>Tháng</span>
-              <input
-                type="month"
-                value={toInputMonth(month, year)}
-                onChange={(event) => {
-                  const next = fromInputMonth(event.currentTarget.value);
-                  setMonth(next.month);
-                  setYear(next.year);
-                }}
-                className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
-              />
-            </label>
+            <TimesheetPeriodPicker
+              month={month}
+              year={year}
+              onMonthChange={setMonth}
+              onYearChange={setYear}
+            />
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#d7dce3] bg-white text-[#334155] hover:bg-[#f8fbff]"

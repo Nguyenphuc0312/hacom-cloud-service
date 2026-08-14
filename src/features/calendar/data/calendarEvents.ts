@@ -32,6 +32,15 @@ export interface ExtendedCalendarEvent extends CalendarEvent {
   startAt?: string;
   /** Full end timestamp from API */
   endAt?: string;
+  /**
+   * Ngày kết thúc (YYYY-MM-DD) đã quy về ĐÚNG múi giờ của sự kiện, song song với
+   * `date` là ngày bắt đầu. Có sẵn ở đây thì tầng lưới lịch không phải đọc
+   * `endAt` bằng giờ máy — cách đó khiến sự kiện nhảy sang ô ngày khác khi mở ở
+   * múi giờ khác.
+   */
+  endDate?: string;
+  /** Giờ kết thúc HH:mm theo múi giờ sự kiện, song song với `time`. */
+  endTime?: string;
   /** All-day event → render ở hàng "Cả ngày" thay vì trên lưới giờ */
   isAllDay?: boolean;
   /** Meeting format: "offline" | "online" | null */

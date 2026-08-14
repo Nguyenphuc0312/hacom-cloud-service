@@ -30,7 +30,7 @@ import {
   getNoticeStatus,
   SICK_ATTACHMENT_MIN_DAYS,
 } from "../utils/leaveRules";
-import { formatCalendarDate } from "../../../utils/formatTime";
+import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { DateFieldVN, isoToVn, vnToIso } from "../../../components/ui/DateFieldVN";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
 
@@ -107,11 +107,7 @@ const NoticeWarning: React.FC<{ request: LeaveRequest }> = ({ request }) => {
   );
 };
 
-const formatDate = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
-  return formatCalendarDate(date);
-};
+const formatDate = (value: string) => formatWorkDate(value);
 
 const formatDays = (value: number | null | undefined) =>
   value === null || value === undefined ? "-" : value.toLocaleString("vi-VN");
