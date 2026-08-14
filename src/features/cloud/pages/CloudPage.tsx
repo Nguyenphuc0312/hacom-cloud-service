@@ -174,13 +174,30 @@ const isContiguousMessageSelection = (
   );
 };
 
+const getMessageRangeIds = (
+  orderedMessages: Message[],
+  startId: string,
+  endId: string,
+): string[] => {
+  const startIndex = orderedMessages.findIndex((message) => message.id === startId);
+  const endIndex = orderedMessages.findIndex((message) => message.id === endId);
+  if (startIndex < 0 || endIndex < 0) return [];
+
+  const lowerIndex = Math.min(startIndex, endIndex);
+  const upperIndex = Math.max(startIndex, endIndex);
+  return orderedMessages
+    .slice(lowerIndex, upperIndex + 1)
+    .map((message) => message.id);
+};
+
 type CloudSelectionDrag = {
   startId: string;
   startX: number;
   startY: number;
   active: boolean;
   selecting: boolean;
-  visited: Set<string>;
+  baseSelection: Set<string>;
+  lastMessageId?: string;
   holdTimer?: number;
 };
 
@@ -538,15 +555,6 @@ export default function CloudPage() {
     });
   }, []);
 
-  const setMessageSelected = useCallback((messageId: string, selected: boolean) => {
-    setSelectedMessageIds((current) => {
-      const next = new Set(current);
-      if (selected) next.add(messageId);
-      else next.delete(messageId);
-      return next;
-    });
-  }, []);
-
   const exitSelectionMode = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
@@ -572,6 +580,24 @@ export default function CloudPage() {
       document.body.style.userSelect = "";
     };
 
+    const applySelectionRange = (drag: CloudSelectionDrag, messageId: string) => {
+      if (drag.lastMessageId === messageId) return;
+
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      const rangeIds = getMessageRangeIds(selectableMessages, drag.startId, messageId);
+      if (rangeIds.length === 0) return;
+
+      drag.lastMessageId = messageId;
+      setSelectedMessageIds(() => {
+        const next = new Set(drag.baseSelection);
+        for (const rangeId of rangeIds) {
+          if (drag.selecting) next.add(rangeId);
+          else next.delete(rangeId);
+        }
+        return next;
+      });
+    };
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const target = event.target as HTMLElement | null;
@@ -590,7 +616,7 @@ export default function CloudPage() {
         startY: event.clientY,
         active: false,
         selecting: !selectedMessageIdsRef.current.has(messageId),
-        visited: new Set([messageId]),
+        baseSelection: new Set(selectedMessageIdsRef.current),
       };
       // Desktop users commonly hold a message instead of dragging. Start the
       // same selection mode after a short hold, while preserving normal click
@@ -602,7 +628,7 @@ export default function CloudPage() {
         document.body.style.userSelect = "none";
         window.getSelection()?.removeAllRanges();
         enterSelectionMode();
-        setMessageSelected(current.startId, current.selecting);
+        applySelectionRange(current, current.startId);
         suppressSelectionClickRef.current = true;
       }, 450);
       selectionDragRef.current = selection;
@@ -626,17 +652,16 @@ export default function CloudPage() {
         document.body.style.userSelect = "none";
         window.getSelection()?.removeAllRanges();
         enterSelectionMode();
-        setMessageSelected(drag.startId, drag.selecting);
+        applySelectionRange(drag, drag.startId);
       }
 
       const target = event.target as HTMLElement | null;
       const row = target?.closest<HTMLElement>("[data-message-id]");
       const messageId = row?.dataset.messageId;
-      if (!messageId || drag.visited.has(messageId)) return;
+      if (!messageId) return;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
       if (!selectableMessages.some((message) => message.id === messageId)) return;
-      drag.visited.add(messageId);
-      setMessageSelected(messageId, drag.selecting);
+      applySelectionRange(drag, messageId);
       event.preventDefault();
     };
 
@@ -674,7 +699,7 @@ export default function CloudPage() {
       document.removeEventListener("click", handleSelectionClick, true);
       finishDrag();
     };
-  }, [enterSelectionMode, messages, setMessageSelected, toggleMessageSelection, trashMessages, viewMode]);
+  }, [enterSelectionMode, messages, toggleMessageSelection, trashMessages, viewMode]);
 
   const handleAddFiles = useCallback(
     (files: File[]) => {
