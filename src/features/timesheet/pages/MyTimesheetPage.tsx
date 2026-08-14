@@ -21,8 +21,9 @@ import {
   type TimesheetPeriodStatus,
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
-import { formatCalendarDate } from "../../../utils/formatTime";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
+import { formatWorkDate } from "../../work/utils/workDatePresentation";
+import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
 
 type LoadState =
@@ -80,17 +81,9 @@ const symbolClass = (symbol: string) => {
 };
 
 const formatMonthTitle = (month: number, year: number) =>
-  `Tháng ${month}/${year}`;
+  `Tháng ${String(month).padStart(2, "0")}/${year}`;
 
-const formatShortDate = (value?: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return formatCalendarDate(date);
-};
-
-const toInputMonth = (month: number, year: number) =>
-  `${year}-${String(month).padStart(2, "0")}`;
+const formatShortDate = (value?: string | null) => formatWorkDate(value);
 
 const fromInputMonth = (value: string) => {
   const [year, month] = value.split("-").map(Number);
@@ -148,7 +141,7 @@ const DayCell: React.FC<{ day: MyTimesheetDay }> = ({ day }) => {
             : "border-[#e5e7eb] bg-[#f8fbff]",
         day.needsExplanation ? "ring-1 ring-amber-300" : "",
       ].join(" ")}
-      title={title || day.date}
+      title={title || formatShortDate(day.date)}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-[#64748b]">
@@ -516,19 +509,12 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           >
             <ChevronLeft size={18} aria-hidden="true" />
           </button>
-          <label className="grid gap-1 text-xs font-medium text-[#475569]">
-            <span>Tháng</span>
-            <input
-              type="month"
-              value={toInputMonth(month, year)}
-              onChange={(event) => {
-                const next = fromInputMonth(event.currentTarget.value);
-                setMonth(next.month);
-                setYear(next.year);
-              }}
-              className="h-10 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
-            />
-          </label>
+          <TimesheetPeriodPicker
+            month={month}
+            year={year}
+            onMonthChange={setMonth}
+            onYearChange={setYear}
+          />
           <button
             type="button"
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#d7dce3] bg-white text-[#334155] hover:bg-[#f8fbff]"

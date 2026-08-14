@@ -385,17 +385,19 @@ export const EventDetailModal: React.FC<{
   // Get status badge info
   const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
 
-  // Time display — convert ISO (UTC) to local wall-clock
-  const startTime = isExtended && "startAt" in event ? toLocalTimeString(event.startAt) : event.time;
-  const endTime = isExtended && "endAt" in event ? toLocalTimeString(event.endAt) : null;
+  // Giờ hiển thị theo múi giờ CỦA SỰ KIỆN (không phải giờ máy người xem);
+  // thiếu thì helper rơi về giờ VN.
+  const eventZone = hrEvent?.timezone;
+  const startTime = isExtended && "startAt" in event ? toLocalTimeString(event.startAt, eventZone) : event.time;
+  const endTime = isExtended && "endAt" in event ? toLocalTimeString(event.endAt, eventZone) : null;
   const duration = isExtended && "startAt" in event && "endAt" in event && event.startAt && event.endAt
     ? calculateDuration(event.startAt, event.endAt)
     : null;
   // Sự kiện kéo dài nhiều ngày (qua đêm / công tác) → bắt đầu & kết thúc khác ngày local.
   const startAtIso = isExtended && "startAt" in event ? event.startAt : null;
   const endAtIso = isExtended && "endAt" in event ? event.endAt : null;
-  const startDateLocal = startAtIso ? toLocalDateString(startAtIso) : null;
-  const endDateLocal = endAtIso ? toLocalDateString(endAtIso) : null;
+  const startDateLocal = startAtIso ? toLocalDateString(startAtIso, eventZone) : null;
+  const endDateLocal = endAtIso ? toLocalDateString(endAtIso, eventZone) : null;
   const isMultiDay = !!(startDateLocal && endDateLocal && startDateLocal !== endDateLocal);
 
   // Location + meeting extras (chairman/format lưu trong metadata của HR event)

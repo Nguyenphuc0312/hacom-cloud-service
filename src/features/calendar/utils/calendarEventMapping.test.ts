@@ -369,3 +369,87 @@ describe("buildCalendarEventForm (prefill Sửa từ chat)", () => {
     });
   });
 });
+
+/**
+ * Lịch phải đọc GIỐNG NHAU ở mọi nơi trên thế giới: giờ hiển thị bám
+ * `HRCalendarEvent.timezone`, không bám giờ máy đang mở app.
+ */
+describe("đọc lịch từ nước ngoài (timezone của sự kiện, không phải của máy)", () => {
+  const meetingIn = (timezone: string) =>
+    mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "tz1",
+        title: "Họp",
+        // 08:00 giờ VN.
+        startAt: "2026-06-04T01:00:00.000Z",
+        endAt: "2026-06-04T02:00:00.000Z",
+        timezone,
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+
+  it("sự kiện giờ VN luôn hiện 08:00 ngày 04/06, dù máy ở múi giờ nào", () => {
+    const ev = meetingIn("Asia/Ho_Chi_Minh");
+    expect(ev.date).toBe("2026-06-04");
+    expect(ev.time).toBe("08:00");
+    expect(ev.endTime).toBe("09:00");
+  });
+
+  it("sự kiện tạo ở múi giờ khác thì hiện theo đúng múi giờ ĐÓ", () => {
+    expect(meetingIn("Asia/Tokyo").time).toBe("10:00");
+    // New York lùi qua hôm trước: đổi cả ngày, không chỉ đổi giờ.
+    const ny = meetingIn("America/New_York");
+    expect(ny.time).toBe("21:00");
+    expect(ny.date).toBe("2026-06-03");
+  });
+
+  it("timezone thiếu/rác thì rơi về giờ VN, không rơi về giờ máy", () => {
+    expect(meetingIn("Khong/Ton_Tai").time).toBe("08:00");
+  });
+
+  it("xếp đúng ô ngày trên lưới lịch theo timezone sự kiện", () => {
+    const ev = meetingIn("Asia/Ho_Chi_Minh");
+    expect(eventOccursOnDay(ev, new Date(2026, 5, 4))).toBe(true);
+    expect(eventOccursOnDay(ev, new Date(2026, 5, 3))).toBe(false);
+    expect(eventOccursOnDay(ev, new Date(2026, 5, 5))).toBe(false);
+  });
+
+  it("sự kiện qua đêm vẫn trải đủ 2 ngày theo giờ sự kiện", () => {
+    // 23:00 → 01:00 hôm sau, giờ VN.
+    const overnight = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "tz2",
+        title: "Trực đêm",
+        startAt: "2026-06-04T16:00:00.000Z",
+        endAt: "2026-06-04T18:00:00.000Z",
+        timezone: "Asia/Ho_Chi_Minh",
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+    expect(overnight.date).toBe("2026-06-04");
+    expect(overnight.time).toBe("23:00");
+    expect(overnight.endDate).toBe("2026-06-05");
+    expect(eventOccursOnDay(overnight, new Date(2026, 5, 4))).toBe(true);
+    expect(eventOccursOnDay(overnight, new Date(2026, 5, 5))).toBe(true);
+  });
+
+  it("kết thúc đúng 00:00 thì KHÔNG tô lem sang ngày hôm sau", () => {
+    // 22:00 → 00:00 giờ VN: thực chất đã hết trong ngày 04.
+    const untilMidnight = mapHrmEventToCalendarEvent(
+      makeHrmEvent({
+        id: "tz3",
+        title: "Hết lúc nửa đêm",
+        startAt: "2026-06-04T15:00:00.000Z",
+        endAt: "2026-06-04T17:00:00.000Z",
+        timezone: "Asia/Ho_Chi_Minh",
+        eventType: "MEETING",
+        visibility: "PUBLIC",
+      }),
+    );
+    expect(untilMidnight.endTime).toBe("00:00");
+    expect(eventOccursOnDay(untilMidnight, new Date(2026, 5, 4))).toBe(true);
+    expect(eventOccursOnDay(untilMidnight, new Date(2026, 5, 5))).toBe(false);
+  });
+});
