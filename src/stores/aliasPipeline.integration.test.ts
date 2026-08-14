@@ -129,4 +129,31 @@ describe("alias pipeline: fetchFriends → display name", () => {
     );
     expect(result.current).toBe("Nguyễn Thế Huy Hoàng");
   });
+
+  it("follows a friend's self-rename when the viewer set no alias (Zalo rule)", async () => {
+    // Zalo: không đặt tên gợi nhớ ⇒ luôn thấy tên MỚI NHẤT người đó tự đặt.
+    mocks.getFriends.mockResolvedValueOnce(
+      pageOf([relation("u1", "Nguyễn Thế Huy Hoàn", null)]),
+    );
+    await useFriendshipStore.getState().fetchFriends();
+
+    // Người đó đổi tên hiển thị; enrich mang tên mới về.
+    useEnrichedProfileStore.getState().setEnrichedName("u1", "Nguyễn Thế Huy Hoàng");
+
+    const { result } = renderHook(() => useResolvedDisplayName("u1", "Nguyễn Thế Huy Hoàn"));
+    expect(result.current).toBe("Nguyễn Thế Huy Hoàng");
+  });
+
+  it("keeps the viewer's alias even after the friend renames themselves (Zalo rule)", async () => {
+    // Zalo: đã đặt tên gợi nhớ ⇒ người kia đổi tên thế nào cũng KHÔNG ảnh hưởng.
+    mocks.getFriends.mockResolvedValueOnce(
+      pageOf([relation("u1", "Nguyễn Thế Huy Hoàn", "Sếp Hoàng")]),
+    );
+    await useFriendshipStore.getState().fetchFriends();
+
+    useEnrichedProfileStore.getState().setEnrichedName("u1", "Tên Mới Tự Đổi");
+
+    const { result } = renderHook(() => useResolvedDisplayName("u1", "Tên Mới Tự Đổi"));
+    expect(result.current).toBe("Sếp Hoàng");
+  });
 });

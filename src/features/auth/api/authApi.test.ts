@@ -34,4 +34,44 @@ describe("normalizeAuthResponse", () => {
       unitCode: "DV001",
     });
   });
+
+  it("keeps the self-chosen displayName instead of the HR legal name", () => {
+    // Regression: the adapter preferred `hrProfile.fullName` for `displayName`,
+    // so every `/me` overwrote the name the user had just saved — the rename
+    // reported success and then snapped back to the HR name on refresh.
+    const result = normalizeAuthResponse({
+      user: {
+        id: "auth-user-1",
+        username: "HC000975",
+        displayName: "Đậu Cao Minh Nhậtttt",
+        hrProfile: {
+          employeeCode: "HC000975",
+          fullName: "Đậu Cao Minh Nhật",
+        },
+      },
+    });
+
+    expect(result.user).toMatchObject({
+      displayName: "Đậu Cao Minh Nhậtttt",
+      effectiveDisplayName: "Đậu Cao Minh Nhậtttt",
+      // HR stays reachable so it can still win when displayName is empty.
+      fullNameFromHr: "Đậu Cao Minh Nhật",
+    });
+  });
+
+  it("falls back to the HR name when the user has no displayName", () => {
+    const result = normalizeAuthResponse({
+      user: {
+        id: "auth-user-1",
+        username: "HC000975",
+        displayName: "   ",
+        hrProfile: { fullName: "Đậu Cao Minh Nhật" },
+      },
+    });
+
+    expect(result.user).toMatchObject({
+      displayName: "Đậu Cao Minh Nhật",
+      effectiveDisplayName: "Đậu Cao Minh Nhật",
+    });
+  });
 });

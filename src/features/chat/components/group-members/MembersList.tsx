@@ -66,8 +66,10 @@ export const MembersList: React.FC<MembersListProps> = ({
   // Sort members: owner first, then admin, then by name (alias-aware so the
   // ordering matches the "tên gợi nhớ" MemberRow actually shows).
   const sortedMembers = React.useMemo(() => {
+    // Order by the name MemberRow actually renders (alias > displayName >
+    // HR name), otherwise the list sorts by a name the user cannot see.
     const nameOf = (m: GroupMember) =>
-      (nameByUserId[m.id] || m.fullNameFromHR || m.displayName || m.username || "").toLowerCase();
+      (nameByUserId[m.id] || m.displayName || m.fullNameFromHR || m.username || "").toLowerCase();
     return [...members].sort((a, b) => {
       const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
       if (roleDiff !== 0) return roleDiff;

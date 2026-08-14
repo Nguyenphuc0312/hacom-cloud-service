@@ -258,15 +258,34 @@ const resolveTokens = (
  * The signed URL expires in ~15m, which is why it is never persisted (see
  * `partialize`) — it is re-resolved on each bootstrap/refresh.
  */
-const fetchOwnAvatarUrl = async (): Promise<string | undefined> => {
+const fetchOwnAvatarUrl = async (): Promise<string | undefined> =>
+  (await fetchOwnChatProfile())?.avatar ?? undefined;
+
+/**
+ * Self-profile fields that live in chat-api, not auth.
+ *
+ * `displayName` (the name the user sets in "Chỉnh sửa hồ sơ") is stored in
+ * chat-api `public.user_profiles.display_name`. The public `/auth/me` contract
+ * deliberately strips `displayName` and exposes HR data only under `hrProfile`
+ * (see auth-identity.service.ts `toPublicCurrentAuthUser`), so a rename is
+ * simply NOT REACHABLE from `/auth/me` — after a reload the UI fell back to the
+ * HR legal name and the rename looked like it had been discarded, even though
+ * the PATCH had succeeded.
+ *
+ * `GET /users/profile` is the authoritative read for these self-owned fields.
+ */
+const fetchOwnChatProfile = async (): Promise<
+  { avatar?: string | null; displayName?: string | null } | null
+> => {
   try {
     const response = await userApi.getProfile();
-    const avatar = (unwrapApiSuccess(response) as { avatar?: string | null })
-      ?.avatar;
-    return avatar ?? undefined;
-    // ponytail: avatar is cosmetic — on failure the UI falls back to initials
+    return unwrapApiSuccess(response) as {
+      avatar?: string | null;
+      displayName?: string | null;
+    };
+    // ponytail: cosmetic/self fields — on failure the UI falls back to auth data
   } catch {
-    return undefined;
+    return null;
   }
 };
 
@@ -283,10 +302,22 @@ const fetchCurrentUser = async (): Promise<User> => {
   user.mustChangePassword = accessToken
     ? parseMustChangePasswordFromToken(accessToken)
     : false;
-  // /auth/me reports `avatarFileId` but never a URL; skip the extra chat-api
-  // round-trip for accounts that have no avatar set at all.
-  if (!user.avatar && user.avatarFileId) {
-    user.avatar = await fetchOwnAvatarUrl();
+
+  // `/auth/me` cannot carry the self-chosen `displayName` (see
+  // `fetchOwnChatProfile`), and it reports `avatarFileId` but never an avatar
+  // URL. One chat-api read backfills both. Skip it only when there is nothing
+  // to gain: no avatar to resolve AND auth already produced a display name.
+  const needsAvatar = !user.avatar && Boolean(user.avatarFileId);
+  const chatProfile = await fetchOwnChatProfile();
+  if (chatProfile) {
+    const chatDisplayName = chatProfile.displayName?.trim();
+    if (chatDisplayName) {
+      user.displayName = chatDisplayName;
+      user.effectiveDisplayName = chatDisplayName;
+    }
+    if (needsAvatar && chatProfile.avatar) {
+      user.avatar = chatProfile.avatar;
+    }
   }
   return user;
 };
