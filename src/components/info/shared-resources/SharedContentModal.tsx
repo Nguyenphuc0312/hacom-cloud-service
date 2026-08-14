@@ -8,9 +8,17 @@ import {
   MagnifyingGlassIcon,
   ArrowLeftIcon,
   ArrowUturnRightIcon,
-  ChevronDownIcon,
   EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
+import { ResourceFilterBar } from "../../common/resource-filter/ResourceFilterBar";
+import {
+  EMPTY_RESOURCE_FILTERS,
+  collectSenders,
+  formatDayHeading,
+  groupByDay,
+  matchesFilters,
+  type ResourceFilters,
+} from "../../common/resource-filter/resourceFilter";
 import { Modal, Skeleton, toast } from "../../ui";
 import {
   useGetConversationMediaQuery,
@@ -207,7 +215,10 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="Kho lưu trữ" size="xl">
+      {/* `full` (max-w-4xl), not `xl` (max-w-xl ≈ 576px): this panel holds a
+          search box, filters and a file/link list whose names were being
+          ellipsised with most of the row still empty. */}
+      <Modal isOpen={isOpen} onClose={onClose} title="Kho lưu trữ" size="full">
         {/* Tab Bar */}
         <div className="flex border-b border-border">
           {tabs.map((tab) => (
@@ -466,6 +477,7 @@ const ModalMediaTab: React.FC<{
   isPersonalCloud,
 }) => {
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<ResourceFilters>(EMPTY_RESOURCE_FILTERS);
   const [urlCache, setUrlCache] = useState<{
     forConversationId: string;
     urls: Record<string, string>;
@@ -478,10 +490,20 @@ const ModalMediaTab: React.FC<{
 
   const hasNext = data?.pagination.hasNext ?? false;
 
+  // Sender choices come from the whole loaded page, so narrowing by sender does
+  // not shrink the list of senders still on offer.
+  const pageItems = useMemo(
+    () => (data?.data ?? []).filter((item) => !hiddenMessageIds.has(item.messageId)),
+    [data?.data, hiddenMessageIds],
+  );
+  const senders = useMemo(() => collectSenders(pageItems), [pageItems]);
+
   // Memoize items to create stable reference
-  const items = useMemo(() => {
-    return (data?.data ?? []).filter((item) => !hiddenMessageIds.has(item.messageId));
-  }, [data?.data, hiddenMessageIds]);
+  const items = useMemo(
+    () => pageItems.filter((item) => matchesFilters(item, filters)),
+    [pageItems, filters],
+  );
+  const dayGroups = useMemo(() => groupByDay(items), [items]);
 
   // Memoize thumbnailUrls to ensure stable reference
   const thumbnailUrls = useMemo(() => {
@@ -568,8 +590,12 @@ const ModalMediaTab: React.FC<{
   if (isLoading) {
     return (
       <div className="p-4">
-        <ResourceFilterBar />
-        <div className="mt-6 grid grid-cols-3 gap-2">
+        <ResourceFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          senders={senders}
+        />
+        <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
           {Array.from({ length: 12 }).map((_, i) => (
             <Skeleton key={i} className="aspect-square rounded-md" />
           ))}
@@ -581,10 +607,18 @@ const ModalMediaTab: React.FC<{
   if (items.length === 0) {
     return (
       <div className="p-4">
-        <ResourceFilterBar />
+        <ResourceFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          senders={senders}
+        />
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
           <PhotoIcon className="h-12 w-12" />
-          <p className="text-sm">Chưa có ảnh hoặc video nào được chia sẻ</p>
+          <p className="text-sm">
+            {pageItems.length > 0
+              ? "Không có ảnh hoặc video nào khớp bộ lọc"
+              : "Chưa có ảnh hoặc video nào được chia sẻ"}
+          </p>
         </div>
       </div>
     );
@@ -592,32 +626,37 @@ const ModalMediaTab: React.FC<{
 
   return (
     <div className="p-4">
-      <ResourceFilterBar />
-      <h4 className="mt-6 text-base font-semibold text-text-primary">
-        Ngày {new Date(items[0]?.createdAt ?? Date.now()).toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "long",
-        })}
-      </h4>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {items.map((item) => (
-          <ModalMediaThumb
-            key={`${item.messageId}-${item.fileId}`}
-            conversationId={conversationId}
-            item={item}
-            fallbackUrl={thumbnailUrls[item.fileId] ?? null}
-            onImageClick={(url) => handleThumbClick(item.fileId, url)}
-            onVideoOpen={onVideoOpen}
-            onForward={() => onForward(item)}
-            onJumpToMessage={onJumpToMessage}
-            onDeleted={onDeleted}
-            recallLabel={recallLabel}
-            isPersonalCloud={isPersonalCloud}
-          />
-        ))}
-      </div>
+      <ResourceFilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        senders={senders}
+      />
+      {dayGroups.map((group) => (
+        <section key={group.iso}>
+          <h4 className="mt-6 text-base font-semibold text-text-primary">
+            {formatDayHeading(group.iso)}
+          </h4>
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+            {group.items.map((item) => (
+              <ModalMediaThumb
+                key={`${item.messageId}-${item.fileId}`}
+                conversationId={conversationId}
+                item={item}
+                fallbackUrl={thumbnailUrls[item.fileId] ?? null}
+                onImageClick={(url) => handleThumbClick(item.fileId, url)}
+                onVideoOpen={onVideoOpen}
+                onForward={() => onForward(item)}
+                onJumpToMessage={onJumpToMessage}
+                onDeleted={onDeleted}
+                recallLabel={recallLabel}
+                isPersonalCloud={isPersonalCloud}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
       {isFetching && (
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="aspect-square rounded-md" />
           ))}
@@ -647,21 +686,6 @@ const ModalMediaTab: React.FC<{
     </div>
   );
 };
-
-const ResourceFilterBar: React.FC = () => (
-  <div className="flex items-center gap-3">
-    {["Người gửi", "Ngày gửi"].map((label) => (
-      <button
-        key={label}
-        type="button"
-        className="inline-flex h-8 min-w-[132px] items-center justify-between gap-2 rounded-full bg-[#e8eaee] px-4 text-sm font-medium text-text-secondary"
-      >
-        <span>{label}</span>
-        <ChevronDownIcon className="h-4 w-4" />
-      </button>
-    ))}
-  </div>
-);
 
 const ModalMediaThumb: React.FC<{
   conversationId: string;
@@ -830,11 +854,12 @@ const ModalMediaThumb: React.FC<{
         isOpen={menuOpen}
         onForward={onForward}
         onToggleMenu={() => setMenuOpen((value) => !value)}
-        className="left-2 top-2"
+        size="compact"
+        className="left-1.5 top-1.5"
       />
 
       {menuOpen ? (
-        <StorageResourceMenu className="left-2 top-11">
+        <StorageResourceMenu className="left-1.5 top-9">
           <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
             Copy
           </StorageMenuButton>
@@ -896,12 +921,17 @@ const ModalFilesTab: React.FC<{
 }) => {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
+  const [filters, setFilters] = useState<ResourceFilters>(EMPTY_RESOURCE_FILTERS);
   const debouncedSearch = useDebounce(searchInput, 300);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [debouncedSearch]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setPage(1); setSearchInput(""); }, [conversationId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+    setSearchInput("");
+    setFilters(EMPTY_RESOURCE_FILTERS);
+  }, [conversationId]);
 
   const { data, isLoading, isFetching } = useGetConversationFilesQuery(
     {
@@ -914,14 +944,24 @@ const ModalFilesTab: React.FC<{
   );
 
   const hasNext = data?.pagination.hasNext ?? false;
-  const rawItems = data?.data ?? [];
-  const items = rawItems.filter(
-    (f) =>
-      !hiddenMessageIds.has(f.messageId) &&
-      !f.mimeType.startsWith("image/") &&
-      !f.mimeType.startsWith("video/") &&
-      !f.mimeType.startsWith("audio/"),
+  const rawItems = useMemo(() => data?.data ?? [], [data?.data]);
+  const pageItems = useMemo(
+    () =>
+      rawItems.filter(
+        (f) =>
+          !hiddenMessageIds.has(f.messageId) &&
+          !f.mimeType.startsWith("image/") &&
+          !f.mimeType.startsWith("video/") &&
+          !f.mimeType.startsWith("audio/"),
+      ),
+    [rawItems, hiddenMessageIds],
   );
+  const senders = useMemo(() => collectSenders(pageItems), [pageItems]);
+  const items = useMemo(
+    () => pageItems.filter((item) => matchesFilters(item, filters)),
+    [pageItems, filters],
+  );
+  const dayGroups = useMemo(() => groupByDay(items), [items]);
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -936,6 +976,12 @@ const ModalFilesTab: React.FC<{
           className="w-full rounded-xl border border-border bg-surface-overlay py-2 pl-10 pr-3 text-sm placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
         />
       </div>
+
+      <ResourceFilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        senders={senders}
+      />
 
       {/* Content */}
       {isLoading || isFetching ? (
@@ -954,27 +1000,34 @@ const ModalFilesTab: React.FC<{
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
           <DocumentIcon className="h-12 w-12" />
           <p className="text-sm">
-            {debouncedSearch
+            {debouncedSearch || pageItems.length > 0
               ? "Không tìm thấy file phù hợp"
               : "Chưa có file nào được chia sẻ"}
           </p>
         </div>
       ) : (
         <>
-          <div className="space-y-0.5">
-            {items.map((item) => (
-              <ModalFileRow
-                key={`${item.messageId}-${item.fileId}`}
-                item={item}
-                conversationId={conversationId}
-                onForward={() => onForward(item)}
-                onJumpToMessage={onJumpToMessage}
-                onDeleted={onDeleted}
-                recallLabel={recallLabel}
-                isPersonalCloud={isPersonalCloud}
-              />
-            ))}
-          </div>
+          {dayGroups.map((group) => (
+            <section key={group.iso}>
+              <h4 className="mb-1 mt-3 text-base font-semibold text-text-primary">
+                {formatDayHeading(group.iso)}
+              </h4>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <ModalFileRow
+                    key={`${item.messageId}-${item.fileId}`}
+                    item={item}
+                    conversationId={conversationId}
+                    onForward={() => onForward(item)}
+                    onJumpToMessage={onJumpToMessage}
+                    onDeleted={onDeleted}
+                    recallLabel={recallLabel}
+                    isPersonalCloud={isPersonalCloud}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
           {(hasNext || page > 1) && (
             <div className="flex items-center justify-center gap-3">
               <button
@@ -1140,7 +1193,10 @@ const ModalFileRow: React.FC<{
           variant="outline"
           className="h-10 w-10 shrink-0"
         />
-        <div className="min-w-0 flex-1 pr-20">
+        {/* The hover actions are an absolute overlay, so the text only needs to
+            yield room while they are showing — a permanent pr-20 left a dead
+            strip down the right of every row. */}
+        <div className="min-w-0 flex-1 pr-2 transition-[padding] group-hover:pr-24">
           <FileName
             name={item.fileName}
             className="text-sm font-semibold text-text-primary"
@@ -1212,54 +1268,71 @@ const StorageHoverActions: React.FC<{
   onToggleMenu: () => void;
   onDownload?: () => void;
   className?: string;
-}> = ({ isOpen, onForward, onToggleMenu, onDownload, className }) => (
-  <div
-    className={clsx(
-      "pointer-events-none absolute z-20 hidden h-9 items-center overflow-hidden rounded-md border border-border bg-surface shadow-elev2 group-hover:flex",
-      isOpen && "flex",
-      className,
-    )}
-  >
-    {onDownload ? (
+  /**
+   * Compact sizing for the media grid, where the tile is a small square and
+   * the full-size 36px buttons cover most of the thumbnail.
+   */
+  size?: "default" | "compact";
+}> = ({ isOpen, onForward, onToggleMenu, onDownload, className, size = "default" }) => {
+  const compact = size === "compact";
+  const barHeight = compact ? "h-7" : "h-9";
+  const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
+  const iconSize = compact ? "h-3.5 w-3.5" : "h-5 w-5";
+  const buttonClass = clsx(
+    "pointer-events-auto flex items-center justify-center text-text-primary hover:bg-surface-hover",
+    buttonSize,
+  );
+
+  return (
+    <div
+      className={clsx(
+        "pointer-events-none absolute z-20 hidden items-center overflow-hidden rounded-md border border-border bg-surface shadow-elev2 group-hover:flex",
+        barHeight,
+        isOpen && "flex",
+        className,
+      )}
+    >
+      {onDownload ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDownload();
+          }}
+          title="Tải xuống"
+          aria-label="Tải xuống"
+          className={buttonClass}
+        >
+          <ArrowDownTrayIcon className={iconSize} />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          onDownload();
+          onForward();
         }}
-        title="Tải xuống"
-        aria-label="Tải xuống"
-        className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
+        title="Chia sẻ"
+        aria-label="Chia sẻ"
+        className={buttonClass}
       >
-        <ArrowDownTrayIcon className="h-5 w-5" />
+        <ArrowUturnRightIcon className={iconSize} />
       </button>
-    ) : null}
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onForward();
-      }}
-      title="Chia sẻ"
-      aria-label="Chia sẻ"
-      className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
-    >
-      <ArrowUturnRightIcon className="h-5 w-5" />
-    </button>
-    <button
-      type="button"
-      title="Thêm"
-      aria-label="Thêm"
-      className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggleMenu();
-      }}
-    >
-      <EllipsisHorizontalIcon className="h-5 w-5" />
-    </button>
-  </div>
-);
+      <button
+        type="button"
+        title="Thêm"
+        aria-label="Thêm"
+        className={buttonClass}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleMenu();
+        }}
+      >
+        <EllipsisHorizontalIcon className={iconSize} />
+      </button>
+    </div>
+  );
+};
 
 const StorageResourceMenu: React.FC<{
   children: React.ReactNode;
@@ -1314,12 +1387,16 @@ const ModalLinksTab: React.FC<{
 }) => {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
+  const [filters, setFilters] = useState<ResourceFilters>(EMPTY_RESOURCE_FILTERS);
   const debouncedSearch = useDebounce(searchInput, 200);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [conversationId, debouncedSearch]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setSearchInput(""); }, [conversationId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearchInput("");
+    setFilters(EMPTY_RESOURCE_FILTERS);
+  }, [conversationId]);
 
   const { data, isLoading, isFetching } = useGetConversationLinksQuery(
     { conversationId, page, limit: MODAL_LINKS_PAGE_SIZE },
@@ -1327,18 +1404,35 @@ const ModalLinksTab: React.FC<{
   );
 
   const hasNext = data?.pagination.hasNext ?? false;
-  const items = (data?.data ?? []).filter((item) => {
-    if (hiddenMessageIds.has(item.messageId)) return false;
-    const q = debouncedSearch.trim().toLowerCase();
-    if (!q) return true;
-    return item.domain.toLowerCase().includes(q) || item.url.toLowerCase().includes(q);
-  });
+  const pageItems = useMemo(
+    () =>
+      (data?.data ?? []).filter((item) => {
+        if (hiddenMessageIds.has(item.messageId)) return false;
+        const q = debouncedSearch.trim().toLowerCase();
+        if (!q) return true;
+        return (
+          item.domain.toLowerCase().includes(q) ||
+          item.url.toLowerCase().includes(q)
+        );
+      }),
+    [data?.data, hiddenMessageIds, debouncedSearch],
+  );
+  const senders = useMemo(() => collectSenders(pageItems), [pageItems]);
+  const items = useMemo(
+    () => pageItems.filter((item) => matchesFilters(item, filters)),
+    [pageItems, filters],
+  );
+  const dayGroups = useMemo(() => groupByDay(items), [items]);
 
   if (isLoading) {
     return (
       <div className="p-4">
         <LinkSearchBar value={searchInput} onChange={setSearchInput} />
-        <ResourceFilterBar />
+        <ResourceFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          senders={senders}
+        />
         <div className="mt-6 space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-2 py-2">
@@ -1358,11 +1452,17 @@ const ModalLinksTab: React.FC<{
     return (
       <div className="p-4">
         <LinkSearchBar value={searchInput} onChange={setSearchInput} />
-        <ResourceFilterBar />
+        <ResourceFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          senders={senders}
+        />
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
           <LinkIcon className="h-12 w-12" />
           <p className="text-sm">
-            {debouncedSearch ? "Không tìm thấy link phù hợp" : "Chưa có liên kết nào được chia sẻ"}
+            {debouncedSearch || pageItems.length > 0
+              ? "Không tìm thấy link phù hợp"
+              : "Chưa có liên kết nào được chia sẻ"}
           </p>
         </div>
       </div>
@@ -1372,26 +1472,31 @@ const ModalLinksTab: React.FC<{
   return (
     <div className="flex flex-col gap-3 p-4">
       <LinkSearchBar value={searchInput} onChange={setSearchInput} />
-      <ResourceFilterBar />
-      <h4 className="mt-4 text-base font-semibold text-text-primary">
-        Ngày {new Date(items[0]?.createdAt ?? Date.now()).toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "long",
-        })}
-      </h4>
-      <div className="space-y-0.5">
-        {items.map((item) => (
-          <ModalLinkRow
-            key={item.messageId}
-            item={item}
-            onForward={() => onForward(item)}
-            onJumpToMessage={onJumpToMessage}
-            onDeleted={onDeleted}
-            recallLabel={recallLabel}
-            isPersonalCloud={isPersonalCloud}
-          />
-        ))}
-      </div>
+      <ResourceFilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        senders={senders}
+      />
+      {dayGroups.map((group) => (
+        <section key={group.iso}>
+          <h4 className="mb-1 mt-1 text-base font-semibold text-text-primary">
+            {formatDayHeading(group.iso)}
+          </h4>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <ModalLinkRow
+                key={item.messageId}
+                item={item}
+                onForward={() => onForward(item)}
+                onJumpToMessage={onJumpToMessage}
+                onDeleted={onDeleted}
+                recallLabel={recallLabel}
+                isPersonalCloud={isPersonalCloud}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
       {(hasNext || page > 1) && !isFetching && (
         <div className="flex items-center justify-center gap-3">
           <button
@@ -1561,7 +1666,8 @@ const ModalLinkRow: React.FC<{
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#d5d9e0] bg-[#eef0f4]">
           <LinkIcon className="h-5 w-5 text-text-primary" />
         </div>
-        <div className="min-w-0 flex-1 pr-20">
+        {/* See ModalFileRow: reserve the action strip only on hover. */}
+        <div className="min-w-0 flex-1 pr-2 transition-[padding] group-hover:pr-24">
           <p className="truncate text-sm font-semibold text-text-primary">
             {item.domain}
           </p>
