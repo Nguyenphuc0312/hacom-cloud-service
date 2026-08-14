@@ -5,7 +5,7 @@
  * sender chip is disabled while a page is still empty rather than opening onto
  * an empty list.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,6 +14,8 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../Avatar";
+import { resolvePublicResourceUrl } from "../../../config";
+import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { FilterChip, Popover, DateRangeFields } from "./FilterControls";
 import { isoToDisplay } from "./dateRange";
@@ -55,7 +57,14 @@ const SenderOption: React.FC<{
         selected && "bg-[#1976D2]/8",
       )}
     >
-      <Avatar src={sender.avatarUrl} alt={name} size="xs" className="shrink-0" />
+      {/* Avatar takes the src as-is, so relative paths from the API must be
+          resolved here — same as every other avatar call site. */}
+      <Avatar
+        src={resolvePublicResourceUrl(sender.avatarUrl ?? undefined) ?? null}
+        alt={name}
+        size="xs"
+        className="shrink-0"
+      />
       <span
         className={clsx(
           "truncate text-[13px]",
@@ -88,6 +97,16 @@ export const ResourceFilterBar: React.FC<ResourceFilterBarProps> = ({
   const [senderQuery, setSenderQuery] = useState("");
 
   const activeSender = senders.find((s) => s.id === filters.senderId);
+
+  // The panel can be opened without ever visiting the timeline, and nothing
+  // else enriches these users, so the dropdown would otherwise show the raw
+  // API `senderName` and no "tên gợi nhớ". `enrichUserProfile` throttles per
+  // user (5 min) and batches, so this stays one request for the whole list.
+  const senderIdsKey = senders.map((s) => s.id).join(",");
+  useEffect(() => {
+    if (!senderOpen || !senderIdsKey) return;
+    for (const id of senderIdsKey.split(",")) enrichUserProfile(id);
+  }, [senderOpen, senderIdsKey]);
 
   const dateLabel =
     filters.from || filters.to
