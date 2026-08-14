@@ -854,11 +854,12 @@ const ModalMediaThumb: React.FC<{
         isOpen={menuOpen}
         onForward={onForward}
         onToggleMenu={() => setMenuOpen((value) => !value)}
-        className="left-2 top-2"
+        size="compact"
+        className="left-1.5 top-1.5"
       />
 
       {menuOpen ? (
-        <StorageResourceMenu className="left-2 top-11">
+        <StorageResourceMenu className="left-1.5 top-9">
           <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
             Copy
           </StorageMenuButton>
@@ -1267,54 +1268,71 @@ const StorageHoverActions: React.FC<{
   onToggleMenu: () => void;
   onDownload?: () => void;
   className?: string;
-}> = ({ isOpen, onForward, onToggleMenu, onDownload, className }) => (
-  <div
-    className={clsx(
-      "pointer-events-none absolute z-20 hidden h-9 items-center overflow-hidden rounded-md border border-border bg-surface shadow-elev2 group-hover:flex",
-      isOpen && "flex",
-      className,
-    )}
-  >
-    {onDownload ? (
+  /**
+   * Compact sizing for the media grid, where the tile is a small square and
+   * the full-size 36px buttons cover most of the thumbnail.
+   */
+  size?: "default" | "compact";
+}> = ({ isOpen, onForward, onToggleMenu, onDownload, className, size = "default" }) => {
+  const compact = size === "compact";
+  const barHeight = compact ? "h-7" : "h-9";
+  const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
+  const iconSize = compact ? "h-3.5 w-3.5" : "h-5 w-5";
+  const buttonClass = clsx(
+    "pointer-events-auto flex items-center justify-center text-text-primary hover:bg-surface-hover",
+    buttonSize,
+  );
+
+  return (
+    <div
+      className={clsx(
+        "pointer-events-none absolute z-20 hidden items-center overflow-hidden rounded-md border border-border bg-surface shadow-elev2 group-hover:flex",
+        barHeight,
+        isOpen && "flex",
+        className,
+      )}
+    >
+      {onDownload ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDownload();
+          }}
+          title="Tải xuống"
+          aria-label="Tải xuống"
+          className={buttonClass}
+        >
+          <ArrowDownTrayIcon className={iconSize} />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          onDownload();
+          onForward();
         }}
-        title="Tải xuống"
-        aria-label="Tải xuống"
-        className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
+        title="Chia sẻ"
+        aria-label="Chia sẻ"
+        className={buttonClass}
       >
-        <ArrowDownTrayIcon className="h-5 w-5" />
+        <ArrowUturnRightIcon className={iconSize} />
       </button>
-    ) : null}
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onForward();
-      }}
-      title="Chia sẻ"
-      aria-label="Chia sẻ"
-      className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
-    >
-      <ArrowUturnRightIcon className="h-5 w-5" />
-    </button>
-    <button
-      type="button"
-      title="Thêm"
-      aria-label="Thêm"
-      className="pointer-events-auto flex h-9 w-9 items-center justify-center text-text-primary hover:bg-surface-hover"
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggleMenu();
-      }}
-    >
-      <EllipsisHorizontalIcon className="h-5 w-5" />
-    </button>
-  </div>
-);
+      <button
+        type="button"
+        title="Thêm"
+        aria-label="Thêm"
+        className={buttonClass}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleMenu();
+        }}
+      >
+        <EllipsisHorizontalIcon className={iconSize} />
+      </button>
+    </div>
+  );
+};
 
 const StorageResourceMenu: React.FC<{
   children: React.ReactNode;

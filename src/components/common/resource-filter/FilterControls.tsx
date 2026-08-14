@@ -3,7 +3,7 @@
  * and the shared-resources ("Kho lưu trữ") modal, so both read and behave the
  * same way.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -54,6 +54,21 @@ export const Popover: React.FC<{
   align?: "left" | "right";
   children: React.ReactNode;
 }> = ({ open, onClose, align = "left", children }) => {
+  // Esc closes it. The click-catcher below covers the whole viewport, so
+  // without this the only way out is a mouse click — and clicking the trigger
+  // again hits the catcher rather than the chip, which reads as a stuck menu.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <>
