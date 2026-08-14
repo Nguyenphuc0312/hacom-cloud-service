@@ -610,6 +610,7 @@ export default function CloudPage() {
       if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
+      const isTextSelectionTarget = Boolean(target.closest(".chat-message-text"));
       const selection: CloudSelectionDrag = {
         startId: messageId,
         startX: event.clientX,
@@ -620,17 +621,21 @@ export default function CloudPage() {
       };
       // Desktop users commonly hold a message instead of dragging. Start the
       // same selection mode after a short hold, while preserving normal click
-      // behavior for a quick release.
-      selection.holdTimer = window.setTimeout(() => {
-        const current = selectionDragRef.current;
-        if (current !== selection) return;
-        current.active = true;
-        document.body.style.userSelect = "none";
-        window.getSelection()?.removeAllRanges();
-        enterSelectionMode();
-        applySelectionRange(current, current.startId);
-        suppressSelectionClickRef.current = true;
-      }, 450);
+      // behavior for a quick release. Text starts intentionally do not use a
+      // hold timer, so a slow native text selection is never converted into a
+      // whole-message selection.
+      if (!isTextSelectionTarget) {
+        selection.holdTimer = window.setTimeout(() => {
+          const current = selectionDragRef.current;
+          if (current !== selection) return;
+          current.active = true;
+          document.body.style.userSelect = "none";
+          window.getSelection()?.removeAllRanges();
+          enterSelectionMode();
+          applySelectionRange(current, current.startId);
+          suppressSelectionClickRef.current = true;
+        }, 450);
+      }
       selectionDragRef.current = selection;
     };
 
@@ -645,6 +650,18 @@ export default function CloudPage() {
         event.clientX - drag.startX,
         event.clientY - drag.startY,
       );
+
+      const target = event.target as HTMLElement | null;
+      const row = target?.closest<HTMLElement>("[data-message-id]");
+      const messageId = row?.dataset.messageId;
+      if (!messageId) return;
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!selectableMessages.some((message) => message.id === messageId)) return;
+
+      // Keep native browser text selection while the pointer remains inside
+      // the message where the gesture started. Message selection begins only
+      // after the pointer enters another message frame.
+      if (!drag.active && messageId === drag.startId) return;
       if (!drag.active && distance < 8) return;
 
       if (!drag.active) {
@@ -655,12 +672,6 @@ export default function CloudPage() {
         applySelectionRange(drag, drag.startId);
       }
 
-      const target = event.target as HTMLElement | null;
-      const row = target?.closest<HTMLElement>("[data-message-id]");
-      const messageId = row?.dataset.messageId;
-      if (!messageId) return;
-      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      if (!selectableMessages.some((message) => message.id === messageId)) return;
       applySelectionRange(drag, messageId);
       event.preventDefault();
     };
