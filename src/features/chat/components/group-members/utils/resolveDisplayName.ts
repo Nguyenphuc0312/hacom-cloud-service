@@ -1,3 +1,5 @@
+import { resolveUserDisplayName } from "../../../identity/resolveUserDisplayName";
+
 interface MemberData {
   displayName?: string;
   fullNameFromHR?: string;
@@ -13,28 +15,40 @@ interface ResolvedDisplayName {
 }
 
 /**
- * Resolves display name for a group member with proper fallback priority:
- * 1. fullName from HR profile
- * 2. displayName (self-set)
- * 3. Email local part (capitalized)
- * 4. Username
+ * Resolves the display name for a group member.
+ *
+ * This delegates to the app-wide `resolveUserDisplayName` so the member list
+ * agrees with the timeline, sidebar, mentions and profile panel. It previously
+ * ranked `fullNameFromHR` ABOVE `displayName`, which inverted the shared rule:
+ * a user who renamed themselves showed the new name everywhere in Chat but
+ * their HR legal name here, which is exactly the "loạn giữa tên gốc và tên đã
+ * đổi" report.
+ *
+ * `usedFallback` stays part of the contract — MemberRow styles the name
+ * differently when it is a technical stand-in (email local part / username)
+ * rather than a real human name.
  */
 export function resolveDisplayName(
   member: MemberData,
 ): ResolvedDisplayName {
   const { displayName, fullNameFromHR, username, email } = member;
 
-  // Priority 1: fullName from HR
-  if (fullNameFromHR?.trim()) {
-    return { displayName: fullNameFromHR.trim(), usedFallback: false };
+  const resolved = resolveUserDisplayName({
+    displayName,
+    fullNameFromHR,
+    username,
+  });
+
+  const hasRealName =
+    Boolean(displayName?.trim() && !EMAIL_PATTERN.test(displayName.trim())) ||
+    Boolean(fullNameFromHR?.trim());
+
+  if (resolved !== "Unknown user") {
+    return { displayName: resolved, usedFallback: !hasRealName };
   }
 
-  // Priority 2: displayName (skip if it looks like an email address)
-  if (displayName?.trim() && !EMAIL_PATTERN.test(displayName.trim())) {
-    return { displayName: displayName.trim(), usedFallback: false };
-  }
-
-  // Priority 3: email local part (capitalized)
+  // No name-bearing field at all: fall back to the email local part before the
+  // generic placeholder, matching the previous behaviour of this helper.
   if (email) {
     const localPart = email.split("@")[0];
     if (localPart) {
@@ -43,11 +57,9 @@ export function resolveDisplayName(
     }
   }
 
-  // Priority 4: username
   if (username?.trim()) {
     return { displayName: username.trim(), usedFallback: true };
   }
 
-  // Ultimate fallback
   return { displayName: "Người dùng", usedFallback: true };
 }

@@ -1122,10 +1122,14 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             allowLegacyFallback: false,
           }) || undefined;
 
-        // Primary name: fullNameFromHR > displayName > username
+        // `displayName` above is already the fully-resolved name (it applies the
+        // shared displayName > fullNameFromHr > username ordering internally),
+        // so it must not be overridden by a raw `fullNameFromHR ||` prefix —
+        // that made @mentions insert the HR legal name while the member list and
+        // timeline showed the user's chosen name.
         const resolvedName =
-          fullNameFromHR ||
           displayName ||
+          fullNameFromHR ||
           participant.username?.trim() ||
           employeeCode ||
           participant.id;

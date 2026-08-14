@@ -360,8 +360,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     if (memberFilterRole === "leadership") result = result.filter((m) => m.role === RoomMemberRole.OWNER || m.role === RoomMemberRole.ADMIN);
     if (memberSearch.trim()) {
       const q = memberSearch.toLowerCase();
+      // Match against BOTH names: the rendered name follows displayName first,
+      // so searching only the HR name failed to find a renamed member by the
+      // name shown on screen. Keeping the HR name searchable too means the
+      // legal name still works as a query.
       result = result.filter((m) =>
-        (m.fullNameFromHR || m.displayName || m.username || "").toLowerCase().includes(q) ||
+        (m.displayName || "").toLowerCase().includes(q) ||
+        (m.fullNameFromHR || "").toLowerCase().includes(q) ||
         m.username.toLowerCase().includes(q),
       );
     }
