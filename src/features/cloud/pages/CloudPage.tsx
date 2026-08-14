@@ -147,6 +147,33 @@ const isStandaloneHttpUrl = (value: string): boolean => {
   }
 };
 
+/**
+ * My Documents selection actions are available only for an uninterrupted
+ * range of message frames. A pointer can jump over a row, so checking only
+ * the selected count is not sufficient.
+ */
+const isContiguousMessageSelection = (
+  orderedMessages: Message[],
+  selectedIds: Set<string>,
+): boolean => {
+  if (selectedIds.size < 2) return false;
+
+  const selectedIndexes = orderedMessages.reduce<number[]>(
+    (indexes, message, index) => {
+      if (selectedIds.has(message.id)) indexes.push(index);
+      return indexes;
+    },
+    [],
+  );
+
+  return (
+    selectedIndexes.length === selectedIds.size &&
+    selectedIndexes.every(
+      (index, position) => position === 0 || index === selectedIndexes[position - 1] + 1,
+    )
+  );
+};
+
 type CloudSelectionDrag = {
   startId: string;
   startX: number;
@@ -845,6 +872,14 @@ export default function CloudPage() {
     () => cloudTrashItems.filter((item) => selectedMessageIds.has(item.id)),
     [cloudTrashItems, selectedMessageIds],
   );
+  const hasContiguousSelection = useMemo(
+    () =>
+      isContiguousMessageSelection(
+        viewMode === "trash" ? trashMessages : messages,
+        selectedMessageIds,
+      ),
+    [messages, selectedMessageIds, trashMessages, viewMode],
+  );
 
   const handleDeleteSelected = useCallback(async () => {
     if (selectedCloudItems.length === 0) {
@@ -1137,7 +1172,7 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            {isSelectionMode ? (
+            {isSelectionMode && hasContiguousSelection ? (
               <div
                 className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 bg-surface px-3 py-2 shadow-sm"
                 role="toolbar"
