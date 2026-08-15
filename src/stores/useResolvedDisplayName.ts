@@ -1,4 +1,7 @@
-import { useEnrichedProfileStore } from "./enrichedProfileStore";
+import {
+  readFreshAvatarUrl,
+  useEnrichedProfileStore,
+} from "./enrichedProfileStore";
 import { useFriendshipStore } from "./friendshipStore";
 
 /**
@@ -27,13 +30,25 @@ export function useResolvedDisplayName(
 }
 
 /**
- * Avatar tương ứng: `fallback ?? bạn bè ?? enriched`.
+ * Avatar tương ứng: `enriched ?? bạn bè ?? fallback`.
  *
- * Khác với tên, `fallback` (avatar do chính API của màn hình trả về) được ưu
- * tiên vì nó gắn với đúng dữ liệu đang hiển thị. Chỉ khi nó rỗng — như list
- * "Người gửi" trong Kho lưu trữ, nơi tab Link không kèm avatar và một số item
- * trả `null` — mới lấy từ `friendshipStore` (đã có sẵn, không tốn request) rồi
- * tới bản `enrichUserProfile` cache về.
+ * ⚠️ Thứ tự NGƯỢC với tên, và đây là điểm mấu chốt của bug "Người gửi mất
+ * avatar" — đừng đảo lại.
+ *
+ * Avatar của hệ thống là URL PRESIGNED, hạn 15 phút (`X-Amz-Expires=900`).
+ * Nhưng `senderAvatarUrl` mà các endpoint resources (media/files) trả về được
+ * đọc từ `sender_snapshot.avatar_url` — bản chụp ĐÔNG CỨNG lúc gửi tin, không
+ * hề ký lại (`chat-api-service/src/services/conversationResources.service.ts:254`).
+ * Tin gửi hôm qua ⇒ chữ ký hết hạn từ 18 tiếng trước ⇒ ảnh 403, ra chữ cái đầu.
+ * Đo thực tế trên `Core Hacom`: cả 4 sender đều CÓ url, và cả 4 đều 403.
+ *
+ * Vì vậy `fallback` (url của chính item) là nguồn KÉM tin cậy nhất, chỉ dùng khi
+ * không còn gì khác. Ưu tiên bản `enrichUserProfile` lấy từ `POST /users/batch`
+ * — BE ký lại mỗi lần đọc (`user.service.ts#rehydrateCachedAvatar`) nên luôn
+ * còn hạn — rồi tới `friendshipStore`.
+ *
+ * Bản enriched quá hạn bị coi như KHÔNG CÓ (`readFreshAvatarUrl`) để rơi về chữ
+ * cái đầu thay vì trả link chết. Đừng đổi thành cache vĩnh viễn.
  *
  * Trả URL thô: caller tự chạy `resolvePublicResourceUrl` như mọi call site
  * avatar khác.
@@ -46,7 +61,7 @@ export function useResolvedAvatarUrl(
     userId ? (s.friendByUserId[userId]?.avatar ?? null) : null,
   );
   const enriched = useEnrichedProfileStore((s) =>
-    userId ? s.avatarByUserId[userId] : undefined,
+    userId ? readFreshAvatarUrl(s.avatarByUserId[userId]) : undefined,
   );
-  return fallback?.trim() || friendAvatar || enriched || null;
+  return enriched || friendAvatar || fallback?.trim() || null;
 }

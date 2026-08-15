@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { useEnrichedProfileStore } from "./enrichedProfileStore";
 
 describe("enrichedProfileStore cache bounds", () => {
@@ -46,6 +46,44 @@ describe("enrichedProfileStore cache bounds", () => {
     expect(useEnrichedProfileStore.getState().lruUserIds).toEqual([]);
   });
 
+  // Avatar URLs are presigned (X-Amz-Expires=900s). Serving one past its TTL
+  // renders a 403 — worse than the initials it replaced.
+  it("hides an avatar url once the presign TTL has passed", () => {
+    vi.useFakeTimers();
+    try {
+      useEnrichedProfileStore.getState().setEnrichedAvatar("user-1", "/a/1.png");
+      expect(
+        useEnrichedProfileStore.getState().getEnrichedAvatar("user-1"),
+      ).toBe("/a/1.png");
+
+      vi.advanceTimersByTime(15 * 60 * 1000);
+
+      expect(
+        useEnrichedProfileStore.getState().getEnrichedAvatar("user-1"),
+      ).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("revives an expired avatar when re-enriched with the same url", () => {
+    vi.useFakeTimers();
+    try {
+      useEnrichedProfileStore.getState().setEnrichedAvatar("user-1", "/a/1.png");
+      vi.advanceTimersByTime(15 * 60 * 1000);
+
+      // Same string, fresh signature: the write must refresh the timestamp
+      // rather than be skipped as a no-op.
+      useEnrichedProfileStore.getState().setEnrichedAvatar("user-1", "/a/1.png");
+
+      expect(
+        useEnrichedProfileStore.getState().getEnrichedAvatar("user-1"),
+      ).toBe("/a/1.png");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("evicts a user's name and avatar together", () => {
     useEnrichedProfileStore.getState().setEnrichedName("user-0", "User 0");
     useEnrichedProfileStore.getState().setEnrichedAvatar("user-0", "/a/0.png");
@@ -77,7 +115,7 @@ describe("enrichedProfileStore cache bounds", () => {
 
     const state = useEnrichedProfileStore.getState();
     expect(state.nameByUserId["user-0"]).toBe("User 0");
-    expect(state.avatarByUserId["user-0"]).toBe("/a/0.png");
+    expect(state.getEnrichedAvatar("user-0")).toBe("/a/0.png");
     expect(state.nameByUserId["user-1"]).toBeUndefined();
   });
 });
