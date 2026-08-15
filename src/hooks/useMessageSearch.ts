@@ -90,9 +90,20 @@ export const useMessageSearch = (
   const abortRef = useRef<AbortController | null>(null);
   const searchIdRef = useRef(0);
 
+  /**
+   * A filter alone is a valid search: the endpoint accepts an empty `q` when
+   * `senderId`/`from`/`to` narrow the result set (verified live — empty query +
+   * senderId returned 622 messages). That powers "everything this person sent
+   * last week" without inventing a keyword.
+   *
+   * With NO query and NO filter there is nothing to ask for, and the panel shows
+   * its idle prompt instead.
+   */
+  const hasFilter = Boolean(senderId || from || to);
+
   const performSearch = useCallback(
     async (searchQuery: string, searchPage: number, append = false) => {
-      if (!searchQuery.trim()) {
+      if (!searchQuery.trim() && !hasFilter) {
         setResults([]);
         setTotal(0);
         setPage(1);
@@ -173,7 +184,7 @@ export const useMessageSearch = (
         }
       }
     },
-    [conversationId, limit, senderId, from, to],
+    [conversationId, limit, senderId, from, to, hasFilter],
   );
 
   // Trigger search when debounced query changes
@@ -181,7 +192,7 @@ export const useMessageSearch = (
 
   if (debouncedQuery !== prevDebouncedQuery) {
     setPrevDebouncedQuery(debouncedQuery);
-    if (!debouncedQuery.trim()) {
+    if (!debouncedQuery.trim() && !hasFilter) {
       setResults([]);
       setTotal(0);
       setPage(1);
@@ -190,11 +201,23 @@ export const useMessageSearch = (
     }
   }
 
+  // `performSearch` changes identity whenever a filter changes, so this also
+  // re-runs the search when the user picks a sender or a date range.
   useEffect(() => {
-    if (debouncedQuery.trim()) {
+    if (debouncedQuery.trim() || hasFilter) {
       performSearch(debouncedQuery, 1, false);
+      return;
     }
-  }, [debouncedQuery, performSearch]);
+    // Cleared the last filter with an empty box: drop the previous results,
+    // otherwise they stay on screen as if they still matched something.
+    searchIdRef.current += 1;
+    abortRef.current?.abort();
+    setResults([]);
+    setTotal(0);
+    setPage(1);
+    setError(null);
+    setIsLoading(false);
+  }, [debouncedQuery, performSearch, hasFilter]);
 
   const loadMore = useCallback(async () => {
     if (isLoading || results.length >= total) return;
