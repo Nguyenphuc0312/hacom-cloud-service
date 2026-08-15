@@ -1,4 +1,7 @@
-import { loadUserProfile } from "./userBatchLoader";
+import {
+  invalidateUserProfileSummary,
+  loadUserProfile,
+} from "./userBatchLoader";
 import {
   looksLikeEmail,
   looksLikeIdentifier,
@@ -60,9 +63,45 @@ export const enrichUserProfile = (userId: string): void => {
   if (allowedAt !== undefined && now < allowedAt) return;
   nextEnrichAllowedAt.set(userId, now + RE_ENRICH_INTERVAL_MS);
 
+  runEnrich(userId);
+};
+
+/**
+ * Re-fetch a profile even if the throttle/TTL would normally skip it, dropping
+ * the cached avatar first.
+ *
+ * For one case only: the browser rejected a signed avatar URL (403). Avatar URLs
+ * expire (`X-Amz-Expires=900`), and both the throttle here and the summary cache
+ * in `loadUserProfile` would otherwise hand back the SAME dead URL for another
+ * five minutes. Clearing both is what makes the retry fetch a fresh signature.
+ */
+export const refreshUserAvatar = (userId: string): void => {
+  if (!userId) return;
+
+  useEnrichedProfileStore.getState().clearEnrichedAvatar(userId);
+  invalidateUserProfileSummary(userId);
+  nextEnrichAllowedAt.delete(userId);
+  nextEnrichAllowedAt.set(userId, Date.now() + RE_ENRICH_INTERVAL_MS);
+
+  runEnrich(userId);
+};
+
+/** Shared fetch + store body for {@link enrichUserProfile}. */
+const runEnrich = (userId: string): void => {
+
   void loadUserProfile(userId)
     .then((profile) => {
       if (!profile) return;
+
+      // The avatar is cached before the alias check below: an alias renames a
+      // person, it does not give them a different picture. Skipping this for
+      // aliased friends is what left the "Người gửi" dropdown on initials for
+      // exactly the people the viewer knows best.
+      const avatarUrl = profile.avatarUrl?.trim();
+      if (avatarUrl) {
+        useEnrichedProfileStore.getState().setEnrichedAvatar(userId, avatarUrl);
+      }
+
       // A "tên gợi nhớ" the viewer set themselves always outranks the real name
       // (Zalo rule). `friendshipStore` is the authoritative alias source;
       // `nameByUserId` is only a mirror it shares with this function. Re-enrich
