@@ -25,3 +25,28 @@ export function useResolvedDisplayName(
   );
   return alias || enriched || fallback;
 }
+
+/**
+ * Avatar tương ứng: `fallback ?? bạn bè ?? enriched`.
+ *
+ * Khác với tên, `fallback` (avatar do chính API của màn hình trả về) được ưu
+ * tiên vì nó gắn với đúng dữ liệu đang hiển thị. Chỉ khi nó rỗng — như list
+ * "Người gửi" trong Kho lưu trữ, nơi tab Link không kèm avatar và một số item
+ * trả `null` — mới lấy từ `friendshipStore` (đã có sẵn, không tốn request) rồi
+ * tới bản `enrichUserProfile` cache về.
+ *
+ * Trả URL thô: caller tự chạy `resolvePublicResourceUrl` như mọi call site
+ * avatar khác.
+ */
+export function useResolvedAvatarUrl(
+  userId: string | undefined,
+  fallback?: string | null,
+): string | null {
+  const friendAvatar = useFriendshipStore((s) =>
+    userId ? (s.friendByUserId[userId]?.avatar ?? null) : null,
+  );
+  const enriched = useEnrichedProfileStore((s) =>
+    userId ? s.avatarByUserId[userId] : undefined,
+  );
+  return fallback?.trim() || friendAvatar || enriched || null;
+}

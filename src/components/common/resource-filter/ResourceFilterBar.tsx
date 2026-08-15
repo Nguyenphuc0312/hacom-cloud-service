@@ -16,7 +16,10 @@ import {
 import { Avatar } from "../Avatar";
 import { resolvePublicResourceUrl } from "../../../config";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
-import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
+import {
+  useResolvedAvatarUrl,
+  useResolvedDisplayName,
+} from "../../../stores/useResolvedDisplayName";
 import { FilterChip, Popover, DateRangeFields } from "./FilterControls";
 import { isoToDisplay } from "./dateRange";
 import {
@@ -43,6 +46,10 @@ const SenderOption: React.FC<{
   onSelect: () => void;
 }> = ({ sender, selected, query, onSelect }) => {
   const name = useResolvedDisplayName(sender.id, sender.name);
+  // The resources API returns `senderAvatarUrl: null` for most rows (and the
+  // link tab has no such field at all), so the raw value alone left every row
+  // on initials. Fall back to the friend record / enriched profile.
+  const avatarUrl = useResolvedAvatarUrl(sender.id, sender.avatarUrl);
   const q = query.trim().toLowerCase();
   // Match the alias too, so typing the nickname finds the person.
   if (q && !name.toLowerCase().includes(q) && !sender.name.toLowerCase().includes(q)) {
@@ -60,7 +67,7 @@ const SenderOption: React.FC<{
       {/* Avatar takes the src as-is, so relative paths from the API must be
           resolved here — same as every other avatar call site. */}
       <Avatar
-        src={resolvePublicResourceUrl(sender.avatarUrl ?? undefined) ?? null}
+        src={resolvePublicResourceUrl(avatarUrl ?? undefined) ?? null}
         alt={name}
         size="xs"
         className="shrink-0"
@@ -100,13 +107,19 @@ export const ResourceFilterBar: React.FC<ResourceFilterBarProps> = ({
 
   // The panel can be opened without ever visiting the timeline, and nothing
   // else enriches these users, so the dropdown would otherwise show the raw
-  // API `senderName` and no "tên gợi nhớ". `enrichUserProfile` throttles per
-  // user (5 min) and batches, so this stays one request for the whole list.
+  // API `senderName` and no "tên gợi nhớ" — and, since the resources endpoints
+  // mostly return `senderAvatarUrl: null`, no avatar either.
+  //
+  // Runs as soon as the sender list exists rather than on open: waiting for the
+  // click meant the first paint of the dropdown was always names-with-initials,
+  // with avatars popping in a moment later. `enrichUserProfile` throttles per
+  // user (5 min) and `loadUserProfile` coalesces, so this stays one batched
+  // request for the whole list however many bars are mounted.
   const senderIdsKey = senders.map((s) => s.id).join(",");
   useEffect(() => {
-    if (!senderOpen || !senderIdsKey) return;
+    if (!senderIdsKey) return;
     for (const id of senderIdsKey.split(",")) enrichUserProfile(id);
-  }, [senderOpen, senderIdsKey]);
+  }, [senderIdsKey]);
 
   const dateLabel =
     filters.from || filters.to

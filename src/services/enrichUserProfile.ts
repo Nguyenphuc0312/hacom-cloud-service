@@ -63,6 +63,16 @@ export const enrichUserProfile = (userId: string): void => {
   void loadUserProfile(userId)
     .then((profile) => {
       if (!profile) return;
+
+      // The avatar is cached before the alias check below: an alias renames a
+      // person, it does not give them a different picture. Skipping this for
+      // aliased friends is what left the "Người gửi" dropdown on initials for
+      // exactly the people the viewer knows best.
+      const avatarUrl = profile.avatarUrl?.trim();
+      if (avatarUrl) {
+        useEnrichedProfileStore.getState().setEnrichedAvatar(userId, avatarUrl);
+      }
+
       // A "tên gợi nhớ" the viewer set themselves always outranks the real name
       // (Zalo rule). `friendshipStore` is the authoritative alias source;
       // `nameByUserId` is only a mirror it shares with this function. Re-enrich
