@@ -47,6 +47,37 @@ export const toIso = (y: number, m0: number, d: number): string =>
 export const toLocalIsoDay = (value: Date): string =>
   toIso(value.getFullYear(), value.getMonth(), value.getDate());
 
+/**
+ * Turn the picker's inclusive ISO days into the `from`/`to` instants that
+ * `GET /messages/search` expects.
+ *
+ * The endpoint validates both bounds with `Joi.date().iso()` and compares them
+ * as instants, so a bare `to=2026-08-14` becomes midnight UTC and drops every
+ * message actually sent that day — measured against the live API: `from` and
+ * `to` both `2026-08-14` returned `total=0` while the same range widened to
+ * `2026-08-15` returned 19 messages, all dated 08-14.
+ *
+ * So `to` is pushed to the last millisecond of the chosen local day. Both ends
+ * are built from local-time parts and serialised WITH the offset, so the window
+ * matches the calendar day the user picked in their own timezone rather than in
+ * UTC.
+ */
+export const isoRangeToSearchWindow = (
+  fromIso: string | null,
+  toIso: string | null,
+): { from?: string; to?: string } => {
+  const window: { from?: string; to?: string } = {};
+  if (fromIso) {
+    const start = new Date(`${fromIso}T00:00:00`);
+    if (!Number.isNaN(start.getTime())) window.from = start.toISOString();
+  }
+  if (toIso) {
+    const end = new Date(`${toIso}T23:59:59.999`);
+    if (!Number.isNaN(end.getTime())) window.to = end.toISOString();
+  }
+  return window;
+};
+
 /** Build the 6×7 grid of days for the month containing (year, month0). */
 export const buildMonthCells = (
   year: number,
