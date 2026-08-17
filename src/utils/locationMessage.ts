@@ -31,6 +31,45 @@ export const tryBuildGoogleMapsSearchUrl = (
   return buildGoogleMapsSearchUrl(location);
 };
 
+/**
+ * Host bản đồ được phép mở từ `mapUrl` của tin nhắn.
+ *
+ * `mapUrl` nằm trong payload tin nhắn nên NGƯỜI GỬI kiểm soát được: nếu mở thẳng,
+ * kẻ gửi đặt `mapUrl` thành `https://evil.com` và nạn nhân bấm "xem trên bản đồ"
+ * trong khi tưởng mình đi Google Maps — open redirect dùng được để phishing.
+ *
+ * Chặn theo scheme là chưa đủ (`https://evil.com` vẫn hợp lệ), nên phải chặn theo
+ * host. Toạ độ đã được kiểm tra cục bộ và tự dựng được URL an toàn qua
+ * `buildGoogleMapsSearchUrl`, nên `mapUrl` lạ không mang thêm giá trị gì → bỏ.
+ */
+const ALLOWED_MAP_HOSTS = new Set([
+  "google.com",
+  "www.google.com",
+  "maps.google.com",
+  "goo.gl",
+  "maps.app.goo.gl",
+]);
+
+/**
+ * Trả về `mapUrl` nếu nó thật sự trỏ tới một host bản đồ đã duyệt, ngược lại `null`.
+ *
+ * Chỉ chấp nhận https: — http: cho phép man-in-the-middle đổi đích đến.
+ * So khớp host chính xác (không dùng `endsWith`) vì `evilgoogle.com` và
+ * `google.com.evil.com` đều lọt nếu so kiểu hậu tố.
+ */
+export const sanitizeMapUrl = (
+  mapUrl: string | undefined | null,
+): string | null => {
+  if (!mapUrl) return null;
+  try {
+    const parsed = new URL(mapUrl);
+    if (parsed.protocol !== "https:") return null;
+    return ALLOWED_MAP_HOSTS.has(parsed.hostname.toLowerCase()) ? mapUrl : null;
+  } catch {
+    return null; // Không parse được → không tin.
+  }
+};
+
 export const resolveAccuracyMeters = (
   location: Pick<LocationMessagePayload, "accuracyM" | "accuracy">,
 ): number | undefined =>
@@ -83,7 +122,11 @@ export const isLocationStale = (
 
 export const openLocationInMaps = (location: LocationMessagePayload): boolean => {
   if (typeof window === "undefined") return false;
-  const url = location.mapUrl || tryBuildGoogleMapsSearchUrl(location);
+  // mapUrl do người gửi kiểm soát → phải lọc qua allowlist host trước khi mở.
+  // Không hợp lệ thì rơi về URL tự dựng từ toạ độ (đã validate cục bộ), chứ
+  // KHÔNG mở đại URL lạ.
+  const url =
+    sanitizeMapUrl(location.mapUrl) || tryBuildGoogleMapsSearchUrl(location);
   if (!url) return false;
 
   const next = window.open(url, "_blank", "noopener,noreferrer");
