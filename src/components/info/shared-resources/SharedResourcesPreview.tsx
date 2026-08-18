@@ -4,6 +4,7 @@ import {
   PhotoIcon,
   DocumentIcon,
   LinkIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { Skeleton } from "../../ui";
 import {
@@ -210,109 +211,55 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     );
   }
 
-  // Always show all three tabs (Ảnh/Video · File · Link) in the same row, even
-  // when a category is empty — users expect the Link tab to be visible here
-  // without first opening the "Xem tất cả" modal.
-  const tabs: { key: SharedContentTab; label: string; count: number }[] = [
-    { key: "media", label: "Ảnh/Video", count: mediaTotal },
-    { key: "files", label: "File", count: filesTotal },
-    { key: "links", label: "Link", count: linksTotal },
-  ];
-
-  const activeTabTotal =
-    activeTab === "media"
-      ? mediaTotal
-      : activeTab === "files"
-        ? filesTotal
-        : linksTotal;
-
-  const activeTabPreviewCount =
-    activeTab === "media"
-      ? DRAWER_MEDIA_PREVIEW
-      : activeTab === "files"
-        ? DRAWER_FILES_PREVIEW
-        : DRAWER_LINKS_PREVIEW;
-
-  const showViewAllFooter = activeTabTotal > activeTabPreviewCount;
-
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <h3 className="text-sm font-semibold text-text-primary">Kho lưu trữ</h3>
-        </div>
+      <div className="border-t border-border py-2">
+        <SharedResourceSection
+          title="Ảnh/Video"
+          count={mediaTotal}
+          onViewAll={() => {
+            setActiveTab("media");
+            setModalOpen(true);
+          }}
+          showViewAll={mediaTotal > DRAWER_MEDIA_PREVIEW}
+        >
+          <DrawerMediaTab
+            conversationId={conversationId}
+            items={mediaPreview}
+            total={mediaTotal}
+            thumbnailUrls={thumbnailUrls}
+            onImageOpen={(index, images) => setLightbox({ images, index })}
+            onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
+            onViewAll={() => {
+              setActiveTab("media");
+              setModalOpen(true);
+            }}
+          />
+        </SharedResourceSection>
 
-        {/* Tab Bar */}
-        {tabs.length > 1 && (
-          <div className="flex border-t border-border">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={clsx(
-                  "flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors",
-                  activeTab === tab.key
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-text-muted hover:text-text-primary",
-                )}
-              >
-                {tab.label}
-                <span
-                  className={clsx(
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                    activeTab === tab.key
-                      ? "bg-primary/10 text-primary"
-                      : "bg-surface-overlay text-text-muted",
-                  )}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <SharedResourceSection
+          title="File"
+          count={filesTotal}
+          onViewAll={() => {
+            setActiveTab("files");
+            setModalOpen(true);
+          }}
+          showViewAll={filesTotal > DRAWER_FILES_PREVIEW}
+        >
+          <DrawerFilesTab items={filesPreview} conversationId={conversationId} />
+        </SharedResourceSection>
 
-        {/* Tab Content */}
-        <div className={clsx("p-3", tabs.length === 1 && "border-t border-border")}>
-          {activeTab === "media" && (
-            <DrawerMediaTab
-              conversationId={conversationId}
-              items={mediaPreview}
-              total={mediaTotal}
-              thumbnailUrls={thumbnailUrls}
-              onImageOpen={(index, images) => setLightbox({ images, index })}
-              onVideoOpen={(url, fileName) => setVideo({ url, fileName })}
-              onViewAll={() => {
-                setActiveTab("media");
-                setModalOpen(true);
-              }}
-            />
-          )}
-          {activeTab === "files" && (
-            <DrawerFilesTab
-              items={filesPreview}
-              conversationId={conversationId}
-            />
-          )}
-          {activeTab === "links" && (
-            <DrawerLinksTab items={linksPreview} />
-          )}
-        </div>
-
-        {/* View All Footer */}
-        {showViewAllFooter && (
-          <div className="border-t border-border">
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="w-full py-2.5 text-sm font-medium text-primary transition-colors hover:bg-surface-hover"
-            >
-              Xem tất cả ({activeTabTotal})
-            </button>
-          </div>
-        )}
+        <SharedResourceSection
+          title="Link"
+          count={linksTotal}
+          onViewAll={() => {
+            setActiveTab("links");
+            setModalOpen(true);
+          }}
+          showViewAll={linksTotal > DRAWER_LINKS_PREVIEW}
+        >
+          <DrawerLinksTab items={linksPreview} />
+        </SharedResourceSection>
       </div>
 
       <ImagePreviewModal
@@ -338,6 +285,34 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     </>
   );
 };
+
+const SharedResourceSection: React.FC<{
+  title: string;
+  count: number;
+  showViewAll: boolean;
+  onViewAll: () => void;
+  children: React.ReactNode;
+}> = ({ title, count, showViewAll, onViewAll, children }) => (
+  <section className="border-b border-border px-4 py-3 last:border-b-0">
+    <div className="flex items-center justify-between gap-2">
+      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-text-muted">{count}</span>
+        <ChevronDownIcon className="h-4 w-4 text-text-muted" aria-hidden />
+      </div>
+    </div>
+    <div className="mt-3">{children}</div>
+    {showViewAll ? (
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="mt-3 w-full rounded-xl bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
+      >
+        Xem tất cả
+      </button>
+    ) : null}
+  </section>
+);
 
 // ─── Drawer Media Tab ─────────────────────────────────────────────────────────
 

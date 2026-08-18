@@ -1,6 +1,8 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { EllipsisHorizontalIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
 import {
@@ -39,6 +41,8 @@ import {
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
 import { Pin } from "lucide-react";
+import { conversationApi } from "../../../services/api";
+import { extractApiError } from "../../../lib/apiContract";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -72,15 +76,11 @@ interface RoomItemViewProps {
   onDragLeave: (event: React.DragEvent<HTMLButtonElement>) => void;
   onDrop: (event: React.DragEvent<HTMLButtonElement>) => void;
   onTogglePin: () => void;
+  onDeleteConversation: () => void | Promise<void>;
 }
 
 type RoomItemVisualState =
-  | "default"
-  | "hover"
-  | "active"
-  | "unread"
-  | "muted"
-  | "mention";
+  "default" | "hover" | "active" | "unread" | "muted" | "mention";
 
 interface RoomItemStateStyles {
   container: string;
@@ -107,8 +107,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
       "group-hover:text-text-primary group-data-[keyboard-active=true]:text-text-primary",
     preview:
       "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
-    time:
-      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    time: "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
     timeBadge:
       "group-hover:bg-surface-overlay/95 group-hover:text-text-secondary group-data-[keyboard-active=true]:bg-surface-overlay/95 group-data-[keyboard-active=true]:text-text-secondary",
     unreadBadge: "",
@@ -118,8 +117,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     title: "text-[#0D3F7A] font-bold",
     preview: "text-text-primary font-medium",
     time: "text-text-secondary",
-    timeBadge:
-      "bg-transparent text-text-secondary",
+    timeBadge: "bg-transparent text-text-secondary",
     unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   unread: {
@@ -127,8 +125,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
-    timeBadge:
-      "bg-transparent text-text-secondary",
+    timeBadge: "bg-transparent text-text-secondary",
     unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   muted: {
@@ -225,6 +222,111 @@ const buildPreviewText = (
   );
 };
 
+/** Matches Hacom Chat: conversation actions live behind the hover ellipsis. */
+export const ConversationItemMenu: React.FC<{
+  isPinned: boolean;
+  onTogglePin: () => void;
+  onDeleteConversation?: () => void | Promise<void>;
+}> = ({ isPinned, onTogglePin, onDeleteConversation }) => {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const buttonRef = useRef<HTMLSpanElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0 });
+
+  const updatePosition = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = 220;
+    const height = 112;
+    setPosition({
+      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - height - 8)),
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    updatePosition();
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const handleDelete = async () => {
+    if (deleting || !onDeleteConversation) return;
+    setDeleting(true);
+    try {
+      await onDeleteConversation();
+      setOpen(false);
+      toast.success("Đã xóa cuộc trò chuyện");
+    } catch (error) {
+      toast.error(extractApiError(error).message || "Không thể xóa cuộc trò chuyện");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <span
+        ref={buttonRef}
+        role="button"
+        tabIndex={0}
+        aria-label="Tùy chọn hội thoại"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen((value) => !value);
+          }
+        }}
+        className={clsx(
+          "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted opacity-0 transition-micro",
+          "group-hover:opacity-100 hover:bg-surface-hover hover:text-text-primary focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          open && "bg-surface-hover text-text-primary opacity-100",
+        )}
+      >
+        <EllipsisHorizontalIcon className="h-5 w-5" />
+      </span>
+      {open && typeof document !== "undefined" ? createPortal(
+        <div ref={menuRef} role="menu" className="fixed z-[1000] w-56 overflow-hidden rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3" style={position} onClick={(event) => event.stopPropagation()}>
+          <button type="button" role="menuitem" onClick={() => { onTogglePin(); setOpen(false); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover">
+            <Pin className="h-4 w-4 text-text-secondary" strokeWidth={1.6} />
+            <span>{isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}</span>
+          </button>
+          {onDeleteConversation ? (
+            <>
+              <div className="my-1 border-t border-border/70" />
+              <button type="button" role="menuitem" disabled={deleting} onClick={() => { void handleDelete(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60">
+                <TrashIcon className="h-4 w-4" />
+                <span>{deleting ? "Đang xóa…" : "Xóa cuộc trò chuyện"}</span>
+              </button>
+            </>
+          ) : null}
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+};
+
 const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   conversation,
   layoutState,
@@ -248,6 +350,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   onDragLeave,
   onDrop,
   onTogglePin,
+  onDeleteConversation,
 }) => {
   const { t } = useTranslation();
   const isDense = layoutState !== "normal";
@@ -264,7 +367,8 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   const previewToneClass =
     previewState === "failed" ? "text-danger" : visualStyles.preview;
   const timeBadgeClasses =
-    timeLabel.length > 0 && (visualState === "active" || shouldEmphasizeUnreadPreview)
+    timeLabel.length > 0 &&
+    (visualState === "active" || shouldEmphasizeUnreadPreview)
       ? visualStyles.timeBadge
       : visualState === "muted"
         ? visualStyles.timeBadge
@@ -288,12 +392,10 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
         isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
         hoverStyles?.container,
-        isDropTarget &&
-          "bg-[#1565C0]/15 ring-2 ring-inset ring-[#1565C0]/70",
+        isDropTarget && "bg-[#1565C0]/15 ring-2 ring-inset ring-[#1565C0]/70",
       )}
       aria-label={displayName}
     >
-     
       <div
         className={clsx(
           "grid w-full grid-cols-[auto,1fr,auto] items-center",
@@ -329,7 +431,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
                 strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="shrink-0 text-[#1976D2]/70"
+                className="hidden shrink-0 text-[#1976D2]/70"
                 role="img"
                 aria-label="Đã ghim"
               >
@@ -398,30 +500,11 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             isDense ? "gap-1" : "gap-1.5",
           )}
         >
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              onTogglePin();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                onTogglePin();
-              }
-            }}
-            title={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
-            aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
-            className={clsx(
-              "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-micro",
-              "hover:bg-surface-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-              isPinned && "text-primary",
-            )}
-          >
-            <Pin size={15} strokeWidth={1.8} />
-          </span>
+          <ConversationItemMenu
+            isPinned={isPinned}
+            onTogglePin={onTogglePin}
+            onDeleteConversation={onDeleteConversation}
+          />
           <span
             className={clsx(
               "inline-flex items-center rounded-full font-medium tabular-nums",
@@ -441,7 +524,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             <span
               className={clsx(
                 "inline-flex items-center justify-center rounded-full font-semibold tabular-nums",
-                isDense ? "min-h-4 min-w-4 px-1 text-[10px]" : "min-h-4 min-w-4 px-1 text-[11px]",
+                isDense
+                  ? "min-h-4 min-w-4 px-1 text-[10px]"
+                  : "min-h-4 min-w-4 px-1 text-[11px]",
                 visualStyles.unreadBadge,
               )}
               aria-label={t("sidebar:room.unreadBadge", { count: unreadCount })}
@@ -476,6 +561,8 @@ const RoomItemView = React.memo(
     prev.isPinned === next.isPinned &&
     prev.isDropTarget === next.isDropTarget &&
     prev.onSelect === next.onSelect &&
+    prev.onTogglePin === next.onTogglePin &&
+    prev.onDeleteConversation === next.onDeleteConversation &&
     prev.onDragOver === next.onDragOver &&
     prev.onDragLeave === next.onDragLeave &&
     prev.onDrop === next.onDrop,
@@ -497,15 +584,21 @@ export const RoomItemContainer = React.memo(
       ),
     );
     const isPinned = useUIStore(
-      useMemo(() => (state) => state.pinnedConversationIds.includes(conversationId), [conversationId]),
+      useMemo(
+        () => (state) => state.pinnedConversationIds.includes(conversationId),
+        [conversationId],
+      ),
     );
-    const togglePinnedConversation = useUIStore((state) => state.togglePinnedConversation);
+    const togglePinnedConversation = useUIStore(
+      (state) => state.togglePinnedConversation,
+    );
+    const removeConversation = useChatStore((state) => state.removeConversation);
     // Unsent draft preview ("Chưa gửi") — hidden on the active room since its
     // composer is already visible. Draft lives in chatUiStore (sessionStorage).
     const draftText = useChatUiStore(
       useMemo(
         () => (s) =>
-          isActive ? "" : s.composerDraftByConversation[conversationId] ?? "",
+          isActive ? "" : (s.composerDraftByConversation[conversationId] ?? ""),
         [conversationId, isActive],
       ),
     );
@@ -538,7 +631,10 @@ export const RoomItemContainer = React.memo(
     );
 
     const directPartnerId = useMemo(
-      () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
+      () =>
+        conversation
+          ? (getOtherParticipant(conversation, currentUser.id)?.id ?? null)
+          : null,
       [conversation, currentUser.id],
     );
     const livePresence = usePresenceStore(
@@ -554,7 +650,8 @@ export const RoomItemContainer = React.memo(
     // TTL-cached so repeated mounts are cheap.
     const enrichedName = useEnrichedProfileStore(
       useMemo(
-        () => (s) => (directPartnerId ? s.nameByUserId[directPartnerId] : undefined),
+        () => (s) =>
+          directPartnerId ? s.nameByUserId[directPartnerId] : undefined,
         [directPartnerId],
       ),
     );
@@ -563,7 +660,10 @@ export const RoomItemContainer = React.memo(
     // and races enrichUserProfile. This makes the sidebar alias reliable.
     const alias = useFriendshipStore(
       useMemo(
-        () => (s) => (directPartnerId ? s.friendByUserId[directPartnerId]?.alias ?? undefined : undefined),
+        () => (s) =>
+          directPartnerId
+            ? (s.friendByUserId[directPartnerId]?.alias ?? undefined)
+            : undefined,
         [directPartnerId],
       ),
     );
@@ -572,7 +672,10 @@ export const RoomItemContainer = React.memo(
     const lastSenderId = conversation?.lastMessage?.senderId;
     const lastSenderAlias = useFriendshipStore(
       useMemo(
-        () => (s) => (lastSenderId ? s.friendByUserId[lastSenderId]?.alias ?? undefined : undefined),
+        () => (s) =>
+          lastSenderId
+            ? (s.friendByUserId[lastSenderId]?.alias ?? undefined)
+            : undefined,
         [lastSenderId],
       ),
     );
@@ -665,7 +768,11 @@ export const RoomItemContainer = React.memo(
       return {
         conversation,
         displayName,
-        previewText: buildPreviewText(conversation, currentUser, lastSenderAlias),
+        previewText: buildPreviewText(
+          conversation,
+          currentUser,
+          lastSenderAlias,
+        ),
         previewState,
         timeLabel: referenceTime
           ? formatRelativeTime(new Date(referenceTime))
@@ -680,7 +787,14 @@ export const RoomItemContainer = React.memo(
           : undefined,
         isDirect,
       };
-    }, [conversation, currentUser, livePresence, enrichedName, alias, lastSenderAlias]);
+    }, [
+      conversation,
+      currentUser,
+      livePresence,
+      enrichedName,
+      alias,
+      lastSenderAlias,
+    ]);
 
     if (!viewModel) {
       return null;
@@ -711,7 +825,13 @@ export const RoomItemContainer = React.memo(
         onDrop={handleDrop}
         onTogglePin={() => {
           togglePinnedConversation(conversationId);
-          toast.success(isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại");
+          toast.success(
+            isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại",
+          );
+        }}
+        onDeleteConversation={async () => {
+          await conversationApi.deleteConversation(conversationId);
+          removeConversation(conversationId);
         }}
       />
     );

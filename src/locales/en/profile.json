@@ -11,6 +11,9 @@
     "emptyBioSelf": "Add a short bio so people know who they're chatting with.",
     "emptyBioOther": "No bio added yet."
   },
+  "conversationInfo": {
+    "title": "Conversation information"
+  },
   "groupInfo": {
     "title": "Group information",
     "renameGroup": "Rename group",

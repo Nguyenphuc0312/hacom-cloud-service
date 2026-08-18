@@ -7,9 +7,12 @@ import {
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
   DocumentIcon as FileText,
+  EllipsisHorizontalIcon,
+  FolderOpenIcon,
   LinkIcon as Link2,
   PhotoIcon as ImageIcon,
   PlayIcon as Play,
+  ArrowUturnRightIcon,
   TrashIcon as Trash2,
 } from "@heroicons/react/24/outline";
 import { ImagePreviewModal } from "../../../components/modals/ImagePreviewModal";
@@ -17,12 +20,16 @@ import { VideoPlayerModal } from "../../../components/info/shared-resources/Vide
 import type { CloudItem } from "../types";
 import { formatBytes, getCloudItemTitle } from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
+import { downloadResourceWithName, getHacomDesktopBridge } from "../../../utils/downloadFile";
 
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
   trashItems?: CloudItem[];
   onViewTrash?: () => void;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
+  onDeleteItem?: (item: CloudItem) => void | Promise<void>;
+  onViewOriginalMessage?: (item: CloudItem) => void;
+  onShowInFolder?: (item: CloudItem) => void;
   userId?: string;
   senderName?: string;
   senderAvatar?: string;
@@ -36,6 +43,9 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   trashItems = [],
   onViewTrash,
   onRestoreTrashItem,
+  onDeleteItem,
+  onViewOriginalMessage,
+  onShowInFolder,
   userId,
   senderName,
   senderAvatar,
@@ -101,15 +111,12 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         </ResourceSection>
 
         <ResourceSection label="File">
-          {files.length ? <div className="space-y-1.5">{files.slice(0, 3).map((item) => {
-            const content = <><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span></>;
-            return item.accessUrl ? <a key={item.id} href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-2 rounded-lg p-2 hover:bg-surface-hover">{content}</a> : <div key={item.id} className="flex items-center gap-2 rounded-lg p-2">{content}</div>;
-          })}</div> : <EmptyState icon={<FileText />} label="Chưa có File được chia sẻ trong hội thoại này" />}
+          {files.length ? <div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<FileText />} label="Chưa có File được chia sẻ trong hội thoại này" />}
           {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
         <ResourceSection label="Link">
-          {links.length ? <div className="space-y-1.5">{links.slice(0, 3).map((item) => { const url = item.url?.trim() ?? ""; let host = url; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ } return <a key={item.id} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg p-2 hover:bg-surface-hover"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="block truncate text-[11px] text-text-muted">{host}</span></span></a>; })}</div> : <EmptyState icon={<Link2 />} label="Chưa có link nào được chia sẻ" />}
+          {links.length ? <div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<Link2 />} label="Chưa có link nào được chia sẻ" />}
           {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
@@ -130,10 +137,139 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           </div> : null}
         </section>
       </div>
-      {galleryTab ? <ResourceGallery tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} /> : null}
+      {galleryTab ? <ResourceGallery tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
       <ImagePreviewModal isOpen={lightboxIndex !== null} onClose={() => setLightboxIndex(null)} images={images} initialIndex={lightboxIndex ?? 0} />
       <VideoPlayerModal isOpen={video !== null} onClose={() => setVideo(null)} url={video?.accessUrl ?? null} fileName={video ? itemTitle(video) : undefined} />
     </>
+  );
+};
+
+const resourceUrl = (item: CloudItem): string => item.accessUrl?.trim() || item.url?.trim() || "";
+
+const linkLabel = (item: CloudItem, url: string): string =>
+  item.title?.trim() || url || itemTitle(item);
+
+/** Documents are opened/downloaded through the row itself. Their overflow
+ * menu intentionally starts at "Chia sẻ" (unlike audio/video resources). */
+const isDocumentFile = (item: CloudItem): boolean => {
+  if (item.type !== "file") return false;
+  const mime = (item.contentType ?? "").toLowerCase();
+  if (mime === "application/pdf" || mime.includes("word") || mime.includes("excel") || mime.includes("spreadsheet")) return true;
+  const name = (item.title ?? item.content ?? "").split("?", 1)[0].toLowerCase();
+  return /\.(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|odt|ods)$/.test(name);
+};
+
+const shareResource = async (item: CloudItem): Promise<void> => {
+  const url = resourceUrl(item);
+  if (!url) return;
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      await navigator.share({ title: itemTitle(item), url });
+      return;
+    }
+    await navigator.clipboard?.writeText(url);
+  } catch {
+    // Sharing can be cancelled by the user; keep the row usable.
+  }
+};
+
+interface ResourceActionProps {
+  item: CloudItem;
+  onDeleteItem?: (item: CloudItem) => void | Promise<void>;
+  onViewOriginalMessage?: (item: CloudItem) => void;
+  onShowInFolder?: (item: CloudItem) => void;
+}
+
+const ResourceActions: React.FC<ResourceActionProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [folderActionPending, setFolderActionPending] = useState(false);
+  const url = resourceUrl(item);
+  const documentFile = isDocumentFile(item);
+
+  const openResource = () => {
+    if (url && typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openFolder = async () => {
+    if (!url || folderActionPending) return;
+    const fileName = item.title?.trim() || itemTitle(item);
+    setFolderActionPending(true);
+    try {
+      const bridge = getHacomDesktopBridge();
+      if (bridge?.openResourceInFolder) {
+        await bridge.openResourceInFolder({ id: item.id, url, fileName });
+        return;
+      }
+      // Links are web resources, not local files. Keep their normal browser
+      // behaviour instead of downloading an HTML page as a fake attachment.
+      if (item.type === "link") {
+        openResource();
+        return;
+      }
+      // Web browsers intentionally cannot open Explorer/Finder. Downloading
+      // with the original name is the safe localhost fallback.
+      await downloadResourceWithName(url, fileName);
+    } finally {
+      setFolderActionPending(false);
+    }
+  };
+
+  return (
+    <div className="pointer-events-none absolute right-2 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-border/70 bg-surface px-1.5 py-1 shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+      {item.type !== "link" ? (
+        <button type="button" disabled={folderActionPending} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void openFolder(); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60" aria-label={`Mở thư mục chứa ${itemTitle(item)}`} title={folderActionPending ? "Đang tải…" : "Mở thư mục"}>
+          <FolderOpenIcon className="h-4 w-4" />
+        </button>
+      ) : null}
+      <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void shareResource(item); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Chia sẻ ${itemTitle(item)}`} title="Chia sẻ">
+        <ArrowUturnRightIcon className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setMenuOpen((open) => !open); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Thêm tùy chọn cho ${itemTitle(item)}`} title="Thêm tùy chọn" aria-expanded={menuOpen}>
+        <EllipsisHorizontalIcon className="h-5 w-5" />
+      </button>
+      {menuOpen ? (
+        <div className="absolute bottom-full right-0 z-30 mb-2 min-w-[16rem] rounded-xl border border-border bg-surface p-2 text-sm shadow-2xl" onClick={(event) => event.stopPropagation()} role="menu">
+          {!documentFile ? <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); openResource(); }}>Mở tài liệu</button> : null}
+          <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); void shareResource(item); }}>Chia sẻ</button>
+          <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); onViewOriginalMessage?.(item); }}>Xem tin nhắn gốc</button>
+          <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); onShowInFolder?.(item); }}>Hiển thị trong thư mục</button>
+          <div className="my-1 border-t border-border/70" />
+          <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setMenuOpen(false); void onDeleteItem?.(item); }}>Xóa</button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+type ResourceRowProps = Omit<ResourceActionProps, "item"> & { item: CloudItem };
+
+const CloudFileRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
+  <div className="group relative rounded-lg hover:bg-surface-hover">
+    {item.accessUrl ? (
+      <a href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-2 rounded-lg p-2 pr-28">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileText className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span>
+      </a>
+    ) : (
+      <div className="flex items-center gap-2 rounded-lg p-2 pr-28"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span></div>
+    )}
+    <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+  </div>
+);
+
+const CloudLinkRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+  const url = item.url?.trim() ?? "";
+  const label = linkLabel(item, url);
+  let host = url;
+  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ }
+  return (
+    <div className="group relative rounded-lg hover:bg-surface-hover">
+      <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg p-2 pr-28">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-[11px] text-text-muted" title={host}>{host}</span></span>
+      </a>
+      <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+    </div>
   );
 };
 
@@ -151,7 +287,10 @@ const ResourceGallery: React.FC<{
   onClose: () => void;
   onOpenImage: (item: CloudItem) => void;
   onOpenVideo: (item: CloudItem) => void;
-}> = ({ tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo }) => {
+  onDeleteItem?: (item: CloudItem) => void | Promise<void>;
+  onViewOriginalMessage?: (item: CloudItem) => void;
+  onShowInFolder?: (item: CloudItem) => void;
+}> = ({ tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const [tab, setTab] = useState<GalleryTab>(initialTab);
   const [filterOpen, setFilterOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -277,8 +416,8 @@ const ResourceGallery: React.FC<{
           <section key={date} className="mb-3 border-b-8 border-surface-muted bg-surface px-5 pb-5 pt-4">
             <h3 className="mb-5 text-lg font-semibold text-text-primary">{date}</h3>
             {tab === "media" ? <div className="grid grid-cols-3 gap-3">{group.map((item) => <button key={item.id} type="button" disabled={!item.accessUrl} onClick={() => item.type === "video" ? onOpenVideo(item) : onOpenImage(item)} className="group relative aspect-square overflow-hidden rounded-md bg-surface-overlay disabled:cursor-default"><GalleryMedia item={item} /></button>)}</div> : null}
-            {tab === "files" ? <div className="space-y-2">{group.map((item) => <GalleryFile key={item.id} item={item} />)}</div> : null}
-            {tab === "links" ? <div className="space-y-2">{group.map((item) => <GalleryLink key={item.id} item={item} />)}</div> : null}
+            {tab === "files" ? <div className="space-y-2">{group.map((item) => <GalleryFile key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
+            {tab === "links" ? <div className="space-y-2">{group.map((item) => <GalleryLink key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
           </section>
         )) : <EmptyState icon={tab === "media" ? <ImageIcon /> : tab === "files" ? <FileText /> : <Link2 />} label={`Chưa có ${tabLabel.toLowerCase()}`} />}
       </div>
@@ -289,13 +428,19 @@ const ResourceGallery: React.FC<{
 
 const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) => item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover" loading="lazy" /> : <><video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /><span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white"><Play className="h-5 w-5" fill="currentColor" /></span></span></> : <ImageIcon className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-text-muted" />;
 
-const GalleryFile: React.FC<{ item: CloudItem }> = ({ item }) => item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-3 rounded-lg bg-surface-overlay p-3"><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span></a> : <div className="flex items-center gap-3 rounded-lg bg-surface-overlay p-3"><FileText className="h-7 w-7 text-text-muted" /><span className="truncate text-sm text-text-primary">{itemTitle(item)}</span></div>;
+const GalleryFile: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
+  <div className="group relative rounded-lg bg-surface-overlay">
+    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-3 rounded-lg p-3 pr-28"><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span></a> : <div className="flex items-center gap-3 rounded-lg p-3 pr-28"><FileText className="h-7 w-7 text-text-muted" /><span className="truncate text-sm text-text-primary">{itemTitle(item)}</span></div>}
+    <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+  </div>
+);
 
-const GalleryLink: React.FC<{ item: CloudItem }> = ({ item }) => {
+const GalleryLink: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const url = item.url?.trim() ?? "";
+  const label = linkLabel(item, url);
   let host = url;
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ }
-  return <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg bg-surface-overlay p-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="block truncate text-xs text-text-muted">{host}</span></span></a>;
+  return <div className="group relative rounded-lg bg-surface-overlay"><a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg p-3 pr-28"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-text-muted" title={host}>{host}</span></span></a><ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /></div>;
 };
 
 const formatCalendarDate = (value: string): string => {

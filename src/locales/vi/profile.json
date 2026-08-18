@@ -11,6 +11,9 @@
     "emptyBioSelf": "Hãy thêm vài dòng giới thiệu để mọi người biết bạn là ai.",
     "emptyBioOther": "Người này chưa thêm giới thiệu."
   },
+  "conversationInfo": {
+    "title": "Thông tin hội thoại"
+  },
   "groupInfo": {
     "title": "Thông tin nhóm",
     "renameGroup": "Đổi tên nhóm",

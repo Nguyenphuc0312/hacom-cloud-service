@@ -12,6 +12,24 @@
 
 const DEFAULT_NAME = "download";
 
+/** Optional Electron/Tauri/native host bridge for revealing a downloaded file. */
+export type HacomDesktopBridge = {
+  openResourceInFolder?: (payload: {
+    id?: string;
+    url: string;
+    fileName: string;
+  }) => Promise<void> | void;
+};
+
+/**
+ * Browsers cannot launch Explorer/Finder or inspect Downloads. A desktop
+ * wrapper may expose this bridge; localhost falls back to a named download.
+ */
+export const getHacomDesktopBridge = (): HacomDesktopBridge | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { hacomDesktop?: HacomDesktopBridge }).hacomDesktop;
+};
+
 const triggerAnchorDownload = (
   href: string,
   fileName: string,

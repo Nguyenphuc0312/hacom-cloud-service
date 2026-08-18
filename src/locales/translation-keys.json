@@ -394,6 +394,7 @@
     "toast.searchUsersFailed",
     "toast.selectAtLeastOneMember",
     "userProfile.blockUser",
+    "conversationInfo.title",
     "userProfile.deleteConversation",
     "userProfile.media",
     "userProfile.notifications",

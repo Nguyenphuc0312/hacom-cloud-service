@@ -611,7 +611,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             <h3 className="text-title-sm text-text-primary">
               {isSelf
                 ? t("friends:relationship.self")
-                : t("profile:userProfile.title")}
+                : conversationContext === "direct"
+                  ? t("profile:conversationInfo.title", {
+                      defaultValue: "Thông tin hội thoại",
+                    })
+                  : t("profile:userProfile.title")}
             </h3>
           </div>
 

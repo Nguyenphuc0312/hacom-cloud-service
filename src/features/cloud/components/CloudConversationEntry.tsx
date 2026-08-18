@@ -4,10 +4,10 @@ import { CloudIcon as Cloud } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import type { CloudItem } from "../types";
-import {
-  getCloudItemPreview,
-  getCloudItemTitle,
-} from "../utils/cloudFormat";
+import { getCloudItemPreview, getCloudItemTitle } from "../utils/cloudFormat";
+import { ConversationItemMenu } from "../../../components/layout/sidebar/RoomItem";
+import { useUIStore } from "../../../stores/uiStore";
+import { CLOUD_CONVERSATION_ID } from "../constants";
 
 interface CloudConversationEntryProps {
   items?: CloudItem[];
@@ -37,10 +37,18 @@ export const CloudConversationAvatar: React.FC<{
   </span>
 );
 
-export const CloudConversationEntry: React.FC<
-  CloudConversationEntryProps
-> = ({ items = [], isActive = false, onSelect }) => {
+export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
+  items = [],
+  isActive = false,
+  onSelect,
+}) => {
   const { t } = useTranslation("cloud");
+  const isPinned = useUIStore((state) =>
+    state.pinnedConversationIds.includes(CLOUD_CONVERSATION_ID),
+  );
+  const togglePinnedConversation = useUIStore(
+    (state) => state.togglePinnedConversation,
+  );
   const latestItem = items[0];
   const preview = latestItem
     ? getCloudItemPreview(latestItem) ||
@@ -84,18 +92,24 @@ export const CloudConversationEntry: React.FC<
             <p
               className={clsx(
                 "mt-0.5 truncate pr-1 text-[12px] leading-[1rem]",
-                isActive
-                  ? "font-medium text-text-primary"
-                  : "text-text-muted",
+                isActive ? "font-medium text-text-primary" : "text-text-muted",
               )}
               title={preview}
             >
               {preview}
             </p>
           </div>
-          <span className="min-w-room-meta text-right text-[11px] font-medium text-text-muted">
-            {timeLabel}
-          </span>
+          <div className="flex min-w-room-meta flex-col items-end justify-center gap-1">
+            <ConversationItemMenu
+              isPinned={isPinned}
+              onTogglePin={() =>
+                togglePinnedConversation(CLOUD_CONVERSATION_ID)
+              }
+            />
+            <span className="text-right text-[11px] font-medium text-text-muted">
+              {timeLabel}
+            </span>
+          </div>
         </div>
       </button>
       <div className="mx-3 h-px bg-border/45" aria-hidden />

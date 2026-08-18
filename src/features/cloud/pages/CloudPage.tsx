@@ -227,6 +227,8 @@ export default function CloudPage() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
+  const [jumpNonce, setJumpNonce] = useState(0);
   const selectionDragRef = useRef<CloudSelectionDrag | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentDraft[]>(
     [],
@@ -853,6 +855,15 @@ export default function CloudPage() {
     [captureTimelineScroll, workspace.items],
   );
 
+  const handleViewOriginalResource = useCallback(
+    (item: CloudItem) => {
+      setIsInfoPanelOpen(false);
+      setJumpToMessageId(item.id);
+      setJumpNonce((nonce) => nonce + 1);
+    },
+    [],
+  );
+
   const handleTrashPermanentDeleteRequest = useCallback(
     (messageId: string) => {
       const item = workspace.trashItems.find(
@@ -1161,6 +1172,8 @@ export default function CloudPage() {
               selectedMessageIds={selectedMessageIds}
               onToggleSelect={toggleMessageSelection}
               onStartSelectionMode={enterSelectionMode}
+              jumpToMessageId={jumpToMessageId}
+              jumpNonce={jumpNonce}
               className="min-h-0 flex-1"
             />
           ) : (
@@ -1179,6 +1192,8 @@ export default function CloudPage() {
               cloudMessageActionsOnly
               cloudTrashMode
               onRestoreCloudItem={handleRestore}
+              jumpToMessageId={jumpToMessageId}
+              jumpNonce={jumpNonce}
               hasMore={Boolean(workspace.trashNextCursor)}
               isLoadingMore={workspace.isLoadingMoreTrash}
               isInitialLoading={workspace.isLoadingTrash}
@@ -1458,6 +1473,9 @@ export default function CloudPage() {
                 showStorage
                 onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
                 onRestoreTrashItem={handleRestore}
+                onDeleteItem={(item) => handleDeleteRequest(item.id)}
+                onViewOriginalMessage={handleViewOriginalResource}
+                onShowInFolder={showPhaseNotice}
                 onClose={() => setIsInfoPanelOpen(false)}
               />
             )}
