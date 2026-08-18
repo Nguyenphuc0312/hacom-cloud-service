@@ -43,6 +43,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   const [galleryTab, setGalleryTab] = useState<GalleryTab | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [video, setVideo] = useState<CloudItem | null>(null);
+  const [trashExpanded, setTrashExpanded] = useState(true);
   const [accessById, setAccessById] = useState<Record<string, { url: string; expiresAt: string }>>({});
 
   const resolvedItems = useMemo(
@@ -85,7 +86,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   return (
     <>
       <div className="overflow-hidden bg-surface">
-        <ResourceSection label="Ảnh/Video" count={media.length}>
+        <ResourceSection label="Ảnh/Video">
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
               {media.slice(0, 6).map((item) => (
@@ -99,7 +100,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           </> : <EmptyState icon={<ImageIcon />} label="Chưa có ảnh hoặc video được chia sẻ trong hội thoại này" />}
         </ResourceSection>
 
-        <ResourceSection label="File" count={files.length}>
+        <ResourceSection label="File">
           {files.length ? <div className="space-y-1.5">{files.slice(0, 3).map((item) => {
             const content = <><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span></>;
             return item.accessUrl ? <a key={item.id} href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-2 rounded-lg p-2 hover:bg-surface-hover">{content}</a> : <div key={item.id} className="flex items-center gap-2 rounded-lg p-2">{content}</div>;
@@ -107,17 +108,17 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
-        <ResourceSection label="Link" count={links.length}>
+        <ResourceSection label="Link">
           {links.length ? <div className="space-y-1.5">{links.slice(0, 3).map((item) => { const url = item.url?.trim() ?? ""; let host = url; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ } return <a key={item.id} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg p-2 hover:bg-surface-hover"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="block truncate text-[11px] text-text-muted">{host}</span></span></a>; })}</div> : <EmptyState icon={<Link2 />} label="Chưa có link nào được chia sẻ" />}
           {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
         <section className="border-t border-border">
-          <div className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-text-primary">
+          <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-text-primary transition-colors hover:bg-surface-hover" aria-expanded={trashExpanded} aria-controls="cloud-resource-section-trash" onClick={() => setTrashExpanded((open) => !open)}>
             <span className="flex items-center gap-2"><Trash2 className="h-4 w-4 text-text-muted" />Thùng rác</span>
-            <span className="text-xs font-normal text-text-muted">{trashItems.length}</span>
-          </div>
-          <div className="px-4 pb-4">
+            <ChevronDown className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${trashExpanded ? "" : "-rotate-90"}`} aria-hidden="true" />
+          </button>
+          {trashExpanded ? <div id="cloud-resource-section-trash" className="px-4 pb-4">
             {trashItems.length ? <>
               <div className="flex items-center justify-between py-2 text-xs text-text-muted">
                 <span>{trashItems.length} mục</span>
@@ -126,7 +127,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
               {trashItems.slice(0, 3).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-lg bg-surface-overlay px-3 py-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-semibold text-emerald-600">{item.type === "image" ? "PNG" : item.type === "video" ? "MP4" : "FILE"}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span><button type="button" onClick={() => void onRestoreTrashItem?.(item.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-primary hover:bg-primary/10" aria-label={`Khôi phục ${itemTitle(item)}`}><RotateCcw className="h-4 w-4" /></button></div>)}
               {trashItems.length >= 4 ? <button type="button" onClick={onViewTrash} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
             </> : <p className="py-3 text-sm text-text-muted">Thùng rác đang trống</p>}
-          </div>
+          </div> : null}
         </section>
       </div>
       {galleryTab ? <ResourceGallery tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} /> : null}
@@ -347,11 +348,32 @@ const CalendarPicker: React.FC<{
   </div>;
 };
 
-const ResourceSection: React.FC<{ label: string; count: number; children: React.ReactNode }> = ({ label, count, children }) => (
-  <section className="border-t border-border first:border-t-0">
-    <div className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-text-primary"><span>{label}</span><span className="text-xs font-normal text-text-muted">{count}</span></div>
-    <div className="border-t border-border/70 px-4 py-3">{children}</div>
-  </section>
-);
+const ResourceSection: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+  const [expanded, setExpanded] = useState(true);
+  const contentId = `cloud-resource-section-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+  return (
+    <section className="border-t border-border first:border-t-0">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-text-primary transition-colors hover:bg-surface-hover"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        <span>{label}</span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
+          aria-hidden="true"
+        />
+      </button>
+      {expanded ? (
+        <div id={contentId} className="border-t border-border/70 px-4 py-3">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+};
 
 const EmptyState: React.FC<{ icon: React.ReactElement<{ className?: string }>; label: string }> = ({ icon, label }) => <div className="flex min-h-24 flex-col items-center justify-center gap-2 text-center text-text-muted">{React.cloneElement(icon, { className: "h-7 w-7" })}<p className="text-xs leading-5">{label}</p></div>;
