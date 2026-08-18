@@ -1470,6 +1470,7 @@ export default function CloudPage() {
                 quota={workspace.quota}
                 viewMode={viewMode}
                 onViewModeChange={handleViewModeChange}
+                onLoadAllTrash={workspace.loadAllTrash}
                 showStorage
                 onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
                 onRestoreTrashItem={handleRestore}

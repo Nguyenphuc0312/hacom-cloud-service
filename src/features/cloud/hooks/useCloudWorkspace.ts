@@ -104,7 +104,7 @@ const hydrateMediaAccess = async (
       ({ item }) =>
         (["image", "video", "audio", "file"] as CloudItem["type"][]).includes(
           item.type,
-        ) && item.status === "ready",
+        ) && (item.status === "ready" || item.status === "trashed"),
     );
   let nextIndex = 0;
 
@@ -248,11 +248,16 @@ export const useCloudWorkspace = (
           userId,
           signal,
         );
+        const hydratedTrashItems = await hydrateMediaAccess(
+          trashPage.items,
+          userId,
+          signal,
+        );
         if (!mountedRef.current || signal?.aborted) return;
         setState((current) => ({
           ...current,
           items: hydratedItems,
-          trashItems: trashPage.items,
+          trashItems: hydratedTrashItems,
           quota,
           quotaRequest,
           health,
@@ -321,10 +326,11 @@ export const useCloudWorkspace = (
         cursor: state.trashNextCursor,
         q: searchQuery.trim() || undefined,
       });
+      const hydratedItems = await hydrateMediaAccess(page.items, userId);
       if (!mountedRef.current) return;
       setState((current) => ({
         ...current,
-        trashItems: mergeTrashItems(current.trashItems, page.items),
+        trashItems: mergeTrashItems(current.trashItems, hydratedItems),
         trashNextCursor: page.nextCursor,
         isLoadingMoreTrash: false,
       }));
@@ -335,6 +341,40 @@ export const useCloudWorkspace = (
         isLoadingMoreTrash: false,
         error: asCloudError(error),
       }));
+    }
+  }, [searchQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
+
+  /** Load every remaining trash page for the gallery view. */
+  const loadAllTrash = useCallback(async () => {
+    if (!userId || !state.trashNextCursor || state.isLoadingMoreTrash) return;
+    setState((current) => ({ ...current, isLoadingMoreTrash: true }));
+    try {
+      let cursor: string | undefined = state.trashNextCursor;
+      let incoming: CloudItem[] = [];
+      while (cursor) {
+        const page = await cloudApi.listTrash(userId, {
+          cursor,
+          q: searchQuery.trim() || undefined,
+        });
+        const hydratedItems = await hydrateMediaAccess(page.items, userId);
+        incoming = mergeTrashItems(incoming, hydratedItems);
+        cursor = page.nextCursor;
+      }
+      if (!mountedRef.current) return;
+      setState((current) => ({
+        ...current,
+        trashItems: mergeTrashItems(current.trashItems, incoming),
+        trashNextCursor: undefined,
+        isLoadingMoreTrash: false,
+      }));
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setState((current) => ({
+        ...current,
+        isLoadingMoreTrash: false,
+        error: asCloudError(error),
+      }));
+      throw error;
     }
   }, [searchQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
 
@@ -747,6 +787,7 @@ export const useCloudWorkspace = (
     refresh,
     loadMore,
     loadMoreTrash,
+    loadAllTrash,
     createText,
     createLink,
     uploadFile,

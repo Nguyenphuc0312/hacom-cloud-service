@@ -18,6 +18,7 @@ import {
 import { ImagePreviewModal } from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import type { CloudItem } from "../types";
+import { CloudItemIcon } from "./CloudItemIcon";
 import { formatBytes, getCloudItemTitle } from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 import { downloadResourceWithName, getHacomDesktopBridge } from "../../../utils/downloadFile";
@@ -26,6 +27,7 @@ interface CloudResourcesPreviewProps {
   items: CloudItem[];
   trashItems?: CloudItem[];
   onViewTrash?: () => void;
+  onLoadAllTrash?: () => Promise<void>;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
   onDeleteItem?: (item: CloudItem) => void | Promise<void>;
   onViewOriginalMessage?: (item: CloudItem) => void;
@@ -42,6 +44,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
   trashItems = [],
   onViewTrash,
+  onLoadAllTrash,
   onRestoreTrashItem,
   onDeleteItem,
   onViewOriginalMessage,
@@ -51,6 +54,8 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   senderAvatar,
 }) => {
   const [galleryTab, setGalleryTab] = useState<GalleryTab | null>(null);
+  const [trashGalleryOpen, setTrashGalleryOpen] = useState(false);
+  const [isLoadingTrashGallery, setIsLoadingTrashGallery] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [video, setVideo] = useState<CloudItem | null>(null);
   const [trashExpanded, setTrashExpanded] = useState(true);
@@ -60,18 +65,24 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     () => items.map((item) => ({ ...item, accessUrl: accessById[item.id]?.url ?? item.accessUrl })),
     [accessById, items],
   );
+  const resolvedTrashItems = useMemo(
+    () => trashItems.map((item) => ({ ...item, accessUrl: accessById[item.id]?.url ?? item.accessUrl })),
+    [accessById, trashItems],
+  );
   const media = useMemo(() => resolvedItems.filter((item) => item.type === "image" || item.type === "video"), [resolvedItems]);
   const files = useMemo(() => resolvedItems.filter((item) => item.type === "file"), [resolvedItems]);
   const links = useMemo(() => resolvedItems.filter((item) => item.type === "link"), [resolvedItems]);
   const images = useMemo(
-    () => media.filter((item) => item.type === "image" && item.accessUrl).map((item) => ({ url: item.accessUrl!, alt: itemTitle(item), senderName, senderAvatar, sentAt: item.createdAt, groupKey: item.id })),
-    [media, senderAvatar, senderName],
+    () => [...media, ...resolvedTrashItems].filter((item) => item.type === "image" && item.accessUrl).map((item) => ({ url: item.accessUrl!, alt: itemTitle(item), senderName, senderAvatar, sentAt: item.createdAt, groupKey: item.id })),
+    [media, resolvedTrashItems, senderAvatar, senderName],
   );
 
   useEffect(() => {
     if (!userId) return;
-    const candidates = [...media, ...files].filter((item) => {
-      if (item.status !== "ready") return false;
+    const candidates = [...media, ...files, ...resolvedTrashItems.filter((item) => item.type === "image" || item.type === "video" || item.type === "file")].filter((item) => {
+      // Trash items remain owner-readable until purgeAfter, so hydrate their
+      // signed URL just like active ready items for gallery previews.
+      if (item.status !== "ready" && item.status !== "trashed") return false;
       const expiresAt = accessById[item.id]?.expiresAt ?? item.accessExpiresAt;
       return !expiresAt || Date.parse(expiresAt) - Date.now() <= 30_000;
     });
@@ -85,12 +96,26 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
       if (Object.keys(next).length) setAccessById((current) => ({ ...current, ...next }));
     });
     return () => { cancelled = true; };
-  }, [accessById, files, media, userId]);
+  }, [accessById, files, media, resolvedTrashItems, userId]);
 
   const openImage = (item: CloudItem) => {
     if (!item.accessUrl) return;
     const index = images.findIndex((image) => image.url === item.accessUrl);
     if (index >= 0) setLightboxIndex(index);
+  };
+
+  const openTrashGallery = async () => {
+    if (onLoadAllTrash) {
+      setIsLoadingTrashGallery(true);
+      try {
+        await onLoadAllTrash();
+      } catch {
+        // Keep the already loaded trash items usable if a later page fails.
+      } finally {
+        setIsLoadingTrashGallery(false);
+      }
+    }
+    setTrashGalleryOpen(true);
   };
 
   return (
@@ -131,13 +156,14 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 <span>{trashItems.length} mục</span>
                 <button type="button" className="font-medium text-primary" onClick={onViewTrash}>Chọn</button>
               </div>
-              {trashItems.slice(0, 3).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-lg bg-surface-overlay px-3 py-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-semibold text-emerald-600">{item.type === "image" ? "PNG" : item.type === "video" ? "MP4" : "FILE"}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span><button type="button" onClick={() => void onRestoreTrashItem?.(item.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-primary hover:bg-primary/10" aria-label={`Khôi phục ${itemTitle(item)}`}><RotateCcw className="h-4 w-4" /></button></div>)}
-              {trashItems.length >= 4 ? <button type="button" onClick={onViewTrash} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
+              {trashItems.slice(0, 3).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-lg bg-surface-overlay px-3 py-2"><CloudItemIcon type={item.type} /><span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span><button type="button" onClick={() => void onRestoreTrashItem?.(item.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-primary hover:bg-primary/10" aria-label={`Khôi phục ${itemTitle(item)}`}><RotateCcw className="h-4 w-4" /></button></div>)}
+              {trashItems.length >= 4 ? <button type="button" disabled={isLoadingTrashGallery} onClick={() => void openTrashGallery()} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60">{isLoadingTrashGallery ? "Đang tải…" : "Xem tất cả"}</button> : null}
             </> : <p className="py-3 text-sm text-text-muted">Thùng rác đang trống</p>}
           </div> : null}
         </section>
       </div>
-      {galleryTab ? <ResourceGallery tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
+      {galleryTab ? <ResourceGallery title="Kho lưu trữ" tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
+      {trashGalleryOpen ? <ResourceGallery title="Thùng rác" tab={resolvedTrashItems.some((item) => item.type === "image" || item.type === "video") ? "media" : resolvedTrashItems.some((item) => item.type === "file") ? "files" : "links"} allItems={resolvedTrashItems} onClose={() => setTrashGalleryOpen(false)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
       <ImagePreviewModal isOpen={lightboxIndex !== null} onClose={() => setLightboxIndex(null)} images={images} initialIndex={lightboxIndex ?? 0} />
       <VideoPlayerModal isOpen={video !== null} onClose={() => setVideo(null)} url={video?.accessUrl ?? null} fileName={video ? itemTitle(video) : undefined} />
     </>
@@ -282,6 +308,7 @@ const formatSentDate = (createdAt: string): string => {
 };
 
 const ResourceGallery: React.FC<{
+  title: "Kho lưu trữ" | "Thùng rác";
   tab: GalleryTab;
   allItems: CloudItem[];
   onClose: () => void;
@@ -290,7 +317,7 @@ const ResourceGallery: React.FC<{
   onDeleteItem?: (item: CloudItem) => void | Promise<void>;
   onViewOriginalMessage?: (item: CloudItem) => void;
   onShowInFolder?: (item: CloudItem) => void;
-}> = ({ tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+}> = ({ title, tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const [tab, setTab] = useState<GalleryTab>(initialTab);
   const [filterOpen, setFilterOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -392,10 +419,10 @@ const ResourceGallery: React.FC<{
   };
 
   return (
-    <section className="absolute inset-0 z-40 flex w-full flex-col overflow-hidden bg-surface shadow-2xl" aria-label="Kho lưu trữ">
+    <section className="absolute inset-0 z-40 flex w-full flex-col overflow-hidden bg-surface shadow-2xl" aria-label={title}>
       <header className="flex min-h-[var(--app-header-height)] shrink-0 items-center justify-between border-b border-border/70 px-5">
         <button type="button" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-fast hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30" aria-label="Quay lại"><ArrowLeft className="h-5 w-5" /></button>
-        <h2 className="flex-1 text-[16px] font-semibold text-text-primary">Kho lưu trữ</h2>
+        <h2 className="flex-1 text-[16px] font-semibold text-text-primary">{title}</h2>
         <button type="button" onClick={onClose} className="inline-flex h-9 items-center rounded-md px-2 text-[13px] font-medium text-text-primary hover:bg-surface-hover">Chọn</button>
       </header>
       <nav className="flex h-14 shrink-0 border-b border-border px-5" aria-label="Loại nội dung">

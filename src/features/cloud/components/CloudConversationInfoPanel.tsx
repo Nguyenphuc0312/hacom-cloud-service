@@ -16,6 +16,7 @@ interface CloudConversationInfoPanelProps {
   quota: CloudQuota | null;
   viewMode: CloudViewMode;
   onViewModeChange: (mode: CloudViewMode) => void;
+  onLoadAllTrash?: () => Promise<void>;
   onClose: () => void;
   onManageCloud?: () => void;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
@@ -34,7 +35,7 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({ items, trashItems, quota, onViewModeChange, onClose, onManageCloud, onRestoreTrashItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, showStorage = true }) => {
+> = ({ items, trashItems, quota, onViewModeChange, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
@@ -171,6 +172,7 @@ export const CloudConversationInfoPanel: React.FC<
           items={items}
           trashItems={trashItems}
           onViewTrash={() => onViewModeChange("trash")}
+          onLoadAllTrash={onLoadAllTrash}
           onRestoreTrashItem={onRestoreTrashItem}
           onDeleteItem={onDeleteItem}
           onViewOriginalMessage={onViewOriginalMessage}
