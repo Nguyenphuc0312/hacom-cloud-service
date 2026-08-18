@@ -67,7 +67,7 @@ const quota: CloudQuota = {
 };
 
 describe("CloudConversationInfoPanel", () => {
-  it("separates links from messages and keeps Trash as a top-level view", () => {
+  it("separates resources into Hacom Chat conversation sections", () => {
     const onClose = vi.fn();
     const onViewModeChange = vi.fn();
 
@@ -88,16 +88,26 @@ describe("CloudConversationInfoPanel", () => {
     expect(screen.queryByText(/^Trống$|^Free$/)).toBeNull();
     expect(screen.queryByText(/Request more storage|Yêu cầu tăng dung lượng/)).toBeNull();
 
-    expect(screen.getByText("Kho lưu trữ")).not.toBeNull();
     expect(screen.getByRole("img", { name: "photo.png" })).not.toBeNull();
-    expect(screen.getByText("report.pdf")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /File/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Link/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Thùng rác/ })).not.toBeNull();
     expect(screen.queryByText("voice-recording.webm")).toBeNull();
 
-    expect(screen.getByText("Hacom")).not.toBeNull();
+    expect(screen.getByText("report.pdf")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /File/ }));
+    expect(screen.queryByText("report.pdf")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /File/ }));
+    expect(screen.getByText("report.pdf")).not.toBeNull();
+    expect(screen.getByText("hacom.vn")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Link/ }));
+    expect(screen.queryByText("hacom.vn")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Link/ }));
+    expect(screen.getByText("hacom.vn")).not.toBeNull();
     expect(screen.queryByText("Ghi chú riêng")).toBeNull();
     expect(container.querySelectorAll("details")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /trash|thùng rác/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Chọn" }));
     expect(onViewModeChange).toHaveBeenCalledWith("trash");
 
     fireEvent.click(screen.getByRole("button", { name: /close|đóng/i }));

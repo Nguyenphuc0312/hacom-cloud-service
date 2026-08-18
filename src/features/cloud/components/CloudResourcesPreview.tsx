@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowLeft,
-  CalendarDays,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  ImageIcon,
-  Link2,
-  Play,
-  RotateCcw,
-  Trash2,
-} from "lucide-react";
+  ArrowLeftIcon as ArrowLeft,
+  ArrowPathIcon as RotateCcw,
+  CalendarDaysIcon as CalendarDays,
+  ChevronDownIcon as ChevronDown,
+  ChevronRightIcon as ChevronRight,
+  DocumentIcon as FileText,
+  LinkIcon as Link2,
+  PhotoIcon as ImageIcon,
+  PlayIcon as Play,
+  TrashIcon as Trash2,
+} from "@heroicons/react/24/outline";
 import { ImagePreviewModal } from "../../../components/modals/ImagePreviewModal";
 import { VideoPlayerModal } from "../../../components/info/shared-resources/VideoPlayerModal";
 import type { CloudItem } from "../types";

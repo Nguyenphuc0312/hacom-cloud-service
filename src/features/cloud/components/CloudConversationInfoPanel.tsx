@@ -1,6 +1,9 @@
 import React, { useMemo } from "react";
-import clsx from "clsx";
-import { ArrowRight, FolderOpen, X } from "lucide-react";
+import {
+  ArrowRightIcon as ArrowRight,
+  FolderOpenIcon as FolderOpen,
+  XMarkIcon as X,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import type { CloudItem, CloudQuota, CloudViewMode } from "../types";
 import { formatBytes } from "../utils/cloudFormat";
@@ -28,12 +31,12 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({ items, trashItems, quota, viewMode, onViewModeChange, onClose, onManageCloud, onRestoreTrashItem, showStorage = true }) => {
+> = ({ items, trashItems, quota, onViewModeChange, onClose, onManageCloud, onRestoreTrashItem, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
     ? {
-        title: "Thông tin hội thoại",
+        title: "Thông tin Hacom Cloud",
         close: "Đóng",
         workspace: "My Documents",
         all: "Tất cả",
@@ -47,7 +50,7 @@ export const CloudConversationInfoPanel: React.FC<
         manage: "Xem và quản lý Hacom Cloud",
       }
     : {
-        title: "Conversation information",
+        title: "Hacom Cloud information",
         close: "Close",
         workspace: "My Documents",
         all: "All",
@@ -160,13 +163,6 @@ export const CloudConversationInfoPanel: React.FC<
             </button>
           ) : null}
         </section> : null}
-
-        <section className="hidden">
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => onViewModeChange("active")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "active" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.all} · {items.length}</button>
-            <button type="button" onClick={() => onViewModeChange("trash")} className={clsx("rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-fast", viewMode === "trash" ? "border-brand-solid/30 bg-brand-soft text-brand-solid" : "border-border/70 text-text-secondary hover:bg-surface-hover")}>{labels.trash} · {trashItems.length}</button>
-          </div>
-        </section>
 
         <CloudResourcesPreview
           items={items}

@@ -1,6 +1,6 @@
 import React from "react";
 import clsx from "clsx";
-import { Cloud } from "lucide-react";
+import { CloudIcon as Cloud } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import type { CloudItem } from "../types";
