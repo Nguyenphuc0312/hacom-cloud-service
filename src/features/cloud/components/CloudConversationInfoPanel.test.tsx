@@ -69,15 +69,11 @@ const quota: CloudQuota = {
 describe("CloudConversationInfoPanel", () => {
   it("separates resources into Hacom Chat conversation sections", () => {
     const onClose = vi.fn();
-    const onViewModeChange = vi.fn();
-
     const { container } = render(
       <CloudConversationInfoPanel
         items={[item, textItem, linkItem, imageItem, audioItem]}
         trashItems={[trashItem]}
         quota={quota}
-        viewMode="active"
-        onViewModeChange={onViewModeChange}
         onClose={onClose}
       />,
     );
@@ -107,8 +103,7 @@ describe("CloudConversationInfoPanel", () => {
     expect(screen.queryByText("Ghi chú riêng")).toBeNull();
     expect(container.querySelectorAll("details")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Chọn" }));
-    expect(onViewModeChange).toHaveBeenCalledWith("trash");
+    expect(screen.queryByRole("button", { name: "Chọn" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /close|đóng/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -125,8 +120,6 @@ describe("CloudConversationInfoPanel", () => {
         quota={quota}
         quotaRequest={null}
         showQuotaRequest
-        viewMode="active"
-        onViewModeChange={vi.fn()}
         onRequestQuota={onRequestQuota}
         onClose={vi.fn()}
       />,

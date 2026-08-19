@@ -5,7 +5,7 @@ import {
   XMarkIcon as X,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import type { CloudItem, CloudQuota, CloudViewMode } from "../types";
+import type { CloudItem, CloudQuota } from "../types";
 import { formatBytes } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
 import { CloudResourcesPreview } from "./CloudResourcesPreview";
@@ -14,12 +14,11 @@ interface CloudConversationInfoPanelProps {
   items: CloudItem[];
   trashItems: CloudItem[];
   quota: CloudQuota | null;
-  viewMode: CloudViewMode;
-  onViewModeChange: (mode: CloudViewMode) => void;
   onLoadAllTrash?: () => Promise<void>;
   onClose: () => void;
   onManageCloud?: () => void;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
+  onPermanentDeleteItem?: (itemId: string) => void | Promise<void>;
   onDeleteItem?: (item: CloudItem) => void | Promise<void>;
   onViewOriginalMessage?: (item: CloudItem) => void;
   onShowInFolder?: (item: CloudItem) => void;
@@ -35,7 +34,7 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({ items, trashItems, quota, onViewModeChange, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, showStorage = true }) => {
+> = ({ items, trashItems, quota, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
@@ -171,9 +170,9 @@ export const CloudConversationInfoPanel: React.FC<
         <CloudResourcesPreview
           items={items}
           trashItems={trashItems}
-          onViewTrash={() => onViewModeChange("trash")}
           onLoadAllTrash={onLoadAllTrash}
           onRestoreTrashItem={onRestoreTrashItem}
+          onPermanentDeleteItem={onPermanentDeleteItem}
           onDeleteItem={onDeleteItem}
           onViewOriginalMessage={onViewOriginalMessage}
           onShowInFolder={onShowInFolder}

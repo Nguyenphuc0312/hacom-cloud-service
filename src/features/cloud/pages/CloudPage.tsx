@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -204,8 +204,6 @@ type CloudSelectionDrag = {
 export default function CloudPage() {
   const { t } = useTranslation("cloud");
   const navigate = useNavigate();
-  const location = useLocation();
-  const isCloudTrashRoute = location.pathname === ROUTE_PATHS.CLOUD_TRASH;
   const authUser = useAuthStore((state) => state.user);
   const { width, chatLayoutBreakpoint } = useResponsive();
   const [draft, setDraft] = useState("");
@@ -213,13 +211,13 @@ export default function CloudPage() {
   const [search, setSearch] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<CloudViewMode>(() =>
-    isCloudTrashRoute ? "trash" : "active",
-  );
+  // The dedicated trash conversation view is intentionally disabled. Trash
+  // content is managed from the Cloud info/gallery surfaces instead.
+  const [viewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
   const timelineScrollTopRef = useRef<number | null>(null);
-  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(isCloudTrashRoute);
+  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const isSelectionModeRef = useRef(false);
   const selectedMessageIdsRef = useRef<Set<string>>(new Set());
@@ -523,20 +521,6 @@ export default function CloudPage() {
       setIsSelectionMode(false);
     }
   }, [isSelectionMode, selectedMessageIds]);
-
-  useEffect(() => {
-    setViewMode(isCloudTrashRoute ? "trash" : "active");
-    if (isCloudTrashRoute) setIsInfoPanelOpen(true);
-  }, [isCloudTrashRoute]);
-
-  const handleViewModeChange = useCallback((mode: CloudViewMode) => {
-    setViewMode(mode);
-    if (mode === "trash" && location.pathname !== ROUTE_PATHS.CLOUD_TRASH) {
-      navigate(ROUTE_PATHS.CLOUD_TRASH);
-    } else if (mode === "active" && location.pathname === ROUTE_PATHS.CLOUD_TRASH) {
-      navigate(ROUTE_PATHS.CLOUD);
-    }
-  }, [location.pathname, navigate]);
 
   useEffect(() => {
     setIsSelectionMode(false);
@@ -1468,12 +1452,11 @@ export default function CloudPage() {
                 items={cloudItems}
                 trashItems={cloudTrashItems}
                 quota={workspace.quota}
-                viewMode={viewMode}
-                onViewModeChange={handleViewModeChange}
                 onLoadAllTrash={workspace.loadAllTrash}
                 showStorage
                 onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
                 onRestoreTrashItem={handleRestore}
+                onPermanentDeleteItem={handlePermanentDelete}
                 onDeleteItem={(item) => handleDeleteRequest(item.id)}
                 onViewOriginalMessage={handleViewOriginalResource}
                 onShowInFolder={showPhaseNotice}
