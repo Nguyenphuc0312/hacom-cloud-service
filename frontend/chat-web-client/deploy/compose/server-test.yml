@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  chat-web-client:
+    image: ${CHAT_WEB_CLIENT_IMAGE}
+    container_name: chat-web-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production

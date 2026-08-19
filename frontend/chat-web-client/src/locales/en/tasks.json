@@ -1,0 +1,62 @@
+{
+  "tasks": {
+    "title": "Tasks",
+    "create": "Create task",
+    "createFirst": "Create your first task",
+    "empty": "You have no tasks yet",
+    "emptyHint": "Create your first task to get started",
+    "search": "Search tasks...",
+    "filters": {
+      "all": "All",
+      "status": "Status",
+      "priority": "Priority"
+    },
+    "status": {
+      "TODO": "To do",
+      "IN_PROGRESS": "In progress",
+      "DONE": "Done",
+      "ARCHIVED": "Archived"
+    },
+    "priority": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    },
+    "form": {
+      "title": "Title",
+      "titlePlaceholder": "Enter task title",
+      "titleRequired": "Title is required",
+      "description": "Description",
+      "descriptionPlaceholder": "Task description (optional)",
+      "status": "Status",
+      "priority": "Priority",
+      "startDate": "Start date",
+      "dueDate": "Due date",
+      "save": "Save",
+      "cancel": "Cancel",
+      "creating": "Saving...",
+      "createTitle": "Create task",
+      "editTitle": "Edit task",
+      "createButton": "Create task",
+      "updateButton": "Update"
+    },
+    "archive": {
+      "title": "Archive task?",
+      "confirm": "Archive",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "created": "Task created",
+      "updated": "Task updated",
+      "done": "Task completed",
+      "archived": "Task archived",
+      "loadError": "Failed to load tasks",
+      "saveError": "Failed to save task",
+      "archiveError": "Failed to archive task"
+    },
+    "overdue": "Overdue",
+    "deadline": "Due",
+    "retry": "Retry"
+  }
+}

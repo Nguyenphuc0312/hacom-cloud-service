@@ -1,0 +1,76 @@
+{
+  "calendar": {
+    "title": "Calendar",
+    "search": {
+      "placeholder": "Search events..."
+    },
+    "myCalendars": "My calendars",
+    "addCalendar": "Add Calendar",
+    "today": "Today",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "events": {
+      "more": "+{{count}} more events",
+      "noEvents": "No events"
+    },
+    "eventTypes": {
+      "vietnam_holiday": "Vietnam Holidays",
+      "international": "International",
+      "work": "Work",
+      "personal": "Personal"
+    },
+    "eventDetails": {
+      "title": "Event Details",
+      "date": "Date",
+      "type": "Type",
+      "description": "Description"
+    },
+    "types": {
+      "vietnam": "Vietnam",
+      "international": "International",
+      "work": "Work",
+      "personal": "Personal",
+      "other": "Other"
+    },
+    "viewDevelopment": {
+      "title": "{{view}} view is under development",
+      "subtitle": "Switch to Month view to see the calendar",
+      "switchButton": "Switch to Month View"
+    },
+    "holidays": {
+      "newYear": "New Year's Day",
+      "vietnamPartyFounding": "Vietnamese Communist Party Founding Day",
+      "intlWomenDay": "International Women's Day",
+      "liberationDay": "Liberation Day",
+      "intlLaborDay": "International Labor Day",
+      "intlChildrensDay": "International Children's Day",
+      "warInvalidsDay": "War Invalid & Martyr Day",
+      "nationalDay": "National Day",
+      "vietnamWomenDay": "Vietnamese Women's Day",
+      "vietnamTeachersDay": "Vietnamese Teachers' Day",
+      "vnaDay": "Vietnam People's Army Day",
+      "valentine": "Valentine",
+      "earthDay": "Earth Day",
+      "worldEnvDay": "World Environment Day",
+      "halloween": "Halloween",
+      "christmas": "Christmas"
+    }
+  },
+  "joinByShareLink": {
+    "title": "Join meeting",
+    "shareLink": "Meeting share link",
+    "joining": "Joining meeting...",
+    "joined": "Successfully joined the meeting",
+    "joinedDescription": "The meeting has been added to your calendar.",
+    "alreadyJoined": "You're already in this meeting",
+    "alreadyJoinedDescription": "You are already in this meeting. See details on the Calendar page.",
+    "cta": "Confirm attendance",
+    "openCalendar": "Open Calendar",
+    "subtitle": "An invitation to join a meeting via share link.",
+    "confirmDescription": "Review the details below. You are only added to the participant list after you confirm.",
+    "organizer": "Organizer",
+    "participantCount": "{{count}} participants",
+    "chairman": "Chair"
+  }
+}

@@ -1,0 +1,499 @@
+{
+  "environment": {
+    "baseUrl": "http://127.0.0.1:4175",
+    "chromiumFlags": [
+      "--enable-precise-memory-info",
+      "--js-flags=--expose-gc"
+    ],
+    "idleMs": 300000,
+    "generatedAt": "2026-07-03T08:53:42.620Z",
+    "fixture": {
+      "users": 2,
+      "conversations": 25,
+      "largeConversationMessages": 1501,
+      "sentPayloads": 1
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "login_open_large_initial",
+      "before": null,
+      "after": {
+        "label": "login_open_large_initial",
+        "usedJSHeapSize": 13904062,
+        "totalJSHeapSize": 23797450,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1227,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": null,
+      "consoleEvents": 1
+    },
+    {
+      "scenario": "idle_5_minutes",
+      "before": {
+        "label": "idle_5_minutes:before",
+        "usedJSHeapSize": 13911372,
+        "totalJSHeapSize": 23797688,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1448,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "idle_5_minutes:after",
+        "usedJSHeapSize": 14333654,
+        "totalJSHeapSize": 16453126,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 422282,
+      "consoleEvents": 1
+    },
+    {
+      "scenario": "load_1500_message_pages_and_deep_scroll",
+      "before": {
+        "label": "load_1500_message_pages_and_deep_scroll:before",
+        "usedJSHeapSize": 14336438,
+        "totalJSHeapSize": 16453126,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "load_1500_message_pages_and_deep_scroll:after",
+        "usedJSHeapSize": 16379069,
+        "totalJSHeapSize": 60527953,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 600
+          }
+        ],
+        "rtkQueryTotalMessages": 600,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 2042631,
+      "consoleEvents": 1
+    },
+    {
+      "scenario": "switch_20_conversations",
+      "before": {
+        "label": "switch_20_conversations:before",
+        "usedJSHeapSize": 16341865,
+        "totalJSHeapSize": 59217233,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 600
+          }
+        ],
+        "rtkQueryTotalMessages": 600,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "switch_20_conversations:after",
+        "usedJSHeapSize": 34146683,
+        "totalJSHeapSize": 134662091,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 17804818,
+      "consoleEvents": 22
+    },
+    {
+      "scenario": "websocket_reconnect_5",
+      "before": {
+        "label": "websocket_reconnect_5:before",
+        "usedJSHeapSize": 22048301,
+        "totalJSHeapSize": 109750505,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "websocket_reconnect_5:after",
+        "usedJSHeapSize": 22433799,
+        "totalJSHeapSize": 99000259,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 385498,
+      "consoleEvents": 22
+    },
+    {
+      "scenario": "visibility_cycles_10",
+      "before": {
+        "label": "visibility_cycles_10:before",
+        "usedJSHeapSize": 16639558,
+        "totalJSHeapSize": 96115946,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "visibility_cycles_10:after",
+        "usedJSHeapSize": 16758796,
+        "totalJSHeapSize": 90609620,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 119238,
+      "consoleEvents": 22
+    },
+    {
+      "scenario": "media_blob_preview_cache_40",
+      "before": {
+        "label": "media_blob_preview_cache_40:before",
+        "usedJSHeapSize": 16733864,
+        "totalJSHeapSize": 90609620,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "media_blob_preview_cache_40:after",
+        "usedJSHeapSize": 16851222,
+        "totalJSHeapSize": 90611646,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 32,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 117358,
+      "consoleEvents": 22
+    },
+    {
+      "scenario": "optimistic_send_and_reconcile",
+      "before": {
+        "label": "optimistic_send_and_reconcile:before",
+        "usedJSHeapSize": 16851642,
+        "totalJSHeapSize": 90611646,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1447,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 32,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "optimistic_send_and_reconcile:after",
+        "usedJSHeapSize": 18127518,
+        "totalJSHeapSize": 90613078,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1475,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 51
+          }
+        ],
+        "rtkQueryTotalMessages": 51,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 32,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": 1275876,
+      "consoleEvents": 22
+    },
+    {
+      "scenario": "logout_login_again",
+      "before": {
+        "label": "logout_login_again:before",
+        "usedJSHeapSize": 18103834,
+        "totalJSHeapSize": 90612518,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1475,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 51
+          }
+        ],
+        "rtkQueryTotalMessages": 51,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 32,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "after": {
+        "label": "logout_login_again:after",
+        "usedJSHeapSize": 17379940,
+        "totalJSHeapSize": 91135684,
+        "jsHeapSizeLimit": 4294967296,
+        "domNodeCount": 1475,
+        "rtkQueryMessageCounts": [
+          {
+            "conversationId": "conv-large",
+            "count": 50
+          }
+        ],
+        "rtkQueryTotalMessages": 50,
+        "legacyMessageCounts": [],
+        "legacyTotalMessages": 0,
+        "blobPreviewCacheSize": 0,
+        "websocketListenerCount": 68,
+        "websocketConnectionState": "connected",
+        "selectedConversationId": "conv-large"
+      },
+      "heapDelta": -723894,
+      "consoleEvents": 23
+    }
+  ],
+  "consoleEvents": [
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    },
+    {
+      "type": "warning",
+      "text": "[tiptap warn]: Duplicate extension names found: ['link']. This can lead to issues."
+    }
+  ]
+}

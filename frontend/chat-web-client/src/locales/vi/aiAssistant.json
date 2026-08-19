@@ -1,0 +1,87 @@
+{
+  "page": {
+    "title": "AI Assistant",
+    "greeting": "Xin chào",
+    "greetingWithName": "Xin chào, {{name}}",
+    "subtitle": "Hỏi đáp với dữ liệu nội bộ HACOM"
+  },
+  "prompt": {
+    "placeholder": "Nhập câu hỏi của bạn...",
+    "send": "Gửi"
+  },
+  "suggestions": {
+    "title": "Gợi ý nhanh",
+    "latestDocs": "Tóm tắt tài liệu mới nhất",
+    "vanThu": "Quy định về công tác văn thư là gì?",
+    "nhanSu": "Tìm thông tin liên quan đến nhân sự",
+    "findDocuments": "Tìm tài liệu số hóa",
+    "askProcess": "Hỏi về quy trình nội bộ"
+  },
+  "dataSources": {
+    "title": "Nguồn dữ liệu có thể hỗ trợ",
+    "attendance": {
+      "name": "Chấm công",
+      "description": "Theo dõi và tra cứu thông tin chấm công cá nhân."
+    },
+    "documents": {
+      "name": "Tài liệu số hóa",
+      "description": "Tìm kiếm nội dung từ dữ liệu đã OCR và tài liệu nội bộ."
+    },
+    "reports": {
+      "name": "Báo cáo công việc",
+      "description": "Hỗ trợ tổng hợp báo cáo theo ngày, tuần hoặc phòng ban."
+    },
+    "internalInfo": {
+      "name": "Thông tin nội bộ công khai",
+      "description": "Truy xuất các dữ liệu được phép sử dụng trong hệ thống."
+    },
+    "status": {
+      "available": "Đã sẵn sàng",
+      "developing": "Đang phát triển"
+    }
+  },
+  "chat": {
+    "newChat": "Cuộc trò chuyện mới",
+    "aiTyping": "AI đang suy nghĩ...",
+    "sources": "{{count}} nguồn tham khảo",
+    "sourcePage": "Trang {{page}}",
+    "sourceScore": "Điểm: {{score}}",
+    "errorTimeout": "Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại.",
+    "errorNetwork": "Không thể kết nối tới AI service. Vui lòng kiểm tra kết nối mạng hoặc trạng thái API.",
+    "error422": "Câu hỏi không hợp lệ hoặc bị thiếu. Vui lòng kiểm tra lại nội dung.",
+    "error405": "API không hỗ trợ phương thức này. Vui lòng liên hệ quản trị viên.",
+    "error500": "AI service đang gặp lỗi, vui lòng thử lại sau."
+  },
+  "weeklyReport": {
+    "menuUpload": "Tải báo cáo mới",
+    "menuList": "Báo cáo đã tải lên",
+    "dialogTitle": "Báo cáo tuần đã tải lên",
+    "dialogDescription": "Xem, tải xuống hoặc tải lên báo cáo tuần cho trợ lý AI cá nhân.",
+    "weekStart": "Tuần từ (YYYY-MM-DD)",
+    "weekEnd": "Tuần đến (YYYY-MM-DD)",
+    "company": "Công ty",
+    "companyPlaceholder": "Lọc theo tên công ty",
+    "applyFilters": "Áp dụng bộ lọc",
+    "refresh": "Làm mới",
+    "uploadNew": "Tải báo cáo mới",
+    "view": "Xem trước",
+    "download": "Tải về",
+    "viewFileHint": "Xem {{name}} trên trình duyệt",
+    "colCompany": "Công ty",
+    "colEmployee": "Nhân viên",
+    "colDepartment": "Phòng ban",
+    "colWeek": "Tuần",
+    "colFile": "File",
+    "colDownload": "Tải về",
+    "emptyTitle": "Chưa có báo cáo",
+    "emptyDescription": "Tải báo cáo tuần mới để trợ lý AI phân tích và trả lời câu hỏi của bạn.",
+    "unnamedFile": "Báo cáo #{{id}}",
+    "listError": "Không thể tải danh sách báo cáo.",
+    "viewError": "Không thể mở xem trước tệp.",
+    "downloadError": "Không thể tải xuống tệp.",
+    "downloadStarted": "Đang tải xuống tệp...",
+    "closePreview": "Đóng",
+    "openInNewTab": "Mở tab mới",
+    "previewUnsupported": "Không xem trước được định dạng này trên trình duyệt. Vui lòng tải xuống để mở bằng ứng dụng phù hợp."
+  }
+}

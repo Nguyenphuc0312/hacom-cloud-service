@@ -1,0 +1,506 @@
+/**
+ * @fileoverview Data-fetching hooks for AI Chat REST endpoints.
+ *
+ * # Why vanilla hooks instead of a query library
+ * This project uses RTK Query for the internal HACOM API.  The AI Chat
+ * service is a different origin with a different data contract.  Rather than
+ * adding a third state management library, these hooks are implemented with
+ * vanilla React (useState + useEffect + useCallback) and delegate transport
+ * to `aiChatClient`.  The same patterns apply — request deduplication is
+ * handled by callers passing stable keys; cancellation uses AbortController.
+ *
+ * # Auth-aware retry
+ * All hooks share `aiChatRetry` which uses `NormalizedError.retryable` as the
+ * single source of truth.  Auth failures (401/403) are NEVER retried —
+ * retrying a 401 would race the token coordinator and spam the auth service.
+ *
+ * # Cancellation
+ * Every fetch is tied to an `AbortController` stored in a ref.  The effect
+ * cleanup aborts in-flight requests on unmount and on dependency changes.
+ */
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import aiChatClient from "../../../services/ai-chat/aiChatClient";
+import { normalizeAiChatError } from "../../../services/ai-chat/aiChatClient";
+import { isRetryableError } from "../../../services/ai-chat/normalizeError";
+import type { NormalizedError } from "../../../services/ai-chat/types";
+import type { AiMessage } from "../types";
+
+// Identity (user_id / employee_code) is carried by the JWT Bearer token now;
+// the backend extracts it server-side, so no X-User-Id / X-Employee-Code
+// header is built here. The `userId` / `employeeCode` args are kept only as
+// refetch keys (re-run the query when the signed-in account changes).
+
+// ---------------------------------------------------------------------------
+// Shared types
+// ---------------------------------------------------------------------------
+
+export interface AiChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface QueryState<T> {
+  data: T | undefined;
+  loading: boolean;
+  error: NormalizedError | null;
+  /** Call to manually trigger a refetch. */
+  refetch: () => void;
+}
+
+export interface MutationState<TResult, TVars> {
+  loading: boolean;
+  error: NormalizedError | null;
+  mutate: (vars: TVars) => Promise<TResult>;
+  reset: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Auth-aware retry helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the error is safe to retry.
+ * Auth failures (401/403) and rate-limits → never retry.
+ * Network / timeout / 5xx → retry up to `maxAttempts` times.
+ */
+export function aiChatRetry(
+  error: unknown,
+  attemptsDone: number,
+  maxAttempts = 2,
+): boolean {
+  const normalized = normalizeAiChatError(error);
+  if (!isRetryableError(normalized)) return false;
+  return attemptsDone < maxAttempts;
+}
+
+// ---------------------------------------------------------------------------
+// Query key factory — prevents typo-driven cache misses across hooks
+// ---------------------------------------------------------------------------
+
+export const aiChatKeys = {
+  sessions: () => "ai-chat:sessions",
+  sessionMessages: (id: string) => `ai-chat:session:${id}:messages`,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Response normalizers — handle multiple API response shapes
+// ---------------------------------------------------------------------------
+
+function normalizeSessionsResponse(raw: unknown): AiChatSession[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) arr = obj.data;
+    else if (Array.isArray(obj.sessions)) arr = obj.sessions;
+    else if (Array.isArray(obj.items)) arr = obj.items;
+  }
+
+  return arr
+    .filter((s) => s && typeof s === "object")
+    .map((s) => {
+      const obj = s as Record<string, unknown>;
+      const id = String(obj.id ?? obj.session_id ?? "");
+      if (!id) return null;
+      return {
+        id,
+        title: String(obj.title ?? ""),
+        createdAt: String(obj.createdAt ?? obj.created_at ?? new Date().toISOString()),
+        updatedAt: String(obj.updatedAt ?? obj.updated_at ?? new Date().toISOString()),
+        messageCount: Number(obj.messageCount ?? obj.message_count ?? 0),
+      } satisfies AiChatSession;
+    })
+    .filter((s): s is AiChatSession => s !== null);
+}
+
+function normalizeMessagesResponse(raw: unknown): AiMessage[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) arr = obj.data;
+    else if (Array.isArray(obj.messages)) arr = obj.messages;
+    else if (Array.isArray(obj.items)) arr = obj.items;
+    // Xử lý format {session: {messages: [...]}} hoặc {history: [...]}
+    else if (obj.session && typeof obj.session === "object") {
+      const sess = obj.session as Record<string, unknown>;
+      if (Array.isArray(sess.messages)) arr = sess.messages;
+      else if (Array.isArray(sess.data)) arr = sess.data;
+    } else if (Array.isArray(obj.history)) arr = obj.history;
+  }
+
+  return arr
+    .filter((m) => m && typeof m === "object")
+    .map((m) => {
+      const obj = m as Record<string, unknown>;
+      // Backend dùng nhiều role cho tool-calling: "user", "assistant",
+      // "assistant_tool_call" (rỗng), "tool" (kết quả tool nội bộ). Chỉ
+      // user/assistant mới là tin nhắn hiển thị cho người dùng; các role
+      // khác là chi tiết nội bộ — KHÔNG ép thành "user" (sẽ làm kết quả tool
+      // hiện nhầm thành câu hỏi của user và sinh bong bóng rỗng sau khi F5).
+      const role = String(obj.role ?? "user");
+      const content = String(obj.content ?? obj.message ?? obj.text ?? "");
+      const rawTs = obj.timestamp ?? obj.created_at ?? obj.createdAt;
+      // sources lịch sử nằm trong metadata.sources (assistant) — giữ lại để
+      // hiển thị nguồn trích dẫn sau khi tải lại.
+      const meta = (obj.metadata ?? null) as Record<string, unknown> | null;
+      const sources = Array.isArray(meta?.sources)
+        ? (meta!.sources as AiMessage["sources"])
+        : undefined;
+      return {
+        id: String(obj.id ?? obj.message_id ?? crypto.randomUUID()),
+        role,
+        content,
+        timestamp: rawTs ? new Date(String(rawTs)) : new Date(),
+        isStreaming: false,
+        sources,
+      };
+    })
+    // Bỏ message không phải hội thoại hiển thị (tool/assistant_tool_call/role
+    // lạ) và assistant rỗng (placeholder tool-call). User rỗng cũng loại.
+    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim().length > 0)
+    .map((m) => ({ ...m, role: m.role as "user" | "assistant" })) as AiMessage[];
+}
+
+// ---------------------------------------------------------------------------
+// useAiChatSessions
+// ---------------------------------------------------------------------------
+
+export function useAiChatSessions(
+  userId?: string | null,
+): QueryState<AiChatSession[]> {
+  const [data, setData] = useState<AiChatSession[] | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+  const [trigger, setTrigger] = useState(0);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let attempts = 0;
+
+    const run = async (): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: res } = await aiChatClient.get<unknown>(
+          "/api/sessions",
+          { signal: ac.signal, params: { limit: 100 } },
+        );
+        if (!ac.signal.aborted) {
+          const sessions = normalizeSessionsResponse(res);
+          setData(sessions.length > 0 ? sessions : undefined);
+        }
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        if (aiChatRetry(err, attempts)) {
+          attempts++;
+          await run();
+        } else {
+          setError(normalizeAiChatError(err));
+        }
+      } finally {
+        if (!ac.signal.aborted) setLoading(false);
+      }
+    };
+
+    void run();
+    return () => ac.abort("cleanup");
+  }, [trigger, userId]);
+
+  const refetch = useCallback(() => {
+    setTrigger((n) => n + 1);
+  }, []);
+
+  return { data, loading, error, refetch };
+}
+
+// ---------------------------------------------------------------------------
+// useAiChatHistory
+// ---------------------------------------------------------------------------
+
+/** Số message tải mỗi trang khi mở session. `offset=0` là trang MỚI NHẤT,
+ * `offset=PAGE_SIZE` là trang cũ hơn kế tiếp (semantics của BE). */
+export const AI_HISTORY_PAGE_SIZE = 40;
+
+/** Đọc cờ còn-lịch-sử-cũ từ response. BE trả `has_more`; nếu thiếu field thì
+ * suy ra từ việc trang có đầy hay không. */
+function readHasMore(raw: unknown, pageLength: number): boolean {
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const flag = obj.has_more ?? obj.hasMore;
+    if (typeof flag === "boolean") return flag;
+  }
+  return pageLength >= AI_HISTORY_PAGE_SIZE;
+}
+
+export interface AiChatHistoryState extends QueryState<AiMessage[]> {
+  /** Còn message cũ hơn ở server. */
+  hasMore: boolean;
+  /** Đang tải trang cũ hơn (khác `loading` của trang đầu). */
+  loadingMore: boolean;
+  /** Tải trang cũ hơn và prepend vào `data`. */
+  loadMore: () => void;
+}
+
+export function useAiChatHistory(
+  sessionId: string | null | undefined,
+  userId?: string | null,
+  employeeCode?: string | null,
+): AiChatHistoryState {
+  // Lưu messages KÈM session_id mà chúng thuộc về. Nhờ vậy khi `sessionId`
+  // đổi (chuyển hội thoại / mở hội thoại mới), `data` được tính lại ngay trong
+  // render → KHÔNG để lịch sử cũ rò sang hội thoại khác (hội thoại mới bị
+  // "dính" nội dung cũ).
+  const [entry, setEntry] = useState<{
+    sid: string;
+    messages: AiMessage[];
+    hasMore: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+  const [trigger, setTrigger] = useState(0);
+  // Chặn hai lần loadMore chồng nhau cho cùng một offset.
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setEntry(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    let attempts = 0;
+
+    const run = async (): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: res } = await aiChatClient.get<unknown>(
+          `/api/sessions/${sessionId}`,
+          {
+            signal: ac.signal,
+            // Không có limit thì BE trả TOÀN BỘ session — payload lớn là nguồn
+            // giật chính khi mở hội thoại dài.
+            params: { limit: AI_HISTORY_PAGE_SIZE, offset: 0 },
+          },
+        );
+        if (!ac.signal.aborted) {
+          const messages = normalizeMessagesResponse(res);
+          setEntry(
+            messages.length > 0
+              ? {
+                  sid: sessionId,
+                  messages,
+                  hasMore: readHasMore(res, messages.length),
+                }
+              : null,
+          );
+        }
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        if (aiChatRetry(err, attempts)) {
+          attempts++;
+          await run();
+        } else {
+          setError(normalizeAiChatError(err));
+        }
+      } finally {
+        if (!ac.signal.aborted) setLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      ac.abort("cleanup");
+      loadMoreAbortRef.current?.abort("session-change");
+      loadMoreAbortRef.current = null;
+    };
+  }, [sessionId, trigger, userId, employeeCode]);
+
+  const refetch = useCallback(() => setTrigger((n) => n + 1), []);
+
+  const loadMore = useCallback(() => {
+    if (!sessionId || loadMoreAbortRef.current) return;
+    const current = entry;
+    if (!current || current.sid !== sessionId || !current.hasMore) return;
+
+    const ac = new AbortController();
+    loadMoreAbortRef.current = ac;
+    setLoadingMore(true);
+
+    void aiChatClient
+      .get<unknown>(`/api/sessions/${sessionId}`, {
+        signal: ac.signal,
+        params: { limit: AI_HISTORY_PAGE_SIZE, offset: current.messages.length },
+      })
+      .then(({ data: res }) => {
+        if (ac.signal.aborted) return;
+        const older = normalizeMessagesResponse(res);
+        setEntry((prev) => {
+          // Session đã đổi trong lúc chờ → bỏ kết quả, không ghi nhầm hội thoại.
+          if (!prev || prev.sid !== sessionId) return prev;
+          const known = new Set(prev.messages.map((m) => m.id));
+          const fresh = older.filter((m) => !known.has(m.id));
+          return {
+            sid: prev.sid,
+            // Trang cũ hơn nằm TRƯỚC theo thứ tự thời gian tăng dần.
+            messages: fresh.length > 0 ? [...fresh, ...prev.messages] : prev.messages,
+            hasMore: fresh.length > 0 && readHasMore(res, older.length),
+          };
+        });
+      })
+      .catch((err) => {
+        if (!ac.signal.aborted) setError(normalizeAiChatError(err));
+      })
+      .finally(() => {
+        if (loadMoreAbortRef.current === ac) loadMoreAbortRef.current = null;
+        if (!ac.signal.aborted) setLoadingMore(false);
+      });
+  }, [sessionId, entry]);
+
+  // Chỉ trả về data khi nó đúng với sessionId hiện tại (tránh rò dữ liệu cũ).
+  const isCurrent = !!entry && !!sessionId && entry.sid === sessionId;
+  const data = isCurrent ? entry.messages : undefined;
+
+  return {
+    data,
+    loading,
+    loadingMore,
+    hasMore: isCurrent ? entry.hasMore : false,
+    error,
+    refetch,
+    loadMore,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// useDeleteSession
+// ---------------------------------------------------------------------------
+
+export function useDeleteSession(): MutationState<void, string> {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+
+  const mutate = useCallback(async (sessionId: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await aiChatClient.delete(`/api/sessions/${sessionId}`);
+    } catch (err) {
+      const normalized = normalizeAiChatError(err);
+      setError(normalized);
+      throw normalized;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reset = useCallback(() => setError(null), []);
+
+  return { loading, error, mutate, reset };
+}
+
+// ---------------------------------------------------------------------------
+// useRenameSession
+// ---------------------------------------------------------------------------
+
+interface RenameSessionVars {
+  sessionId: string;
+  title: string;
+}
+
+export function useRenameSession(): MutationState<void, RenameSessionVars> {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<NormalizedError | null>(null);
+
+  const mutate = useCallback(
+    async ({ sessionId, title }: RenameSessionVars): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        await aiChatClient.patch(`/api/chat/sessions/${sessionId}`, { title });
+      } catch (err) {
+        const normalized = normalizeAiChatError(err);
+        setError(normalized);
+        throw normalized;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  const reset = useCallback(() => setError(null), []);
+
+  return { loading, error, mutate, reset };
+}
+
+// ---------------------------------------------------------------------------
+// usePrefetchSession
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a stable `prefetch` function.  Call it on `onMouseEnter` of a
+ * session list item to warm a local ref cache before the user navigates.
+ *
+ * Note: without a shared query cache (like React Query or RTK Query),
+ * prefetched data is held in a module-level WeakMap and consumed by the
+ * first `useAiChatHistory` call for the same session ID within 60 seconds.
+ */
+const prefetchCache = new Map<string, { data: AiMessage[]; expiresAt: number }>();
+const PREFETCH_TTL_MS = 60_000;
+
+export function usePrefetchSession(
+  userId?: string | null,
+  employeeCode?: string | null,
+) {
+  const prefetch = useCallback((sessionId: string): void => {
+    const existing = prefetchCache.get(sessionId);
+    if (existing && existing.expiresAt > Date.now()) return;
+
+    const ac = new AbortController();
+    void aiChatClient
+      .get<unknown>(`/api/sessions/${sessionId}`, {
+        signal: ac.signal,
+        params: { limit: AI_HISTORY_PAGE_SIZE, offset: 0 },
+      })
+      .then(({ data }) => {
+        const messages = normalizeMessagesResponse(data);
+        if (messages.length > 0) {
+          prefetchCache.set(sessionId, {
+            data: messages,
+            expiresAt: Date.now() + PREFETCH_TTL_MS,
+          });
+        }
+      })
+      .catch(() => {
+        // Prefetch errors are silently ignored — they're best-effort.
+      });
+  }, [userId, employeeCode]);
+
+  return { prefetch };
+}
+
+/**
+ * Retrieve a prefetched session message list (if still fresh).
+ * Returns `undefined` when the cache is cold or stale.
+ */
+export function getPrefetchedSessionMessages(
+  sessionId: string,
+): AiMessage[] | undefined {
+  const entry = prefetchCache.get(sessionId);
+  if (!entry || entry.expiresAt <= Date.now()) return undefined;
+  return entry.data;
+}

@@ -1,0 +1,124 @@
+﻿{
+  "header": {
+    "workspace": "Workspace",
+    "startNewChat": "Start new chat",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "conversations": "Messages",
+    "composeLabel": "New chat",
+    "notificationsLabel": "Notifications"
+  },
+  "search": {
+    "placeholder": "Search conversations",
+    "aria": "Search conversations",
+    "clearAria": "Clear search"
+  },
+  "globalSearch": {
+    "close": "Close",
+    "tabs": {
+      "all": "All",
+      "contacts": "Contacts",
+      "messages": "Messages",
+      "files": "Files"
+    },
+    "sections": {
+      "people": "People",
+      "groups": "Groups"
+    },
+    "seeAll": {
+      "contacts": "See all contacts",
+      "groups": "See all groups",
+      "messages": "See all messages",
+      "files": "See all files"
+    },
+    "count": {
+      "contacts": "Contacts ({{count}})",
+      "groups": "Groups ({{count}})",
+      "messages": "Messages ({{count}})",
+      "files": "Files ({{count}})"
+    },
+    "filter": {
+      "label": "Filter by:",
+      "sender": "Sender",
+      "date": "Date sent",
+      "searchPlaceholder": "Search",
+      "pickRange": "Pick a date range",
+      "from": "From",
+      "to": "To",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "clear": "Clear filters"
+    },
+    "fileType": {
+      "all": "All",
+      "image": "Images",
+      "video": "Video",
+      "document": "Documents",
+      "audio": "Audio",
+      "other": "Other"
+    },
+    "empty": {
+      "prompt": "Type a keyword to find contacts, messages and files.",
+      "noResults": "No results found for \"{{query}}\".",
+      "noContacts": "No matching contacts.",
+      "noMessages": "No matching messages.",
+      "noFiles": "No matching files."
+    },
+    "resultAria": "Search results"
+  },
+  "tabs": {
+    "all": "All",
+    "direct": "Direct",
+    "unread": "Unread",
+    "groups": "Groups",
+    "channels": "Channels"
+  },
+  "room": {
+    "section": {
+      "unread": "Unread",
+      "channels": "Channels",
+      "groups": "Groups",
+      "direct": "Direct messages"
+    },
+    "type": {
+      "direct": "Direct",
+      "group": "Group"
+    },
+    "mentioned": "Mentioned",
+    "draftLabel": "Draft",
+    "noMessagesYet": "No messages yet",
+    "emptyBySearch": "No room matches your search.",
+    "empty": "No conversations available.",
+    "listAria": "Conversation list",
+    "unreadBadge": "{{count}} unread message(s)"
+  },
+  "sidebar": {
+    "aria": "Sidebar"
+  },
+  "rail": {
+    "messages": "Messages",
+    "contacts": "Contacts",
+    "tasks": "Tasks",
+    "calendar": "Calendar",
+    "aiAssistant": "Personal AI",
+    "cloud": "Hacom Cloud",
+    "notifications": "Notifications",
+    "help": "Help",
+    "settings": "Settings",
+    "profile": "My Profile",
+    "navAria": "Main Navigation",
+    "logoAria": "Hacom Holdings",
+    "moduleNavAria": "Modules"
+  },
+  "actions": {
+    "loadMore": "Load more"
+  },
+  "logout": {
+    "button": "Sign out",
+    "loading": "Signing out...",
+    "confirmTitle": "Sign out",
+    "confirmMessage": "You need to sign in again to continue.",
+    "confirmText": "Sign out",
+    "cancelText": "Cancel"
+  }
+}

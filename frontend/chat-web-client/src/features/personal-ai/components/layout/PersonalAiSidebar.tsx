@@ -1,0 +1,361 @@
+import React, { useState, useMemo, useDeferredValue } from "react";
+import clsx from "clsx";
+import {
+  PlusIcon,
+  SearchIcon,
+  Trash2Icon,
+  PinIcon,
+  Edit2Icon,
+  MessageSquareIcon,
+  UserCircle2Icon,
+  PinOffIcon,
+  Loader2Icon,
+} from "lucide-react";
+import { usePersonalAiStore } from "../../stores/personalAiStore";
+import { useChatUiStore } from "../../../chat/state/chatUiStore";
+import { useAuthStore } from "../../../../stores/authStore";
+import {
+  deletePersonalSession,
+  renamePersonalSession,
+} from "../../../ai-assistant/services/aiChatApi";
+import { ConfirmDialog } from "../../../../components/ui";
+import { isToday, isYesterday, subDays, isAfter } from "date-fns";
+
+/**
+ * Sidebar trái cho Personal AI Workspace — phong cách ChatGPT, đồng bộ với
+ * AiSidebar bên ai-assistant nhưng nối vào `usePersonalAiStore` (đúng store của
+ * trang này) để bấm chuyển hội thoại & tạo mới hoạt động.
+ */
+export const PersonalAiSidebar: React.FC = () => {
+  const {
+    conversations,
+    activeConversationId,
+    sessionsLoaded,
+    setActiveConversation,
+    createConversation,
+    deleteConversation,
+    togglePinConversation,
+    renameConversation,
+  } = usePersonalAiStore();
+
+  const user = useAuthStore((s) => s.user);
+  const currentOwnerId = user
+    ? (user.employeeCode ?? user.employee_code ?? null)
+    : null;
+
+  const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  /** Hội thoại đang chờ xác nhận xóa — xóa mất cả lịch sử, không hoàn tác được. */
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    title: string;
+    serverSessionId?: string | null;
+  } | null>(null);
+
+  const activeTab = selectedEndpoint;
+
+  // Gõ tìm kiếm quét nội dung MỌI tin nhắn của MỌI hội thoại → với lịch sử dài
+  // thì mỗi phím gõ là một lượt quét toàn bộ, gây khựng ô tìm kiếm. Hoãn 150ms:
+  // người dùng gõ liên tục chỉ tốn một lượt quét sau khi dừng tay.
+  const deferredQuery = useDeferredValue(searchQuery);
+
+  /** Nhóm hội thoại theo thời gian */
+  const groupedConversations = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase();
+    const filtered = conversations.filter((c) => {
+      if (currentOwnerId && c.ownerId && c.ownerId !== currentOwnerId) return false;
+      if (!q) return true;
+      // Tên khớp là đủ — khỏi quét nội dung tin nhắn của hội thoại đó.
+      return (
+        c.title.toLowerCase().includes(q) ||
+        c.messages.some((m) => m.content.toLowerCase().includes(q))
+      );
+    });
+
+    // MỘT lượt duyệt, mỗi hội thoại dựng Date đúng một lần. Trước đây là 5 lượt
+    // filter chồng nhau với tới 7 `new Date()` mỗi hội thoại — phần lớn công
+    // việc render lại sidebar nằm ở đây.
+    const pinned: typeof conversations = [];
+    const today: typeof conversations = [];
+    const yesterday: typeof conversations = [];
+    const lastWeek: typeof conversations = [];
+    const older: typeof conversations = [];
+    const weekAgo = subDays(new Date(), 7);
+
+    for (const c of filtered) {
+      if (c.isPinned) {
+        pinned.push(c);
+        continue;
+      }
+      const updatedAt = new Date(c.updatedAt);
+      if (isToday(updatedAt)) today.push(c);
+      else if (isYesterday(updatedAt)) yesterday.push(c);
+      else if (isAfter(updatedAt, weekAgo)) lastWeek.push(c);
+      else older.push(c);
+    }
+
+    return [
+      { label: "Đã ghim", items: pinned },
+      { label: "Hôm nay", items: today },
+      { label: "Hôm qua", items: yesterday },
+      { label: "7 ngày qua", items: lastWeek },
+      { label: "Cũ hơn", items: older },
+    ].filter((g) => g.items.length > 0);
+  }, [conversations, deferredQuery, currentOwnerId]);
+
+  /** Xác nhận xóa → xóa trên BE rồi bỏ khỏi danh sách local. */
+  const confirmDelete = () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    if (target.serverSessionId) {
+      deletePersonalSession(target.serverSessionId).catch(() => {});
+    }
+    deleteConversation(target.id);
+  };
+
+  /** Bắt đầu đổi tên */
+  const handleStartRename = (
+    e: React.MouseEvent,
+    id: string,
+    title: string,
+  ) => {
+    e.stopPropagation();
+    setEditingId(id);
+    setEditValue(title);
+  };
+
+  /** Lưu tên mới — cập nhật local ngay + persist lên BE (đổi máy vẫn còn tên). */
+  const handleSaveRename = (id: string) => {
+    const title = editValue.trim();
+    if (title) {
+      const conv = conversations.find((c) => c.id === id);
+      renameConversation(id, title);
+      // Persist to BE. Server-synced convs have id === session_id, so fall back
+      // to id when serverSessionId isn't set yet (avoids the rename staying local
+      // and reverting to the server's old title on reload / other device).
+      const sessionId = conv?.serverSessionId ?? conv?.id;
+      if (sessionId) {
+        renamePersonalSession(sessionId, title).catch(() => {});
+      }
+    }
+    setEditingId(null);
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col bg-surface-overlay border-r border-border select-none">
+      {/* ── Header: New chat ── */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider pl-1">
+          Hội thoại
+        </span>
+        <button
+          onClick={() => createConversation()}
+          className="h-8 w-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-active/60 transition-colors"
+          aria-label="Tạo cuộc trò chuyện mới"
+          title="Tạo mới"
+        >
+          <PlusIcon size={18} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* ── Mode tabs: Công ty / Cá nhân ── */}
+      <div className="px-3 mb-2">
+        <div className="flex bg-surface-active/60 rounded-lg p-0.5">
+          <button
+            onClick={() => setSelectedEndpoint("company")}
+            className={clsx(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
+              activeTab === "company"
+                ? "bg-surface shadow-sm text-[#1565C0]"
+                : "text-text-muted hover:text-text-secondary",
+            )}
+          >
+            <img src="/Logo_noname.png" alt="HACOM" className="h-4 w-4 object-contain" />
+            <span>Công ty</span>
+          </button>
+          <button
+            onClick={() => setSelectedEndpoint("personal")}
+            className={clsx(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
+              activeTab === "personal"
+                ? "bg-surface shadow-sm text-[#1565C0]"
+                : "text-text-muted hover:text-text-secondary",
+            )}
+          >
+            <UserCircle2Icon size={14} strokeWidth={2} />
+            <span>Cá nhân</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Search ── */}
+      <div className="px-3 mb-2">
+        <div className="relative">
+          <SearchIcon
+            size={14}
+            strokeWidth={2}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+          />
+          <input
+            type="text"
+            placeholder="Tìm kiếm..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15 focus:border-[#1976D2]/60 transition-all"
+          />
+        </div>
+      </div>
+
+      {/* ── Conversation list ── */}
+      <div className="flex-1 overflow-y-auto px-2 pb-4 ai-scrollbar">
+        {activeTab === "personal" && !sessionsLoaded ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2Icon size={24} strokeWidth={1.5} className="animate-spin text-text-disabled" />
+          </div>
+        ) : (<>
+        <div className="space-y-4">
+          {groupedConversations.map((group) => (
+            <div key={group.label}>
+              <h3 className="px-2 mb-1 text-[11px] font-semibold text-text-disabled uppercase tracking-wide">
+                {group.label}
+              </h3>
+              <div className="space-y-0.5">
+                {group.items.map((conv) => (
+                  <div
+                    key={conv.id}
+                    onClick={() => setActiveConversation(conv.id)}
+                    className={clsx(
+                      "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer",
+                      activeConversationId === conv.id
+                        ? "bg-[#DBEAFE]/10 text-text-primary"
+                        : "text-text-secondary hover:bg-surface-hover/40",
+                    )}
+                  >
+                    <MessageSquareIcon
+                      size={16}
+                      strokeWidth={1.8}
+                      className="shrink-0 text-text-muted"
+                    />
+
+                    {editingId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => handleSaveRename(conv.id)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleSaveRename(conv.id)
+                        }
+                        className="flex-1 bg-transparent text-sm outline-none border-b border-border-strong py-0"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="flex-1 truncate text-sm leading-snug">
+                        {conv.title}
+                      </span>
+                    )}
+
+                    {/* Hover actions */}
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePinConversation(conv.id);
+                        }}
+                        className="p-1 rounded hover:bg-surface-active/60 text-text-muted hover:text-text-secondary transition-colors"
+                        title={conv.isPinned ? "Bỏ ghim" : "Ghim"}
+                      >
+                        {conv.isPinned ? (
+                          <PinOffIcon size={12} strokeWidth={2} />
+                        ) : (
+                          <PinIcon size={12} strokeWidth={2} />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) =>
+                          handleStartRename(e, conv.id, conv.title)
+                        }
+                        className="p-1 rounded hover:bg-surface-active/60 text-text-muted hover:text-text-secondary transition-colors"
+                        title="Đổi tên"
+                      >
+                        <Edit2Icon size={12} strokeWidth={2} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDelete({
+                            id: conv.id,
+                            title: conv.title,
+                            serverSessionId: conv.serverSessionId,
+                          });
+                        }}
+                        className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"
+                        title="Xóa"
+                      >
+                        <Trash2Icon size={12} strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {groupedConversations.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <MessageSquareIcon
+              size={32}
+              strokeWidth={1}
+              className="text-text-disabled mb-3"
+            />
+            <p className="text-sm font-medium text-text-muted">
+              Chưa có hội thoại
+            </p>
+            <p className="text-xs text-text-disabled mt-1">
+              Bắt đầu bằng cách tạo cuộc trò chuyện mới
+            </p>
+          </div>
+        )}
+        </>)}
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="p-3 border-t border-border">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 shrink-0">
+            <img
+              alt="Hacom Holdings"
+              className="h-full w-full object-contain"
+              src="/logo-dung.png"
+            />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-text-primary truncate">
+              Hacom Holdings
+            </span>
+            <span className="text-[10px] text-text-muted flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              Sẵn sàng
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Xóa hội thoại là mất toàn bộ lịch sử chat của nó — hỏi lại trước. */}
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Xóa hội thoại?"
+        message={`Toàn bộ nội dung của "${pendingDelete?.title ?? ""}" sẽ bị xóa. Hành động này không thể hoàn tác.`}
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
+      />
+    </div>
+  );
+};

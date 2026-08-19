@@ -1,0 +1,538 @@
+name: deploy-production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "deploy/**"
+      - ".github/workflows/deploy-production.yml"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag/SHA to deploy (leave empty to build from HEAD). Use a previous SHA for rollback."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+      SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+      SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
+      SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+      SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: chat-web-client
+
+      - if: ${{ env.SHARED_TYPES_REPO_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
+          path: chat-shared-types
+          ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
+          token: ${{ env.SHARED_TYPES_REPO_TOKEN }}
+
+      - if: ${{ env.SHARED_TYPES_REPO_TOKEN == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
+          path: chat-shared-types
+          ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
+
+      - name: Resolve image tag
+        shell: bash
+        env:
+          INPUT_IMAGE_TAG: ${{ github.event.inputs.image_tag || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_IMAGE_TAG}" ]; then
+            echo "IMAGE_TAG=${INPUT_IMAGE_TAG}" >> "$GITHUB_ENV"
+            echo "SKIP_BUILD=true" >> "$GITHUB_ENV"
+          else
+            echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+            echo "SKIP_BUILD=false" >> "$GITHUB_ENV"
+          fi
+          echo "IMAGE_REF=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chat-web-client:${INPUT_IMAGE_TAG:-${GITHUB_SHA}}" >> "$GITHUB_ENV"
+
+      - name: Debug configuration presence
+        shell: bash
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          # App services must use SERVER_RUNTIME_ENV_FILE.
+          # SERVER_INFRA_ENV_FILE is only for infra repository deployments.
+          for var in DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT SERVER_RUNTIME_ENV_FILE HEALTHCHECK_URL SERVICE_NAME; do
+            if [ -n "${!var:-}" ]; then
+              echo "${var}=SET"
+            else
+              echo "${var}=MISSING"
+            fi
+          done
+
+      - name: Validate deploy inputs
+        id: validate_inputs
+        env:
+          SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+          VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
+          VITE_USE_AUTH_SERVICE: ${{ vars.VITE_USE_AUTH_SERVICE }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+          VITE_WS_USE_QUERY_TOKEN: ${{ vars.VITE_WS_USE_QUERY_TOKEN }}
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK: ${{ vars.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK }}
+          # Post-cleanup (2026-05): production mounts SimpleVirtualizedChatTimeline.
+          # V2 flags are no longer read by the production decision tree.
+          VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE: ${{ vars.VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE }}
+          VITE_CHAT_SIMPLE_TIMELINE_DEBUG: ${{ vars.VITE_CHAT_SIMPLE_TIMELINE_DEBUG }}
+          VITE_CHAT_USE_LEGACY_TIMELINE: ${{ vars.VITE_CHAT_USE_LEGACY_TIMELINE }}
+          VITE_HR_API_BASE_URL: ${{ vars.VITE_HR_API_BASE_URL }}
+          SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
+          SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+
+          trim() { printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
+          require() {
+            local v; v="$(trim "${2}")"
+            [[ -n "${v}" ]] || { echo "::error::${1} is required"; exit 1; }
+            printf '%s' "${v}"
+          }
+          require_multiline() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(printf '%s' "${raw_value}" | tr -d '\r')"
+            [[ -n "${cleaned_value}" ]] || { echo "::error::${name} is required"; exit 1; }
+          }
+          require_file() {
+            local path="$1"
+            [[ -f "${path}" ]] || { echo "::error::${path} was not found"; exit 1; }
+          }
+
+          # App services must use SERVER_RUNTIME_ENV_FILE.
+          # SERVER_INFRA_ENV_FILE is only for infra repository deployments.
+          required_vars=(DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT SERVER_RUNTIME_ENV_FILE SERVICE_NAME)
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required app deploy configuration: $var"
+              exit 1
+            fi
+          done
+
+          SERVER_APPS_ROOT_CLEAN="$(require "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT:-}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE:-}")"
+          SERVER_INFRA_ROOT_CLEAN="$(trim "${SERVER_INFRA_ROOT:-}")"
+          SERVICE_NAME_CLEAN="$(require "vars.SERVICE_NAME" "${SERVICE_NAME:-}")"
+          DEPLOY_ENV_CLEAN="$(require "vars.DEPLOY_ENV" "${DEPLOY_ENV:-}")"
+          SERVER_PORT_CLEAN="$(require "secrets.SERVER_PORT" "${SERVER_PORT:-}")"
+          SERVER_USER_CLEAN="$(require "secrets.SERVER_USER" "${SERVER_USER:-}")"
+          SERVER_HOST_CLEAN="$(require "secrets.SERVER_HOST" "${SERVER_HOST:-}")"
+          require "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME:-}" >/dev/null
+          require "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN:-}" >/dev/null
+          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY:-}"
+          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS:-}"
+
+          if [ "${DEPLOY_ENV_CLEAN}" != "production" ]; then
+            echo "DEPLOY_ENV must be production"
+            exit 1
+          fi
+
+          if ! [[ "${SERVER_PORT_CLEAN}" =~ ^[0-9]+$ ]]; then
+            echo "SERVER_PORT secret must be digits only"
+            exit 1
+          fi
+
+          case "${SERVER_RUNTIME_ENV_FILE_CLEAN}" in
+            *develop*|*server-test*)
+              echo "Invalid app deploy configuration: SERVER_RUNTIME_ENV_FILE must not point to develop or server-test for production"
+              exit 1
+              ;;
+          esac
+
+          RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${IMAGE_TAG}"
+
+          HEALTHCHECK_URL_CLEAN="$(trim "${HEALTHCHECK_URL:-}")"; [[ -n "${HEALTHCHECK_URL_CLEAN}" ]] || HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
+          VITE_APP_BASE_PATH_CLEAN="$(trim "${VITE_APP_BASE_PATH:-}")"; [[ -n "${VITE_APP_BASE_PATH_CLEAN}" ]] || VITE_APP_BASE_PATH_CLEAN="/"
+          VITE_API_BASE_URL_CLEAN="$(trim "${VITE_API_BASE_URL:-}")"; [[ -n "${VITE_API_BASE_URL_CLEAN}" ]] || VITE_API_BASE_URL_CLEAN="/api/v1"
+          VITE_AUTH_BASE_URL_CLEAN="$(trim "${VITE_AUTH_BASE_URL:-}")"; [[ -n "${VITE_AUTH_BASE_URL_CLEAN}" ]] || VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
+          VITE_USE_AUTH_SERVICE_CLEAN="$(trim "${VITE_USE_AUTH_SERVICE:-}")"; [[ -n "${VITE_USE_AUTH_SERVICE_CLEAN}" ]] || VITE_USE_AUTH_SERVICE_CLEAN="true"
+          VITE_WS_URL_CLEAN="$(trim "${VITE_WS_URL:-}")"; [[ -n "${VITE_WS_URL_CLEAN}" ]] || VITE_WS_URL_CLEAN="/ws"
+          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim "${VITE_WS_USE_QUERY_TOKEN:-}")"; [[ -n "${VITE_WS_USE_QUERY_TOKEN_CLEAN}" ]] || VITE_WS_USE_QUERY_TOKEN_CLEAN="false"
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK:-}")"; [[ -n "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" ]] || VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
+          # Post-cleanup (2026-05) production timeline flags.
+          # SIMPLE is the only production timeline. USE_LEGACY is the
+          # emergency rollback flag (TODO remove by 2026-06-30).
+          VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN="$(trim "${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE:-}")"; [[ -n "${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}" ]] || VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN="true"
+          VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="$(trim "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG:-}")"; [[ -n "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" ]] || VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="false"
+          VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="$(trim "${VITE_CHAT_USE_LEGACY_TIMELINE:-}")"; [[ -n "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" ]] || VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="false"
+          VITE_HR_API_BASE_URL_CLEAN="$(trim "${VITE_HR_API_BASE_URL:-}")"
+
+          # Whitelist values. Vite needs the literal "true" or "false".
+          for v_name in \
+              VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN \
+              VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN \
+              VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN; do
+            v_val="${!v_name}"
+            if [[ "${v_val}" != "true" && "${v_val}" != "false" ]]; then
+              echo "::error title=Invalid V2 flag::${v_name} must be 'true' or 'false', got '${v_val}'"
+              exit 1
+            fi
+          done
+
+          # Hard rule for production: debug MUST be off unless an oncall
+          # explicitly opts in. Spamming logs hurts perf and leaks state.
+          if [[ "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" == "true" ]]; then
+            echo "::warning title=Debug logs enabled in production::vars.VITE_CHAT_SIMPLE_TIMELINE_DEBUG is 'true'. Confirm this is intentional (incident triage)."
+          fi
+          if [[ "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" == "true" ]]; then
+            echo "::warning title=Legacy timeline rollback active::vars.VITE_CHAT_USE_LEGACY_TIMELINE is 'true'. Production is mounting the legacy MessageList instead of SimpleVirtualizedChatTimeline."
+          fi
+
+          case "${HEALTHCHECK_URL_CLEAN}" in
+            http://*|https://*) ;;
+            *)
+              echo "Invalid app deploy configuration: HEALTHCHECK_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
+
+          echo "Deploy kind: app"
+          echo "DEPLOY_ENV=${DEPLOY_ENV_CLEAN}"
+          echo "SERVICE_NAME=${SERVICE_NAME_CLEAN}"
+          echo "SERVER_APPS_ROOT=${SERVER_APPS_ROOT_CLEAN}"
+          echo "SERVER_RUNTIME_ENV_FILE=${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+          echo "HEALTHCHECK_URL=${HEALTHCHECK_URL_CLEAN}"
+
+          require_file ./chat-web-client/Dockerfile
+          require_file ./chat-web-client/package-lock.json
+          require_file ./chat-shared-types/package-lock.json
+          require_file ./chat-web-client/nginx/default.conf.template
+          require_file "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+          require_file ./chat-web-client/deploy/scripts/deploy.sh
+          require_file ./chat-web-client/deploy/scripts/rollback.sh
+
+          {
+            echo "### Deploy configuration"
+            echo
+            echo "| Key | Value |"
+            echo "| --- | --- |"
+            printf '| %s | `%s` |\n' "SERVICE_NAME" "${SERVICE_NAME_CLEAN}"
+            printf '| %s | `%s` |\n' "DEPLOY_ENV" "${DEPLOY_ENV_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_APPS_ROOT" "${SERVER_APPS_ROOT_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf '| %s | `%s` |\n' "HEALTHCHECK_URL" "${HEALTHCHECK_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_APP_BASE_PATH" "${VITE_APP_BASE_PATH_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_API_BASE_URL" "${VITE_API_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_AUTH_BASE_URL" "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_USE_AUTH_SERVICE" "${VITE_USE_AUTH_SERVICE_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_URL" "${VITE_WS_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_USE_QUERY_TOKEN" "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_AUTO_QUERY_TOKEN_FALLBACK" "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE" "${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_SIMPLE_TIMELINE_DEBUG" "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_USE_LEGACY_TIMELINE" "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_HR_API_BASE_URL" "${VITE_HR_API_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "IMAGE_REF" "${IMAGE_REF}"
+            printf '| %s | `%s` |\n' "RELEASE_DIR" "${RELEASE_DIR}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          {
+            printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE_CLEAN=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf 'SERVER_INFRA_ROOT_CLEAN=%s\n' "${SERVER_INFRA_ROOT_CLEAN}"
+            printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
+            printf 'SERVER_USER_CLEAN=%s\n' "${SERVER_USER_CLEAN}"
+            printf 'SERVER_HOST_CLEAN=%s\n' "${SERVER_HOST_CLEAN}"
+            printf 'HEALTHCHECK_URL_CLEAN=%s\n' "${HEALTHCHECK_URL_CLEAN}"
+            printf 'VITE_APP_BASE_PATH_CLEAN=%s\n' "${VITE_APP_BASE_PATH_CLEAN}"
+            printf 'VITE_API_BASE_URL_CLEAN=%s\n' "${VITE_API_BASE_URL_CLEAN}"
+            printf 'VITE_AUTH_BASE_URL_CLEAN=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf 'VITE_USE_AUTH_SERVICE_CLEAN=%s\n' "${VITE_USE_AUTH_SERVICE_CLEAN}"
+            printf 'VITE_WS_URL_CLEAN=%s\n' "${VITE_WS_URL_CLEAN}"
+            printf 'VITE_WS_USE_QUERY_TOKEN_CLEAN=%s\n' "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+            printf 'VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN=%s\n' "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf 'VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN=%s\n' "${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}"
+            printf 'VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN=%s\n' "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
+            printf 'VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN=%s\n' "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
+            printf 'VITE_HR_API_BASE_URL_CLEAN=%s\n' "${VITE_HR_API_BASE_URL_CLEAN}"
+            printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
+            printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
+            printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Print resolved timeline flags
+        # Surface the post-validate values so anyone reading the run can see
+        # what the Vite bundle is about to bake in. Production default is
+        # SIMPLE=true, DEBUG=false, USE_LEGACY=false (post-cleanup 2026-05).
+        run: |
+          set -Eeuo pipefail
+          echo "SIMPLE=${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}"
+          echo "SIMPLE_DEBUG=${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
+          echo "USE_LEGACY=${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
+
+      - name: Preflight Docker build context
+        if: env.SKIP_BUILD == 'false'
+        run: |
+          set -Eeuo pipefail
+          pwd
+          ls -la
+          echo "Dockerfiles:"
+          find . -maxdepth 2 -name 'Dockerfile*' -type f | sort
+          echo "Top-level dirs:"
+          find . -maxdepth 2 -type d | sort
+          test -d ./chat-web-client
+          test -f ./chat-web-client/Dockerfile
+          test -f ./chat-web-client/package-lock.json
+          test -d ./chat-shared-types
+          test -f ./chat-shared-types/package-lock.json
+
+      - name: Prepare workspace .dockerignore for root build context
+        if: env.SKIP_BUILD == 'false'
+        run: |
+          set -Eeuo pipefail
+          cat > .dockerignore <<'EOF'
+          **/node_modules
+          **/.git
+          **/dist
+          **/coverage
+          **/build
+          **/.next
+          **/.env
+          **/.env.*
+          **/logs
+          **/tmp
+          **/.release-bundle
+          EOF
+          echo "Workspace .dockerignore:"
+          cat .dockerignore
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push runtime image
+        if: env.SKIP_BUILD == 'false'
+        run: |
+          set -Eeuo pipefail
+          docker buildx build \
+            --file ./chat-web-client/Dockerfile \
+            --target production \
+            --platform linux/amd64 \
+            --progress plain \
+            --build-arg VITE_APP_BUILD_SHA="${GITHUB_SHA}" \
+            --build-arg VITE_APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VITE_APP_BASE_PATH="${VITE_APP_BASE_PATH_CLEAN}" \
+            --build-arg VITE_API_BASE_URL="${VITE_API_BASE_URL_CLEAN}" \
+            --build-arg VITE_AUTH_BASE_URL="${VITE_AUTH_BASE_URL_CLEAN}" \
+            --build-arg VITE_USE_AUTH_SERVICE="${VITE_USE_AUTH_SERVICE_CLEAN}" \
+            --build-arg VITE_WS_URL="${VITE_WS_URL_CLEAN}" \
+            --build-arg VITE_WS_USE_QUERY_TOKEN="${VITE_WS_USE_QUERY_TOKEN_CLEAN}" \
+            --build-arg VITE_WS_AUTO_QUERY_TOKEN_FALLBACK="${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" \
+            --build-arg VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE="${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}" \
+            --build-arg VITE_CHAT_SIMPLE_TIMELINE_DEBUG="${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" \
+            --build-arg VITE_CHAT_USE_LEGACY_TIMELINE="${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" \
+            --build-arg VITE_HR_API_BASE_URL="${VITE_HR_API_BASE_URL_CLEAN}" \
+            --tag "${IMAGE_REF}" \
+            --push \
+            .
+
+      - name: Verify pushed manifest
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect "${IMAGE_REF}"
+
+      - name: Verify production timeline flags landed in bundle
+        if: env.SKIP_BUILD == 'false'
+        # Post-cleanup (2026-05): assert the SIMPLE flag literal is inlined
+        # so we know build args actually reached Vite. Also guard against
+        # V2 strings leaking back into the production bundle.
+        run: |
+          set -Eeuo pipefail
+          docker pull "${IMAGE_REF}"
+          CID="$(docker create "${IMAGE_REF}")"
+          trap 'docker rm -f "${CID}" >/dev/null 2>&1 || true' EXIT
+          rm -rf ./_bundle && mkdir -p ./_bundle
+          docker cp "${CID}:/usr/share/nginx/html/assets" ./_bundle/
+          ASSETS_DIR="./_bundle/assets"
+          test -d "${ASSETS_DIR}"
+
+          echo "Resolved flags:"
+          echo "SIMPLE=${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}"
+          echo "SIMPLE_DEBUG=${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
+          echo "USE_LEGACY=${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
+
+          echo "::group::SIMPLE flag inline check"
+          if ! grep -RqE "VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE" "${ASSETS_DIR}"; then
+            echo "::error title=Flag inline missing::Bundle has no VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE literal — Vite did not inline the build arg"
+            exit 1
+          fi
+          echo "OK: SIMPLE flag literal present."
+          echo "::endgroup::"
+
+          echo "::group::V2 leak check"
+          # The V2 module is quarantined under __deprecated__. These strings
+          # MUST NOT appear in the production bundle.
+          if grep -RqE "ChatTimelineV2|useChatScrollOwnerV2|useScrollEventBridge|suppressScrollWrites|onTimelineEvent|VITE_CHAT_SCROLL_OWNER_V2_DRIVES" "${ASSETS_DIR}"; then
+            echo "::error title=V2 leak::Production bundle contains deprecated V2 timeline strings — something is importing from timeline-v2/__deprecated__/"
+            grep -RnoE "ChatTimelineV2|useChatScrollOwnerV2|useScrollEventBridge|suppressScrollWrites|onTimelineEvent|VITE_CHAT_SCROLL_OWNER_V2_DRIVES" "${ASSETS_DIR}" | head -20
+            exit 1
+          fi
+          echo "OK: bundle is clean of V2 strings."
+          echo "::endgroup::"
+
+          echo "::group::Empty env-object regression guard"
+          if grep -RqnP \
+              "(const [A-Za-z0-9_\$]+=\{\}.{0,500}import\.meta\.env\.VITE_CHAT_)|(import\.meta\.env\.VITE_CHAT_.{0,500}const [A-Za-z0-9_\$]+=\{\})" \
+              "${ASSETS_DIR}" 2>/dev/null; then
+            echo "::error title=V2 flags not inlined::Empty env-object literal sits next to an unreplaced import.meta.env.VITE_CHAT_* reference — Vite did not see the build args"
+            grep -RnP \
+              "(const [A-Za-z0-9_\$]+=\{\}.{0,500}import\.meta\.env\.VITE_CHAT_)|(import\.meta\.env\.VITE_CHAT_.{0,500}const [A-Za-z0-9_\$]+=\{\})" \
+              "${ASSETS_DIR}" | head -5 || true
+            exit 1
+          fi
+          echo "OK: no unreplaced import.meta.env.VITE_CHAT_* near empty {} literals."
+          echo "::endgroup::"
+
+      - name: Prepare release bundle
+        working-directory: ./chat-web-client
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .release-bundle/deploy
+          cp -R deploy/compose .release-bundle/deploy/
+          cp -R deploy/scripts .release-bundle/deploy/
+          cp deploy/README.md .release-bundle/deploy/README.md
+
+          {
+            printf 'CHAT_WEB_CLIENT_IMAGE=%q\n' "${IMAGE_REF}"
+            printf 'IMAGE_REF=%q\n' "${IMAGE_REF}"
+            printf 'RELEASE_SHA=%q\n' "${USE_TAG}"
+            printf 'SERVICE_NAME=%q\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV=%q\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_APPS_ROOT=%q\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE=%q\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf 'COMPOSE_PROJECT_NAME=%q\n' "chat-web-client-${DEPLOY_ENV_CLEAN}"
+            printf 'COMPOSE_FILE=%q\n' "deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+            printf 'RUNTIME_SERVICE=%q\n' "chat-web-client"
+            printf 'MIGRATE_ENABLED=%q\n' "false"
+            printf 'HEALTHCHECK_URL=%q\n' "${HEALTHCHECK_URL_CLEAN}"
+          } > .release-bundle/.release.env
+
+      - name: Set up SSH
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${SERVER_SSH_KNOWN_HOSTS}" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        run: |
+          set -Eeuo pipefail
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=6 \
+            -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            'echo SSH_OK && whoami && hostname && docker --version && docker compose version'
+
+      - name: Verify server app paths
+        run: |
+          set -Eeuo pipefail
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=6 \
+            -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_RUNTIME_ENV_FILE_CLEAN}" "${SERVER_INFRA_ROOT_CLEAN}" <<'ENDSSH'
+          set -Eeuo pipefail
+          test -d "$1" || { echo "Missing apps root: $1" >&2; exit 1; }
+          test -f "$2" || { echo "Runtime env file does not exist on server: $2" >&2; exit 1; }
+          if [ -n "${3:-}" ]; then
+            test -d "$3" || { echo "Configured SERVER_INFRA_ROOT does not exist on server: $3" >&2; exit 1; }
+          fi
+          docker network inspect chat-platform >/dev/null || { echo "Docker network chat-platform not found" >&2; exit 1; }
+          ENDSSH
+
+      - name: Configure known_hosts, rsync, deploy
+        id: deploy_remote
+        run: |
+          set -Eeuo pipefail
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            "mkdir -p '${RELEASE_DIR}'"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p ${PORT}" \
+            ./chat-web-client/.release-bundle/ \
+            "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}:${RELEASE_DIR}/"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set -eu
+          cd "${RELEASE_DIR}"
+          test -f ./.release.env
+          test -f "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+          echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u "${GHCR_PULL_USERNAME}" --password-stdin
+          chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
+          ./deploy/scripts/deploy.sh
+          EOF
+
+      - name: Show remote logs on failure
+        if: ${{ failure() && steps.validate_inputs.outcome == 'success' && steps.deploy_remote.outcome == 'failure' }}
+        run: |
+          set +e
+          [ -n "${SERVER_PORT_CLEAN:-}" ] || exit 0
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set +e
+          cd "${RELEASE_DIR}" || exit 0
+          [ -f ./.release.env ] || exit 0
+          set -a; . ./.release.env; set +a
+          docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" ps || true
+          docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" logs --tail=200 chat-web-client || true
+          EOF

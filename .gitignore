@@ -8,3 +8,8 @@ coverage.out
 newman-p5-container.json
 tests/env/*.env
 !tests/env/*.env.example
+
+# Frontend local environment files
+frontend/chat-web-client/.env
+frontend/chat-web-client/.env.*
+!frontend/chat-web-client/.env.example

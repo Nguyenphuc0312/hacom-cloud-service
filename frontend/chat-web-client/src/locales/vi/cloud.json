@@ -1,0 +1,214 @@
+{
+  "title": "My Documents",
+  "subtitle": "Kho nội dung cá nhân",
+  "common": {
+    "soon": "Sắp có",
+    "close": "Đóng",
+    "cancel": "Hủy"
+  },
+  "workspace": {
+    "title": "My Documents",
+    "description": "Nội dung tại đây chỉ hiển thị với bạn và được đồng bộ qua tài khoản Hacom.",
+    "introTitle": "Không gian riêng của bạn",
+    "onlyYou": "Chỉ mình bạn có thể xem",
+    "sidebarPreview": "Lưu nội dung cho chính bạn",
+    "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của My Documents.",
+    "saving": "Đang lưu nội dung {{size}}",
+    "private": "Riêng tư",
+    "refresh": "Làm mới"
+  },
+  "search": {
+    "placeholder": "Tìm trong My Documents",
+    "aria": "Tìm kiếm trong My Documents"
+  },
+  "navigation": {
+    "aria": "Lọc nội dung My Documents",
+    "all": "Tất cả",
+    "text": "Văn bản",
+    "image": "Ảnh",
+    "file": "Tệp",
+    "link": "Liên kết",
+    "folders": "Thư mục",
+    "shared": "Được chia sẻ",
+    "trash": "Thùng rác"
+  },
+  "quota": {
+    "aria": "Dung lượng Hacom Cloud",
+    "title": "Dung lượng",
+    "loading": "Đang đọc dung lượng...",
+    "usage": "Đã dùng {{used}} / {{limit}}",
+    "usageCompact": "{{used}} / {{limit}} đã dùng",
+    "reserved": "{{value}} đang được giữ cho tệp tải lên",
+    "of": " / {{limit}} đã dùng",
+    "active": "{{value}} đang sử dụng",
+    "trash": "{{value}} trong thùng rác",
+    "available": "{{value}} còn lại"
+  },
+  "quotaRequest": {
+    "action": "Yêu cầu tăng dung lượng",
+    "title": "Yêu cầu tăng dung lượng Cloud",
+    "description": "Chọn một mức dung lượng được hỗ trợ. Hạn mức chỉ thay đổi sau khi yêu cầu được duyệt.",
+    "tier": "Hạn mức đề nghị",
+    "reason": "Lý do (không bắt buộc)",
+    "reasonPlaceholder": "Mô tả ngắn lý do cần thêm dung lượng",
+    "submit": "Gửi yêu cầu",
+    "submitted": "Đã gửi yêu cầu tăng dung lượng.",
+    "requested": "Hạn mức đề nghị: {{value}}",
+    "pendingNotice": "Mỗi tài khoản chỉ có một yêu cầu đang chờ duyệt.",
+    "status": {
+      "pending": "Đang chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Đã từ chối"
+    }
+  },
+  "service": {
+    "checking": "Đang kiểm tra dịch vụ Cloud",
+    "ready": "Dịch vụ Cloud sẵn sàng",
+    "offline": "Không kết nối được Cloud"
+  },
+  "composer": {
+    "aria": "Chọn nội dung muốn lưu",
+    "tabs": { "upload": "Tải tệp", "text": "Ghi nhanh", "link": "Liên kết" },
+    "text": {
+      "placeholder": "Viết nhanh một nội dung cần ghi nhớ...",
+      "aria": "Nội dung ghi chú",
+      "hint": "Enter để xuống dòng · nội dung chỉ mình bạn thấy",
+      "action": "Gửi"
+    },
+    "link": {
+      "urlLabel": "Địa chỉ liên kết",
+      "titleLabel": "Tên gợi nhớ",
+      "titlePlaceholder": "Không bắt buộc",
+      "action": "Lưu liên kết"
+    },
+    "upload": {
+      "drop": "Kéo thả tệp vào đây",
+      "limit": "Tối đa 100 MB mỗi tệp",
+      "pick": "Chọn tệp",
+      "remove": "Bỏ tệp đã chọn",
+      "action": "Tải lên"
+    },
+    "errors": {
+      "emptyFile": "Không thể tải lên tệp rỗng.",
+      "fileTooLarge": "Tệp vượt quá giới hạn 100 MB.",
+      "fileRequired": "Hãy chọn một tệp trước.",
+      "textRequired": "Nội dung ghi chú không được để trống.",
+      "linkInvalid": "Hãy nhập liên kết HTTP hoặc HTTPS hợp lệ."
+    }
+  },
+  "upload": {
+    "stage": {
+      "reserving": "Đang kiểm tra dung lượng...",
+      "uploading": "Đang tải lên kho lưu trữ...",
+      "finalizing": "Đang xác nhận tệp...",
+      "processing": "Đang xử lý và kiểm tra tệp..."
+    }
+  },
+  "feed": {
+    "all": "Hoạt động gần đây",
+    "image": "Ảnh đã lưu",
+    "file": "Tệp của tôi",
+    "text": "Ghi chú",
+    "link": "Liên kết đã lưu",
+    "count": "{{count}} mục đang hiển thị",
+    "count_one": "{{count}} mục đang hiển thị",
+    "count_other": "{{count}} mục đang hiển thị",
+    "loadedOnly": "Tìm trong dữ liệu đã tải"
+  },
+  "timeline": {
+    "unknownDate": "Không rõ thời gian",
+    "loadMore": "Tải thêm",
+    "empty": {
+      "title": "Chưa có nội dung",
+      "description": "Gửi một ghi chú, ảnh, file hoặc liên kết cho chính bạn để bắt đầu."
+    }
+  },
+  "item": {
+    "untitledText": "Ghi chú không tiêu đề",
+    "untitledLink": "Liên kết đã lưu",
+    "untitledFile": "Tệp không tên",
+    "fileMetadata": "Tệp · {{size}}"
+  },
+  "type": {
+    "text": "Ghi chú",
+    "link": "Liên kết",
+    "file": "Tệp",
+    "image": "Hình ảnh",
+    "video": "Video",
+    "audio": "Âm thanh"
+  },
+  "status": {
+    "pending": "Đang chờ",
+    "processing": "Đang xử lý",
+    "ready": "Sẵn sàng",
+    "failed": "Thất bại",
+    "trashed": "Trong thùng rác",
+    "deleting": "Đang xóa",
+    "deleted": "Đã xóa vĩnh viễn"
+  },
+  "delete": {
+    "dialogTitle": "Bạn muốn xóa mục này thế nào?",
+    "permanentTitle": "Xóa vĩnh viễn mục này?",
+    "moveToTrash": "Đưa vào thùng rác",
+    "moveToTrashDescription": "Mục sẽ ẩn khỏi cuộc trò chuyện nhưng vẫn tiếp tục chiếm dung lượng.",
+    "retention": "Có thể khôi phục trong 24 giờ",
+    "permanent": "Xóa ngay",
+    "permanentDescription": "Giải phóng dung lượng ngay và không thể khôi phục."
+  },
+  "trash": {
+    "headerSubtitle": "Các mục sẽ tự xóa sau 24 giờ",
+    "loading": "Đang tải Thùng rác...",
+    "emptyTitle": "Thùng rác đang trống",
+    "emptyDescription": "Mục bạn đưa vào đây có thể được khôi phục trong 24 giờ.",
+    "restore": "Khôi phục",
+    "deletePermanently": "Xóa vĩnh viễn",
+    "retentionNotice": "Mục trong Thùng rác vẫn tính vào dung lượng và sẽ tự xóa sau 24 giờ.",
+    "expired": "Đã hết hạn khôi phục",
+    "hoursRemaining": "Còn khoảng {{count}} giờ",
+    "minutesRemaining": "Còn khoảng {{count}} phút"
+  },
+  "inspector": {
+    "title": "Hacom Cloud",
+    "details": "Chi tiết mục",
+    "empty": {
+      "title": "Kho lưu trữ cá nhân",
+      "description": "Chọn một mục để xem thông tin. Dữ liệu hiện được tách biệt theo người dùng."
+    },
+    "capabilities": {
+      "private": "Tách biệt dữ liệu theo người dùng",
+      "hash": "Kiểm tra toàn vẹn tệp nén",
+      "quota": "Kiểm soát dung lượng phía máy chủ"
+    },
+    "metadata": {
+      "status": "Trạng thái",
+      "size": "Kích thước",
+      "created": "Ngày tạo",
+      "updated": "Cập nhật",
+      "id": "Mã mục"
+    },
+    "actions": { "download": "Tải xuống", "share": "Chia sẻ" },
+    "phaseLater": "Tính năng thuộc giai đoạn tiếp theo",
+    "phaseNote": "Tải xuống, chia sẻ và thư mục chưa có API trong Phase 1 nên đang được khóa rõ ràng."
+  },
+  "toast": {
+    "textCreated": "Đã lưu ghi chú.",
+    "linkCreated": "Đã lưu liên kết.",
+    "uploadStarted": "Tệp đã tải lên và đang được xử lý.",
+    "movedToTrash": "Đã đưa mục vào Thùng rác.",
+    "restored": "Đã khôi phục mục.",
+    "permanentlyDeleted": "Đã xóa vĩnh viễn và giải phóng dung lượng."
+  },
+  "errors": {
+    "user": "Không xác định được người dùng hiện tại. Hãy đăng nhập lại.",
+    "quota": "Dung lượng Cloud không đủ cho thao tác này.",
+    "fileTooLarge": "Tệp vượt quá giới hạn cho phép.",
+    "driveInactive": "Không gian Cloud của bạn chưa hoạt động.",
+    "itemNotReady": "Mục đang xử lý nên chưa thể xóa. Hãy thử lại khi trạng thái sẵn sàng.",
+    "trashExpired": "Mục đã hết thời hạn 24 giờ và không thể khôi phục.",
+    "invalidQuotaTier": "Hãy chọn một hạn mức dung lượng được hỗ trợ.",
+    "quotaRequestPending": "Đã có một yêu cầu tăng dung lượng đang chờ duyệt.",
+    "idempotencyConflict": "Thao tác xung đột với yêu cầu trước đó. Hãy làm mới rồi thử lại.",
+    "offline": "Không kết nối được dịch vụ Cloud. Hãy kiểm tra kết nối Hacom Chat.",
+    "generic": "Không thể hoàn tất thao tác Cloud. Vui lòng thử lại."
+  }
+}
