@@ -20,6 +20,8 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
+import { PinnedMessageBar } from "../../../components/chat/PinnedMessageBar";
+import PinnedMessagesPanel from "../../../components/chat/PinnedMessagesPanel";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
@@ -39,6 +41,7 @@ import {
 } from "../../../types";
 import { resolveChatLayoutProfile } from "../../../utils/densityPolicy";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { usePinnedMessages } from "../../../hooks/usePinnedMessages";
 import { CLOUD_CONVERSATION_ID, CLOUD_MAX_UPLOAD_BYTES } from "../constants";
 import {
   CloudConversationAvatar,
@@ -218,6 +221,7 @@ export default function CloudPage() {
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
   const timelineScrollTopRef = useRef<number | null>(null);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
+  const [isPinnedPanelOpen, setIsPinnedPanelOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const isSelectionModeRef = useRef(false);
   const selectedMessageIdsRef = useRef<Set<string>>(new Set());
@@ -239,6 +243,15 @@ export default function CloudPage() {
   // matching Hacom Chat's local panel behavior. Do not refetch the Cloud
   // bundle for every keystroke (that caused the red Cloud error banner).
   const workspace = useCloudWorkspace(cloudUserId);
+  // My Documents uses the same pin contract as ordinary Hacom Chat
+  // conversations.  Keeping this hook here makes pin state, optimistic
+  // updates and the pinned-message panel behave identically in both views.
+  const {
+    pinnedMessages,
+    togglePin,
+    isLoading: isPinnedLoading,
+    error: pinnedError,
+  } = usePinnedMessages(CLOUD_CONVERSATION_ID, { localFallback: true });
 
   const captureTimelineScroll = useCallback(() => {
     const element = document.querySelector<HTMLElement>(
@@ -344,7 +357,7 @@ export default function CloudPage() {
       ? "mobile"
       : "normal";
   const layoutProfile = resolveChatLayoutProfile(width, layoutState);
-  const isRightPanelOpen = isInfoPanelOpen || isSearchOpen;
+  const isRightPanelOpen = isInfoPanelOpen || isSearchOpen || isPinnedPanelOpen;
 
   const conversation = useMemo<Conversation>(
     () => ({
@@ -372,17 +385,20 @@ export default function CloudPage() {
   const cloudTrashItems = workspace.trashItems;
 
   const messages = useMemo(
-    () => [
-      ...cloudItemsToMessages(
+    () => {
+      const pinnedIds = new Set(pinnedMessages.map((message) => message.id));
+      return cloudItemsToMessages(
         cloudItems,
         currentUser,
         {
         link: t("item.untitledLink"),
         file: t("item.untitledFile"),
         },
-      ),
-    ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()),
-    [cloudItems, currentUser, t],
+      )
+        .map((message) => ({ ...message, isPinned: pinnedIds.has(message.id) }))
+        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+    },
+    [cloudItems, currentUser, pinnedMessages, t],
   );
 
   const visibleMessages = useMemo(() => {
@@ -412,14 +428,13 @@ export default function CloudPage() {
     });
   }, [cloudTrashItems, search, t]);
 
-  const trashMessages = useMemo(
-    () =>
-      cloudItemsToMessages(visibleTrashItems, currentUser, {
+  const trashMessages = useMemo(() => {
+    const pinnedIds = new Set(pinnedMessages.map((message) => message.id));
+    return cloudItemsToMessages(visibleTrashItems, currentUser, {
         link: t("item.untitledLink"),
         file: t("item.untitledFile"),
-      }),
-    [currentUser, t, visibleTrashItems],
-  );
+      }).map((message) => ({ ...message, isPinned: pinnedIds.has(message.id) }));
+  }, [currentUser, pinnedMessages, t, visibleTrashItems]);
 
   const showPhaseNotice = useCallback(() => {
     toast.info(t("workspace.phaseAction"));
@@ -839,6 +854,25 @@ export default function CloudPage() {
     [captureTimelineScroll, workspace.items],
   );
 
+  const handleCloudPin = useCallback(
+    async (messageId: string) => {
+      const message = [...messages, ...trashMessages].find(
+        (candidate) => candidate.id === messageId,
+      );
+      if (!message) return;
+      await togglePin(message);
+    },
+    [messages, togglePin, trashMessages],
+  );
+
+  const handlePinnedJump = useCallback((message: Message) => {
+    setIsPinnedPanelOpen(false);
+    setIsInfoPanelOpen(false);
+    setIsSearchOpen(false);
+    setJumpToMessageId(message.id);
+    setJumpNonce((nonce) => nonce + 1);
+  }, []);
+
   const handleViewOriginalResource = useCallback(
     (item: CloudItem) => {
       setIsInfoPanelOpen(false);
@@ -1093,16 +1127,35 @@ export default function CloudPage() {
             onBack={() => navigate("/chat")}
             onInfoClick={() => {
               setIsSearchOpen(false);
+              setIsPinnedPanelOpen(false);
               setIsInfoPanelOpen((isOpen) => !isOpen);
             }}
             onSearchClick={() => {
               captureTimelineScroll();
               workspace.clearError();
               setIsInfoPanelOpen(false);
+              setIsPinnedPanelOpen(false);
               setIsSearchOpen((value) => !value);
             }}
-            onPinnedClick={showPhaseNotice}
+            onPinnedClick={() => {
+              setIsInfoPanelOpen(false);
+              setIsSearchOpen(false);
+              setIsPinnedPanelOpen((isOpen) => !isOpen);
+            }}
           />
+
+          {pinnedMessages.length > 0 ? (
+            <PinnedMessageBar
+              pinnedMessages={pinnedMessages}
+              currentUserId={currentUser.id}
+              onJumpToMessage={handlePinnedJump}
+              onOpenList={() => {
+                setIsInfoPanelOpen(false);
+                setIsSearchOpen(false);
+                setIsPinnedPanelOpen(true);
+              }}
+            />
+          ) : null}
 
           {workspace.error ? (
             <ConversationLane className="pt-3">
@@ -1141,7 +1194,7 @@ export default function CloudPage() {
               onReply={noopMessageAction}
               onReact={noopMessageIdAction}
               onForward={noopMessageAction}
-              onPin={noopMessageIdAction}
+              onPin={handleCloudPin}
               onEdit={noopMessageAction}
               onDelete={handleDeleteRequest}
               onRetry={handleRetryCloudMessage}
@@ -1169,7 +1222,7 @@ export default function CloudPage() {
               onReply={noopMessageAction}
               onReact={noopMessageIdAction}
               onForward={noopMessageAction}
-              onPin={noopMessageIdAction}
+              onPin={handleCloudPin}
               onEdit={noopMessageAction}
               onDelete={handleTrashPermanentDeleteRequest}
               onRetry={handleRetryCloudMessage}
@@ -1447,6 +1500,17 @@ export default function CloudPage() {
                   )}
                 </div>
               </aside>
+            ) : isPinnedPanelOpen ? (
+              <PinnedMessagesPanel
+                pinnedMessages={pinnedMessages}
+                isLoading={isPinnedLoading}
+                error={pinnedError}
+                currentUserId={currentUser.id}
+                onClose={() => setIsPinnedPanelOpen(false)}
+                onJumpToMessage={handlePinnedJump}
+                onUnpin={(message) => togglePin({ ...message, isPinned: true })}
+                className="h-full w-full"
+              />
             ) : (
               <CloudConversationInfoPanel
                 items={cloudItems}
@@ -1472,6 +1536,7 @@ export default function CloudPage() {
             onClick={() => {
               setIsInfoPanelOpen(false);
               setIsSearchOpen(false);
+              setIsPinnedPanelOpen(false);
             }}
             aria-label={t("common.close")}
           />
