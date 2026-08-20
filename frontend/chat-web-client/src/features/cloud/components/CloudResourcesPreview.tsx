@@ -76,6 +76,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   const media = useMemo(() => resolvedItems.filter((item) => item.type === "image" || item.type === "video"), [resolvedItems]);
   const files = useMemo(() => resolvedItems.filter((item) => item.type === "file"), [resolvedItems]);
   const links = useMemo(() => resolvedItems.filter((item) => item.type === "link"), [resolvedItems]);
+  const texts = useMemo(() => resolvedItems.filter((item) => item.type === "text"), [resolvedItems]);
   const activeImages = useMemo(
     () => media.filter((item) => item.type === "image" && item.accessUrl).map((item) => ({ url: item.accessUrl!, alt: itemTitle(item), senderName, senderAvatar, sentAt: item.createdAt, groupKey: item.id })),
     [media, senderAvatar, senderName],
@@ -133,13 +134,15 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
       ? "media"
       : resolvedTrashItems.some((item) => item.type === "file")
         ? "files"
-        : "links";
+        : resolvedTrashItems.some((item) => item.type === "link")
+          ? "links"
+          : "text";
     setTrashGalleryTab(preferredTab ?? fallbackTab);
     setTrashGalleryOpen(true);
   };
 
   const galleryTabForItem = (item: CloudItem): GalleryTab =>
-    item.type === "image" || item.type === "video" ? "media" : item.type === "file" ? "files" : "links";
+    item.type === "image" || item.type === "video" ? "media" : item.type === "file" ? "files" : item.type === "link" ? "links" : "text";
 
   return (
     <>
@@ -168,6 +171,11 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
+        <ResourceSection label="Văn bản" count={texts.length}>
+          {texts.length ? <div className="space-y-1.5">{texts.slice(0, 3).map((item) => <CloudTextRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<CloudItemIcon type="text" />} label="Chưa có văn bản được lưu trữ" />}
+          {texts.length >= 4 ? <button type="button" onClick={() => setGalleryTab("text")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
+        </ResourceSection>
+
         <section className="border-t border-border">
           <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-text-primary transition-colors hover:bg-surface-hover" aria-expanded={trashExpanded} aria-controls="cloud-resource-section-trash" onClick={() => setTrashExpanded((open) => !open)}>
             <span className="flex items-center gap-2"><Trash2 className="h-4 w-4 text-text-muted" />Thùng rác</span>
@@ -185,7 +193,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 </button>
                 <button type="button" onClick={() => void onRestoreTrashItem?.(item.id)} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm hover:bg-primary/10" aria-label={`Khôi phục ${itemTitle(item)}`}><RotateCcw className="h-4 w-4" /></button>
               </div>)}
-              {trashItems.length >= 4 ? <button type="button" disabled={isLoadingTrashGallery} onClick={() => void openTrashGallery()} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60">{isLoadingTrashGallery ? "Đang tải…" : "Xem tất cả"}</button> : null}
+              {trashItems.length > 0 ? <button type="button" disabled={isLoadingTrashGallery} onClick={() => void openTrashGallery()} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60">{isLoadingTrashGallery ? "Đang tải…" : "Xem tất cả"}</button> : null}
             </> : <p className="py-3 text-sm text-text-muted">Thùng rác đang trống</p>}
           </div> : null}
         </section>
@@ -364,7 +372,20 @@ const CloudLinkRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOr
   );
 };
 
-type GalleryTab = "media" | "files" | "links";
+const CloudTextRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+  const text = item.content?.trim() || itemTitle(item);
+  return (
+    <div className="group relative rounded-lg hover:bg-surface-hover">
+      <div className="flex items-center gap-2 rounded-lg p-2 pr-28">
+        <CloudItemIcon type="text" className="h-9 w-9 shrink-0" />
+        <span className="min-w-0 flex-1"><span className="block break-words text-xs font-medium text-text-primary">{text}</span><span className="text-[11px] text-text-muted">Văn bản · Bạn</span></span>
+      </div>
+      <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+    </div>
+  );
+};
+
+type GalleryTab = "media" | "files" | "links" | "text";
 
 const formatSentDate = (createdAt: string): string => {
   const date = new Date(createdAt);
@@ -404,7 +425,7 @@ const ResourceGallery: React.FC<{
   const selectionPointerDown = useRef(false);
   const selectionDragRef = useRef<{ anchorId: string; baseIds: Set<string> } | null>(null);
   const tabItems = useMemo(() => {
-    const type = tab === "media" ? ["image", "video"] : tab === "files" ? ["file"] : ["link"];
+    const type = tab === "media" ? ["image", "video"] : tab === "files" ? ["file"] : tab === "links" ? ["link"] : ["text"];
     return allItems.filter((item) => type.includes(item.type));
   }, [allItems, tab]);
   const filteredItems = useMemo(() => {
@@ -428,7 +449,7 @@ const ResourceGallery: React.FC<{
     [groups],
   );
 
-  const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : "Links";
+  const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : tab === "links" ? "Links" : "Văn bản";
   const toggleSelection = (itemId: string) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -601,7 +622,7 @@ const ResourceGallery: React.FC<{
         </div>
       </header>
       <nav className="flex h-14 shrink-0 border-b border-border px-5" aria-label="Loại nội dung">
-        {([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links']] as const).map(([key, label]) => (
+        {([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links'], ['text', 'Văn bản']] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} className={`flex flex-1 items-center justify-center border-b-2 text-base font-medium ${key === tab ? "border-primary text-primary" : "border-transparent text-text-primary"}`}>{label}</button>
         ))}
       </nav>
@@ -620,12 +641,13 @@ const ResourceGallery: React.FC<{
             {tab === "media" ? <div className="grid grid-cols-3 gap-3">{group.map((item) => <div key={item.id} className="group relative aspect-square"><button type="button" disabled={!item.accessUrl && !selectionMode} onPointerDown={(event) => startLongPress(item.id, event)} onPointerUp={releaseSelectionPointer} onPointerCancel={releaseSelectionPointer} onPointerLeave={cancelLongPress} onPointerEnter={() => handleMediaPointerEnter(item.id)} onClick={() => handleMediaClick(item)} className="group relative h-full w-full overflow-hidden rounded-md bg-surface-overlay disabled:cursor-default"><GalleryMedia item={item} />{selectionMode ? <SelectionCircle selected={selectedIds.has(item.id)} className="absolute left-2 top-2 z-10" /> : null}</button>{!selectionMode ? <ResourceActions compact placement="top" isTrash={isTrash} item={item} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}</div>)}</div> : null}
             {tab === "files" ? <div className="space-y-2">{group.map((item) => <GalleryFile key={item.id} item={item} selectionMode={selectionMode} selected={selectedIds.has(item.id)} onToggleSelect={() => toggleSelection(item.id)} isTrash={isTrash} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
             {tab === "links" ? <div className="space-y-2">{group.map((item) => <GalleryLink key={item.id} item={item} selectionMode={selectionMode} selected={selectedIds.has(item.id)} onToggleSelect={() => toggleSelection(item.id)} isTrash={isTrash} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
+            {tab === "text" ? <div className="space-y-2">{group.map((item) => <GalleryText key={item.id} item={item} selectionMode={selectionMode} selected={selectedIds.has(item.id)} onToggleSelect={() => toggleSelection(item.id)} isTrash={isTrash} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
           </section>
-        )) : <EmptyState icon={tab === "media" ? <ImageIcon /> : tab === "files" ? <FileText /> : <Link2 />} label={`Chưa có ${tabLabel.toLowerCase()}`} />}
+        )) : <EmptyState icon={tab === "media" ? <ImageIcon /> : tab === "files" ? <FileText /> : tab === "links" ? <Link2 /> : <CloudItemIcon type="text" />} label={`Chưa có ${tabLabel.toLowerCase()}`} />}
       </div>
       {suggestionsOpen && suggestionPosition && typeof document !== "undefined" ? createPortal(<div className="fixed z-[1000] grid w-56 gap-1 rounded-xl border border-border bg-surface p-3 shadow-2xl" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} onMouseEnter={keepSuggestionsOpen} onMouseLeave={hideSuggestionsSoon} role="menu">{[[7, "7 ngày trước"], [30, "30 ngày trước"], [90, "3 tháng trước"]].map(([days, label]) => <button key={days} type="button" onClick={() => chooseSuggestion(Number(days))} className="rounded-md px-2 py-2 text-left text-base text-text-secondary hover:bg-surface-hover" role="menuitem">{label}</button>)}</div>, document.body) : null}
       {selectionMode ? <div className="z-30 flex shrink-0 items-center gap-3 border-t border-border bg-surface px-5 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
-        <span className="text-sm font-medium text-text-primary">{selectedIds.size} {tab === "media" ? "hình ảnh" : tab === "files" ? "tệp" : "liên kết"}</span>
+        <span className="text-sm font-medium text-text-primary">{selectedIds.size} {tab === "media" ? "hình ảnh" : tab === "files" ? "tệp" : tab === "links" ? "liên kết" : "văn bản"}</span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" disabled={!selectedIds.size} onClick={() => void shareSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Chia sẻ mục đã chọn" title="Chia sẻ"><ArrowUturnRightIcon className="h-5 w-5" /></button>
           <button type="button" disabled={!selectedIds.size} onClick={() => void downloadSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Tải xuống mục đã chọn" title="Tải xuống"><Download className="h-5 w-5" /></button>
@@ -667,6 +689,20 @@ const GalleryLink: React.FC<ResourceRowProps> = ({ item, selectionMode = false, 
     <a href={url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-text-muted" title={host}>{host}</span></span></a>
     {!selectionMode ? <ResourceActions compact isTrash={isTrash} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
   </div>;
+};
+
+const GalleryText: React.FC<ResourceRowProps> = ({ item, selectionMode = false, selected = false, onToggleSelect, isTrash = false, onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+  const text = item.content?.trim() || itemTitle(item);
+  return (
+    <div className="group relative rounded-lg bg-surface-overlay">
+      {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${text}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
+      <div className={`flex min-h-[62px] items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}>
+        <CloudItemIcon type="text" className="h-9 w-9 shrink-0" />
+        <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-text-primary">{text}</span><span className="text-xs text-text-muted">Văn bản · {formatBytes(item.sizeBytes)}</span></span>
+      </div>
+      {!selectionMode ? <ResourceActions compact isTrash={isTrash} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
+    </div>
+  );
 };
 
 const formatCalendarDate = (value: string): string => {

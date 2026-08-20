@@ -89,7 +89,7 @@ describe("CloudConversationInfoPanel", () => {
     expect(screen.getByRole("button", { name: /File/ })).not.toBeNull();
     expect(screen.getByRole("button", { name: /Link/ })).not.toBeNull();
     expect(screen.getByRole("button", { name: /Ảnh\/Video.*1/ })).not.toBeNull();
-    expect(screen.getAllByLabelText("1 mục")).toHaveLength(3);
+    expect(screen.getAllByLabelText("1 mục")).toHaveLength(4);
     expect(screen.getByRole("button", { name: /Thùng rác/ })).not.toBeNull();
     expect(screen.queryByText("voice-recording.webm")).toBeNull();
 
@@ -103,7 +103,7 @@ describe("CloudConversationInfoPanel", () => {
     expect(screen.queryByText("hacom.vn")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Link/ }));
     expect(screen.getByText("hacom.vn")).not.toBeNull();
-    expect(screen.queryByText("Ghi chú riêng")).toBeNull();
+    expect(screen.getByText("Ghi chú riêng")).not.toBeNull();
     expect(container.querySelectorAll("details")).toHaveLength(0);
 
     expect(screen.queryByRole("button", { name: "Chọn" })).toBeNull();
@@ -146,10 +146,10 @@ describe("CloudConversationInfoPanel", () => {
         accessUrl: `https://cloud.test/photo-${index + 1}.png`,
       }));
 
-      render(<CloudResourcesPreview items={mediaItems} />);
-      fireEvent.click(screen.getByRole("button", { name: "Xem tất cả" }));
+      const { container } = render(<CloudResourcesPreview items={mediaItems} />);
+      fireEvent.click(within(container).getAllByRole("button", { name: "Xem tất cả" })[0]);
 
-      const gallery = screen.getByRole("region", { name: "Kho lưu trữ" });
+      const gallery = within(container).getAllByRole("region")[0];
       const mediaButtons = mediaItems.map((media) =>
         within(gallery).getByRole("button", { name: media.title ?? "" }),
       );
