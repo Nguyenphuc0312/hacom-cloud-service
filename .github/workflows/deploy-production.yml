@@ -35,6 +35,7 @@ jobs:
     env:
       DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
       HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+      PUBLIC_WEB_URL: ${{ vars.PUBLIC_WEB_URL || 'https://chat.hacomholdings.com.vn' }}
       SERVICE_NAME: ${{ vars.SERVICE_NAME }}
       SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
       SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -529,6 +530,32 @@ jobs:
           chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
           ./deploy/scripts/deploy.sh
           EOF
+
+      - name: Verify public release marker
+        env:
+          EXPECTED_BUILD_SHA: ${{ github.event.inputs.image_tag || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          public_web_url="${PUBLIC_WEB_URL%/}"
+          [[ "${public_web_url}" == https://* ]] || { echo "::error title=Invalid public URL::PUBLIC_WEB_URL must start with https://"; exit 1; }
+          marker_url="${public_web_url}/build-info.json"
+
+          for attempt in $(seq 1 12); do
+            body="$(curl --silent --show-error --fail --connect-timeout 10 --max-time 20 \
+              --header 'Cache-Control: no-cache' \
+              "${marker_url}?release=${GITHUB_RUN_ID}-${attempt}")" || body=""
+            actual_sha="$(printf '%s' "${body}" | sed -n 's/^{"buildSha":"\([0-9a-f]\{40\}\)"}$/\1/p')"
+            if [[ "${actual_sha}" == "${EXPECTED_BUILD_SHA}" ]]; then
+              echo "Public HTTPS serves build ${actual_sha}."
+              exit 0
+            fi
+
+            echo "Public release marker is not ready (attempt ${attempt}/12; observed ${actual_sha:-none})."
+            sleep 10
+          done
+
+          echo "::error title=Public release was not verified::${marker_url} did not return ${EXPECTED_BUILD_SHA} after deployment."
+          exit 1
 
       - name: Show remote logs on failure
         if: ${{ failure() && steps.validate_inputs.outcome == 'success' && steps.deploy_remote.outcome == 'failure' }}

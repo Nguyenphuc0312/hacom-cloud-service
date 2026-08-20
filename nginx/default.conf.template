@@ -22,6 +22,15 @@ server {
         include /etc/nginx/snippets/security-headers.conf;
     }
 
+    # This file is generated during the image build. It lets the release
+    # workflow verify that the public HTTPS route serves the expected image,
+    # not merely that the local container is healthy.
+    location = /build-info.json {
+        try_files $uri =404;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        include /etc/nginx/snippets/security-headers.conf;
+    }
+
     location /assets/ {
         try_files $uri =404;
         # `expires 1y` tự sinh Cache-Control riêng → trùng với add_header bên
