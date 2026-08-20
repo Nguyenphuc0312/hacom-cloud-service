@@ -144,7 +144,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   return (
     <>
       <div className="overflow-hidden bg-surface">
-        <ResourceSection label="Ảnh/Video">
+        <ResourceSection label="Ảnh/Video" count={media.length}>
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
               {media.slice(0, 6).map((item) => (
@@ -158,12 +158,12 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           </> : <EmptyState icon={<ImageIcon />} label="Chưa có ảnh hoặc video được chia sẻ trong hội thoại này" />}
         </ResourceSection>
 
-        <ResourceSection label="File">
+        <ResourceSection label="File" count={files.length}>
           {files.length ? <div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<FileText />} label="Chưa có File được chia sẻ trong hội thoại này" />}
           {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
 
-        <ResourceSection label="Link">
+        <ResourceSection label="Link" count={links.length}>
           {links.length ? <div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<Link2 />} label="Chưa có link nào được chia sẻ" />}
           {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
         </ResourceSection>
@@ -402,6 +402,7 @@ const ResourceGallery: React.FC<{
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
   const selectionPointerDown = useRef(false);
+  const selectionDragRef = useRef<{ anchorId: string; baseIds: Set<string> } | null>(null);
   const tabItems = useMemo(() => {
     const type = tab === "media" ? ["image", "video"] : tab === "files" ? ["file"] : ["link"];
     return allItems.filter((item) => type.includes(item.type));
@@ -422,6 +423,10 @@ const ResourceGallery: React.FC<{
     });
     return [...grouped.entries()];
   }, [filteredItems]);
+  const galleryItems = useMemo(
+    () => groups.flatMap(([, group]) => group),
+    [groups],
+  );
 
   const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : "Links";
   const toggleSelection = (itemId: string) => {
@@ -472,13 +477,20 @@ const ResourceGallery: React.FC<{
     }
   };
   const startLongPress = (itemId: string, event: React.PointerEvent<HTMLButtonElement>) => {
-    if (selectionMode || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     cancelLongPress();
     selectionPointerDown.current = true;
     longPressTriggered.current = false;
+    const baseIds = new Set(selectedIds);
+    baseIds.delete(itemId);
+    if (selectionMode) {
+      selectionDragRef.current = { anchorId: itemId, baseIds };
+      return;
+    }
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null;
       longPressTriggered.current = true;
+      selectionDragRef.current = { anchorId: itemId, baseIds };
       setSelectionMode(true);
       setSelectedIds(new Set([itemId]));
     }, 500);
@@ -486,10 +498,19 @@ const ResourceGallery: React.FC<{
   const releaseSelectionPointer = () => {
     cancelLongPress();
     selectionPointerDown.current = false;
+    selectionDragRef.current = null;
   };
   const handleMediaPointerEnter = (itemId: string) => {
     if (!selectionMode || !selectionPointerDown.current) return;
-    setSelectedIds((current) => current.has(itemId) ? current : new Set(current).add(itemId));
+    const drag = selectionDragRef.current;
+    if (!drag) return;
+    const anchorIndex = galleryItems.findIndex((item) => item.id === drag.anchorId);
+    const currentIndex = galleryItems.findIndex((item) => item.id === itemId);
+    if (anchorIndex < 0 || currentIndex < 0) return;
+    const start = Math.min(anchorIndex, currentIndex);
+    const end = Math.max(anchorIndex, currentIndex);
+    const range = galleryItems.slice(start, end + 1).map((item) => item.id);
+    setSelectedIds(new Set([...drag.baseIds, ...range]));
   };
   const handleMediaClick = (item: CloudItem) => {
     if (longPressTriggered.current) {
@@ -698,7 +719,7 @@ const CalendarPicker: React.FC<{
   </div>;
 };
 
-const ResourceSection: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+const ResourceSection: React.FC<{ label: string; count: number; children: React.ReactNode }> = ({ label, count, children }) => {
   const [expanded, setExpanded] = useState(true);
   const contentId = `cloud-resource-section-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
@@ -711,7 +732,12 @@ const ResourceSection: React.FC<{ label: string; children: React.ReactNode }> = 
         aria-controls={contentId}
         onClick={() => setExpanded((open) => !open)}
       >
-        <span>{label}</span>
+        <span className="flex items-center gap-2">
+          <span>{label}</span>
+          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-surface-overlay px-1.5 py-0.5 text-[11px] font-medium text-text-muted" aria-label={`${count} mục`}>
+            {count}
+          </span>
+        </span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
           aria-hidden="true"

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CloudItem, CloudQuota } from "../types";
 import { CloudConversationInfoPanel } from "./CloudConversationInfoPanel";
+import { CloudResourcesPreview } from "./CloudResourcesPreview";
 
 const item: CloudItem = {
   id: "item-1",
@@ -87,6 +88,8 @@ describe("CloudConversationInfoPanel", () => {
     expect(screen.getByRole("img", { name: "photo.png" })).not.toBeNull();
     expect(screen.getByRole("button", { name: /File/ })).not.toBeNull();
     expect(screen.getByRole("button", { name: /Link/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Ảnh\/Video.*1/ })).not.toBeNull();
+    expect(screen.getAllByLabelText("1 mục")).toHaveLength(3);
     expect(screen.getByRole("button", { name: /Thùng rác/ })).not.toBeNull();
     expect(screen.queryByText("voice-recording.webm")).toBeNull();
 
@@ -131,5 +134,38 @@ describe("CloudConversationInfoPanel", () => {
       }),
     );
     expect(onRequestQuota).toHaveBeenCalledTimes(1);
+  });
+
+  it("shrinks a media drag selection when the pointer moves back", () => {
+    vi.useFakeTimers();
+    try {
+      const mediaItems = Array.from({ length: 4 }, (_, index): CloudItem => ({
+        ...imageItem,
+        id: `image-${index + 1}`,
+        title: `photo-${index + 1}.png`,
+        accessUrl: `https://cloud.test/photo-${index + 1}.png`,
+      }));
+
+      render(<CloudResourcesPreview items={mediaItems} />);
+      fireEvent.click(screen.getByRole("button", { name: "Xem tất cả" }));
+
+      const gallery = screen.getByRole("region", { name: "Kho lưu trữ" });
+      const mediaButtons = mediaItems.map((media) =>
+        within(gallery).getByRole("button", { name: media.title ?? "" }),
+      );
+
+      fireEvent.pointerDown(mediaButtons[0], { button: 0, pointerType: "touch" });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.pointerEnter(mediaButtons[2], { pointerType: "touch" });
+      expect(screen.getByText("3 hình ảnh")).not.toBeNull();
+
+      fireEvent.pointerEnter(mediaButtons[1], { pointerType: "touch" });
+      expect(screen.getByText("2 hình ảnh")).not.toBeNull();
+      fireEvent.pointerUp(mediaButtons[1], { pointerType: "touch" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
