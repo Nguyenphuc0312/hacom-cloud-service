@@ -10,11 +10,14 @@
  * - Element.scrollTo shim (jsdom)
  */
 
-import { beforeAll } from "vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, beforeAll } from "vitest";
 
 beforeAll(() => {
   // No-op: timeout configuration if needed in the future
 });
+
+afterEach(cleanup);
 
 // ResizeObserver is not implemented in jsdom — install a minimal shim
 // so component tests that call new ResizeObserver() don't throw.

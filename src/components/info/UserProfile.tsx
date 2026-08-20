@@ -406,10 +406,21 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   }, [showReminders, conversationId]);
 
   const currentAlias = useFriendshipStore((s) => s.friendByUserId[userId]?.alias ?? null);
-  const [isEditingAlias, setIsEditingAlias] = React.useState(false);
-  const [aliasInput, setAliasInput] = React.useState("");
-  const [isSavingAlias, setIsSavingAlias] = React.useState(false);
+  // Tag the transient editor state with its owner. A profile surface can swap
+  // target users without unmounting; a plain boolean would expose A's draft on
+  // B and could save it against B's friendship.
+  const [editingAliasUserId, setEditingAliasUserId] = React.useState<string | null>(
+    null,
+  );
+  const [aliasDraft, setAliasDraft] = React.useState<{
+    userId: string;
+    value: string;
+  } | null>(null);
+  const [savingAliasUserId, setSavingAliasUserId] = React.useState<string | null>(
+    null,
+  );
   const aliasInputRef = React.useRef<HTMLInputElement>(null);
+  const aliasEditButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const {
     refreshDirectory,
@@ -600,31 +611,81 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }, [isSelf, onStartConversation, t, userId]);
 
+  const aliasInput = aliasDraft?.userId === userId ? aliasDraft.value : "";
+  const isEditingAlias =
+    editingAliasUserId === userId && aliasDraft?.userId === userId;
+  const isSavingAlias = savingAliasUserId === userId;
+
+  const updateAliasInput = React.useCallback(
+    (value: string) => {
+      setAliasDraft((draft) =>
+        draft?.userId === userId ? { ...draft, value } : draft,
+      );
+    },
+    [userId],
+  );
+
   const startEditAlias = React.useCallback(() => {
-    setAliasInput(currentAlias ?? displayName);
-    setIsEditingAlias(true);
+    if (relationship.kind !== "friend") return;
+    setAliasDraft({ userId, value: currentAlias ?? displayName });
+    setEditingAliasUserId(userId);
     setTimeout(() => aliasInputRef.current?.focus(), 0);
-  }, [currentAlias, displayName]);
+  }, [currentAlias, displayName, relationship.kind, userId]);
+
+  const cancelEditAlias = React.useCallback(() => {
+    setEditingAliasUserId((editingUserId) =>
+      editingUserId === userId ? null : editingUserId,
+    );
+    setAliasDraft((draft) =>
+      draft?.userId === userId ? null : draft,
+    );
+    setTimeout(() => aliasEditButtonRef.current?.focus(), 0);
+  }, [userId]);
 
   const saveAlias = React.useCallback(async () => {
+    const aliasTargetUserId = userId;
     const friendshipId =
       relationship.kind === "friend" ? relationship.friendshipId : undefined;
-    if (!friendshipId) return;
+    if (
+      !friendshipId ||
+      editingAliasUserId !== aliasTargetUserId ||
+      aliasDraft?.userId !== aliasTargetUserId ||
+      savingAliasUserId === aliasTargetUserId
+    ) {
+      return;
+    }
+
     const trimmed = aliasInput.trim();
     const newAlias = trimmed || null;
-    setIsSavingAlias(true);
+    setSavingAliasUserId(aliasTargetUserId);
     try {
       await friendshipApi.setAlias(friendshipId, newAlias);
-      useFriendshipStore.getState().setLocalAlias(userId, newAlias);
-      if (!newAlias) enrichUserProfile(userId);
-      setIsEditingAlias(false);
+      useFriendshipStore.getState().setLocalAlias(aliasTargetUserId, newAlias);
+      if (!newAlias) enrichUserProfile(aliasTargetUserId);
+      setEditingAliasUserId((editingUserId) =>
+        editingUserId === aliasTargetUserId ? null : editingUserId,
+      );
+      setAliasDraft((draft) =>
+        draft?.userId === aliasTargetUserId ? null : draft,
+      );
+      setTimeout(() => aliasEditButtonRef.current?.focus(), 0);
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(apiError.message || t("friends:alias.saveFailed"));
     } finally {
-      setIsSavingAlias(false);
+      setSavingAliasUserId((savingUserId) =>
+        savingUserId === aliasTargetUserId ? null : savingUserId,
+      );
     }
-  }, [aliasInput, relationship, t, userId]);
+  }, [
+    aliasInput,
+    aliasDraft,
+    editingAliasUserId,
+    relationship,
+    savingAliasUserId,
+    t,
+    userId,
+  ]);
 
   const commonGroups = React.useMemo(
     () =>
@@ -1037,6 +1098,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               isHidden={isHiddenLocally}
               commonGroupCount={commonGroups.length}
               onClose={onClose}
+              isEditingAlias={isEditingAlias}
+              aliasInput={aliasInput}
+              aliasInputRef={aliasInputRef}
+              aliasEditButtonRef={aliasEditButtonRef}
+              isSavingAlias={isSavingAlias}
+              onAliasInputChange={updateAliasInput}
+              onSaveAlias={() => void saveAlias()}
+              onCancelAlias={cancelEditAlias}
               onEditAlias={relationship.kind === "friend" ? startEditAlias : undefined}
               onToggleMute={() =>
                 isMuted ? void handleUnmuteConversation() : setIsMuteDialogOpen(true)
@@ -1150,41 +1219,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
                   <div className="w-full min-w-0 space-y-1.5">
                     {isEditingAlias ? (
-                      <div className="flex flex-col items-center gap-3 py-1">
-                        <input
-                          ref={aliasInputRef}
-                          value={aliasInput}
-                          onChange={(e) => setAliasInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveAlias();
-                            if (e.key === "Escape") setIsEditingAlias(false);
-                          }}
-                          placeholder={t("friends:alias.placeholder")}
-                          maxLength={100}
-                          disabled={isSavingAlias}
-                          className="w-full border-0 border-b-2 border-[#1565C0]/40 bg-transparent pb-1 text-center text-2xl font-semibold text-text-primary placeholder:font-normal placeholder:text-text-muted/50 focus:border-[#1565C0] focus:outline-none disabled:opacity-50 transition-colors"
-                        />
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void saveAlias()}
-                            disabled={isSavingAlias}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-[#E7E9EB] transition-colors hover:bg-[#1976D2] disabled:opacity-50"
-                          >
-                            <CheckIcon className="h-3.5 w-3.5" />
-                            {t("common:actions.save")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsEditingAlias(false)}
-                            disabled={isSavingAlias}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-surface-overlay px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
-                          >
-                            <XMarkIcon className="h-3.5 w-3.5" />
-                            {t("common:actions.cancel")}
-                          </button>
-                        </div>
-                      </div>
+                      <AliasEditor
+                        value={aliasInput}
+                        inputRef={aliasInputRef}
+                        isSaving={isSavingAlias}
+                        variant="profile"
+                        onChange={updateAliasInput}
+                        onSave={() => void saveAlias()}
+                        onCancel={cancelEditAlias}
+                      />
                     ) : (
                       <div className="flex flex-wrap items-center justify-center gap-2">
                         <h2 className="text-2xl font-semibold text-text-primary">
@@ -1193,9 +1236,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         {relationship.kind === "friend" && (
                           <button
                             type="button"
+                            ref={aliasEditButtonRef}
                             onClick={startEditAlias}
+                            aria-label={t("friends:alias.editTitle")}
                             title={t("friends:alias.editTitle")}
-                            className="icon-button-surface h-6 w-6 opacity-50 transition-opacity hover:opacity-100"
+                            className="icon-button-surface h-9 w-9 opacity-50 transition-opacity hover:opacity-100"
                           >
                             <PencilSquareIcon className="h-3.5 w-3.5" />
                           </button>
@@ -1608,6 +1653,87 @@ const DirectSectionHeader: React.FC<{
   </button>
 );
 
+const AliasEditor: React.FC<{
+  value: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  isSaving: boolean;
+  variant: "profile" | "direct";
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}> = ({
+  value,
+  inputRef,
+  isSaving,
+  variant,
+  onChange,
+  onSave,
+  onCancel,
+}) => {
+  const { t } = useTranslation(["friends", "common"]);
+  const inputId = React.useId();
+  const isDirect = variant === "direct";
+
+  return (
+    <div
+      className={clsx(
+        "flex flex-col items-center gap-3",
+        isDirect ? "mt-4" : "py-1",
+      )}
+      aria-busy={isSaving}
+    >
+      <label className="sr-only" htmlFor={inputId}>
+        {t("friends:alias.editTitle")}
+      </label>
+      <input
+        id={inputId}
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !isSaving) {
+            event.preventDefault();
+            onSave();
+          }
+          if (event.key === "Escape" && !isSaving) {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+        placeholder={t("friends:alias.placeholder")}
+        maxLength={100}
+        disabled={isSaving}
+        className={clsx(
+          "border-0 border-b-2 border-[#1565C0]/40 bg-transparent pb-1 text-center font-semibold text-text-primary placeholder:font-normal placeholder:text-text-muted/50 focus:border-[#1565C0] focus:outline-none disabled:opacity-50 transition-colors",
+          isDirect
+            ? "w-full max-w-[280px] text-base"
+            : "w-full text-2xl",
+        )}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={isSaving}
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#1565C0] px-4 py-1.5 text-sm font-medium text-[#E7E9EB] transition-colors hover:bg-[#1976D2] disabled:opacity-50"
+        >
+          <CheckIcon className="h-3.5 w-3.5" />
+          {t("common:actions.save")}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-surface-overlay px-4 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          <XMarkIcon className="h-3.5 w-3.5" />
+          {t("common:actions.cancel")}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const DirectConversationInfoPanel: React.FC<{
   user: ProfileUser | null;
   conversationId: string;
@@ -1620,6 +1746,14 @@ const DirectConversationInfoPanel: React.FC<{
   hiddenUpdating?: boolean;
   commonGroupCount: number;
   onClose: () => void;
+  isEditingAlias: boolean;
+  aliasInput: string;
+  aliasInputRef: React.RefObject<HTMLInputElement | null>;
+  aliasEditButtonRef: React.RefObject<HTMLButtonElement | null>;
+  isSavingAlias: boolean;
+  onAliasInputChange: (value: string) => void;
+  onSaveAlias: () => void;
+  onCancelAlias: () => void;
   onEditAlias?: () => void;
   onToggleMute: () => void;
   onTogglePin: () => void;
@@ -1642,6 +1776,14 @@ const DirectConversationInfoPanel: React.FC<{
   hiddenUpdating = false,
   commonGroupCount,
   onClose,
+  isEditingAlias,
+  aliasInput,
+  aliasInputRef,
+  aliasEditButtonRef,
+  isSavingAlias,
+  onAliasInputChange,
+  onSaveAlias,
+  onCancelAlias,
   onEditAlias,
   onToggleMute,
   onTogglePin,
@@ -1654,6 +1796,7 @@ const DirectConversationInfoPanel: React.FC<{
   onDeleteHistory,
 }) => {
   const [securityOpen, setSecurityOpen] = React.useState(true);
+  const { t } = useTranslation(["friends"]);
 
   return (
     <>
@@ -1667,21 +1810,35 @@ const DirectConversationInfoPanel: React.FC<{
             status={effectiveStatus}
             showStatus
           />
-          <div className="mt-4 flex items-center justify-center gap-1.5">
-            <h3 className="line-clamp-2 max-w-[220px] text-base font-bold text-text-primary">
-              {displayName}
-            </h3>
-            {onEditAlias ? (
-              <button
-                type="button"
-                onClick={onEditAlias}
-                className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                aria-label="Đổi tên gợi nhớ"
-              >
-                <PencilSquareIcon className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-          </div>
+          {isEditingAlias ? (
+            <AliasEditor
+              value={aliasInput}
+              inputRef={aliasInputRef}
+              isSaving={isSavingAlias}
+              variant="direct"
+              onChange={onAliasInputChange}
+              onSave={onSaveAlias}
+              onCancel={onCancelAlias}
+            />
+          ) : (
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+              <h3 className="line-clamp-2 max-w-[220px] text-base font-bold text-text-primary">
+                {displayName}
+              </h3>
+              {onEditAlias ? (
+                <button
+                  ref={aliasEditButtonRef}
+                  type="button"
+                  onClick={onEditAlias}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  aria-label={t("friends:alias.editTitle")}
+                  title={t("friends:alias.editTitle")}
+                >
+                  <PencilSquareIcon className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+          )}
 
           <div className="mt-5 grid grid-cols-3 gap-2">
             <DirectActionButton

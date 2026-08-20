@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
-import { fireEvent } from "@testing-library/dom";
+import { fireEvent, renderHook } from "@testing-library/react";
 import { useClickOutside } from "./useClickOutside";
 
 const mount = () => {

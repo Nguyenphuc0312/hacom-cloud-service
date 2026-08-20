@@ -880,6 +880,15 @@ export const FriendsPage: React.FC = () => {
     [friends, enrichedNameMap, enrichedHrMap],
   );
 
+  const previewDisplayName = useMemo(() => {
+    if (!previewTarget) return null;
+
+    const currentFriend = friendItems.find(
+      (friend) => friend.id === previewTarget.userId,
+    );
+    return toDisplayName(currentFriend ?? previewTarget.initialUser);
+  }, [friendItems, previewTarget]);
+
   // ponytail: lọc client-side trong số bạn ĐÃ tải. Nếu cần tìm bạn ở trang chưa
   // tải (list rất dài), nâng lên gọi API /friends?q= khi backend hỗ trợ.
   // Khớp qua `matchesContactQuery` để CÙNG luật với tab Khám phá (bỏ dấu).
@@ -1314,7 +1323,7 @@ export const FriendsPage: React.FC = () => {
                   {activeTab === "qr"
                     ? t("friends:tabs.qr")
                     : previewTarget
-                      ? toDisplayName(previewTarget.initialUser)
+                      ? previewDisplayName
                       : t("friends:previewTitle")}
                 </h2>
                 <p className="mt-1 text-sm text-text-secondary">
