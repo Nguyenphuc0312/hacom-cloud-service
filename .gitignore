@@ -13,3 +13,6 @@ tests/env/*.env
 frontend/chat-web-client/.env
 frontend/chat-web-client/.env.*
 !frontend/chat-web-client/.env.example
+node_modules
+dist/
+.env.local

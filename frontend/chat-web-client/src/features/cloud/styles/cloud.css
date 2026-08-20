@@ -1,5 +1,11 @@
 .cloud-workspace {
   display: flex;
+  /* Cloud is rendered inside the same shell as Hacom Chat. Inherit the
+     shared family and base rhythm so cloud-only panels never fall back to a
+     browser-dependent font. */
+  font-family: inherit;
+  font-size: var(--font-size-body, 1rem);
+  line-height: var(--line-height-body, 1.5rem);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -58,7 +64,7 @@
   border-radius: 9px;
   padding: 0 10px;
   color: hsl(var(--color-text-secondary));
-  font-size: 13px;
+  font-size: var(--font-size-sm, 0.875rem);
   font-weight: 500;
   transition:
     background-color 120ms ease,
@@ -84,7 +90,7 @@
 .cloud-sidebar__count {
   min-width: 22px;
   color: hsl(var(--color-text-muted));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -95,7 +101,7 @@
   padding: 1px 6px;
   background: hsl(var(--color-surface));
   color: hsl(var(--color-text-muted));
-  font-size: 9px;
+  font-size: 0.625rem;
   font-weight: 600;
   line-height: 15px;
 }
@@ -136,7 +142,7 @@
   justify-content: center;
   gap: 6px;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 500;
 }
 
@@ -183,7 +189,7 @@
   padding: 0 9px;
   background: hsl(var(--color-success) / 0.08);
   color: hsl(var(--color-success));
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -217,7 +223,7 @@
   gap: 7px;
   padding: 0 11px;
   color: hsl(var(--color-text-muted));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   font-weight: 600;
   transition: color 120ms ease;
 }
@@ -327,7 +333,7 @@
   padding: 4px 8px;
   background: hsl(var(--color-surface-hover));
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .cloud-timeline {
@@ -344,7 +350,7 @@
   gap: 12px;
   padding: 0 5px 9px;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.035em;
   text-transform: uppercase;
@@ -419,7 +425,7 @@
   gap: 4px;
   border-radius: 999px;
   padding: 0 7px;
-  font-size: 9px;
+  font-size: 0.625rem;
   font-weight: 600;
 }
 
@@ -478,7 +484,7 @@
 .cloud-inspector--empty h2 {
   margin-top: 14px;
   color: hsl(var(--color-text-primary));
-  font-size: 14px;
+  font-size: var(--font-size-sm, 0.875rem);
   font-weight: 600;
 }
 
@@ -487,7 +493,7 @@
   max-width: 260px;
   margin-top: 5px;
   color: hsl(var(--color-text-muted));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.55;
 }
 
@@ -541,7 +547,7 @@
   padding: 12px;
   background: hsl(var(--color-background) / 0.7);
   color: hsl(var(--color-text-secondary));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -556,7 +562,7 @@
   border-radius: 10px;
   padding: 10px 11px;
   color: hsl(var(--color-primary));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   transition: background-color 120ms ease;
 }
 
@@ -575,7 +581,7 @@
   gap: 12px;
   border-bottom: 1px solid hsl(var(--color-border) / 0.75);
   padding: 10px 0;
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
 }
 
 .cloud-inspector__metadata dt {
@@ -605,7 +611,7 @@
   padding: 10px;
   background: hsl(var(--color-warning) / 0.09);
   color: hsl(var(--color-text-secondary));
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.5;
 }
 
@@ -624,7 +630,7 @@
   padding: 9px 10px;
   background: hsl(var(--color-background));
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   text-align: left;
 }
 
@@ -654,7 +660,7 @@
   border-radius: 8px;
   padding: 0 10px;
   color: hsl(var(--color-text-secondary));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   font-weight: 600;
 }
 
@@ -674,7 +680,7 @@
   padding: 1px 5px;
   background: hsl(var(--color-surface-active));
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   text-align: center;
 }
 
@@ -687,7 +693,7 @@
   gap: 10px;
   overflow-x: auto;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   white-space: nowrap;
   scrollbar-width: none;
 }
@@ -734,14 +740,14 @@ button.cloud-delete-choice--danger:hover {
 
 .cloud-delete-choice h3 {
   color: hsl(var(--color-text-primary));
-  font-size: 13px;
+  font-size: var(--font-size-sm, 0.875rem);
   font-weight: 700;
 }
 
 .cloud-delete-choice p {
   margin-top: 3px;
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.5;
 }
 
@@ -751,7 +757,7 @@ button.cloud-delete-choice--danger:hover {
   gap: 5px;
   margin-top: 7px;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .cloud-trash-timeline {
@@ -792,7 +798,7 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-message__body h3 {
   overflow-wrap: anywhere;
   color: hsl(var(--color-text-primary));
-  font-size: 13px;
+  font-size: var(--font-size-sm, 0.875rem);
   font-weight: 650;
 }
 
@@ -801,7 +807,7 @@ button.cloud-delete-choice--danger:hover {
   margin-top: 3px;
   overflow: hidden;
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -813,7 +819,7 @@ button.cloud-delete-choice--danger:hover {
   gap: 8px 12px;
   margin-top: 8px;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .cloud-trash-message__meta span {
@@ -825,7 +831,7 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-message__time {
   padding: 0 14px 8px;
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   text-align: right;
 }
 
@@ -901,7 +907,7 @@ button.cloud-delete-choice--danger:hover {
   gap: 8px;
   padding: 9px 11px;
   color: hsl(var(--color-danger));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   text-align: left;
 }
 
@@ -922,14 +928,14 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-empty h2 {
   margin-top: 12px;
   color: hsl(var(--color-text-primary));
-  font-size: 14px;
+  font-size: var(--font-size-sm, 0.875rem);
   font-weight: 650;
 }
 
 .cloud-trash-empty p {
   max-width: 320px;
   margin-top: 5px;
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.5;
 }
 
@@ -944,7 +950,7 @@ button.cloud-delete-choice--danger:hover {
   padding: 9px 12px;
   background: hsl(var(--color-warning) / 0.09);
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.45;
   text-align: center;
 }
@@ -1009,7 +1015,7 @@ button.cloud-delete-choice--danger:hover {
     padding: 6px 11px;
     background: hsl(var(--color-surface));
     color: hsl(var(--color-text-secondary));
-    font-size: 11px;
+    font-size: var(--font-size-xs, 0.75rem);
     font-weight: 600;
   }
 
@@ -1188,7 +1194,7 @@ button.cloud-delete-choice--danger:hover {
   flex: 0 0 auto;
   padding: 0 13px;
   color: hsl(var(--color-text-muted));
-  font-size: 12px;
+  font-size: var(--font-size-xs, 0.75rem);
   font-weight: 600;
   white-space: nowrap;
   transition:
@@ -1237,7 +1243,7 @@ button.cloud-delete-choice--danger:hover {
   padding: 0 24px;
   background: hsl(var(--color-background) / 0.92);
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .cloud-service-dot {
@@ -1299,7 +1305,7 @@ button.cloud-delete-choice--danger:hover {
   padding: 11px 13px;
   background: hsl(var(--color-surface) / 0.8);
   color: hsl(var(--color-text-muted));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.5;
   text-align: left;
   box-shadow: var(--shadow-xs);
@@ -1324,7 +1330,7 @@ button.cloud-delete-choice--danger:hover {
   padding: 4px 10px;
   background: hsl(var(--color-surface));
   color: hsl(var(--color-text-muted));
-  font-size: 10px;
+  font-size: 0.625rem;
   box-shadow: var(--shadow-xs);
 }
 
@@ -1351,7 +1357,7 @@ button.cloud-delete-choice--danger:hover {
 
 .cloud-documents__composer .cloud-composer__tab {
   padding: 0 9px;
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
 }
 
 .cloud-documents__composer .cloud-composer__body {
@@ -1378,7 +1384,7 @@ button.cloud-delete-choice--danger:hover {
   gap: 10px;
   padding: 0 8px 10px;
   color: hsl(var(--color-text-muted));
-  font-size: 9px;
+  font-size: 0.625rem;
   letter-spacing: 0.02em;
 }
 
@@ -1490,7 +1496,7 @@ button.cloud-delete-choice--danger:hover {
   margin-top: 3px;
   overflow: hidden;
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1503,7 +1509,7 @@ button.cloud-delete-choice--danger:hover {
   gap: 8px;
   margin-top: 5px;
   color: hsl(var(--color-text-muted));
-  font-size: 9px;
+  font-size: 0.625rem;
   line-height: 1;
 }
 
@@ -1622,7 +1628,7 @@ button.cloud-delete-choice--danger:hover {
   padding: 6px 10px;
   background: hsl(var(--color-surface) / 0.96);
   color: hsl(var(--color-text-secondary));
-  font-size: 11px;
+  font-size: var(--font-size-xs, 0.75rem);
   box-shadow: var(--shadow-xs);
 }
 

@@ -18,6 +18,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
+  ClockIcon,
   EyeIcon,
   ExclamationTriangleIcon,
   ShieldExclamationIcon,
@@ -28,7 +29,6 @@ import { resolvePublicResourceUrl } from "../../config";
 import { useInViewport } from "../../hooks/useInViewport";
 import {
   formatFileSize,
-  getFileExtension,
   getFileIconType,
   getPreviewType,
   isFileTooLargeForPreview,
@@ -74,7 +74,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     attachment.fileName,
   ) as PreviewType;
   const iconType = getFileIconType(attachment.mimeType, attachment.fileName) as FileIconType;
-  const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
   // Office documents (Word/Excel/PowerPoint) + PDF/text/csv/media are all
   // previewable in-browser. Only truly opaque types (archives, unknown) and
@@ -451,12 +450,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       <div
         className={clsx(
           "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover/file:scale-105",
-          isOwn
-            ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15]"
-            : "bg-[#DBEAFE]/70 ring-1 ring-inset ring-[#1976D2]/10",
         )}
       >
-        <FileTypeIcon type={iconType} />
+        <FileTypeIcon type={iconType} fileName={attachment.fileName} className="h-11 w-11" />
       </div>
 
       {/* File info */}
@@ -469,26 +465,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
           )}
         />
-        <div className="mt-0.5 flex items-center gap-1.5">
-          {extension ? (
-            <span
-              className={clsx(
-                "rounded-md px-1.5 py-px text-[10px] font-bold uppercase tracking-wide",
-                isOwn
-                  ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))/0.85]"
-                  : "bg-[#1976D2]/10 text-[#1565C0]",
-              )}
-            >
-              {extension}
-            </span>
-          ) : null}
-          <span
-            className={clsx(
-              "text-xs",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
-            )}
-          >
-            {size}
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+          <span className={clsx("shrink-0", isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted")}>{size}</span>
+          <span className={clsx("shrink-0", isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.5]" : "text-text-muted/50")} aria-hidden="true">·</span>
+          <span className={clsx("flex min-w-0 items-center gap-1 whitespace-nowrap", isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.8]" : "text-[#1565C0]")}>
+            <ClockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">Tải về để xem lâu dài</span>
           </span>
         </div>
       </div>

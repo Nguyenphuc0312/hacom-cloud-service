@@ -8,6 +8,7 @@ import {
 } from "../../../types";
 import { CLOUD_CONVERSATION_ID } from "../constants";
 import type { CloudItem } from "../types";
+import { normalizeCloudItemType } from "./cloudFormat";
 
 const resolveMessageStatus = (item: CloudItem): Message["status"] => {
   switch (item.status) {
@@ -69,6 +70,9 @@ export const cloudItemToMessage = (
     file: string;
   },
 ): Message => {
+  // Keep the message renderer safe even when a caller passes an unhydrated
+  // item directly (legacy Cloud projections sometimes label CSV as image).
+  item = normalizeCloudItemType(item);
   const createdAt = new Date(item.createdAt);
   const safeCreatedAt = Number.isNaN(createdAt.getTime())
     ? new Date()

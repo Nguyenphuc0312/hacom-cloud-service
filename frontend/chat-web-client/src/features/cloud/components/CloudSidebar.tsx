@@ -2,20 +2,19 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  Clock3,
-  FileText,
-  FolderOpen,
-  HardDrive,
-  Image,
-  Link2,
-  LoaderCircle,
-  Search,
-  Share2,
-  StickyNote,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
+  CircleStackIcon as HardDrive,
+  ClockIcon as Clock3,
+  DocumentTextIcon as FileText,
+  FolderOpenIcon as FolderOpen,
+  MagnifyingGlassIcon as Search,
+  PhotoIcon as Image,
+  ArrowPathIcon as LoaderCircle,
+  LinkIcon as Link2,
+  ShareIcon as Share2,
+  SignalIcon as Wifi,
+  SignalSlashIcon as WifiOff,
+  TrashIcon as Trash2,
+} from "@heroicons/react/24/outline";
 import { Input } from "../../../components/ui";
 import type {
   CloudFilter,
@@ -37,7 +36,7 @@ interface CloudSidebarProps {
 
 const filterIcons = {
   all: Clock3,
-  text: StickyNote,
+  text: FileText,
   image: Image,
   file: FileText,
   link: Link2,

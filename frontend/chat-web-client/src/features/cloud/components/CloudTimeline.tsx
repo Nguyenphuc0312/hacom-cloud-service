@@ -1,7 +1,11 @@
 import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Files, LoaderCircle } from "lucide-react";
+import {
+  ArrowPathIcon as LoaderCircle,
+  ArrowTopRightOnSquareIcon as ExternalLink,
+  DocumentDuplicateIcon as Files,
+} from "@heroicons/react/24/outline";
 import { Button } from "../../../components/ui";
 import type { CloudItem } from "../types";
 import {

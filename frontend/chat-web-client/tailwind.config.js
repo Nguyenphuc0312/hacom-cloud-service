@@ -10,12 +10,19 @@ export default {
       screens: { xs: "360px" },
       fontFamily: {
         sans: [
+          // Match Hacom Chat: emoji font is restricted by unicode-range in
+          // src/index.css, while regular text remains Inter/system UI.
+          '"Noto Color Emoji"',
           "var(--font-family-sans)",
           "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "sans-serif",
+          '"Apple Color Emoji"',
+          '"Segoe UI Emoji"',
+          '"Noto Color Emoji"',
+          '"Segoe UI Symbol"',
         ],
       },
       fontSize: {
