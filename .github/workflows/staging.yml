@@ -15,6 +15,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    environment: staging
     steps:
       - uses: actions/checkout@v4
         with:
