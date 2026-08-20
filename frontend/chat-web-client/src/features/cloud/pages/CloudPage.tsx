@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -278,8 +278,6 @@ type CloudSelectionDrag = {
 export default function CloudPage() {
   const { t } = useTranslation("cloud");
   const navigate = useNavigate();
-  const location = useLocation();
-  const isCloudTrashRoute = location.pathname === ROUTE_PATHS.CLOUD_TRASH;
   const authUser = useAuthStore((state) => state.user);
   const { width, chatLayoutBreakpoint } = useResponsive();
   const [draft, setDraft] = useState("");
@@ -287,13 +285,13 @@ export default function CloudPage() {
   const [search, setSearch] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<CloudViewMode>(() =>
-    isCloudTrashRoute ? "trash" : "active",
-  );
+  // Trash resources remain available from the Cloud information panel/gallery;
+  // the legacy standalone trash page has been removed.
+  const viewMode = "active" as CloudViewMode;
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
   const timelineScrollTopRef = useRef<number | null>(null);
-  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(isCloudTrashRoute);
+  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const isSelectionModeRef = useRef(false);
@@ -608,20 +606,6 @@ export default function CloudPage() {
       clearNativeTextSelection();
     }
   }, [isSelectionMode, selectedMessageIds]);
-
-  useEffect(() => {
-    setViewMode(isCloudTrashRoute ? "trash" : "active");
-    if (isCloudTrashRoute) setIsInfoPanelOpen(true);
-  }, [isCloudTrashRoute]);
-
-  const handleViewModeChange = useCallback((mode: CloudViewMode) => {
-    setViewMode(mode);
-    if (mode === "trash" && location.pathname !== ROUTE_PATHS.CLOUD_TRASH) {
-      navigate(ROUTE_PATHS.CLOUD_TRASH);
-    } else if (mode === "active" && location.pathname === ROUTE_PATHS.CLOUD_TRASH) {
-      navigate(ROUTE_PATHS.CLOUD);
-    }
-  }, [location.pathname, navigate]);
 
   useEffect(() => {
     setIsSelectionMode(false);
@@ -1570,8 +1554,6 @@ export default function CloudPage() {
                 quota={workspace.quota}
                 quotaRequest={workspace.quotaRequest}
                 showQuotaRequest={showQuotaRequest}
-                viewMode={viewMode}
-                onViewModeChange={handleViewModeChange}
                 onRequestQuota={() => setIsQuotaRequestOpen(true)}
                 isMutating={workspace.isMutating}
                 onRestoreTrashItem={handleRestore}
