@@ -34,6 +34,8 @@ jobs:
             chat-shared-types/package-lock.json
       - run: npm ci
         working-directory: chat-shared-types
+      - run: npm run build
+        working-directory: chat-shared-types
       - run: npm ci
         working-directory: chat-web-client
       - run: npm run lint && npm run typecheck && npm run build
