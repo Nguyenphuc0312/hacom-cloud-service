@@ -2,15 +2,10 @@ import React, { useMemo } from "react";
 import {
   ArrowRightIcon as ArrowRight,
   FolderOpenIcon as FolderOpen,
-  PlusCircleIcon as CirclePlus,
   XMarkIcon as X,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import type {
-  CloudItem,
-  CloudQuota,
-  CloudQuotaRequest,
-} from "../types";
+import type { CloudItem, CloudQuota } from "../types";
 import { formatBytes } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
 import { CloudResourcesPreview } from "./CloudResourcesPreview";
@@ -19,16 +14,11 @@ interface CloudConversationInfoPanelProps {
   items: CloudItem[];
   trashItems: CloudItem[];
   quota: CloudQuota | null;
-  quotaRequest?: CloudQuotaRequest | null;
-  showQuotaRequest?: boolean;
-  onRequestQuota?: () => void;
   onLoadAllTrash?: () => Promise<void>;
   onClose: () => void;
   onManageCloud?: () => void;
-  isMutating?: boolean;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
-  onDeleteTrashItem?: (item: CloudItem) => void;
-  isLoadingTrash?: boolean;
+  onPermanentDeleteItem?: (itemId: string) => void | Promise<void>;
   onDeleteItem?: (item: CloudItem) => void | Promise<void>;
   onViewOriginalMessage?: (item: CloudItem) => void;
   onShowInFolder?: (item: CloudItem) => void;
@@ -44,32 +34,15 @@ const typeBytes = (items: CloudItem[], types: CloudItem["type"][]): number =>
 
 export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
-> = ({
-  items,
-  trashItems,
-  quota,
-  quotaRequest = null,
-  showQuotaRequest = false,
-  onRequestQuota,
-  onLoadAllTrash,
-  onClose,
-  onManageCloud,
-  isMutating = false,
-  onRestoreTrashItem,
-  onDeleteTrashItem,
-  isLoadingTrash = false,
-  onDeleteItem,
-  onViewOriginalMessage,
-  onShowInFolder,
-  showStorage = true,
-}) => {
-  const { i18n, t } = useTranslation("cloud");
+> = ({ items, trashItems, quota, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, showStorage = true }) => {
+  const { i18n } = useTranslation("cloud");
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
     ? {
         title: "Thông tin Hacom Cloud",
         close: "Đóng",
         workspace: "My Documents",
+        all: "Tất cả",
         trash: "Thùng rác",
         description:
           "Lưu trữ và truy cập nhanh những nội dung quan trọng của bạn trên Hacom Cloud",
@@ -83,6 +56,7 @@ export const CloudConversationInfoPanel: React.FC<
         title: "Hacom Cloud information",
         close: "Close",
         workspace: "My Documents",
+        all: "All",
         trash: "Trash",
         description:
           "Store and quickly access your important content on Hacom Cloud",
@@ -93,6 +67,8 @@ export const CloudConversationInfoPanel: React.FC<
         manage: "View and manage Hacom Cloud",
       };
 
+  // Link bytes remain part of the storage bar, but Link and Free are
+  // intentionally omitted from the legend per the My Documents UI contract.
   const categories = useMemo(
     () => [
       {
@@ -132,10 +108,7 @@ export const CloudConversationInfoPanel: React.FC<
     limitBytes > 0 ? Math.min(100, Math.max(0, (bytes / limitBytes) * 100)) : 0;
 
   return (
-    <aside
-      className="relative flex h-full min-h-0 flex-col bg-surface"
-      aria-label={labels.title}
-    >
+    <aside className="relative flex h-full min-h-0 flex-col bg-surface" aria-label={labels.title}>
       <header className="flex min-h-[var(--app-header-height)] items-center justify-between border-b border-border/70 px-5">
         <h2 className="text-[16px] font-semibold text-text-primary">{labels.title}</h2>
         <button
@@ -155,95 +128,55 @@ export const CloudConversationInfoPanel: React.FC<
           <p className="mt-2 max-w-[19rem] text-[13px] leading-5 text-text-muted">{labels.description}</p>
         </section>
 
-        {showStorage ? (
-          <section className="border-b border-border/60 px-5 py-5">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-[13px] font-semibold text-text-primary">{labels.storage}</h3>
-              <span className="text-[12px] font-semibold text-text-primary">
-                {formatBytes(quota?.usedBytes ?? 0)} / {formatBytes(limitBytes)}
+        {showStorage ? <section className="border-b border-border/60 px-5 py-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[13px] font-semibold text-text-primary">{labels.storage}</h3>
+            <span className="text-[12px] font-semibold text-text-primary">
+              {formatBytes(quota?.usedBytes ?? 0)} / {formatBytes(limitBytes)}
+            </span>
+          </div>
+          <div className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted" aria-label={labels.storage}>
+            {categories.map((category) => (
+              <span key={category.key} style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }} aria-hidden />
+            ))}
+            <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
+            <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-text-muted">
+            {categories.filter((category) => category.showLegend).map((category) => (
+              <span key={category.key} className="flex items-center gap-1.5">
+                <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
+                {category.label}
               </span>
-            </div>
-            <div
-              className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted"
-              aria-label={labels.storage}
-              role="meter"
-              aria-valuemin={0}
-              aria-valuemax={limitBytes}
-              aria-valuenow={Math.min(quota?.usedBytes ?? 0, limitBytes)}
+            ))}
+            <span className="flex items-center gap-1.5">
+              <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
+              {labels.trash}
+            </span>
+          </div>
+          {onManageCloud ? (
+            <button
+              type="button"
+              onClick={onManageCloud}
+              className="mt-5 flex w-full items-center gap-3 rounded-full border border-[#9BC5F5] px-4 py-3 text-left text-[15px] font-medium text-[#1565C0] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
             >
-              {categories.map((category) => (
-                <span
-                  key={category.key}
-                  style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }}
-                  aria-hidden
-                />
-              ))}
-              <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
-              <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] text-text-muted">
-              {categories.filter((category) => category.showLegend).map((category) => (
-                <span key={category.key} className="flex items-center gap-1.5">
-                  <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-                  {category.label}
-                </span>
-              ))}
-              <span className="flex items-center gap-1.5">
-                <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
-                {labels.trash}
-              </span>
-            </div>
-            {onManageCloud ? (
-              <button
-                type="button"
-                onClick={onManageCloud}
-                className="mt-5 flex w-full items-center gap-3 rounded-full border border-[#9BC5F5] px-4 py-3 text-left text-[15px] font-medium text-[#1565C0] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
-              >
-                <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
-                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
-              </button>
-            ) : null}
-            {showQuotaRequest ? (
-              <div className="mt-4 rounded-xl border border-brand-solid/20 bg-brand-soft/40 p-3">
-                <p className="text-xs leading-5 text-text-secondary">
-                  {quotaRequest?.status === "pending"
-                    ? t("quotaRequest.status.pending")
-                    : quotaRequest?.status === "approved"
-                      ? t("quotaRequest.status.approved")
-                      : quotaRequest?.status === "rejected"
-                        ? t("quotaRequest.status.rejected")
-                        : t("quotaRequest.action")}
-                </p>
-                {quotaRequest?.status !== "pending" && onRequestQuota ? (
-                  <button
-                    type="button"
-                    onClick={onRequestQuota}
-                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-solid hover:underline"
-                  >
-                    <CirclePlus className="h-4 w-4" aria-hidden />
-                    {t("quotaRequest.action")}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-        ) : null}
+              <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            </button>
+          ) : null}
+        </section> : null}
 
-        <div className="px-4 pb-4 pr-5">
-          <CloudResourcesPreview
-            items={items}
-            trashItems={trashItems}
-            onLoadAllTrash={onLoadAllTrash}
-            onRestoreTrashItem={onRestoreTrashItem}
-            onDeleteTrashItem={onDeleteTrashItem}
-            isMutating={isMutating}
-            isLoadingTrash={isLoadingTrash}
-            onDeleteItem={onDeleteItem}
-            onViewOriginalMessage={onViewOriginalMessage}
-            onShowInFolder={onShowInFolder}
-          />
-        </div>
+        <CloudResourcesPreview
+          items={items}
+          trashItems={trashItems}
+          onLoadAllTrash={onLoadAllTrash}
+          onRestoreTrashItem={onRestoreTrashItem}
+          onPermanentDeleteItem={onPermanentDeleteItem}
+          onDeleteItem={onDeleteItem}
+          onViewOriginalMessage={onViewOriginalMessage}
+          onShowInFolder={onShowInFolder}
+        />
       </div>
     </aside>
   );

@@ -42,7 +42,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   bare ? (
     <div
       className={clsx(
-        "chat-message-bubble relative inline-block box-border min-w-0 max-w-full",
+        "relative inline-block box-border min-w-0 max-w-full",
         isHighlighted && "message-highlight-pulse",
         className,
       )}
@@ -52,7 +52,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   ) : (
     <div
       className={clsx(
-        "chat-message-bubble relative inline-block box-border min-w-0 max-w-full overflow-hidden transition-colors",
+        "relative inline-block box-border min-w-0 max-w-full overflow-hidden transition-colors",
         hasError && "min-w-[8.5rem]",
         isOwn
           ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CloudItem, CloudQuota } from "../types";
 import { CloudConversationInfoPanel } from "./CloudConversationInfoPanel";
@@ -19,7 +19,6 @@ const trashItem: CloudItem = {
   id: "trash-1",
   status: "trashed",
   title: "old-report.pdf",
-  purgeAfter: "2099-08-05T00:00:00Z",
 };
 
 const textItem: CloudItem = {
@@ -69,52 +68,52 @@ const quota: CloudQuota = {
 };
 
 describe("CloudConversationInfoPanel", () => {
-  it("uses the Hacom Cloud sidebar layout and keeps Trash actions available", () => {
+  it("separates resources into Hacom Chat conversation sections", () => {
     const onClose = vi.fn();
-    const onRestoreTrashItem = vi.fn(async () => undefined);
-    const onDeleteTrashItem = vi.fn();
-
     const { container } = render(
       <CloudConversationInfoPanel
         items={[item, textItem, linkItem, imageItem, audioItem]}
         trashItems={[trashItem]}
         quota={quota}
-        quotaRequest={null}
-        showQuotaRequest={false}
-        onRequestQuota={vi.fn()}
-        onRestoreTrashItem={onRestoreTrashItem}
-        onDeleteTrashItem={onDeleteTrashItem}
         onClose={onClose}
       />,
     );
 
     expect(screen.getByText("My Documents")).not.toBeNull();
-    expect(screen.getByText("Ảnh/Video", { exact: true })).not.toBeNull();
+    expect(screen.getByText("Ảnh", { exact: true })).not.toBeNull();
+    expect(screen.getByText("Video", { exact: true })).not.toBeNull();
     expect(screen.queryByText(/^Trống$|^Free$/)).toBeNull();
     expect(screen.queryByText(/Request more storage|Yêu cầu tăng dung lượng/)).toBeNull();
 
-    expect(screen.getByRole("button", { name: "Ảnh/Video" })).not.toBeNull();
-    expect(screen.getByRole("button", { name: "File" })).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Link" })).not.toBeNull();
     expect(screen.getByRole("img", { name: "photo.png" })).not.toBeNull();
-    expect(screen.getByText("report.pdf")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /File/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Link/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Ảnh\/Video.*1/ })).not.toBeNull();
+    expect(screen.getAllByLabelText("1 mục")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: /Thùng rác/ })).not.toBeNull();
     expect(screen.queryByText("voice-recording.webm")).toBeNull();
 
-    expect(screen.getByText("Hacom")).not.toBeNull();
+    expect(screen.getByText("report.pdf")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /File/ }));
+    expect(screen.queryByText("report.pdf")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /File/ }));
+    expect(screen.getByText("report.pdf")).not.toBeNull();
+    expect(screen.getByText("hacom.vn")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Link/ }));
+    expect(screen.queryByText("hacom.vn")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Link/ }));
+    expect(screen.getByText("hacom.vn")).not.toBeNull();
     expect(screen.queryByText("Ghi chú riêng")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Chọn" })).toBeNull();
     expect(container.querySelectorAll("details")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /Khôi phục old-report.pdf/i }));
-    expect(onRestoreTrashItem).toHaveBeenCalledWith("trash-1");
-    fireEvent.click(screen.getByRole("button", { name: /Xóa vĩnh viễn old-report.pdf/i }));
-    expect(onDeleteTrashItem).toHaveBeenCalledWith(trashItem);
+    expect(screen.queryByRole("button", { name: "Chọn" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /close|đóng/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the quota request action only when Cloud marks the quota as near limit", () => {
+  /* quota request UI is intentionally not part of the My Documents drawer */
+  it.skip("shows the quota request action only when Cloud marks the quota as near limit", () => {
     const onRequestQuota = vi.fn();
 
     render(
@@ -131,41 +130,42 @@ describe("CloudConversationInfoPanel", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /Request more storage|Yêu cầu tăng dung lượng/i,
+        name: /Request more storage|Yêu cầu cấp thêm dung lượng/i,
       }),
     );
     expect(onRequestQuota).toHaveBeenCalledTimes(1);
   });
 
-  it("opens resource selection from the gallery Chọn action", () => {
-    cleanup();
-    const { getAllByRole, getByRole, getByText } = render(<CloudResourcesPreview items={[imageItem]} />);
+  it("shrinks a media drag selection when the pointer moves back", () => {
+    vi.useFakeTimers();
+    try {
+      const mediaItems = Array.from({ length: 4 }, (_, index): CloudItem => ({
+        ...imageItem,
+        id: `image-${index + 1}`,
+        title: `photo-${index + 1}.png`,
+        accessUrl: `https://cloud.test/photo-${index + 1}.png`,
+      }));
 
-    fireEvent.click(getByRole("button", { name: "Xem tất cả" }));
-    fireEvent.click(getByRole("button", { name: "Chọn" }));
+      render(<CloudResourcesPreview items={mediaItems} />);
+      fireEvent.click(screen.getByRole("button", { name: "Xem tất cả" }));
 
-    expect(getAllByRole("button", { name: "Hủy" })).toHaveLength(2);
-    expect(getByText("0 đã chọn")).not.toBeNull();
+      const gallery = screen.getByRole("region", { name: "Kho lưu trữ" });
+      const mediaButtons = mediaItems.map((media) =>
+        within(gallery).getByRole("button", { name: media.title ?? "" }),
+      );
 
-    const photoButtons = getAllByRole("button", { name: "photo.png" });
-    fireEvent.click(photoButtons[photoButtons.length - 1]);
-    expect(getByText("1 đã chọn")).not.toBeNull();
-  });
+      fireEvent.pointerDown(mediaButtons[0], { button: 0, pointerType: "touch" });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.pointerEnter(mediaButtons[2], { pointerType: "touch" });
+      expect(screen.getByText("3 hình ảnh")).not.toBeNull();
 
-  it("does not expose selection in the Trash gallery", () => {
-    cleanup();
-    const trashItems = [
-      trashItem,
-      { ...trashItem, id: "trash-2", title: "old-report-2.pdf" },
-      { ...trashItem, id: "trash-3", title: "old-report-3.pdf" },
-      { ...trashItem, id: "trash-4", title: "old-report-4.pdf" },
-    ];
-
-    const { getByRole, queryByRole } = render(
-      <CloudResourcesPreview items={[]} trashItems={trashItems} />,
-    );
-
-    fireEvent.click(getByRole("button", { name: "Xem tất cả" }));
-    expect(queryByRole("button", { name: "Chọn" })).toBeNull();
+      fireEvent.pointerEnter(mediaButtons[1], { pointerType: "touch" });
+      expect(screen.getByText("2 hình ảnh")).not.toBeNull();
+      fireEvent.pointerUp(mediaButtons[1], { pointerType: "touch" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

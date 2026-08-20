@@ -20,6 +20,8 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
+import { PinnedMessageBar } from "../../../components/chat/PinnedMessageBar";
+import PinnedMessagesPanel from "../../../components/chat/PinnedMessagesPanel";
 import { MessageInput } from "../../../components/input/MessageInput";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
 import { Sidebar } from "../../../components/layout/Sidebar";
@@ -39,13 +41,13 @@ import {
 } from "../../../types";
 import { resolveChatLayoutProfile } from "../../../utils/densityPolicy";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { usePinnedMessages } from "../../../hooks/usePinnedMessages";
 import { CLOUD_CONVERSATION_ID, CLOUD_MAX_UPLOAD_BYTES } from "../constants";
 import {
   CloudConversationAvatar,
   CloudConversationEntry,
 } from "../components/CloudConversationEntry";
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
-import { CloudQuotaRequestDialog } from "../components/CloudQuotaRequestDialog";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
 import type { CloudItem, CloudViewMode } from "../types";
@@ -56,7 +58,6 @@ import {
   getCloudItemTitle,
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
-import { shouldPromptQuotaRequest } from "../utils/cloudQuota";
 import { ROUTE_PATHS } from "../../../router/paths";
 import {
   ATTACHMENT_CONSTRAINTS,
@@ -192,77 +193,6 @@ const getMessageRangeIds = (
     .map((message) => message.id);
 };
 
-const clearNativeTextSelection = (): void => {
-  if (typeof window === "undefined") return;
-  window.getSelection()?.removeAllRanges();
-};
-
-/**
- * Resolve a message from the pointer's vertical position, even when the
- * pointer is in the empty lane beside a bubble. Zalo keeps the whole message
- * row as a drag target; relying only on event.target.closest() makes the
- * gesture stop as soon as the pointer leaves the bubble DOM node.
- */
-const getMessageIdAtPoint = (
-  event: MouseEvent | PointerEvent,
-  selectableMessages: Message[],
-): string | undefined => {
-  const selectableIds = new Set(selectableMessages.map((message) => message.id));
-  const target = event.target instanceof Element ? event.target : null;
-  const pointTarget = document.elementFromPoint(event.clientX, event.clientY);
-  const directRow =
-    target?.closest<HTMLElement>("[data-message-id]") ??
-    pointTarget?.closest<HTMLElement>("[data-message-id]");
-  const directId = directRow?.dataset.messageId;
-  if (directId && selectableIds.has(directId)) return directId;
-
-  const timeline =
-    pointTarget?.closest<HTMLElement>("[data-testid='simple-timeline-scroll']") ??
-    target?.closest<HTMLElement>("[data-testid='simple-timeline-scroll']") ??
-    document.querySelector<HTMLElement>("[data-testid='simple-timeline-scroll']");
-  if (!timeline) return undefined;
-
-  const timelineRect = timeline.getBoundingClientRect();
-  if (
-    event.clientX < timelineRect.left ||
-    event.clientX > timelineRect.right ||
-    event.clientY < timelineRect.top ||
-    event.clientY > timelineRect.bottom
-  ) {
-    return undefined;
-  }
-
-  let nearestId: string | undefined;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const row of timeline.querySelectorAll<HTMLElement>("[data-message-id]")) {
-    const messageId = row.dataset.messageId;
-    if (!messageId || !selectableIds.has(messageId)) continue;
-    const rect = row.getBoundingClientRect();
-    if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
-      return messageId;
-    }
-    const distance = event.clientY < rect.top
-      ? rect.top - event.clientY
-      : event.clientY - rect.bottom;
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearestId = messageId;
-    }
-  }
-  return nearestId;
-};
-
-const isPointerInsideMessageBubble = (
-  target: EventTarget | null,
-  messageId: string,
-): boolean => {
-  if (!(target instanceof Element)) return false;
-  const bubble = target.closest<HTMLElement>(
-    ".chat-message-surface, .chat-message-bubble",
-  );
-  return bubble?.closest<HTMLElement>("[data-message-id]")?.dataset.messageId === messageId;
-};
-
 type CloudSelectionDrag = {
   startId: string;
   startX: number;
@@ -270,7 +200,6 @@ type CloudSelectionDrag = {
   active: boolean;
   selecting: boolean;
   baseSelection: Set<string>;
-  nativeTextSelection: boolean;
   lastMessageId?: string;
   holdTimer?: number;
 };
@@ -285,14 +214,14 @@ export default function CloudPage() {
   const [search, setSearch] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  // Trash resources remain available from the Cloud information panel/gallery;
-  // the legacy standalone trash page has been removed.
-  const viewMode = "active" as CloudViewMode;
+  // The dedicated trash conversation view is intentionally disabled. Trash
+  // content is managed from the Cloud info/gallery surfaces instead.
+  const [viewMode] = useState<CloudViewMode>("active");
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
   const timelineScrollTopRef = useRef<number | null>(null);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [isQuotaRequestOpen, setIsQuotaRequestOpen] = useState(false);
+  const [isPinnedPanelOpen, setIsPinnedPanelOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const isSelectionModeRef = useRef(false);
   const selectedMessageIdsRef = useRef<Set<string>>(new Set());
@@ -314,15 +243,15 @@ export default function CloudPage() {
   // matching Hacom Chat's local panel behavior. Do not refetch the Cloud
   // bundle for every keystroke (that caused the red Cloud error banner).
   const workspace = useCloudWorkspace(cloudUserId);
-  const showQuotaRequest =
-    shouldPromptQuotaRequest(workspace.quota, workspace.quotaRequest) ||
-    Boolean(workspace.quotaRequest);
-
-  useEffect(() => {
-    if (workspace.error?.code === "QUOTA_EXCEEDED") {
-      setIsQuotaRequestOpen(true);
-    }
-  }, [workspace.error?.code]);
+  // My Documents uses the same pin contract as ordinary Hacom Chat
+  // conversations.  Keeping this hook here makes pin state, optimistic
+  // updates and the pinned-message panel behave identically in both views.
+  const {
+    pinnedMessages,
+    togglePin,
+    isLoading: isPinnedLoading,
+    error: pinnedError,
+  } = usePinnedMessages(CLOUD_CONVERSATION_ID, { localFallback: true });
 
   const captureTimelineScroll = useCallback(() => {
     const element = document.querySelector<HTMLElement>(
@@ -428,7 +357,7 @@ export default function CloudPage() {
       ? "mobile"
       : "normal";
   const layoutProfile = resolveChatLayoutProfile(width, layoutState);
-  const isRightPanelOpen = isInfoPanelOpen || isSearchOpen;
+  const isRightPanelOpen = isInfoPanelOpen || isSearchOpen || isPinnedPanelOpen;
 
   const conversation = useMemo<Conversation>(
     () => ({
@@ -456,17 +385,20 @@ export default function CloudPage() {
   const cloudTrashItems = workspace.trashItems;
 
   const messages = useMemo(
-    () => [
-      ...cloudItemsToMessages(
+    () => {
+      const pinnedIds = new Set(pinnedMessages.map((message) => message.id));
+      return cloudItemsToMessages(
         cloudItems,
         currentUser,
         {
         link: t("item.untitledLink"),
         file: t("item.untitledFile"),
         },
-      ),
-    ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()),
-    [cloudItems, currentUser, t],
+      )
+        .map((message) => ({ ...message, isPinned: pinnedIds.has(message.id) }))
+        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+    },
+    [cloudItems, currentUser, pinnedMessages, t],
   );
 
   const visibleMessages = useMemo(() => {
@@ -496,14 +428,13 @@ export default function CloudPage() {
     });
   }, [cloudTrashItems, search, t]);
 
-  const trashMessages = useMemo(
-    () =>
-      cloudItemsToMessages(visibleTrashItems, currentUser, {
+  const trashMessages = useMemo(() => {
+    const pinnedIds = new Set(pinnedMessages.map((message) => message.id));
+    return cloudItemsToMessages(visibleTrashItems, currentUser, {
         link: t("item.untitledLink"),
         file: t("item.untitledFile"),
-      }),
-    [currentUser, t, visibleTrashItems],
-  );
+      }).map((message) => ({ ...message, isPinned: pinnedIds.has(message.id) }));
+  }, [currentUser, pinnedMessages, t, visibleTrashItems]);
 
   const showPhaseNotice = useCallback(() => {
     toast.info(t("workspace.phaseAction"));
@@ -603,15 +534,12 @@ export default function CloudPage() {
     selectedMessageIdsRef.current = selectedMessageIds;
     if (isSelectionMode && selectedMessageIds.size === 0) {
       setIsSelectionMode(false);
-      clearNativeTextSelection();
     }
   }, [isSelectionMode, selectedMessageIds]);
 
   useEffect(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
-    clearNativeTextSelection();
-    document.body.style.userSelect = "";
   }, [viewMode]);
 
   const enterSelectionMode = useCallback(() => {
@@ -631,8 +559,6 @@ export default function CloudPage() {
   const exitSelectionMode = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
-    clearNativeTextSelection();
-    document.body.style.userSelect = "";
   }, []);
 
   // Allow a Telegram/Zalo-style click-drag gesture to select messages without
@@ -640,18 +566,16 @@ export default function CloudPage() {
   // a few pixels, so an ordinary click keeps its normal message behavior.
   useEffect(() => {
     const finishDrag = () => {
-      const drag = selectionDragRef.current;
-      if (drag?.holdTimer) {
-        window.clearTimeout(drag.holdTimer);
+      if (selectionDragRef.current?.holdTimer) {
+        window.clearTimeout(selectionDragRef.current.holdTimer);
       }
-      if (drag?.active) {
+      if (selectionDragRef.current?.active) {
         // A pointer drag can emit a synthetic click on release. That click
         // must not immediately undo the last message selected by the drag.
         suppressSelectionClickRef.current = true;
         window.setTimeout(() => {
           suppressSelectionClickRef.current = false;
         }, 0);
-        clearNativeTextSelection();
       }
       selectionDragRef.current = null;
       document.body.style.userSelect = "";
@@ -681,8 +605,9 @@ export default function CloudPage() {
       // Links, file cards and video surfaces are selectable too. Only native
       // controls should keep their own click/drag behavior.
       if (!target || target.closest("button,input,select,textarea")) return;
+      const row = target.closest<HTMLElement>("[data-message-id]");
+      const messageId = row?.dataset.messageId;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      const messageId = getMessageIdAtPoint(event, selectableMessages);
       if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
@@ -694,8 +619,6 @@ export default function CloudPage() {
         active: false,
         selecting: !selectedMessageIdsRef.current.has(messageId),
         baseSelection: new Set(selectedMessageIdsRef.current),
-        nativeTextSelection:
-          !isSelectionModeRef.current && isTextSelectionTarget,
       };
       // Desktop users commonly hold a message instead of dragging. Start the
       // same selection mode after a short hold, while preserving normal click
@@ -729,26 +652,17 @@ export default function CloudPage() {
         event.clientY - drag.startY,
       );
 
-      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
       const target = event.target as HTMLElement | null;
-      const messageId = getMessageIdAtPoint(event, selectableMessages);
+      const row = target?.closest<HTMLElement>("[data-message-id]");
+      const messageId = row?.dataset.messageId;
       if (!messageId) return;
+      const selectableMessages = viewMode === "trash" ? trashMessages : messages;
+      if (!selectableMessages.some((message) => message.id === messageId)) return;
 
       // Keep native browser text selection while the pointer remains inside
-      // the starting bubble. Once the pointer leaves that bubble, the whole
-      // message row becomes a Zalo-style drag target, including its empty
-      // lane beside the bubble.
-      const insideStartingBubble = isPointerInsideMessageBubble(
-        target,
-        drag.startId,
-      );
-      if (
-        !drag.active &&
-        drag.nativeTextSelection &&
-        insideStartingBubble
-      ) {
-        return;
-      }
+      // the message where the gesture started. Message selection begins only
+      // after the pointer enters another message frame.
+      if (!drag.active && messageId === drag.startId) return;
       if (!drag.active && distance < 8) return;
 
       if (!drag.active) {
@@ -773,8 +687,9 @@ export default function CloudPage() {
       if (!target || target.closest("button,input,select,textarea,a,video")) {
         return;
       }
+      const row = target.closest<HTMLElement>("[data-message-id]");
+      const messageId = row?.dataset.messageId;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      const messageId = getMessageIdAtPoint(event, selectableMessages);
       if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
@@ -938,6 +853,25 @@ export default function CloudPage() {
     },
     [captureTimelineScroll, workspace.items],
   );
+
+  const handleCloudPin = useCallback(
+    async (messageId: string) => {
+      const message = [...messages, ...trashMessages].find(
+        (candidate) => candidate.id === messageId,
+      );
+      if (!message) return;
+      await togglePin(message);
+    },
+    [messages, togglePin, trashMessages],
+  );
+
+  const handlePinnedJump = useCallback((message: Message) => {
+    setIsPinnedPanelOpen(false);
+    setIsInfoPanelOpen(false);
+    setIsSearchOpen(false);
+    setJumpToMessageId(message.id);
+    setJumpNonce((nonce) => nonce + 1);
+  }, []);
 
   const handleViewOriginalResource = useCallback(
     (item: CloudItem) => {
@@ -1193,16 +1127,35 @@ export default function CloudPage() {
             onBack={() => navigate("/chat")}
             onInfoClick={() => {
               setIsSearchOpen(false);
+              setIsPinnedPanelOpen(false);
               setIsInfoPanelOpen((isOpen) => !isOpen);
             }}
             onSearchClick={() => {
               captureTimelineScroll();
               workspace.clearError();
               setIsInfoPanelOpen(false);
+              setIsPinnedPanelOpen(false);
               setIsSearchOpen((value) => !value);
             }}
-            onPinnedClick={showPhaseNotice}
+            onPinnedClick={() => {
+              setIsInfoPanelOpen(false);
+              setIsSearchOpen(false);
+              setIsPinnedPanelOpen((isOpen) => !isOpen);
+            }}
           />
+
+          {pinnedMessages.length > 0 ? (
+            <PinnedMessageBar
+              pinnedMessages={pinnedMessages}
+              currentUserId={currentUser.id}
+              onJumpToMessage={handlePinnedJump}
+              onOpenList={() => {
+                setIsInfoPanelOpen(false);
+                setIsSearchOpen(false);
+                setIsPinnedPanelOpen(true);
+              }}
+            />
+          ) : null}
 
           {workspace.error ? (
             <ConversationLane className="pt-3">
@@ -1241,7 +1194,7 @@ export default function CloudPage() {
               onReply={noopMessageAction}
               onReact={noopMessageIdAction}
               onForward={noopMessageAction}
-              onPin={noopMessageIdAction}
+              onPin={handleCloudPin}
               onEdit={noopMessageAction}
               onDelete={handleDeleteRequest}
               onRetry={handleRetryCloudMessage}
@@ -1269,7 +1222,7 @@ export default function CloudPage() {
               onReply={noopMessageAction}
               onReact={noopMessageIdAction}
               onForward={noopMessageAction}
-              onPin={noopMessageIdAction}
+              onPin={handleCloudPin}
               onEdit={noopMessageAction}
               onDelete={handleTrashPermanentDeleteRequest}
               onRetry={handleRetryCloudMessage}
@@ -1416,14 +1369,14 @@ export default function CloudPage() {
           className={clsx(
             "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
             isRightPanelOpen
-              ? "translate-x-0 xl:w-[344px] min-[1920px]:w-[384px] xl:border-l xl:border-border/60"
+              ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
               : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
           )}
           aria-hidden={!isRightPanelOpen}
         >
           <div
             className={clsx(
-              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[344px] min-[1920px]:w-[384px]",
+              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
               isRightPanelOpen
                 ? "translate-x-0 opacity-100"
                 : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
@@ -1547,21 +1500,27 @@ export default function CloudPage() {
                   )}
                 </div>
               </aside>
+            ) : isPinnedPanelOpen ? (
+              <PinnedMessagesPanel
+                pinnedMessages={pinnedMessages}
+                isLoading={isPinnedLoading}
+                error={pinnedError}
+                currentUserId={currentUser.id}
+                onClose={() => setIsPinnedPanelOpen(false)}
+                onJumpToMessage={handlePinnedJump}
+                onUnpin={(message) => togglePin({ ...message, isPinned: true })}
+                className="h-full w-full"
+              />
             ) : (
               <CloudConversationInfoPanel
                 items={cloudItems}
                 trashItems={cloudTrashItems}
                 quota={workspace.quota}
-                quotaRequest={workspace.quotaRequest}
-                showQuotaRequest={showQuotaRequest}
-                onRequestQuota={() => setIsQuotaRequestOpen(true)}
-                isMutating={workspace.isMutating}
-                onRestoreTrashItem={handleRestore}
-                onDeleteTrashItem={(item) => handleTrashPermanentDeleteRequest(item.id)}
-                isLoadingTrash={workspace.isLoadingTrash}
                 onLoadAllTrash={workspace.loadAllTrash}
                 showStorage
                 onManageCloud={() => navigate(ROUTE_PATHS.CLOUD_MANAGE)}
+                onRestoreTrashItem={handleRestore}
+                onPermanentDeleteItem={handlePermanentDelete}
                 onDeleteItem={(item) => handleDeleteRequest(item.id)}
                 onViewOriginalMessage={handleViewOriginalResource}
                 onShowInFolder={showPhaseNotice}
@@ -1577,6 +1536,7 @@ export default function CloudPage() {
             onClick={() => {
               setIsInfoPanelOpen(false);
               setIsSearchOpen(false);
+              setIsPinnedPanelOpen(false);
             }}
             aria-label={t("common.close")}
           />
@@ -1602,17 +1562,6 @@ export default function CloudPage() {
         }}
         onTrash={handleDialogTrash}
         onPermanentDelete={handleDialogPermanentDelete}
-      />
-      <CloudQuotaRequestDialog
-        isOpen={isQuotaRequestOpen}
-        quota={workspace.quota}
-        currentRequest={workspace.quotaRequest}
-        isLoading={workspace.isRequestingQuota}
-        onClose={() => setIsQuotaRequestOpen(false)}
-        onSubmit={async (requestedQuotaBytes, reason) => {
-          await workspace.requestQuota(requestedQuotaBytes, reason);
-          toast.success(t("quotaRequest.submitted"));
-        }}
       />
     </AppShell>
   );
