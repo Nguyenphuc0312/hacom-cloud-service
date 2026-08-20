@@ -23,6 +23,7 @@ jobs:
         with:
           repository: hacom-holding-dx/chat-shared-types
           path: chat-shared-types
+          token: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -55,6 +56,7 @@ jobs:
         with:
           repository: hacom-holding-dx/chat-shared-types
           path: chat-shared-types
+          token: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
