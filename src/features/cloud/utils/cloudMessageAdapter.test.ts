@@ -69,6 +69,25 @@ describe("cloud message adapter", () => {
     });
   });
 
+  it("maps legacy image-labelled CSV objects to the native file card", () => {
+    const message = cloudItemToMessage(
+      createItem({
+        type: "image",
+        title: "don-hang-3520 (6).csv",
+        accessUrl: "/cloud-object/don-hang-3520.csv?signed=1",
+        contentType: "text/csv",
+      }),
+      currentUser,
+      { link: "LiÃªn káº¿t", file: "Tá»‡p" },
+    );
+
+    expect(message.type).toBe(MessageType.FILE);
+    expect(message.attachments?.[0]).toMatchObject({
+      fileName: "don-hang-3520 (6).csv",
+      mimeType: "text/csv",
+    });
+  });
+
   it("maps Cloud recordings to native voice/audio bubbles instead of files", () => {
     const message = cloudItemToMessage(
       createItem({

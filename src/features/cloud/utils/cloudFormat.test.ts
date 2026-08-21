@@ -3,9 +3,11 @@ import type { CloudItem } from "../types";
 import {
   formatBytes,
   getTrashCountdown,
+  getTrashExpiry,
   getCloudItemPreview,
   getCloudItemTitle,
   isSafeExternalUrl,
+  normalizeCloudItemType,
 } from "./cloudFormat";
 
 const baseItem: CloudItem = {
@@ -57,5 +59,21 @@ describe("cloudFormat", () => {
       hours: 0,
       minutes: 0,
     });
+  });
+
+  it("uses the server deadline and falls back to the 24-hour trash policy", () => {
+    expect(getTrashExpiry("2026-07-31T05:30:00Z", "2026-07-30T08:00:00Z")).toBe("2026-07-31T05:30:00Z");
+    expect(getTrashExpiry(undefined, "2026-07-30T08:00:00Z")).toBe("2026-07-31T08:00:00.000Z");
+    expect(getTrashExpiry(undefined, "invalid")).toBeUndefined();
+  });
+
+  it("keeps CSV resources as files when an old projection says image", () => {
+    const item = normalizeCloudItemType({
+      ...baseItem,
+      type: "image",
+      title: "don-hang-3520.csv",
+      contentType: "text/csv",
+    });
+    expect(item.type).toBe("file");
   });
 });

@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { Clock3, Trash2, XCircle } from "lucide-react";
+import {
+  ClockIcon as Clock3,
+  TrashIcon as Trash2,
+  XCircleIcon as XCircle,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { Button, Modal } from "../../../components/ui";
 import type { CloudItem } from "../types";

@@ -2,15 +2,19 @@ import React, { useMemo, useState } from "react";
 import {
   ArrowDownUp,
   ArrowLeft,
-  FileImage,
-  FileText,
-  Files,
   Grid2X2,
   List,
-  Mic,
   Search,
-  Video,
 } from "lucide-react";
+import {
+  DocumentDuplicateIcon,
+  DocumentIcon,
+  DocumentTextIcon,
+  LinkIcon,
+  MicrophoneIcon,
+  PhotoIcon,
+  VideoCameraIcon,
+} from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../../stores/authStore";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
@@ -33,12 +37,12 @@ const typeLabel: Record<CloudItem["type"], string> = {
 };
 
 const typeIcon: Record<CloudItem["type"], React.ReactNode> = {
-  image: <FileImage className="h-6 w-6" aria-hidden />,
-  video: <Video className="h-6 w-6" aria-hidden />,
-  file: <FileText className="h-6 w-6" aria-hidden />,
-  audio: <Mic className="h-6 w-6" aria-hidden />,
-  link: <FileText className="h-6 w-6" aria-hidden />,
-  text: <FileText className="h-6 w-6" aria-hidden />,
+  image: <PhotoIcon className="h-6 w-6" aria-hidden />,
+  video: <VideoCameraIcon className="h-6 w-6" aria-hidden />,
+  file: <DocumentIcon className="h-6 w-6" aria-hidden />,
+  audio: <MicrophoneIcon className="h-6 w-6" aria-hidden />,
+  link: <LinkIcon className="h-6 w-6" aria-hidden />,
+  text: <DocumentTextIcon className="h-6 w-6" aria-hidden />,
 };
 
 const titleFor = (item: CloudItem) =>
@@ -80,7 +84,7 @@ export default function CloudManagePage() {
       .reduce((total, item) => total + item.sizeBytes, 0);
 
   const cards: Array<{ type: Filter; label: string; icon: React.ReactNode }> = [
-    { type: "all", label: "Tất cả", icon: <Files className="h-6 w-6" aria-hidden /> },
+    { type: "all", label: "Tất cả", icon: <DocumentDuplicateIcon className="h-6 w-6" aria-hidden /> },
     { type: "image", label: "Ảnh", icon: typeIcon.image },
     { type: "video", label: "Video", icon: typeIcon.video },
     { type: "file", label: "File", icon: typeIcon.file },
@@ -166,7 +170,7 @@ export default function CloudManagePage() {
             <div className="flex min-h-[460px] items-center justify-center text-[#64748B]">Đang tải dữ liệu…</div>
           ) : items.length === 0 ? (
             <div className="flex min-h-[460px] flex-col items-center justify-center text-center">
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F8FAFC] text-[#64748B]"><FileText className="h-8 w-8" aria-hidden /></span>
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F8FAFC] text-[#64748B]"><DocumentIcon className="h-8 w-8" aria-hidden /></span>
               <h3 className="mt-5 text-xl font-semibold">Chưa có tệp nào</h3>
               <p className="mt-3 text-base text-[#64748B]">Tải tệp lên Hacom Cloud để lưu trữ và truy cập nhanh.</p>
             </div>
