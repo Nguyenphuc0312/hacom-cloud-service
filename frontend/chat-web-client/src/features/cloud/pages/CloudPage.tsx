@@ -199,6 +199,7 @@ type CloudSelectionDrag = {
   startY: number;
   active: boolean;
   selecting: boolean;
+  reachedMultiple: boolean;
   baseSelection: Set<string>;
   lastMessageId?: string;
   holdTimer?: number;
@@ -229,6 +230,10 @@ export default function CloudPage() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     () => new Set(),
   );
+  // A drag selection keeps its toolbar after the pointer range collapses back
+  // to one message, but a plain single-message selection still stays quiet.
+  const [selectionGestureReachedMultiple, setSelectionGestureReachedMultiple] =
+    useState(false);
   const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
   const [jumpNonce, setJumpNonce] = useState(0);
   const selectionDragRef = useRef<CloudSelectionDrag | null>(null);
@@ -534,12 +539,14 @@ export default function CloudPage() {
     selectedMessageIdsRef.current = selectedMessageIds;
     if (isSelectionMode && selectedMessageIds.size === 0) {
       setIsSelectionMode(false);
+      setSelectionGestureReachedMultiple(false);
     }
   }, [isSelectionMode, selectedMessageIds]);
 
   useEffect(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
+    setSelectionGestureReachedMultiple(false);
   }, [viewMode]);
 
   const enterSelectionMode = useCallback(() => {
@@ -551,7 +558,10 @@ export default function CloudPage() {
       const next = new Set(current);
       if (next.has(messageId)) next.delete(messageId);
       else next.add(messageId);
-      if (next.size === 0) setIsSelectionMode(false);
+      if (next.size === 0) {
+        setIsSelectionMode(false);
+        setSelectionGestureReachedMultiple(false);
+      }
       return next;
     });
   }, []);
@@ -559,6 +569,7 @@ export default function CloudPage() {
   const exitSelectionMode = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedMessageIds(new Set());
+    setSelectionGestureReachedMultiple(false);
   }, []);
 
   // Allow a Telegram/Zalo-style click-drag gesture to select messages without
@@ -589,14 +600,16 @@ export default function CloudPage() {
       if (rangeIds.length === 0) return;
 
       drag.lastMessageId = messageId;
-      setSelectedMessageIds(() => {
-        const next = new Set(drag.baseSelection);
-        for (const rangeId of rangeIds) {
-          if (drag.selecting) next.add(rangeId);
-          else next.delete(rangeId);
-        }
-        return next;
-      });
+      const next = new Set(drag.baseSelection);
+      for (const rangeId of rangeIds) {
+        if (drag.selecting) next.add(rangeId);
+        else next.delete(rangeId);
+      }
+      if (next.size > 1 && !drag.reachedMultiple) {
+        drag.reachedMultiple = true;
+        setSelectionGestureReachedMultiple(true);
+      }
+      setSelectedMessageIds(next);
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -611,6 +624,7 @@ export default function CloudPage() {
       if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
         return;
       }
+      setSelectionGestureReachedMultiple(false);
       const isTextSelectionTarget = Boolean(target.closest(".chat-message-text"));
       const selection: CloudSelectionDrag = {
         startId: messageId,
@@ -618,6 +632,7 @@ export default function CloudPage() {
         startY: event.clientY,
         active: false,
         selecting: !selectedMessageIdsRef.current.has(messageId),
+        reachedMultiple: false,
         baseSelection: new Set(selectedMessageIdsRef.current),
       };
       // Desktop users commonly hold a message instead of dragging. Start the
@@ -945,6 +960,10 @@ export default function CloudPage() {
       ),
     [messages, selectedMessageIds, trashMessages, viewMode],
   );
+  const showSelectionToolbar =
+    isSelectionMode &&
+    (hasContiguousSelection ||
+      (selectionGestureReachedMultiple && selectedMessageIds.size === 1));
 
   const handleDeleteSelected = useCallback(async () => {
     if (selectedCloudItems.length === 0) {
@@ -1260,7 +1279,7 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            {isSelectionMode && hasContiguousSelection ? (
+            {showSelectionToolbar ? (
               <div
                 className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 bg-surface px-3 py-2 shadow-sm"
                 role="toolbar"
