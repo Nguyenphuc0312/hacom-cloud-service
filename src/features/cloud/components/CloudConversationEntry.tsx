@@ -8,10 +8,12 @@ import { getCloudItemPreview, getCloudItemTitle } from "../utils/cloudFormat";
 import { ConversationItemMenu } from "../../../components/layout/sidebar/RoomItem";
 import { useUIStore } from "../../../stores/uiStore";
 import { CLOUD_CONVERSATION_ID } from "../constants";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
 interface CloudConversationEntryProps {
   items?: CloudItem[];
   isActive?: boolean;
+  layoutState?: ChatLayoutState;
   onSelect: () => void;
 }
 
@@ -24,14 +26,14 @@ export const CloudConversationAvatar: React.FC<{
       size === "sm"
         ? "h-[34px] w-[34px]"
         : size === "lg"
-          ? "h-20 w-20"
+          ? "h-16 w-16"
           : "h-10 w-10",
     )}
     aria-hidden
   >
     <Cloud
       className={
-        size === "sm" ? "h-4 w-4" : size === "lg" ? "h-9 w-9" : "h-5 w-5"
+        size === "sm" ? "h-4 w-4" : size === "lg" ? "h-8 w-8" : "h-5 w-5"
       }
     />
   </span>
@@ -40,6 +42,7 @@ export const CloudConversationAvatar: React.FC<{
 export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
   items = [],
   isActive = false,
+  layoutState = "normal",
   onSelect,
 }) => {
   const { t } = useTranslation("cloud");
@@ -61,29 +64,38 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
   const timeLabel = latestItem
     ? formatRelativeTime(new Date(latestItem.createdAt))
     : "";
+  const isDense = layoutState !== "normal";
 
   return (
-    <div className="shrink-0 pb-0.5">
       <button
         type="button"
         role="option"
         aria-selected={isActive}
         onClick={onSelect}
         className={clsx(
-          "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center rounded-lg px-2.5 text-left",
+          "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] shrink-0 items-center text-left",
           "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
           isActive
             ? "bg-[#1565C0]/20 ring-1 ring-inset ring-[#1976D2]/40"
             : "hover:bg-surface-hover/70",
         )}
         aria-label={t("workspace.title")}
       >
-        <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
+        <div
+          className={clsx(
+            "grid w-full grid-cols-[auto,1fr,auto] items-center",
+            isDense ? "gap-2" : "gap-2.5",
+          )}
+        >
           <CloudConversationAvatar />
           <div className="min-w-0">
             <p
               className={clsx(
-                "truncate text-[14px] font-medium leading-[1.1rem]",
+                "truncate font-medium",
+                isDense
+                  ? "text-[13px] leading-[1.05rem]"
+                  : "text-[14px] leading-[1.1rem]",
                 isActive ? "font-bold text-[#0D3F7A]" : "text-text-primary",
               )}
             >
@@ -91,7 +103,10 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
             </p>
             <p
               className={clsx(
-                "mt-0.5 truncate pr-1 text-[12px] leading-[1rem]",
+                "mt-0.5 truncate pr-1",
+                isDense
+                  ? "text-[11px] leading-[0.95rem]"
+                  : "text-[12px] leading-[1rem]",
                 isActive ? "font-medium text-text-primary" : "text-text-muted",
               )}
               title={preview}
@@ -99,7 +114,12 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
               {preview}
             </p>
           </div>
-          <div className="flex min-w-room-meta flex-col items-end justify-center gap-1">
+          <div
+            className={clsx(
+              "flex h-full min-w-room-meta flex-col items-end justify-center",
+              isDense ? "gap-1" : "gap-1.5",
+            )}
+          >
             <ConversationItemMenu
               isPinned={isPinned}
               onTogglePin={() =>
@@ -112,8 +132,6 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
           </div>
         </div>
       </button>
-      <div className="mx-3 h-px bg-border/45" aria-hidden />
-    </div>
   );
 };
 

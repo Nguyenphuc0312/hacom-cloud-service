@@ -1177,6 +1177,7 @@ export default function CloudPage() {
                 <CloudConversationEntry
                   items={cloudItems}
                   isActive
+                  layoutState={layoutState}
                   onSelect={() => undefined}
                 />
               }

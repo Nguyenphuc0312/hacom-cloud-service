@@ -5,6 +5,9 @@ import {
   XMarkIcon as X,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
+import { Pin } from "lucide-react";
+import { useUIStore } from "../../../stores/uiStore";
+import { CLOUD_CONVERSATION_ID } from "../constants";
 import type { CloudItem, CloudQuota } from "../types";
 import { formatBytes, normalizeCloudItemType } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
@@ -40,10 +43,16 @@ export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
 > = ({ items, trashItems, quota, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, senderName, userId, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
+  const isPinned = useUIStore((state) =>
+    state.pinnedConversationIds.includes(CLOUD_CONVERSATION_ID),
+  );
+  const togglePinnedConversation = useUIStore(
+    (state) => state.togglePinnedConversation,
+  );
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
     ? {
-        title: "Thông tin hội thoại",
+        title: "Thông tin Hacom Cloud",
         close: "Đóng",
         workspace: "My Documents",
         all: "Tất cả",
@@ -57,7 +66,7 @@ export const CloudConversationInfoPanel: React.FC<
         manage: "Xem và quản lý Hacom Cloud",
       }
     : {
-        title: "Conversation info",
+        title: "Hacom Cloud info",
         close: "Close",
         workspace: "My Documents",
         all: "All",
@@ -130,29 +139,51 @@ export const CloudConversationInfoPanel: React.FC<
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="space-y-3 px-3 py-3">
-        <section className="flex flex-col items-center rounded-2xl border border-border/70 bg-[hsl(var(--chat-panel-bg))] px-5 py-6 text-center">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
+        <section className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
           <CloudConversationAvatar size="lg" />
-          <h3 className="mt-4 text-2xl font-semibold text-text-primary">{labels.workspace}</h3>
-          <p className="mt-2 max-w-[19rem] text-sm leading-6 text-text-secondary">{labels.description}</p>
+          <h3 className="mt-4 text-base font-bold text-text-primary">{labels.workspace}</h3>
+          <p className="mt-1 max-w-[18rem] text-xs leading-[1.125rem] text-text-muted">{labels.description}</p>
         </section>
 
-        {showStorage ? <section className="rounded-2xl border border-border/70 bg-surface px-4 py-4">
+        <section className="bg-surface px-4 pb-5">
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => togglePinnedConversation(CLOUD_CONVERSATION_ID)}
+              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
+            >
+              <span className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15"}`}>
+                <Pin className={isPinned ? "h-5 w-5 text-text-secondary" : "h-5 w-5 text-primary"} strokeWidth={1.5} aria-hidden />
+              </span>
+              <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+                {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <div className="space-y-3 px-4 pr-5">
+        {showStorage ? <section className="rounded-xl border border-border/70 bg-surface-hover/35 p-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-text-primary">{labels.storage}</h3>
-            <span className="text-sm font-semibold text-text-primary">
-              {formatBytes(quota?.usedBytes ?? 0)} / {formatBytes(limitBytes)}
+            <span className="text-xs text-text-muted">
+              {limitBytes > 0 ? `${((Number(quota?.usedBytes ?? 0) / limitBytes) * 100).toFixed(Number(quota?.usedBytes ?? 0) > 0 && Number(quota?.usedBytes ?? 0) / limitBytes < 0.1 ? 1 : 0)}%` : "0%"}
             </span>
           </div>
-          <div className="mt-3 flex h-4 overflow-hidden rounded-sm bg-surface-muted" aria-label={labels.storage}>
+          <p className="mt-2 text-base font-semibold text-text-primary">
+            {formatBytes(quota?.usedBytes ?? 0)} <span className="text-sm font-normal text-text-muted">đã dùng</span>
+          </p>
+          <p className="text-xs text-text-muted">trên tổng dung lượng {formatBytes(limitBytes)}</p>
+          <div className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-full bg-surface-hover" aria-label={labels.storage}>
             {categories.map((category) => (
               <span key={category.key} style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }} aria-hidden />
             ))}
             <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
             <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-text-secondary">
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
             {categories.filter((category) => category.showLegend).map((category) => (
               <span key={category.key} className="flex items-center gap-1.5">
                 <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
@@ -164,11 +195,12 @@ export const CloudConversationInfoPanel: React.FC<
               {labels.trash}
             </span>
           </div>
+          <p className="mt-2 text-xs text-text-muted">Còn trống {formatBytes(quota?.availableBytes ?? 0)}</p>
           {onManageCloud ? (
             <button
               type="button"
               onClick={onManageCloud}
-              className="mt-4 flex w-full items-center gap-3 rounded-full border border-[#9BC5F5] bg-surface px-4 py-3 text-left text-[15px] font-medium text-[#1565C0] transition-colors hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30"
+              className="mt-4 flex h-10 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-sm font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
@@ -177,7 +209,6 @@ export const CloudConversationInfoPanel: React.FC<
           ) : null}
         </section> : null}
 
-        <section className="overflow-hidden bg-surface">
         <CloudResourcesPreview
           items={items}
           trashItems={trashItems}
@@ -190,7 +221,6 @@ export const CloudConversationInfoPanel: React.FC<
            userId={userId}
            senderName={senderName}
         />
-        </section>
         </div>
       </div>
     </aside>

@@ -25,3 +25,18 @@ export function useResolvedDisplayName(
   );
   return alias || enriched || fallback;
 }
+
+/**
+ * Resolve an avatar from the same authoritative friendship source used by the
+ * current local chat flow. The resource panel only needs a stable URL and
+ * falls back to the snapshot URL supplied by the resource API.
+ */
+export function useResolvedAvatarUrl(
+  userId: string | undefined,
+  fallback?: string | null,
+): string | null {
+  const friendAvatar = useFriendshipStore((state) =>
+    userId ? (state.friendByUserId[userId]?.avatar ?? null) : null,
+  );
+  return friendAvatar || fallback?.trim() || null;
+}

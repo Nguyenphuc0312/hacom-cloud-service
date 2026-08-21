@@ -2,9 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Keep emoji rendering consistent with Hacom Chat across browsers. The
-   unicode range limits this font to emoji glyphs; normal Vietnamese/Latin
-   text continues to use Inter below. */
+/* ===== Emoji: tự nhúng font, KHÔNG dựa vào font hệ điều hành =====
+   "Segoe UI Emoji" của Windows chỉ tới ~Unicode 13 và cố ý bỏ TOÀN BỘ cờ
+   quốc gia. Hệ quả trên web (mobile không dính vì Android có Noto sẵn):
+     🇻🇳 → ra chữ "vn"  (cờ = 2 ký tự Regional Indicator, fallback ra chữ cái)
+     🫠 🫡 🥹 🫶 🩷 → ra ô vuông  (E14 trở đi Windows chưa có glyph)
+   Máy thiếu glyph thì xếp thứ tự font kiểu gì cũng vô ích — phải nhúng glyph.
+
+   Noto Color Emoji v35 (6/2025, OFL-1.1) = đúng bộ Android đang dùng, nên
+   web khớp mobile 1:1. `unicode-range` giới hạn ở các dải emoji nên font
+   CHỈ tải khi trang thực sự có emoji, và không bao giờ đụng chữ tiếng Việt
+   dù nó đứng đầu font stack. Tải 1 lần rồi cache vĩnh viễn.
+
+   ponytail: 5.2MB là cái giá để hết lệch mobile; muốn nhẹ hơn phải tự subset
+   font theo tập emoji thực dùng — chỉ làm khi đo thấy tải chậm thật. */
 @font-face {
   font-family: "Noto Color Emoji";
   src: url("/fonts/NotoColorEmoji.woff2") format("woff2");
@@ -76,7 +87,7 @@
   --app-page-narrow-max: 56rem;
   --app-sidebar-width: 320px;
   --app-sidebar-width-compact: 288px;
-  --app-inspector-width: 360px;
+  --app-inspector-width: 344px;
   --app-rail-width: 248px;
   --layout-panel-min: 280px;
   --layout-panel-max: 420px;
@@ -529,6 +540,9 @@ body,
 body {
   margin: 0;
   font-family:
+    /* Phải đứng TRƯỚC mọi font khác: nếu để sau, "Segoe UI Emoji"/"Segoe UI
+       Symbol" giành mất ký tự và vẽ ra glyph cũ/ô vuông/chữ cái. unicode-range
+       ở @font-face giữ cho nó chỉ áp dụng đúng dải emoji. */
     "Noto Color Emoji",
     var(--font-family-sans),
     system-ui,
@@ -536,6 +550,7 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif,
+    /* Fallback cho máy chưa tải xong font nhúng (font-display: swap). */
     "Apple Color Emoji",
     "Segoe UI Emoji",
     "Segoe UI Symbol";
@@ -1112,16 +1127,13 @@ a:focus-visible {
 
 @keyframes messageHighlightPulse {
   0% {
-    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0), 0 0 0 0 hsl(262 83% 65% / 0);
+    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0);
   }
   20% {
-    box-shadow: 0 0 0 3px hsl(var(--color-primary, 206 100% 41%) / 0.55), 0 0 0 6px hsl(262 83% 65% / 0.28);
-  }
-  48% {
-    box-shadow: 0 0 0 2px hsl(var(--color-primary, 206 100% 41%) / 0.35), 0 0 0 5px hsl(262 83% 65% / 0.22);
+    box-shadow: 0 0 0 3px hsl(var(--color-primary, 206 100% 41%) / 0.45);
   }
   100% {
-    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0), 0 0 0 0 hsl(262 83% 65% / 0);
+    box-shadow: 0 0 0 0 hsl(var(--color-primary, 206 100% 41%) / 0);
   }
 }
 
@@ -1134,7 +1146,6 @@ a:focus-visible {
     animation: none;
     box-shadow: 0 0 0 2px hsl(var(--color-primary, 206 100% 41%) / 0.4);
   }
-
 }
 
 /* Voice message waveform: bars bounce like a live equalizer while playing */
@@ -2105,12 +2116,12 @@ input[type="password"]::-ms-clear {
   }
 }
 
-/* Màn lớn (27–32 inch, ≥1920px): nới sidebar, info panel và gutter để bố cục
+/* Màn lớn (27–32 inch, ≥1920px): nới sidebar/gutter vừa đủ để bố cục
    cân đối thay vì dồn hết không gian thừa vào khung chat. Lane nội dung chat
    đã được giới hạn riêng qua data-chat-layout-profile="desktop-wide". */
 @media (min-width: 1920px) {
   :root {
-    --app-inspector-width: 400px;
+    --app-inspector-width: 384px;
     --hc-sidebar-width: clamp(340px, 19vw, 440px);
     --app-shell-gutter: 32px;
   }

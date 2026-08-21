@@ -13,6 +13,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export type Theme = "light" | "dark" | "system";
 export type ThemeBrand = "blue" | "green" | "purple";
 export type ChatDensity = "auto" | "comfortable" | "compact" | "expanded";
+export interface ConversationLabel {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder?: number;
+  systemKey?: string | null;
+}
 export type ModalType =
   | "createGroup"
   | "editProfile"
@@ -99,11 +106,37 @@ interface UIState {
   // Pinned conversations (client-side, persisted)
   pinnedConversationIds: string[];
   togglePinnedConversation: (conversationId: string) => void;
+
+  // Conversation labels (client-side, persisted)
+  conversationLabels: ConversationLabel[];
+  conversationLabelsByConversationId: Record<string, string[]>;
+  selectedConversationLabelIds: string[];
+  isConversationLabelManagerOpen: boolean;
+  openConversationLabelManager: () => void;
+  closeConversationLabelManager: () => void;
+  setConversationLabelState: (
+    labels: ConversationLabel[],
+    assignments?: Record<string, string[]>,
+  ) => void;
+  setSelectedConversationLabelIds: (labelIds: string[]) => void;
+  clearSelectedConversationLabels: () => void;
 }
 
 // ============================================
 // STORE
 // ============================================
+
+export const DEFAULT_CONVERSATION_LABELS: ConversationLabel[] = [
+  { id: "customer", name: "Khách hàng", color: "#e31b23" },
+  { id: "family", name: "Gia đình", color: "#e11dca" },
+  { id: "work", name: "Công việc", color: "#f97316" },
+  { id: "friends", name: "Bạn bè", color: "#f5b700" },
+  { id: "reply-later", name: "Trả lời sau", color: "#45c776" },
+  { id: "colleague", name: "Đồng nghiệp", color: "#0b74ff" },
+];
+
+const uniqueLabelIds = (labelIds: string[]): string[] =>
+  Array.from(new Set((labelIds ?? []).filter(Boolean)));
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -293,6 +326,55 @@ export const useUIStore = create<UIState>()(
         });
       },
 
+      // ============================================
+      // CONVERSATION LABELS
+      // ============================================
+      // These defaults are intentionally present even when an older persisted
+      // ui-storage payload is loaded.  The latest Sidebar renders this state
+      // during the first paint, so undefined arrays would otherwise crash the
+      // whole chat route before the API response arrives.
+      conversationLabels: DEFAULT_CONVERSATION_LABELS,
+      conversationLabelsByConversationId: {},
+      selectedConversationLabelIds: [],
+      isConversationLabelManagerOpen: false,
+
+      openConversationLabelManager: () => {
+        set({ isConversationLabelManagerOpen: true });
+      },
+
+      closeConversationLabelManager: () => {
+        set({ isConversationLabelManagerOpen: false });
+      },
+
+      setConversationLabelState: (labels, assignments = {}) => {
+        const safeLabels = Array.isArray(labels) ? labels : [];
+        const validIds = new Set(safeLabels.map((label) => label.id));
+        const safeAssignments = Object.fromEntries(
+          Object.entries(assignments ?? {})
+            .map(([conversationId, labelIds]) => [
+              conversationId,
+              uniqueLabelIds(labelIds).filter((labelId) => validIds.has(labelId)),
+            ])
+            .filter(([, labelIds]) => labelIds.length > 0),
+        );
+
+        set((state) => ({
+          conversationLabels: safeLabels,
+          conversationLabelsByConversationId: safeAssignments,
+          selectedConversationLabelIds: state.selectedConversationLabelIds.filter(
+            (labelId) => validIds.has(labelId),
+          ),
+        }));
+      },
+
+      setSelectedConversationLabelIds: (labelIds) => {
+        set({ selectedConversationLabelIds: uniqueLabelIds(labelIds) });
+      },
+
+      clearSelectedConversationLabels: () => {
+        set({ selectedConversationLabelIds: [] });
+      },
+
     }),
     {
       name: "ui-storage",
@@ -303,6 +385,9 @@ export const useUIStore = create<UIState>()(
         isSidebarCollapsed: state.isSidebarCollapsed,
         chatDensity: state.chatDensity,
         pinnedConversationIds: state.pinnedConversationIds,
+        conversationLabels: state.conversationLabels,
+        conversationLabelsByConversationId: state.conversationLabelsByConversationId,
+        selectedConversationLabelIds: state.selectedConversationLabelIds,
       }),
     },
   ),

@@ -81,7 +81,6 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   const media = useMemo(() => resolvedItems.filter((item) => item.type === "image" || item.type === "video"), [resolvedItems]);
   const files = useMemo(() => resolvedItems.filter((item) => item.type === "file"), [resolvedItems]);
   const links = useMemo(() => resolvedItems.filter((item) => item.type === "link"), [resolvedItems]);
-  const texts = useMemo(() => resolvedItems.filter((item) => item.type === "text"), [resolvedItems]);
   const activeImages = useMemo(
     () => media.filter((item) => item.type === "image" && item.accessUrl).map((item) => ({ url: item.accessUrl!, alt: itemTitle(item), senderName, senderAvatar, sentAt: item.createdAt, groupKey: item.id })),
     [media, senderAvatar, senderName],
@@ -157,7 +156,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
 
   return (
     <>
-      <div className="overflow-hidden bg-surface">
+      <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
         <ResourceSection label="Ảnh/Video" count={media.length}>
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
@@ -168,31 +167,24 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 </button>
               ))}
             </div>
-            {media.length >= 4 ? <button type="button" onClick={() => setGalleryTab("media")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
-          </> : <EmptyState icon={<ImageIcon />} label="Chưa có ảnh hoặc video được chia sẻ trong hội thoại này" />}
+            <ViewAllButton onClick={() => setGalleryTab("media")} />
+          </> : <ResourceEmptyText>Chưa có ảnh hoặc video nào</ResourceEmptyText>}
         </ResourceSection>
 
         <ResourceSection label="File" count={files.length}>
-          {files.length ? <div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<FileText />} label="Chưa có File được chia sẻ trong hội thoại này" />}
-          {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
+          {files.length ? <><div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("files")} /></> : <ResourceEmptyText>Chưa có File được chia sẻ trong hội thoại này</ResourceEmptyText>}
         </ResourceSection>
 
         <ResourceSection label="Link" count={links.length}>
-          {links.length ? <div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<Link2 />} label="Chưa có link nào được chia sẻ" />}
-          {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
+          {links.length ? <><div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("links")} /></> : <ResourceEmptyText>Chưa có link nào được chia sẻ</ResourceEmptyText>}
         </ResourceSection>
 
-        <ResourceSection label="Văn bản" count={texts.length}>
-          {texts.length ? <div className="space-y-1.5">{texts.slice(0, 3).map((item) => <CloudTextRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <EmptyState icon={<CloudItemIcon type="text" />} label="Chưa có văn bản được lưu trữ" />}
-          {texts.length >= 4 ? <button type="button" onClick={() => setGalleryTab("text")} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover">Xem tất cả</button> : null}
-        </ResourceSection>
-
-        <section className="border-t-8 border-surface-muted">
-          <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-base font-medium text-text-primary transition-colors hover:bg-surface-hover" aria-expanded={trashExpanded} aria-controls="cloud-resource-section-trash" onClick={() => setTrashExpanded((open) => !open)}>
+        <section className="bg-surface px-5 py-3">
+          <button type="button" className="mb-2.5 flex w-full items-center justify-between text-left text-[16px] font-semibold text-text-primary transition-colors" aria-expanded={trashExpanded} aria-controls="cloud-resource-section-trash" onClick={() => setTrashExpanded((open) => !open)}>
             <span>Thùng rác</span>
             <ChevronDown className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${trashExpanded ? "" : "-rotate-90"}`} aria-hidden="true" />
           </button>
-          {trashExpanded ? <div id="cloud-resource-section-trash" className="px-4 pb-4">
+          {trashExpanded ? <div id="cloud-resource-section-trash">
             {resolvedTrashItems.length ? <>
               <div className="flex items-center justify-between py-2 text-xs text-text-muted">
                 <span>{resolvedTrashItems.length} mục</span>
@@ -705,7 +697,10 @@ const ResourceGallery: React.FC<{
         </div>
       </header>
       <nav className="flex h-14 shrink-0 border-b border-border px-5" aria-label="Loại nội dung">
-        {([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links'], ['text', 'Văn bản']] as const).map(([key, label]) => (
+        {(isTrash
+          ? ([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links'], ['text', 'Văn bản']] as const)
+          : ([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links']] as const)
+        ).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} className={`flex flex-1 items-center justify-center border-b-2 text-base font-medium ${key === tab ? "border-primary text-primary" : "border-transparent text-text-primary"}`}>{label}</button>
         ))}
       </nav>
@@ -845,32 +840,41 @@ const ResourceSection: React.FC<{ label: string; count: number; children: React.
   const contentId = `cloud-resource-section-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
-    <section className="border-b border-border last:border-b-0 px-4 py-3">
+    <section className="bg-surface px-5 py-3">
       <button
         type="button"
-        className="flex w-full items-center justify-between py-1 text-left text-base font-medium text-text-primary transition-colors hover:bg-surface-hover"
+        className="mb-2.5 flex w-full items-center justify-between text-left text-[16px] font-semibold text-text-primary transition-colors"
         aria-expanded={expanded}
         aria-controls={contentId}
         onClick={() => setExpanded((open) => !open)}
       >
-        <span className="flex items-center gap-2 [&>span:nth-child(2)]:sr-only">
-          <span>{label}</span>
-          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-surface-overlay px-1.5 py-0.5 text-[11px] font-medium text-text-muted" aria-label={`${count} mục`}>
-            {count}
-          </span>
-        </span>
+        <span>{label}</span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
           aria-hidden="true"
         />
       </button>
       {expanded ? (
-        <div id={contentId} className="mt-3">
+        <div id={contentId}>
           {children}
         </div>
       ) : null}
     </section>
   );
 };
+
+const ViewAllButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="mt-3 h-9 w-full rounded bg-[#e4e7ec] text-[14px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7]"
+  >
+    Xem tất cả
+  </button>
+);
+
+const ResourceEmptyText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="py-4 text-center text-sm text-text-muted">{children}</p>
+);
 
 const EmptyState: React.FC<{ icon: React.ReactElement<{ className?: string }>; label: string }> = ({ icon, label }) => <div className="flex min-h-24 flex-col items-center justify-center gap-2 text-center text-text-muted">{React.cloneElement(icon, { className: "h-7 w-7" })}<p className="text-xs leading-5">{label}</p></div>;
