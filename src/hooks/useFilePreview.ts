@@ -50,7 +50,10 @@ export interface PreviewTarget {
   conversationId: string;
   messageId?: string;
   previewType: PreviewType;
+  uploaderName?: string | null;
+  uploaderAvatarUrl?: string | null;
 }
+
 
 export interface UseFilePreviewReturn {
   /** Whether the preview modal is open */

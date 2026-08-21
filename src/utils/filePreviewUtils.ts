@@ -27,6 +27,10 @@ export const MAX_TEXT_PREVIEW_LINES = 500;
 /** Maximum rows to show in CSV preview */
 export const MAX_CSV_PREVIEW_ROWS = 100;
 
+/** Large archive threshold (50 MB) */
+export const ARCHIVE_LARGE_SIZE_THRESHOLD = 50 * 1024 * 1024;
+
+
 /**
  * Check whether a file is too large for inline preview
  */

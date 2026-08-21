@@ -1,229 +1,111 @@
 /**
- * @fileoverview PdfPreview - PDF file preview component with page navigation.
- * Uses iframe/object for rendering with navigation controls.
+ * @fileoverview Xem trước PDF bằng iframe với #toolbar=0&navpanes=0 và scale do component cha điều khiển.
  */
-
-import React, { useCallback, useState } from "react";
-import { useTranslation } from "react-i18next";
-import clsx from "clsx";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ArrowDownTrayIcon,
-  ArrowTopRightOnSquareIcon,
-} from "@heroicons/react/24/outline";
-import { IconButton } from "../ui";
-import { DocumentTextIcon } from "@heroicons/react/24/outline";
-import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
-import { truncateFilename } from "../../utils/truncateFilename";
-import { downloadResourceWithName } from "../../utils/downloadFile";
-import { FileTypeIcon } from "../message/FileTypeIcon";
+import { useCallback, useState } from 'react';
+import { AlertTriangle, Download, ExternalLink } from 'lucide-react';
+import { downloadResourceWithName } from '../../utils/downloadFile';
+import styles from './PreviewPanel.module.css';
 
 interface PdfPreviewProps {
   url: string;
   fileName: string;
   fileSize?: number;
-  className?: string;
+  /** Mức thu phóng do component cha điều khiển (mặc định 1 = 100%). */
+  scale?: number;
 }
 
-export const PdfPreview: React.FC<PdfPreviewProps> = ({
-  url,
-  fileName,
-  fileSize,
-  className,
-}) => {
-  const { t } = useTranslation();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState<number | null>(null);
+export function PdfPreview({ url, fileName, scale = 1 }: PdfPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
   const handleDownload = useCallback(async () => {
-    await downloadResourceWithName(url, fileName || "document.pdf");
+    await downloadResourceWithName(url, fileName || 'document.pdf');
   }, [fileName, url]);
 
   const handleOpenInNewTab = useCallback(() => {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(url, '_blank', 'noopener,noreferrer');
   }, [url]);
 
-  const handlePrevPage = useCallback(() => {
-    if (currentPage > 1) {
-      setCurrentPage((p) => p - 1);
-      setIsLoading(true);
-    }
-  }, [currentPage]);
-
-  const handleNextPage = useCallback(() => {
-    if (totalPages === null || currentPage < totalPages) {
-      setCurrentPage((p) => p + 1);
-      setIsLoading(true);
-    }
-  }, [currentPage, totalPages]);
-
-  const handleLoad = useCallback(() => {
-    setIsLoading(false);
-    setHasError(false);
-  }, []);
-
-  const handleError = useCallback(() => {
-    setIsLoading(false);
-    setHasError(true);
-  }, []);
-
-  const handlePageCount = useCallback((event: React.SyntheticEvent<HTMLIFrameElement>) => {
-    const iframe = event.currentTarget;
-    try {
-      if (typeof iframe.contentWindow?.document !== "undefined") {
-        const pageCount = iframe.contentWindow.document.body.dataset.pageCount;
-        if (pageCount) {
-          setTotalPages(parseInt(pageCount, 10));
-        }
-      }
-    } catch {
-      // Cross-origin access denied, can't read page count
-    }
-  }, []);
-
-  const extension = getFileExtension(fileName);
-
-  const pdfUrl = totalPages
-    ? `${url}#page=${currentPage}`
-    : url;
+  const embedUrl = `${url}#toolbar=0&navpanes=0`;
+  const inverseScale = 100 / scale;
 
   return (
-    <div
-      className={clsx(
-        "flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface",
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
-            <FileTypeIcon type="pdf" className="h-5 w-5 text-red-500" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {truncateFilename(fileName, 48)}
-            </p>
-            <p className="text-xs text-text-muted">
-              {formatFileSize(fileSize)} · {extension}
-              {totalPages && ` · ${totalPages} pages`}
-            </p>
-          </div>
-        </div>
-
-        {/* Page navigation */}
-        {totalPages !== null && totalPages > 1 && (
-          <div className="flex items-center gap-2">
-            <IconButton
-              icon={<ChevronLeftIcon className="h-5 w-5" />}
-              onClick={handlePrevPage}
-              disabled={currentPage <= 1}
-              variant="ghost"
-              aria-label={t("chat:filePreview.previousPage")}
-            />
-            <span className="min-w-[60px] text-center text-sm text-text-secondary">
-              {currentPage} / {totalPages}
-            </span>
-            <IconButton
-              icon={<ChevronRightIcon className="h-5 w-5" />}
-              onClick={handleNextPage}
-              disabled={currentPage >= totalPages}
-              variant="ghost"
-              aria-label={t("chat:filePreview.nextPage")}
-            />
+    <div className={styles.panel}>
+      <div className={styles.panelBody} style={{ position: 'relative' }}>
+        {isLoading && !hasError && (
+          <div className={styles.centerState} style={{ position: 'absolute', inset: 0 }}>
+            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải xem trước…</span>
           </div>
         )}
-      </div>
-
-      {/* PDF Viewer */}
-      <div className="relative flex-1 overflow-hidden">
-        {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface-overlay">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm text-text-muted">
-                {t("chat:filePreview.loading", { defaultValue: "Loading preview..." })}
-              </p>
-            </div>
-          </div>
-        )}
-
         {hasError ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <DocumentTextIcon className="h-16 w-16 text-text-muted" />
-              <p className="text-sm text-text-secondary">
-                {t("chat:filePreview.pdfRenderError", {
-                  defaultValue: "Failed to render PDF. Please open in a new tab.",
-                })}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleOpenInNewTab}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-text-inverse hover:bg-primary-hover"
-                >
-                  <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                  {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover"
-                >
-                  <ArrowDownTrayIcon className="h-4 w-4" />
-                  {t("chat:file.download")}
-                </button>
-              </div>
+          <div className={styles.centerState}>
+            <AlertTriangle size={40} color="#fa5252" />
+            <span style={{ fontSize: 13, color: '#495057' }}>Không hiển thị được PDF. Vui lòng mở ở tab mới.</span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#228be6',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onClick={handleOpenInNewTab}
+              >
+                <ExternalLink size={14} />
+                Mở tab mới
+              </button>
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #dee2e6',
+                  background: '#f8f9fa',
+                  color: '#495057',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onClick={() => void handleDownload()}
+              >
+                <Download size={14} />
+                Tải về
+              </button>
             </div>
           </div>
         ) : (
           <iframe
-            key={pdfUrl}
-            src={pdfUrl}
-            className="h-full w-full border-0 bg-white"
-            title={fileName || "PDF Preview"}
-            sandbox="allow-same-origin allow-popups"
-            onLoad={(e) => {
-              handleLoad();
-              handlePageCount(e);
+            key={url}
+            src={embedUrl}
+            title={fileName || 'PDF preview'}
+            className={styles.iframe}
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              width: `${inverseScale}%`,
+              height: `${inverseScale}%`,
             }}
-            onError={handleError}
+            onLoad={() => setIsLoading(false)}
+            onError={() => {
+              setIsLoading(false);
+              setHasError(true);
+            }}
           />
         )}
       </div>
-
-      {/* Footer */}
-      <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2">
-        <p className="text-xs text-text-muted">
-          {t("chat:filePreview.pdfFooter", {
-            defaultValue: "Use browser controls to zoom or scroll",
-          })}
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover"
-          >
-            <ArrowDownTrayIcon className="h-4 w-4" />
-            {t("chat:file.download")}
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenInNewTab}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover"
-          >
-            <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-            {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
-          </button>
-        </div>
-      </div>
     </div>
   );
-};
+}
 
 export default PdfPreview;

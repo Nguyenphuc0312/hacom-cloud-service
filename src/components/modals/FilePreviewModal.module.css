@@ -1,0 +1,261 @@
+﻿.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: #e9ebee;
+}
+
+/* Khối chân màn hình: gồm 2 hàng — hàng công cụ (số trang + zoom) phía trên,
+   hàng thông tin file (avatar/tên/dung lượng + tải về/đóng) phía dưới —
+   giống hệt bố cục xem file của Zalo web. */
+.bottomChrome {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Hàng trên: bên trái icon loại file + "TRANG X/Y" (chỉ với tài liệu Word),
+   bên phải "100% ⌄" (mở menu chọn mức zoom) và nút toàn màn hình. */
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 36px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #868e96;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.zoomTrigger {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #495057;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.zoomTrigger:hover {
+  background: #f1f3f5;
+}
+
+.zoomMenu {
+  position: absolute;
+  bottom: 100%;
+  right: 28px;
+  margin-bottom: 6px;
+  min-width: 130px;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoomMenuItem {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #495057;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.12s ease;
+}
+.zoomMenuItem:hover {
+  background: #f1f3f5;
+  color: #212529;
+}
+
+.zoomMenuDivider {
+  height: 1px;
+  background: #e9ecef;
+  margin: 4px 0;
+}
+
+.toolbarIconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #495057;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.toolbarIconBtn:hover {
+  background: #f1f3f5;
+}
+
+/* Hàng dưới: avatar người chia sẻ + tên file + mô tả bên trái, tải về/đóng bên phải. */
+.bottomBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.bottomBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fileName {
+  color: #25262b;
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 50vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileMeta {
+  color: #868e96;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #495057;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.actionBtn:hover {
+  background: #f1f3f5;
+}
+
+.actionDivider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: #dee2e6;
+}
+
+.navBtn {
+  position: absolute;
+  top: calc(50% - 32px);
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: #fff;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.navBtn:hover {
+  background: #f1f3f5;
+}
+.navLeft {
+  left: 16px;
+}
+.navRight {
+  right: 16px;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Chừa khoảng trên/dưới cho nội dung, còn hai cạnh để panel có thể đưa
+     scrollbar sát mép của vùng xem file. */
+  padding: 16px 0 96px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Khi có hàng công cụ phía trên (isZoomable) thì chân màn hình cao hơn (36px + hàng info). */
+.contentWithToolbar {
+  padding-bottom: 132px;
+}
+
+.mediaBox {
+  max-height: calc(100vh - 160px);
+  max-width: 90vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image {
+  max-height: calc(100vh - 160px);
+  max-width: 90vw;
+  object-fit: contain;
+  user-select: none;
+  transition: transform 0.15s ease;
+}

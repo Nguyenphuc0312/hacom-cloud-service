@@ -10,9 +10,12 @@ vi.mock("xlsx", () => ({
     Sheets: { "Sheet 1": {} },
   })),
   utils: {
-    sheet_to_json: vi.fn(() => [["Name", "Value"], ["unsafe", maliciousCell]]),
+    sheet_to_html: vi.fn(() => `<table><tr><td>Name</td><td>Value</td></tr><tr><td>unsafe</td><td>${maliciousCell}</td></tr></table>`),
+    decode_range: vi.fn(() => ({ s: { r: 0, c: 0 }, e: { r: 1, c: 1 } })),
+    encode_col: vi.fn((c: number) => String.fromCharCode(65 + c)),
   },
 }));
+
 
 describe("ExcelPreview", () => {
   beforeEach(() => {
