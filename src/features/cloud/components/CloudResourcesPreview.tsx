@@ -28,6 +28,7 @@ import { CloudItemIcon } from "./CloudItemIcon";
 import { formatBytes, formatCloudDateTime, getCloudItemTitle, getTrashCountdown, getTrashExpiry, normalizeCloudItemType } from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 import { downloadResourceWithName, getHacomDesktopBridge } from "../../../utils/downloadFile";
+import { formatRelativeDate } from "../../../utils/formatTime";
 
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
@@ -172,7 +173,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         </ResourceSection>
 
         <ResourceSection label="File" count={files.length}>
-          {files.length ? <><div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("files")} /></> : <ResourceEmptyText>Chưa có File được chia sẻ trong hội thoại này</ResourceEmptyText>}
+          {files.length ? <><div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("files")} /></> : <ResourceEmptyText>Chưa có File được chia sẻ trong hội thoại này</ResourceEmptyText>}
         </ResourceSection>
 
         <ResourceSection label="Link" count={links.length}>
@@ -393,25 +394,52 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
 
 type ResourceRowProps = Omit<ResourceActionProps, "item"> & {
   item: CloudItem;
+  senderName?: string;
   trashNow?: number;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
 };
 
-const CloudFileRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
-  <div className="group relative rounded-lg hover:bg-surface-hover">
-    {item.accessUrl ? (
-      <a href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-2 rounded-lg p-2 pr-28">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileTypeIcon type={getFileIconType(item.contentType, itemTitle(item))} fileName={itemTitle(item)} className="h-5 w-5" /></span>
-        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span>
-      </a>
-    ) : (
-      <div className="flex items-center gap-2 rounded-lg p-2 pr-28"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-overlay text-text-muted"><FileTypeIcon type={getFileIconType(item.contentType, itemTitle(item))} fileName={itemTitle(item)} className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-text-primary">{itemTitle(item)}</span><span className="text-[11px] text-text-muted">{formatBytes(item.sizeBytes)}</span></span></div>
-    )}
-    <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
-  </div>
-);
+const CloudFileRow: React.FC<ResourceRowProps> = ({ item, senderName, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+  const name = itemTitle(item);
+  const date = formatRelativeDate(new Date(item.createdAt));
+  const owner = senderName?.trim() || "Bạn";
+  const content = (
+    <>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px]">
+        <FileTypeIcon
+          type={getFileIconType(item.contentType, name)}
+          fileName={name}
+          className="h-11 w-11"
+        />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold leading-5 text-text-primary" title={name}>{name}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate text-xs leading-5 text-text-muted">
+          <span className="shrink-0">{formatBytes(item.sizeBytes)}</span>
+          <Clock className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <span aria-hidden="true">·</span>
+          <span className="truncate">{owner}</span>
+        </span>
+      </span>
+      <span className="ml-auto max-w-[6.5rem] shrink-0 truncate text-right text-xs text-text-muted">{date}</span>
+    </>
+  );
+
+  return (
+    <div className="group relative rounded-lg hover:bg-surface-hover">
+      {item.accessUrl ? (
+        <a href={item.accessUrl} download={name} className="flex min-h-[64px] items-center gap-3 rounded-lg p-2 pr-28">
+          {content}
+        </a>
+      ) : (
+        <div className="flex min-h-[64px] items-center gap-3 rounded-lg p-2 pr-28">{content}</div>
+      )}
+      <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+    </div>
+  );
+};
 
 const CloudLinkRow: React.FC<ResourceRowProps & { senderName?: string }> = ({ item, senderName, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const url = item.url?.trim() ?? "";
