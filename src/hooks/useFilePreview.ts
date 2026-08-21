@@ -56,6 +56,7 @@ export interface PreviewTarget {
   previewType: PreviewType;
   uploaderName?: string | null;
   uploaderAvatarUrl?: string | null;
+  createdAt?: string | Date | null;
 }
 
 export interface UseFilePreviewReturn {

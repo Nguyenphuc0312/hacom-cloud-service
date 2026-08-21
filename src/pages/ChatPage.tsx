@@ -1278,20 +1278,26 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
-      const target: PreviewTarget = {
-        attachment,
-        conversationId: selectedConversation.id,
-        previewType: getPreviewType(
-          attachment.mimeType,
-          attachment.fileName,
-        ) as PreviewType,
-      };
       const cachedMessages = rtkChatApi.endpoints.getMessages
         .select({ conversationId: selectedConversation.id })(store.getState())
         .data?.messages ?? [];
-      const gallery = cachedMessages
-        .flatMap((message) =>
-          (message.attachments ?? []).map((candidate) => ({
+
+      const gallery: PreviewTarget[] = cachedMessages
+        .flatMap((message) => {
+          const uploaderName =
+            message.senderName ||
+            (message as any).sender?.fullName ||
+            (message as any).sender?.displayName ||
+            (message as any).sender?.username ||
+            null;
+          const uploaderAvatarUrl =
+            message.senderAvatar ||
+            (message as any).sender?.avatarUrl ||
+            (message as any).sender?.avatar ||
+            null;
+          const createdAt = message.createdAt || null;
+
+          return (message.attachments ?? []).map((candidate) => ({
             attachment: candidate,
             conversationId: selectedConversation.id,
             messageId: message.id,
@@ -1299,9 +1305,48 @@ export const ChatPage: React.FC = () => {
               candidate.mimeType,
               candidate.fileName,
             ) as PreviewType,
-          })),
-        )
+            uploaderName,
+            uploaderAvatarUrl,
+            createdAt,
+          }));
+        })
         .filter((candidate) => candidate.previewType !== "unknown");
+
+      const parentMessage = cachedMessages.find((m) =>
+        (m.attachments ?? []).some(
+          (a) =>
+            (attachment.id && a.id === attachment.id) ||
+            (attachment.objectKey && a.objectKey === attachment.objectKey) ||
+            (attachment.url && a.url === attachment.url),
+        ),
+      );
+
+      const targetUploaderName =
+        parentMessage?.senderName ||
+        (parentMessage as any)?.sender?.fullName ||
+        (parentMessage as any)?.sender?.displayName ||
+        (parentMessage as any)?.sender?.username ||
+        null;
+      const targetUploaderAvatarUrl =
+        parentMessage?.senderAvatar ||
+        (parentMessage as any)?.sender?.avatarUrl ||
+        (parentMessage as any)?.sender?.avatar ||
+        null;
+      const targetCreatedAt = parentMessage?.createdAt || null;
+
+      const target: PreviewTarget = {
+        attachment,
+        conversationId: selectedConversation.id,
+        messageId: parentMessage?.id,
+        previewType: getPreviewType(
+          attachment.mimeType,
+          attachment.fileName,
+        ) as PreviewType,
+        uploaderName: targetUploaderName,
+        uploaderAvatarUrl: targetUploaderAvatarUrl,
+        createdAt: targetCreatedAt,
+      };
+
       filePreview.open(target, gallery.length > 0 ? gallery : undefined);
     },
     [filePreview, selectedConversation],

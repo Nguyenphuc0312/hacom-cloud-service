@@ -24,6 +24,7 @@ import { getMimePreviewType, type PreviewType } from '../../utils/mimeRegistry';
 import { formatFileSize, getIconTypeFromPreviewType } from '../../utils/filePreviewUtils';
 import { truncateFilename } from '../../utils/truncateFilename';
 import { downloadResourceWithName } from '../../utils/downloadFile';
+import { formatCalendarDateTime } from '../../utils/formatTime';
 import {
   FileTypeIcon,
   TextPreview,
@@ -152,13 +153,36 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return current.previewType || getMimePreviewType(mimeType, fileName);
   }, [current, mimeType, fileName]);
 
-  if (!isOpen || !current) return null;
-
   const displayName = truncateFilename(fileName, 48);
   const iconType = getIconTypeFromPreviewType(previewType);
-  const uploaderName = current.uploaderName || null;
-  const uploaderAvatarUrl = current.uploaderAvatarUrl || null;
-  const metadataLine = [uploaderName, formatFileSize(fileSize)].filter(Boolean).join(' · ');
+  const uploaderName =
+    current?.uploaderName ||
+    (rawAtt?.uploaderName as string | undefined) ||
+    (rawAtt?.senderName as string | undefined) ||
+    null;
+  const uploaderAvatarUrl =
+    current?.uploaderAvatarUrl ||
+    (rawAtt?.uploaderAvatarUrl as string | undefined) ||
+    (rawAtt?.senderAvatar as string | undefined) ||
+    null;
+  const createdAtRaw =
+    current?.createdAt ||
+    (rawAtt?.createdAt as string | undefined) ||
+    (rawAtt?.timestamp as string | undefined) ||
+    null;
+
+  const formattedTime = useMemo(() => {
+    if (!createdAtRaw) return null;
+    const d =
+      typeof createdAtRaw === 'string' || typeof createdAtRaw === 'number'
+        ? new Date(createdAtRaw)
+        : createdAtRaw;
+    return Number.isNaN(d.getTime()) ? null : formatCalendarDateTime(d);
+  }, [createdAtRaw]);
+
+  const metadataLine = [uploaderName, formattedTime, formatFileSize(fileSize)]
+    .filter(Boolean)
+    .join(' · ');
 
   const lowerName = fileName.toLowerCase();
   const isDocx = lowerName.endsWith('.docx');
@@ -167,6 +191,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     previewType === 'document' || previewType === 'spreadsheet' || previewType === 'presentation';
   const isZoomable =
     previewType === 'image' || previewType === 'pdf' || (isOfficeDoc && (isDocx || isXlsx));
+
+  if (!isOpen || !current) return null;
 
   const handleDownload = () => {
     if (secureUrl) {
