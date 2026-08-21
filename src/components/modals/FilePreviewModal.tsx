@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview FilePreviewModal — lightbox xem trước file đính kèm với giao diện
  * chuẩn theo kiểu xem file của Zalo web (giống hệt hr-web-client calendar file preview):
  * nền sáng toàn màn hình (#e9ebee), thanh dưới cùng có icon/tên/dung lượng file bên trái
@@ -68,6 +68,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   hasNext,
   onPrev,
   onNext,
+  onRefreshUrl,
 }) => {
   const [scale, setScale] = useState(1);
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
@@ -146,7 +147,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         : undefined;
   const mimeType = (rawAtt?.mimeType || 'application/octet-stream') as string;
 
-
   const previewType: PreviewType = useMemo(() => {
     if (!current) return 'unknown';
     return current.previewType || getMimePreviewType(mimeType, fileName);
@@ -192,6 +192,25 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <div style={{ fontSize: 13, color: '#868e96', marginTop: 8 }}>
             {urlError || 'File đang được xử lý hoặc không còn khả dụng, thử lại sau.'}
           </div>
+          {onRefreshUrl && (
+            <button
+              type="button"
+              style={{
+                marginTop: 12,
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: '1px solid #dee2e6',
+                background: '#fff',
+                color: '#495057',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+              onClick={() => void onRefreshUrl()}
+            >
+              Thử lại
+            </button>
+          )}
         </div>
       );
     }
@@ -199,9 +218,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     if (previewType === 'text') {
       return <TextPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
     }
+
     if (previewType === 'csv') {
       return <CsvPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
     }
+
     if (previewType === 'pdf') {
       return (
         <PdfPreview
@@ -213,7 +234,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         />
       );
     }
-
 
     if (isOfficeDoc) {
       if (isDocx) {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview useFilePreview — manages the file preview modal state.
  *
  * Tracks the list of previewable attachments in the current conversation,
@@ -23,6 +23,10 @@ const URL_CACHE = new ExpiringLruCache<CacheEntry>({
   maxEntries: 120,
 });
 const CACHE_MARGIN_MS = 30_000;
+
+export const clearPreviewUrlCache = (): void => {
+  URL_CACHE.clear();
+};
 
 const getPreviewUrlPolicy = (attachment: Attachment, previewType: PreviewType) => ({
   context: previewType === "image" ? ("image" as const) : ("media" as const),
@@ -54,7 +58,6 @@ export interface PreviewTarget {
   uploaderAvatarUrl?: string | null;
 }
 
-
 export interface UseFilePreviewReturn {
   /** Whether the preview modal is open */
   isOpen: boolean;
@@ -82,7 +85,7 @@ export interface UseFilePreviewReturn {
   hasPrev: boolean;
   /** Whether there is a next item */
   hasNext: boolean;
-  /** Force-refresh the secure URL (e.g. on 403) */
+  /** Force-refresh the secure URL (e.g. on 403 or error) */
   refreshUrl: () => Promise<void>;
 }
 
@@ -95,77 +98,98 @@ export function useFilePreview(): UseFilePreviewReturn {
   const [secureUrl, setSecureUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const reqSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const current = gallery[currentIndex] ?? null;
+  const current = isOpen ? gallery[currentIndex] ?? null : null;
 
-  // ─ Resolve secure URL for a given target ─
+  useEffect(() => {
+    const seq = ++reqSeqRef.current;
 
-  const resolveUrl = useCallback(
-    async (target: PreviewTarget, force = false) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+    // Abort previous in-flight request
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
 
-      const key = cacheKey(target.conversationId, target.attachment);
+    if (!isOpen || !current) {
+      setSecureUrl(null);
+      setUrlError(null);
+      setIsLoadingUrl(false);
+      return;
+    }
 
-      // Check cache first
-      if (!force) {
-        const cached = getCached(key);
-        if (cached) {
-          setSecureUrl(cached);
-          setUrlError(null);
-          return;
-        }
+    const key = cacheKey(current.conversationId, current.attachment);
 
-        // Try attachment's own downloadUrl
-        if (target.attachment.downloadUrl) {
-          const expiresAtMs = target.attachment.expiresAt
-            ? Date.parse(target.attachment.expiresAt)
-            : 0;
-          if (expiresAtMs - Date.now() > CACHE_MARGIN_MS) {
-            const resolvedDownloadUrl = resolvePublicResourceUrl(
-              target.attachment.downloadUrl,
-              getPreviewUrlPolicy(target.attachment, target.previewType),
-            );
-            if (resolvedDownloadUrl) {
-              URL_CACHE.set(key, { url: resolvedDownloadUrl }, expiresAtMs);
-              setSecureUrl(resolvedDownloadUrl);
-              setUrlError(null);
-              return;
-            }
-          }
-        }
-      }
-
-      // No valid cached/inline URL – fetch from API
-      const hasIdentity = target.attachment.objectKey || target.attachment.id;
-      if (!hasIdentity) {
-        // Fallback: use raw url if available
-        setSecureUrl(
-          resolvePublicResourceUrl(
-            target.attachment.url,
-            getPreviewUrlPolicy(target.attachment, target.previewType),
-          ) ?? null,
-        );
+    // 1. Check cache (unless this run was triggered by refreshUrl)
+    const isForcedRefresh = refreshNonce > 0;
+    if (!isForcedRefresh) {
+      const cached = getCached(key);
+      if (cached) {
+        setSecureUrl(cached);
+        setUrlError(null);
+        setIsLoadingUrl(false);
         return;
       }
 
-      setIsLoadingUrl(true);
-      setUrlError(null);
+      // Try attachment's own downloadUrl if not expired
+      if (current.attachment.downloadUrl) {
+        const expiresAtMs = current.attachment.expiresAt
+          ? Date.parse(current.attachment.expiresAt)
+          : 0;
+        if (expiresAtMs - Date.now() > CACHE_MARGIN_MS) {
+          const resolvedDownloadUrl = resolvePublicResourceUrl(
+            current.attachment.downloadUrl,
+            getPreviewUrlPolicy(current.attachment, current.previewType),
+          );
+          if (resolvedDownloadUrl) {
+            URL_CACHE.set(key, { url: resolvedDownloadUrl }, expiresAtMs);
+            setSecureUrl(resolvedDownloadUrl);
+            setUrlError(null);
+            setIsLoadingUrl(false);
+            return;
+          }
+        }
+      }
+    }
 
+    // 2. Fallback if no identity
+    const hasIdentity = current.attachment.objectKey || current.attachment.id;
+    if (!hasIdentity) {
+      const fallbackUrl =
+        resolvePublicResourceUrl(
+          current.attachment.url,
+          getPreviewUrlPolicy(current.attachment, current.previewType),
+        ) ?? null;
+      setSecureUrl(fallbackUrl);
+      setUrlError(null);
+      setIsLoadingUrl(false);
+      return;
+    }
+
+    // 3. Needs API fetch
+    setSecureUrl(null);
+    setUrlError(null);
+    setIsLoadingUrl(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    void (async () => {
       try {
         const response = await fileApi.getDownloadUrl({
-          conversationId: target.conversationId,
-          objectKey: target.attachment.objectKey || undefined,
-          attachmentId: target.attachment.id || undefined,
-          // Đây là luồng XEM: xin URL hạn dài để trình xem nhúng không chết
-          // giữa chừng khi người dùng đọc tài liệu lâu.
+          conversationId: current.conversationId,
+          objectKey: current.attachment.objectKey || undefined,
+          attachmentId: current.attachment.id || undefined,
           mode: "view",
           signal: controller.signal,
         });
 
-        if (controller.signal.aborted) return;
+        if (reqSeqRef.current !== seq || controller.signal.aborted) {
+          return;
+        }
 
         const payload = unwrapApiSuccess(response);
         const expiresAtMs = payload.expiresAt
@@ -173,69 +197,55 @@ export function useFilePreview(): UseFilePreviewReturn {
           : Date.now() + 5 * 60 * 1000;
 
         const signedUrl = resolvePublicResourceUrl(payload.url, {
-          context: target.previewType === "image" ? "image" : "media",
+          context: current.previewType === "image" ? "image" : "media",
           allowBlob: true,
         });
-        if (!signedUrl) {
-          setSecureUrl(
-            resolvePublicResourceUrl(
-              target.attachment.url,
-              getPreviewUrlPolicy(target.attachment, target.previewType),
-            ) ?? null,
-          );
+
+        const finalUrl =
+          signedUrl ||
+          (resolvePublicResourceUrl(
+            current.attachment.url,
+            getPreviewUrlPolicy(current.attachment, current.previewType),
+          ) ?? null);
+
+        if (signedUrl) {
+          URL_CACHE.set(key, { url: signedUrl }, expiresAtMs);
+        }
+
+        if (reqSeqRef.current === seq && !controller.signal.aborted) {
+          setSecureUrl(finalUrl);
+          setUrlError(null);
+          setIsLoadingUrl(false);
+        }
+      } catch (err) {
+        if (reqSeqRef.current !== seq || controller.signal.aborted) {
           return;
         }
 
-        URL_CACHE.set(key, { url: signedUrl }, expiresAtMs);
-        setSecureUrl(signedUrl);
-      } catch (err) {
-        if (controller.signal.aborted) return;
+        const fallbackUrl =
+          resolvePublicResourceUrl(
+            current.attachment.url,
+            getPreviewUrlPolicy(current.attachment, current.previewType),
+          ) ?? null;
+
         setUrlError(
           err instanceof Error ? err.message : "Failed to load preview URL",
         );
-        // Fallback to raw URL
-        setSecureUrl(
-          resolvePublicResourceUrl(
-            target.attachment.url,
-            getPreviewUrlPolicy(target.attachment, target.previewType),
-          ) ?? null,
-        );
+        setSecureUrl(fallbackUrl);
+        setIsLoadingUrl(false);
       } finally {
-        if (!controller.signal.aborted) {
+        if (reqSeqRef.current === seq && !controller.signal.aborted) {
           setIsLoadingUrl(false);
         }
       }
-    },
-    [],
-  );
-
-  // Whenever current target changes, resolve its URL
-  const [prevCurrent, setPrevCurrent] = useState(current);
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
-
-  if (current !== prevCurrent || isOpen !== prevIsOpen) {
-    setPrevCurrent(current);
-    setPrevIsOpen(isOpen);
-    setSecureUrl(null);
-    setUrlError(null);
-    if (isOpen && current) {
-      setIsLoadingUrl(true);
-    } else {
-      setIsLoadingUrl(false);
-    }
-  }
-
-  useEffect(() => {
-    if (isOpen && current) {
-      void resolveUrl(current);
-    }
+    })();
 
     return () => {
-      abortRef.current?.abort();
+      controller.abort();
     };
-  }, [isOpen, current, resolveUrl]);
+  }, [isOpen, current, refreshNonce]);
 
-  // ─ Actions ─
+  // ── Actions ────────────────────────────────────────────────────────
 
   const open = useCallback(
     (target: PreviewTarget, galleryItems?: PreviewTarget[]) => {
@@ -243,12 +253,13 @@ export function useFilePreview(): UseFilePreviewReturn {
       setGallery(items);
       const idx = items.findIndex(
         (it) =>
-          it.attachment.id === target.attachment.id &&
-          it.attachment.objectKey === target.attachment.objectKey,
+          (target.attachment.id && it.attachment.id === target.attachment.id) ||
+          (target.attachment.objectKey &&
+            it.attachment.objectKey === target.attachment.objectKey) ||
+          (target.attachment.url && it.attachment.url === target.attachment.url),
       );
       setSecureUrl(null);
       setUrlError(null);
-      setIsLoadingUrl(true);
       setCurrentIndex(idx >= 0 ? idx : 0);
       setIsOpen(true);
     },
@@ -256,7 +267,10 @@ export function useFilePreview(): UseFilePreviewReturn {
   );
 
   const close = useCallback(() => {
-    abortRef.current?.abort();
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
     setIsOpen(false);
     setSecureUrl(null);
     setUrlError(null);
@@ -264,24 +278,19 @@ export function useFilePreview(): UseFilePreviewReturn {
   }, []);
 
   const prev = useCallback(() => {
-    setSecureUrl(null);
-    setUrlError(null);
-    setIsLoadingUrl(true);
     setCurrentIndex((i) => Math.max(0, i - 1));
   }, []);
 
   const next = useCallback(() => {
-    setSecureUrl(null);
-    setUrlError(null);
-    setIsLoadingUrl(true);
     setCurrentIndex((i) => Math.min(gallery.length - 1, i + 1));
   }, [gallery.length]);
 
   const refreshUrl = useCallback(async () => {
     if (!current) return;
-    await resolveUrl(current, true);
-  }, [current, resolveUrl]);
-
+    const key = cacheKey(current.conversationId, current.attachment);
+    URL_CACHE.delete(key);
+    setRefreshNonce((n) => n + 1);
+  }, [current]);
 
   return {
     isOpen,
