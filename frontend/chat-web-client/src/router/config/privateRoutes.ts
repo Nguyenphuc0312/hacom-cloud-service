@@ -39,6 +39,7 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
   { path: ROUTE_PATHS.CLOUD, component: CloudPage },
+  { path: ROUTE_PATHS.CLOUD_TRASH, component: CloudPage },
   { path: ROUTE_PATHS.CLOUD_MANAGE, component: CloudManagePage },
   { path: ROUTE_PATHS.CLOUD_LEGACY, component: CloudLegacyRedirect },
   { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },

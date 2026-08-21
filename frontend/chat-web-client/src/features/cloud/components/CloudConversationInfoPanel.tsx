@@ -10,6 +10,7 @@ import type {
   CloudItem,
   CloudQuota,
   CloudQuotaRequest,
+  CloudViewMode,
 } from "../types";
 import { formatBytes } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
@@ -21,6 +22,8 @@ interface CloudConversationInfoPanelProps {
   quota: CloudQuota | null;
   quotaRequest?: CloudQuotaRequest | null;
   showQuotaRequest?: boolean;
+  viewMode: CloudViewMode;
+  onViewModeChange: (mode: CloudViewMode) => void;
   onRequestQuota?: () => void;
   onLoadAllTrash?: () => Promise<void>;
   onClose: () => void;
@@ -50,6 +53,7 @@ export const CloudConversationInfoPanel: React.FC<
   quota,
   quotaRequest = null,
   showQuotaRequest = false,
+  onViewModeChange,
   onRequestQuota,
   onLoadAllTrash,
   onClose,
@@ -234,6 +238,7 @@ export const CloudConversationInfoPanel: React.FC<
           <CloudResourcesPreview
             items={items}
             trashItems={trashItems}
+            onViewTrash={() => onViewModeChange("trash")}
             onLoadAllTrash={onLoadAllTrash}
             onRestoreTrashItem={onRestoreTrashItem}
             onDeleteTrashItem={onDeleteTrashItem}

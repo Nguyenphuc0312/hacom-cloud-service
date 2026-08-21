@@ -3,9 +3,7 @@ import { createPortal } from "react-dom";
 import {
   ArrowLeftIcon as ArrowLeft,
   ArrowPathIcon as RotateCcw,
-  ArrowDownTrayIcon as Download,
   CalendarDaysIcon as CalendarDays,
-  CheckIcon as Check,
   ClockIcon as Clock3,
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
@@ -36,6 +34,7 @@ import { getFileIconType } from "../../../utils/formatFileSize";
 interface CloudResourcesPreviewProps {
   items: CloudItem[];
   trashItems?: CloudItem[];
+  onViewTrash?: () => void;
   onLoadAllTrash?: () => Promise<void>;
   onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
   onDeleteTrashItem?: (item: CloudItem) => void;
@@ -59,6 +58,7 @@ const itemTitle = (item: CloudItem): string =>
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
   trashItems = [],
+  onViewTrash,
   onLoadAllTrash,
   onRestoreTrashItem,
   onDeleteTrashItem,
@@ -259,7 +259,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 <button
                   type="button"
                   onClick={() => setGalleryTab("media")}
-                  className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7] dark:bg-black dark:text-white dark:hover:bg-neutral-900"
+                  className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7]"
                 >
                   Xem tất cả
                 </button>
@@ -274,12 +274,12 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
 
         <ResourceSection label="File" count={files.length}>
           {files.length ? <div className="space-y-0.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <p className="py-3 text-center text-[12px] text-text-muted">Chưa có File được chia sẻ trong hội thoại này</p>}
-          {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7] dark:bg-black dark:text-white dark:hover:bg-neutral-900">Xem tất cả</button> : null}
+          {files.length >= 4 ? <button type="button" onClick={() => setGalleryTab("files")} className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7]">Xem tất cả</button> : null}
         </ResourceSection>
 
         <ResourceSection label="Link" count={links.length}>
           {links.length ? <div className="space-y-0.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : <p className="py-3 text-center text-[12px] text-text-muted">Chưa có link nào được chia sẻ</p>}
-          {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7] dark:bg-black dark:text-white dark:hover:bg-neutral-900">Xem tất cả</button> : null}
+          {links.length >= 4 ? <button type="button" onClick={() => setGalleryTab("links")} className="mt-3 h-8 w-full rounded bg-[#e4e7ec] text-[13px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7]">Xem tất cả</button> : null}
         </ResourceSection>
 
         <section className="border-t border-border">
@@ -316,6 +316,13 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 <>
                   <div className="flex items-center justify-between py-2 text-[11px] text-text-muted">
                     <span>{trashItems.length} mục</span>
+                    <button
+                      type="button"
+                      className="font-medium text-primary"
+                      onClick={onViewTrash}
+                    >
+                      Chọn
+                    </button>
                   </div>
                   <div className="space-y-1.5">
                     {trashItems.slice(0, 3).map((item) => {
@@ -377,7 +384,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                       type="button"
                       disabled={isLoadingTrashGallery}
                       onClick={() => void openTrashGallery()}
-                      className="mt-3 w-full rounded-md bg-surface-overlay py-2 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface-hover dark:bg-black dark:text-white dark:hover:bg-neutral-900"
+                      className="mt-3 w-full rounded-md bg-surface-overlay py-2 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface-hover"
                     >
                       {isLoadingTrashGallery ? "Đang tải…" : "Xem tất cả"}
                     </button>
@@ -389,7 +396,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
         </section>
       </div>
       {galleryTab ? <ResourceGallery tab={galleryTab} allItems={resolvedItems} onClose={() => setGalleryTab(null)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
-      {trashGalleryOpen ? <ResourceGallery title="Thùng rác" tab={resolvedTrashItems.some((item) => item.type === "image" || item.type === "video") ? "media" : resolvedTrashItems.some((item) => item.type === "file") ? "files" : "links"} allItems={resolvedTrashItems} onClose={() => setTrashGalleryOpen(false)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onRestoreTrashItem={onRestoreTrashItem} onDeleteTrashItem={onDeleteTrashItem} isMutating={isMutating} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
+      {trashGalleryOpen ? <ResourceGallery title="Thùng rác" tab={resolvedTrashItems.some((item) => item.type === "image" || item.type === "video") ? "media" : resolvedTrashItems.some((item) => item.type === "file") ? "files" : "links"} allItems={resolvedTrashItems} onClose={() => setTrashGalleryOpen(false)} onOpenImage={openImage} onOpenVideo={setVideo} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
       <ImagePreviewModal isOpen={lightboxIndex !== null} onClose={() => setLightboxIndex(null)} images={images} initialIndex={lightboxIndex ?? 0} />
       <VideoPlayerModal isOpen={video !== null} onClose={() => setVideo(null)} url={video?.accessUrl ?? null} fileName={video ? itemTitle(video) : undefined} />
     </>
@@ -493,12 +500,7 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, onDeleteItem, on
   );
 };
 
-type ResourceRowProps = Omit<ResourceActionProps, "item"> & {
-  item: CloudItem;
-  selectionMode?: boolean;
-  selected?: boolean;
-  onToggleSelect?: () => void;
-};
+type ResourceRowProps = Omit<ResourceActionProps, "item"> & { item: CloudItem };
 
 const CloudFileRow: React.FC<ResourceRowProps> = ({
   item,
@@ -590,16 +592,10 @@ const ResourceGallery: React.FC<{
   onOpenImage: (item: CloudItem) => void;
   onOpenVideo: (item: CloudItem) => void;
   onDeleteItem?: (item: CloudItem) => void | Promise<void>;
-  onRestoreTrashItem?: (itemId: string) => void | Promise<void>;
-  onDeleteTrashItem?: (item: CloudItem) => void;
-  isMutating?: boolean;
   onViewOriginalMessage?: (item: CloudItem) => void;
   onShowInFolder?: (item: CloudItem) => void;
-}> = ({ title = "Kho lưu trữ", tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo, onDeleteItem, onRestoreTrashItem, onDeleteTrashItem, isMutating = false, onViewOriginalMessage, onShowInFolder }) => {
+}> = ({ title = "Kho lưu trữ", tab: initialTab, allItems, onClose, onOpenImage, onOpenVideo, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const [tab, setTab] = useState<GalleryTab>(initialTab);
-  const isTrash = title === "Thùng rác";
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [fromDate, setFromDate] = useState("");
@@ -641,50 +637,8 @@ const ResourceGallery: React.FC<{
       });
     return [...grouped.entries()];
   }, [filteredItems]);
+
   const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : "Links";
-  const toggleSelection = (itemId: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  };
-  const toggleSelectionMode = () => {
-    setSelectionMode((current) => !current);
-    setSelectedIds(new Set());
-  };
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectedIds(new Set());
-  };
-  const selectedItems = useMemo(
-    () => allItems.filter((item) => selectedIds.has(item.id)),
-    [allItems, selectedIds],
-  );
-  const shareSelectedItems = async () => {
-    for (const item of selectedItems) await shareResource(item);
-  };
-  const downloadSelectedItems = async () => {
-    for (const item of selectedItems) {
-      const url = resourceUrl(item);
-      if (url && item.type !== "link") {
-        await downloadResourceWithName(url, item.title?.trim() || itemTitle(item));
-      }
-    }
-  };
-  const deleteSelectedItems = async () => {
-    for (const item of selectedItems) {
-      if (isTrash) await onDeleteTrashItem?.(item);
-      else await onDeleteItem?.(item);
-    }
-    exitSelectionMode();
-  };
-  const restoreSelectedItems = async () => {
-    if (!isTrash || !onRestoreTrashItem) return;
-    for (const item of selectedItems) await onRestoreTrashItem(item.id);
-    exitSelectionMode();
-  };
   const chooseSuggestion = (days: number) => {
     const today = new Date();
     const start = new Date(today);
@@ -767,15 +721,13 @@ const ResourceGallery: React.FC<{
           <ArrowLeft className="h-5 w-5" />
         </button>
         <h2 className="flex-1 text-[16px] font-semibold text-text-primary">{title}</h2>
-        {!isTrash ? (
-          <button
-            type="button"
-            onClick={selectionMode ? exitSelectionMode : toggleSelectionMode}
-            className="inline-flex h-9 items-center rounded-md px-2 text-[13px] font-medium text-text-primary hover:bg-surface-hover"
-          >
-            {selectionMode ? "Hủy" : "Chọn"}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-9 items-center rounded-md px-2 text-[13px] font-medium text-text-primary hover:bg-surface-hover"
+        >
+          Chọn
+        </button>
       </header>
       <nav className="flex h-14 shrink-0 border-b border-border px-5" aria-label="Loại nội dung">
         {(["media", "files", "links"] as const).map((key) => {
@@ -863,62 +815,9 @@ const ResourceGallery: React.FC<{
         {groups.length ? groups.map(([date, group]) => (
           <section key={date} className="mb-3 border-b-8 border-surface-muted bg-surface px-5 pb-5 pt-4">
             <h3 className="mb-5 text-lg font-semibold text-text-primary">{date}</h3>
-            {tab === "media" ? (
-              <div className="grid grid-cols-3 gap-3">
-                {group.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={!item.accessUrl && !selectionMode}
-                    onClick={() => {
-                      if (selectionMode) {
-                        toggleSelection(item.id);
-                        return;
-                      }
-                      if (item.type === "video") onOpenVideo(item);
-                      else onOpenImage(item);
-                    }}
-                    className="group relative aspect-square overflow-hidden rounded-md bg-surface-overlay disabled:cursor-default"
-                    aria-pressed={selectionMode ? selectedIds.has(item.id) : undefined}
-                  >
-                    <GalleryMedia item={item} />
-                    {selectionMode ? <SelectionCircle selected={selectedIds.has(item.id)} className="absolute left-2 top-2 z-10" /> : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {tab === "files" ? (
-              <div className="space-y-2">
-                {group.map((item) => (
-                  <GalleryFile
-                    key={item.id}
-                    item={item}
-                    selectionMode={selectionMode}
-                    selected={selectedIds.has(item.id)}
-                    onToggleSelect={() => toggleSelection(item.id)}
-                    onDeleteItem={onDeleteItem}
-                    onViewOriginalMessage={onViewOriginalMessage}
-                    onShowInFolder={onShowInFolder}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {tab === "links" ? (
-              <div className="space-y-2">
-                {group.map((item) => (
-                  <GalleryLink
-                    key={item.id}
-                    item={item}
-                    selectionMode={selectionMode}
-                    selected={selectedIds.has(item.id)}
-                    onToggleSelect={() => toggleSelection(item.id)}
-                    onDeleteItem={onDeleteItem}
-                    onViewOriginalMessage={onViewOriginalMessage}
-                    onShowInFolder={onShowInFolder}
-                  />
-                ))}
-              </div>
-            ) : null}
+            {tab === "media" ? <div className="grid grid-cols-3 gap-3">{group.map((item) => <button key={item.id} type="button" disabled={!item.accessUrl} onClick={() => item.type === "video" ? onOpenVideo(item) : onOpenImage(item)} className="group relative aspect-square overflow-hidden rounded-md bg-surface-overlay disabled:cursor-default"><GalleryMedia item={item} /></button>)}</div> : null}
+            {tab === "files" ? <div className="space-y-2">{group.map((item) => <GalleryFile key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
+            {tab === "links" ? <div className="space-y-2">{group.map((item) => <GalleryLink key={item.id} item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
           </section>
         )) : <EmptyState icon={tab === "media" ? <ImageIcon /> : tab === "files" ? <FileText /> : <Link2 />} label={`Chưa có ${tabLabel.toLowerCase()}`} />}
       </div>
@@ -950,27 +849,9 @@ const ResourceGallery: React.FC<{
             document.body,
           )
         : null}
-      {selectionMode ? (
-        <div className="z-30 flex shrink-0 items-center gap-3 border-t border-border bg-surface px-5 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
-          <span className="text-sm font-medium text-text-primary">{selectedIds.size} đã chọn</span>
-          <div className="ml-auto flex items-center gap-2">
-            <button type="button" disabled={!selectedIds.size} onClick={() => void shareSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Chia sẻ mục đã chọn" title="Chia sẻ"><ArrowUturnRightIcon className="h-5 w-5" /></button>
-            <button type="button" disabled={!selectedIds.size} onClick={() => void downloadSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Tải xuống mục đã chọn" title="Tải xuống"><Download className="h-5 w-5" /></button>
-            {isTrash ? <button type="button" disabled={!selectedIds.size || !onRestoreTrashItem || isMutating} onClick={() => void restoreSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Khôi phục mục đã chọn" title="Khôi phục"><RotateCcw className="h-5 w-5" /></button> : null}
-            <button type="button" disabled={!selectedIds.size || isMutating} onClick={() => void deleteSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-red-950/30 dark:hover:bg-red-950/50" aria-label="Xóa mục đã chọn" title="Xóa"><Trash2 className="h-5 w-5" /></button>
-            <button type="button" onClick={exitSelectionMode} className="ml-2 px-2 text-sm font-medium text-text-primary hover:underline">Hủy</button>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 };
-
-const SelectionCircle: React.FC<{ selected: boolean; className?: string }> = ({ selected, className = "" }) => (
-  <span aria-hidden="true" className={`inline-flex h-5 w-5 items-center justify-center rounded-full border shadow-sm ${selected ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"} ${className}`}>
-    {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-  </span>
-);
 
 const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) =>
   item.accessUrl ? (
@@ -990,20 +871,19 @@ const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) =>
     <ImageIcon className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-text-muted" />
   );
 
-const GalleryFile: React.FC<ResourceRowProps> = ({ item, selectionMode = false, selected = false, onToggleSelect, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
+const GalleryFile: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
   <div className="group relative rounded-lg bg-surface-overlay">
-    {selectionMode ? <button type="button" onClick={onToggleSelect} className="absolute left-3 top-1/2 z-10 -translate-y-1/2" aria-label={selected ? `Bỏ chọn ${itemTitle(item)}` : `Chọn ${itemTitle(item)}`} aria-pressed={selected}><SelectionCircle selected={selected} /></button> : null}
-    {item.accessUrl ? <a href={selectionMode ? undefined : item.accessUrl} download={selectionMode ? undefined : itemTitle(item)} onClick={selectionMode ? (event) => event.preventDefault() : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-12" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span></a> : <div className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-12" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="truncate text-sm text-text-primary">{itemTitle(item)}</span></div>}
-    {!selectionMode ? <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
+    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} className="flex items-center gap-3 rounded-lg p-3 pr-28"><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="text-xs text-text-muted">{formatBytes(item.sizeBytes)}</span></span></a> : <div className="flex items-center gap-3 rounded-lg p-3 pr-28"><FileText className="h-7 w-7 text-text-muted" /><span className="truncate text-sm text-text-primary">{itemTitle(item)}</span></div>}
+    <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
   </div>
 );
 
-const GalleryLink: React.FC<ResourceRowProps> = ({ item, selectionMode = false, selected = false, onToggleSelect, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+const GalleryLink: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const url = item.url?.trim() ?? "";
   const label = linkLabel(item, url);
   let host = url;
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ }
-  return <div className="group relative rounded-lg bg-surface-overlay">{selectionMode ? <button type="button" onClick={onToggleSelect} className="absolute left-3 top-1/2 z-10 -translate-y-1/2" aria-label={selected ? `Bỏ chọn ${label}` : `Chọn ${label}`} aria-pressed={selected}><SelectionCircle selected={selected} /></button> : null}<a href={selectionMode ? undefined : url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => event.preventDefault() : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-12" : ""}`}><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-text-muted" title={host}>{host}</span></span></a>{!selectionMode ? <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}</div>;
+  return <div className="group relative rounded-lg bg-surface-overlay"><a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg p-3 pr-28"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-text-muted" title={host}>{host}</span></span></a><ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /></div>;
 };
 
 const formatCalendarDate = (value: string): string => {

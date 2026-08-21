@@ -1,8 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CloudItem, CloudQuota } from "../types";
 import { CloudConversationInfoPanel } from "./CloudConversationInfoPanel";
-import { CloudResourcesPreview } from "./CloudResourcesPreview";
 
 const item: CloudItem = {
   id: "item-1",
@@ -71,6 +70,7 @@ const quota: CloudQuota = {
 describe("CloudConversationInfoPanel", () => {
   it("uses the Hacom Cloud sidebar layout and keeps Trash actions available", () => {
     const onClose = vi.fn();
+    const onViewModeChange = vi.fn();
     const onRestoreTrashItem = vi.fn(async () => undefined);
     const onDeleteTrashItem = vi.fn();
 
@@ -81,6 +81,8 @@ describe("CloudConversationInfoPanel", () => {
         quota={quota}
         quotaRequest={null}
         showQuotaRequest={false}
+        viewMode="active"
+        onViewModeChange={onViewModeChange}
         onRequestQuota={vi.fn()}
         onRestoreTrashItem={onRestoreTrashItem}
         onDeleteTrashItem={onDeleteTrashItem}
@@ -102,9 +104,10 @@ describe("CloudConversationInfoPanel", () => {
 
     expect(screen.getByText("Hacom")).not.toBeNull();
     expect(screen.queryByText("Ghi chú riêng")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Chọn" })).toBeNull();
     expect(container.querySelectorAll("details")).toHaveLength(0);
 
+    fireEvent.click(screen.getByRole("button", { name: "Chọn" }));
+    expect(onViewModeChange).toHaveBeenCalledWith("trash");
     fireEvent.click(screen.getByRole("button", { name: /Khôi phục old-report.pdf/i }));
     expect(onRestoreTrashItem).toHaveBeenCalledWith("trash-1");
     fireEvent.click(screen.getByRole("button", { name: /Xóa vĩnh viễn old-report.pdf/i }));
@@ -124,6 +127,8 @@ describe("CloudConversationInfoPanel", () => {
         quota={quota}
         quotaRequest={null}
         showQuotaRequest
+        viewMode="active"
+        onViewModeChange={vi.fn()}
         onRequestQuota={onRequestQuota}
         onClose={vi.fn()}
       />,
@@ -135,37 +140,5 @@ describe("CloudConversationInfoPanel", () => {
       }),
     );
     expect(onRequestQuota).toHaveBeenCalledTimes(1);
-  });
-
-  it("opens resource selection from the gallery Chọn action", () => {
-    cleanup();
-    const { getAllByRole, getByRole, getByText } = render(<CloudResourcesPreview items={[imageItem]} />);
-
-    fireEvent.click(getByRole("button", { name: "Xem tất cả" }));
-    fireEvent.click(getByRole("button", { name: "Chọn" }));
-
-    expect(getAllByRole("button", { name: "Hủy" })).toHaveLength(2);
-    expect(getByText("0 đã chọn")).not.toBeNull();
-
-    const photoButtons = getAllByRole("button", { name: "photo.png" });
-    fireEvent.click(photoButtons[photoButtons.length - 1]);
-    expect(getByText("1 đã chọn")).not.toBeNull();
-  });
-
-  it("does not expose selection in the Trash gallery", () => {
-    cleanup();
-    const trashItems = [
-      trashItem,
-      { ...trashItem, id: "trash-2", title: "old-report-2.pdf" },
-      { ...trashItem, id: "trash-3", title: "old-report-3.pdf" },
-      { ...trashItem, id: "trash-4", title: "old-report-4.pdf" },
-    ];
-
-    const { getByRole, queryByRole } = render(
-      <CloudResourcesPreview items={[]} trashItems={trashItems} />,
-    );
-
-    fireEvent.click(getByRole("button", { name: "Xem tất cả" }));
-    expect(queryByRole("button", { name: "Chọn" })).toBeNull();
   });
 });
