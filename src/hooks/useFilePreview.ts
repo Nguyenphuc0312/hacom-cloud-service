@@ -216,8 +216,12 @@ export function useFilePreview(): UseFilePreviewReturn {
   if (current !== prevCurrent || isOpen !== prevIsOpen) {
     setPrevCurrent(current);
     setPrevIsOpen(isOpen);
-    if (!isOpen || !current) {
-      setSecureUrl(null);
+    setSecureUrl(null);
+    setUrlError(null);
+    if (isOpen && current) {
+      setIsLoadingUrl(true);
+    } else {
+      setIsLoadingUrl(false);
     }
   }
 
@@ -242,6 +246,9 @@ export function useFilePreview(): UseFilePreviewReturn {
           it.attachment.id === target.attachment.id &&
           it.attachment.objectKey === target.attachment.objectKey,
       );
+      setSecureUrl(null);
+      setUrlError(null);
+      setIsLoadingUrl(true);
       setCurrentIndex(idx >= 0 ? idx : 0);
       setIsOpen(true);
     },
@@ -257,10 +264,16 @@ export function useFilePreview(): UseFilePreviewReturn {
   }, []);
 
   const prev = useCallback(() => {
+    setSecureUrl(null);
+    setUrlError(null);
+    setIsLoadingUrl(true);
     setCurrentIndex((i) => Math.max(0, i - 1));
   }, []);
 
   const next = useCallback(() => {
+    setSecureUrl(null);
+    setUrlError(null);
+    setIsLoadingUrl(true);
     setCurrentIndex((i) => Math.min(gallery.length - 1, i + 1));
   }, [gallery.length]);
 
@@ -268,6 +281,7 @@ export function useFilePreview(): UseFilePreviewReturn {
     if (!current) return;
     await resolveUrl(current, true);
   }, [current, resolveUrl]);
+
 
   return {
     isOpen,

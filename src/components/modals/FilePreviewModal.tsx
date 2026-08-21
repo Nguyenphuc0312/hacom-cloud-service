@@ -203,8 +203,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       return <CsvPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
     }
     if (previewType === 'pdf') {
-      return <PdfPreview url={secureUrl} fileName={fileName} fileSize={fileSize} scale={scale} />;
+      return (
+        <PdfPreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={fileSize}
+          scale={scale}
+          onPageCount={setPageCount}
+        />
+      );
     }
+
 
     if (isOfficeDoc) {
       if (isDocx) {

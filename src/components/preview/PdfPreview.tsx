@@ -1,7 +1,8 @@
-/**
- * @fileoverview Xem trước PDF bằng iframe với #toolbar=0&navpanes=0 và scale do component cha điều khiển.
+﻿/**
+ * @fileoverview Xem trước PDF bằng pdfjs-dist vẽ lên canvas trong trình duyệt.
+ * Không dùng iframe để tránh việc trình duyệt tự động kích hoạt tải file về máy.
  */
-import { useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AlertTriangle, Download, ExternalLink } from 'lucide-react';
 import { downloadResourceWithName } from '../../utils/downloadFile';
 import styles from './PreviewPanel.module.css';
@@ -12,35 +13,167 @@ interface PdfPreviewProps {
   fileSize?: number;
   /** Mức thu phóng do component cha điều khiển (mặc định 1 = 100%). */
   scale?: number;
+  /** Báo số trang thực tế cho component cha */
+  onPageCount?: (count: number) => void;
 }
 
-export function PdfPreview({ url, fileName, scale = 1 }: PdfPreviewProps) {
+interface PDFDocumentWrapper {
+  numPages: number;
+  getPage: (n: number) => Promise<{
+    getViewport: (opts: { scale: number }) => { width: number; height: number };
+    render: (opts: {
+      canvasContext: CanvasRenderingContext2D;
+      viewport: { width: number; height: number };
+    }) => { promise: Promise<void>; cancel: () => void };
+  }>;
+}
+
+let pdfjsLib: typeof import('pdfjs-dist') | null = null;
+
+async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
+  if (pdfjsLib) return pdfjsLib;
+
+  const [pdfjs, { default: PdfWorker }] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?worker'),
+  ]);
+  pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+  pdfjsLib = pdfjs;
+  return pdfjs;
+}
+
+const PdfPageCanvas: React.FC<{
+  doc: PDFDocumentWrapper;
+  pageNumber: number;
+  scale: number;
+}> = React.memo(({ doc, pageNumber, scale }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: { promise: Promise<void>; cancel: () => void } | null = null;
+
+    void (async () => {
+      try {
+        const page = await doc.getPage(pageNumber);
+        if (cancelled) return;
+
+        // Render at device pixel ratio for crisp text
+        const pixelRatio = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: scale * pixelRatio });
+        const displayViewport = page.getViewport({ scale });
+
+        setPageSize({ width: displayViewport.width, height: displayViewport.height });
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const context = canvas.getContext('2d');
+        if (!context) return;
+
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${Math.floor(displayViewport.width)}px`;
+        canvas.style.height = `${Math.floor(displayViewport.height)}px`;
+
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch {
+        // Ignored on cancelled
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
+  }, [doc, pageNumber, scale]);
+
+  return (
+    <div
+      style={{
+        margin: '0 auto 24px',
+        width: pageSize ? `${pageSize.width}px` : 'auto',
+        minHeight: pageSize ? `${pageSize.height}px` : '400px',
+        backgroundColor: '#fff',
+        boxShadow: '0 1px 8px rgba(0, 0, 0, 0.14)',
+        display: 'flex',
+        justifyContent: 'center',
+      }}
+    >
+      <canvas ref={canvasRef} style={{ display: 'block' }} />
+    </div>
+  );
+});
+PdfPageCanvas.displayName = 'PdfPageCanvas';
+
+export function PdfPreview({ url, fileName, scale = 1, onPageCount }: PdfPreviewProps) {
+  const [doc, setDoc] = useState<PDFDocumentWrapper | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const handleDownload = useCallback(async () => {
-    await downloadResourceWithName(url, fileName || 'document.pdf');
-  }, [fileName, url]);
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setHasError(false);
+    setDoc(null);
 
-  const handleOpenInNewTab = useCallback(() => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    void (async () => {
+      try {
+        const [pdfjs, res] = await Promise.all([loadPdfJs(), fetch(url)]);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.arrayBuffer();
+        if (cancelled) return;
+
+        const loadingTask = pdfjs.getDocument({
+          data,
+          enableXfa: false,
+          useSystemFonts: false,
+        });
+
+        const loadedDoc = await loadingTask.promise;
+        if (cancelled) return;
+
+        setDoc(loadedDoc as unknown as PDFDocumentWrapper);
+        setIsLoading(false);
+        onPageCount?.(loadedDoc.numPages);
+      } catch {
+        if (!cancelled) {
+          setIsLoading(false);
+          setHasError(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  const embedUrl = `${url}#toolbar=0&navpanes=0`;
-  const inverseScale = 100 / scale;
+  const pageNumbers = useMemo(() => {
+    if (!doc) return [];
+    return Array.from({ length: doc.numPages }, (_, i) => i + 1);
+  }, [doc]);
+
+  const handleDownload = () => void downloadResourceWithName(url, fileName || 'document.pdf');
+  const handleOpenInNewTab = () => window.open(url, '_blank', 'noopener,noreferrer');
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.panelBody} style={{ position: 'relative' }}>
-        {isLoading && !hasError && (
+    <div className={styles.panel} style={{ background: 'transparent' }}>
+      <div className={styles.docHost} style={{ position: 'relative' }}>
+        {isLoading && (
           <div className={styles.centerState} style={{ position: 'absolute', inset: 0 }}>
-            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải xem trước…</span>
+            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải tài liệu PDF…</span>
           </div>
         )}
-        {hasError ? (
-          <div className={styles.centerState}>
+
+        {hasError && (
+          <div className={styles.centerState} style={{ position: 'absolute', inset: 0 }}>
             <AlertTriangle size={40} color="#fa5252" />
-            <span style={{ fontSize: 13, color: '#495057' }}>Không hiển thị được PDF. Vui lòng mở ở tab mới.</span>
+            <span style={{ fontSize: 13, color: '#495057' }}>
+              Không hiển thị được PDF. Vui lòng mở ở tab mới hoặc tải về.
+            </span>
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button
                 type="button"
@@ -77,31 +210,21 @@ export function PdfPreview({ url, fileName, scale = 1 }: PdfPreviewProps) {
                   fontWeight: 500,
                   cursor: 'pointer',
                 }}
-                onClick={() => void handleDownload()}
+                onClick={handleDownload}
               >
                 <Download size={14} />
                 Tải về
               </button>
             </div>
           </div>
-        ) : (
-          <iframe
-            key={url}
-            src={embedUrl}
-            title={fileName || 'PDF preview'}
-            className={styles.iframe}
-            style={{
-              transform: `scale(${scale})`,
-              transformOrigin: 'top left',
-              width: `${inverseScale}%`,
-              height: `${inverseScale}%`,
-            }}
-            onLoad={() => setIsLoading(false)}
-            onError={() => {
-              setIsLoading(false);
-              setHasError(true);
-            }}
-          />
+        )}
+
+        {doc && (
+          <div style={{ width: '100%' }}>
+            {pageNumbers.map((num) => (
+              <PdfPageCanvas key={num} doc={doc} pageNumber={num} scale={scale} />
+            ))}
+          </div>
         )}
       </div>
     </div>
