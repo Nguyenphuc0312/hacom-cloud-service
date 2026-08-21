@@ -309,9 +309,7 @@ export default defineConfig(({ mode }) => {
     customLogger: devLogger,
 
     server: {
-      // Keep the local corporate-auth proxy reachable only from this machine.
-      // Set VITE_DEV_HOST explicitly if a LAN-accessible dev server is needed.
-      host: env.VITE_DEV_HOST?.trim() || "127.0.0.1",
+      host: "0.0.0.0",
       port: 5100,
       strictPort: true,
       proxy: {

@@ -8,14 +8,14 @@ import {
   useState,
 } from "react";
 import {
-  ArrowPathIcon as LoaderCircle,
-  ArrowUturnLeftIcon as RotateCcw,
-  ClipboardDocumentIcon as Copy,
-  MagnifyingGlassIcon as Search,
-  ShareIcon as Share2,
-  TrashIcon as Trash2,
-  XMarkIcon as X,
-} from "@heroicons/react/24/outline";
+  LoaderCircle,
+  Copy,
+  Search,
+  Share2,
+  Trash2,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -62,9 +62,7 @@ import { ROUTE_PATHS } from "../../../router/paths";
 import {
   ATTACHMENT_CONSTRAINTS,
   createAttachmentDraft,
-  isBlockingAttachmentDraft,
   isDuplicateFile,
-  isFinalizedAttachmentDraft,
   type AttachmentDraft,
 } from "../../../types/attachmentDraft";
 import "../styles/cloud.css";
@@ -238,8 +236,6 @@ export default function CloudPage() {
     [],
   );
   const pendingAttachmentsRef = useRef<AttachmentDraft[]>([]);
-  const pendingUploadIdsRef = useRef<Set<string>>(new Set());
-  const pendingUploadCountRef = useRef(0);
   const [isUploadingPendingAttachments, setIsUploadingPendingAttachments] =
     useState(false);
   const cloudUserId = resolveCloudUserId(authUser?.id);
@@ -334,71 +330,6 @@ export default function CloudPage() {
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
-
-  // Match Hacom Chat's upload queue: selecting a file starts the upload
-  // immediately. Drafts remain visible as "Đang chờ"/progress and the send
-  // action is enabled only after every draft is finalized.
-  useEffect(() => {
-    const queued = pendingAttachments.filter(
-      (draft) =>
-        draft.status === "idle" &&
-        Boolean(draft.file) &&
-        !pendingUploadIdsRef.current.has(draft.localId),
-    );
-    if (queued.length === 0) return;
-
-    queued.forEach((draft) => pendingUploadIdsRef.current.add(draft.localId));
-    pendingUploadCountRef.current += queued.length;
-    setIsUploadingPendingAttachments(true);
-
-    void Promise.all(
-      queued.map(async (draft) => {
-        setPendingAttachments((current) =>
-          current.map((item) =>
-            item.localId === draft.localId
-              ? { ...item, status: "uploading", progress: 0 }
-              : item,
-          ),
-        );
-        try {
-          const item = await workspace.uploadFile(draft.file!);
-          setPendingAttachments((current) =>
-            current.map((currentDraft) =>
-              currentDraft.localId === draft.localId
-                ? {
-                    ...currentDraft,
-                    status: "finalized",
-                    progress: 100,
-                    fileId: item.id,
-                    errorCode: undefined,
-                    errorMessage: undefined,
-                  }
-                : currentDraft,
-            ),
-          );
-        } catch {
-          setPendingAttachments((current) =>
-            current.map((currentDraft) =>
-              currentDraft.localId === draft.localId
-                ? {
-                    ...currentDraft,
-                    status: "failed",
-                    errorMessage: t("errors.generic"),
-                  }
-                : currentDraft,
-            ),
-          );
-        } finally {
-          pendingUploadIdsRef.current.delete(draft.localId);
-          pendingUploadCountRef.current -= 1;
-          if (pendingUploadCountRef.current <= 0) {
-            pendingUploadCountRef.current = 0;
-            setIsUploadingPendingAttachments(false);
-          }
-        }
-      }),
-    );
-  }, [pendingAttachments, t, workspace.uploadFile]);
 
   useEffect(
     () => () => {
@@ -512,13 +443,9 @@ export default function CloudPage() {
   const handleSend = useCallback(
     async (rawContent?: string) => {
       const content = stripRichText(rawContent ?? "");
-      // Files are uploaded as soon as they are selected. Only a failed or
-      // interrupted draft still needs an upload during an explicit retry.
-      const attachments = pendingAttachments.filter(
-        (draft) => draft.file && !isFinalizedAttachmentDraft(draft),
-      );
+      const attachments = pendingAttachments.filter((draft) => draft.file);
 
-      if (!content && pendingAttachments.length === 0) return;
+      if (!content && attachments.length === 0) return;
 
       if (attachments.length > 0) {
         setIsUploadingPendingAttachments(true);
@@ -560,20 +487,6 @@ export default function CloudPage() {
         // Keep failed drafts visible so the user can remove/retry them. Do not
         // create a text item when an attachment in the same send failed.
         if (failed) return;
-      }
-
-      // A finalized item has already been persisted by Cloud. Remove only
-      // the local composer drafts after the user confirms the send; do not
-      // issue a second upload request.
-      if (pendingAttachments.length > 0) {
-        setPendingAttachments((current) => {
-          current.forEach((draft) => {
-            if (isFinalizedAttachmentDraft(draft) && draft.previewUrl) {
-              URL.revokeObjectURL(draft.previewUrl);
-            }
-          });
-          return current.filter((draft) => !isFinalizedAttachmentDraft(draft));
-        });
       }
 
       if (content) {
@@ -1437,21 +1350,11 @@ export default function CloudPage() {
                 onCancelUpload={handleRemovePendingAttachment}
                 onRetryUpload={handleRetryPendingAttachment}
                 onClearAllDrafts={handleClearPendingAttachments}
-                hasUploadingDrafts={
-                  isUploadingPendingAttachments ||
-                  pendingAttachments.some(
-                    (draft) =>
-                      draft.status === "idle" ||
-                      isBlockingAttachmentDraft(draft),
-                  )
-                }
+                hasUploadingDrafts={isUploadingPendingAttachments}
                 hasFailedDrafts={pendingAttachments.some((draft) =>
                   ["failed", "expired", "cancelled"].includes(draft.status),
                 )}
-                hasReadyDrafts={
-                  pendingAttachments.length > 0 &&
-                  pendingAttachments.every(isFinalizedAttachmentDraft)
-                }
+                hasReadyDrafts={pendingAttachments.length > 0}
               />
             ) : (
               <div className="cloud-trash-retention-note">
@@ -1621,8 +1524,6 @@ export default function CloudPage() {
                 onDeleteItem={(item) => handleDeleteRequest(item.id)}
                 onViewOriginalMessage={handleViewOriginalResource}
                 onShowInFolder={showPhaseNotice}
-                userId={cloudUserId ?? currentUser.id}
-                senderName={currentUser.displayName || currentUser.username || "Bạn"}
                 onClose={() => setIsInfoPanelOpen(false)}
               />
             )}

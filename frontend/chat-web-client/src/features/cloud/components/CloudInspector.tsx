@@ -1,14 +1,14 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowDownTrayIcon as Download,
-  ArrowTopRightOnSquareIcon as ExternalLink,
-  CalendarDaysIcon as CalendarClock,
-  DocumentCheckIcon as FileCheck2,
-  FingerPrintIcon as Fingerprint,
-  LockClosedIcon as LockKeyhole,
-  ShareIcon as Share2,
-} from "@heroicons/react/24/outline";
+  CalendarClock,
+  Download,
+  ExternalLink,
+  FileCheck2,
+  Fingerprint,
+  LockKeyhole,
+  Share2,
+} from "lucide-react";
 import { Button } from "../../../components/ui";
 import type { CloudItem } from "../types";
 import {

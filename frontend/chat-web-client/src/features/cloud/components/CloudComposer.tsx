@@ -2,14 +2,14 @@ import React, { useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowUpTrayIcon as FileUp,
-  CloudArrowUpIcon as UploadCloud,
-  DocumentTextIcon as StickyNote,
-  LinkIcon as Link2,
-  PaperAirplaneIcon as SendHorizontal,
-  PaperClipIcon as Paperclip,
-  XMarkIcon as X,
-} from "@heroicons/react/24/outline";
+  FileUp,
+  Link2,
+  Paperclip,
+  SendHorizontal,
+  StickyNote,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { Button, Input, Textarea } from "../../../components/ui";
 import type { CloudComposerMode, CloudUploadProgress } from "../types";
 import { formatBytes } from "../utils/cloudFormat";

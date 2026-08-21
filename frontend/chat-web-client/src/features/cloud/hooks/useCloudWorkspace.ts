@@ -9,7 +9,6 @@ import type {
   CloudUploadProgress,
 } from "../types";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
-import { normalizeCloudItemType } from "../utils/cloudFormat";
 
 const PROCESSING_REFRESH_MS = 2_000;
 const INITIAL_LOAD_RETRY_DELAYS_MS = [150, 400];
@@ -98,9 +97,8 @@ const hydrateMediaAccess = async (
   userId: string,
   signal?: AbortSignal,
 ): Promise<CloudItem[]> => {
-  const normalizedItems = items.map(normalizeCloudItemType);
-  const hydrated = [...normalizedItems];
-  const candidates = normalizedItems
+  const hydrated = [...items];
+  const candidates = items
     .map((item, index) => ({ item, index }))
     .filter(
       ({ item }) =>
@@ -460,7 +458,7 @@ export const useCloudWorkspace = (
   );
 
   const uploadFile = useCallback(
-    async (file: File): Promise<CloudItem> => {
+    async (file: File) => {
       if (!userId) {
         const error = createMissingUserError();
         setState((current) => ({ ...current, error }));
@@ -514,29 +512,26 @@ export const useCloudWorkspace = (
           session.uploadSessionId,
         );
         await refreshQuota();
-        if (mountedRef.current) {
-          setState((current) => ({
-            ...current,
-            items: mergeItems(current.items, [normalizeCloudItemType(completed.item)]),
-            isMutating: false,
-            uploadProgress: {
-              fileName: file.name,
-              percent: 100,
-              stage: "processing",
-            },
-          }));
-        }
-        return normalizeCloudItemType(completed.item);
+        if (!mountedRef.current) return;
+        setState((current) => ({
+          ...current,
+          items: mergeItems(current.items, [completed.item]),
+          isMutating: false,
+          uploadProgress: {
+            fileName: file.name,
+            percent: 100,
+            stage: "processing",
+          },
+        }));
       } catch (error) {
+        if (!mountedRef.current) return;
         const cloudError = asCloudError(error);
-        if (mountedRef.current) {
-          setState((current) => ({
-            ...current,
-            isMutating: false,
-            uploadProgress: null,
-            error: cloudError,
-          }));
-        }
+        setState((current) => ({
+          ...current,
+          isMutating: false,
+          uploadProgress: null,
+          error: cloudError,
+        }));
         throw cloudError;
       }
     },

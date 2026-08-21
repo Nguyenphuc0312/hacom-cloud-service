@@ -74,42 +74,6 @@ export interface TrashCountdown {
   minutes: number;
 }
 
-/** Returns the server purge deadline, falling back to the 24-hour trash policy. */
-export const getTrashExpiry = (
-  purgeAfter: string | undefined,
-  deletedAt: string | undefined,
-): string | undefined => {
-  if (purgeAfter && Number.isFinite(new Date(purgeAfter).getTime())) return purgeAfter;
-  const deletedAtMs = deletedAt ? new Date(deletedAt).getTime() : Number.NaN;
-  return Number.isFinite(deletedAtMs)
-    ? new Date(deletedAtMs + 24 * 60 * 60 * 1000).toISOString()
-    : undefined;
-};
-
-/**
- * Keeps file resources classified by their actual MIME/extension. Older
- * Cloud projections can report every object with an image-like type, which
- * makes CSV files render as thumbnails in the chat timeline. Hacom Chat
- * resolves file icons from MIME + filename, so Cloud applies the same
- * correction at its API boundary.
- */
-export const normalizeCloudItemType = (item: CloudItem): CloudItem => {
-  if (item.type === "text" || item.type === "link") return item;
-
-  const mime = (item.contentType ?? "").trim().toLowerCase();
-  const fileName = (item.title ?? "").split("?", 1)[0].trim().toLowerCase();
-  const isSpreadsheet =
-    mime === "text/csv" ||
-    mime === "application/csv" ||
-    mime.includes("spreadsheet") ||
-    mime.includes("excel") ||
-    /\.(csv|xls|xlsx|ods)$/.test(fileName);
-
-  return isSpreadsheet && item.type !== "file"
-    ? { ...item, type: "file" }
-    : item;
-};
-
 export const getTrashCountdown = (
   expiresAt: string | undefined,
   now = Date.now(),

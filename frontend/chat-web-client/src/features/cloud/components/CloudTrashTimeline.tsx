@@ -1,10 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  ArrowPathIcon as RotateCcw,
-  ClockIcon as Clock3,
-  EllipsisHorizontalIcon as MoreHorizontal,
-  TrashIcon as Trash2,
-} from "@heroicons/react/24/outline";
+import { Clock3, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -14,7 +9,6 @@ import {
   getCloudItemPreview,
   getCloudItemTitle,
   getTrashCountdown,
-  getTrashExpiry,
 } from "../utils/cloudFormat";
 import { CloudItemIcon } from "./CloudItemIcon";
 
@@ -77,7 +71,7 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
               file: t("item.untitledFile"),
             });
             const preview = getCloudItemPreview(item);
-            const countdown = getTrashCountdown(getTrashExpiry(item.purgeAfter, item.deletedAt), now);
+            const countdown = getTrashCountdown(item.purgeAfter, now);
             const remaining = countdown.expired
               ? t("trash.expired")
               : countdown.hours > 0
