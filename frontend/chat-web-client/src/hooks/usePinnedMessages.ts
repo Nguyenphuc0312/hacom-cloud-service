@@ -53,20 +53,9 @@ interface UsePinnedMessagesReturn {
   togglePin: (message: Message) => Promise<boolean>;
 }
 
-interface UsePinnedMessagesOptions {
-  /**
-   * Cloud/My Documents can run against an independent API that may not expose
-   * the chat pin endpoints yet. Keep the same UI contract and persist locally
-   * until that endpoint is available, without changing ordinary chat behavior.
-   */
-  localFallback?: boolean;
-}
-
 export const usePinnedMessages = (
   conversationId: string | null,
-  options: UsePinnedMessagesOptions = {},
 ): UsePinnedMessagesReturn => {
-  const localFallback = options.localFallback === true;
   const dispatch = useAppDispatch();
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -136,20 +125,12 @@ export const usePinnedMessages = (
         syncPinnedFlags(messages);
       }
     } catch (err) {
-      if (localFallback) {
-        const messages = readLocalPins(conversationId);
-        setPinnedMessages(messages);
-        syncPinnedFlags(messages);
-        setError(null);
-        setIsLoading(false);
-        return;
-      }
       const apiErr = extractApiError(err);
       setError(apiErr.message);
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, localFallback, syncPinnedFlags]);
+  }, [conversationId, syncPinnedFlags]);
 
   useEffect(() => {
     if (conversationId && conversationId !== fetchedRef.current) {
@@ -234,19 +215,6 @@ export const usePinnedMessages = (
         }
         return true;
       } catch (err) {
-        if (localFallback) {
-          const next = isPinned
-            ? readLocalPins(conversationId).filter((item) => item.id !== message.id)
-            : [
-                { ...message, isPinned: true },
-                ...readLocalPins(conversationId).filter(
-                  (item) => item.id !== message.id,
-                ),
-              ];
-          writeLocalPins(conversationId, next);
-          setError(null);
-          return true;
-        }
         // Revert optimistic update
         if (isPinned) {
           setPinnedMessages((prev) => [
@@ -262,7 +230,7 @@ export const usePinnedMessages = (
         return false;
       }
     },
-    [conversationId, localFallback, patchIsPinned],
+    [conversationId, patchIsPinned],
   );
 
   return {
