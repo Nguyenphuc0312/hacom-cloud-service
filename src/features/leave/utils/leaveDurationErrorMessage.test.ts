@@ -6,7 +6,7 @@ describe("getLeaveDurationErrorMessage", () => {
   it("maps every new leave-duration validation code", () => {
     expect(
       getLeaveDurationErrorMessage({ errorCode: "LEAVE_TOTAL_DAYS_MISMATCH" }),
-    ).toContain("Tổng số ngày nghỉ không khớp");
+    ).toContain("hệ thống tính lại không khớp");
     expect(
       getLeaveDurationErrorMessage({
         response: { data: { message: "LEAVE_DURATION_SCHEDULE_UNASSIGNED" } },

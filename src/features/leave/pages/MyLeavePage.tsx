@@ -21,13 +21,14 @@ import {
   type WorkflowStatus,
 } from "../../api/hrApi";
 import {
-  calculateLeaveDays,
+  countCalendarLeaveDays,
   type LeaveDayPortion,
 } from "../utils/leaveDays";
 import { getLeaveDurationErrorMessage } from "../utils/leaveDurationErrorMessage";
 import {
   collectBlockingIssues,
   getNoticeStatus,
+  needsSickAttachmentHint,
   SICK_ATTACHMENT_MIN_DAYS,
 } from "../utils/leaveRules";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
@@ -83,9 +84,6 @@ const halfDaySessionLabel = (value?: LeaveHalfDaySession | null) => {
   if (value === "AFTERNOON") return "Chiều";
   return "Cả ngày";
 };
-
-const isAttachmentRequired = (leaveType: LeaveType, totalDays: number) =>
-  leaveType === "SICK" && totalDays >= SICK_ATTACHMENT_MIN_DAYS;
 
 /** Gợi ý chứng từ theo từng loại nghỉ — thay vì luôn nói "nghỉ ốm". */
 const attachmentHint: Record<LeaveType, string> = {
@@ -304,18 +302,25 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
   });
 
   // Nháp dd/mm/yyyy cho hai ô ngày: giữ nguyên chữ đang gõ dở ("05/0…") thay vì
-  // ép về form (form chỉ nhận ISO hợp lệ, nếu không calculateLeaveDays sẽ vỡ).
+  // ép về form (form chỉ nhận ISO hợp lệ, nếu không countCalendarLeaveDays sẽ vỡ).
   const [dateDraft, setDateDraft] = React.useState<{ start: string | null; end: string | null }>({
     start: null,
     end: null,
   });
 
-  const totalDays = React.useMemo(
-    () => calculateLeaveDays(form.startDate, form.endDate, form.startPortion, form.endPortion),
+  // Ước lượng theo LỊCH. Server mới tính số ngày thật theo ca đã phân của
+  // nhân viên (bỏ cuối tuần/ngày lễ), nên con số này chỉ để hiển thị tạm và
+  // chặn khoảng ngày vô lý — không được gửi lên như số ngày chính thức.
+  const estimatedDays = React.useMemo(
+    () => countCalendarLeaveDays(form.startDate, form.endDate, form.startPortion, form.endPortion),
     [form.endDate, form.endPortion, form.startDate, form.startPortion],
   );
 
-  const attachmentRequired = isAttachmentRequired(form.leaveType, totalDays);
+  const attachmentRequired = needsSickAttachmentHint({
+    leaveType: form.leaveType,
+    estimatedDays,
+    attachmentUrl: form.attachmentUrl,
+  });
 
   // Lỗi CHẶN (BE sẽ từ chối) và cảnh báo báo muộn (BE chỉ gắn cờ) — tách riêng
   // để hai thứ không trông giống nhau: hồng = không gửi được, hổ phách = nên biết.
@@ -326,21 +331,17 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
         endDate: form.endDate,
         startPortion: form.startPortion,
         endPortion: form.endPortion,
-        totalDays,
+        totalDays: estimatedDays,
         leaveType: form.leaveType,
         attachmentUrl: form.attachmentUrl,
       }),
-    [form, totalDays],
+    [form, estimatedDays],
   );
-  const attachmentMissing = blockingIssues.some(
-    (issue) => issue.code === "SICK_LEAVE_ATTACHMENT_REQUIRED",
-  );
-  const dateIssues = blockingIssues.filter(
-    (issue) => issue.code !== "SICK_LEAVE_ATTACHMENT_REQUIRED",
-  );
+  const attachmentMissing = attachmentRequired;
+  const dateIssues = blockingIssues;
   const notice = React.useMemo(
-    () => getNoticeStatus(form.startDate, totalDays),
-    [form.startDate, totalDays],
+    () => getNoticeStatus(form.startDate, estimatedDays),
+    [form.startDate, estimatedDays],
   );
   const showLateNotice = Boolean(notice?.lateSubmission) && dateIssues.length === 0;
 
@@ -384,7 +385,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
   const balances = data?.balances ?? [];
 
   async function handleCreate() {
-    if (totalDays <= 0) {
+    if (estimatedDays <= 0) {
       toast.error("Khoảng ngày nghỉ chưa hợp lệ.");
       return;
     }
@@ -400,7 +401,6 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
         endDate: form.endDate,
         startHalfDaySession: toHalfDaySession(form.startPortion),
         endHalfDaySession: toHalfDaySession(form.endPortion),
-        totalDays,
         reason: form.reason.trim() || undefined,
         attachmentUrl: form.attachmentUrl.trim() || undefined,
       });
@@ -666,7 +666,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
 
                 {showLateNotice && notice ? (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    Nghỉ {formatDays(totalDays)} ngày cần báo trước{" "}
+                    Nghỉ khoảng {formatDays(estimatedDays)} ngày cần báo trước{" "}
                     <span className="font-semibold">{notice.requiredDays} ngày</span>, đơn này
                     {notice.actualDays < 0
                       ? " khai lùi về quá khứ"
@@ -722,12 +722,19 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({ tabBar }) 
                   ) : null}
                 </label>
                 <div className="rounded-lg border border-[#d7dce3] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
-                  Tổng: <span className="font-semibold text-[#0f172a]">{formatDays(totalDays)} ngày</span>
+                  Tạm tính:{" "}
+                  <span className="font-semibold text-[#0f172a]">
+                    {formatDays(estimatedDays)} ngày
+                  </span>
+                  <div className="mt-0.5 text-xs text-[#64748b]">
+                    Số ngày trừ phép chính thức do hệ thống tính theo lịch làm việc của bạn
+                    (không tính cuối tuần, ngày lễ) và hiển thị sau khi gửi đơn.
+                  </div>
                 </div>
                 <button
                   type="button"
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#1565C0] px-4 text-sm font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
-                  disabled={submitting || totalDays <= 0 || blockingIssues.length > 0}
+                  disabled={submitting || estimatedDays <= 0 || blockingIssues.length > 0}
                   onClick={() => void handleCreate()}
                 >
                   <Send size={16} aria-hidden="true" />

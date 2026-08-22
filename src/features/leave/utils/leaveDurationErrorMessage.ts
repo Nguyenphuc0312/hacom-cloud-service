@@ -1,6 +1,6 @@
 const LEAVE_DURATION_ERROR_MESSAGES: Record<string, string> = {
   LEAVE_TOTAL_DAYS_MISMATCH:
-    "Tổng số ngày nghỉ không khớp với lịch làm việc đã phân. Vui lòng kiểm tra lại ngày và buổi nghỉ.",
+    "Số ngày nghỉ do hệ thống tính lại không khớp với số đang hiển thị. Vui lòng tải lại trang và gửi lại đơn.",
   LEAVE_DURATION_SCHEDULE_UNASSIGNED:
     "Chưa có lịch làm việc hoặc phân ca hiệu lực cho ngày nghỉ. Vui lòng liên hệ HR để được phân ca trước khi gửi đơn.",
   LEAVE_DURATION_NO_WORKING_DAY:
