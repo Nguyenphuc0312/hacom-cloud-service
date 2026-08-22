@@ -72,6 +72,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  if (authStatus === "password_change_required") {
+    return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
+  }
+
   if (!isAuthenticated) {
     return (
       <Navigate
@@ -198,20 +202,21 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
     isBootstrappingAuth,
     user,
     authStatus,
+    passwordChangeContinuation,
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !(authStatus === "password_change_required" && passwordChangeContinuation)) {
     if (isPendingHrLinkStatus(authStatus)) {
       return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
     }
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
-  if (user?.mustChangePassword !== true) {
+  if (authStatus !== "password_change_required" && user?.mustChangePassword !== true) {
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
   }
 

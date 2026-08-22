@@ -159,6 +159,7 @@ export interface RegisterFlowResult {
 export type LoginResult =
   | { status: "authenticated"; message?: string }
   | { status: "pending_hr_link"; message?: string }
+  | { status: "password_change_required"; message?: string }
   | "activation_required"
   | "locked"
   | "disabled";
@@ -179,6 +180,7 @@ interface AuthState {
   error: string | null;
   /** Mốc thời gian (epoch ms) được phép thử đăng nhập lại sau khi bị rate-limit. */
   rateLimitedUntil: number | null;
+  passwordChangeContinuation: string | null;
 
   login: (data: LoginFormData) => Promise<LoginResult>;
   applyLoginResponse: (payload: unknown, rememberMe?: boolean) => void;
@@ -542,6 +544,7 @@ export const useAuthStore = create<AuthState>()(
             pendingVerificationEmail: null,
             pendingVerificationSource: null,
             emailVerificationChallenge: null,
+            passwordChangeContinuation: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
@@ -578,6 +581,7 @@ export const useAuthStore = create<AuthState>()(
         registrationStatus: "idle",
         error: null,
         rateLimitedUntil: null,
+        passwordChangeContinuation: null,
 
         applyLoginResponse: (payload, rememberMe = false) => {
           const normalizedPayload = normalizeLoginPayload(payload);
@@ -718,6 +722,19 @@ export const useAuthStore = create<AuthState>()(
               password: data.password,
               rememberMe: data.rememberMe,
             });
+            if (payload.requiresPasswordChange && payload.passwordChangeContinuation) {
+              set({
+                user: null,
+                authStatus: "password_change_required",
+                passwordChangeContinuation: payload.passwordChangeContinuation,
+                isAuthenticated: false,
+                isInitialized: true,
+                isBootstrappingAuth: false,
+                isLoading: false,
+                error: null,
+              });
+              return { status: "password_change_required", message: payload.message };
+            }
             get().applyLoginResponse(payload, data.rememberMe);
             const canonicalUser = await get().refreshUser();
             if (get().authStatus === "pending_hr_link") {
@@ -1479,7 +1496,10 @@ export const useAuthStore = create<AuthState>()(
         // Strip avatar: presigned S3 URLs expire before the next session;
         // bootstrap always revalidates the canonical auth principal via /auth/me.
         user: state.user ? { ...state.user, avatar: undefined } : state.user,
-        authStatus: state.authStatus,
+        authStatus:
+          state.authStatus === "password_change_required"
+            ? "anonymous"
+            : state.authStatus,
         activationContext: state.activationContext,
         lockedAccount: state.lockedAccount,
         pendingVerificationEmail: state.pendingVerificationEmail,

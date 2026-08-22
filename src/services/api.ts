@@ -514,6 +514,19 @@ export const authApi = {
     persistAuthTokensFromPayload(unwrapApiSuccess(response.data));
     return response.data;
   },
+  changeRequiredPassword: async (data: {
+    passwordChangeContinuation: string;
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const response = await authClient.post<ApiResponse<ChangePasswordResponseData>>(
+      AUTH_ENDPOINTS.changeRequiredPassword,
+      data,
+    );
+    persistAuthTokensFromPayload(unwrapApiSuccess(response.data));
+    return response.data;
+  },
 };
 
 // ============================================

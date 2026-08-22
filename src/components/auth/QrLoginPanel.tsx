@@ -33,6 +33,16 @@ type StoreAuthResponse = {
   };
 };
 
+type AuthenticatedLoginResponse = Exclude<
+  LoginResponse,
+  { requiresPasswordChange: true }
+>;
+
+const isPasswordChangeRequired = (
+  payload: LoginResponse,
+): payload is Exclude<LoginResponse, AuthenticatedLoginResponse> =>
+  "requiresPasswordChange" in payload && payload.requiresPasswordChange === true;
+
 type QrPanelState = {
   sessionId: string;
   webSecret: string;
@@ -110,7 +120,7 @@ const toIsoString = (value: string | Date | undefined): string | undefined => {
 };
 
 const normalizeLoginResponseForStore = (
-  payload: LoginResponse,
+  payload: AuthenticatedLoginResponse,
 ): StoreAuthResponse => ({
   accessToken: payload.accessToken,
   refreshToken: payload.refreshToken,
@@ -288,10 +298,24 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           rememberMe,
         );
 
-        applyLoginResponse(
-          normalizeLoginResponseForStore(loginResponse),
-          rememberMe,
-        );
+        if (isPasswordChangeRequired(loginResponse)) {
+          if (!loginResponse.passwordChangeContinuation) {
+            throw new Error("Password-change continuation is missing");
+          }
+          useAuthStore.setState({
+            user: null,
+            authStatus: "password_change_required",
+            passwordChangeContinuation: loginResponse.passwordChangeContinuation,
+            isAuthenticated: false,
+            isInitialized: true,
+            isBootstrappingAuth: false,
+          });
+        } else {
+          applyLoginResponse(
+            normalizeLoginResponseForStore(loginResponse),
+            rememberMe,
+          );
+        }
         setPanelState((current) =>
           current && current.sessionId === panelSessionId
             ? { ...current, status: QrLoginSessionStatus.EXCHANGED }

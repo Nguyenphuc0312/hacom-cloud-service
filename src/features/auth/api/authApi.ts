@@ -54,6 +54,8 @@ export interface NormalizedAuthResponse {
     accessToken?: string;
     refreshToken?: string;
   };
+  requiresPasswordChange?: boolean;
+  passwordChangeContinuation?: string;
 }
 
 
@@ -160,6 +162,8 @@ export const normalizeAuthResponse = (
             refreshToken,
           }
         : undefined,
+    requiresPasswordChange: asBoolean(record.requiresPasswordChange) ?? false,
+    passwordChangeContinuation: asString(record.passwordChangeContinuation) || undefined,
   };
 };
 

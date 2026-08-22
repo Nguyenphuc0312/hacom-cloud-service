@@ -15,6 +15,7 @@ export const AUTH_ENDPOINTS = {
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   changePassword: "/change-password",
+  changeRequiredPassword: "/change-required-password",
   qrLoginCreateSession: "/qr-login/sessions",
   qrLoginSessionStatus: (sessionId: string): string =>
     `/qr-login/sessions/${sessionId}/status`,
