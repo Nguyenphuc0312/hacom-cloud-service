@@ -368,7 +368,12 @@ export interface CreateMyLeaveRequestPayload {
   endDate: string;
   startHalfDaySession?: LeaveHalfDaySession;
   endHalfDaySession?: LeaveHalfDaySession;
-  totalDays: number;
+  /**
+   * Bỏ trống để server tự tính theo lịch làm việc đã phân của nhân viên.
+   * FE không biết ca/ngày lễ của từng người nên không tự tính số ngày chính
+   * thức — gửi số tự tính sẽ bị trả `LEAVE_TOTAL_DAYS_MISMATCH`.
+   */
+  totalDays?: number;
   reason?: string;
   attachmentUrl?: string;
 }
