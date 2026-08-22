@@ -139,3 +139,129 @@ describe("MyTimesheetPage — future days", () => {
     expect(within(tile).getByText("1")).toBeTruthy();
   });
 });
+
+/**
+ * Some shifts include Sunday (a weekly template, or a weekday mask with the
+ * Sunday bit set). The grid must take "is this a working day" from the schedule
+ * the server resolved for that employee, never from the weekday itself —
+ * otherwise a Sunday-working employee sees their shift painted as a rest day.
+ */
+describe("MyTimesheetPage — shifts that include Sunday", () => {
+  /** The Sundays and one Monday of a fixed month, so the weekday is unambiguous. */
+  const SUNDAYS = ["2026-03-01", "2026-03-08", "2026-03-15"];
+  const MONDAY = "2026-03-02";
+
+  const renderMonth = async (days: ReturnType<typeof day>[]) => {
+    getMyTimesheet.mockResolvedValue({
+      period: {
+        id: "period-1",
+        month: 3,
+        year: 2026,
+        status: "PENDING_EMPLOYEE",
+        confirmDeadline: null,
+      },
+      confirmation: null,
+      days,
+      summary: { totalPaidDays: 0, totalLeaveDays: 0, countBySymbol: {} },
+    });
+    render(
+      <MemoryRouter initialEntries={["/timesheet?period=2026-03"]}>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(getMyTimesheet).toHaveBeenCalled());
+  };
+
+  const cellByDayNumber = async (date: string) => {
+    const label = String(Number(date.slice(8, 10)));
+    const nodes = await screen.findAllByText(label);
+    const cell = nodes
+      .map((node) => node.closest("div.flex.flex-col"))
+      .find((node): node is HTMLElement => node !== null);
+    if (!cell) throw new Error(`No cell rendered for ${date}`);
+    return cell;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not mark a worked Sunday as a rest day", async () => {
+    await renderMonth([
+      ...SUNDAYS.map((date) =>
+        day(date, {
+          isWorkingDay: true,
+          paidDays: 1,
+          displaySymbol: "+",
+          source: "DEVICE",
+          firstPunch: "08:00",
+          lastPunch: "17:30",
+          needsExplanation: false,
+        }),
+      ),
+      day(MONDAY, {
+        isWorkingDay: true,
+        paidDays: 1,
+        displaySymbol: "+",
+        source: "DEVICE",
+        needsExplanation: false,
+      }),
+    ]);
+
+    const sunday = await cellByDayNumber(SUNDAYS[0]);
+    // A worked Sunday shows its credit, not the "Nghỉ" rest-day wording.
+    expect(within(sunday).getByText("1 công")).toBeTruthy();
+    expect(within(sunday).queryByText("Nghỉ")).toBeNull();
+  });
+
+  it("keeps the Sunday header neutral when the shift works Sundays", async () => {
+    const { container } = { container: document.body };
+    await renderMonth(
+      SUNDAYS.map((date) =>
+        day(date, {
+          isWorkingDay: true,
+          paidDays: 1,
+          displaySymbol: "+",
+          source: "DEVICE",
+          needsExplanation: false,
+        }),
+      ),
+    );
+
+    await cellByDayNumber(SUNDAYS[0]);
+    const header = [...container.querySelectorAll("div")].find(
+      (node) => node.textContent?.trim() === "CN",
+    );
+    expect(header).toBeTruthy();
+    // Red is reserved for a column that is genuinely a rest day.
+    expect(header?.className).not.toContain("f43f5e");
+  });
+
+  it("still marks Sunday as a rest day for an ordinary office shift", async () => {
+    const { container } = { container: document.body };
+    await renderMonth([
+      ...SUNDAYS.map((date) =>
+        day(date, {
+          isWorkingDay: false,
+          source: "REST_DAY",
+          needsExplanation: false,
+        }),
+      ),
+      day(MONDAY, {
+        isWorkingDay: true,
+        paidDays: 1,
+        displaySymbol: "+",
+        source: "DEVICE",
+        needsExplanation: false,
+      }),
+    ]);
+
+    const sunday = await cellByDayNumber(SUNDAYS[0]);
+    expect(within(sunday).getByText("Nghỉ")).toBeTruthy();
+
+    const header = [...container.querySelectorAll("div")].find(
+      (node) => node.textContent?.trim() === "CN",
+    );
+    expect(header?.className).toContain("f43f5e");
+  });
+});

@@ -458,6 +458,31 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const daysNeedingReview = days.filter(
     (day) => day.needsExplanation && day.date <= today,
   ).length;
+  /*
+   * Cột nào tô màu "ngày nghỉ" phải suy từ CA ĐÃ SẮP của chính người này, không
+   * mặc định Chủ nhật là nghỉ: có ca làm cả Chủ nhật (mẫu ca tuần / weekday_mask
+   * bật bit CN), và ngược lại có người nghỉ vào thứ khác. Máy chủ đã trả
+   * `isWorkingDay` theo đúng ca được gán — chỉ đọc lại, không tự suy theo thứ.
+   *
+   * Một cột chỉ được coi là nghỉ khi MỌI ngày rơi vào cột đó trong tháng đều là
+   * ngày nghỉ; tháng có ca xoay (tuần này làm CN, tuần sau nghỉ) thì không cột
+   * nào bị tô, đúng bản chất là lịch không cố định theo thứ.
+   */
+  const restDayColumns = React.useMemo(() => {
+    const workingByColumn = new Map<string, boolean>();
+    for (const day of days) {
+      const label = WEEK_COLUMNS[gridColumnFor(day.date) - 1];
+      workingByColumn.set(
+        label,
+        (workingByColumn.get(label) ?? false) || day.isWorkingDay,
+      );
+    }
+    return new Set(
+      [...workingByColumn.entries()]
+        .filter(([, hasWorkingDay]) => !hasWorkingDay)
+        .map(([label]) => label),
+    );
+  }, [days]);
 
   async function handleConfirm() {
     setSubmitting("confirm");
@@ -675,7 +700,9 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                   <div
                     key={label}
                     className={`px-1 text-[11px] font-semibold uppercase tracking-wide ${
-                      label === "CN" ? "text-[#f43f5e]" : "text-[#94a3b8]"
+                      restDayColumns.has(label)
+                        ? "text-[#f43f5e]"
+                        : "text-[#94a3b8]"
                     }`}
                   >
                     {label}
