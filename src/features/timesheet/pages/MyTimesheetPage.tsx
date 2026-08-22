@@ -129,6 +129,14 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
   const scheduleNotice = getTimesheetDayScheduleNotice(day.source);
   const isUnpaidHoliday = day.source === "HOLIDAY_UNPAID";
   const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(day.date)];
+  /*
+   * Ngày chưa tới thì mọi dấu hiệu "cần xem lại" đều phải tắt, không chỉ riêng
+   * nút Giải trình: viền vàng, icon cảnh báo và dòng "Chờ giải trình" trong
+   * tooltip đều bắt nguồn từ cùng một cờ. Bảng công đã tính trước đó vẫn còn cờ
+   * cũ trong DB cho tới lần recompute kế tiếp, nên chặn ở một chỗ duy nhất tại
+   * đây thay vì rải điều kiện ra từng nơi.
+   */
+  const needsExplanation = day.needsExplanation && !isFuture;
   const title = [
     `${weekdayLabel} ${formatShortDate(day.date)}`,
     isFuture ? "Ngày chưa tới" : null,
@@ -139,7 +147,7 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
       : null,
     day.lateMinutes > 0 ? `Muộn ${day.lateMinutes}'` : null,
     day.earlyLeaveMinutes > 0 ? `Về sớm ${day.earlyLeaveMinutes}'` : null,
-    day.needsExplanation ? "Chờ giải trình" : null,
+    needsExplanation ? "Chờ giải trình" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -155,7 +163,7 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
             : day.isWorkingDay
               ? "border-[#d7dce3] bg-white"
               : "border-[#e5e7eb] bg-[#f8fbff]",
-        day.needsExplanation ? "ring-1 ring-amber-300" : "",
+        needsExplanation ? "ring-1 ring-amber-300" : "",
       ].join(" ")}
       title={title || formatShortDate(day.date)}
     >
@@ -172,7 +180,7 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
             {weekdayLabel}
           </span>
         </span>
-        {day.needsExplanation ? (
+        {needsExplanation ? (
           <AlertTriangle
             size={14}
             className="text-amber-500"
