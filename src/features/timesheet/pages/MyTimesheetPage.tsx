@@ -25,6 +25,14 @@ import { WorkPageShell } from "../../work/components/WorkPageShell";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
+import {
+  gridColumnFor,
+  LG_COLUMN_START,
+  todayIso,
+  WEEK_COLUMNS,
+  WEEKDAY_LABELS,
+  weekdayIndex,
+} from "../timesheetCalendar";
 
 type LoadState =
   | {
@@ -114,10 +122,16 @@ const dayNumber = (date: string) => {
   return Number.isFinite(value) ? value : 0;
 };
 
-const DayCell: React.FC<{ day: MyTimesheetDay }> = ({ day }) => {
+const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
+  day,
+  isFuture = false,
+}) => {
   const scheduleNotice = getTimesheetDayScheduleNotice(day.source);
   const isUnpaidHoliday = day.source === "HOLIDAY_UNPAID";
+  const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(day.date)];
   const title = [
+    `${weekdayLabel} ${formatShortDate(day.date)}`,
+    isFuture ? "Ngày chưa tới" : null,
     day.holidayName,
     scheduleNotice?.detail,
     day.firstPunch || day.lastPunch
@@ -134,18 +148,29 @@ const DayCell: React.FC<{ day: MyTimesheetDay }> = ({ day }) => {
     <div
       className={[
         "min-h-[92px] rounded-lg border p-2 text-left transition-colors",
-        scheduleNotice
-          ? "border-amber-300 bg-amber-50"
-          : day.isWorkingDay
-            ? "border-[#d7dce3] bg-white"
-            : "border-[#e5e7eb] bg-[#f8fbff]",
+        isFuture
+          ? "border-dashed border-[#e2e8f0] bg-[#fbfcfe]"
+          : scheduleNotice
+            ? "border-amber-300 bg-amber-50"
+            : day.isWorkingDay
+              ? "border-[#d7dce3] bg-white"
+              : "border-[#e5e7eb] bg-[#f8fbff]",
         day.needsExplanation ? "ring-1 ring-amber-300" : "",
       ].join(" ")}
       title={title || formatShortDate(day.date)}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-[#64748b]">
-          {dayNumber(day.date)}
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="flex items-baseline gap-1.5">
+          <span
+            className={`text-sm font-semibold tabular-nums ${
+              isFuture ? "text-[#94a3b8]" : "text-[#0f172a]"
+            }`}
+          >
+            {dayNumber(day.date)}
+          </span>
+          <span className="text-[11px] font-medium text-[#94a3b8]">
+            {weekdayLabel}
+          </span>
         </span>
         {day.needsExplanation ? (
           <AlertTriangle
@@ -171,18 +196,26 @@ const DayCell: React.FC<{ day: MyTimesheetDay }> = ({ day }) => {
           {day.displaySymbol}
         </span>
       ) : (
-        <span className="text-sm text-[#94a3b8]">-</span>
+        <span
+          className={`text-sm ${isFuture ? "text-[#cbd5e1]" : "text-[#94a3b8]"}`}
+        >
+          {isFuture ? "·" : "-"}
+        </span>
       )}
-      <div className="mt-2 text-xs text-[#64748b]">
+      <div
+        className={`mt-2 text-xs ${isFuture ? "text-[#94a3b8]" : "text-[#64748b]"}`}
+      >
         {scheduleNotice
           ? "Chưa tính công"
           : isUnpaidHoliday
             ? "Nghỉ lễ không lương"
             : day.paidDays
               ? `${day.paidDays} công`
-              : day.isWorkingDay
-                ? "0 công"
-                : "Nghỉ"}
+              : !day.isWorkingDay
+                ? "Nghỉ"
+                : isFuture
+                  ? "Chưa tới"
+                  : "0 công"}
       </div>
       {day.firstPunch || day.lastPunch ? (
         <div className="mt-1 truncate text-[11px] text-[#64748b]">
@@ -202,13 +235,29 @@ const inferExplanationType = (day: MyTimesheetDay) => {
 
 const ExplainableDayCell: React.FC<{
   day: MyTimesheetDay;
+  isFuture?: boolean;
+  /**
+   * Cột (1–7) mà ngày đầu tháng phải rơi vào, để ô nằm đúng dưới nhãn thứ.
+   * Chỉ ngày đầu tiên cần đẩy; các ngày sau tự chảy tiếp trong lưới.
+   */
+  firstColumn?: number;
   onExplain: (day: MyTimesheetDay) => void;
-}> = ({ day, onExplain }) => (
+}> = ({ day, isFuture = false, firstColumn, onExplain }) => (
   // Nút xếp dưới ô, không absolute: bản absolute đè lên dòng giờ chấm công
   // (08:05 - 17:35) làm mất thông tin ở đúng những ngày cần đọc kỹ nhất.
-  <div className="flex flex-col">
-    <DayCell day={day} />
-    {day.needsExplanation && day.id ? (
+  <div
+    className={`flex flex-col ${
+      firstColumn && firstColumn > 1 ? LG_COLUMN_START[firstColumn] : ""
+    }`}
+  >
+    <DayCell day={day} isFuture={isFuture} />
+    {/*
+      Ngày chưa tới thì không có gì để giải trình. Máy chủ đã ngừng gắn cờ cho
+      ngày tương lai, nhưng vẫn chặn thêm một lớp ở đây: bảng công cũ đã tính
+      trước đó vẫn còn cờ trong DB cho tới lần recompute kế tiếp, và người dùng
+      không nên nhìn thấy nút đòi giải trình cho ngày họ chưa đi làm.
+    */}
+    {day.needsExplanation && day.id && !isFuture ? (
       <button
         type="button"
         className="mt-1 rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50"
@@ -392,6 +441,15 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
     period?.status === "PENDING_EMPLOYEE" &&
     (!confirmation || confirmation.status === "PENDING");
   const days = data?.days ?? [];
+  // Mốc so sánh ngày tương lai. Tính một lần cho cả lưới để mọi ô dùng chung
+  // một "hôm nay", tránh lệch nếu render vắt qua nửa đêm.
+  const today = React.useMemo(() => todayIso(), []);
+  // Bộ đếm phải khớp với số nút "Giải trình" thật sự hiện ra: đếm cả ngày chưa
+  // tới thì con số vô nghĩa (bảng công ngày 22 báo "8 ngày cần xem lại" trong
+  // khi 8 ngày đó còn chưa xảy ra).
+  const daysNeedingReview = days.filter(
+    (day) => day.needsExplanation && day.date <= today,
+  ).length;
 
   async function handleConfirm() {
     setSubmitting("confirm");
@@ -570,7 +628,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             />
             <SummaryTile
               label="Ngày cần xem lại"
-              value={String(days.filter((day) => day.needsExplanation).length)}
+              value={String(daysNeedingReview)}
               tone="text-[#b45309]"
             />
           </div>
@@ -596,18 +654,45 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {days.map((day) => (
-                <ExplainableDayCell
-                  key={day.date}
-                  day={day}
-                  onExplain={(item) => {
-                    setExplainingDay(item);
-                    setExplanationReason("");
-                  }}
-                />
-              ))}
-            </div>
+            <>
+              {/*
+                Hàng thứ chỉ có nghĩa khi ô thật sự nằm đúng cột của thứ đó,
+                nên chỉ hiện từ `lg` — đúng breakpoint mà lưới chuyển sang 7 cột.
+              */}
+              <div
+                className="mb-2 hidden grid-cols-7 gap-2 lg:grid"
+                aria-hidden="true"
+              >
+                {WEEK_COLUMNS.map((label) => (
+                  <div
+                    key={label}
+                    className={`px-1 text-[11px] font-semibold uppercase tracking-wide ${
+                      label === "CN" ? "text-[#f43f5e]" : "text-[#94a3b8]"
+                    }`}
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                {days.map((day, index) => (
+                  <ExplainableDayCell
+                    key={day.date}
+                    day={day}
+                    isFuture={day.date > today}
+                    onExplain={(item) => {
+                      setExplainingDay(item);
+                      setExplanationReason("");
+                    }}
+                    // Chỉ ngày đầu tháng cần đẩy vào đúng cột thứ của nó; các
+                    // ngày sau tự chảy tiếp. Chỉ áp dụng ở lưới 7 cột.
+                    {...(index === 0
+                      ? { firstColumn: gridColumnFor(day.date) }
+                      : {})}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
 
