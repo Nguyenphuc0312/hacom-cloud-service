@@ -11,7 +11,13 @@ import type { LeaveDayPortion } from "./leaveDays";
 /** BE: `retroactiveLeaveLimitDays = 3` */
 export const RETROACTIVE_LIMIT_DAYS = 3;
 
-/** BE: `leaveType === SICK && totalDays >= 3 && !attachmentUrl` */
+/**
+ * BE: `leaveType === SICK && derived.totalDays >= 3 && !attachmentUrl`.
+ *
+ * ⚠️ BE so với số ngày **server tự tính theo ca**, không phải số ngày lịch.
+ * FE chỉ ước lượng được nên có thể nhắc chứng từ sớm hơn/muộn hơn một chút;
+ * đây là nhắc trước, BE vẫn là nơi chặn thật.
+ */
 export const SICK_ATTACHMENT_MIN_DAYS = 3;
 
 const MS_PER_DAY = 86_400_000;
@@ -88,8 +94,15 @@ export const isInvalidHalfDayRange = (
 export type LeaveFormIssue = { code: string; message: string };
 
 /**
- * Gom mọi lỗi CHẶN gửi đơn (BE sẽ ném lỗi nếu lọt qua). Báo trước muộn không
- * nằm ở đây vì nó chỉ là cảnh báo.
+ * Gom các lỗi CHẶN mà FE tự khẳng định được **không cần biết lịch làm việc**:
+ * khoảng ngày chạy ngược và khai lùi quá hạn. Hai thứ này chỉ phụ thuộc ngày
+ * tháng nên FE kết luận được chắc chắn.
+ *
+ * `SICK_LEAVE_ATTACHMENT_REQUIRED` dựa trên số ngày ước lượng nên là cảnh báo
+ * mềm, KHÔNG chặn nút gửi — nếu chặn theo số ngày lịch, người nghỉ ốm Thứ 6 →
+ * Thứ 2 (server tính 2 ngày) sẽ bị đòi chứng từ oan.
+ *
+ * Báo trước muộn cũng không nằm ở đây vì BE chỉ gắn cờ, không từ chối.
  */
 export const collectBlockingIssues = (input: {
   startDate: string;
@@ -117,16 +130,19 @@ export const collectBlockingIssues = (input: {
     });
   }
 
-  if (
-    input.leaveType === "SICK" &&
-    input.totalDays >= SICK_ATTACHMENT_MIN_DAYS &&
-    !input.attachmentUrl.trim()
-  ) {
-    issues.push({
-      code: "SICK_LEAVE_ATTACHMENT_REQUIRED",
-      message: `Nghỉ ốm từ ${SICK_ATTACHMENT_MIN_DAYS} ngày phải có chứng từ đính kèm.`,
-    });
-  }
-
   return issues;
 };
+
+/**
+ * Nhắc chứng từ nghỉ ốm — CẢNH BÁO, không chặn. Số ngày đưa vào đây là ước
+ * lượng theo lịch nên có thể lớn hơn số ngày server tính; chặn cứng theo nó sẽ
+ * đòi chứng từ oan. BE mới là nơi chặn thật (`SICK_LEAVE_ATTACHMENT_REQUIRED`).
+ */
+export const needsSickAttachmentHint = (input: {
+  leaveType: string;
+  estimatedDays: number;
+  attachmentUrl: string;
+}): boolean =>
+  input.leaveType === "SICK" &&
+  input.estimatedDays >= SICK_ATTACHMENT_MIN_DAYS &&
+  !input.attachmentUrl.trim();

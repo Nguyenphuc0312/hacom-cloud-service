@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   collectBlockingIssues,
+  needsSickAttachmentHint,
   getNoticeRequiredDays,
   getNoticeStatus,
   isBeforeRetroactiveLimit,
@@ -81,31 +82,6 @@ describe("collectBlockingIssues", () => {
     expect(collectBlockingIssues(base)).toEqual([]);
   });
 
-  it("nghỉ ốm từ 3 ngày mà thiếu chứng từ thì chặn", () => {
-    const issues = collectBlockingIssues({ ...base, leaveType: "SICK", totalDays: 3 });
-    expect(issues.map((i) => i.code)).toEqual(["SICK_LEAVE_ATTACHMENT_REQUIRED"]);
-  });
-
-  it("có chứng từ rồi thì hết chặn", () => {
-    const issues = collectBlockingIssues({
-      ...base,
-      leaveType: "SICK",
-      totalDays: 3,
-      attachmentUrl: "https://example.com/giay-kham.pdf",
-    });
-    expect(issues).toEqual([]);
-  });
-
-  it("khoảng trắng không tính là đã đính kèm chứng từ", () => {
-    const issues = collectBlockingIssues({
-      ...base,
-      leaveType: "SICK",
-      totalDays: 3,
-      attachmentUrl: "   ",
-    });
-    expect(issues.map((i) => i.code)).toEqual(["SICK_LEAVE_ATTACHMENT_REQUIRED"]);
-  });
-
   it("gom được nhiều lỗi cùng lúc", () => {
     const issues = collectBlockingIssues({
       ...base,
@@ -119,7 +95,44 @@ describe("collectBlockingIssues", () => {
     expect(issues.map((i) => i.code)).toEqual([
       "INVALID_HALF_DAY_SESSION_RANGE",
       "RETROACTIVE_LEAVE_LIMIT_EXCEEDED",
-      "SICK_LEAVE_ATTACHMENT_REQUIRED",
     ]);
+  });
+
+  it("thiếu chứng từ nghỉ ốm KHÔNG còn chặn — số ngày FE chỉ là ước lượng", () => {
+    const issues = collectBlockingIssues({ ...base, leaveType: "SICK", totalDays: 3 });
+    expect(issues).toEqual([]);
+  });
+});
+
+describe("needsSickAttachmentHint", () => {
+  it("nghỉ ốm từ 3 ngày mà thiếu chứng từ thì nhắc", () => {
+    expect(
+      needsSickAttachmentHint({ leaveType: "SICK", estimatedDays: 3, attachmentUrl: "" }),
+    ).toBe(true);
+  });
+
+  it("có chứng từ rồi thì thôi nhắc", () => {
+    expect(
+      needsSickAttachmentHint({
+        leaveType: "SICK",
+        estimatedDays: 3,
+        attachmentUrl: "https://example.com/giay-kham.pdf",
+      }),
+    ).toBe(false);
+  });
+
+  it("khoảng trắng không tính là đã đính kèm chứng từ", () => {
+    expect(
+      needsSickAttachmentHint({ leaveType: "SICK", estimatedDays: 3, attachmentUrl: "   " }),
+    ).toBe(true);
+  });
+
+  it("dưới 3 ngày hoặc loại nghỉ khác thì không nhắc", () => {
+    expect(
+      needsSickAttachmentHint({ leaveType: "SICK", estimatedDays: 2, attachmentUrl: "" }),
+    ).toBe(false);
+    expect(
+      needsSickAttachmentHint({ leaveType: "ANNUAL", estimatedDays: 5, attachmentUrl: "" }),
+    ).toBe(false);
   });
 });

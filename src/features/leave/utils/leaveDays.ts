@@ -10,7 +10,19 @@ const parseDateOnly = (value: string): Date | null => {
 const inclusiveDayCount = (start: Date, end: Date): number =>
   Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
 
-export const calculateLeaveDays = (
+/**
+ * Đếm số ngày THEO LỊCH của khoảng nghỉ — KHÔNG phải số ngày công.
+ *
+ * ⚠️ Đây KHÔNG phải con số quyết định. Server (`LeaveDurationService.derive`)
+ * mới là nguồn sự thật: nó duyệt từng ngày theo ca đã phân của nhân viên và
+ * BỎ QUA ngày không làm việc (cuối tuần, ngày lễ, ngày ca nghỉ). Hàm này đếm
+ * cả những ngày đó vì FE không biết lịch làm việc của từng người.
+ *
+ * ⇒ Chỉ dùng cho: bật/tắt nút gửi khi khoảng ngày vô lý (<= 0), và ước lượng
+ * hiển thị có ghi rõ là tạm tính. TUYỆT ĐỐI không gửi kết quả này lên server
+ * như thể là số ngày nghỉ thật — server sẽ trả `LEAVE_TOTAL_DAYS_MISMATCH`.
+ */
+export const countCalendarLeaveDays = (
   startDate: string,
   endDate: string,
   startPortion: LeaveDayPortion,
