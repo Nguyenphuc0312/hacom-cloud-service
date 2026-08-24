@@ -152,6 +152,9 @@ export interface AttendanceCalendarDay {
   firstPunch?: string | null;
   lastPunch?: string | null;
   displaySymbol?: string | null;
+  shiftCode?: string | null;
+  shiftName?: string | null;
+  lateMinutes?: number | null;
   totalTime?: string | null;
   totalMinutes?: number | null;
   classificationStatus?: ClassificationStatus | null;

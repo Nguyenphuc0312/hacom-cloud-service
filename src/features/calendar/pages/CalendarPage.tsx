@@ -67,6 +67,7 @@ import {
 } from "../utils/calendarEventMapping";
 import { getMonthFetchRange } from "../utils/calendarFetchRange";
 import { resolveOpenEventRequest } from "../utils/resolveOpenEventRequest";
+import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
 import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
@@ -328,24 +329,34 @@ const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
 }> = ({ attendance }) => {
   const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
-  const symbol = attendance.displaySymbol?.trim();
+  const label = attendanceCalendarLabel(attendance);
+  const isLate = (attendance.lateMinutes ?? 0) > 0;
 
   return (
     <div
       className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
       title={[
-        symbol ? `Công: ${symbol}` : null,
+        label
+          ? `${label === attendance.shiftCode?.trim() ? "Ca" : "Ký hiệu"}: ${label}`
+          : null,
+        attendance.shiftName ? attendance.shiftName : null,
         hasPunch
           ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}`
           : null,
+        isLate ? `Đi muộn ${attendance.lateMinutes} phút` : null,
       ]
         .filter(Boolean)
-        .join(" · ") || "Chưa có dữ liệu chấm công"}
+        .join(" · ") || "Chưa có lịch ca hoặc phép"}
     >
-      {symbol ? (
+      {label ? (
         <span className="block space-y-0.5">
-          <span className="inline-flex min-w-6 items-center justify-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">
-            {symbol}
+          <span
+            className={clsx(
+              "inline-flex min-w-6 items-center justify-center rounded border border-border bg-surface-overlay px-1.5 py-0.5 font-semibold",
+              isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
+            )}
+          >
+            {label}
           </span>
           {hasPunch ? (
             <span className="block truncate text-[11px] text-text-secondary">
@@ -382,7 +393,6 @@ const MonthGrid: React.FC<{
   getAttendanceForDate: (date: Date) => AttendanceCalendarDay | undefined;
   isToday: (date: Date) => boolean;
   isSelected: (date: Date) => boolean;
-  isAttendanceFilterActive: boolean;
   showAttendance: boolean;
   onOpenDay: (date: Date) => void;
   onEventClick: (event: LocalCalendarEvent | ExtendedCalendarEvent) => void;
@@ -393,7 +403,6 @@ const MonthGrid: React.FC<{
     getAttendanceForDate,
     isToday,
     isSelected,
-    isAttendanceFilterActive,
     showAttendance,
     onOpenDay,
     onEventClick,
@@ -469,8 +478,8 @@ const MonthGrid: React.FC<{
                   </span>
                 </div>
 
-                {/* Attendance badge — only show for own calendar */}
-                {attendance && isAttendanceFilterActive && showAttendance && (
+                {/* Ca/phép HRM tự đồng bộ trong Lịch của tôi. */}
+                {attendance && showAttendance && (
                   <div className="mb-1">
                     <AttendanceBadge attendance={attendance} />
                   </div>
@@ -863,7 +872,6 @@ export const CalendarPage: React.FC = () => {
     const defaultFilters: CalendarTypeFilter[] = [
       { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
       { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
-      { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: false },
     ];
 
     if (filters.types.length === 0) return defaultFilters;
@@ -1184,9 +1192,6 @@ export const CalendarPage: React.FC = () => {
     setSelectedEvent(null);
   }, [mutations]);
 
-  // Check if attendance filter is active
-  const isAttendanceFilterActive = localFilters.find(f => f.type === "attendance")?.checked ?? true;
-
   // View buttons
   const viewButtons: Array<{ id: CalendarView; label: string }> = [
     { id: "day", label: "Ngày" },
@@ -1474,7 +1479,6 @@ export const CalendarPage: React.FC = () => {
               getAttendanceForDate={getAttendanceForDate}
               isToday={isToday}
               isSelected={isSelected}
-              isAttendanceFilterActive={isAttendanceFilterActive}
               showAttendance={mode !== "other"}
               onOpenDay={handleOpenDay}
               onEventClick={handleEventClick}
