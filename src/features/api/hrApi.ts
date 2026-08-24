@@ -348,7 +348,12 @@ export interface LeaveBalance {
   usedDays: number;
   pendingDays: number;
   remainingDays: number | null;
-  source: "TIMESHEET_P_SYMBOL" | "APPROVED_LEAVE_REQUESTS" | string;
+  source:
+    | "TIMESHEET_P_SYMBOL"
+    | "TIMESHEET_OM_SYMBOL"
+    | "TIMESHEET_KL_SYMBOL"
+    | "APPROVED_LEAVE_REQUESTS"
+    | string;
   balanceStatus: "PENDING_HR_CSV_RECONCILIATION" | string;
 }
 

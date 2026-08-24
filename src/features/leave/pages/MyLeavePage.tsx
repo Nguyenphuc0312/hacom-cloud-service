@@ -110,6 +110,13 @@ const formatDate = (value: string) => formatWorkDate(value);
 const formatDays = (value: number | null | undefined) =>
   value === null || value === undefined ? "-" : value.toLocaleString("vi-VN");
 
+const balanceSourceLabel = (source: LeaveBalance["source"]) => {
+  if (source === "TIMESHEET_P_SYMBOL") return "Từ ký hiệu P";
+  if (source === "TIMESHEET_OM_SYMBOL") return "Từ ký hiệu OM";
+  if (source === "TIMESHEET_KL_SYMBOL") return "Từ ký hiệu KL";
+  return "Từ đơn đã duyệt";
+};
+
 const extractErrorMessage = (error: unknown) => {
   const leaveDurationMessage = getLeaveDurationErrorMessage(error);
   if (leaveDurationMessage) return leaveDurationMessage;
@@ -147,7 +154,7 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
           {leaveTypeLabel[balance.leaveType] ?? balance.label}
         </div>
         <div className="mt-1 text-xs text-[#64748b]">
-          {balance.leaveType === "ANNUAL" ? "Từ ký hiệu P" : "Từ đơn đã duyệt"}
+          {balanceSourceLabel(balance.source)}
         </div>
       </div>
       <CalendarCheck2

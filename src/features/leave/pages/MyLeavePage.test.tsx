@@ -124,6 +124,31 @@ describe("MyLeavePage — leave request payload", () => {
     expect(screen.queryByText(/^Tổng:/)).toBeNull();
   });
 
+  it("shows that sick leave usage comes from the OM timesheet symbol", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "EMPLOYEE",
+      balances: [
+        {
+          leaveType: "SICK",
+          label: "Ốm đau",
+          entitlementDays: null,
+          usedDays: 1,
+          pendingDays: 0,
+          remainingDays: null,
+          source: "TIMESHEET_OM_SYMBOL",
+          balanceStatus: "PENDING_HR_CSV_RECONCILIATION",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("Từ ký hiệu OM")).toBeTruthy();
+  });
+
   it("sends the half-day sessions so the server can derive a half day", async () => {
     const user = userEvent.setup();
     render(<MyLeavePage />);
