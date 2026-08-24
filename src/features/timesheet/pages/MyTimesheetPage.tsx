@@ -25,6 +25,7 @@ import { WorkPageShell } from "../../work/components/WorkPageShell";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
+import { attendanceCalendarLabel } from "../../calendar/utils/attendanceCalendarPresentation";
 import {
   gridColumnFor,
   LG_COLUMN_START,
@@ -127,6 +128,7 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
   isFuture = false,
 }) => {
   const scheduleNotice = getTimesheetDayScheduleNotice(day.source);
+  const dayLabel = attendanceCalendarLabel(day);
   const isUnpaidHoliday = day.source === "HOLIDAY_UNPAID";
   const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(day.date)];
   /*
@@ -197,11 +199,11 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
             Cần HR thiết lập lịch làm việc
           </div>
         </>
-      ) : day.displaySymbol ? (
+      ) : dayLabel ? (
         <span
           className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold ${symbolClass(day.displaySymbol)}`}
         >
-          {day.displaySymbol}
+          {dayLabel}
         </span>
       ) : (
         <span
