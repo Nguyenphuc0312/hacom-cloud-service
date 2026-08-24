@@ -39,11 +39,9 @@ ARG VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE=true
 ARG VITE_CHAT_SIMPLE_TIMELINE_DEBUG=false
 ARG VITE_CHAT_USE_LEGACY_TIMELINE=false
 ARG VITE_HR_API_BASE_URL
-# Màn "Công & Phép" (/timesheet, /leave, /timesheet/team). Mặc định `false` ở
-# đây vì Dockerfile này chỉ dùng cho bản deploy: quên truyền build-arg thì rơi
-# về "ẩn" chứ không lộ màn chưa nghiệm thu. Local `npm run dev` không đọc file
-# này nên vẫn bật bình thường.
-ARG VITE_WORK_MODULE_ENABLED=false
+# Màn "Công & Phép" (/timesheet, /leave, /timesheet/team) đã mở trên deploy.
+# Có thể truyền `false` làm rollback tạm thời.
+ARG VITE_WORK_MODULE_ENABLED=true
 # Refresh token storage mode. "cookie" = HttpOnly cookie set by auth-service
 # (secure, XSS-proof). "session" = localStorage fallback for envs without
 # cookie-based auth. Production must always use "cookie".

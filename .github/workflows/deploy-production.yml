@@ -117,9 +117,8 @@ jobs:
           VITE_CHAT_SIMPLE_TIMELINE_DEBUG: ${{ vars.VITE_CHAT_SIMPLE_TIMELINE_DEBUG }}
           VITE_CHAT_USE_LEGACY_TIMELINE: ${{ vars.VITE_CHAT_USE_LEGACY_TIMELINE }}
           VITE_HR_API_BASE_URL: ${{ vars.VITE_HR_API_BASE_URL }}
-          # Màn "Công & Phép": để trống vars → mặc định "false" (ẩn trên
-          # production). Nghiệm thu xong thì đặt vars.VITE_WORK_MODULE_ENABLED
-          # = "true", không cần sửa code.
+          # Màn "Công & Phép": để trống vars → mặc định "true" (bật trên
+          # production). Đặt vars.VITE_WORK_MODULE_ENABLED="false" chỉ để rollback.
           VITE_WORK_MODULE_ENABLED: ${{ vars.VITE_WORK_MODULE_ENABLED }}
           SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
@@ -206,16 +205,17 @@ jobs:
           VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="$(trim "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG:-}")"; [[ -n "${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" ]] || VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN="false"
           VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="$(trim "${VITE_CHAT_USE_LEGACY_TIMELINE:-}")"; [[ -n "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" ]] || VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="false"
           VITE_HR_API_BASE_URL_CLEAN="$(trim "${VITE_HR_API_BASE_URL:-}")"
-          VITE_WORK_MODULE_ENABLED_CLEAN="$(trim "${VITE_WORK_MODULE_ENABLED:-}")"; [[ -n "${VITE_WORK_MODULE_ENABLED_CLEAN}" ]] || VITE_WORK_MODULE_ENABLED_CLEAN="false"
+          VITE_WORK_MODULE_ENABLED_CLEAN="$(trim "${VITE_WORK_MODULE_ENABLED:-}")"; [[ -n "${VITE_WORK_MODULE_ENABLED_CLEAN}" ]] || VITE_WORK_MODULE_ENABLED_CLEAN="true"
 
           # Whitelist values. Vite needs the literal "true" or "false".
           for v_name in \
               VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN \
               VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN \
-              VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN; do
+              VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN \
+              VITE_WORK_MODULE_ENABLED_CLEAN; do
             v_val="${!v_name}"
             if [[ "${v_val}" != "true" && "${v_val}" != "false" ]]; then
-              echo "::error title=Invalid V2 flag::${v_name} must be 'true' or 'false', got '${v_val}'"
+              echo "::error title=Invalid boolean flag::${v_name} must be 'true' or 'false', got '${v_val}'"
               exit 1
             fi
           done

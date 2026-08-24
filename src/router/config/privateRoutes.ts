@@ -22,8 +22,7 @@ const TeamTimesheetPage = lazy(() => import("../../features/timesheet/pages/Team
 const WorkHubPage = lazy(() => import("../../features/work/pages/WorkHubPage"));
 const WorkComingSoon = lazy(() => import("../../features/work/pages/WorkComingSoon"));
 
-// Tạm ẩn trên production (VITE_WORK_MODULE_ENABLED=false ở .env.production);
-// local vẫn vào test bình thường vì flag mặc định bật.
+// Mặc định bật ở mọi môi trường; flag=false chỉ dùng để rollback tạm thời.
 const workPage = WORK_MODULE_ENABLED ? WorkHubPage : WorkComingSoon;
 const teamTimesheetPage = WORK_MODULE_ENABLED ? TeamTimesheetPage : WorkComingSoon;
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));

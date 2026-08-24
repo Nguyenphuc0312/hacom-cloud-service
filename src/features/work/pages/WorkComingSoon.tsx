@@ -3,7 +3,7 @@ import { AppErrorPage } from "../../../components/error";
 import { ROUTE_PATHS } from "../../../router/paths";
 
 /**
- * Màn thay thế khi `VITE_WORK_MODULE_ENABLED=false` (hiện chỉ production).
+ * Màn thay thế khi `VITE_WORK_MODULE_ENABLED=false` để rollback tạm thời.
  * Code thật vẫn nguyên vẹn — bật lại flag là chạy tiếp.
  */
 const WorkComingSoon: React.FC = () => (
