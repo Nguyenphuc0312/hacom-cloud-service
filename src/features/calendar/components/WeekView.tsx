@@ -36,13 +36,14 @@ const MULTI_DAY_END_COLOR = {
   border: "border-[#DC2626]",
 } as const;
 import { useNowMinute } from "../hooks/useNowMinute";
+import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
 
 interface AttendanceDay {
   date: string;
-  firstPunch?: string | null;
-  lastPunch?: string | null;
   displaySymbol?: string | null;
-  totalTime?: string | null;
+  shiftCode?: string | null;
+  shiftName?: string | null;
+  lateMinutes?: number | null;
 }
 
 interface WeekViewProps {
@@ -129,7 +130,8 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
           const attendance = getAttendanceForDay(date);
-          const attendanceSymbol = attendance?.displaySymbol?.trim();
+          const attendanceLabel = attendanceCalendarLabel(attendance);
+          const isLate = (attendance?.lateMinutes ?? 0) > 0;
           const isWeekend = index >= 5;
           return (
             <button
@@ -164,20 +166,18 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
               >
                 {date.getDate()}
               </div>
-              {/* Luôn giữ chỗ cho vùng chấm công để các cột cao bằng nhau (cân đối header) */}
-              <div className="mt-0.5 h-[22px] space-y-px text-[9px] leading-tight text-emerald-600 dark:text-emerald-400">
-                {attendanceSymbol ? (
-                  <>
-                    <div className="truncate font-semibold">{attendanceSymbol}</div>
-                    <div className="truncate">
-                      {attendance?.firstPunch ?? "--:--"} - {attendance?.lastPunch ?? "--:--"}
-                    </div>
-                  </>
-                ) : attendance?.firstPunch || attendance?.lastPunch ? (
-                  <>
-                    <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
-                    <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
-                  </>
+              {/* Chỉ hiện ca/phép; giờ chấm xem ở màn Công phép. */}
+              <div className="mt-0.5 h-[14px] text-[9px] leading-tight text-text-secondary">
+                {attendanceLabel ? (
+                  <div
+                    className={clsx(
+                      "truncate font-semibold",
+                      isLate && "text-rose-600 dark:text-rose-400",
+                    )}
+                    title={attendance?.shiftName ?? undefined}
+                  >
+                    {attendanceLabel}
+                  </div>
                 ) : null}
               </div>
             </button>

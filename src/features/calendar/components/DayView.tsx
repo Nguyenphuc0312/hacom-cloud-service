@@ -34,15 +34,16 @@ const MULTI_DAY_END_COLOR = {
   border: "border-[#DC2626]",
 } as const;
 import { useNowMinute } from "../hooks/useNowMinute";
+import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
 
 interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
   attendance?: {
-    firstPunch?: string | null;
-    lastPunch?: string | null;
     displaySymbol?: string | null;
-    totalTime?: string | null;
+    shiftCode?: string | null;
+    shiftName?: string | null;
+    lateMinutes?: number | null;
   };
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
@@ -55,7 +56,6 @@ const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_BLOCK_HEIGHT = 22;
 
 const formatHour = (hour: number): string => `${hour.toString().padStart(2, "0")}:00`;
-const formatTime = (time: string | null | undefined): string => (time ? time : "--:--");
 const fmtMin = (min: number): string => {
   const clamped = Math.max(0, Math.min(min, MINUTES_PER_DAY));
   const h = Math.floor(clamped / 60) % 24;
@@ -215,7 +215,8 @@ const DayViewImpl: React.FC<DayViewProps> = ({
 
   const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-  const attendanceSymbol = attendance?.displaySymbol?.trim();
+  const attendanceLabel = attendanceCalendarLabel(attendance);
+  const isLate = (attendance?.lateMinutes ?? 0) > 0;
 
   // Auto-scroll tới giờ hiện tại (today) hoặc 07:00 (ngày khác) khi mở/đổi ngày.
   useEffect(() => {
@@ -268,38 +269,22 @@ const DayViewImpl: React.FC<DayViewProps> = ({
         )}
       </div>
 
-      {/* Attendance summary */}
-      {attendance && (
-        <div className="border-b border-border bg-emerald-50 px-4 py-2 dark:bg-emerald-900/20">
-          <div className="flex items-center gap-4 text-sm">
-            {attendanceSymbol && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-emerald-700 dark:text-emerald-300">Công:</span>
-                <span className="rounded border border-emerald-200 bg-white px-2 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
-                  {attendanceSymbol}
-                </span>
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ đến:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.firstPunch)}
-              </span>
+      {/* Ca/phép đồng bộ từ HRM; giờ chấm chỉ xem ở màn Công phép. */}
+      {attendanceLabel && attendance && (
+        <div className="border-b border-border bg-surface-overlay px-4 py-2">
+          <div className="flex items-center gap-1 text-sm">
+            <span className="font-medium text-text-secondary">
+              {attendanceLabel === attendance.shiftCode?.trim() ? "Ca:" : "Ký hiệu:"}
             </span>
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ về:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.lastPunch)}
-              </span>
+            <span
+              className={clsx(
+                "rounded border border-border bg-surface px-2 py-0.5 font-semibold",
+                isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
+              )}
+              title={attendance.shiftName ?? undefined}
+            >
+              {attendanceLabel}
             </span>
-            {attendance.totalTime && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-emerald-700 dark:text-emerald-300">Tổng:</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                  {attendance.totalTime}
-                </span>
-              </span>
-            )}
           </div>
         </div>
       )}
