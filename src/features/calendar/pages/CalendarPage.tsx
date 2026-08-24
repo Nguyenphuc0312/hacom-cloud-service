@@ -134,15 +134,6 @@ const formatDateString = (date: Date): string => {
 };
 
 /**
- * Format time from HH:mm format
- */
-const formatTime = (time: string | null | undefined): string => {
-  if (!time) return "--:--";
-  return time;
-};
-
-
-/**
  * Mini calendar component for the sidebar.
  */
 const MiniCalendar: React.FC<{
@@ -328,50 +319,29 @@ const EventBadge: React.FC<{
 const AttendanceBadge: React.FC<{
   attendance: AttendanceCalendarDay;
 }> = ({ attendance }) => {
-  const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
   const label = attendanceCalendarLabel(attendance);
   const isLate = (attendance.lateMinutes ?? 0) > 0;
+  if (!label) return null;
 
   return (
     <div
       className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
       title={[
-        label
-          ? `${label === attendance.shiftCode?.trim() ? "Ca" : "Ký hiệu"}: ${label}`
-          : null,
-        attendance.shiftName ? attendance.shiftName : null,
-        hasPunch
-          ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}`
-          : null,
-        isLate ? `Đi muộn ${attendance.lateMinutes} phút` : null,
+        (label === attendance.shiftCode?.trim() ? "Ca: " : "Ký hiệu: ") + label,
+        attendance.shiftName,
+        isLate ? "Đi muộn " + attendance.lateMinutes + " phút" : null,
       ]
         .filter(Boolean)
-        .join(" · ") || "Chưa có lịch ca hoặc phép"}
+        .join(" · ")}
     >
-      {label ? (
-        <span className="block space-y-0.5">
-          <span
-            className={clsx(
-              "inline-flex min-w-6 items-center justify-center rounded border border-border bg-surface-overlay px-1.5 py-0.5 font-semibold",
-              isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
-            )}
-          >
-            {label}
-          </span>
-          {hasPunch ? (
-            <span className="block truncate text-[11px] text-text-secondary">
-              {formatTime(attendance.firstPunch)} - {formatTime(attendance.lastPunch)}
-            </span>
-          ) : null}
-        </span>
-      ) : hasPunch ? (
-        <span className="block space-y-0.5">
-          <span className="block truncate text-text-secondary">Giờ đến: <span className="font-medium text-text-primary">{formatTime(attendance.firstPunch)}</span></span>
-          <span className="block truncate text-text-secondary">Giờ về: <span className="font-medium text-text-primary">{formatTime(attendance.lastPunch)}</span></span>
-        </span>
-      ) : (
-        <span className="block truncate text-text-muted">Chưa chấm công</span>
-      )}
+      <span
+        className={clsx(
+          "inline-flex min-w-6 items-center justify-center rounded border border-border bg-surface-overlay px-1.5 py-0.5 font-semibold",
+          isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
+        )}
+      >
+        {label}
+      </span>
     </div>
   );
 };

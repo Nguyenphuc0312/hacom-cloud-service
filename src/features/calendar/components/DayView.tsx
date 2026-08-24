@@ -40,13 +40,10 @@ interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
   attendance?: {
-    firstPunch?: string | null;
-    lastPunch?: string | null;
     displaySymbol?: string | null;
     shiftCode?: string | null;
     shiftName?: string | null;
     lateMinutes?: number | null;
-    totalTime?: string | null;
   };
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
@@ -59,7 +56,6 @@ const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_BLOCK_HEIGHT = 22;
 
 const formatHour = (hour: number): string => `${hour.toString().padStart(2, "0")}:00`;
-const formatTime = (time: string | null | undefined): string => (time ? time : "--:--");
 const fmtMin = (min: number): string => {
   const clamped = Math.max(0, Math.min(min, MINUTES_PER_DAY));
   const h = Math.floor(clamped / 60) % 24;
@@ -273,46 +269,22 @@ const DayViewImpl: React.FC<DayViewProps> = ({
         )}
       </div>
 
-      {/* Ca/phép đồng bộ từ HRM. */}
-      {attendance && (
+      {/* Ca/phép đồng bộ từ HRM; giờ chấm chỉ xem ở màn Công phép. */}
+      {attendanceLabel && attendance && (
         <div className="border-b border-border bg-surface-overlay px-4 py-2">
-          <div className="flex items-center gap-4 text-sm">
-            {attendanceLabel && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-text-secondary">
-                  {attendanceLabel === attendance.shiftCode?.trim() ? "Ca:" : "Ký hiệu:"}
-                </span>
-                <span
-                  className={clsx(
-                    "rounded border border-border bg-surface px-2 py-0.5 font-semibold",
-                    isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
-                  )}
-                  title={attendance.shiftName ?? undefined}
-                >
-                  {attendanceLabel}
-                </span>
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ đến:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.firstPunch)}
-              </span>
+          <div className="flex items-center gap-1 text-sm">
+            <span className="font-medium text-text-secondary">
+              {attendanceLabel === attendance.shiftCode?.trim() ? "Ca:" : "Ký hiệu:"}
             </span>
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ về:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.lastPunch)}
-              </span>
+            <span
+              className={clsx(
+                "rounded border border-border bg-surface px-2 py-0.5 font-semibold",
+                isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
+              )}
+              title={attendance.shiftName ?? undefined}
+            >
+              {attendanceLabel}
             </span>
-            {attendance.totalTime && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-emerald-700 dark:text-emerald-300">Tổng:</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                  {attendance.totalTime}
-                </span>
-              </span>
-            )}
           </div>
         </div>
       )}

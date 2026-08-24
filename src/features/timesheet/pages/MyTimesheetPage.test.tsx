@@ -193,6 +193,7 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
           isWorkingDay: true,
           paidDays: 1,
           displaySymbol: "+",
+          shiftCode: "HC1",
           source: "DEVICE",
           firstPunch: "08:00",
           lastPunch: "17:30",
@@ -212,6 +213,8 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
     // A worked Sunday shows its credit, not the "Nghỉ" rest-day wording.
     expect(within(sunday).getByText("1 công")).toBeTruthy();
     expect(within(sunday).queryByText("Nghỉ")).toBeNull();
+    expect(within(sunday).getByText("HC1")).toBeTruthy();
+    expect(within(sunday).queryByText("+")).toBeNull();
   });
 
   it("keeps the Sunday header neutral when the shift works Sundays", async () => {

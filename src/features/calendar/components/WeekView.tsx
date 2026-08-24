@@ -40,13 +40,10 @@ import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation
 
 interface AttendanceDay {
   date: string;
-  firstPunch?: string | null;
-  lastPunch?: string | null;
   displaySymbol?: string | null;
   shiftCode?: string | null;
   shiftName?: string | null;
   lateMinutes?: number | null;
-  totalTime?: string | null;
 }
 
 interface WeekViewProps {
@@ -169,28 +166,18 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
               >
                 {date.getDate()}
               </div>
-              {/* Luôn giữ chỗ cho vùng ca/phép để các cột cao bằng nhau. */}
-              <div className="mt-0.5 h-[22px] space-y-px text-[9px] leading-tight text-text-secondary">
+              {/* Chỉ hiện ca/phép; giờ chấm xem ở màn Công phép. */}
+              <div className="mt-0.5 h-[14px] text-[9px] leading-tight text-text-secondary">
                 {attendanceLabel ? (
-                  <>
-                    <div
-                      className={clsx(
-                        "truncate font-semibold",
-                        isLate && "text-rose-600 dark:text-rose-400",
-                      )}
-                      title={attendance?.shiftName ?? undefined}
-                    >
-                      {attendanceLabel}
-                    </div>
-                    <div className="truncate">
-                      {attendance?.firstPunch ?? "--:--"} - {attendance?.lastPunch ?? "--:--"}
-                    </div>
-                  </>
-                ) : attendance?.firstPunch || attendance?.lastPunch ? (
-                  <>
-                    <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
-                    <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
-                  </>
+                  <div
+                    className={clsx(
+                      "truncate font-semibold",
+                      isLate && "text-rose-600 dark:text-rose-400",
+                    )}
+                    title={attendance?.shiftName ?? undefined}
+                  >
+                    {attendanceLabel}
+                  </div>
                 ) : null}
               </div>
             </button>

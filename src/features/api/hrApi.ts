@@ -204,6 +204,8 @@ export interface MyTimesheetDay {
   /** Server-owned day source. `UNASSIGNED` is not absence; `HOLIDAY_UNPAID` is a non-working unpaid holiday. */
   source?: string | null;
   displaySymbol: string;
+  shiftCode?: string | null;
+  shiftName?: string | null;
   paidDays: number;
   isWorkingDay: boolean;
   holidayName: string | null;
