@@ -21,7 +21,7 @@ import { AppShell, ModuleSidebar } from "../shared/layout";
 import {
   ConfirmDialog,
   NotificationListSkeleton,
-  PageSkeleton,
+  ChatWorkspaceSkeleton,
   ProfileSkeleton,
   Skeleton,
 } from "../components/ui";
@@ -458,15 +458,15 @@ const DeferredPanelFallback: React.FC = () => (
 const PersonalCloudSurfaceSkeleton: React.FC = () => (
   <div className="flex h-full min-h-0 flex-col bg-surface" aria-busy="true">
     <div className="flex min-h-[var(--app-header-height)] shrink-0 items-center gap-3 border-b border-border/70 px-4">
-      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-surface-hover" />
+      <div className="skeleton h-10 w-10 shrink-0 rounded-full" />
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="h-3.5 w-32 animate-pulse rounded bg-surface-hover" />
-        <div className="h-3 w-56 animate-pulse rounded bg-surface-hover" />
+        <div className="skeleton h-3.5 w-32 rounded" />
+        <div className="skeleton h-3 w-56 rounded" />
       </div>
     </div>
     <div className="min-h-0 flex-1" />
     <div className="shrink-0 border-t border-border/70 px-[var(--chat-lane-padding)] py-3">
-      <div className="mx-auto h-11 w-full max-w-[var(--chat-content-lane)] animate-pulse rounded-full bg-surface-hover" />
+      <div className="skeleton mx-auto h-11 w-full max-w-[var(--chat-content-lane)] rounded-full" />
     </div>
   </div>
 );
@@ -1425,7 +1425,7 @@ export const ChatPage: React.FC = () => {
 
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
-      return <PageSkeleton />;
+      return <ChatWorkspaceSkeleton />;
     }
 
     return (

@@ -684,7 +684,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
               {Array.from({ length: 28 }, (_, index) => (
                 <div
                   key={index}
-                  className="h-[92px] animate-pulse rounded-lg bg-white"
+                  className="skeleton h-[92px] rounded-lg"
                 />
               ))}
             </div>

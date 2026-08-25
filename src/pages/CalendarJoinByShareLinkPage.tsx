@@ -166,9 +166,9 @@ export const CalendarJoinByShareLinkPage: React.FC = () => {
                 để không ai tham gia một buổi họp mà chưa biết đó là họp gì. */}
             {previewStatus === "loading" ? (
               <div className="app-page-subtle space-y-2 rounded-xl px-4 py-4">
-                <div className="h-5 w-2/3 animate-pulse rounded bg-surface-hover" />
-                <div className="h-3 w-1/2 animate-pulse rounded bg-surface-hover" />
-                <div className="h-3 w-2/5 animate-pulse rounded bg-surface-hover" />
+                <div className="skeleton h-5 w-2/3 rounded" />
+                <div className="skeleton h-3 w-1/2 rounded" />
+                <div className="skeleton h-3 w-2/5 rounded" />
               </div>
             ) : preview ? (
               <div className="app-page-subtle space-y-3 rounded-xl px-4 py-4">

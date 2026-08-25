@@ -1295,9 +1295,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               {pollsLoading ? (
                 <div className="space-y-2 p-3">
                   {[1, 2].map((i) => (
-                    <div key={i} className="animate-pulse rounded-xl bg-surface-overlay p-3">
-                      <div className="mb-2 h-3 w-3/4 rounded bg-surface-active" />
-                      <div className="h-2 w-1/3 rounded bg-surface-active/70" />
+                    <div key={i} className="skeleton-stage rounded-xl bg-surface-overlay p-3">
+                      <div className="skeleton mb-2 h-3 w-3/4 rounded" />
+                      <div className="skeleton h-2 w-1/3 rounded" />
                     </div>
                   ))}
                 </div>
@@ -2735,9 +2735,9 @@ const PinnedBoardList: React.FC<{
     return (
       <div className="space-y-3">
         {[1, 2].map((i) => (
-          <div key={i} className="animate-pulse rounded border border-border bg-surface p-4">
-            <div className="mb-3 h-4 w-2/3 rounded bg-surface-active" />
-            <div className="h-3 w-full rounded bg-surface-active/70" />
+          <div key={i} className="skeleton-stage rounded border border-border bg-surface p-4">
+            <div className="skeleton mb-3 h-4 w-2/3 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
           </div>
         ))}
       </div>
@@ -2862,10 +2862,10 @@ const PollPreviewList: React.FC<{
     return (
       <div className="space-y-4">
         {[1, 2].map((i) => (
-          <div key={i} className="animate-pulse rounded border border-border bg-surface p-4">
-            <div className="mb-4 h-5 w-4/5 rounded bg-surface-active" />
-            <div className="mb-2 h-11 w-full rounded bg-surface-active/70" />
-            <div className="h-11 w-full rounded bg-surface-active/70" />
+          <div key={i} className="skeleton-stage rounded border border-border bg-surface p-4">
+            <div className="skeleton mb-4 h-5 w-4/5 rounded" />
+            <div className="skeleton mb-2 h-11 w-full rounded" />
+            <div className="skeleton h-11 w-full rounded" />
           </div>
         ))}
       </div>

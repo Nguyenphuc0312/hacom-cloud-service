@@ -6,7 +6,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { PageSkeleton, Skeleton } from "./Skeleton";
+import { Skeleton } from "./Skeleton";
 
 interface SpinnerProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
@@ -49,7 +49,28 @@ export const Spinner: React.FC<SpinnerProps> = ({
   );
 };
 
-export const PageSpinner: React.FC<{ message?: string }> = () => <PageSkeleton />;
+export const PageSpinner: React.FC<{ message?: string }> = ({ message }) => {
+  const { t } = useTranslation();
+  const label = message ?? t("common:loading.page");
+
+  return (
+    <div className="app-loading-screen" role="status" aria-live="polite">
+      <div className="app-loading-mark">
+        <img
+          src="/logo.png"
+          width="56"
+          height="56"
+          alt=""
+          className="h-14 w-14 rounded-2xl shadow-sm"
+        />
+        <div className="app-loading-progress" aria-hidden="true">
+          <span className="app-loading-progress__bar" />
+        </div>
+      </div>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+};
 
 export const LoadingText: React.FC<{ text?: string; className?: string }> = ({
   text,

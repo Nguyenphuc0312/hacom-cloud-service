@@ -1119,10 +1119,14 @@ a:focus-visible {
   }
 }
 
-@keyframes skeleton-shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+@keyframes skeleton-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loading-progress {
+  from { opacity: 0.65; transform: scaleX(0.16); }
+  to { opacity: 1; transform: scaleX(1); }
 }
 
 @keyframes messageHighlightPulse {
@@ -1167,28 +1171,70 @@ a:focus-visible {
 }
 
 @layer components {
+  .app-loading-screen {
+    display: grid;
+    width: 100%;
+    height: var(--app-dvh);
+    min-height: 100%;
+    place-items: center;
+    overflow: hidden;
+    background: hsl(var(--color-background));
+  }
+
+  .app-loading-mark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: skeleton-enter 160ms var(--motion-ease-enter) both;
+  }
+
+  .app-loading-progress {
+    position: relative;
+    width: 72px;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: hsl(var(--skeleton-base));
+    contain: paint;
+  }
+
+  .app-loading-progress__bar {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 100%;
+    border-radius: inherit;
+    background: hsl(var(--color-primary));
+    transform-origin: left;
+    animation: loading-progress 900ms var(--motion-ease-spring) both;
+  }
+
   .skeleton {
     position: relative;
     overflow: hidden;
-    background: hsl(var(--skeleton-base));
+    background:
+      linear-gradient(
+        100deg,
+        hsl(var(--skeleton-base)) 0%,
+        hsl(var(--skeleton-highlight) / 0.72) 48%,
+        hsl(var(--skeleton-base)) 100%
+      );
   }
 
-  .skeleton::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(90deg,
-        transparent,
-        hsl(var(--skeleton-highlight) / 0.86),
-        transparent);
-    animation: skeleton-shimmer var(--motion-duration-skeleton) linear infinite;
+  .skeleton-stage {
+    animation: skeleton-enter 160ms var(--motion-ease-enter) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .skeleton::after {
+    .app-loading-mark,
+    .app-loading-progress__bar,
+    .skeleton-stage {
       animation: none;
-      opacity: 0;
+    }
+
+    .app-loading-progress__bar {
+      opacity: 0.72;
     }
   }
 

@@ -235,7 +235,7 @@ export const TeamTimesheetPage: React.FC = () => {
           ) : state.status === "loading" && confirmations.length === 0 ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 7 }, (_, index) => (
-                <div key={index} className="h-12 animate-pulse rounded-lg bg-[#f1f5f9]" />
+                <div key={index} className="skeleton h-12 rounded-lg" />
               ))}
             </div>
           ) : confirmations.length === 0 ? (

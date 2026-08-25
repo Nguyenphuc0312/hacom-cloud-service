@@ -339,7 +339,7 @@ export const TasksPage: React.FC = () => {
         {isLoading && (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+              <div key={i} className="skeleton h-20 rounded-xl" />
             ))}
           </div>
         )}
