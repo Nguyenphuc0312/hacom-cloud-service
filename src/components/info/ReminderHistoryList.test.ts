@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Message } from "../../types";
-import { dedupeByReminderId } from "./ReminderHistoryList";
+import { dedupeByReminderId } from "./reminderHistory";
 
 const card = (
   id: string,

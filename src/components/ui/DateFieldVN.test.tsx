@@ -7,7 +7,7 @@ import {
   normalizeVnDateInput,
   useIsoDateField,
   vnToIso,
-} from "./DateFieldVN";
+} from "./dateFieldVNUtils";
 
 describe("isValidIsoDate", () => {
   it("chấp nhận ngày có thật", () => {
