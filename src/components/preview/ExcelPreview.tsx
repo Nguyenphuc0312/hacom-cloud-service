@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Menu as IconMenu2 } from 'lucide-react';
-import { sanitizeTableHtml } from './sanitizeTableHtml';
+import { sanitizeTableHtml } from '../../utils/sanitizeTableHtml';
 import styles from './PreviewPanel.module.css';
 
 interface ExcelPreviewProps {

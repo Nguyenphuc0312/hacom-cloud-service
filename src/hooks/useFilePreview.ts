@@ -103,6 +103,7 @@ export function useFilePreview(): UseFilePreviewReturn {
 
   const reqSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const forcedRefreshKeyRef = useRef<string | null>(null);
 
   const current = isOpen ? gallery[currentIndex] ?? null : null;
 
@@ -125,7 +126,10 @@ export function useFilePreview(): UseFilePreviewReturn {
     const key = cacheKey(current.conversationId, current.attachment);
 
     // 1. Check cache (unless this run was triggered by refreshUrl)
-    const isForcedRefresh = refreshNonce > 0;
+    const isForcedRefresh = forcedRefreshKeyRef.current === key;
+    if (isForcedRefresh) {
+      forcedRefreshKeyRef.current = null;
+    }
     if (!isForcedRefresh) {
       const cached = getCached(key);
       if (cached) {
@@ -290,6 +294,7 @@ export function useFilePreview(): UseFilePreviewReturn {
     if (!current) return;
     const key = cacheKey(current.conversationId, current.attachment);
     URL_CACHE.delete(key);
+    forcedRefreshKeyRef.current = key;
     setRefreshNonce((n) => n + 1);
   }, [current]);
 

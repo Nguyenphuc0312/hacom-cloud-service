@@ -21,10 +21,15 @@ import {
 } from 'lucide-react';
 import type { PreviewTarget } from '../../hooks/useFilePreview';
 import { getMimePreviewType, type PreviewType } from '../../utils/mimeRegistry';
-import { formatFileSize, getIconTypeFromPreviewType } from '../../utils/filePreviewUtils';
+import {
+  formatFilePreviewMetadata,
+  getIconTypeFromPreviewType,
+} from '../../utils/filePreviewUtils';
 import { truncateFilename } from '../../utils/truncateFilename';
 import { downloadResourceWithName } from '../../utils/downloadFile';
-import { formatCalendarDateTime } from '../../utils/formatTime';
+import { markFileDownloaded } from '../../utils/downloadedFiles';
+import { asString } from '../../utils/payloadGuards';
+import { SafeImage } from '../common/SafeImage';
 import {
   FileTypeIcon,
   TextPreview,
@@ -70,6 +75,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   onPrev,
   onNext,
   onRefreshUrl,
+  size = 'full',
 }) => {
   const [scale, setScale] = useState(1);
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
@@ -77,6 +83,16 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pageCount, setPageCount] = useState(1);
   const overlayRef = useRef<HTMLDivElement>(null);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    overlayRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
 
   // Reset scale and states when opening a different item
   useEffect(() => {
@@ -138,7 +154,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   const att = current?.attachment;
   const rawAtt = att as (Record<string, unknown> | undefined);
-  const fileName = (rawAtt?.fileName || rawAtt?.originalName || rawAtt?.name || 'file') as string;
+  const fileName =
+    asString(rawAtt?.fileName) ||
+    asString(rawAtt?.originalName) ||
+    asString(rawAtt?.name) ||
+    'file';
   const fileSize = typeof rawAtt?.fileSize === 'number'
     ? rawAtt.fileSize
     : typeof rawAtt?.sizeBytes === 'number'
@@ -146,7 +166,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       : typeof rawAtt?.size === 'number'
         ? rawAtt.size
         : undefined;
-  const mimeType = (rawAtt?.mimeType || 'application/octet-stream') as string;
+  const mimeType = asString(rawAtt?.mimeType) || 'application/octet-stream';
 
   const previewType: PreviewType = useMemo(() => {
     if (!current) return 'unknown';
@@ -156,33 +176,20 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const displayName = truncateFilename(fileName, 48);
   const iconType = getIconTypeFromPreviewType(previewType);
   const uploaderName =
-    current?.uploaderName ||
-    (rawAtt?.uploaderName as string | undefined) ||
-    (rawAtt?.senderName as string | undefined) ||
-    null;
+    asString(current?.uploaderName) ||
+    asString(rawAtt?.uploaderName) ||
+    asString(rawAtt?.senderName);
   const uploaderAvatarUrl =
-    current?.uploaderAvatarUrl ||
-    (rawAtt?.uploaderAvatarUrl as string | undefined) ||
-    (rawAtt?.senderAvatar as string | undefined) ||
-    null;
+    asString(current?.uploaderAvatarUrl) ||
+    asString(rawAtt?.uploaderAvatarUrl) ||
+    asString(rawAtt?.senderAvatar);
   const createdAtRaw =
-    current?.createdAt ||
-    (rawAtt?.createdAt as string | undefined) ||
-    (rawAtt?.timestamp as string | undefined) ||
-    null;
-
-  const formattedTime = useMemo(() => {
-    if (!createdAtRaw) return null;
-    const d =
-      typeof createdAtRaw === 'string' || typeof createdAtRaw === 'number'
-        ? new Date(createdAtRaw)
-        : createdAtRaw;
-    return Number.isNaN(d.getTime()) ? null : formatCalendarDateTime(d);
-  }, [createdAtRaw]);
-
-  const metadataLine = [uploaderName, formattedTime, formatFileSize(fileSize)]
-    .filter(Boolean)
-    .join(' · ');
+    current?.createdAt ?? rawAtt?.createdAt ?? rawAtt?.timestamp ?? null;
+  const metadataLine = formatFilePreviewMetadata(
+    uploaderName,
+    createdAtRaw,
+    fileSize,
+  );
 
   const lowerName = fileName.toLowerCase();
   const isDocx = lowerName.endsWith('.docx');
@@ -194,10 +201,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (!isOpen || !current) return null;
 
-  const handleDownload = () => {
-    if (secureUrl) {
-      void downloadResourceWithName(secureUrl, fileName);
-    }
+  const handleDownload = async () => {
+    if (!secureUrl) return;
+    await downloadResourceWithName(secureUrl, fileName);
+    markFileDownloaded(att?.id || att?.objectKey || att?.url);
   };
 
   const renderContent = () => {
@@ -292,13 +299,26 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (previewType === 'image') {
       return (
-        <div className={styles.mediaBox} onClick={(e) => e.stopPropagation()}>
-          <img
+        <div
+          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <SafeImage
             src={secureUrl}
             alt={fileName}
-            className={styles.image}
+            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
             style={{ transform: `scale(${scale})` }}
+            objectFit="contain"
+            loading="eager"
             draggable={false}
+            retryOnSignedUrlExpired
+            onRetrySource={() => void onRefreshUrl?.()}
+            fallback={
+              <div className={styles.mediaError}>
+                <AlertTriangle size={32} />
+                <span>Không tải được ảnh</span>
+              </div>
+            }
           />
         </div>
       );
@@ -306,13 +326,16 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (previewType === 'video') {
       return (
-        <div className={styles.mediaBox} onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          onClick={(e) => e.stopPropagation()}
+        >
           <video
             src={secureUrl}
             controls
             playsInline
             preload="metadata"
-            className={styles.image}
+            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
           />
         </div>
       );
@@ -385,6 +408,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Xem trước file"
+      tabIndex={-1}
     >
       <div className={styles.backdrop} onClick={onClose} />
 
@@ -482,10 +506,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         <div className={styles.bottomBar}>
           <div className={styles.bottomBarLeft}>
             {uploaderAvatarUrl ? (
-              <img
+              <SafeImage
                 src={uploaderAvatarUrl}
                 alt={uploaderName || ''}
-                style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
+                className={styles.uploaderAvatar}
+                objectFit="cover"
+                loading="eager"
+                fallback={<FileTypeIcon type={iconType} fileName={fileName} size={22} />}
               />
             ) : (
               <FileTypeIcon type={iconType} fileName={fileName} size={22} />
@@ -505,7 +532,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <button
               type="button"
               className={styles.actionBtn}
-              onClick={handleDownload}
+              onClick={() => void handleDownload()}
               aria-label="Tải về"
             >
               <Download size={18} />

@@ -2,6 +2,7 @@
  * @fileoverview File Preview Utilities - Helper functions for file preview logic.
  */
 
+import { format } from "date-fns";
 import type { Attachment } from "../types";
 import type { PreviewType, FileCategory } from "./mimeRegistry";
 import {
@@ -157,6 +158,31 @@ export function formatFileSize(bytes: number | undefined): string {
   }
 
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
+}
+
+export function formatFilePreviewMetadata(
+  uploaderName: unknown,
+  createdAt: unknown,
+  fileSize: number | undefined,
+): string {
+  const normalizedName =
+    typeof uploaderName === "string" && uploaderName.trim()
+      ? uploaderName.trim()
+      : null;
+  const date =
+    createdAt instanceof Date
+      ? createdAt
+      : typeof createdAt === "string" || typeof createdAt === "number"
+        ? new Date(createdAt)
+        : null;
+  const formattedTime =
+    date && !Number.isNaN(date.getTime())
+      ? format(date, "dd/MM/yyyy HH:mm")
+      : null;
+
+  return [normalizedName, formattedTime, formatFileSize(fileSize)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // ── Preview Helpers ────────────────────────────────────────────────────

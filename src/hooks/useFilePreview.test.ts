@@ -220,4 +220,37 @@ describe("useFilePreview", () => {
       expect(result.current.urlError).toBe("Network error or 429 rate limit");
     });
   });
+
+  it("bypasses an inline URL only for the item being manually refreshed", async () => {
+    const inlineTarget: PreviewTarget = {
+      ...mockTarget2,
+      attachment: {
+        ...mockTarget2.attachment,
+        downloadUrl: "https://signed/inline.docx",
+        expiresAt: new Date(Date.now() + 600000).toISOString(),
+      },
+    };
+    vi.mocked(fileApi.getDownloadUrl).mockResolvedValue({
+      success: true,
+      data: {
+        url: "https://signed/refreshed.pdf",
+        expiresAt: new Date(Date.now() + 600000).toISOString(),
+      },
+    } as never);
+
+    const { result } = renderHook(() => useFilePreview());
+    act(() => result.current.open(mockTarget1, [mockTarget1, inlineTarget]));
+    await waitFor(() =>
+      expect(result.current.secureUrl).toBe("https://signed/refreshed.pdf"),
+    );
+
+    await act(async () => result.current.refreshUrl());
+    await waitFor(() => expect(fileApi.getDownloadUrl).toHaveBeenCalledTimes(2));
+
+    act(() => result.current.next());
+    await waitFor(() =>
+      expect(result.current.secureUrl).toBe("https://signed/inline.docx"),
+    );
+    expect(fileApi.getDownloadUrl).toHaveBeenCalledTimes(2);
+  });
 });

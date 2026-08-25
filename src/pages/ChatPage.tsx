@@ -37,7 +37,13 @@ import {
   useFriendshipStore,
 } from "../stores";
 import { useGlobalWebSocket } from "../features/realtime/GlobalWebSocketProvider";
-import type { Attachment, Conversation, ImageClickPayload, UserSummary } from "../types";
+import type {
+  Attachment,
+  Conversation,
+  ImageClickPayload,
+  Message,
+  UserSummary,
+} from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
@@ -89,6 +95,7 @@ import {
   readCachedCloudConversationId,
 } from "../features/cloud/personalCloudPolicy";
 import { cloudApi } from "../features/cloud/api/cloudApi";
+import { asRecord, asString } from "../utils/payloadGuards";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -125,6 +132,21 @@ const LIGHTBOX_PREVIEW_URL_CAP = 64;
 const isImageAttachment = (attachment: Attachment): boolean =>
   attachment.mimeType?.startsWith("image/") === true ||
   /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(attachment.fileName ?? "");
+
+const getPreviewSender = (message: Message) => {
+  const sender = asRecord(asRecord(message)?.sender);
+  return {
+    uploaderName:
+      asString(message.senderName) ||
+      asString(sender?.fullName) ||
+      asString(sender?.displayName) ||
+      asString(sender?.username),
+    uploaderAvatarUrl:
+      asString(message.senderAvatar) ||
+      asString(sender?.avatarUrl) ||
+      asString(sender?.avatar),
+  };
+};
 
 /** Filmstrip shows the most-recent images; must stay in sync with FILMSTRIP_MAX in the modal. */
 const LIGHTBOX_FILMSTRIP_MAX = 15;
@@ -1284,17 +1306,8 @@ export const ChatPage: React.FC = () => {
 
       const gallery: PreviewTarget[] = cachedMessages
         .flatMap((message) => {
-          const uploaderName =
-            message.senderName ||
-            (message as any).sender?.fullName ||
-            (message as any).sender?.displayName ||
-            (message as any).sender?.username ||
-            null;
-          const uploaderAvatarUrl =
-            message.senderAvatar ||
-            (message as any).sender?.avatarUrl ||
-            (message as any).sender?.avatar ||
-            null;
+          const { uploaderName, uploaderAvatarUrl } =
+            getPreviewSender(message);
           const createdAt = message.createdAt || null;
 
           return (message.attachments ?? []).map((candidate) => ({
@@ -1321,17 +1334,9 @@ export const ChatPage: React.FC = () => {
         ),
       );
 
-      const targetUploaderName =
-        parentMessage?.senderName ||
-        (parentMessage as any)?.sender?.fullName ||
-        (parentMessage as any)?.sender?.displayName ||
-        (parentMessage as any)?.sender?.username ||
-        null;
-      const targetUploaderAvatarUrl =
-        parentMessage?.senderAvatar ||
-        (parentMessage as any)?.sender?.avatarUrl ||
-        (parentMessage as any)?.sender?.avatar ||
-        null;
+      const targetSender = parentMessage
+        ? getPreviewSender(parentMessage)
+        : { uploaderName: null, uploaderAvatarUrl: null };
       const targetCreatedAt = parentMessage?.createdAt || null;
 
       const target: PreviewTarget = {
@@ -1342,8 +1347,8 @@ export const ChatPage: React.FC = () => {
           attachment.mimeType,
           attachment.fileName,
         ) as PreviewType,
-        uploaderName: targetUploaderName,
-        uploaderAvatarUrl: targetUploaderAvatarUrl,
+        uploaderName: targetSender.uploaderName,
+        uploaderAvatarUrl: targetSender.uploaderAvatarUrl,
         createdAt: targetCreatedAt,
       };
 
