@@ -5,5 +5,6 @@ export default defineConfig({
   ...baseConfig,
   testDir: "./e2e/performance",
   testMatch: "**/*.spec.ts",
+  testIgnore: [],
   reporter: process.env.CI ? "github" : "list",
 });

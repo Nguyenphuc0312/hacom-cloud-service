@@ -2,7 +2,8 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-const loginIdentifier = process.env.HACOM_CLOUD_E2E_LOGIN ?? "cloud.user@local.test";
+const loginIdentifier =
+  process.env.HACOM_CLOUD_E2E_LOGIN ?? "cloud.user@local.test";
 const password = process.env.HACOM_CLOUD_E2E_PASSWORD;
 const fixturePath = path.resolve(
   process.cwd(),
@@ -12,9 +13,13 @@ const artifactPath = path.resolve(
   process.cwd(),
   "../performance/media-db-optimization/artifacts/browser-waterfall.json",
 );
-const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8")) as {
-  conversationId: string;
-};
+const fixture = fs.existsSync(fixturePath)
+  ? (JSON.parse(fs.readFileSync(fixturePath, "utf8")) as {
+      conversationId: string;
+    })
+  : null;
+
+test.skip(!fixture, `Requires benchmark fixture: ${fixturePath}`);
 
 type WaterfallEntry = {
   phase: "cold" | "warm";
@@ -31,7 +36,9 @@ type WaterfallEntry = {
 };
 
 const trackedPath = (pathname: string): boolean =>
-  pathname.includes(`/conversations/${fixture.conversationId}/messages`) ||
+  pathname.includes(
+    `/conversations/${fixture?.conversationId ?? "__missing__"}/messages`,
+  ) ||
   pathname.endsWith("/files/batch-thumbnail-urls") ||
   pathname.startsWith("/chat-files/");
 
@@ -57,6 +64,7 @@ const scrollTimelineToTop = async (page: Page): Promise<void> => {
 
 test("captures a sanitized cold/warm media waterfall", async ({ page }) => {
   test.setTimeout(120_000);
+  if (!fixture) return;
   await login(page);
 
   let phase: WaterfallEntry["phase"] = "cold";
@@ -69,29 +77,31 @@ test("captures a sanitized cold/warm media waterfall", async ({ page }) => {
     const pathname = parsedUrl.pathname;
     if (!trackedPath(pathname)) return;
 
-    pending.push((async () => {
-      const [response, sizes] = await Promise.all([
-        request.response(),
-        request.sizes().catch(() => null),
-      ]);
-      const timing = request.timing();
-      entries.push({
-        phase: eventPhase,
-        method: request.method(),
-        path: pathname,
-        queryKeys: Array.from(parsedUrl.searchParams.keys()).sort(),
-        limit: parsedUrl.searchParams.get("limit"),
-        resourceType: request.resourceType(),
-        status: response?.status() ?? 0,
-        durationMs:
-          timing.responseEnd >= 0
-            ? Math.round(timing.responseEnd * 100) / 100
-            : null,
-        responseBodyBytes: sizes?.responseBodySize ?? null,
-        responseHeaderBytes: sizes?.responseHeadersSize ?? null,
-        fromServiceWorker: response?.fromServiceWorker() ?? false,
-      });
-    })());
+    pending.push(
+      (async () => {
+        const [response, sizes] = await Promise.all([
+          request.response(),
+          request.sizes().catch(() => null),
+        ]);
+        const timing = request.timing();
+        entries.push({
+          phase: eventPhase,
+          method: request.method(),
+          path: pathname,
+          queryKeys: Array.from(parsedUrl.searchParams.keys()).sort(),
+          limit: parsedUrl.searchParams.get("limit"),
+          resourceType: request.resourceType(),
+          status: response?.status() ?? 0,
+          durationMs:
+            timing.responseEnd >= 0
+              ? Math.round(timing.responseEnd * 100) / 100
+              : null,
+          responseBodyBytes: sizes?.responseBodySize ?? null,
+          responseHeaderBytes: sizes?.responseHeadersSize ?? null,
+          fromServiceWorker: response?.fromServiceWorker() ?? false,
+        });
+      })(),
+    );
   });
 
   const coldStartedAt = Date.now();
@@ -101,7 +111,10 @@ test("captures a sanitized cold/warm media waterfall", async ({ page }) => {
   await page.waitForTimeout(1_000);
 
   const currentUrl = page.url();
-  const alternate = page.getByRole("option").filter({ hasNotText: /Cloud của tôi/i }).nth(1);
+  const alternate = page
+    .getByRole("option")
+    .filter({ hasNotText: /Cloud của tôi/i })
+    .nth(1);
   await alternate.click();
   await expect(page).not.toHaveURL(currentUrl);
 
@@ -118,13 +131,27 @@ test("captures a sanitized cold/warm media waterfall", async ({ page }) => {
     const scoped = entries.filter((entry) => entry.phase === targetPhase);
     return {
       requestCount: scoped.length,
-      apiRequests: scoped.filter((entry) => entry.path.startsWith("/api/")).length,
-      batchRequests: scoped.filter((entry) => entry.path.endsWith("/files/batch-thumbnail-urls")).length,
-      variantRequests: scoped.filter((entry) => entry.path.startsWith("/chat-files/variants/")).length,
-      originalImageRequests: scoped.filter((entry) => entry.path.includes("runtime-image-")).length,
-      videoObjectRequests: scoped.filter((entry) => entry.path.includes("runtime-video-")).length,
-      genericFileRequests: scoped.filter((entry) => entry.path.includes("runtime-document-")).length,
-      responseBodyBytes: scoped.reduce((total, entry) => total + (entry.responseBodyBytes ?? 0), 0),
+      apiRequests: scoped.filter((entry) => entry.path.startsWith("/api/"))
+        .length,
+      batchRequests: scoped.filter((entry) =>
+        entry.path.endsWith("/files/batch-thumbnail-urls"),
+      ).length,
+      variantRequests: scoped.filter((entry) =>
+        entry.path.startsWith("/chat-files/variants/"),
+      ).length,
+      originalImageRequests: scoped.filter((entry) =>
+        entry.path.includes("runtime-image-"),
+      ).length,
+      videoObjectRequests: scoped.filter((entry) =>
+        entry.path.includes("runtime-video-"),
+      ).length,
+      genericFileRequests: scoped.filter((entry) =>
+        entry.path.includes("runtime-document-"),
+      ).length,
+      responseBodyBytes: scoped.reduce(
+        (total, entry) => total + (entry.responseBodyBytes ?? 0),
+        0,
+      ),
     };
   };
 
@@ -134,18 +161,23 @@ test("captures a sanitized cold/warm media waterfall", async ({ page }) => {
     timings: { coldFirstVisibleImageMs, warmFirstVisibleImageMs },
     cold: summarize("cold"),
     warm: summarize("warm"),
-    entries: entries.sort((left, right) => left.phase.localeCompare(right.phase)),
+    entries: entries.sort((left, right) =>
+      left.phase.localeCompare(right.phase),
+    ),
   };
   fs.writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
 
   expect(artifact.cold.variantRequests).toBeGreaterThan(0);
-  expect(entries.filter((entry) =>
-    entry.phase === "cold" &&
-    entry.path.endsWith("/messages") &&
-    entry.queryKeys.length === 1 &&
-    entry.queryKeys[0] === "limit" &&
-    entry.limit === "50"
-  )).toHaveLength(1);
+  expect(
+    entries.filter(
+      (entry) =>
+        entry.phase === "cold" &&
+        entry.path.endsWith("/messages") &&
+        entry.queryKeys.length === 1 &&
+        entry.queryKeys[0] === "limit" &&
+        entry.limit === "50",
+    ),
+  ).toHaveLength(1);
   expect(artifact.cold.originalImageRequests).toBe(0);
   expect(artifact.cold.videoObjectRequests).toBe(0);
   expect(artifact.cold.genericFileRequests).toBe(0);
