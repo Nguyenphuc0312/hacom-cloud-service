@@ -69,7 +69,7 @@ export const StickerMessage: React.FC<StickerMessageProps> = ({
       {/* Loading skeleton */}
       {(!loaded || isLoading) && !error && (
         <div
-          className="flex h-[120px] w-[120px] items-center justify-center rounded-lg bg-surface-overlay animate-pulse"
+          className="skeleton flex h-[120px] w-[120px] items-center justify-center rounded-lg"
           style={{ width: 120, height: 120 }}
         >
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1976D2] border-t-transparent" />

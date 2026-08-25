@@ -36,9 +36,9 @@ export const ReminderHistoryList: React.FC<ReminderHistoryListProps> = ({
     return (
       <div className="space-y-2 p-3">
         {[1, 2].map((i) => (
-          <div key={i} className="animate-pulse rounded-xl bg-surface-overlay p-3">
-            <div className="mb-2 h-3 w-3/4 rounded bg-surface-active" />
-            <div className="h-2 w-1/3 rounded bg-surface-active/70" />
+          <div key={i} className="skeleton-stage rounded-xl bg-surface-overlay p-3">
+            <div className="skeleton mb-2 h-3 w-3/4 rounded" />
+            <div className="skeleton h-2 w-1/3 rounded" />
           </div>
         ))}
       </div>

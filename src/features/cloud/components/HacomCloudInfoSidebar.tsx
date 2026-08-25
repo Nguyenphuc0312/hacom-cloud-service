@@ -165,7 +165,7 @@ export const CloudStorageCard: React.FC<{
         </section>
       );
     }
-    return <div className="h-[174px] animate-pulse rounded-xl border border-border/70 bg-surface-hover/50" aria-label="Đang tải dung lượng lưu trữ" />;
+    return <div className="skeleton h-[174px] rounded-xl" aria-label="Đang tải dung lượng lưu trữ" />;
   }
 
   const used = quota.usedBytes;
@@ -386,7 +386,7 @@ export const HacomCloudInfoSidebar: React.FC<{
             <button type="button" className="icon-button-surface h-9 w-9" onClick={onClose} aria-label="Đóng thông tin Hacom Cloud"><X className="h-5 w-5" /></button>
           </header>
           {loading ? (
-            <div className="space-y-4 p-4" aria-label="Đang tải thông tin Hacom Cloud"><div className="h-[72px] animate-pulse rounded-xl bg-surface-hover" /><div className="h-44 animate-pulse rounded-xl bg-surface-hover" /><div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="aspect-square animate-pulse rounded-lg bg-surface-hover" />)}</div>{[1, 2, 3].map((item) => <div key={item} className="h-[60px] animate-pulse rounded-lg bg-surface-hover" />)}</div>
+            <div className="skeleton-stage space-y-4 p-4" aria-label="Đang tải thông tin Hacom Cloud"><div className="skeleton h-[72px] rounded-xl" /><div className="skeleton h-44 rounded-xl" /><div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="skeleton aspect-square rounded-lg" />)}</div>{[1, 2, 3].map((item) => <div key={item} className="skeleton h-[60px] rounded-lg" />)}</div>
           ) : (
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
               <CloudIdentity />
@@ -397,7 +397,7 @@ export const HacomCloudInfoSidebar: React.FC<{
                     chuyển tiếp/tải giống hệt bên ngoài, nên không cần mục "Tệp trong Cloud"
                     riêng nữa (chốt với user 07-08-26). */}
                 {conversationId ? (
-                  <React.Suspense fallback={<div className="h-44 animate-pulse rounded-xl bg-surface-hover" />}>
+                  <React.Suspense fallback={<div className="skeleton h-44 rounded-xl" />}>
                     <CloudSharedResources
                       conversationId={conversationId}
                       variant="zalo"
