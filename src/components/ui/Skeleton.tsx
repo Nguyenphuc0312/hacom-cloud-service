@@ -123,7 +123,7 @@ export const ConversationListSkeleton: React.FC<{
   count?: number;
   compact?: boolean;
 }> = ({ className, count = 7, compact }) => (
-  <div className={clsx("py-1", className)} aria-busy="true">
+  <div className={clsx("skeleton-stage py-1", className)} aria-busy="true">
     {Array.from({ length: count }).map((_, index) => (
       <ConversationItemSkeleton key={index} compact={compact} />
     ))}
@@ -169,10 +169,10 @@ export const MessageBubbleSkeleton: React.FC<{
     {!isMe && <SkeletonCircle size={32} />}
     <div
       className={clsx(
-        "max-w-[72%] rounded-[var(--chat-bubble-radius)] border px-3 py-2 shadow-xs",
+        "max-w-[72%] rounded-[var(--chat-bubble-radius)] px-3 py-2",
         isMe
-          ? "border-primary/10 bg-primary/10"
-          : "border-border/70 bg-surface",
+          ? "bg-primary/[0.07]"
+          : "bg-surface/80",
       )}
       style={{ width: toCssSize(width) }}
     >
@@ -191,7 +191,7 @@ export const MessageSkeleton = MessageBubbleSkeleton;
 export const MessageListSkeleton: React.FC<{
   className?: string;
   count?: number;
-}> = ({ className, count = 9 }) => {
+}> = ({ className, count = 5 }) => {
   const pattern = [
     { isMe: false, width: "48%", lines: 1 },
     { isMe: true, width: "42%", lines: 1 },
@@ -206,7 +206,7 @@ export const MessageListSkeleton: React.FC<{
 
   return (
     <div
-      className={clsx("mx-auto flex w-full max-w-[var(--chat-content-lane)] flex-col gap-1 py-4", className)}
+      className={clsx("skeleton-stage mx-auto flex w-full max-w-[var(--chat-content-lane)] flex-col gap-1 py-4", className)}
       aria-busy="true"
     >
       <div className="mb-2 flex justify-center">
@@ -413,22 +413,16 @@ export const DirectorySkeleton: React.FC<{
   </div>
 );
 
-export const PageSkeleton: React.FC<{ className?: string }> = ({
+export const ChatWorkspaceSkeleton: React.FC<{ className?: string }> = ({
   className,
 }) => (
   <div
-    className={clsx("grid h-[var(--app-dvh)] min-h-[var(--app-dvh)] grid-cols-[var(--hc-rail-width)_var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background", className)}
+    className={clsx(
+      "grid h-full min-h-0 w-full grid-cols-[var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background max-md:grid-cols-1",
+      className,
+    )}
     aria-busy="true"
   >
-    <div className="hc-side-rail">
-      <SkeletonCircle size={34} className="bg-white/20" />
-      <div className="mt-4 flex flex-1 flex-col gap-3">
-        {Array.from({ length: 7 }).map((_, index) => (
-          <SkeletonCircle key={index} size={36} className="bg-white/20" />
-        ))}
-      </div>
-      <SkeletonCircle size={34} className="bg-white/20" />
-    </div>
     <div className="min-h-0 border-r border-border bg-surface">
       <div className="border-b border-border px-4 py-4">
         <Skeleton className="h-6" width={132} rounded="sm" />
@@ -439,12 +433,12 @@ export const PageSkeleton: React.FC<{ className?: string }> = ({
           <Skeleton key={index} className="h-8 flex-1" rounded="md" />
         ))}
       </div>
-      <ConversationListSkeleton count={7} />
+      <ConversationListSkeleton count={6} />
     </div>
-    <div className="flex min-h-0 min-w-0 flex-col bg-background">
+    <div className="flex min-h-0 min-w-0 flex-col bg-background max-md:hidden">
       <ChatHeaderSkeleton />
       <div className="chat-background min-h-0 flex-1 overflow-hidden px-[var(--chat-lane-padding)]">
-        <MessageListSkeleton />
+        <MessageListSkeleton count={5} />
       </div>
       <MessageComposerSkeleton />
     </div>

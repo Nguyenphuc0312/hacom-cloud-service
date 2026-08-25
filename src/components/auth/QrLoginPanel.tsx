@@ -358,7 +358,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
               )}
               objectFit="contain"
               fallback={
-                <div className="h-full w-full rounded-lg bg-surface-overlay animate-pulse" />
+                <div className="skeleton h-full w-full rounded-lg" />
               }
             />
           ) : (

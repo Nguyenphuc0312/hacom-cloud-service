@@ -151,13 +151,13 @@ export const MessageEditHistoryModal: React.FC<MessageEditHistoryModalProps> = (
       {loading && (
         // Skeleton theo đúng hình dạng timeline bên dưới, tránh nhảy layout
         // khi data về (product register: skeleton, không phải spinner giữa trang).
-        <div className="space-y-5" aria-hidden="true">
+        <div className="skeleton-stage space-y-5" aria-hidden="true">
           {[0, 1].map((row) => (
             <div key={row} className="flex gap-3">
-              <span className="mt-1.5 h-[7px] w-[7px] shrink-0 animate-pulse rounded-full bg-border" />
+              <span className="skeleton mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full" />
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-2.5 w-24 animate-pulse rounded bg-surface-hover" />
-                <div className="h-3.5 w-4/5 animate-pulse rounded bg-surface-hover" />
+                <div className="skeleton h-2.5 w-24 rounded" />
+                <div className="skeleton h-3.5 w-4/5 rounded" />
               </div>
             </div>
           ))}

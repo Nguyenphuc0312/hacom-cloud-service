@@ -404,7 +404,7 @@ export const CloudManageView: React.FC<{
           {/* 4 ô lọc theo loại, giống Zalo My Documents */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {loading ? MEDIA_TILES.map((tile) => (
-              <div key={tile.key} className="h-[72px] animate-pulse rounded-xl border border-border/60 bg-surface-hover/60" />
+              <div key={tile.key} className="skeleton h-[72px] rounded-xl" />
             )) : MEDIA_TILES.map((tile) => {
               const bytes = tile.quotaKey ? quota?.usedByType?.[tile.quotaKey] : undefined;
               const active = filter === tile.key;
@@ -504,12 +504,12 @@ export const CloudManageView: React.FC<{
                 ) : null}
               </div>
             ) : loading ? (
-              <div aria-label="Đang tải danh sách tệp" className="space-y-px">
-                <div className="h-11 animate-pulse border-b border-border bg-surface-hover/50" />
+              <div aria-label="Đang tải danh sách tệp" className="skeleton-stage space-y-px">
+                <div className="skeleton h-11 rounded-md" />
                 {[1, 2, 3, 4, 5].map((item) => (
                   <div key={item} className="flex h-[68px] items-center gap-3 border-b border-border/60 px-3">
-                    <div className="h-11 w-11 shrink-0 animate-pulse rounded-lg bg-surface-hover" />
-                    <div className="h-3.5 w-2/5 animate-pulse rounded bg-surface-hover" />
+                    <div className="skeleton h-11 w-11 shrink-0 rounded-lg" />
+                    <div className="skeleton h-3.5 w-2/5 rounded" />
                   </div>
                 ))}
               </div>

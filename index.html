@@ -26,9 +26,73 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      #app-boot-loader {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+      }
+      [data-theme="dark"] #app-boot-loader { background: #0e0f10; }
+      #app-boot-loader > div {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      #app-boot-loader img {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        box-shadow: 0 3px 8px rgb(15 23 42 / 9%);
+      }
+      #app-boot-loader span {
+        position: relative;
+        width: 72px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e5e7eb;
+      }
+      [data-theme="dark"] #app-boot-loader span { background: #27292b; }
+      #app-boot-loader span::after {
+        content: "";
+        position: absolute;
+        inset-block: 0;
+        left: 0;
+        width: 100%;
+        border-radius: inherit;
+        background: #1565c0;
+        transform-origin: left;
+        animation: app-boot-progress 900ms cubic-bezier(.16, 1, .3, 1) both;
+      }
+      @keyframes app-boot-progress {
+        from { opacity: .65; transform: scaleX(.16); }
+        to { opacity: 1; transform: scaleX(1); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-boot-loader span::after {
+          opacity: .72;
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="app-boot-loader"
+        role="status"
+        aria-label="Đang tải Hacom Holdings"
+      >
+        <div aria-hidden="true">
+          <img src="%BASE_URL%logo.png" width="56" height="56" alt="" />
+          <span></span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

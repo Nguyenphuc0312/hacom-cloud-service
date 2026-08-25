@@ -38,7 +38,7 @@ export {
   CardGridSkeleton,
   NotificationListSkeleton,
   DirectorySkeleton,
-  PageSkeleton,
+  ChatWorkspaceSkeleton,
 } from "./Skeleton";
 export { useDelayedLoading } from "../../hooks/useDelayedLoading";
 export {
