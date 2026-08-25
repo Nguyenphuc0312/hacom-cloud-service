@@ -1,5 +1,5 @@
-import { describe, expect, it, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { describe, expect, it, afterEach, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import {
   GuestRoute,
@@ -8,10 +8,14 @@ import {
 } from "./RouteGuards";
 import { useAuthStore } from "../../stores/authStore";
 
-function setAuthState(status: "authenticated" | "pending_hr_link" | "anonymous") {
+const originalInitialize = useAuthStore.getState().initialize;
+
+function setAuthState(
+  status: "authenticated" | "pending_hr_link" | "anonymous" | "bootstrap_error",
+) {
   useAuthStore.setState({
     user:
-      status === "anonymous"
+      status === "anonymous" || status === "bootstrap_error"
         ? null
         : {
             id: "user-1",
@@ -35,6 +39,7 @@ function setAuthState(status: "authenticated" | "pending_hr_link" | "anonymous")
 afterEach(() => {
   cleanup();
   setAuthState("anonymous");
+  useAuthStore.setState({ initialize: originalInitialize });
 });
 
 describe("RouteGuards pending HR link", () => {
@@ -105,5 +110,35 @@ describe("RouteGuards pending HR link", () => {
     );
 
     expect(screen.getByText("Waiting room")).toBeTruthy();
+  });
+
+  it("keeps a transient bootstrap failure on the protected route for retry", () => {
+    const initialize = vi.fn().mockResolvedValue(undefined);
+    setAuthState("bootstrap_error");
+    useAuthStore.setState({
+      initialize,
+      error: "Dịch vụ xác thực tạm thời không khả dụng.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat"]}>
+        <Routes>
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <div>Chat app</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/login" element={<div>Login</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Login")).toBeNull();
+    expect(screen.getByText("Dịch vụ xác thực tạm thời không khả dụng.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /thử lại/i }));
+    expect(initialize).toHaveBeenCalledTimes(1);
   });
 });
