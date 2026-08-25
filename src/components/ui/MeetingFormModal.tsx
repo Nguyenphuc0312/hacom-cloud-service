@@ -21,7 +21,8 @@ import { conversationApi } from "../../services/api";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import { unwrapApiSuccess } from "../../lib/apiContract";
 import { RoomType, type Conversation } from "../../types";
-import { DateFieldVN, isValidIsoDate, isoToVn as formatDateVN, useIsoDateField } from "./DateFieldVN";
+import { DateFieldVN } from "./DateFieldVN";
+import { isValidIsoDate, isoToVn as formatDateVN, useIsoDateField } from "./dateFieldVNUtils";
 
 export interface MeetingParticipant {
   name: string;

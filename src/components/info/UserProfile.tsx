@@ -61,8 +61,8 @@ import { extractApiError } from "../../lib/apiContract";
 import type { UserProfileSummaryDto } from "@hacom/chat-shared-types/auth";
 import type { Conversation, Message, UserSummary } from "../../types";
 import { MessageType, UserStatus } from "../../types";
-import { conversationApi, messageApi } from "../../services/api";
 import { unwrapApiSuccess } from "../../lib/apiContract";
+import { chatApi } from "../../features/chat/api/chatApi";
 import { ReminderHistoryList } from "./ReminderHistoryList";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { getUserDisplayName } from "../../utils/messageHelpers";
@@ -77,7 +77,6 @@ import { resolveUserDisplayName } from "../../features/chat/identity/resolveUser
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
-import { friendshipApi } from "../../services/api";
 import {
   type ChatSearchUser,
   isGroupMemberEligible,
@@ -398,7 +397,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   React.useEffect(() => {
     if (!showReminders || !conversationId) return;
     setRemindersLoading(true);
-    void messageApi
+    void chatApi.message
       .searchMessages({ conversationId, type: MessageType.REMINDER, q: "", limit: 30 })
       .then((res) => setReminders(unwrapApiSuccess(res)?.messages ?? []))
       .catch(() => setReminders([]))
@@ -659,7 +658,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     const newAlias = trimmed || null;
     setSavingAliasUserId(aliasTargetUserId);
     try {
-      await friendshipApi.setAlias(friendshipId, newAlias);
+      await chatApi.friendship.setAlias(friendshipId, newAlias);
       useFriendshipStore.getState().setLocalAlias(aliasTargetUserId, newAlias);
       if (!newAlias) enrichUserProfile(aliasTargetUserId);
       setEditingAliasUserId((editingUserId) =>
@@ -728,7 +727,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     } as Partial<Conversation>);
 
     try {
-      const result = await conversationApi.setConversationPinned(
+      const result = await chatApi.conversation.setConversationPinned(
         conversationId,
         nextPinned,
       );
@@ -761,7 +760,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       setIsMuted(true);
       setIsMuteDialogOpen(false);
       try {
-        const result = await conversationApi.setConversationMuted(conversationId, {
+        const result = await chatApi.conversation.setConversationMuted(conversationId, {
           muted: true,
           muteUntil,
         });
@@ -782,7 +781,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     if (!conversationId) return;
     setIsMuted(false);
     try {
-      const result = await conversationApi.setConversationMuted(conversationId, {
+      const result = await chatApi.conversation.setConversationMuted(conversationId, {
         muted: false,
         muteUntil: null,
       });
@@ -849,7 +848,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     if (!conversationId || isDeletingConversation) return;
     setIsDeletingConversation(true);
     try {
-      await conversationApi.deleteConversation(conversationId);
+      await chatApi.conversation.deleteConversation(conversationId);
       removeConversation(conversationId);
       selectConversation(null);
       toast.success("Đã xóa lịch sử trò chuyện");
@@ -881,7 +880,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       } as Partial<Conversation>);
 
       try {
-        const result = await conversationApi.setConversationHidden(
+        const result = await chatApi.conversation.setConversationHidden(
           conversationId,
           hidden,
         );

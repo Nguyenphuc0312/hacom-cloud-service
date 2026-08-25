@@ -12,7 +12,8 @@ import type { DepartmentSelectionRequest, WorkReportRecord } from "../types";
 import { fetchWorkReports, fetchDepartments, AiApiError } from "../services/aiChatApi";
 import type { DepartmentListItem } from "../services/aiChatApi";
 import { WorkReportTable } from "./WorkReportTable";
-import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
+import { DateFieldVN } from "../../../components/ui/DateFieldVN";
+import { useIsoDateField } from "../../../components/ui/dateFieldVNUtils";
 
 interface DepartmentSelectorProps {
   data: DepartmentSelectionRequest;

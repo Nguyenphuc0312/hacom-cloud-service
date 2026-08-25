@@ -46,7 +46,6 @@ import { MessageType, RoomMemberRole } from "../../types";
 import type { PollInfo } from "@hacom/chat-shared-types/chat";
 import { ReminderHistoryList } from "./ReminderHistoryList";
 import { CollapsibleSection } from "./CollapsibleSection";
-import { conversationApi, messageApi } from "../../services/api";
 import {
   loadUserProfiles,
   invalidateUserProfileSummary,
@@ -253,7 +252,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     if (!conversation.id) return;
     setPollsShowAll(false);
     setPollsLoading(true);
-    void messageApi
+    void chatApi.message
       .searchMessages({ conversationId: conversation.id, type: MessageType.POLL, q: "", limit: 30 })
       .then((res) => {
         const messages = unwrapApiSuccess(res)?.messages ?? [];
@@ -272,7 +271,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       .finally(() => setPollsLoading(false));
 
     setRemindersLoading(true);
-    void messageApi
+    void chatApi.message
       .searchMessages({ conversationId: conversation.id, type: MessageType.REMINDER, q: "", limit: 30 })
       .then((res) => {
         setReminders(unwrapApiSuccess(res)?.messages ?? []);
@@ -302,7 +301,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     });
 
     try {
-      const result = await conversationApi.setConversationPinned(
+      const result = await chatApi.conversation.setConversationPinned(
         conversation.id,
         nextPinned,
       );
@@ -471,7 +470,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           toast.success("Đã tạo bình chọn");
           reloadBoardItems();
           if (options.pinToTop && created?.id) {
-            messageApi.pinMessage(created.id).catch(() => {
+            chatApi.message.pinMessage(created.id).catch(() => {
               toast.error("Không thể ghim bình chọn");
             });
           }
@@ -526,7 +525,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         .then((created) => {
           toast.success("Đã tạo ghi chú");
           if (payload.pinToTop && created?.id) {
-            messageApi.pinMessage(created.id).catch(() => {
+            chatApi.message.pinMessage(created.id).catch(() => {
               toast.error("Không thể ghim ghi chú");
             });
           }

@@ -279,15 +279,6 @@ const FileRow: React.FC<{
 
 // --- filter controls (messages + files) --------------------------------------
 
-// The date helpers moved to components/common/resource-filter/dateRange so the
-// shared-resources modal can use them too; re-exported here for existing
-// importers.
-export {
-  isoToDisplay,
-  displayToIso,
-  buildMonthCells,
-} from "../../common/resource-filter/dateRange";
-
 // --- main overlay ------------------------------------------------------------
 
 const PREVIEW_COUNT = 5;

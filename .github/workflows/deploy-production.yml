@@ -49,12 +49,12 @@ jobs:
       GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: chat-web-client
 
       - if: ${{ env.SHARED_TYPES_REPO_TOKEN != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
           path: chat-shared-types
@@ -62,7 +62,7 @@ jobs:
           token: ${{ env.SHARED_TYPES_REPO_TOKEN }}
 
       - if: ${{ env.SHARED_TYPES_REPO_TOKEN == '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
           path: chat-shared-types

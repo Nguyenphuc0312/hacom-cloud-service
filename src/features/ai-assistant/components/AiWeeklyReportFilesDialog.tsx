@@ -16,7 +16,8 @@ import {
 import { useWeeklyReportFileActions } from "../hooks/useWeeklyReportFileActions";
 import { AiWeeklyReportFilePreviewModal } from "./AiWeeklyReportFilePreviewModal";
 import { toast } from "../../../utils/toast";
-import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
+import { DateFieldVN } from "../../../components/ui/DateFieldVN";
+import { useIsoDateField } from "../../../components/ui/dateFieldVNUtils";
 
 interface AiWeeklyReportFilesDialogProps {
   isOpen: boolean;
