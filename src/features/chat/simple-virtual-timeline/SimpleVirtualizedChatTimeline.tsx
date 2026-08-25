@@ -295,7 +295,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     count: threadRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => estimateRowHeight(threadRows[index]),
-    overscan: 8,
+    overscan: 2,
     getItemKey: (index) =>
       threadRows[index]?.key ?? `${threadRows[index]?.kind ?? "x"}-${index}`,
   });

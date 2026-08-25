@@ -1,0 +1,250 @@
+﻿.panel {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 0;
+  overflow: hidden;
+  height: calc(100vh - 108px);
+  /* Khung cuộn cần phủ hết vùng preview để thanh kéo nằm sát mép phải,
+     không bị bám ở cạnh một khối tài liệu hẹp nằm giữa màn hình. */
+  width: 100%;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0;
+}
+
+.panelBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Thanh cuộn mảnh, bo tròn thay cho thanh cuộn mặc định thô của trình duyệt —
+   áp dụng chung cho mọi khung xem trước có thể cuộn (Word/PDF/CSV/text...). */
+.panelBody,
+.docHost {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent; /* Firefox */
+}
+.panelBody::-webkit-scrollbar,
+.docHost::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.panelBody::-webkit-scrollbar-track,
+.docHost::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panelBody::-webkit-scrollbar-thumb,
+.docHost::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+}
+.panelBody::-webkit-scrollbar-thumb:hover,
+.docHost::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+.centerState {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #868e96;
+  text-align: center;
+  padding: 24px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-top: 1px solid #dee2e6;
+  background: #f8f9fa;
+  flex-shrink: 0;
+}
+
+/* Thanh chọn sheet Excel — tab phẳng, gạch chân khi active, có nút cuộn
+   ngang trái/phải + icon menu bên trái, giống thanh sheet-tab thật của
+   Excel/Zalo web thay vì "pills" tròn kiểu nút bấm. */
+.sheetTabBar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  height: 38px;
+  border-top: 1px solid #dee2e6;
+  background: #f8f9fa;
+  flex-shrink: 0;
+}
+
+.sheetTabMenuIcon {
+  flex-shrink: 0;
+  color: #868e96;
+  margin-right: 4px;
+}
+
+.sheetTabScrollBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  flex-shrink: 0;
+  color: #868e96;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.sheetTabScrollBtn:hover {
+  background: #e9ecef;
+}
+
+.sheetTabList {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+.sheetTabList::-webkit-scrollbar {
+  display: none;
+}
+
+.sheetTab {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #868e96;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.sheetTab:hover {
+  color: #212529;
+  background: #f1f3f5;
+}
+.sheetTab[data-active='true'] {
+  color: #1c7ed6;
+  font-weight: 650;
+  border-bottom-color: #228be6;
+}
+
+.iframe {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
+.card {
+  width: min(30rem, calc(100vw - 2rem));
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+  background: #ffffff;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.docHost {
+  background: transparent;
+  height: 100%;
+  overflow: auto;
+  padding: 24px 0 40px;
+}
+
+/* docx-preview tự chèn CSS mặc định cho ".docx-wrapper" (nền xám đậm + đệm
+   dày quanh trang) để giả lập khung "trang trên canvas" kiểu Word Online —
+   đúng nguyên nhân tạo ra viền xám dày quanh trang thấy trên ảnh chụp thực
+   tế. Ghi đè để trang tài liệu nổi trực tiếp trên nền xám nhạt của lightbox
+   (không có khung/nền riêng), chỉ giữ lại bóng đổ nhẹ quanh trang — đúng kiểu
+   xem file của Zalo web trong ảnh mẫu. */
+.docHost :global(.docx-wrapper) {
+  background: transparent !important;
+  padding: 0 !important;
+}
+.docHost :global(.docx-wrapper > section.docx),
+.docHost :global(.docx-wrapper > .docx) {
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.14) !important;
+  margin: 0 auto 24px !important;
+}
+
+.excelTable :global(table) {
+  /* table-layout: fixed bat buoc phai co de <colgroup> (chen o ExcelPreview.tsx,
+     lay dung do rong tung cot tu file goc) duoc ton trong - neu khong trinh
+     duyet se tu tinh lai do rong theo noi dung, gay ra bang bi "phinh to"
+     thay vi gon nhu Zalo web. */
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  /* Chu nho + line-height xit lai cho gong nhu Zalo web - 13px + padding
+     4px 8px truoc day khien moi o chiem nhieu khong gian hon can thiet,
+     cong don lai lam bang trong "phinh to". */
+  font-size: 12px;
+  line-height: 1.35;
+}
+.excelTable :global(td),
+.excelTable :global(th) {
+  border: 1px solid #e0e0e0;
+  padding: 2px 6px;
+  /* Chu xuong dong trong pham vi do rong cot that (thay vi nowrap khien moi
+     cot tu gian ra du chua het chu tren 1 dong) - dung cach Zalo web hien thi. */
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  vertical-align: top;
+  font-weight: 400;
+  text-align: left;
+}
+
+/* Hàng chữ cột (A, B, C...) và cột số dòng (1, 2, 3...) tự chèn thêm, dán cố
+   định khi cuộn — giống lưới bảng tính thật thay vì bảng dữ liệu trần. */
+.excelTable :global(.excel-grid-colhead),
+.excelTable :global(.excel-grid-corner) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f1f3f5;
+  color: #868e96;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.excelTable :global(.excel-grid-rowhead) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #f1f3f5;
+  color: #868e96;
+  font-weight: 600;
+  text-align: center;
+}
+.excelTable :global(.excel-grid-corner) {
+  left: 0;
+  z-index: 3;
+}

@@ -6,7 +6,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
-import { PageSpinner } from "../../components/ui";
+import { ErrorState, PageSpinner } from "../../components/ui";
 import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
 import {
@@ -35,6 +35,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     user,
     authStatus,
     activationContext,
+    error,
+    initialize,
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
@@ -64,11 +66,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (authStatus === "bootstrap_error") {
     return (
-      <Navigate
-        to={ROUTE_PATHS.LOGIN}
-        state={{ from: location.pathname }}
-        replace
-      />
+      <div className="flex min-h-screen items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+        <ErrorState
+          title={t("error:auth.profileMissing")}
+          message={error ?? t("error:auth.profileRetryHint")}
+          onRetry={() => void initialize()}
+        />
+      </div>
     );
   }
 

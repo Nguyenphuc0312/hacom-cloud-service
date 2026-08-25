@@ -36,21 +36,11 @@ const MULTI_DAY_END_COLOR = {
   border: "border-[#DC2626]",
 } as const;
 import { useNowMinute } from "../hooks/useNowMinute";
-import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
-
-interface AttendanceDay {
-  date: string;
-  displaySymbol?: string | null;
-  shiftCode?: string | null;
-  shiftName?: string | null;
-  lateMinutes?: number | null;
-}
 
 interface WeekViewProps {
   /** Ngày bất kỳ trong tuần cần hiển thị. */
   weekDate: Date;
   events: CalendarEvent[];
-  attendanceData: AttendanceDay[];
   onDateClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
@@ -74,15 +64,11 @@ const fmtMin = (min: number): string => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
 
-const dateKey = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
 // memo: parent (CalendarPage) re-renders on every modal toggle; props are
 // stable (useCallback handlers) so memo lets Week view skip those re-renders.
 const WeekViewImpl: React.FC<WeekViewProps> = ({
   weekDate,
   events,
-  attendanceData,
   onDateClick,
   onEventClick,
   onSlotClick,
@@ -107,9 +93,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
 
   const hasAllDay = eventsByDay.some((d) => d.allDay.length > 0);
 
-  const getAttendanceForDay = (date: Date): AttendanceDay | undefined =>
-    attendanceData.find((a) => a.date === dateKey(date));
-
   // Auto-scroll tới giờ hiện tại khi mở/đổi tuần.
   useEffect(() => {
     const el = scrollRef.current;
@@ -129,9 +112,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
       <div className="flex border-b border-border bg-surface">
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
-          const attendance = getAttendanceForDay(date);
-          const attendanceLabel = attendanceCalendarLabel(attendance);
-          const isLate = (attendance?.lateMinutes ?? 0) > 0;
           const isWeekend = index >= 5;
           return (
             <button
@@ -165,20 +145,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
                 )}
               >
                 {date.getDate()}
-              </div>
-              {/* Chỉ hiện ca/phép; giờ chấm xem ở màn Công phép. */}
-              <div className="mt-0.5 h-[14px] text-[9px] leading-tight text-text-secondary">
-                {attendanceLabel ? (
-                  <div
-                    className={clsx(
-                      "truncate font-semibold",
-                      isLate && "text-rose-600 dark:text-rose-400",
-                    )}
-                    title={attendance?.shiftName ?? undefined}
-                  >
-                    {attendanceLabel}
-                  </div>
-                ) : null}
               </div>
             </button>
           );

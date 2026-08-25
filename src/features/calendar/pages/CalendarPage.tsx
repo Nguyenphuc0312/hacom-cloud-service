@@ -39,10 +39,6 @@ const PersonalEventFormModal = React.lazy(() =>
 );
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import {
-  hrApi,
-  type AttendanceCalendarDay,
-} from "../../api/hrApi";
-import {
   hrCalendarApi,
   type HRCalendarEvent,
 } from "../../api/hrCalendarApi";
@@ -51,14 +47,12 @@ import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import { type PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { toast } from "../../../utils/toast";
-import { logger } from "../../../utils/logger";
 import { useCalendarStore } from "../../../stores/calendarStore";
 import { DayView } from "../components/DayView";
 import { WeekView } from "../components/WeekView";
 import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, getMultiDayPosition, type MultiDayPosition } from "../utils/timeline";
 import {
   buildExtendedEventMap,
-  filterCalendarEventsByType,
   getMeetingMetadata,
   mapHrmEventToCalendarEvent,
   remoteAttachmentsToForm,
@@ -67,7 +61,6 @@ import {
 } from "../utils/calendarEventMapping";
 import { getMonthFetchRange } from "../utils/calendarFetchRange";
 import { resolveOpenEventRequest } from "../utils/resolveOpenEventRequest";
-import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
 import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
@@ -313,39 +306,6 @@ const EventBadge: React.FC<{
   );
 };
 
-/**
- * Attendance badge component for calendar day cell
- */
-const AttendanceBadge: React.FC<{
-  attendance: AttendanceCalendarDay;
-}> = ({ attendance }) => {
-  const label = attendanceCalendarLabel(attendance);
-  const isLate = (attendance.lateMinutes ?? 0) > 0;
-  if (!label) return null;
-
-  return (
-    <div
-      className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
-      title={[
-        (label === attendance.shiftCode?.trim() ? "Ca: " : "Ký hiệu: ") + label,
-        attendance.shiftName,
-        isLate ? "Đi muộn " + attendance.lateMinutes + " phút" : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
-    >
-      <span
-        className={clsx(
-          "inline-flex min-w-6 items-center justify-center rounded border border-border bg-surface-overlay px-1.5 py-0.5 font-semibold",
-          isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
-        )}
-      >
-        {label}
-      </span>
-    </div>
-  );
-};
-
 interface MonthGridDay {
   date: Date;
   isCurrentMonth: boolean;
@@ -360,20 +320,16 @@ interface MonthGridDay {
 const MonthGrid: React.FC<{
   calendarDays: MonthGridDay[];
   events: (LocalCalendarEvent | ExtendedCalendarEvent)[];
-  getAttendanceForDate: (date: Date) => AttendanceCalendarDay | undefined;
   isToday: (date: Date) => boolean;
   isSelected: (date: Date) => boolean;
-  showAttendance: boolean;
   onOpenDay: (date: Date) => void;
   onEventClick: (event: LocalCalendarEvent | ExtendedCalendarEvent) => void;
 }> = React.memo(
   ({
     calendarDays,
     events,
-    getAttendanceForDate,
     isToday,
     isSelected,
-    showAttendance,
     onOpenDay,
     onEventClick,
   }) => {
@@ -418,7 +374,6 @@ const MonthGrid: React.FC<{
             const maxVisibleEvents = 2;
             const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
             const remainingCount = dayEvents.length - maxVisibleEvents;
-            const attendance = getAttendanceForDate(dayInfo.date);
 
             return (
               <div
@@ -447,13 +402,6 @@ const MonthGrid: React.FC<{
                     {dayInfo.date.getDate()}
                   </span>
                 </div>
-
-                {/* Ca/phép HRM tự đồng bộ trong Lịch của tôi. */}
-                {attendance && showAttendance && (
-                  <div className="mb-1">
-                    <AttendanceBadge attendance={attendance} />
-                  </div>
-                )}
 
                 {/* Events */}
                 <div className="space-y-0.5">
@@ -539,11 +487,6 @@ export const CalendarPage: React.FC = () => {
   // khoá vĩnh viễn sau lần đầu và mọi lần bấm sau đó im lặng không mở gì.
   const handledNavState = useRef<string | null>(null);
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
-
-  // Attendance data state. (Loading/error state đã bỏ: giá trị chưa từng được
-  // render — chỉ giữ data + log lỗi ra console cho dev.)
-  const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
-
 
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
@@ -810,33 +753,6 @@ export const CalendarPage: React.FC = () => {
     );
   }, [calendarEventsFromApi, participantAvatars]);
 
-  // Fetch attendance data when month changes.
-  // Skip when viewing another user's calendar — never show current user's attendance
-  // alongside someone else's events. A future phase can fetch target user's attendance here.
-  useEffect(() => {
-    // Xem lịch người khác → không hiển thị chấm công của mình. Clear nằm trong
-    // async fn (không set-state đồng bộ trong effect body → tránh cascading render).
-    const fetchAttendance = async () => {
-      if (mode === "other") {
-        setAttendanceData([]);
-        return;
-      }
-      try {
-        const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-        const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
-
-        const data = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
-        // reason EMPLOYEE_NOT_LINKED / NO_ATTENDANCE_DATA → items rỗng → lịch trống (không có badge).
-        setAttendanceData(data.items ?? []);
-      } catch (error: unknown) {
-        logger.warn("calendar", "attendance_fetch_failed", error);
-        setAttendanceData([]);
-      }
-    };
-
-    void fetchAttendance();
-  }, [currentYear, currentMonth, mode]);
-
   // Calendar type filters — local state for display
   const localFilters = useMemo((): CalendarTypeFilter[] => {
     const defaultFilters: CalendarTypeFilter[] = [
@@ -867,13 +783,10 @@ export const CalendarPage: React.FC = () => {
   // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
   const allEvents = calendarEventsWithAvatars;
 
-  // Filter events based on selected filters.
-  // knownTypes = đúng những loại CÓ checkbox; loại khác (vd "task") không có ô để
-  // tick nên phải hiện mặc định, không được lọc mất.
+  // Chỉ hiện đúng hai nhóm mà trang lịch cung cấp: lịch họp và cá nhân.
   const filteredEvents = useMemo(() => {
     const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
-    const knownTypes = localFilters.map((f) => f.type);
-    return filterCalendarEventsByType(allEvents, activeTypes, knownTypes);
+    return allEvents.filter((event) => activeTypes.includes(event.type));
   }, [allEvents, localFilters]);
 
   // Search filtered events
@@ -891,15 +804,6 @@ export const CalendarPage: React.FC = () => {
   const calendarDays = useMemo(
     () => generateCalendarDays(currentYear, currentMonth),
     [currentYear, currentMonth]
-  );
-
-  // Get attendance for a specific date
-  const getAttendanceForDate = useCallback(
-    (date: Date): AttendanceCalendarDay | undefined => {
-      const dateStr = formatDateString(date);
-      return attendanceData.find((a) => a.date === dateStr);
-    },
-    [attendanceData]
   );
 
   // Check if a date is today
@@ -1446,10 +1350,8 @@ export const CalendarPage: React.FC = () => {
             <MonthGrid
               calendarDays={calendarDays}
               events={searchedEvents}
-              getAttendanceForDate={getAttendanceForDate}
               isToday={isToday}
               isSelected={isSelected}
-              showAttendance={mode !== "other"}
               onOpenDay={handleOpenDay}
               onEventClick={handleEventClick}
             />
@@ -1460,7 +1362,6 @@ export const CalendarPage: React.FC = () => {
             <DayView
               date={selectedDate}
               events={searchedEvents}
-              attendance={mode !== "other" ? getAttendanceForDate(selectedDate) : undefined}
               onEventClick={handleEventClick}
               onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
             />
@@ -1471,7 +1372,6 @@ export const CalendarPage: React.FC = () => {
             <WeekView
               weekDate={selectedDate}
               events={searchedEvents}
-              attendanceData={mode !== "other" ? attendanceData : []}
               onDateClick={handleOpenDay}
               onEventClick={handleEventClick}
               onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
