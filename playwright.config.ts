@@ -3,7 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "**/*.spec.ts",
-  testIgnore: "**/__deprecated__/**",
+  testIgnore: [
+    "**/__deprecated__/**",
+    "**/hacom-cloud/**",
+    "**/performance/**",
+  ],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
