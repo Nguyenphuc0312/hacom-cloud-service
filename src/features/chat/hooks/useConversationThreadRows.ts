@@ -31,12 +31,18 @@ export interface ConversationThreadGroupRow {
   showAvatar: boolean;
   showSenderName: boolean;
   showStatus: boolean;
+  groupItemOffset: number;
+  groupItemCount: number;
 }
 
 export type ConversationThreadRow = ThreadSeparatorRow | ConversationThreadGroupRow;
 
+const MAX_MESSAGES_PER_THREAD_ROW = 6;
+
 const buildGroupRow = (
   items: ConversationThreadMessageItem[],
+  groupItemOffset = 0,
+  groupItemCount = items.length,
 ): ConversationThreadGroupRow => {
   const firstItem = items[0];
   const lastItem = items[items.length - 1];
@@ -55,6 +61,8 @@ const buildGroupRow = (
     showAvatar: Boolean(lastItem.showAvatar),
     showSenderName: Boolean(firstItem.showSenderName),
     showStatus: Boolean(lastItem.showStatus),
+    groupItemOffset,
+    groupItemCount,
   };
 };
 
@@ -69,7 +77,23 @@ export const buildConversationThreadRows = (
       return;
     }
 
-    rows.push(buildGroupRow(pendingGroup));
+    const groupItemCount = pendingGroup.length;
+    for (
+      let groupItemOffset = 0;
+      groupItemOffset < groupItemCount;
+      groupItemOffset += MAX_MESSAGES_PER_THREAD_ROW
+    ) {
+      rows.push(
+        buildGroupRow(
+          pendingGroup.slice(
+            groupItemOffset,
+            groupItemOffset + MAX_MESSAGES_PER_THREAD_ROW,
+          ),
+          groupItemOffset,
+          groupItemCount,
+        ),
+      );
+    }
     pendingGroup = [];
   };
 
@@ -111,6 +135,8 @@ const areGroupRowsEqual = (
     previousRow.showAvatar !== nextRow.showAvatar ||
     previousRow.showSenderName !== nextRow.showSenderName ||
     previousRow.showStatus !== nextRow.showStatus ||
+    previousRow.groupItemOffset !== nextRow.groupItemOffset ||
+    previousRow.groupItemCount !== nextRow.groupItemCount ||
     previousRow.items.length !== nextRow.items.length
   ) {
     return false;

@@ -339,7 +339,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         isContact: message.type === MessageType.CONTACT,
         hasLink,
       });
-    }, [message.type, message.content, message.contentFormat, dragAttachment?.fileName]);
+    }, [message.type, message.content, message.contentFormat, dragAttachment]);
     const canQuickForward =
       !isSelectionMode && dragLabel !== null && Boolean(message.conversationId);
     const handleDragStart = React.useCallback(
@@ -769,7 +769,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     );
 
     const actionRail =
-      inlineActions.length > 0 && !isSelectionMode ? (
+      inlineActions.length > 0 &&
+      !isSelectionMode &&
+      (isHovered || isActionSheetOpen) ? (
         <div
           onMouseEnter={handleItemMouseEnter}
           onMouseLeave={handleItemMouseLeave}
@@ -1088,19 +1090,21 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           />
         )}
 
-        <MessageActions
-          mode={coarsePointer ? "sheet" : "dropdown"}
-          actions={actionPolicy.menuActions}
-          isOpen={isActionSheetOpen}
-          anchorRect={menuAnchorRect ?? undefined}
-          onAction={handleAction}
-          onClose={() => setIsActionSheetOpen(false)}
-          actionLabelOverrides={
-            isPersonalCloud
-              ? { deleteForMe: t("chat:message.actions.delete", { defaultValue: "Xóa" }) }
-              : undefined
-          }
-        />
+        {isActionSheetOpen && (
+          <MessageActions
+            mode={coarsePointer ? "sheet" : "dropdown"}
+            actions={actionPolicy.menuActions}
+            isOpen
+            anchorRect={menuAnchorRect ?? undefined}
+            onAction={handleAction}
+            onClose={() => setIsActionSheetOpen(false)}
+            actionLabelOverrides={
+              isPersonalCloud
+                ? { deleteForMe: t("chat:message.actions.delete", { defaultValue: "Xóa" }) }
+                : undefined
+            }
+          />
+        )}
 
         {/* Mobile emoji picker — full-screen overlay shown via long-press action sheet */}
         {showMobileReact && coarsePointer && (
@@ -1216,7 +1220,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   return (
     <section
       className={clsx(
-        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5 pb-1.5",
+        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5",
+        row.groupItemOffset + row.items.length >= row.groupItemCount && "pb-1.5",
         (row.isOwn || isPollGroup) && "grid-cols-[minmax(0,1fr)]",
       )}
     >
@@ -1265,8 +1270,13 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               key={item.key}
               item={item}
               isOwn={row.isOwn}
-              isGroupTail={index === row.items.length - 1}
-              bubblePosition={resolveBubblePosition(index, row.items.length)}
+              isGroupTail={
+                row.groupItemOffset + index === row.groupItemCount - 1
+              }
+              bubblePosition={resolveBubblePosition(
+                row.groupItemOffset + index,
+                row.groupItemCount,
+              )}
               showSenderName={index === 0 && !row.isOwn && row.showSenderName}
               senderDisplayName={senderDisplayName}
               onReply={onReply}
