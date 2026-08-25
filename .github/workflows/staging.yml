@@ -17,17 +17,17 @@ jobs:
     runs-on: ubuntu-24.04
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: chat-web-client
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: hacom-holding-dx/chat-shared-types
           path: chat-shared-types
           token: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             chat-web-client/package-lock.json
@@ -52,10 +52,10 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: chat-web-client
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: hacom-holding-dx/chat-shared-types
           path: chat-shared-types

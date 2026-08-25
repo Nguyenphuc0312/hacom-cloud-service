@@ -3,7 +3,7 @@ import {
   isoToDisplay,
   displayToIso,
   buildMonthCells,
-} from "./GlobalSearchOverlay";
+} from "../../common/resource-filter/dateRange";
 
 describe("isoToDisplay", () => {
   it("converts yyyy-mm-dd to dd/mm/yyyy", () => {

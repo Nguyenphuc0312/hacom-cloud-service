@@ -19,7 +19,8 @@ import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import type { WorkReportScope } from "../types";
 import { toast } from "../../../utils/toast";
 import { Button } from "../../../components/ui";
-import { DateFieldVN, useIsoDateField } from "../../../components/ui/DateFieldVN";
+import { DateFieldVN } from "../../../components/ui/DateFieldVN";
+import { useIsoDateField } from "../../../components/ui/dateFieldVNUtils";
 
 /** Ngày hôm nay dạng YYYY-MM-DD theo giờ máy (input[type=date] dùng dạng này). */
 function todayIso(): string {

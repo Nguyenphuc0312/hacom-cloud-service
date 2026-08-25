@@ -32,7 +32,8 @@ import {
   SICK_ATTACHMENT_MIN_DAYS,
 } from "../utils/leaveRules";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
-import { DateFieldVN, isoToVn, vnToIso } from "../../../components/ui/DateFieldVN";
+import { DateFieldVN } from "../../../components/ui/DateFieldVN";
+import { isoToVn, vnToIso } from "../../../components/ui/dateFieldVNUtils";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
 
 type LoadState =

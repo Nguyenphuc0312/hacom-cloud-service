@@ -370,7 +370,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioSendLockedRef.current = false;
     }
-  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
+  }, [audioAmplitude, audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();
@@ -466,7 +466,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     mentionMatch?.query ?? "",
   );
 
-  const mentionSuggestions = React.useMemo(() => {
+  const mentionSuggestions = (() => {
     if (!mentionMatch) {
       return [] as MentionCandidate[];
     }
@@ -484,8 +484,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     // cap. The panel scrolls on overflow. ponytail: one Avatar per member; fine
     // for normal groups. If groups grow to hundreds, virtualize the list.
     return filterMentionCandidates(available, deferredMentionQuery);
-    // draftValue: chip inserts/deletes change it, so tagged ids re-read then.
-  }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates, draftValue]);
+  })();
 
   // Không còn ai khớp thì ĐÓNG hẳn panel, đúng như Zalo — không hiện khung
   // "không có kết quả" treo lơ lửng.
