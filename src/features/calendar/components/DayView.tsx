@@ -34,17 +34,10 @@ const MULTI_DAY_END_COLOR = {
   border: "border-[#DC2626]",
 } as const;
 import { useNowMinute } from "../hooks/useNowMinute";
-import { attendanceCalendarLabel } from "../utils/attendanceCalendarPresentation";
 
 interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
-  attendance?: {
-    displaySymbol?: string | null;
-    shiftCode?: string | null;
-    shiftName?: string | null;
-    lateMinutes?: number | null;
-  };
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
   onSlotClick?: (date: Date, minutes: number) => void;
@@ -198,7 +191,6 @@ const TimedEventBlock: React.FC<{
 const DayViewImpl: React.FC<DayViewProps> = ({
   date,
   events,
-  attendance,
   onEventClick,
   onSlotClick,
 }) => {
@@ -215,8 +207,6 @@ const DayViewImpl: React.FC<DayViewProps> = ({
 
   const weekdays = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-  const attendanceLabel = attendanceCalendarLabel(attendance);
-  const isLate = (attendance?.lateMinutes ?? 0) > 0;
 
   // Auto-scroll tới giờ hiện tại (today) hoặc 07:00 (ngày khác) khi mở/đổi ngày.
   useEffect(() => {
@@ -268,26 +258,6 @@ const DayViewImpl: React.FC<DayViewProps> = ({
           </span>
         )}
       </div>
-
-      {/* Ca/phép đồng bộ từ HRM; giờ chấm chỉ xem ở màn Công phép. */}
-      {attendanceLabel && attendance && (
-        <div className="border-b border-border bg-surface-overlay px-4 py-2">
-          <div className="flex items-center gap-1 text-sm">
-            <span className="font-medium text-text-secondary">
-              {attendanceLabel === attendance.shiftCode?.trim() ? "Ca:" : "Ký hiệu:"}
-            </span>
-            <span
-              className={clsx(
-                "rounded border border-border bg-surface px-2 py-0.5 font-semibold",
-                isLate ? "text-rose-600 dark:text-rose-400" : "text-text-primary",
-              )}
-              title={attendance.shiftName ?? undefined}
-            >
-              {attendanceLabel}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* All-day row */}
       {allDay.length > 0 && (

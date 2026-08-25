@@ -1,48 +1,48 @@
-/**
- * @fileoverview FilePreviewModal - Unified file preview modal with support for all file types.
- * Supports image, video, audio, PDF, text, CSV, documents, and archives.
+﻿/**
+ * @fileoverview FilePreviewModal — lightbox xem trước file đính kèm với giao diện
+ * chuẩn theo kiểu xem file của Zalo web (giống hệt hr-web-client calendar file preview):
+ * nền sáng toàn màn hình (#e9ebee), thanh dưới cùng có icon/tên/dung lượng file bên trái
+ * và nút tải về / đóng bên phải, thanh zoom nổi phía trên thanh dưới cùng khi xem ảnh
+ * hoặc tài liệu Word/Excel/PDF, mũi tên chuyển file hai bên khi có nhiều file.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
-import { useTranslation } from "react-i18next";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  ArrowDownTrayIcon,
-  ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
-  ArrowsPointingOutIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ExclamationTriangleIcon,
-  MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon,
-  MusicalNoteIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { IconButton, Skeleton } from "../ui";
-import { FileTypeIcon } from "../message/FileTypeIcon";
-import { SafeImage } from "../common/SafeImage";
-import { TextPreview, CsvPreview, DocumentPreview, ExcelPreview, WordPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
-import { OfficeOnlinePreview } from "../preview/OfficeOnlinePreview";
-import { isPubliclyFetchableUrl } from "../../utils/publicUrl";
-import type { PreviewType } from "../../utils/mimeRegistry";
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Maximize,
+  Minimize,
+  Music,
+  X,
+  AlertTriangle,
+} from 'lucide-react';
+import type { PreviewTarget } from '../../hooks/useFilePreview';
+import { getMimePreviewType, type PreviewType } from '../../utils/mimeRegistry';
 import {
-  getMimePreviewType,
-} from "../../utils/mimeRegistry";
-import {
-  formatFileSize,
-  getFileExtension,
+  formatFilePreviewMetadata,
   getIconTypeFromPreviewType,
-} from "../../utils/filePreviewUtils";
-import type { PreviewTarget } from "../../hooks/useFilePreview";
+} from '../../utils/filePreviewUtils';
+import { truncateFilename } from '../../utils/truncateFilename';
+import { downloadResourceWithName } from '../../utils/downloadFile';
+import { markFileDownloaded } from '../../utils/downloadedFiles';
+import { asString } from '../../utils/payloadGuards';
+import { SafeImage } from '../common/SafeImage';
 import {
-  downloadResourceWithName,
-  openResourceInNewTab,
-} from "../../utils/downloadFile";
-import { markFileDownloaded } from "../../utils/downloadedFiles";
-import { truncateFilename } from "../../utils/truncateFilename";
+  FileTypeIcon,
+  TextPreview,
+  CsvPreview,
+  PdfPreview,
+  ExcelPreview,
+  WordPreview,
+  DocumentPreview,
+  ArchivePreview,
+} from '../preview';
+import styles from './FilePreviewModal.module.css';
 
-interface FilePreviewModalProps {
+export interface FilePreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   current: PreviewTarget | null;
@@ -55,17 +55,13 @@ interface FilePreviewModalProps {
   hasNext: boolean;
   onPrev: () => void;
   onNext: () => void;
-  onRefreshUrl: () => Promise<void>;
-  /** "full" (mặc định) = ảnh/video gần full màn; "compact" = nhỏ hơn (dùng cho
-   *  danh sách file lịch, đỡ chói mắt). Chỉ đổi cỡ media, không đổi doc/pdf. */
-  size?: "full" | "compact";
+  onRefreshUrl?: () => Promise<void>;
+  size?: 'full' | 'compact';
 }
 
-const MIN_SCALE = 1;
-const MAX_SCALE = 4;
-const ZOOM_STEP = 0.25;
+const ZOOM_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
+export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   isOpen,
   onClose,
   current,
@@ -79,447 +75,248 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   onPrev,
   onNext,
   onRefreshUrl,
-  size = "full",
+  size = 'full',
 }) => {
-  const { t } = useTranslation();
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Cỡ media (ảnh/video). Compact → khung nhỏ hẳn (max ~640px), ở giữa, không
-  // còn cảm giác full màn. Full = gần full viewport như lightbox chat.
-  const mediaBox =
-    size === "compact"
-      ? "max-h-[60vh] max-w-[min(640px,80vw)]"
-      : "max-h-[88vh] max-w-[92vw]";
-  const resetKey = `${currentIndex}:${secureUrl ?? ""}`;
-  const [scaleState, setScaleState] = useState({ key: resetKey, value: 1 });
-
-  // Office Online hỏng (URL không công khai / quá hạn chờ) → rơi về tự render.
-  // Theo `resetKey` để đổi sang file khác là thử lại từ đầu, không mang theo
-  // thất bại của file trước.
-  const [officeOnlineState, setOfficeOnlineState] = useState({
-    key: resetKey,
-    failed: false,
-  });
-  const officeOnlineFailed =
-    officeOnlineState.key === resetKey && officeOnlineState.failed;
-
-  // Đã thử xin URL mới cho file này chưa. Chỉ thử ĐÚNG MỘT LẦN: nếu URL mới vẫn
-  // hỏng thì nguyên nhân không phải hết hạn, thử tiếp chỉ làm user chờ vô ích.
-  const retriedUrlRef = useRef<string | null>(null);
-
-  const handleOfficeOnlineUnavailable = useCallback(() => {
-    // Nguyên nhân hay gặp nhất là URL ký đã hết hạn (mở tài liệu đọc quá lâu).
-    // Xin URL mới rồi để viewer thử lại — giữ được bản xem chuẩn của Microsoft
-    // thay vì tụt xuống bản tự render kém hơn.
-    if (secureUrl && retriedUrlRef.current !== secureUrl) {
-      retriedUrlRef.current = secureUrl;
-      void onRefreshUrl();
-      return;
-    }
-    setOfficeOnlineState({ key: resetKey, failed: true });
-  }, [onRefreshUrl, resetKey, secureUrl]);
-
-  // Get preview type from attachment
-  const attachment = current?.attachment;
-  const previewType: PreviewType = useMemo(() => {
-    if (!attachment) return "unknown";
-    return getMimePreviewType(attachment.mimeType, attachment.fileName);
-  }, [attachment]);
-
-  const fileName = attachment?.fileName ?? "";
-  // Tên dài → cắt giữa giữ đuôi (….docx) như chuẩn file chat; tooltip giữ tên đầy đủ.
-  const displayName = fileName ? truncateFilename(fileName, 48) : "";
-  const fileMimeType = attachment?.mimeType ?? "";
-  const fileSize = formatFileSize(attachment?.fileSize);
-  const extension = getFileExtension(fileName || "file");
-  const iconType = getIconTypeFromPreviewType(previewType);
+  const [scale, setScale] = useState(1);
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pageCount, setPageCount] = useState(1);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const zoomMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
+    if (!isOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    containerRef.current?.focus();
-
+    document.body.style.overflow = 'hidden';
+    overlayRef.current?.focus();
     return () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 
-  const scale = scaleState.key === resetKey ? scaleState.value : 1;
+  // Reset scale and states when opening a different item
+  useEffect(() => {
+    setScale(1);
+    setIsZoomMenuOpen(false);
+    setPageCount(1);
+  }, [currentIndex, secureUrl]);
 
-  const handleZoomIn = useCallback(() => {
-    setScaleState((currentScale) => {
-      const baseScale = currentScale.key === resetKey ? currentScale.value : 1;
-      return {
-        key: resetKey,
-        value: Math.min(MAX_SCALE, baseScale + ZOOM_STEP),
-      };
-    });
-  }, [resetKey]);
-
-  const handleZoomOut = useCallback(() => {
-    setScaleState((currentScale) => {
-      const baseScale = currentScale.key === resetKey ? currentScale.value : 1;
-      return {
-        key: resetKey,
-        value: Math.max(MIN_SCALE, baseScale - ZOOM_STEP),
-      };
-    });
-  }, [resetKey]);
-
-  const handleResetZoom = useCallback(() => {
-    setScaleState({ key: resetKey, value: 1 });
-  }, [resetKey]);
-
-  const handleDownload = useCallback(async () => {
-    if (!secureUrl) return;
-    await downloadResourceWithName(
-      secureUrl,
-      fileName || `file-${Date.now()}.${extension.toLowerCase() || "bin"}`,
-    );
-    // Cùng khoá với FileMessageCard để thẻ file ngoài timeline đổi trạng thái ngay.
-    markFileDownloaded(
-      attachment?.id || attachment?.objectKey || attachment?.url,
-    );
-  }, [attachment, extension, fileName, secureUrl]);
-
-  const handleOpenInNewTab = useCallback(() => {
-    if (!secureUrl) return;
-    const inlineViewable = ["image", "pdf", "video", "audio", "text"].includes(
-      previewType,
-    );
-    openResourceInNewTab(secureUrl, fileName, inlineViewable);
-  }, [fileName, previewType, secureUrl]);
-
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      switch (event.key) {
-        case "Escape":
-          event.preventDefault();
+  // Keyboard navigation & escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isZoomMenuOpen) {
+          setIsZoomMenuOpen(false);
+        } else {
           onClose();
-          break;
-        case "ArrowLeft":
-          if (hasPrev) {
-            event.preventDefault();
-            onPrev();
-          }
-          break;
-        case "ArrowRight":
-          if (hasNext) {
-            event.preventDefault();
-            onNext();
-          }
-          break;
-        case "+":
-        case "=":
-          if (previewType === "image") {
-            event.preventDefault();
-            handleZoomIn();
-          }
-          break;
-        case "-":
-          if (previewType === "image") {
-            event.preventDefault();
-            handleZoomOut();
-          }
-          break;
-        case "0":
-          if (previewType === "image") {
-            event.preventDefault();
-            handleResetZoom();
-          }
-          break;
+        }
       }
-    },
-    [
-      handleResetZoom,
-      handleZoomIn,
-      handleZoomOut,
-      hasNext,
-      hasPrev,
-      onClose,
-      onNext,
-      onPrev,
-      previewType,
-    ],
-  );
+      if (e.key === 'ArrowLeft' && hasPrev) onPrev();
+      if (e.key === 'ArrowRight' && hasNext) onNext();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, onPrev, onNext, hasPrev, hasNext, isZoomMenuOpen]);
 
-  const handleWheel = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
-      if (previewType !== "image") return;
-      event.preventDefault();
-      if (event.deltaY > 0) {
-        handleZoomOut();
-      } else {
-        handleZoomIn();
+  // Click outside zoom menu
+  useEffect(() => {
+    if (!isZoomMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
+        setIsZoomMenuOpen(false);
       }
-    },
-    [handleZoomIn, handleZoomOut, previewType],
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isZoomMenuOpen]);
+
+  // Sync fullscreen state
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, [isOpen]);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    } else if (overlayRef.current) {
+      void overlayRef.current.requestFullscreen().catch(() => undefined);
+    }
+  };
+
+  const att = current?.attachment;
+  const rawAtt = att as (Record<string, unknown> | undefined);
+  const fileName =
+    asString(rawAtt?.fileName) ||
+    asString(rawAtt?.originalName) ||
+    asString(rawAtt?.name) ||
+    'file';
+  const fileSize = typeof rawAtt?.fileSize === 'number'
+    ? rawAtt.fileSize
+    : typeof rawAtt?.sizeBytes === 'number'
+      ? rawAtt.sizeBytes
+      : typeof rawAtt?.size === 'number'
+        ? rawAtt.size
+        : undefined;
+  const mimeType = asString(rawAtt?.mimeType) || 'application/octet-stream';
+
+  const previewType: PreviewType = useMemo(() => {
+    if (!current) return 'unknown';
+    return current.previewType || getMimePreviewType(mimeType, fileName);
+  }, [current, mimeType, fileName]);
+
+  const displayName = truncateFilename(fileName, 48);
+  const iconType = getIconTypeFromPreviewType(previewType);
+  const uploaderName =
+    asString(current?.uploaderName) ||
+    asString(rawAtt?.uploaderName) ||
+    asString(rawAtt?.senderName);
+  const uploaderAvatarUrl =
+    asString(current?.uploaderAvatarUrl) ||
+    asString(rawAtt?.uploaderAvatarUrl) ||
+    asString(rawAtt?.senderAvatar);
+  const createdAtRaw =
+    current?.createdAt ?? rawAtt?.createdAt ?? rawAtt?.timestamp ?? null;
+  const metadataLine = formatFilePreviewMetadata(
+    uploaderName,
+    createdAtRaw,
+    fileSize,
   );
 
-  const metadataLine = useMemo(() => {
-    const parts = [fileSize];
-    if (extension) {
-      parts.push(extension);
-    }
-    if (fileMimeType) {
-      parts.push(fileMimeType);
-    }
-    if (totalItems > 1) {
-      parts.push(`${currentIndex + 1} / ${totalItems}`);
-    }
-    return parts.filter(Boolean).join(" - ");
-  }, [currentIndex, extension, fileMimeType, fileSize, totalItems]);
+  const lowerName = fileName.toLowerCase();
+  const isDocx = lowerName.endsWith('.docx');
+  const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+  const isOfficeDoc =
+    previewType === 'document' || previewType === 'spreadsheet' || previewType === 'presentation';
+  const isZoomable =
+    previewType === 'image' || previewType === 'pdf' || (isOfficeDoc && (isDocx || isXlsx));
 
-  const renderUnavailableState = () => (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-text-inverse/12 bg-text-inverse/6 p-8 text-center backdrop-blur">
-      <ExclamationTriangleIcon className="h-10 w-10 text-warning" />
-      <p className="max-w-sm text-sm text-text-inverse/80">
-        {t("chat:filePreview.urlError", {
-          defaultValue: "Failed to load preview. The link may have expired.",
-        })}
-      </p>
-      <button
-        type="button"
-        onClick={() => void onRefreshUrl()}
-        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-primary-hover"
-      >
-        <ArrowPathIcon className="h-4 w-4" />
-        {t("chat:filePreview.retry", { defaultValue: "Retry" })}
-      </button>
-    </div>
-  );
+  if (!isOpen || !current) return null;
 
-  const renderUnsupportedPreview = () => (
-    <div
-      className="w-[min(30rem,calc(100vw-2rem))] rounded-2xl border border-text-inverse/12 bg-text-inverse/6 p-5 backdrop-blur"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-text-inverse/10">
-          <FileTypeIcon
-            type={iconType}
-            fileName={fileName}
-            variant="outline"
-            className="h-6 w-6"
-          />
-        </div>
-        <div className="min-w-0 flex-1 text-left">
-          <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
-            {displayName || t("chat:file.unknown")}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-inverse/58">
-            {extension && (
-              <span className="rounded-full border border-text-inverse/12 px-2 py-0.5">
-                {extension}
-              </span>
-            )}
-            <span>{fileSize}</span>
-            {fileMimeType && (
-              <span className="truncate break-all">{fileMimeType}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <p className="mt-4 text-sm text-text-inverse/60">
-        {t("chat:filePreview.noPreview", {
-          defaultValue: "Preview is not available for this file type.",
-        })}
-      </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void handleDownload()}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-primary-hover"
-        >
-          <ArrowDownTrayIcon className="h-4 w-4" />
-          {t("chat:file.download")}
-        </button>
-        <button
-          type="button"
-          onClick={handleOpenInNewTab}
-          className="flex items-center gap-2 rounded-lg border border-text-inverse/12 px-4 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-text-inverse/8"
-        >
-          <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-          {t("chat:filePreview.openInNewTab", {
-            defaultValue: "Open in new tab",
-          })}
-        </button>
-      </div>
-    </div>
-  );
+  const handleDownload = async () => {
+    if (!secureUrl) return;
+    await downloadResourceWithName(secureUrl, fileName);
+    markFileDownloaded(att?.id || att?.objectKey || att?.url);
+  };
 
   const renderContent = () => {
     if (isLoadingUrl) {
       return (
-        <div
-          className="flex h-full w-full items-center justify-center p-6"
-          aria-busy="true"
-          aria-label={t("chat:filePreview.loading", {
-            defaultValue: "Loading preview...",
-          })}
-          role="status"
-        >
-          <div className="w-full max-w-3xl space-y-4">
-            <Skeleton className="aspect-video w-full bg-text-inverse/16" rounded="lg" />
-            <div className="mx-auto flex max-w-md items-center justify-center gap-3">
-              <Skeleton className="h-3 flex-1 bg-text-inverse/16" rounded="full" />
-              <Skeleton className="h-3 w-20 bg-text-inverse/16" rounded="full" />
-            </div>
+        <div style={{ color: '#495057', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: '#868e96', marginTop: 8 }}>
+            Đang xin liên kết xem file mới nhất…
           </div>
         </div>
       );
     }
 
-    if (!current || (!secureUrl && urlError)) {
-      return renderUnavailableState();
-    }
-
-    if (!current || !secureUrl) {
-      return null;
-    }
-
-    // Text file preview
-    if (previewType === "text") {
+    if (urlError || !secureUrl) {
       return (
-        <TextPreview
+        <div style={{ color: '#495057', textAlign: 'center' }}>
+          <AlertTriangle size={32} color="#fa5252" style={{ margin: '0 auto' }} />
+          <div style={{ fontSize: 13, color: '#868e96', marginTop: 8 }}>
+            {urlError || 'File đang được xử lý hoặc không còn khả dụng, thử lại sau.'}
+          </div>
+          {onRefreshUrl && (
+            <button
+              type="button"
+              style={{
+                marginTop: 12,
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: '1px solid #dee2e6',
+                background: '#fff',
+                color: '#495057',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+              onClick={() => void onRefreshUrl()}
+            >
+              Thử lại
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (previewType === 'text') {
+      return <TextPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
+    }
+
+    if (previewType === 'csv') {
+      return <CsvPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
+    }
+
+    if (previewType === 'pdf') {
+      return (
+        <PdfPreview
           url={secureUrl}
           fileName={fileName}
-          fileSize={current.attachment.fileSize}
+          fileSize={fileSize}
+          scale={scale}
+          onPageCount={setPageCount}
         />
       );
     }
 
-    // CSV file preview
-    if (previewType === "csv") {
-      return (
-        <CsvPreview
-          url={secureUrl}
-          fileName={fileName}
-          fileSize={current.attachment.fileSize}
-        />
-      );
-    }
-
-    // PDF preview using PDF.js for cross-origin support
-    if (previewType === "pdf") {
-      if (secureUrl) {
+    if (isOfficeDoc) {
+      if (isDocx) {
         return (
-          <PdfJsViewer
+          <WordPreview
             url={secureUrl}
             fileName={fileName}
-            fileSize={current.attachment.fileSize}
+            scale={scale}
+            onPageCount={setPageCount}
           />
         );
       }
-      return (
-        <PdfPreview
-          url=""
-          fileName={fileName}
-          fileSize={current.attachment.fileSize}
-        />
-      );
-    }
-
-    // ── Tài liệu Office ─────────────────────────────────────────────────
-    //
-    // Thứ tự ưu tiên giống Zalo Web:
-    //  1. Microsoft Office Online — chính Microsoft render nên khớp 100% bố cục
-    //     gốc (merge cell, shape, phân trang). Cần URL công khai để MS tải được.
-    //  2. Tự render (docx-preview / SheetJS) — dùng khi (1) không khả dụng:
-    //     chạy localhost, mạng nội bộ, hoặc viewer quá hạn chờ.
-    const ext = extension.toLowerCase();
-    const isDocx =
-      ext === "docx" || fileMimeType.includes("wordprocessingml");
-    const isXlsx =
-      ext === "xlsx" ||
-      ext === "xls" ||
-      fileMimeType.includes("spreadsheetml") ||
-      fileMimeType.includes("ms-excel");
-    const isOfficeDoc =
-      previewType === "document" ||
-      previewType === "spreadsheet" ||
-      previewType === "presentation";
-
-    if (isOfficeDoc) {
-      const canUseOfficeOnline =
-        !officeOnlineFailed && isPubliclyFetchableUrl(secureUrl);
-
-      if (canUseOfficeOnline) {
-        return (
-          <div
-            className="flex h-[85vh] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <OfficeOnlinePreview
-              url={secureUrl}
-              fileName={fileName}
-              onUnavailable={handleOfficeOnlineUnavailable}
-            />
-          </div>
-        );
-      }
-
-      // Dự phòng theo đúng định dạng — chỉ .docx/.xlsx mới tự dựng lại được.
-      if (isDocx) {
-        return <WordPreview url={secureUrl} fileName={fileName} />;
-      }
       if (isXlsx) {
-        return <ExcelPreview url={secureUrl} fileName={fileName} />;
+        return <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />;
       }
-
-      // .doc cũ, .pptx, ODF… không tự render được → thẻ tải về.
       return (
         <DocumentPreview
           url={secureUrl}
           fileName={fileName}
-          fileSize={current.attachment.fileSize}
-          mimeType={fileMimeType}
+          fileSize={fileSize}
+          mimeType={mimeType}
           previewType={previewType}
         />
       );
     }
 
-    // Archive fallback
-    if (previewType === "archive") {
-      return (
-        <ArchivePreview
-          url={secureUrl}
-          fileName={fileName}
-          fileSize={current.attachment.fileSize}
-          mimeType={fileMimeType}
-        />
-      );
+    if (previewType === 'archive') {
+      return <ArchivePreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
     }
 
-    // Image preview
-    if (previewType === "image") {
+    if (previewType === 'image') {
       return (
         <div
-          className={clsx(
-            "flex items-center justify-center overflow-hidden",
-            mediaBox,
-          )}
-          onClick={(event) => event.stopPropagation()}
-          onWheel={handleWheel}
+          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          onClick={(e) => e.stopPropagation()}
         >
           <SafeImage
             src={secureUrl}
-            alt={fileName || t("chat:image.previewAlt")}
-            className={clsx(
-              "select-none object-contain transition-transform duration-150",
-              mediaBox,
-            )}
+            alt={fileName}
+            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
             style={{ transform: `scale(${scale})` }}
+            objectFit="contain"
+            loading="eager"
             draggable={false}
+            retryOnSignedUrlExpired
+            onRetrySource={() => void onRefreshUrl?.()}
             fallback={
-              <div className="flex min-h-[240px] min-w-[280px] flex-col items-center justify-center gap-2 rounded-xl bg-surface-overlay text-text-muted">
-                <ExclamationTriangleIcon className="h-8 w-8" />
-                <span className="text-sm">Khong tai duoc anh</span>
+              <div className={styles.mediaError}>
+                <AlertTriangle size={32} />
+                <span>Không tải được ảnh</span>
               </div>
             }
           />
@@ -527,261 +324,234 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    // Video preview
-    if (previewType === "video") {
+    if (previewType === 'video') {
       return (
         <div
-          className={clsx("flex items-center justify-center", mediaBox)}
-          onClick={(event) => event.stopPropagation()}
+          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          onClick={(e) => e.stopPropagation()}
         >
           <video
             src={secureUrl}
             controls
             playsInline
             preload="metadata"
-            className={clsx("rounded-xl", mediaBox)}
-          >
-            <track kind="captions" />
-            {t("chat:filePreview.videoNotSupported", {
-              defaultValue: "Your browser does not support video playback.",
-            })}
-          </video>
+            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
+          />
         </div>
       );
     }
 
-    // Audio preview
-    if (previewType === "audio") {
+    if (previewType === 'audio') {
       return (
         <div
-          className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-text-inverse/12 bg-text-inverse/6 p-5 backdrop-blur"
-          onClick={(event) => event.stopPropagation()}
+          style={{
+            width: 'min(32rem, calc(100vw - 2rem))',
+            borderRadius: 16,
+            border: '1px solid #dee2e6',
+            background: '#fff',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
+            padding: 20,
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-text-inverse/10">
-              <MusicalNoteIcon className="h-6 w-6 text-text-inverse" />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                background: '#f1f3f5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Music size={22} color="#495057" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
-                {displayName || t("chat:file.unknown")}
-              </p>
-              <p className="mt-1 text-xs text-text-inverse/58">
-                {metadataLine}
-              </p>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#25262b',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={fileName}
+              >
+                {displayName}
+              </div>
+              <div style={{ fontSize: 12, color: '#868e96' }}>{metadataLine}</div>
             </div>
           </div>
-
-          <div className="mt-5 rounded-xl bg-text-primary/24 p-3">
-            <audio
-              src={secureUrl}
-              controls
-              preload="metadata"
-              className="w-full"
-            >
-              {t("chat:filePreview.audioNotSupported", {
-                defaultValue: "Your browser does not support audio playback.",
-              })}
-            </audio>
+          <div style={{ marginTop: 16 }}>
+            <audio src={secureUrl} controls preload="metadata" style={{ width: '100%' }} />
           </div>
         </div>
       );
     }
 
-    // Unknown type fallback
-    return renderUnsupportedPreview();
-  };
-
-  if (!isOpen) {
-    return null;
-  }
-
-  // Check if this preview type uses full-width layout
-  const isFullWidth = [
-    "pdf",
-    "text",
-    "csv",
-    "document",
-    "spreadsheet",
-    "presentation",
-  ].includes(previewType);
-
-  return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 z-modal flex items-center justify-center animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("chat:filePreview.modalLabel", {
-        defaultValue: "File preview",
-      })}
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      <div
-        className="absolute inset-0 bg-text-primary/95 backdrop-blur-md"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-text-inverse/10">
-            <FileTypeIcon
-              type={iconType}
-              fileName={fileName}
-              variant="outline"
-              className="h-5 w-5"
-            />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-inverse" title={fileName}>
-              {displayName || t("chat:file.unknown")}
-            </p>
-            <p className="truncate text-xs text-text-inverse/50">
-              {metadataLine}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {previewType === "image" && secureUrl && (
-            <>
-              <IconButton
-                icon={<MagnifyingGlassMinusIcon className="h-5 w-5" />}
-                aria-label={t("chat:filePreview.zoomOut", {
-                  defaultValue: "Zoom out",
-                })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleZoomOut();
-                }}
-                variant="ghost"
-                className="text-text-inverse hover:bg-text-inverse/10"
-              />
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleResetZoom();
-                }}
-                className="rounded-lg px-2 py-1.5 text-sm text-text-inverse hover:bg-text-inverse/10"
-              >
-                {Math.round(scale * 100)}%
-              </button>
-              <IconButton
-                icon={<MagnifyingGlassPlusIcon className="h-5 w-5" />}
-                aria-label={t("chat:filePreview.zoomIn", {
-                  defaultValue: "Zoom in",
-                })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleZoomIn();
-                }}
-                variant="ghost"
-                className="text-text-inverse hover:bg-text-inverse/10"
-              />
-              <IconButton
-                icon={<ArrowsPointingOutIcon className="h-5 w-5" />}
-                aria-label={t("chat:filePreview.fitToScreen", {
-                  defaultValue: "Fit to screen",
-                })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleResetZoom();
-                }}
-                variant="ghost"
-                className="text-text-inverse hover:bg-text-inverse/10"
-              />
-              <div className="mx-1 h-6 w-px bg-text-inverse/20" />
-            </>
-          )}
-
-          <IconButton
-            icon={<ArrowDownTrayIcon className="h-5 w-5" />}
-            aria-label={t("chat:file.download")}
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleDownload();
-            }}
-            variant="ghost"
-            className="text-text-inverse hover:bg-text-inverse/10"
-            disabled={!secureUrl}
-          />
-          <IconButton
-            icon={<ArrowTopRightOnSquareIcon className="h-5 w-5" />}
-            aria-label={t("chat:filePreview.openInNewTab", {
-              defaultValue: "Open in new tab",
-            })}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleOpenInNewTab();
-            }}
-            variant="ghost"
-            className="text-text-inverse hover:bg-text-inverse/10"
-            disabled={!secureUrl}
-          />
-          <IconButton
-            icon={<XMarkIcon className="h-5 w-5" />}
-            aria-label={t("chat:filePreview.close", {
-              defaultValue: "Close preview",
-            })}
-            onClick={onClose}
-            variant="ghost"
-            className="text-text-inverse hover:bg-text-inverse/10"
-          />
+    return (
+      <div style={{ color: '#495057', textAlign: 'center' }}>
+        <div style={{ fontSize: 13, color: '#868e96' }}>
+          Không có bản xem trước cho định dạng này.
         </div>
       </div>
+    );
+  };
+
+  return createPortal(
+    <div
+      ref={overlayRef}
+      className={styles.overlay}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Xem trước file"
+      tabIndex={-1}
+    >
+      <div className={styles.backdrop} onClick={onClose} />
 
       {totalItems > 1 && hasPrev && (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
+          className={`${styles.navBtn} ${styles.navLeft}`}
+          onClick={(e) => {
+            e.stopPropagation();
             onPrev();
           }}
-          className="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-text-inverse/10 text-text-inverse transition-colors hover:bg-text-inverse/20 sm:left-4 sm:h-12 sm:w-12"
-          aria-label={t("chat:filePreview.previous", {
-            defaultValue: "Previous file",
-          })}
+          aria-label="File trước"
         >
-          <ChevronLeftIcon className="h-6 w-6" />
+          <ChevronLeft size={20} />
         </button>
       )}
-
       {totalItems > 1 && hasNext && (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
+          className={`${styles.navBtn} ${styles.navRight}`}
+          onClick={(e) => {
+            e.stopPropagation();
             onNext();
           }}
-          className="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-text-inverse/10 text-text-inverse transition-colors hover:bg-text-inverse/20 sm:right-4 sm:h-12 sm:w-12"
-          aria-label={t("chat:filePreview.next", {
-            defaultValue: "Next file",
-          })}
+          aria-label="File sau"
         >
-          <ChevronRightIcon className="h-6 w-6" />
+          <ChevronRight size={20} />
         </button>
       )}
 
-      <div className={clsx(
-        "relative z-[1] flex items-center justify-center px-4",
-        isFullWidth && "w-full"
-      )}>
+      <div className={`${styles.content} ${isZoomable ? styles.contentWithToolbar : ''}`}>
         {renderContent()}
       </div>
 
-      {previewType === "image" && secureUrl && (
-        <div className="absolute bottom-4 left-1/2 z-10 hidden -translate-x-1/2 text-xs text-text-inverse/40 sm:block">
-          {t("chat:filePreview.instructions", {
-            defaultValue: "Scroll to zoom - Arrow keys to navigate",
-          })}
+      {/* Chân màn hình kiểu Zalo: hàng công cụ (số trang/zoom) phía trên + hàng thông tin file phía dưới. */}
+      <div className={styles.bottomChrome} onClick={(e) => e.stopPropagation()}>
+        {isZoomable && (
+          <div className={styles.toolbarRow}>
+            <div className={styles.toolbarLeft}>
+              <FileTypeIcon type={iconType} fileName={fileName} size={16} />
+              {isOfficeDoc && isDocx && <span>Trang 1/{pageCount}</span>}
+            </div>
+            <div className={styles.toolbarRight} ref={zoomMenuRef}>
+              <button
+                type="button"
+                className={styles.zoomTrigger}
+                onClick={() => setIsZoomMenuOpen((prev) => !prev)}
+                aria-label="Chọn mức thu phóng"
+              >
+                {Math.round(scale * 100)}%
+                <ChevronDown size={14} />
+              </button>
+
+              {isZoomMenuOpen && (
+                <div className={styles.zoomMenu}>
+                  {ZOOM_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={styles.zoomMenuItem}
+                      onClick={() => {
+                        setScale(preset);
+                        setIsZoomMenuOpen(false);
+                      }}
+                    >
+                      {Math.round(preset * 100)}%
+                    </button>
+                  ))}
+                  <div className={styles.zoomMenuDivider} />
+                  <button
+                    type="button"
+                    className={styles.zoomMenuItem}
+                    onClick={() => {
+                      setScale(1);
+                      setIsZoomMenuOpen(false);
+                    }}
+                  >
+                    Vừa khung hình
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className={styles.toolbarIconBtn}
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
+              >
+                {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className={styles.bottomBar}>
+          <div className={styles.bottomBarLeft}>
+            {uploaderAvatarUrl ? (
+              <SafeImage
+                src={uploaderAvatarUrl}
+                alt={uploaderName || ''}
+                className={styles.uploaderAvatar}
+                objectFit="cover"
+                loading="eager"
+                fallback={<FileTypeIcon type={iconType} fileName={fileName} size={22} />}
+              />
+            ) : (
+              <FileTypeIcon type={iconType} fileName={fileName} size={22} />
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div className={styles.fileName} title={fileName}>
+                {displayName}
+              </div>
+              <div className={styles.fileMeta}>
+                {metadataLine}
+                {totalItems > 1 && ` · ${currentIndex + 1}/${totalItems}`}
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.actionBtn}
+              onClick={() => void handleDownload()}
+              aria-label="Tải về"
+            >
+              <Download size={18} />
+            </button>
+            <div className={styles.actionDivider} />
+            <button
+              type="button"
+              className={styles.actionBtn}
+              onClick={onClose}
+              aria-label="Đóng"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    </div>,
+    document.body,
   );
 };
-
-export const FilePreviewModal = React.memo(FilePreviewModalComponent);
 
 export default FilePreviewModal;

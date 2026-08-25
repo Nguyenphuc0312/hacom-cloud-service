@@ -1,163 +1,100 @@
 /**
- * @fileoverview TextPreview - Safe text file preview component.
- * Renders plain text content with syntax highlighting for common formats.
+ * @fileoverview Xem trước file .txt/.md — chuyển thể từ hr-web-client calendar file preview.
  */
-
-import React, { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import clsx from "clsx";
-import { DocumentTextIcon } from "@heroicons/react/24/outline";
-import { formatFileSize, MAX_TEXT_PREVIEW_SIZE, MAX_TEXT_PREVIEW_LINES } from "../../utils/filePreviewUtils";
-import { truncateFilename } from "../../utils/truncateFilename";
-import { FileTypeIcon } from "../message/FileTypeIcon";
+import { useEffect, useRef, useState } from 'react';
+import { FileText } from 'lucide-react';
+import { MAX_TEXT_PREVIEW_SIZE, MAX_TEXT_PREVIEW_LINES, formatFileSize } from '../../utils/filePreviewUtils';
+import { truncateFilename } from '../../utils/truncateFilename';
+import styles from './PreviewPanel.module.css';
 
 interface TextPreviewProps {
   url: string;
   fileName: string;
   fileSize?: number;
-  onClose?: () => void;
-  className?: string;
 }
 
 interface TextContent {
   content: string;
   truncated: boolean;
-  lineCount: number;
   error?: string;
 }
 
-const parseTextContent = async (
-  url: string,
-  signal?: AbortSignal,
-): Promise<TextContent> => {
+async function parseTextContent(url: string, signal?: AbortSignal): Promise<TextContent> {
   try {
-    const response = await fetch(url, { signal });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const text = await response.text();
-    const lines = text.split("\n");
-
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const lines = text.split('\n');
     if (text.length > MAX_TEXT_PREVIEW_SIZE || lines.length > MAX_TEXT_PREVIEW_LINES) {
-      const truncatedLines = lines.slice(0, MAX_TEXT_PREVIEW_LINES);
-      return {
-        content: truncatedLines.join("\n"),
-        truncated: true,
-        lineCount: truncatedLines.length,
-      };
+      return { content: lines.slice(0, MAX_TEXT_PREVIEW_LINES).join('\n'), truncated: true };
     }
-
-    return { content: text, truncated: false, lineCount: lines.length };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return { content: "", truncated: false, lineCount: 0, error: "cancelled" };
-    }
-    return { content: "", truncated: false, lineCount: 0, error: "Failed to load text" };
+    return { content: text, truncated: false };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return { content: '', truncated: false, error: 'cancelled' };
+    return { content: '', truncated: false, error: 'Không đọc được file' };
   }
-};
+}
 
-export const TextPreview: React.FC<TextPreviewProps> = ({
-  url,
-  fileName,
-  fileSize,
-  className,
-}) => {
-  const { t } = useTranslation();
+export function TextPreview({ url, fileName, fileSize }: TextPreviewProps) {
   const [content, setContent] = useState<TextContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const abortControllerRef = React.useRef<AbortController | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    abortControllerRef.current?.abort();
+    abortRef.current?.abort();
     const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const fetchContent = async () => {
-      setIsLoading(true);
-      setContent(null);
-      const result = await parseTextContent(url, controller.signal);
+    abortRef.current = controller;
+    setIsLoading(true);
+    setContent(null);
+    void parseTextContent(url, controller.signal).then((result) => {
       if (!controller.signal.aborted) {
         setContent(result);
         setIsLoading(false);
       }
-    };
-
-    void fetchContent();
-
-    return () => {
-      controller.abort();
-    };
+    });
+    return () => controller.abort();
   }, [url]);
 
-  const extension = fileName.split(".").pop()?.toUpperCase() || "";
+  const extension = fileName.split('.').pop()?.toUpperCase() || '';
 
   return (
-    <div
-      className={clsx(
-        "flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface",
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-            <FileTypeIcon type="document" className="h-5 w-5 text-blue-500" />
+    <div className={styles.panel}>
+      <div className={styles.panelHeader}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#25262b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>
+            {truncateFilename(fileName, 48)}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {truncateFilename(fileName, 48)}
-            </p>
-            <p className="text-xs text-text-muted">
-              {formatFileSize(fileSize)} · {extension}
-              {content?.truncated && ` · ${t("chat:filePreview.truncated", { defaultValue: "Truncated" })}`}
-            </p>
+          <div style={{ fontSize: 12, color: '#868e96' }}>
+            {formatFileSize(fileSize)} · {extension}
+            {content?.truncated && ' · Đã rút gọn'}
           </div>
         </div>
       </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className={styles.panelBody}>
         {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm text-text-muted">
-                {t("chat:filePreview.loading", { defaultValue: "Loading preview..." })}
-              </p>
-            </div>
+          <div className={styles.centerState}>
+            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải xem trước…</span>
           </div>
-        ) : content?.error ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <DocumentTextIcon className="h-12 w-12 text-text-muted" />
-              <p className="text-sm text-text-muted">{content.error}</p>
-            </div>
+        ) : content?.error && content.error !== 'cancelled' ? (
+          <div className={styles.centerState}>
+            <FileText size={40} color="#868e96" />
+            <span style={{ fontSize: 13, color: '#495057' }}>{content.error}</span>
           </div>
         ) : (
-          <pre
-            className={clsx(
-              "whitespace-pre-wrap break-words p-4 text-sm font-mono",
-              "text-text-primary leading-relaxed",
-            )}
-          >
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: 16, fontSize: 13, fontFamily: 'monospace', margin: 0 }}>
             {content?.content}
           </pre>
         )}
       </div>
-
-      {/* Footer */}
       {content?.truncated && (
-        <div className="shrink-0 border-t border-border px-4 py-2 text-center text-xs text-text-muted">
-          {t("chat:filePreview.textTruncated", {
-            defaultValue: "Only first {{lines}} lines shown. Download to view full content.",
-            lines: MAX_TEXT_PREVIEW_LINES,
-          })}
+        <div className={styles.toolbar}>
+          <div style={{ fontSize: 12, color: '#868e96', textAlign: 'center', width: '100%' }}>
+            Chỉ hiển thị {MAX_TEXT_PREVIEW_LINES} dòng đầu. Tải về để xem toàn bộ.
+          </div>
         </div>
       )}
     </div>
   );
-};
+}
 
 export default TextPreview;

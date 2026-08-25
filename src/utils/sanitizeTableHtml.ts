@@ -5,10 +5,12 @@
  * trong ô A1 sẽ sinh ra HTML chạy được, và ExcelPreview render nó bằng
  * dangerouslySetInnerHTML → XSS chỉ cần nạn nhân bấm xem trước file.
  *
- * Chỉ giữ thẻ bảng + text. Mọi thuộc tính đều bị gỡ (kể cả style/colspan):
- * bảng preview không cần chúng, giữ lại chỉ mở thêm bề mặt tấn công.
+ * Chỉ giữ thẻ bảng + text. `colspan`/`rowspan` dạng số được giữ để file có ô
+ * merge vẫn đúng cấu trúc; mọi thuộc tính khác đều bị gỡ.
  */
 const TABLE_TAGS = ["table", "thead", "tbody", "tfoot", "tr", "th", "td", "br"];
+const SAFE_SPAN_ATTRIBUTES = new Set(["colspan", "rowspan"]);
+const SAFE_SPAN_VALUE = /^\d{1,3}$/;
 
 export function sanitizeTableHtml(html: string): string {
   if (typeof window === "undefined") return "";
@@ -25,6 +27,13 @@ export function sanitizeTableHtml(html: string): string {
       continue;
     }
     for (const attr of Array.from(el.attributes)) {
+      if (
+        SAFE_SPAN_ATTRIBUTES.has(attr.name.toLowerCase()) &&
+        SAFE_SPAN_VALUE.test(attr.value) &&
+        Number(attr.value) > 0
+      ) {
+        continue;
+      }
       el.removeAttribute(attr.name);
     }
   }

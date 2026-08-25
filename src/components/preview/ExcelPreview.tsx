@@ -1,56 +1,32 @@
 /**
- * @fileoverview ExcelPreview — render .xlsx/.xls/.csv NGAY TRONG TRÌNH DUYỆT
- * (client-side, không cần Office Online / URL công khai → chạy được trên localhost).
+ * @fileoverview Xem trước .xlsx/.xls ngay trong trình duyệt bằng SheetJS —
+ * chuyển thể từ hr-web-client calendar file preview.
  *
- * Dùng SheetJS (`xlsx`, đã cài sẵn): fetch file → parse workbook → sheet đầu tiên
- * → HTML table. Có tab chọn sheet nếu file nhiều sheet.
+ * Zoom điều khiển từ component cha qua prop scale. Panel có thanh chọn sheet ở dưới
+ * cùng, kiểu tab phẳng có gạch chân + mũi tên cuộn ngang khi nhiều sheet.
+ * Thêm số dòng (1, 2, 3...) và chữ cột (A, B, C...) giống lưới bảng tính thật.
  */
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import clsx from "clsx";
-import {
-  ExclamationTriangleIcon,
-  MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon,
-} from "@heroicons/react/24/outline";
-import { sanitizeTableHtml } from "../../utils/sanitizeTableHtml";
-
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 2.5;
-const SCALE_STEP = 0.1;
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Menu as IconMenu2 } from 'lucide-react';
+import { sanitizeTableHtml } from '../../utils/sanitizeTableHtml';
+import styles from './PreviewPanel.module.css';
 
 interface ExcelPreviewProps {
   url: string;
-  fileName: string;
-  className?: string;
+  fileName?: string;
+  /** Mức thu phóng do component cha điều khiển (mặc định 1 = 100%). */
+  scale?: number;
 }
 
 interface ParsedWorkbook {
   sheetNames: string[];
-  /** HTML table string cho từng sheet (index khớp sheetNames). */
   htmlBySheet: string[];
 }
 
-// xlsx nặng (~1MB) → lazy import để không phình bundle chính.
-async function loadXlsx(): Promise<typeof import("xlsx")> {
-  return import("xlsx");
+async function loadXlsx() {
+  return import('xlsx');
 }
 
-/**
- * Đóng băng Object.prototype trước khi parse file người dùng gửi.
- *
- * Bối cảnh: 0.18.5 (bản duy nhất trên npm) dính GHSA-4r6h-8v6p-xvw6 (prototype
- * pollution) + GHSA-5pgg-2g8v-p4x9 (ReDoS). Từ 05-08-26 đã nâng lên 0.20.3 lấy
- * thẳng từ cdn.sheetjs.com — nơi duy nhất phát hành bản vá — nên cả hai CVE
- * không còn.
- *
- * Vẫn GIỮ lớp freeze này: XLSX.read() chạy trên file do người dùng KHÁC gửi,
- * và ta không muốn an toàn phụ thuộc hoàn toàn vào một version cụ thể. Chi phí
- * gần như bằng 0.
- *
- * Freeze là vĩnh viễn và app không bao giờ ghi lên Object.prototype trong luồng
- * bình thường, nên không cần khôi phục.
- */
 let prototypeFrozen = false;
 function freezeObjectPrototypeOnce(): void {
   if (prototypeFrozen) return;
@@ -58,21 +34,79 @@ function freezeObjectPrototypeOnce(): void {
   prototypeFrozen = true;
 }
 
-export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
-  url,
-  fileName,
-  className,
-}) => {
+/** Độ rộng cột mặc định (px) khi file không khai báo. */
+const DEFAULT_COL_PX = 64;
+/** Độ rộng tối thiểu 1 cột. */
+const MIN_COL_PX = 40;
+/** Độ rộng cột số dòng (1, 2, 3...) bên trái. */
+const ROW_HEAD_COL_PX = 40;
+
+function resolveColPx(colInfo: { wpx?: number; wch?: number; width?: number } | undefined): number {
+  if (!colInfo) return DEFAULT_COL_PX;
+  if (typeof colInfo.wpx === 'number') return Math.max(MIN_COL_PX, Math.round(colInfo.wpx));
+  const chars = typeof colInfo.wch === 'number' ? colInfo.wch : typeof colInfo.width === 'number' ? colInfo.width : null;
+  if (chars == null) return DEFAULT_COL_PX;
+  return Math.max(MIN_COL_PX, Math.round(chars * 7 + 5));
+}
+
+function addGridHeaders(
+  html: string,
+  encodeCol: (c: number) => string,
+  range: { s: { r: number; c: number }; e: { r: number; c: number } },
+  cols: Array<{ wpx?: number; wch?: number; width?: number } | undefined>,
+): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const table = doc.querySelector('table');
+  if (!table) return html;
+
+  const rows = Array.from(table.querySelectorAll('tr'));
+
+  const colgroup = doc.createElement('colgroup');
+  const rowHeadCol = doc.createElement('col');
+  rowHeadCol.style.width = `${ROW_HEAD_COL_PX}px`;
+  colgroup.appendChild(rowHeadCol);
+  let totalWidthPx = ROW_HEAD_COL_PX;
+  for (let c = range.s.c; c <= range.e.c; c += 1) {
+    const colPx = resolveColPx(cols[c]);
+    totalWidthPx += colPx;
+    const col = doc.createElement('col');
+    col.style.width = `${colPx}px`;
+    colgroup.appendChild(col);
+  }
+  table.insertBefore(colgroup, table.firstChild);
+  table.setAttribute('style', `width:${totalWidthPx}px`);
+
+  const headerRow = doc.createElement('tr');
+  const cornerCell = doc.createElement('th');
+  cornerCell.className = 'excel-grid-corner';
+  headerRow.appendChild(cornerCell);
+  for (let c = range.s.c; c <= range.e.c; c += 1) {
+    const th = doc.createElement('th');
+    th.className = 'excel-grid-colhead';
+    th.textContent = encodeCol(c);
+    headerRow.appendChild(th);
+  }
+  table.insertBefore(headerRow, colgroup.nextSibling);
+
+  rows.forEach((tr, i) => {
+    const th = doc.createElement('th');
+    th.className = 'excel-grid-rowhead';
+    th.textContent = String(range.s.r + i + 1);
+    tr.insertBefore(th, tr.firstChild);
+  });
+
+  return table.outerHTML;
+}
+
+export function ExcelPreview({ url, scale = 1 }: ExcelPreviewProps) {
   const [parsed, setParsed] = useState<ParsedWorkbook | null>(null);
   const [activeSheet, setActiveSheet] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [scale, setScale] = useState(1);
+  const tabListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
-      // Reset trong async (không đồng bộ trong effect body) — tránh cascading render.
       setParsed(null);
       setError(null);
       setActiveSheet(0);
@@ -81,127 +115,88 @@ export const ExcelPreview: React.FC<ExcelPreviewProps> = ({
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
         if (cancelled) return;
-
         freezeObjectPrototypeOnce();
-        const wb = XLSX.read(buf, { type: "array" });
-        const htmlBySheet = wb.SheetNames.map((name) =>
-          // sheet_to_html KHÔNG escape nội dung ô → bắt buộc lọc trước khi render.
-          sanitizeTableHtml(
-            XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
-          ),
-        );
+        const wb = XLSX.read(buf, { type: 'array' });
+        const htmlBySheet = wb.SheetNames.map((name) => {
+          const ws = wb.Sheets[name];
+          const rawHtml = sanitizeTableHtml(XLSX.utils.sheet_to_html(ws, { editable: false }));
+          const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+          return addGridHeaders(rawHtml, XLSX.utils.encode_col, range, ws['!cols'] || []);
+        });
         if (cancelled) return;
         setParsed({ sheetNames: wb.SheetNames, htmlBySheet });
       } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Không đọc được file");
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Không đọc được file');
       }
     })();
-
     return () => {
       cancelled = true;
     };
   }, [url]);
 
-  const activeHtml = useMemo(
-    () => parsed?.htmlBySheet[activeSheet] ?? "",
-    [parsed, activeSheet],
-  );
+  const activeHtml = useMemo(() => parsed?.htmlBySheet[activeSheet] ?? '', [parsed, activeSheet]);
 
-  const zoomIn = useCallback(
-    () => setScale((s) => Math.min(MAX_SCALE, s + SCALE_STEP)),
-    [],
-  );
-  const zoomOut = useCallback(
-    () => setScale((s) => Math.max(MIN_SCALE, s - SCALE_STEP)),
-    [],
-  );
-  const resetZoom = useCallback(() => setScale(1), []);
+  const scrollTabs = (dir: -1 | 1) => {
+    tabListRef.current?.scrollBy({ left: dir * 160, behavior: 'smooth' });
+  };
 
   return (
-    <div
-      className={clsx(
-        "flex h-[70vh] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface",
-        className,
-      )}
-      onClick={(event) => event.stopPropagation()}
-      aria-label={fileName}
-    >
-      {/* Nội dung */}
-      <div className="min-h-0 flex-1 overflow-auto bg-white p-3">
+    <div className={styles.panel}>
+      <div className={styles.panelBody} style={{ background: '#fff' }}>
         {error ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-text-muted">
-            <ExclamationTriangleIcon className="h-8 w-8" />
-            <span className="text-sm">Không xem trước được: {error}</span>
+          <div className={styles.centerState}>
+            <AlertTriangle size={32} color="#fa5252" />
+            <span style={{ fontSize: 13, color: '#495057' }}>Không xem trước được: {error}</span>
           </div>
         ) : !parsed ? (
-          <div className="flex h-full items-center justify-center text-sm text-text-muted">
-            Đang tải bảng tính…
+          <div className={styles.centerState}>
+            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải bảng tính…</span>
           </div>
         ) : (
-          // sheet_to_html trả bảng có sẵn style tối thiểu; bọc class để căn đẹp.
-          // Thu phóng bằng transform để không phải dựng lại bảng.
           <div
-            className="excel-preview-table w-fit origin-top-left text-sm text-gray-900 transition-transform duration-150"
-            style={{ transform: `scale(${scale})` }}
+            className={styles.excelTable}
+            style={{ width: 'fit-content', transform: `scale(${scale})`, transformOrigin: 'top left' }}
             dangerouslySetInnerHTML={{ __html: activeHtml }}
           />
         )}
       </div>
 
-      {/* Thanh dưới: tab sheet bên trái + thu phóng bên phải (như Excel/Zalo) */}
-      {parsed && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-surface-overlay px-2 py-1.5">
-          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-hide">
+      {parsed && parsed.sheetNames.length > 1 && (
+        <div className={styles.sheetTabBar}>
+          <IconMenu2 size={16} className={styles.sheetTabMenuIcon} />
+          <button
+            type="button"
+            className={styles.sheetTabScrollBtn}
+            onClick={() => scrollTabs(-1)}
+            aria-label="Cuộn trái"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className={styles.sheetTabList} ref={tabListRef}>
             {parsed.sheetNames.map((name, i) => (
               <button
                 key={name}
                 type="button"
+                className={styles.sheetTab}
+                data-active={i === activeSheet ? 'true' : undefined}
                 onClick={() => setActiveSheet(i)}
-                className={clsx(
-                  "shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                  i === activeSheet
-                    ? "bg-[#1565C0] text-white"
-                    : "text-text-secondary hover:bg-surface-hover",
-                )}
               >
                 {name}
               </button>
             ))}
           </div>
-
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={zoomOut}
-              disabled={scale <= MIN_SCALE}
-              className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
-              aria-label="Thu nhỏ"
-            >
-              <MagnifyingGlassMinusIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={resetZoom}
-              className="min-w-[3rem] rounded-md px-1.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
-              aria-label="Đặt lại thu phóng"
-            >
-              {Math.round(scale * 100)}%
-            </button>
-            <button
-              type="button"
-              onClick={zoomIn}
-              disabled={scale >= MAX_SCALE}
-              className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
-              aria-label="Phóng to"
-            >
-              <MagnifyingGlassPlusIcon className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className={styles.sheetTabScrollBtn}
+            onClick={() => scrollTabs(1)}
+            aria-label="Cuộn phải"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       )}
     </div>
   );
-};
+}
 
 export default ExcelPreview;

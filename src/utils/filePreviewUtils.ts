@@ -2,6 +2,7 @@
  * @fileoverview File Preview Utilities - Helper functions for file preview logic.
  */
 
+import { format } from "date-fns";
 import type { Attachment } from "../types";
 import type { PreviewType, FileCategory } from "./mimeRegistry";
 import {
@@ -26,6 +27,10 @@ export const MAX_TEXT_PREVIEW_LINES = 500;
 
 /** Maximum rows to show in CSV preview */
 export const MAX_CSV_PREVIEW_ROWS = 100;
+
+/** Large archive threshold (50 MB) */
+export const ARCHIVE_LARGE_SIZE_THRESHOLD = 50 * 1024 * 1024;
+
 
 /**
  * Check whether a file is too large for inline preview
@@ -153,6 +158,31 @@ export function formatFileSize(bytes: number | undefined): string {
   }
 
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
+}
+
+export function formatFilePreviewMetadata(
+  uploaderName: unknown,
+  createdAt: unknown,
+  fileSize: number | undefined,
+): string {
+  const normalizedName =
+    typeof uploaderName === "string" && uploaderName.trim()
+      ? uploaderName.trim()
+      : null;
+  const date =
+    createdAt instanceof Date
+      ? createdAt
+      : typeof createdAt === "string" || typeof createdAt === "number"
+        ? new Date(createdAt)
+        : null;
+  const formattedTime =
+    date && !Number.isNaN(date.getTime())
+      ? format(date, "dd/MM/yyyy HH:mm")
+      : null;
+
+  return [normalizedName, formattedTime, formatFileSize(fileSize)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // ── Preview Helpers ────────────────────────────────────────────────────

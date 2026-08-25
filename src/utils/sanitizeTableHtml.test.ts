@@ -19,11 +19,12 @@ describe("sanitizeTableHtml", () => {
     expect(out).toContain("100");
   });
 
-  it("gỡ mọi thuộc tính, kể cả loại vô hại", () => {
+  it("chỉ giữ colspan/rowspan dạng số để bảo toàn ô merge", () => {
     const out = sanitizeTableHtml(
-      '<table border="1"><tr><td colspan="2" style="color:red">x</td></tr></table>',
+      '<table border="1"><tr><td colspan="2" rowspan="x" style="color:red">x</td></tr></table>',
     );
-    expect(out).not.toMatch(/border=|colspan=|style=/i);
+    expect(out).toContain('colspan="2"');
+    expect(out).not.toMatch(/border=|rowspan=|style=/i);
     expect(out).toContain("x");
   });
 

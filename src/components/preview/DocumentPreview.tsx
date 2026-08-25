@@ -1,30 +1,14 @@
 /**
- * @fileoverview DocumentPreview - In-browser preview for office documents.
- *
- * Word / Excel / PowerPoint are rendered with the Microsoft Office Online
- * viewer (iframe) when the file is served from a publicly reachable URL —
- * Microsoft's servers fetch the file directly, so the signed/public storage
- * URL must be absolute http(s) and not a localhost address.
- *
- * When the file is not publicly reachable (e.g. local dev) we fall back to a
- * download / open-in-new-tab card.
+ * @fileoverview Xem trước tài liệu Office qua Microsoft Office Online hoặc thẻ dự phòng.
  */
-
-import React, { useCallback, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import clsx from "clsx";
-import {
-  ArrowDownTrayIcon,
-  ArrowTopRightOnSquareIcon,
-} from "@heroicons/react/24/outline";
-import type { PreviewType } from "../../utils/mimeRegistry";
-import { formatFileSize, getFileExtension } from "../../utils/filePreviewUtils";
-import { truncateFilename } from "../../utils/truncateFilename";
-import { FileTypeIcon } from "../message/FileTypeIcon";
-import {
-  downloadResourceWithName,
-  openResourceInNewTab,
-} from "../../utils/downloadFile";
+import { useCallback, useMemo, useState } from 'react';
+import { Download, ExternalLink } from 'lucide-react';
+import type { PreviewType } from '../../utils/mimeRegistry';
+import { formatFileSize, getFileExtension } from '../../utils/filePreviewUtils';
+import { truncateFilename } from '../../utils/truncateFilename';
+import { downloadResourceWithName, openResourceInNewTab } from '../../utils/downloadFile';
+import { FileTypeIcon } from './FileTypeIcon';
+import styles from './PreviewPanel.module.css';
 
 interface DocumentPreviewProps {
   url: string;
@@ -32,252 +16,182 @@ interface DocumentPreviewProps {
   fileSize?: number;
   mimeType?: string;
   previewType: PreviewType;
-  isOwn?: boolean;
-  className?: string;
 }
 
-const getDocumentIconType = (previewType: PreviewType): "document" | "spreadsheet" | "presentation" => {
-  switch (previewType) {
-    case "spreadsheet":
-      return "spreadsheet";
-    case "presentation":
-      return "presentation";
-    case "document":
-    default:
-      return "document";
-  }
-};
+function getDocDescription(mimeType?: string): string {
+  if (!mimeType) return '';
+  if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) return 'Microsoft Word';
+  if (mimeType.includes('spreadsheetml') || mimeType.includes('ms-excel')) return 'Microsoft Excel';
+  if (mimeType.includes('presentationml') || mimeType.includes('mspowerpoint')) return 'Microsoft PowerPoint';
+  return '';
+}
 
-const getDocumentColorClass = (previewType: PreviewType): string => {
-  switch (previewType) {
-    case "spreadsheet":
-      return "text-green-600 bg-green-500/10";
-    case "presentation":
-      return "text-orange-500 bg-orange-500/10";
-    case "document":
-    default:
-      return "text-blue-500 bg-blue-500/10";
-  }
-};
-
-const getDocumentDescription = (mimeType?: string): string => {
-  if (!mimeType) return "";
-
-  if (mimeType.includes("wordprocessingml")) return "Microsoft Word";
-  if (mimeType.includes("spreadsheetml")) return "Microsoft Excel";
-  if (mimeType.includes("presentationml")) return "Microsoft PowerPoint";
-  if (mimeType.includes("msword")) return "Microsoft Word";
-  if (mimeType.includes("msexcel")) return "Microsoft Excel";
-  if (mimeType.includes("mspowerpoint")) return "Microsoft PowerPoint";
-  if (mimeType.includes("opendocument.text")) return "OpenDocument Text";
-  if (mimeType.includes("opendocument.spreadsheet")) return "OpenDocument Spreadsheet";
-  if (mimeType.includes("opendocument.presentation")) return "OpenDocument Presentation";
-
-  return "";
-};
-
-/**
- * Whether a URL can be fetched by Microsoft's Office Online viewer:
- * must be an absolute http(s) URL that isn't a localhost / private address.
- */
-const isPubliclyViewableUrl = (value: string): boolean => {
+function isPubliclyViewableUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return false;
-    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
-    if (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host === "0.0.0.0" ||
-      host.endsWith(".local")
-    ) {
-      return false;
-    }
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local')) return false;
     return true;
   } catch {
     return false;
   }
-};
+}
 
 const buildOfficeViewerUrl = (fileUrl: string): string =>
   `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
 
-export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
-  url,
-  fileName,
-  fileSize,
-  mimeType,
-  previewType,
-  isOwn,
-  className,
-}) => {
-  const { t } = useTranslation();
+export function DocumentPreview({ url, fileName, fileSize, mimeType, previewType }: DocumentPreviewProps) {
   const [iframeFailed, setIframeFailed] = useState(false);
+  const iconType = previewType === 'spreadsheet' ? 'spreadsheet' : previewType === 'presentation' ? 'presentation' : 'document';
+  const extension = getFileExtension(fileName);
+  const docDescription = getDocDescription(mimeType);
 
   const handleDownload = useCallback(async () => {
-    await downloadResourceWithName(url, fileName || "document");
+    await downloadResourceWithName(url, fileName || 'document');
   }, [fileName, url]);
+  const handleOpenInNewTab = useCallback(() => openResourceInNewTab(url, fileName, false), [fileName, url]);
 
-  // Office docs không render trực tiếp trong tab trình duyệt → mở tab mới chỉ tải
-  // về với tên sai; thay bằng tải về giữ đúng tên gốc.
-  const handleOpenInNewTab = useCallback(() => {
-    openResourceInNewTab(url, fileName, false);
-  }, [fileName, url]);
+  const canEmbed = useMemo(() => Boolean(url) && isPubliclyViewableUrl(url), [url]);
+  const viewerUrl = useMemo(() => (canEmbed ? buildOfficeViewerUrl(url) : null), [canEmbed, url]);
 
-  const extension = getFileExtension(fileName);
-  const docDescription = getDocumentDescription(mimeType);
-  const iconType = getDocumentIconType(previewType);
-  const colorClass = getDocumentColorClass(previewType);
-
-  const canEmbed = useMemo(
-    () => Boolean(url) && isPubliclyViewableUrl(url),
-    [url],
-  );
-  const viewerUrl = useMemo(
-    () => (canEmbed ? buildOfficeViewerUrl(url) : null),
-    [canEmbed, url],
-  );
-
-  // ── In-browser viewer (Microsoft Office Online) ──────────────────────
   if (viewerUrl && !iframeFailed) {
     return (
-      <div
-        className={clsx(
-          "flex h-[calc(85vh/var(--app-zoom,1))] w-[min(72rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-text-inverse/12 bg-surface",
-          className,
-        )}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {/* Toolbar */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-surface-overlay px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colorClass)}>
-              <FileTypeIcon
-                type={iconType}
-                fileName={fileName}
-                variant="outline"
-                className="h-5 w-5"
-              />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
+      <div className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <FileTypeIcon type={iconType} fileName={fileName} size={24} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#25262b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>
                 {truncateFilename(fileName, 48)}
-              </p>
-              <p className="truncate text-xs text-text-muted">
-                {[extension?.toUpperCase(), formatFileSize(fileSize), docDescription]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              </div>
+              <div style={{ fontSize: 12, color: '#868e96' }}>
+                {[extension, formatFileSize(fileSize), docDescription].filter(Boolean).join(' · ')}
+              </div>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div style={{ display: 'flex', gap: 6 }}>
             <button
               type="button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: '1px solid #dee2e6',
+                background: '#f8f9fa',
+                color: '#495057',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
               onClick={() => void handleDownload()}
-              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
             >
-              <ArrowDownTrayIcon className="h-4 w-4" />
-              {t("chat:file.download")}
+              <Download size={14} />
+              Tải về
             </button>
             <button
               type="button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: '1px solid #dee2e6',
+                background: '#f8f9fa',
+                color: '#495057',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
               onClick={handleOpenInNewTab}
-              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
             >
-              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-              {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
+              <ExternalLink size={14} />
+              Mở tab mới
             </button>
           </div>
         </div>
-
-        {/* Viewer */}
         <iframe
           src={viewerUrl}
-          title={fileName || "document preview"}
-          className="min-h-0 w-full flex-1 border-0 bg-white"
+          title={fileName || 'document preview'}
+          className={styles.iframe}
+          style={{ flex: 1, minHeight: 0 }}
           onError={() => setIframeFailed(true)}
-          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
         />
       </div>
     );
   }
 
-  // ── Fallback card (not publicly reachable / viewer unavailable) ───────
   return (
-    <div
-      className={clsx(
-        "w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-border/70 bg-surface p-5",
-        isOwn && "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08]",
-        className,
-      )}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="flex items-start gap-4">
-        <div className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", colorClass)}>
-          <FileTypeIcon
-            type={iconType}
-            fileName={fileName}
-            variant="outline"
-            className="h-6 w-6"
-          />
+    <div className={styles.card}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: '#e7f5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <FileTypeIcon type={iconType} fileName={fileName} size={26} />
         </div>
-        <div className="min-w-0 flex-1 text-left">
-          <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#25262b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>
             {truncateFilename(fileName, 48)}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {extension && (
-              <span className="rounded-full border border-border px-2 py-0.5 uppercase">
+              <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, border: '1px solid #dee2e6', color: '#495057' }}>
                 {extension}
               </span>
             )}
-            <span>{formatFileSize(fileSize)}</span>
-            {docDescription && <span>{docDescription}</span>}
+            <span style={{ fontSize: 12, color: '#868e96' }}>{formatFileSize(fileSize)}</span>
+            {docDescription && <span style={{ fontSize: 12, color: '#868e96' }}>· {docDescription}</span>}
           </div>
         </div>
       </div>
 
-      <div className="mt-4 rounded-lg bg-surface-overlay p-3">
-        <p className="text-sm text-text-secondary">
-          {t("chat:filePreview.documentNotice", {
-            defaultValue: "Preview is not available for this file type.",
-          })}
-        </p>
-        <p className="mt-1 text-xs text-text-muted">
-          {t("chat:filePreview.documentSuggestion", {
-            defaultValue: "Download the file to open it in your preferred application.",
-          })}
-        </p>
+      <div style={{ fontSize: 13, color: '#868e96', marginTop: 12 }}>
+        Không có bản xem trước cho định dạng này. Tải file về để mở bằng phần mềm phù hợp.
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button
           type="button"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: 'none',
+            background: '#228be6',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: 'pointer',
+          }}
           onClick={() => void handleDownload()}
-          className={clsx(
-            "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-            "bg-primary text-text-inverse hover:bg-primary-hover",
-          )}
         >
-          <ArrowDownTrayIcon className="h-4 w-4" />
-          {t("chat:file.download")}
+          <Download size={14} />
+          Tải về
         </button>
         <button
           type="button"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: '1px solid #dee2e6',
+            background: '#f8f9fa',
+            color: '#495057',
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: 'pointer',
+          }}
           onClick={handleOpenInNewTab}
-          className={clsx(
-            "flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors",
-            "text-text-secondary hover:bg-surface-hover",
-          )}
         >
-          <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-          {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
+          <ExternalLink size={14} />
+          Mở tab mới
         </button>
       </div>
     </div>
   );
-};
+}
 
 export default DocumentPreview;

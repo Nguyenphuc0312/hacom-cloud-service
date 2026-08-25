@@ -1,22 +1,16 @@
 /**
- * @fileoverview CsvPreview - CSV file preview component with table rendering.
- * Parses CSV and renders as a scrollable table with pagination for large files.
+ * @fileoverview Xem trước file .csv dạng bảng — chuyển thể từ hr-web-client calendar file preview.
  */
-
-import React, { useEffect, useState, useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import clsx from "clsx";
-import { TableCellsIcon } from "@heroicons/react/24/outline";
-import { formatFileSize, MAX_CSV_PREVIEW_ROWS } from "../../utils/filePreviewUtils";
-import { truncateFilename } from "../../utils/truncateFilename";
-import { FileTypeIcon } from "../message/FileTypeIcon";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Table as IconTable } from 'lucide-react';
+import { MAX_CSV_PREVIEW_ROWS, formatFileSize } from '../../utils/filePreviewUtils';
+import { truncateFilename } from '../../utils/truncateFilename';
+import styles from './PreviewPanel.module.css';
 
 interface CsvPreviewProps {
   url: string;
   fileName: string;
   fileSize?: number;
-  onClose?: () => void;
-  className?: string;
 }
 
 interface CsvData {
@@ -27,15 +21,13 @@ interface CsvData {
   error?: string;
 }
 
-const parseCsvLine = (line: string): string[] => {
+function parseCsvLine(line: string): string[] {
   const result: string[] = [];
-  let current = "";
+  let current = '';
   let inQuotes = false;
-
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     const nextChar = line[i + 1];
-
     if (inQuotes) {
       if (char === '"' && nextChar === '"') {
         current += '"';
@@ -45,231 +37,123 @@ const parseCsvLine = (line: string): string[] => {
       } else {
         current += char;
       }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      result.push(current.trim());
+      current = '';
     } else {
-      if (char === '"') {
-        inQuotes = true;
-      } else if (char === ",") {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
+      current += char;
     }
   }
-
   result.push(current.trim());
   return result;
-};
+}
 
-const parseCsvContent = async (
-  url: string,
-  signal?: AbortSignal,
-): Promise<CsvData> => {
+async function parseCsvContent(url: string, signal?: AbortSignal): Promise<CsvData> {
   try {
-    const response = await fetch(url, { signal });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const text = await response.text();
-    const lines = text.split(/\r?\n/).filter((line) => line.trim());
-
-    if (lines.length === 0) {
-      return { headers: [], rows: [], totalRows: 0, truncated: false };
-    }
-
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length === 0) return { headers: [], rows: [], totalRows: 0, truncated: false };
     const headers = parseCsvLine(lines[0]);
     const dataRows = lines.slice(1);
-    const totalRows = dataRows.length;
-
     if (dataRows.length > MAX_CSV_PREVIEW_ROWS) {
-      const truncatedRows = dataRows.slice(0, MAX_CSV_PREVIEW_ROWS).map(parseCsvLine);
       return {
         headers,
-        rows: truncatedRows,
-        totalRows,
+        rows: dataRows.slice(0, MAX_CSV_PREVIEW_ROWS).map(parseCsvLine),
+        totalRows: dataRows.length,
         truncated: true,
       };
     }
-
-    const rows = dataRows.map(parseCsvLine);
-    return { headers, rows, totalRows, truncated: false };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return { headers: [], rows: [], totalRows: 0, truncated: false, error: "cancelled" };
-    }
-    return { headers: [], rows: [], totalRows: 0, truncated: false, error: "Failed to load CSV" };
+    return { headers, rows: dataRows.map(parseCsvLine), totalRows: dataRows.length, truncated: false };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return { headers: [], rows: [], totalRows: 0, truncated: false, error: 'cancelled' };
+    return { headers: [], rows: [], totalRows: 0, truncated: false, error: 'Không đọc được CSV' };
   }
-};
+}
 
 const PAGE_SIZE = 50;
 
-export const CsvPreview: React.FC<CsvPreviewProps> = ({
-  url,
-  fileName,
-  fileSize,
-  className,
-}) => {
-  const { t } = useTranslation();
+export function CsvPreview({ url, fileName, fileSize }: CsvPreviewProps) {
   const [csvData, setCsvData] = useState<CsvData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [sortColumn, setSortColumn] = useState<number | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const abortControllerRef = React.useRef<AbortController | null>(null);
+  const [page, setPage] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    abortControllerRef.current?.abort();
+    abortRef.current?.abort();
     const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const fetchContent = async () => {
-      setIsLoading(true);
-      setCsvData(null);
-      setCurrentPage(0);
-      const result = await parseCsvContent(url, controller.signal);
+    abortRef.current = controller;
+    setIsLoading(true);
+    setCsvData(null);
+    setPage(0);
+    void parseCsvContent(url, controller.signal).then((result) => {
       if (!controller.signal.aborted) {
         setCsvData(result);
         setIsLoading(false);
       }
-    };
-
-    void fetchContent();
-
-    return () => {
-      controller.abort();
-    };
+    });
+    return () => controller.abort();
   }, [url]);
 
-  const sortedRows = useMemo(() => {
-    if (!csvData || sortColumn === null) {
-      return csvData?.rows ?? [];
-    }
-
-    return [...csvData.rows].sort((a, b) => {
-      const aVal = a[sortColumn] ?? "";
-      const bVal = b[sortColumn] ?? "";
-
-      const aNum = parseFloat(aVal);
-      const bNum = parseFloat(bVal);
-
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return sortDirection === "asc" ? aNum - bNum : bNum - aNum;
-      }
-
-      return sortDirection === "asc"
-        ? aVal.localeCompare(bVal)
-        : bVal.localeCompare(aVal);
-    });
-  }, [csvData, sortColumn, sortDirection]);
+  const totalPages = useMemo(() => {
+    if (!csvData) return 0;
+    return Math.ceil(csvData.rows.length / PAGE_SIZE);
+  }, [csvData]);
 
   const paginatedRows = useMemo(() => {
-    const start = currentPage * PAGE_SIZE;
-    return sortedRows.slice(start, start + PAGE_SIZE);
-  }, [sortedRows, currentPage]);
-
-  const totalPages = Math.ceil(sortedRows.length / PAGE_SIZE);
-
-  const handleSort = (columnIndex: number) => {
-    if (sortColumn === columnIndex) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortColumn(columnIndex);
-      setSortDirection("asc");
-    }
-    setCurrentPage(0);
-  };
-
-  const extension = fileName.split(".").pop()?.toUpperCase() || "";
+    if (!csvData) return [];
+    const start = page * PAGE_SIZE;
+    return csvData.rows.slice(start, start + PAGE_SIZE);
+  }, [csvData, page]);
 
   return (
-    <div
-      className={clsx(
-        "flex h-[85vh] w-[92vw] max-w-6xl flex-col rounded-xl bg-surface",
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-500/10">
-            <FileTypeIcon type="spreadsheet" className="h-5 w-5 text-green-600" />
+    <div className={styles.panel}>
+      <div className={styles.panelHeader}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#25262b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>
+            {truncateFilename(fileName, 48)}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-primary" title={fileName}>
-              {truncateFilename(fileName, 48)}
-            </p>
-            <p className="text-xs text-text-muted">
-              {formatFileSize(fileSize)} · {extension}
-              {csvData && ` · ${csvData.totalRows.toLocaleString()} rows`}
-              {csvData?.truncated && ` · ${t("chat:filePreview.truncated", { defaultValue: "Truncated" })}`}
-            </p>
+          <div style={{ fontSize: 12, color: '#868e96' }}>
+            {formatFileSize(fileSize)}
+            {csvData && ` · ${csvData.totalRows} dòng`}
+            {csvData?.truncated && ' · Đã rút gọn'}
           </div>
         </div>
       </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className={styles.panelBody} style={{ padding: 0 }}>
         {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm text-text-muted">
-                {t("chat:filePreview.loading", { defaultValue: "Loading preview..." })}
-              </p>
-            </div>
+          <div className={styles.centerState}>
+            <span style={{ fontSize: 13, color: '#868e96' }}>Đang tải bảng tính…</span>
           </div>
-        ) : csvData?.error ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <TableCellsIcon className="h-12 w-12 text-text-muted" />
-              <p className="text-sm text-text-muted">{csvData.error}</p>
-            </div>
+        ) : csvData?.error && csvData.error !== 'cancelled' ? (
+          <div className={styles.centerState}>
+            <IconTable size={40} color="#868e96" />
+            <span style={{ fontSize: 13, color: '#495057' }}>{csvData.error}</span>
           </div>
-        ) : csvData && csvData.headers.length > 0 ? (
-          <div className="overflow-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 bg-surface-overlay">
-                <tr>
-                  <th className="border-b border-border px-3 py-2 text-left font-medium text-text-muted">
-                    #
-                  </th>
-                  {csvData.headers.map((header, index) => (
-                    <th
-                      key={index}
-                      className="cursor-pointer border-b border-border px-3 py-2 text-left font-medium text-text-muted hover:bg-surface-hover"
-                      onClick={() => handleSort(index)}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className="truncate">{header || `Column ${index + 1}`}</span>
-                        {sortColumn === index && (
-                          <span className="text-xs">
-                            {sortDirection === "asc" ? "↑" : "↓"}
-                          </span>
-                        )}
-                      </div>
+        ) : !csvData || (csvData.headers.length === 0 && csvData.rows.length === 0) ? (
+          <div className={styles.centerState}>
+            <span style={{ fontSize: 13, color: '#868e96' }}>File CSV trống</span>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                  {csvData.headers.map((h, i) => (
+                    <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#495057', borderRight: '1px solid #e9ecef' }}>
+                      {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {paginatedRows.map((row, rowIndex) => (
-                  <tr
-                    key={rowIndex}
-                    className={clsx(
-                      "hover:bg-surface-hover",
-                      rowIndex % 2 === 0 ? "bg-surface" : "bg-surface-overlay/50",
-                    )}
-                  >
-                    <td className="border-b border-border/50 px-3 py-1.5 text-text-muted">
-                      {currentPage * PAGE_SIZE + rowIndex + 1}
-                    </td>
-                    {row.map((cell, cellIndex) => (
-                      <td
-                        key={cellIndex}
-                        className="max-w-[200px] truncate border-b border-border/50 px-3 py-1.5"
-                        title={cell}
-                      >
+                {paginatedRows.map((row, ri) => (
+                  <tr key={ri} style={{ borderBottom: '1px solid #f1f3f5' }}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{ padding: '6px 12px', color: '#212529', borderRight: '1px solid #f1f3f5' }}>
                         {cell}
                       </td>
                     ))}
@@ -278,72 +162,59 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <TableCellsIcon className="h-12 w-12 text-text-muted" />
-              <p className="text-sm text-text-muted">
-                {t("chat:filePreview.emptyCsv", { defaultValue: "CSV file is empty" })}
-              </p>
-            </div>
-          </div>
         )}
       </div>
-
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2">
-          <p className="text-xs text-text-muted">
-            {t("chat:filePreview.showingRows", {
-              defaultValue: "Showing {{start}}-{{end}} of {{total}}",
-              start: currentPage * PAGE_SIZE + 1,
-              end: Math.min((currentPage + 1) * PAGE_SIZE, sortedRows.length),
-              total: sortedRows.length,
-            })}
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              className={clsx(
-                "rounded px-2 py-1 text-xs",
-                "text-text-secondary hover:bg-surface-hover",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-              )}
-            >
-              ←
-            </button>
-            <span className="px-2 text-xs text-text-muted">
-              {currentPage + 1} / {totalPages}
+        <div className={styles.toolbar}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <span style={{ fontSize: 12, color: '#868e96' }}>
+              Trang {page + 1} / {totalPages}
             </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage >= totalPages - 1}
-              className={clsx(
-                "rounded px-2 py-1 text-xs",
-                "text-text-secondary hover:bg-surface-hover",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-              )}
-            >
-              →
-            </button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                type="button"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 4,
+                  border: '1px solid #dee2e6',
+                  background: '#fff',
+                  cursor: page === 0 ? 'not-allowed' : 'pointer',
+                  opacity: page === 0 ? 0.5 : 1,
+                }}
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 4,
+                  border: '1px solid #dee2e6',
+                  background: '#fff',
+                  cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                  opacity: page >= totalPages - 1 ? 0.5 : 1,
+                }}
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Footer warning */}
-      {csvData?.truncated && (
-        <div className="shrink-0 border-t border-border px-4 py-2 text-center text-xs text-text-muted">
-          {t("chat:filePreview.csvTruncated", {
-            defaultValue: "Only first {{rows}} rows shown. Download to view full content.",
-            rows: MAX_CSV_PREVIEW_ROWS,
-          })}
         </div>
       )}
     </div>
   );
-};
+}
 
 export default CsvPreview;

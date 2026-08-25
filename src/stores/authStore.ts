@@ -1260,7 +1260,6 @@ export const useAuthStore = create<AuthState>()(
               } catch (error: unknown) {
                 const apiError = extractApiError(error);
                 if (apiError.statusCode !== 401) {
-                  runClientLogoutCleanup("bootstrap_me_failed");
                   set({
                     user: null,
                     authStatus: "bootstrap_error",
@@ -1373,26 +1372,25 @@ export const useAuthStore = create<AuthState>()(
                     profileApiErr.statusCode !== 401 &&
                     profileApiErr.statusCode !== 403
                   ) {
-                    // Network/server error on profile fetch, but we have a fresh
-                    // token — restore from persisted user rather than logging out.
-                    const cachedUser = get().user;
-                    const cachedPending = isPendingHrLinkUser(cachedUser);
+                    // Never turn a persisted profile into authority. The fresh
+                    // token may belong to a different account after rotation.
                     set({
-                      user: cachedUser,
-                      authStatus: cachedPending ? "pending_hr_link" : "authenticated",
+                      user: null,
+                      authStatus: "bootstrap_error",
                       isBootstrappingAuth: false,
                       activationContext: null,
                       lockedAccount: null,
                       pendingVerificationEmail: null,
                       pendingVerificationSource: null,
                       emailVerificationChallenge: null,
-                      isAuthenticated: !cachedPending,
+                      isAuthenticated: false,
                       isLoading: false,
                       isInitialized: true,
                       registrationStatus: "idle",
-                      error: null,
+                      error:
+                        profileApiErr.message ||
+                        i18n.t("error:auth.profileRetryHint"),
                     });
-                    resetAuthFailureState();
                     return;
                   }
                   // 401/403 with a fresh token = genuine session invalidation,
@@ -1414,7 +1412,7 @@ export const useAuthStore = create<AuthState>()(
                 ) {
                   set({
                     user: null,
-                    authStatus: "anonymous",
+                    authStatus: "bootstrap_error",
                     isBootstrappingAuth: false,
                     activationContext: null,
                     lockedAccount: null,
@@ -1425,7 +1423,9 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                     isInitialized: true,
                     registrationStatus: "idle",
-                    error: null,
+                    error:
+                      refreshApiErr.message ||
+                      i18n.t("error:auth.profileRetryHint"),
                   });
                   return;
                 }
@@ -1493,9 +1493,9 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Strip avatar: presigned S3 URLs expire before the next session;
-        // bootstrap always revalidates the canonical auth principal via /auth/me.
-        user: state.user ? { ...state.user, avatar: undefined } : state.user,
+        // Authority is memory-only and is always rebuilt from /auth/me.
+        // Persisting a profile risks showing the previous account after a
+        // refresh-token rotation while the canonical profile read is down.
         authStatus:
           state.authStatus === "password_change_required"
             ? "anonymous"
@@ -1518,6 +1518,8 @@ export const useAuthStore = create<AuthState>()(
 
         return {
           ...merged,
+          // Ignore `user` left by older app versions in auth-storage.
+          user: null,
           authStatus: normalizePersistedAuthStatus(
             persisted.authStatus,
             persisted.lockedAccount ?? null,
