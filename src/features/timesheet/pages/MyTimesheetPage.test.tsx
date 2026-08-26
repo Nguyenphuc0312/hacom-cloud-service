@@ -4,6 +4,13 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getMyTimesheet = vi.fn();
+const getPendingAttendanceExplanations = vi.fn();
+const authState = vi.hoisted(() => ({ roles: ["EMPLOYEE"] as string[] }));
+
+vi.mock("../../../stores/authStore", () => ({
+  useAuthStore: (selector: (state: { user: { id: string; username: string; roles: string[] } }) => unknown) =>
+    selector({ user: { id: "user-1", username: "tester", roles: authState.roles } }),
+}));
 
 vi.mock("../../api/hrApi", () => ({
   hrApi: {
@@ -11,7 +18,8 @@ vi.mock("../../api/hrApi", () => ({
     confirmMyTimesheet: vi.fn(),
     disputeMyTimesheet: vi.fn(),
     getMyAttendanceExplanations: vi.fn().mockResolvedValue([]),
-    getPendingAttendanceExplanations: vi.fn().mockResolvedValue(null),
+    getPendingAttendanceExplanations: (...args: unknown[]) =>
+      getPendingAttendanceExplanations(...args),
     createAttendanceExplanation: vi.fn(),
     approveAttendanceExplanation: vi.fn(),
     rejectAttendanceExplanation: vi.fn(),
@@ -32,6 +40,11 @@ const shift = (days: number) => {
   date.setDate(date.getDate() + days);
   return date;
 };
+
+beforeEach(() => {
+  authState.roles = ["EMPLOYEE"];
+  getPendingAttendanceExplanations.mockResolvedValue({ items: [] });
+});
 
 const day = (date: string, overrides: Record<string, unknown> = {}) => ({
   id: `day-${date}`,
@@ -266,5 +279,56 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
       (node) => node.textContent?.trim() === "CN",
     );
     expect(header?.className).toContain("f43f5e");
+  });
+});
+
+describe("MyTimesheetPage — Chat approval visibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMyTimesheet.mockResolvedValue({
+      period: null,
+      confirmation: null,
+      days: [],
+      summary: { totalPaidDays: 0, totalLeaveDays: 0, countBySymbol: {} },
+    });
+  });
+
+  it("does not fetch or show pending explanations for a regular user", async () => {
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getMyTimesheet).toHaveBeenCalled());
+    expect(getPendingAttendanceExplanations).not.toHaveBeenCalled();
+    expect(screen.queryByText("Chờ duyệt giải trình")).toBeNull();
+  });
+
+  it("shows pending explanations for a Super Admin", async () => {
+    authState.roles = ["SUPER_ADMIN"];
+    getPendingAttendanceExplanations.mockResolvedValueOnce({
+      items: [
+        {
+          id: "explanation-1",
+          employeeId: "employee-2",
+          type: "LATE",
+          reason: "Đi công trình buổi sáng",
+          status: "SUBMITTED",
+          employee: { employeeCode: "HC0002", fullName: "Trần An" },
+          timesheetDay: { workDate: "2026-08-25", displaySymbol: "?" },
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Chờ duyệt giải trình")).toBeTruthy();
+    expect(await screen.findByText("Trần An")).toBeTruthy();
+    expect(getPendingAttendanceExplanations).toHaveBeenCalledTimes(1);
   });
 });

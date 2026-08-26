@@ -6,11 +6,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createMyLeaveRequest = vi.fn();
 const getMyLeave = vi.fn();
 const getPendingLeaveApprovals = vi.fn();
+const authState = vi.hoisted(() => ({ roles: ["EMPLOYEE"] as string[] }));
 
+const searchMyLeaveReplacementCandidates = vi.fn();
+vi.mock("../../../stores/authStore", () => ({
+  useAuthStore: (selector: (state: { user: { id: string; username: string; roles: string[] } }) => unknown) =>
+    selector({ user: { id: "user-1", username: "tester", roles: authState.roles } }),
+}));
 vi.mock("../../api/hrApi", () => ({
   hrApi: {
     getMyLeave: (...args: unknown[]) => getMyLeave(...args),
     createMyLeaveRequest: (...args: unknown[]) => createMyLeaveRequest(...args),
+    searchMyLeaveReplacementCandidates: (...args: unknown[]) =>
+      searchMyLeaveReplacementCandidates(...args),
     cancelMyLeaveRequest: vi.fn(),
     getPendingLeaveApprovals: (...args: unknown[]) =>
       getPendingLeaveApprovals(...args),
@@ -71,6 +79,7 @@ const MON = shift(THU, 4);
 describe("MyLeavePage — leave request payload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.roles = ["EMPLOYEE"];
     getMyLeave.mockResolvedValue({
       year: 2026,
       employeeId: "emp-1",
@@ -81,6 +90,7 @@ describe("MyLeavePage — leave request payload", () => {
     getPendingLeaveApprovals.mockResolvedValue(null);
     createMyLeaveRequest.mockResolvedValue({ id: "leave-1" });
   });
+  searchMyLeaveReplacementCandidates.mockResolvedValue([]);
 
   const fillDate = async (
     user: ReturnType<typeof userEvent.setup>,
@@ -113,6 +123,7 @@ describe("MyLeavePage — leave request payload", () => {
       startDate: iso(THU),
       endDate: iso(MON),
     });
+    await waitFor(() => expect(getMyLeave).toHaveBeenCalledTimes(2));
   });
 
   it("labels the day count as an estimate, not the deducted total", async () => {
@@ -147,6 +158,63 @@ describe("MyLeavePage — leave request payload", () => {
     render(<MyLeavePage />);
 
     expect(await screen.findByText("Từ ký hiệu OM")).toBeTruthy();
+  });
+
+  it("labels a reconciled annual balance as live HRM truth", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: 12,
+          usedDays: 2,
+          pendingDays: 0.5,
+          remainingDays: 9.5,
+          source: "RECONCILED_LEAVE_LEDGER",
+          balanceStatus: "RECONCILED",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("Số dư đã đối chiếu trên HRM")).toBeTruthy();
+    expect(screen.getByText("Quỹ phép đã đối chiếu")).toBeTruthy();
+    expect(screen.queryByText("Số dư đang được HR đối chiếu")).toBeNull();
+  });
+
+  it("labels an unreconciled annual balance as trial data from the P timesheet", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "TRIAL_PENDING_CSV_RECONCILIATION",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: null,
+          usedDays: 2,
+          pendingDays: 0.5,
+          remainingDays: null,
+          source: "TIMESHEET_P_SYMBOL",
+          balanceStatus: "PENDING_HR_CSV_RECONCILIATION",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(
+      await screen.findByText("Số dư đang được HR đối chiếu"),
+    ).toBeTruthy();
+    expect(screen.getByText("Từ ký hiệu P")).toBeTruthy();
+    expect(screen.getByText("Đối chiếu")).toBeTruthy();
+    expect(screen.queryByText("Số dư đã đối chiếu trên HRM")).toBeNull();
   });
 
   it("sends the half-day sessions so the server can derive a half day", async () => {
@@ -203,5 +271,170 @@ describe("MyLeavePage — leave request payload", () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("liên hệ HR");
+  });
+
+  it("explains that an annual leave request crossing years needs HR confirmation", async () => {
+    const user = userEvent.setup();
+    createMyLeaveRequest.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: "ANNUAL_LEAVE_CROSS_YEAR_REQUIRES_HR_CONFIRMATION",
+        },
+      },
+    });
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(MON));
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("tách kỳ phép");
+  });
+
+  it("shows the official paid/unpaid allocation returned by HRM", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [],
+      requests: [
+        {
+          id: "leave-1",
+          employeeId: "emp-1",
+          leaveType: "ANNUAL",
+          startDate: iso(THU),
+          endDate: iso(THU),
+          totalDays: 1,
+          annualPaidDays: 0.5,
+          unpaidDays: 0.5,
+          status: "SUBMITTED",
+        },
+      ],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("0,5 P")).toBeTruthy();
+    expect(screen.getByText("0,5 KL")).toBeTruthy();
+  });
+
+  it("labels the P/KL split as an estimate before the server derives workdays", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: 1,
+          usedDays: 0.5,
+          pendingDays: 0,
+          remainingDays: 0.5,
+          source: "RECONCILED_LEAVE_LEDGER",
+          balanceStatus: "RECONCILED",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText(/Ước tính nguồn/)).toBeTruthy();
+    expect(screen.getByText("0,5 P")).toBeTruthy();
+    expect(screen.getByText("0,5 KL")).toBeTruthy();
+  });
+
+  it("searches within the department and submits the selected handover employee", async () => {
+    const user = userEvent.setup();
+    searchMyLeaveReplacementCandidates.mockResolvedValueOnce([
+      {
+        id: "emp-2",
+        employeeCode: "HC0002",
+        fullName: "Trần An",
+        employeeAssignments: [
+          { department: { id: "dept-1", name: "Phòng Nhân sự" } },
+        ],
+      },
+    ]);
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+
+    await user.type(screen.getByLabelText("Người nhận bàn giao"), "Trần");
+    await waitFor(() =>
+      expect(searchMyLeaveReplacementCandidates).toHaveBeenCalledWith(
+        "Trần",
+        10,
+      ),
+    );
+    await user.click(await screen.findByText("Trần An"));
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(THU));
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(createMyLeaveRequest).toHaveBeenCalled());
+    expect(createMyLeaveRequest.mock.calls[0][0]).toMatchObject({
+      replacementEmployeeId: "emp-2",
+    });
+  });
+
+  it("explains an invalid replacement returned by HRM", async () => {
+    const user = userEvent.setup();
+    createMyLeaveRequest.mockRejectedValueOnce({
+      response: { data: { message: "LEAVE_REPLACEMENT_EMPLOYEE_INVALID" } },
+    });
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(THU));
+
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("cùng phòng ban");
+  });
+
+  it("does not fetch or show leave approvals for a regular Chat user", async () => {
+    render(<MyLeavePage />);
+
+    await screen.findByText("Gửi đơn");
+    await waitFor(() => expect(getMyLeave).toHaveBeenCalled());
+    expect(getPendingLeaveApprovals).not.toHaveBeenCalled();
+    expect(screen.queryByText("Duyệt nhanh")).toBeNull();
+  });
+
+  it("shows the leave approval panel for a Super Admin", async () => {
+    authState.roles = ["super-admin"];
+    getPendingLeaveApprovals.mockResolvedValueOnce({
+      items: [
+        {
+          id: "leave-pending-1",
+          employeeId: "employee-2",
+          leaveType: "ANNUAL",
+          startDate: iso(THU),
+          endDate: iso(THU),
+          totalDays: 1,
+          status: "SUBMITTED",
+          employee: { id: "employee-2", employeeCode: "HC0002", fullName: "Trần An" },
+          currentApprovalStep: { stepOrder: 1, stepName: "Người theo dõi công", status: "SUBMITTED" },
+        },
+      ],
+      pagination: {
+        page: 1,
+        pageSize: 50,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("Duyệt nhanh")).toBeTruthy();
+    expect(await screen.findByText("Trần An")).toBeTruthy();
+    expect(getPendingLeaveApprovals).toHaveBeenCalledWith({ page: 1, pageSize: 50 });
   });
 });
