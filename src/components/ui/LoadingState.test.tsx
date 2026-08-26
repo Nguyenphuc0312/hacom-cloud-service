@@ -78,6 +78,29 @@ describe("loading states", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps split and card auth routes on their real page geometry", () => {
+    const { container, rerender } = render(
+      <AuthenticatedRouteFallback pathname="/login" includeNavigationRail />,
+    );
+
+    expect(
+      container.querySelector("[data-skeleton-variant='auth-split']"),
+    ).toBeInTheDocument();
+    expect(container.querySelector(".hc-side-rail")).not.toBeInTheDocument();
+
+    rerender(
+      <AuthenticatedRouteFallback
+        pathname="/reset-password"
+        includeNavigationRail
+      />,
+    );
+
+    expect(
+      container.querySelector("[data-skeleton-variant='auth-card']"),
+    ).toBeInTheDocument();
+    expect(container.querySelector(".hc-side-rail")).not.toBeInTheDocument();
+  });
+
   it("keeps the full chat shell stable while authentication loads", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/chat/conversation-id"]}>

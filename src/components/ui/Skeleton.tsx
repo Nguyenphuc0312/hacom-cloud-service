@@ -616,40 +616,99 @@ export const AppRouteSkeleton: React.FC<{
   );
 };
 
-export const AuthPageSkeleton: React.FC<{ className?: string }> = ({
-  className,
+export const AuthFormSkeleton: React.FC<{ compact?: boolean }> = ({
+  compact = false,
 }) => (
   <div
-    className={clsx(
-      "grid h-[var(--app-dvh)] min-h-[36rem] w-full bg-background lg:grid-cols-[minmax(0,1fr)_minmax(28rem,42%)]",
-      className,
-    )}
-    data-skeleton-variant="auth"
+    className={clsx("skeleton-stage", compact ? "space-y-4" : "space-y-5")}
     aria-busy="true"
   >
-    <div className="hidden bg-[hsl(var(--color-chat-canvas))] p-10 lg:flex lg:flex-col lg:justify-end">
-      <Skeleton className="h-8" width="48%" rounded="sm" />
-      <SkeletonText
-        className="mt-4 max-w-xl"
-        lines={2}
-        widths={["88%", "62%"]}
-      />
-      <Skeleton className="mt-8 h-1" width="54%" rounded="full" />
+    <Skeleton className="mx-auto h-16 w-28" rounded="lg" />
+    <div className="space-y-2 text-center">
+      <Skeleton className="mx-auto h-6" width="68%" rounded="sm" />
+      <Skeleton className="mx-auto h-3.5" width="76%" rounded="sm" />
     </div>
-    <div className="flex items-center justify-center bg-surface px-5 py-10 sm:px-10">
-      <div className="w-full max-w-md rounded-[var(--hc-radius-xl)] border border-border bg-surface p-6 sm:p-8">
-        <Skeleton className="mx-auto h-14 w-28" rounded="lg" />
-        <Skeleton className="mt-8 h-6" width="58%" rounded="sm" />
-        <Skeleton className="mt-3 h-4" width="76%" rounded="sm" />
-        <div className="mt-7 space-y-4">
-          <Skeleton className="h-11 w-full" rounded="md" />
-          <Skeleton className="h-11 w-full" rounded="md" />
-          <Skeleton className="h-11 w-full" rounded="md" />
-        </div>
+    <Skeleton className="h-12 w-full" rounded="lg" />
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <Skeleton className="h-3.5" width="34%" rounded="sm" />
+        <Skeleton className="h-12 w-full" rounded="md" />
       </div>
+      <div className="space-y-2">
+        <Skeleton className="h-3.5" width="26%" rounded="sm" />
+        <Skeleton className="h-12 w-full" rounded="md" />
+      </div>
+      <div className="flex h-6 items-center justify-between">
+        <Skeleton className="h-3.5" width="34%" rounded="sm" />
+        <Skeleton className="h-3.5" width="30%" rounded="sm" />
+      </div>
+      <Skeleton className="h-12 w-full" rounded="md" />
     </div>
   </div>
 );
+
+export const AuthPageSkeleton: React.FC<{
+  className?: string;
+  variant?: "split" | "card";
+}> = ({ className, variant = "split" }) => {
+  if (variant === "card") {
+    return (
+      <div
+        className={clsx("auth-shell", className)}
+        data-skeleton-variant="auth-card"
+        aria-busy="true"
+      >
+        <div className="auth-shell-inner max-w-md">
+          <section className="auth-card p-6 sm:p-7">
+            <AuthFormSkeleton compact />
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={clsx(
+        "flex h-[var(--app-dvh)] w-full overflow-hidden bg-surface-overlay",
+        className,
+      )}
+      data-skeleton-variant="auth-split"
+      aria-busy="true"
+    >
+      <div className="relative hidden w-1/2 overflow-hidden bg-gray-900 lg:block">
+        <img
+          src="/hacom-imperial-dalat.jpg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
+        <div className="absolute inset-x-0 bottom-0 p-[clamp(24px,4vw,64px)] text-white">
+          <h2 className="text-[clamp(1.5rem,3.5vw,3rem)] font-bold leading-[1.1] tracking-tight">
+            Hacom Imperial Dalat
+          </h2>
+          <p className="mt-3 max-w-2xl text-[clamp(0.875rem,1.5vw,1.25rem)] font-light leading-relaxed text-white/90">
+            Dự án nổi bật tại Đà Lạt - Kiến trúc tân cổ điển sang trọng giữa
+            ngàn hoa
+          </p>
+          <div className="mt-8 grid grid-cols-4 gap-3">
+            <span className="h-1 rounded-full bg-white" />
+            {Array.from({ length: 3 }).map((_, index) => (
+              <span key={index} className="h-1 rounded-full bg-white/20" />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="w-full overflow-y-auto bg-surface-overlay lg:w-1/2">
+        <div className="flex min-h-[var(--app-dvh)] items-center justify-center px-[clamp(12px,3vw,40px)] py-[clamp(16px,4dvh,40px)]">
+          <div className="w-full max-w-[clamp(320px,90vw,500px)] rounded-3xl border border-border bg-surface-raised px-[clamp(16px,4vw,36px)] py-[clamp(20px,3.5dvh,36px)] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_12px_40px_rgb(0,0,0,0.5)]">
+            <AuthFormSkeleton />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const ChatWorkspaceSkeleton: React.FC<{ className?: string }> = ({
   className,

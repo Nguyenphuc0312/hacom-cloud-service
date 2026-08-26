@@ -18,14 +18,17 @@ interface AuthenticatedRouteFallbackProps {
 const matchesRoute = (pathname: string, route: string): boolean =>
   pathname === route || pathname.startsWith(`${route}/`);
 
-const authRoutes = [
+const splitAuthRoutes = [
   ROUTE_PATHS.LOGIN,
-  ROUTE_PATHS.ACTIVATION,
-  ROUTE_PATHS.VERIFY_EMAIL,
   ROUTE_PATHS.FORGOT_PASSWORD,
-  ROUTE_PATHS.RESET_PASSWORD,
   ROUTE_PATHS.FORCE_CHANGE_PASSWORD,
   ROUTE_PATHS.PENDING_HR_LINK,
+];
+
+const cardAuthRoutes = [
+  ROUTE_PATHS.ACTIVATION,
+  ROUTE_PATHS.VERIFY_EMAIL,
+  ROUTE_PATHS.RESET_PASSWORD,
 ];
 
 const legalRoutes = [
@@ -83,8 +86,12 @@ const resolveAppSkeleton = (pathname: string): ReactNode => {
 export const AuthenticatedRouteFallback: FC<
   AuthenticatedRouteFallbackProps
 > = ({ pathname, includeNavigationRail = false, label }) => {
-  if (authRoutes.some((route) => matchesRoute(pathname, route))) {
-    return <AuthPageSkeleton />;
+  if (splitAuthRoutes.some((route) => matchesRoute(pathname, route))) {
+    return <AuthPageSkeleton variant="split" />;
+  }
+
+  if (cardAuthRoutes.some((route) => matchesRoute(pathname, route))) {
+    return <AuthPageSkeleton variant="card" />;
   }
 
   if (legalRoutes.some((route) => matchesRoute(pathname, route))) {
