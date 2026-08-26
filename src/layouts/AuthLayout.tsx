@@ -4,7 +4,7 @@ import { AuthPageSkeleton } from "../components/ui";
 
 export const AuthLayout: React.FC = () => {
   return (
-    <Suspense fallback={<AuthPageSkeleton />}>
+    <Suspense fallback={<AuthPageSkeleton variant="card" />}>
       <Outlet />
     </Suspense>
   );

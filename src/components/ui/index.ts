@@ -42,6 +42,7 @@ export {
   NotificationListSkeleton,
   DirectorySkeleton,
   AppRouteSkeleton,
+  AuthFormSkeleton,
   AuthPageSkeleton,
   type AppRouteSkeletonVariant,
   ChatWorkspaceSkeleton,
