@@ -48,8 +48,8 @@ const ViContent: React.FC = () => (
       <div className="flex items-center gap-3 mb-4">
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Trợ Giúp & Hỗ Trợ</h1>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">Hacom Holdings — Trung tâm hỗ trợ</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Trợ giúp & hỗ trợ</h1>
+          <p className="mt-1 text-[11px] font-medium tracking-wide text-[#64748b]">Hacom Holdings — Trung tâm hỗ trợ</p>
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
@@ -66,12 +66,12 @@ const ViContent: React.FC = () => (
       <p>Nếu bạn gặp bất kỳ sự cố nào khi sử dụng Hacom Holdings, vui lòng liên hệ với đội ngũ hỗ trợ theo các kênh sau:</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Email hỗ trợ kỹ thuật</p>
+          <p className="text-xs font-semibold text-[#64748b] mb-1.5">Email hỗ trợ kỹ thuật</p>
           <a href="mailto:support@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline break-all">support@hacomholdings.com.vn</a>
           <p className="mt-1.5 text-xs text-[#64748b]">Phản hồi trong vòng 1 ngày làm việc</p>
         </div>
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Bộ phận IT nội bộ</p>
+          <p className="text-xs font-semibold text-[#64748b] mb-1.5">Bộ phận IT nội bộ</p>
           <a href="mailto:it@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline break-all">it@hacomholdings.com.vn</a>
           <p className="mt-1.5 text-xs text-[#64748b]">Dành cho yêu cầu quản trị tài khoản</p>
         </div>
@@ -103,7 +103,7 @@ const ViContent: React.FC = () => (
     {/* FAQ */}
     <Section title="3. Câu hỏi thường gặp">
       {/* login */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Đăng nhập & Tài khoản</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Đăng nhập & tài khoản</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="Tôi không đăng nhập được, phải làm gì?">
           <ul className="space-y-1.5 pl-4">
@@ -128,7 +128,7 @@ const ViContent: React.FC = () => (
       </div>
 
       {/* messaging */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Nhắn tin</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Nhắn tin</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="Làm sao để gửi tin nhắn cho đồng nghiệp?">
           <p>Nhấn biểu tượng <span className="font-medium">Tạo cuộc trò chuyện</span> (hoặc nút <span className="font-medium">+</span>) ở thanh bên, tìm tên đồng nghiệp và chọn để bắt đầu cuộc trò chuyện riêng tư.</p>
@@ -148,7 +148,7 @@ const ViContent: React.FC = () => (
       </div>
 
       {/* groups */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Trò chuyện nhóm</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Trò chuyện nhóm</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="Làm sao để tạo nhóm mới?">
           <p>Nhấn <span className="font-medium">+</span> → <span className="font-medium">Tạo nhóm</span>, đặt tên nhóm và thêm thành viên. Nhóm có thể có nhiều thành viên và được quản lý bởi chủ nhóm (owner) và quản trị viên nhóm (admin).</p>
@@ -168,7 +168,7 @@ const ViContent: React.FC = () => (
       </div>
 
       {/* notifications */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Thông báo & Cài đặt</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Thông báo & cài đặt</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7]">
         <FaqItem q="Tôi không nhận được thông báo trên trình duyệt?">
           <ul className="space-y-1.5 pl-4">
@@ -212,7 +212,7 @@ const EnContent: React.FC = () => (
         <img src="/logo.png" alt="HACOM" className="h-10 w-10 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#0f172a]">Help & Support</h1>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.1em] text-[#64748b]">Hacom Holdings — Support Center</p>
+          <p className="mt-1 text-[11px] font-medium tracking-wide text-[#64748b]">Hacom Holdings — Support Center</p>
         </div>
       </div>
       <div className="space-y-1.5 rounded-xl border border-[#1976D2]/15 bg-[#1976D2]/[0.05] p-4 text-sm text-[#334155]">
@@ -229,12 +229,12 @@ const EnContent: React.FC = () => (
       <p>If you encounter any issues while using Hacom Holdings, please reach out through the following channels:</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Technical support email</p>
+          <p className="text-xs font-semibold text-[#64748b] mb-1.5">Technical support email</p>
           <a href="mailto:support@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline break-all">support@hacomholdings.com.vn</a>
           <p className="mt-1.5 text-xs text-[#64748b]">Response within 1 business day</p>
         </div>
         <div className="rounded-xl border border-[#d7dce3] bg-[#f8fbff] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#64748b] mb-1.5">Internal IT department</p>
+          <p className="text-xs font-semibold text-[#64748b] mb-1.5">Internal IT department</p>
           <a href="mailto:it@hacomholdings.com.vn" className="font-medium text-[#1565C0] hover:text-[#1976D2] hover:underline break-all">it@hacomholdings.com.vn</a>
           <p className="mt-1.5 text-xs text-[#64748b]">For account administration requests</p>
         </div>
@@ -266,7 +266,7 @@ const EnContent: React.FC = () => (
     {/* FAQ */}
     <Section title="3. Frequently Asked Questions">
       {/* login */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Login & Account</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Login & Account</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="I can't log in — what should I do?">
           <ul className="space-y-1.5 pl-4">
@@ -291,7 +291,7 @@ const EnContent: React.FC = () => (
       </div>
 
       {/* messaging */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Messaging</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Messaging</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="How do I send a message to a colleague?">
           <p>Click the <span className="font-medium">New Conversation</span> button (or the <span className="font-medium">+</span> icon) in the sidebar, search for your colleague's name, and select them to start a direct message.</p>
@@ -311,7 +311,7 @@ const EnContent: React.FC = () => (
       </div>
 
       {/* groups */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Group Chat</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Group Chat</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7] mb-6">
         <FaqItem q="How do I create a new group?">
           <p>Click <span className="font-medium">+</span> → <span className="font-medium">Create Group</span>, give it a name, and add members. Groups can have multiple members and are managed by the owner and group admins.</p>
@@ -331,7 +331,7 @@ const EnContent: React.FC = () => (
       </div>
 
       {/* notifications */}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#64748b]">Notifications & Settings</p>
+      <p className="mb-3 text-xs font-semibold text-[#64748b]">Notifications & Settings</p>
       <div className="rounded-xl border border-[#e5e7eb] divide-y divide-[#eef2f7]">
         <FaqItem q="I'm not receiving browser notifications — how do I fix this?">
           <ul className="space-y-1.5 pl-4">

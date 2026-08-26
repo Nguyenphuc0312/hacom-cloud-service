@@ -118,7 +118,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             autoComplete="new-password"
           />
 
-          <div className="flex gap-3 pt-2">
+          <div className="grid gap-3 pt-2 sm:grid-cols-2">
             <Button
               type="button"
               variant="brand-outline"

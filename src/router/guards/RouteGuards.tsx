@@ -6,13 +6,14 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
-import { ErrorState, PageSpinner } from "../../components/ui";
+import { ErrorState } from "../../components/ui";
 import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
 import {
   isBlockedAuthStatus,
   isPendingHrLinkStatus,
 } from "../../features/auth/model/authState";
+import { AuthenticatedRouteFallback } from "../../layouts/AuthenticatedRouteFallback";
 
 interface GuardProps {
   children: React.ReactNode;
@@ -40,7 +41,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        includeNavigationRail
+        label={t("common:loading.checkingAuth")}
+      />
+    );
   }
 
   if (authStatus === "activation_required" && activationContext) {
@@ -122,7 +129,12 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.default")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        label={t("common:loading.default")}
+      />
+    );
   }
 
   if (isBlockedAuthStatus(authStatus) || authStatus === "bootstrap_error") {
@@ -137,7 +149,8 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     if (user?.mustChangePassword === true) {
       return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
     }
-    const from = (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
+    const from =
+      (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
     return <Navigate to={from} replace />;
   }
 
@@ -171,11 +184,17 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        label={t("common:loading.checkingAuth")}
+      />
+    );
   }
 
   if (isAuthenticated || authStatus === "authenticated") {
-    const from = (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
+    const from =
+      (location.state as { from?: string } | null)?.from ?? ROUTE_PATHS.CHAT;
     return <Navigate to={from} replace />;
   }
 
@@ -198,8 +217,11 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
 };
 
-export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => {
+export const ForceChangePasswordRoute: React.FC<GuardProps> = ({
+  children,
+}) => {
   const { t } = useTranslation();
+  const location = useLocation();
   const {
     isAuthenticated,
     isInitialized,
@@ -210,17 +232,28 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        label={t("common:loading.checkingAuth")}
+      />
+    );
   }
 
-  if (!isAuthenticated && !(authStatus === "password_change_required" && passwordChangeContinuation)) {
+  if (
+    !isAuthenticated &&
+    !(authStatus === "password_change_required" && passwordChangeContinuation)
+  ) {
     if (isPendingHrLinkStatus(authStatus)) {
       return <Navigate to={ROUTE_PATHS.PENDING_HR_LINK} replace />;
     }
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
-  if (authStatus !== "password_change_required" && user?.mustChangePassword !== true) {
+  if (
+    authStatus !== "password_change_required" &&
+    user?.mustChangePassword !== true
+  ) {
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
   }
 
@@ -229,15 +262,17 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
 
 export const PendingHrLinkRoute: React.FC<GuardProps> = ({ children }) => {
   const { t } = useTranslation();
-  const {
-    isInitialized,
-    isBootstrappingAuth,
-    authStatus,
-    user,
-  } = useAuthStore();
+  const location = useLocation();
+  const { isInitialized, isBootstrappingAuth, authStatus, user } =
+    useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        label={t("common:loading.checkingAuth")}
+      />
+    );
   }
 
   if (isPendingHrLinkStatus(authStatus) && user) {

@@ -26,6 +26,8 @@ import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
 import { attendanceCalendarLabel } from "../../calendar/utils/attendanceCalendarPresentation";
+import { isSuperAdmin } from "../../auth/utils/isSuperAdmin";
+import { useAuthStore } from "../../../stores/authStore";
 import {
   gridColumnFor,
   LG_COLUMN_START,
@@ -363,6 +365,8 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   tabBar,
 }) => {
   const [searchParams] = useSearchParams();
+  const currentUser = useAuthStore((auth) => auth.user);
+  const canReviewOnChat = isSuperAdmin(currentUser);
   const queryPeriod = periodFromQuery(searchParams.get("month"));
   const queryMonth = queryPeriod?.month;
   const queryYear = queryPeriod?.year;
@@ -422,13 +426,18 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
       setMyExplanations([]);
     }
 
+    if (!canReviewOnChat) {
+      setPendingExplanations([]);
+      return;
+    }
+
     try {
       const pending = await hrApi.getPendingAttendanceExplanations();
       setPendingExplanations(pending.items ?? []);
     } catch {
       setPendingExplanations([]);
     }
-  }, [month, year]);
+  }, [canReviewOnChat, month, year]);
 
   React.useEffect(() => {
     if (!queryMonth || !queryYear) return;
@@ -549,6 +558,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
     item: AttendanceExplanation,
     status: "APPROVED" | "REJECTED",
   ) {
+    if (!canReviewOnChat) return;
     setReviewingExplanationId(item.id);
     try {
       if (status === "APPROVED") {
@@ -821,7 +831,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </div>
           </div>
 
-          {pendingExplanations.length > 0 ? (
+          {canReviewOnChat && pendingExplanations.length > 0 ? (
             <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[#0f172a]">

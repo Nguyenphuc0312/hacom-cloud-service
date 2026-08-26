@@ -22,10 +22,12 @@ import {
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_CONFIG } from "../config";
 import {
+  bindAuthSessionIdentity,
   compareIdentity,
   reportAuthIdentityMismatch,
   resetAuthIdentityGuard,
   setAuthIdentityMismatchHandler,
+  validateBoundAuthSessionIdentity,
 } from "../services/authIdentityGuard";
 import { toast } from "../components/ui";
 import {
@@ -34,6 +36,7 @@ import {
   redirectToLogin,
   requestServerLogout,
   runClientLogoutCleanup,
+  runCurrentTabIdentityMismatchCleanup,
 } from "../services/authService";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 // api.ts imports User from here type-only, so this value import is not a cycle.
@@ -99,6 +102,8 @@ export interface User {
   backgroundFileId?: string | null;
   status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
+  roles?: string[];
+  permissions?: string[];
   isVerified?: boolean;
   createdAt?: string;
   accountState?: string;
@@ -245,6 +250,32 @@ const resolveTokens = (
   const refreshToken =
     payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
   return { accessToken, refreshToken };
+};
+
+const establishExplicitAuthSession = (
+  accessToken: string,
+  refreshToken: string | null,
+  rememberMe: boolean,
+  user: User,
+): void => {
+  storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+  if (bindAuthSessionIdentity(accessToken, user)) return;
+
+  runClientLogoutCleanup("login_identity_mismatch");
+  throw new Error(i18n.t("error:auth.loginFailed"));
+};
+
+const validateBootstrapIdentity = (
+  accessToken: string,
+  user: User,
+): "match" | "missing" | "mismatch" => {
+  const status = validateBoundAuthSessionIdentity(accessToken, user);
+  if (status !== "missing" || !import.meta.env.PROD) return status;
+
+  // Safe rollout migration: production sessions established before this guard
+  // have no binding yet. Canonical /auth/me may seed it once; dev remains
+  // fail-closed so the reported localhost Admin cookie is removed immediately.
+  return bindAuthSessionIdentity(accessToken, user) ? "match" : "mismatch";
 };
 
 /**
@@ -620,7 +651,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           if (isPendingHrLinkUser(user)) {
-            storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+            establishExplicitAuthSession(
+              accessToken,
+              refreshToken,
+              rememberMe,
+              user,
+            );
             resetAuthFailureState();
             resetAuthIdentityGuard();
 
@@ -642,7 +678,12 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+          establishExplicitAuthSession(
+            accessToken,
+            refreshToken,
+            rememberMe,
+            user,
+          );
           resetAuthFailureState();
           // A fresh, validated token+user pair is now in sync — re-arm the
           // one-shot identity guard so a future account switch is detectable.
@@ -967,6 +1008,8 @@ export const useAuthStore = create<AuthState>()(
 
         refreshUser: async (): Promise<User | null> => {
           const token = getAccessToken();
+          const isCompletingRequiredPasswordChange =
+            get().authStatus === "password_change_required";
 
           if (!token) {
             set({
@@ -990,6 +1033,21 @@ export const useAuthStore = create<AuthState>()(
 
           try {
             const user = await fetchCurrentUser();
+            if (
+              isCompletingRequiredPasswordChange &&
+              !bindAuthSessionIdentity(token, user)
+            ) {
+              runClientLogoutCleanup("password_change_identity_mismatch");
+              set({
+                user: null,
+                authStatus: "anonymous",
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                isBootstrappingAuth: false,
+              });
+              return null;
+            }
             const blockedStatus = resolveBlockedStatusFromUser(user);
 
             if (blockedStatus) {
@@ -1192,6 +1250,31 @@ export const useAuthStore = create<AuthState>()(
             if (accessToken) {
               try {
                 const user = await fetchCurrentUser();
+                const identityStatus = validateBootstrapIdentity(
+                  accessToken,
+                  user,
+                );
+                if (identityStatus !== "match") {
+                  runCurrentTabIdentityMismatchCleanup(
+                    `bootstrap_identity_${identityStatus}`,
+                  );
+                  set({
+                    user: null,
+                    authStatus: "anonymous",
+                    isBootstrappingAuth: false,
+                    activationContext: null,
+                    lockedAccount: null,
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: null,
+                  });
+                  return;
+                }
                 const blockedStatus = resolveBlockedStatusFromUser(user);
 
                 if (blockedStatus) {
@@ -1299,6 +1382,31 @@ export const useAuthStore = create<AuthState>()(
               if (bootstrapToken) {
                 try {
                   const user = await fetchCurrentUser();
+                  const identityStatus = validateBootstrapIdentity(
+                    bootstrapToken,
+                    user,
+                  );
+                  if (identityStatus !== "match") {
+                    runCurrentTabIdentityMismatchCleanup(
+                      `bootstrap_refresh_identity_${identityStatus}`,
+                    );
+                    set({
+                      user: null,
+                      authStatus: "anonymous",
+                      isBootstrappingAuth: false,
+                      activationContext: null,
+                      lockedAccount: null,
+                      pendingVerificationEmail: null,
+                      pendingVerificationSource: null,
+                      emailVerificationChallenge: null,
+                      isAuthenticated: false,
+                      isLoading: false,
+                      isInitialized: true,
+                      registrationStatus: "idle",
+                      error: null,
+                    });
+                    return;
+                  }
                   const blockedStatus = resolveBlockedStatusFromUser(user);
 
                   if (blockedStatus) {

@@ -199,7 +199,29 @@ export const clearTokens = (): void => {
   setAuthSessionActive(false);
   localStorage.removeItem(AUTH_CONFIG.USER_KEY);
   localStorage.removeItem(AUTH_CONFIG.REMEMBER_ME_KEY);
+  localStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
   sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
+};
+
+/**
+ * Drop only this document's credentials after a cross-account mismatch.
+ * Shared cookie markers/localStorage may belong to a newer login in another
+ * tab and must remain untouched.
+ */
+export const clearCurrentTabTokens = (): void => {
+  inMemoryAccessToken = null;
+  if (!isBrowser()) return;
+
+  sessionStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  // Keep this tab fail-closed across another F5. A later explicit login
+  // replaces the sentinel with its validated principal binding.
+  sessionStorage.setItem(
+    AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY,
+    AUTH_CONFIG.AUTH_SESSION_MISMATCH_SENTINEL,
+  );
 };
 
 export const parseMustChangePasswordFromToken = (token: string): boolean => {

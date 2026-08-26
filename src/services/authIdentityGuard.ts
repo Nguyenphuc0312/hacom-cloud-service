@@ -17,6 +17,7 @@
  */
 
 import { parseJwtPayload } from "../utils/jwtHelpers";
+import { AUTH_CONFIG } from "../config";
 
 export interface TokenIdentity {
   authUserId: string | null;
@@ -66,6 +67,38 @@ export interface CurrentUserIdentityLike {
   email?: string | null;
 }
 
+export type AuthSessionIdentityStatus = "match" | "missing" | "mismatch";
+
+const normalizeUserId = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+
+const canUseBrowserStorage = (): boolean =>
+  typeof window !== "undefined" &&
+  typeof localStorage !== "undefined" &&
+  typeof sessionStorage !== "undefined";
+
+/** Return the principal explicitly established by a successful login flow. */
+export const getBoundAuthSessionUserId = (): string | null => {
+  if (!canUseBrowserStorage()) return null;
+  return (
+    normalizeUserId(
+      sessionStorage.getItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY),
+    ) ||
+    normalizeUserId(
+      localStorage.getItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY),
+    )
+  );
+};
+
+/** Remove the browser-session principal binding during every logout cleanup. */
+export const clearBoundAuthSessionIdentity = (): void => {
+  if (!canUseBrowserStorage()) return;
+  localStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
+};
+
 /**
  * Compare a token's identity against the in-app current user. Mismatch is
  * reported ONLY when a field present on BOTH sides disagrees (authUserId
@@ -98,6 +131,46 @@ export const compareIdentity = (
     return { ...base, mismatch: tokenIdentity.email !== userEmail };
   }
   return base;
+};
+
+/**
+ * Bind a fresh explicit login/QR/activation result to its canonical user.
+ * A token/user mismatch is rejected before the pair can become session state.
+ */
+export const bindAuthSessionIdentity = (
+  token: string | null | undefined,
+  user: CurrentUserIdentityLike | null | undefined,
+): boolean => {
+  if (!canUseBrowserStorage()) return true;
+
+  const userId = normalizeUserId(user?.id);
+  if (!userId || userId === "unknown-user") return false;
+  if (compareIdentity(token, user).mismatch) return false;
+
+  localStorage.setItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY, userId);
+  // Per-tab binding wins on reload. Another tab may explicitly log in as a
+  // different account and replace the origin-wide cookie/local fallback, but
+  // it must not rewrite this tab's expected principal.
+  sessionStorage.setItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY, userId);
+  return true;
+};
+
+/**
+ * A reload may restore only the principal that established this browser
+ * session. Missing bindings fail closed once so legacy sessions re-authenticate
+ * instead of silently adopting whichever account a shared refresh cookie owns.
+ */
+export const validateBoundAuthSessionIdentity = (
+  token: string | null | undefined,
+  user: CurrentUserIdentityLike | null | undefined,
+): AuthSessionIdentityStatus => {
+  const expectedUserId = getBoundAuthSessionUserId();
+  if (!expectedUserId) return "missing";
+
+  const actualUserId = normalizeUserId(user?.id);
+  if (!actualUserId || actualUserId !== expectedUserId) return "mismatch";
+  if (compareIdentity(token, user).mismatch) return "mismatch";
+  return "match";
 };
 
 // ── One-shot mismatch reporting ────────────────────────────────────────────

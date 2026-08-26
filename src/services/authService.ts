@@ -1,4 +1,8 @@
 import axios from "axios";
+import {
+  PUBLIC_CHAT_CONTRACT_HEADER,
+  PUBLIC_CHAT_CONTRACT_VERSION,
+} from "@hacom/chat-shared-types/runtime";
 import { buildAuthEndpoint } from "../lib/authPath";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { ROUTE_PATHS } from "../router/paths";
@@ -6,6 +10,7 @@ import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
 import { softNavigate } from "../lib/softNavigator";
 import {
+  clearCurrentTabTokens,
   clearTokens,
   getAccessToken,
   getCsrfToken,
@@ -61,7 +66,7 @@ export const requestServerLogout = async (): Promise<void> => {
     withCredentials: isRefreshTokenCookieMode(),
     headers: {
       "Content-Type": "application/json",
-      "X-Api-Contract": "2",
+      [PUBLIC_CHAT_CONTRACT_HEADER]: PUBLIC_CHAT_CONTRACT_VERSION,
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
     },
@@ -72,6 +77,13 @@ export const runClientLogoutCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
   clearTokens();
+  usePresenceStore.getState().clearAll();
+};
+
+export const runCurrentTabIdentityMismatchCleanup = (reason: string): void => {
+  cancelPendingRequests(`logout:${reason}`);
+  disconnectSocket();
+  clearCurrentTabTokens();
   usePresenceStore.getState().clearAll();
 };
 
