@@ -87,12 +87,7 @@ export const SkeletonButton: React.FC<{
   width?: string | number;
   height?: string | number;
 }> = ({ className, width = 96, height = 36 }) => (
-  <Skeleton
-    className={className}
-    width={width}
-    height={height}
-    rounded="md"
-  />
+  <Skeleton className={className} width={width} height={height} rounded="md" />
 );
 
 export const ConversationItemSkeleton: React.FC<{ compact?: boolean }> = ({
@@ -170,9 +165,7 @@ export const MessageBubbleSkeleton: React.FC<{
     <div
       className={clsx(
         "max-w-[72%] rounded-[var(--chat-bubble-radius)] px-3 py-2",
-        isMe
-          ? "bg-primary/[0.07]"
-          : "bg-surface/80",
+        isMe ? "bg-primary/[0.07]" : "bg-surface/80",
       )}
       style={{ width: toCssSize(width) }}
     >
@@ -206,7 +199,10 @@ export const MessageListSkeleton: React.FC<{
 
   return (
     <div
-      className={clsx("skeleton-stage mx-auto flex w-full max-w-[var(--chat-content-lane)] flex-col gap-1 py-4", className)}
+      className={clsx(
+        "skeleton-stage mx-auto flex w-full max-w-[var(--chat-content-lane)] flex-col gap-1 py-4",
+        className,
+      )}
       aria-busy="true"
     >
       <div className="mb-2 flex justify-center">
@@ -261,9 +257,16 @@ export const ProfileSkeleton: React.FC<{ className?: string }> = ({
       <Skeleton className="mb-4 h-4" width={144} rounded="sm" />
       <div className="space-y-4">
         {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="grid grid-cols-[9rem_minmax(0,1fr)] gap-4">
+          <div
+            key={index}
+            className="grid grid-cols-[9rem_minmax(0,1fr)] gap-4"
+          >
             <Skeleton className="h-3.5" width="72%" rounded="sm" />
-            <Skeleton className="h-3.5" width={index % 2 ? "52%" : "78%"} rounded="sm" />
+            <Skeleton
+              className="h-3.5"
+              width={index % 2 ? "52%" : "78%"}
+              rounded="sm"
+            />
           </div>
         ))}
       </div>
@@ -276,30 +279,51 @@ export const UserProfileSkeleton = ProfileSkeleton;
 export const SettingsSkeleton: React.FC<{ className?: string }> = ({
   className,
 }) => (
-  <div
-    className={clsx("grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)] bg-background", className)}
+  <section
+    className={clsx("app-page-shell h-full", className)}
+    data-skeleton-variant="settings"
     aria-busy="true"
   >
-    <aside className="border-r border-border bg-surface p-4">
-      <Skeleton className="h-6" width={92} rounded="sm" />
-      <Skeleton className="mt-4 h-10 w-full" rounded="md" />
-      <div className="mt-5 space-y-2">
-        {Array.from({ length: 7 }).map((_, index) => (
-          <div key={index} className="flex items-center gap-3 rounded-lg px-2 py-2">
-            <SkeletonCircle size={28} className="rounded-md" />
-            <Skeleton className="h-4" width={index % 2 ? "54%" : "68%"} rounded="sm" />
+    <header className="app-page-header">
+      <div className="app-page-header__inner">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-5" width={120} rounded="sm" />
+          <Skeleton className="h-3" width={240} rounded="sm" />
+        </div>
+        <SkeletonButton width={116} height={36} />
+      </div>
+    </header>
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-background p-4 sm:p-5 lg:p-6">
+      <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-[17rem_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside className="hidden overflow-hidden rounded-[var(--hc-radius-lg)] border border-border bg-surface p-4 md:block">
+          <Skeleton className="h-6" width={92} rounded="sm" />
+          <Skeleton className="mt-4 h-10 w-full" rounded="md" />
+          <div className="mt-5 space-y-2">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 rounded-lg px-2 py-2"
+              >
+                <SkeletonCircle size={28} className="rounded-md" />
+                <Skeleton
+                  className="h-4"
+                  width={index % 2 ? "54%" : "68%"}
+                  rounded="sm"
+                />
+              </div>
+            ))}
           </div>
-        ))}
+        </aside>
+        <main className="min-w-0 overflow-hidden rounded-[var(--hc-radius-lg)] border border-border bg-surface px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="max-w-[880px] space-y-5">
+            <Skeleton className="h-7" width={180} rounded="sm" />
+            <Skeleton className="h-4 max-w-full" width={360} rounded="sm" />
+            <ProfileSkeleton className="p-0" />
+          </div>
+        </main>
       </div>
-    </aside>
-    <main className="min-w-0 overflow-y-auto px-8 py-7">
-      <div className="max-w-[880px] space-y-5">
-        <Skeleton className="h-7" width={180} rounded="sm" />
-        <Skeleton className="h-4" width={360} rounded="sm" />
-        <ProfileSkeleton className="p-0" />
-      </div>
-    </main>
-  </div>
+    </div>
+  </section>
 );
 
 export const TableSkeleton: React.FC<{
@@ -317,7 +341,13 @@ export const TableSkeleton: React.FC<{
   showAvatar = false,
   showActions = true,
 }) => (
-  <div className={clsx("rounded-[var(--hc-radius-lg)] border border-border bg-surface", className)} aria-busy="true">
+  <div
+    className={clsx(
+      "rounded-[var(--hc-radius-lg)] border border-border bg-surface",
+      className,
+    )}
+    aria-busy="true"
+  >
     <div
       className="grid gap-4 border-b border-border px-4 py-3"
       style={{
@@ -327,7 +357,12 @@ export const TableSkeleton: React.FC<{
       {showCheckbox && <Skeleton className="h-4 w-4" rounded="sm" />}
       {showAvatar && <span />}
       {Array.from({ length: columns }).map((_, index) => (
-        <Skeleton key={index} className="h-3.5" width={index === 0 ? "70%" : "52%"} rounded="sm" />
+        <Skeleton
+          key={index}
+          className="h-3.5"
+          width={index === 0 ? "70%" : "52%"}
+          rounded="sm"
+        />
       ))}
       {showActions && <span />}
     </div>
@@ -359,9 +394,15 @@ export const CardGridSkeleton: React.FC<{
   className?: string;
   count?: number;
 }> = ({ className, count = 6 }) => (
-  <div className={clsx("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)} aria-busy="true">
+  <div
+    className={clsx("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)}
+    aria-busy="true"
+  >
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="rounded-[var(--hc-radius-lg)] border border-border bg-surface p-4">
+      <div
+        key={index}
+        className="rounded-[var(--hc-radius-lg)] border border-border bg-surface p-4"
+      >
         <Skeleton className="aspect-video w-full" rounded="lg" />
         <Skeleton className="mt-4 h-4" width="72%" rounded="sm" />
         <Skeleton className="mt-2 h-3.5" width="54%" rounded="sm" />
@@ -374,13 +415,20 @@ export const NotificationListSkeleton: React.FC<{
   className?: string;
   count?: number;
 }> = ({ className, count = 5 }) => (
-  <div className={clsx("divide-y divide-border/60", className)} aria-busy="true">
+  <div
+    className={clsx("divide-y divide-border/60", className)}
+    aria-busy="true"
+  >
     {Array.from({ length: count }).map((_, index) => (
       <div key={index} className="flex gap-3 px-4 py-3">
         <SkeletonCircle size={40} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <Skeleton className="h-4" width={index % 2 ? "48%" : "62%"} rounded="sm" />
+            <Skeleton
+              className="h-4"
+              width={index % 2 ? "48%" : "62%"}
+              rounded="sm"
+            />
             <Skeleton className="h-3" width={40} rounded="sm" />
           </div>
           <SkeletonText
@@ -401,15 +449,205 @@ export const DirectorySkeleton: React.FC<{
 }> = ({ className, count = 6 }) => (
   <div className={clsx("space-y-1", className)} aria-busy="true">
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="flex min-h-[64px] items-center gap-3 rounded-[var(--hc-radius-lg)] px-3 py-2.5">
+      <div
+        key={index}
+        className="flex min-h-[64px] items-center gap-3 rounded-[var(--hc-radius-lg)] px-3 py-2.5"
+      >
         <SkeletonCircle size={40} />
         <div className="min-w-0 flex-1">
-          <Skeleton className="h-4" width={index % 2 ? "44%" : "58%"} rounded="sm" />
-          <Skeleton className="mt-2 h-3" width={index % 3 ? "62%" : "76%"} rounded="sm" />
+          <Skeleton
+            className="h-4"
+            width={index % 2 ? "44%" : "58%"}
+            rounded="sm"
+          />
+          <Skeleton
+            className="mt-2 h-3"
+            width={index % 3 ? "62%" : "76%"}
+            rounded="sm"
+          />
         </div>
         <SkeletonButton width={72} height={30} />
       </div>
     ))}
+  </div>
+);
+
+export type AppRouteSkeletonVariant =
+  "list" | "table" | "calendar" | "content" | "workspace";
+
+export const AppRouteSkeleton: React.FC<{
+  className?: string;
+  variant?: AppRouteSkeletonVariant;
+}> = ({ className, variant = "list" }) => {
+  const header = (
+    <header className="app-page-header">
+      <div className="app-page-header__inner">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-5" width={148} rounded="sm" />
+          <Skeleton className="h-3 max-w-[55vw]" width={280} rounded="sm" />
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <SkeletonButton className="hidden sm:block" width={92} height={36} />
+          <SkeletonButton width={108} height={36} />
+        </div>
+      </div>
+    </header>
+  );
+
+  let content: React.ReactNode;
+
+  if (variant === "calendar") {
+    content = (
+      <div className="app-page-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-border p-4">
+          <SkeletonButton width={88} height={36} />
+          <Skeleton className="h-5" width={164} rounded="sm" />
+          <div className="flex-1" />
+          <SkeletonButton width={112} height={36} />
+        </div>
+        <div className="grid min-h-0 flex-1 grid-cols-7">
+          {Array.from({ length: 35 }).map((_, index) => (
+            <div
+              key={index}
+              className="min-h-16 border-b border-r border-border/60 p-2"
+            >
+              <SkeletonCircle size={18} />
+              {index % 5 === 0 ? (
+                <Skeleton className="mt-3 h-5 w-full" rounded="sm" />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  } else if (variant === "content") {
+    content = (
+      <div className="app-page-panel mx-auto w-full max-w-4xl overflow-hidden p-5 sm:p-7">
+        <Skeleton className="h-7" width="42%" rounded="sm" />
+        <SkeletonText
+          className="mt-4"
+          lines={3}
+          widths={["94%", "88%", "68%"]}
+        />
+        <div className="mt-7 space-y-5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="border-t border-border/70 pt-5">
+              <Skeleton
+                className="h-5"
+                width={index % 2 ? "38%" : "52%"}
+                rounded="sm"
+              />
+              <SkeletonText
+                className="mt-3"
+                lines={2}
+                widths={["92%", "64%"]}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  } else if (variant === "workspace") {
+    content = (
+      <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside className="app-page-panel hidden min-h-0 p-4 md:block">
+          <Skeleton className="h-10 w-full" rounded="md" />
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 py-2">
+                <SkeletonCircle size={32} />
+                <Skeleton
+                  className="h-4"
+                  width={index % 2 ? "58%" : "72%"}
+                  rounded="sm"
+                />
+              </div>
+            ))}
+          </div>
+        </aside>
+        <main className="app-page-panel min-h-0 p-5 sm:p-7">
+          <Skeleton className="h-7" width="36%" rounded="sm" />
+          <SkeletonText className="mt-4" lines={2} widths={["72%", "48%"]} />
+          <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-[var(--hc-radius-lg)] border border-border p-4"
+              >
+                <SkeletonCircle size={36} />
+                <Skeleton className="mt-4 h-4" width="64%" rounded="sm" />
+                <Skeleton className="mt-3 h-3" width="82%" rounded="sm" />
+              </div>
+            ))}
+          </div>
+        </main>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="app-page-panel min-h-0 flex-1 overflow-hidden">
+        <div className="flex gap-3 border-b border-border p-4">
+          <Skeleton className="h-10 min-w-0 flex-1" rounded="md" />
+          <SkeletonButton width={104} height={40} />
+        </div>
+        {variant === "table" ? (
+          <TableSkeleton
+            className="rounded-none border-0"
+            rows={7}
+            columns={4}
+            showAvatar
+          />
+        ) : (
+          <DirectorySkeleton className="p-2" count={7} />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={clsx("app-page-shell h-full", className)}
+      data-skeleton-variant={variant}
+      aria-busy="true"
+    >
+      {header}
+      <div className="app-page-body">{content}</div>
+    </section>
+  );
+};
+
+export const AuthPageSkeleton: React.FC<{ className?: string }> = ({
+  className,
+}) => (
+  <div
+    className={clsx(
+      "grid h-[var(--app-dvh)] min-h-[36rem] w-full bg-background lg:grid-cols-[minmax(0,1fr)_minmax(28rem,42%)]",
+      className,
+    )}
+    data-skeleton-variant="auth"
+    aria-busy="true"
+  >
+    <div className="hidden bg-[hsl(var(--color-chat-canvas))] p-10 lg:flex lg:flex-col lg:justify-end">
+      <Skeleton className="h-8" width="48%" rounded="sm" />
+      <SkeletonText
+        className="mt-4 max-w-xl"
+        lines={2}
+        widths={["88%", "62%"]}
+      />
+      <Skeleton className="mt-8 h-1" width="54%" rounded="full" />
+    </div>
+    <div className="flex items-center justify-center bg-surface px-5 py-10 sm:px-10">
+      <div className="w-full max-w-md rounded-[var(--hc-radius-xl)] border border-border bg-surface p-6 sm:p-8">
+        <Skeleton className="mx-auto h-14 w-28" rounded="lg" />
+        <Skeleton className="mt-8 h-6" width="58%" rounded="sm" />
+        <Skeleton className="mt-3 h-4" width="76%" rounded="sm" />
+        <div className="mt-7 space-y-4">
+          <Skeleton className="h-11 w-full" rounded="md" />
+          <Skeleton className="h-11 w-full" rounded="md" />
+          <Skeleton className="h-11 w-full" rounded="md" />
+        </div>
+      </div>
+    </div>
   </div>
 );
 

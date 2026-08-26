@@ -21,9 +21,13 @@ describe("loading states", () => {
     const { container } = render(<PageSpinner message="Đang mở trang" />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Đang mở trang");
-    expect(container.querySelector(".app-loading-progress")).toBeInTheDocument();
+    expect(
+      container.querySelector(".app-loading-progress"),
+    ).toBeInTheDocument();
     expect(container.querySelector(".hc-side-rail")).not.toBeInTheDocument();
-    expect(container.querySelector("[aria-busy='true']")).not.toBeInTheDocument();
+    expect(
+      container.querySelector("[aria-busy='true']"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the chat workspace skeleton inside the persistent app rail", () => {
@@ -34,7 +38,7 @@ describe("loading states", () => {
     expect(container.querySelectorAll(".skeleton").length).toBeLessThan(75);
   });
 
-  it("fills chat route loading with the workspace skeleton", () => {
+  it("uses layout-matched skeletons instead of a route spinner", () => {
     const { container, rerender } = render(
       <AuthenticatedRouteFallback pathname="/chat/conversation-id" />,
     );
@@ -46,10 +50,32 @@ describe("loading states", () => {
 
     rerender(<AuthenticatedRouteFallback pathname="/settings" />);
 
+    expect(container.querySelector("[aria-busy='true']")).toBeInTheDocument();
     expect(
-      container.querySelector("[aria-busy='true']"),
+      container.querySelector("[data-skeleton-variant='settings']"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".app-loading-progress"),
     ).not.toBeInTheDocument();
-    expect(container.querySelector(".app-loading-progress")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/friends", "list"],
+    ["/tasks", "table"],
+    ["/calendar", "calendar"],
+    ["/ai-assistant", "workspace"],
+    ["/help", "content"],
+  ])("maps %s to the %s skeleton", (pathname, variant) => {
+    const { container } = render(
+      <AuthenticatedRouteFallback pathname={pathname} />,
+    );
+
+    expect(
+      container.querySelector(`[data-skeleton-variant='${variant}']`),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".app-loading-progress"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the full chat shell stable while authentication loads", () => {
@@ -71,5 +97,22 @@ describe("loading states", () => {
     expect(
       container.querySelector(".app-loading-progress"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the app rail stable on non-chat routes while auth loads", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <AuthenticatedRouteFallback
+          pathname="/settings"
+          includeNavigationRail
+          label="Đang kiểm tra phiên đăng nhập"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(container.querySelectorAll(".hc-side-rail")).toHaveLength(1);
+    expect(
+      container.querySelector("[data-skeleton-variant='settings']"),
+    ).toBeInTheDocument();
   });
 });
