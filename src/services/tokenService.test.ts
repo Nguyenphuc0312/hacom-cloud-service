@@ -108,4 +108,30 @@ describe("tokenService remember-me persistence", () => {
     expect(sessionStorage.getItem("accessToken")).toBeNull();
     expect(localStorage.getItem("accessToken")).toBeNull();
   });
+
+  it("clears the bound session principal on logout", async () => {
+    localStorage.setItem("authSessionUserId", "user-A");
+    sessionStorage.setItem("authSessionUserId", "user-A");
+    const tokenService = await importTokenService();
+
+    tokenService.clearTokens();
+
+    expect(localStorage.getItem("authSessionUserId")).toBeNull();
+    expect(sessionStorage.getItem("authSessionUserId")).toBeNull();
+  });
+
+  it("can clear only the mismatched tab without erasing another tab's session", async () => {
+    sessionStorage.setItem("authSessionUserId", "user-A");
+    localStorage.setItem("authSessionUserId", "user-B");
+    localStorage.setItem("authSessionActive", "true");
+    const tokenService = await importTokenService();
+
+    tokenService.clearCurrentTabTokens();
+
+    expect(sessionStorage.getItem("authSessionUserId")).toBe(
+      "__identity_mismatch__",
+    );
+    expect(localStorage.getItem("authSessionUserId")).toBe("user-B");
+    expect(localStorage.getItem("authSessionActive")).toBe("true");
+  });
 });

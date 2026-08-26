@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  bindAuthSessionIdentity,
+  clearBoundAuthSessionIdentity,
   compareIdentity,
+  getBoundAuthSessionUserId,
   getTokenIdentity,
   reportAuthIdentityMismatch,
   resetAuthIdentityGuard,
   setAuthIdentityMismatchHandler,
+  validateBoundAuthSessionIdentity,
   type IdentityComparison,
 } from "./authIdentityGuard";
 
@@ -57,6 +61,71 @@ describe("compareIdentity", () => {
     expect(compareIdentity(null, { id: "user-A" }).mismatch).toBe(false);
     expect(compareIdentity(makeToken({ authUserId: "u" }), null).mismatch).toBe(false);
     expect(compareIdentity(makeToken({ authUserId: "u" }), {}).mismatch).toBe(false);
+  });
+});
+
+describe("browser auth-session identity binding", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it("binds an explicit login and accepts only the same principal on reload", () => {
+    const token = makeToken({ authUserId: "user-A", email: "a@hacom.vn" });
+
+    expect(
+      bindAuthSessionIdentity(token, { id: "user-A", email: "a@hacom.vn" }),
+    ).toBe(true);
+    expect(getBoundAuthSessionUserId()).toBe("user-A");
+    expect(
+      validateBoundAuthSessionIdentity(token, {
+        id: "user-A",
+        email: "a@hacom.vn",
+      }),
+    ).toBe("match");
+  });
+
+  it("rejects a valid refreshed token and /me response for another account", () => {
+    const tokenA = makeToken({ authUserId: "user-A" });
+    const tokenB = makeToken({ authUserId: "system-super-admin" });
+    expect(bindAuthSessionIdentity(tokenA, { id: "user-A" })).toBe(true);
+
+    expect(
+      validateBoundAuthSessionIdentity(tokenB, {
+        id: "system-super-admin",
+      }),
+    ).toBe("mismatch");
+  });
+
+  it("keeps each tab bound when another tab replaces the persistent account", () => {
+    sessionStorage.setItem("authSessionUserId", "user-A");
+    localStorage.setItem("authSessionUserId", "system-super-admin");
+
+    expect(getBoundAuthSessionUserId()).toBe("user-A");
+    expect(
+      validateBoundAuthSessionIdentity(
+        makeToken({ authUserId: "system-super-admin" }),
+        { id: "system-super-admin" },
+      ),
+    ).toBe("mismatch");
+  });
+
+  it("fails closed for a legacy session without a principal binding", () => {
+    expect(
+      validateBoundAuthSessionIdentity(makeToken({ authUserId: "user-A" }), {
+        id: "user-A",
+      }),
+    ).toBe("missing");
+  });
+
+  it("clears the binding during logout cleanup", () => {
+    expect(
+      bindAuthSessionIdentity(makeToken({ authUserId: "user-A" }), {
+        id: "user-A",
+      }),
+    ).toBe(true);
+    clearBoundAuthSessionIdentity();
+    expect(getBoundAuthSessionUserId()).toBeNull();
   });
 });
 

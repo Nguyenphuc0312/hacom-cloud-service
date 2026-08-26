@@ -335,6 +335,10 @@ export const AUTH_CONFIG = {
   USER_KEY: "user",
   REMEMBER_ME_KEY: "rememberMe",
   AUTH_SESSION_ACTIVE_KEY: "authSessionActive",
+  // Minimal principal binding used to prevent a refresh cookie from silently
+  // switching an already-established browser session to another account.
+  AUTH_SESSION_IDENTITY_KEY: "authSessionUserId",
+  AUTH_SESSION_MISMATCH_SENTINEL: "__identity_mismatch__",
 };
 
 // Pagination
