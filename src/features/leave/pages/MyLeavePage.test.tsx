@@ -149,6 +149,33 @@ describe("MyLeavePage — leave request payload", () => {
     expect(await screen.findByText("Từ ký hiệu OM")).toBeTruthy();
   });
 
+  it("labels a reconciled annual balance as live HRM truth", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: 12,
+          usedDays: 2,
+          pendingDays: 0.5,
+          remainingDays: 9.5,
+          source: "RECONCILED_LEDGER",
+          balanceStatus: "RECONCILED",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("Số dư đã đối chiếu trên HRM")).toBeTruthy();
+    expect(screen.getByText("Quỹ phép đã đối chiếu")).toBeTruthy();
+    expect(screen.queryByText("Số dư đang được HR đối chiếu")).toBeNull();
+  });
+
   it("sends the half-day sessions so the server can derive a half day", async () => {
     const user = userEvent.setup();
     render(<MyLeavePage />);
@@ -203,5 +230,25 @@ describe("MyLeavePage — leave request payload", () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("liên hệ HR");
+  });
+
+  it("explains that an annual leave request crossing years needs HR confirmation", async () => {
+    const user = userEvent.setup();
+    createMyLeaveRequest.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: "ANNUAL_LEAVE_CROSS_YEAR_REQUIRES_HR_CONFIRMATION",
+        },
+      },
+    });
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(MON));
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("tách kỳ phép");
   });
 });

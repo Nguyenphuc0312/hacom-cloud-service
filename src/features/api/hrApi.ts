@@ -365,7 +365,11 @@ export interface LeaveBalance {
 export interface MyLeaveResponse {
   year: number;
   employeeId: string | null;
-  mode: "TRIAL_PENDING_CSV_RECONCILIATION" | "EMPLOYEE_NOT_LINKED" | string;
+  mode:
+    | "LIVE"
+    | "TRIAL_PENDING_CSV_RECONCILIATION"
+    | "EMPLOYEE_NOT_LINKED"
+    | string;
   balances: LeaveBalance[];
   requests: LeaveRequest[];
   reason?: "EMPLOYEE_NOT_LINKED" | string;
