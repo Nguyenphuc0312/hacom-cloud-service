@@ -12,22 +12,26 @@ const HACoM_IMAGES = [
   {
     src: "/hacom-imperial-dalat.jpg",
     title: "Hacom Imperial Dalat",
-    subtitle: "Dự án nổi bật tại Đà Lạt - Kiến trúc tân cổ điển sang trọng giữa ngàn hoa",
+    subtitle:
+      "Dự án nổi bật tại Đà Lạt - Kiến trúc tân cổ điển sang trọng giữa ngàn hoa",
   },
   {
     src: "/hacom-riverside.jpg",
     title: "Hacom Riverside",
-    subtitle: "Không gian sống hiện đại bên sông - Nơi hội tụ tinh hoa và đẳng cấp thượng lưu",
+    subtitle:
+      "Không gian sống hiện đại bên sông - Nơi hội tụ tinh hoa và đẳng cấp thượng lưu",
   },
   {
     src: "/hacom-tower.jpg",
     title: "Hacom Tower",
-    subtitle: "Biểu tượng mới của thành phố - Tòa cao ốc phức hợp hiện đại bậc nhất",
+    subtitle:
+      "Biểu tượng mới của thành phố - Tòa cao ốc phức hợp hiện đại bậc nhất",
   },
   {
     src: "/hacom-wind.jpg",
     title: "Hacom Wind",
-    subtitle: "Năng lượng xanh cho tương lai - Kiến tạo giá trị bền vững cho thế hệ mai sau",
+    subtitle:
+      "Năng lượng xanh cho tương lai - Kiến tạo giá trị bền vững cho thế hệ mai sau",
   },
 ];
 
@@ -81,7 +85,10 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
         <div className="relative z-10 p-10" />
 
         {/* Dynamic Content */}
-        <div className="relative z-10 text-white max-w-2xl" style={{ padding: "clamp(24px, 4dvh, 64px) clamp(24px, 4vw, 64px)" }}>
+        <div
+          className="relative z-10 text-white max-w-2xl"
+          style={{ padding: "clamp(24px, 4dvh, 64px) clamp(24px, 4vw, 64px)" }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={currentIndex}
@@ -105,24 +112,43 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
             </motion.div>
           </AnimatePresence>
 
-          {/* Premium Progress Indicators */}
-          <div className="mt-8 flex gap-3">
-            {HACoM_IMAGES.map((_, idx) => (
+          {/* Labeled project navigation */}
+          <div
+            className="mt-8 grid grid-cols-4 gap-3"
+            aria-label="Chọn dự án nổi bật"
+          >
+            {HACoM_IMAGES.map((image, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => setCurrentIndex(idx)}
-                className="group relative h-1 flex-1 overflow-hidden rounded-full bg-white/20 transition-all hover:bg-white/30"
+                aria-label={`Xem ${image.title}`}
+                aria-current={idx === currentIndex ? "true" : undefined}
+                className="group min-w-0 rounded-lg py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
               >
-                {idx === currentIndex && (
-                  <motion.div
-                    layoutId="progress-bar"
-                    className="absolute inset-0 bg-white"
-                    initial={{ scaleX: 0, originX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ duration: 5, ease: "linear" }}
-                  />
-                )}
-                {idx < currentIndex && <div className="absolute inset-0 bg-white/60" />}
+                <span
+                  className={`block truncate text-xs font-medium transition-colors ${
+                    idx === currentIndex
+                      ? "text-white"
+                      : "text-white/65 group-hover:text-white"
+                  }`}
+                >
+                  {image.title.replace("Hacom ", "")}
+                </span>
+                <span className="relative mt-2 block h-1 overflow-hidden rounded-full bg-white/20 transition-colors group-hover:bg-white/30">
+                  {idx === currentIndex && (
+                    <motion.span
+                      layoutId="progress-bar"
+                      className="absolute inset-0 block bg-white"
+                      initial={{ scaleX: 0, originX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ duration: 5, ease: "linear" }}
+                    />
+                  )}
+                  {idx < currentIndex && (
+                    <span className="absolute inset-0 block bg-white/60" />
+                  )}
+                </span>
               </button>
             ))}
           </div>

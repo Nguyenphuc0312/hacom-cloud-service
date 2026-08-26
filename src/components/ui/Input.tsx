@@ -118,8 +118,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="rounded text-text-muted transition-colors hover:text-text-secondary focus:outline-none"
-                tabIndex={-1}
+                aria-label={
+                  showPassword
+                    ? t("common:actions.hidePassword")
+                    : t("common:actions.showPassword")
+                }
+                className="-mr-2 flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 {showPassword ? (
                   <EyeSlashIcon className="h-5 w-5" />
