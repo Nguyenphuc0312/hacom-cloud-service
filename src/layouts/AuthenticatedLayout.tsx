@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPalette } from "../components/layout/CommandPalette";
 import { COMMAND_PALETTE_OPEN_EVENT } from "../lib/commandPalette";
 import { useAuthStore } from "../stores";
@@ -12,6 +12,7 @@ import {
 } from "../features/chat/events/chatUiEvents";
 import { useReminderStore } from "../stores/reminderStore";
 import { useFriendshipStore } from "../stores/friendshipStore";
+import { AuthenticatedRouteFallback } from "./AuthenticatedRouteFallback";
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
@@ -19,6 +20,7 @@ import { useFriendshipStore } from "../stores/friendshipStore";
  */
 export const AuthenticatedLayout: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
   const checkReminder = useReminderStore((s) => s.checkReminder);
@@ -96,7 +98,11 @@ export const AuthenticatedLayout: React.FC = () => {
             onCurrentUserClick={() => navigate(ROUTE_PATHS.SETTINGS)}
           />
           <div className="private-app-route">
-            <Suspense fallback={<div className="flex-1" />}>
+            <Suspense
+              fallback={
+                <AuthenticatedRouteFallback pathname={location.pathname} />
+              }
+            >
               <Outlet />
             </Suspense>
           </div>
