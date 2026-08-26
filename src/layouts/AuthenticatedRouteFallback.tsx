@@ -107,6 +107,7 @@ export const AuthenticatedRouteFallback: FC<
   return (
     <div
       className="private-app-shell"
+      data-loading-shell
       role="status"
       aria-label={label}
       aria-busy="true"

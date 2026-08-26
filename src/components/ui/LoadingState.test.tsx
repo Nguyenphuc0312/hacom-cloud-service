@@ -57,6 +57,7 @@ describe("loading states", () => {
     expect(
       container.querySelector(".app-loading-progress"),
     ).not.toBeInTheDocument();
+    expect(container.querySelector("[data-loading-shell]")).toBeInTheDocument();
   });
 
   it.each([

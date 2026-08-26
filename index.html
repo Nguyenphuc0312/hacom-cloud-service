@@ -61,12 +61,34 @@
         min-height: 100%;
         margin: 0;
       }
+      html[data-boot-route="chat"],
+      html[data-boot-route="chat"] body,
+      html[data-boot-route="chat"] #root,
+      html[data-boot-route="app"],
+      html[data-boot-route="app"] body,
+      html[data-boot-route="app"] #root,
+      html[data-boot-route="auth-split"],
+      html[data-boot-route="auth-split"] body,
+      html[data-boot-route="auth-split"] #root,
+      html[data-boot-route="auth-card"],
+      html[data-boot-route="auth-card"] body,
+      html[data-boot-route="auth-card"] #root {
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
       #app-boot-loader {
         position: fixed;
         inset: 0;
         display: grid;
         place-items: center;
         background: #f8fafc;
+      }
+      #app-boot-loader,
+      #app-boot-loader * {
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
       }
       [data-theme="dark"] #app-boot-loader {
         background: #0e0f10;
@@ -81,7 +103,7 @@
         width: 56px;
         height: 56px;
         border-radius: 16px;
-        box-shadow: 0 3px 8px rgb(15 23 42 / 9%);
+        box-shadow: 0 3px 8px rgb(15 23 42 / 9%) !important;
       }
       #app-boot-loader span {
         position: relative;
@@ -149,6 +171,9 @@
       #app-boot-auth,
       #app-boot-auth * {
         box-sizing: border-box;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
       }
       .boot-auth-visual {
         position: relative;
@@ -221,17 +246,17 @@
         padding: clamp(16px, 4dvh, 40px) clamp(12px, 3vw, 40px);
         background: var(--auth-boot-canvas);
       }
-      .boot-auth-card {
+      #app-boot-auth .boot-auth-card {
         width: 100%;
         max-width: clamp(320px, 90vw, 500px);
         padding: clamp(20px, 3.5dvh, 36px) clamp(16px, 4vw, 36px);
-        border: 1px solid var(--auth-boot-border);
+        border: 1px solid var(--auth-boot-border) !important;
         border-radius: 24px;
         background: var(--auth-boot-surface);
-        box-shadow: 0 8px 30px rgb(0 0 0 / 6%);
+        box-shadow: 0 8px 30px rgb(0 0 0 / 6%) !important;
       }
-      [data-theme="dark"] .boot-auth-card {
-        box-shadow: 0 12px 40px rgb(0 0 0 / 50%);
+      [data-theme="dark"] #app-boot-auth .boot-auth-card {
+        box-shadow: 0 12px 40px rgb(0 0 0 / 50%) !important;
       }
       [data-boot-route="auth-card"] .boot-auth-form-pane {
         background: var(--auth-boot-canvas);
