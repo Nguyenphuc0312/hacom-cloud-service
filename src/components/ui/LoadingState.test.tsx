@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AuthenticatedRouteFallback } from "../../layouts/AuthenticatedRouteFallback";
 import { ChatWorkspaceSkeleton } from "./Skeleton";
 import { PageSpinner } from "./Spinner";
 
@@ -26,5 +27,23 @@ describe("loading states", () => {
     expect(container.querySelector("[aria-busy='true']")).toBeInTheDocument();
     expect(container.querySelector(".hc-side-rail")).not.toBeInTheDocument();
     expect(container.querySelectorAll(".skeleton").length).toBeLessThan(75);
+  });
+
+  it("fills chat route loading with the workspace skeleton", () => {
+    const { container, rerender } = render(
+      <AuthenticatedRouteFallback pathname="/chat/conversation-id" />,
+    );
+
+    expect(container.querySelector("[aria-busy='true']")).toBeInTheDocument();
+    expect(
+      container.querySelector(".app-loading-progress"),
+    ).not.toBeInTheDocument();
+
+    rerender(<AuthenticatedRouteFallback pathname="/settings" />);
+
+    expect(
+      container.querySelector("[aria-busy='true']"),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector(".app-loading-progress")).toBeInTheDocument();
   });
 });
