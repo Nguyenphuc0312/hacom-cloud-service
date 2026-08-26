@@ -282,6 +282,18 @@ export type WorkflowStatus =
 
 export type LeaveHalfDaySession = "FULL_DAY" | "MORNING" | "AFTERNOON";
 
+export interface LeaveReplacementEmployee {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+}
+
+export interface LeaveReplacementCandidate extends LeaveReplacementEmployee {
+  employeeAssignments: Array<{
+    department: { id: string; name: string };
+  }>;
+}
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;
@@ -291,6 +303,10 @@ export interface LeaveRequest {
   startHalfDaySession?: LeaveHalfDaySession;
   endHalfDaySession?: LeaveHalfDaySession;
   totalDays: number;
+  annualPaidDays?: number | null;
+  unpaidDays?: number | null;
+  replacementEmployeeId?: string | null;
+  replacementEmployee?: LeaveReplacementEmployee | null;
   reason?: string | null;
   attachmentUrl?: string | null;
   noticeRequiredDays?: number | null;
@@ -391,6 +407,7 @@ export interface CreateMyLeaveRequestPayload {
   totalDays?: number;
   reason?: string;
   attachmentUrl?: string;
+  replacementEmployeeId?: string;
 }
 
 export type AttendanceExplanationType =
@@ -551,6 +568,17 @@ export const hrApi = {
       `/leave/me${query.toString() ? `?${query.toString()}` : ""}`,
     );
     return unwrapHrEnvelope<MyLeaveResponse>(response.data);
+  },
+
+  searchMyLeaveReplacementCandidates: async (
+    search: string,
+    limit = 10,
+  ): Promise<LeaveReplacementCandidate[]> => {
+    const query = new URLSearchParams({ search, limit: String(limit) });
+    const response = await hrApiClient.get(
+      `/leave/me/replacement-candidates?${query.toString()}`,
+    );
+    return unwrapHrEnvelope<LeaveReplacementCandidate[]>(response.data);
   },
 
   createMyLeaveRequest: async (

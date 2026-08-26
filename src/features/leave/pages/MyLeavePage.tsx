@@ -6,6 +6,7 @@ import {
   Check,
   Loader2,
   RefreshCcw,
+  Search,
   Send,
   X,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import {
   type LeaveBalance,
   type LeaveHalfDaySession,
   type LeaveRequest,
+  type LeaveReplacementCandidate,
   type LeaveType,
   type MyLeaveResponse,
   type PendingLeaveApprovalsResponse,
@@ -156,6 +158,18 @@ const extractErrorMessage = (error: unknown) => {
   ) {
     return "Đơn phép năm đi qua hai năm cần HR xác nhận và tách kỳ phép.";
   }
+  if (normalizedMessage.includes("ANNUAL_LEAVE_BALANCE_NOT_RECONCILED")) {
+    return "Quỹ phép năm chưa được HR đối chiếu nên chưa thể gửi đơn.";
+  }
+  if (normalizedMessage.includes("LEAVE_REPLACEMENT_CANNOT_BE_SELF")) {
+    return "Người nhận bàn giao phải là một nhân sự khác.";
+  }
+  if (normalizedMessage.includes("LEAVE_REPLACEMENT_EMPLOYEE_INVALID")) {
+    return "Người nhận bàn giao không còn hợp lệ hoặc không cùng phòng ban.";
+  }
+  if (normalizedMessage.includes("LEAVE_REQUEST_OVERLAPS_APPROVED_LEAVE")) {
+    return "Khoảng nghỉ bị trùng với một đơn đã duyệt của nhân sự.";
+  }
   if (status === 422)
     return "Tài khoản chưa liên kết hồ sơ nhân sự hoặc dữ liệu chưa hợp lệ.";
   if (status === 409) return "Trạng thái đơn nghỉ phép đã thay đổi.";
@@ -229,6 +243,15 @@ const RequestRow: React.FC<{
       <div className="text-xs text-[#64748b]">
         {formatDays(request.totalDays)} ngày
       </div>
+      {request.leaveType === "ANNUAL" ? (
+        <div className="mt-1 flex items-center gap-1 text-xs font-medium text-[#1565C0]">
+          <span>
+            {formatDays(request.annualPaidDays ?? request.totalDays)} P
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{formatDays(request.unpaidDays ?? 0)} KL</span>
+        </div>
+      ) : null}
     </td>
     <td className="min-w-[190px] px-4 py-3 text-sm text-[#475569]">
       {formatDate(request.startDate)} - {formatDate(request.endDate)}
@@ -239,6 +262,12 @@ const RequestRow: React.FC<{
       <NoticeWarning request={request} />
     </td>
     <td className="min-w-[220px] px-4 py-3 text-sm text-[#475569]">
+      {request.replacementEmployee ? (
+        <div className="mt-1 text-xs text-[#64748b]">
+          Bàn giao: {request.replacementEmployee.fullName} ·{" "}
+          {request.replacementEmployee.employeeCode}
+        </div>
+      ) : null}
       {request.reason || "-"}
     </td>
     <td className="px-4 py-3">
@@ -301,6 +330,18 @@ const ApprovalRow: React.FC<{
       {halfDaySessionLabel(request.endHalfDaySession)}
     </div>
     <NoticeWarning request={request} />
+    {request.leaveType === "ANNUAL" ? (
+      <div className="mt-1 text-xs font-medium text-[#1565C0]">
+        Phân bổ: {formatDays(request.annualPaidDays ?? request.totalDays)} P ·{" "}
+        {formatDays(request.unpaidDays ?? 0)} KL
+      </div>
+    ) : null}
+    {request.replacementEmployee ? (
+      <div className="mt-1 text-xs text-[#64748b]">
+        Bàn giao cho {request.replacementEmployee.fullName} ·{" "}
+        {request.replacementEmployee.employeeCode}
+      </div>
+    ) : null}
     {request.reason ? (
       <div className="mt-1 line-clamp-2 text-sm text-[#64748b]">
         {request.reason}
@@ -351,7 +392,13 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     endPortion: "FULL" as LeaveDayPortion,
     reason: "",
     attachmentUrl: "",
+    replacementEmployeeId: "",
   });
+  const [replacementSearch, setReplacementSearch] = React.useState("");
+  const [replacementCandidates, setReplacementCandidates] = React.useState<
+    LeaveReplacementCandidate[]
+  >([]);
+  const [replacementLoading, setReplacementLoading] = React.useState(false);
 
   // Nháp dd/mm/yyyy cho hai ô ngày: giữ nguyên chữ đang gõ dở ("05/0…") thay vì
   // ép về form (form chỉ nhận ISO hợp lệ, nếu không countCalendarLeaveDays sẽ vỡ).
@@ -449,10 +496,54 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     void loadLeave();
   }, [loadLeave]);
 
+  React.useEffect(() => {
+    const search = replacementSearch.trim();
+    if (search.length < 2 || form.replacementEmployeeId) {
+      setReplacementCandidates([]);
+      setReplacementLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setReplacementLoading(true);
+      void hrApi
+        .searchMyLeaveReplacementCandidates(search, 10)
+        .then((items) => {
+          if (!cancelled) setReplacementCandidates(items);
+        })
+        .catch(() => {
+          if (!cancelled) setReplacementCandidates([]);
+        })
+        .finally(() => {
+          if (!cancelled) setReplacementLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [form.replacementEmployeeId, replacementSearch]);
+
   const data = state.data;
   const requests = data?.requests ?? [];
   const balances = data?.balances ?? [];
 
+  const annualRemainingDays = balances.find(
+    (balance) => balance.leaveType === "ANNUAL",
+  )?.remainingDays;
+  const estimatedAnnualAllocation =
+    form.leaveType === "ANNUAL" &&
+    annualRemainingDays !== null &&
+    annualRemainingDays !== undefined
+      ? (() => {
+          const available =
+            Math.floor(Math.max(0, annualRemainingDays) * 2) / 2;
+          const paid = Math.min(estimatedDays, available);
+          return { paid, unpaid: Math.max(0, estimatedDays - paid) };
+        })()
+      : null;
   async function handleCreate() {
     if (estimatedDays <= 0) {
       toast.error("Khoảng ngày nghỉ chưa hợp lệ.");
@@ -464,7 +555,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     }
     setSubmitting(true);
     try {
-      await hrApi.createMyLeaveRequest({
+      const created = await hrApi.createMyLeaveRequest({
         leaveType: form.leaveType,
         startDate: form.startDate,
         endDate: form.endDate,
@@ -472,9 +563,27 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
         endHalfDaySession: toHalfDaySession(form.endPortion),
         reason: form.reason.trim() || undefined,
         attachmentUrl: form.attachmentUrl.trim() || undefined,
+        replacementEmployeeId: form.replacementEmployeeId || undefined,
       });
-      toast.success("Đã gửi đơn nghỉ phép.");
-      setForm((current) => ({ ...current, reason: "", attachmentUrl: "" }));
+      if (
+        created.leaveType === "ANNUAL" &&
+        created.annualPaidDays !== null &&
+        created.annualPaidDays !== undefined
+      ) {
+        toast.success(
+          `Đã gửi đơn: ${formatDays(created.annualPaidDays)} ngày P, ` +
+            `${formatDays(created.unpaidDays ?? 0)} ngày KL.`,
+        );
+      } else {
+        toast.success("Đã gửi đơn nghỉ phép.");
+      }
+      setForm((current) => ({
+        ...current,
+        reason: "",
+        attachmentUrl: "",
+        replacementEmployeeId: "",
+      }));
+      setReplacementSearch("");
       await loadLeave();
     } catch (error) {
       toast.error(extractErrorMessage(error));
@@ -779,6 +888,88 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
                   className="resize-none rounded-lg border border-[#d7dce3] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
                 />
               </label>
+              <div className="grid gap-1">
+                <label
+                  htmlFor="leave-replacement-search"
+                  className="text-sm font-medium text-[#475569]"
+                >
+                  Người nhận bàn giao
+                  <span className="ml-1 text-xs font-normal text-[#94a3b8]">
+                    (không bắt buộc)
+                  </span>
+                </label>
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-3 text-[#94a3b8]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="leave-replacement-search"
+                    type="search"
+                    aria-label="Người nhận bàn giao"
+                    value={replacementSearch}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      setReplacementSearch(next);
+                      setForm((current) => ({
+                        ...current,
+                        replacementEmployeeId: "",
+                      }));
+                    }}
+                    placeholder="Nhập ít nhất 2 ký tự tên hoặc mã nhân sự"
+                    autoComplete="off"
+                    aria-expanded={replacementCandidates.length > 0}
+                    aria-controls="leave-replacement-options"
+                    className="h-10 w-full rounded-lg border border-[#d7dce3] bg-white pl-9 pr-3 text-sm text-[#0f172a] outline-none focus:border-[#1976D2]"
+                  />
+                </div>
+                {replacementLoading ? (
+                  <span className="text-xs text-[#64748b]">
+                    Đang tìm trong phòng ban…
+                  </span>
+                ) : null}
+                {replacementCandidates.length > 0 ? (
+                  <div
+                    id="leave-replacement-options"
+                    role="listbox"
+                    className="max-h-48 overflow-y-auto rounded-lg border border-[#d7dce3] bg-white p-1"
+                  >
+                    {replacementCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        role="option"
+                        aria-selected={
+                          form.replacementEmployeeId === candidate.id
+                        }
+                        className="flex w-full items-start justify-between gap-3 rounded-md px-3 py-2 text-left hover:bg-[#f0f7ff]"
+                        onClick={() => {
+                          setForm((current) => ({
+                            ...current,
+                            replacementEmployeeId: candidate.id,
+                          }));
+                          setReplacementSearch(candidate.fullName);
+                          setReplacementCandidates([]);
+                        }}
+                      >
+                        <span className="text-sm font-medium text-[#0f172a]">
+                          {candidate.fullName}
+                        </span>
+                        <span className="text-xs text-[#64748b]">
+                          {candidate.employeeCode}
+                          {candidate.employeeAssignments[0]?.department.name
+                            ? ` · ${candidate.employeeAssignments[0].department.name}`
+                            : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <span className="text-xs text-[#64748b]">
+                  Hệ thống chỉ tìm nhân sự đang hoạt động trong cùng phòng ban.
+                </span>
+              </div>
               <label className="grid gap-1 text-sm font-medium text-[#475569]">
                 <span className="flex items-center gap-1.5">
                   Chứng từ/URL
@@ -818,6 +1009,18 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
                     Nghỉ ốm từ {SICK_ATTACHMENT_MIN_DAYS} ngày phải có chứng từ
                     đính kèm.
                   </span>
+                ) : null}
+                {estimatedAnnualAllocation ? (
+                  <div className="mt-1 text-xs">
+                    Ước tính nguồn:{" "}
+                    <span className="font-semibold text-[#1565C0]">
+                      {formatDays(estimatedAnnualAllocation.paid)} P
+                    </span>{" "}
+                    ·{" "}
+                    <span className="font-semibold text-amber-700">
+                      {formatDays(estimatedAnnualAllocation.unpaid)} KL
+                    </span>
+                  </div>
                 ) : null}
               </label>
               <div className="rounded-lg border border-[#d7dce3] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">

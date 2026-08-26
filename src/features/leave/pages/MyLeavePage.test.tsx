@@ -7,10 +7,13 @@ const createMyLeaveRequest = vi.fn();
 const getMyLeave = vi.fn();
 const getPendingLeaveApprovals = vi.fn();
 
+const searchMyLeaveReplacementCandidates = vi.fn();
 vi.mock("../../api/hrApi", () => ({
   hrApi: {
     getMyLeave: (...args: unknown[]) => getMyLeave(...args),
     createMyLeaveRequest: (...args: unknown[]) => createMyLeaveRequest(...args),
+    searchMyLeaveReplacementCandidates: (...args: unknown[]) =>
+      searchMyLeaveReplacementCandidates(...args),
     cancelMyLeaveRequest: vi.fn(),
     getPendingLeaveApprovals: (...args: unknown[]) =>
       getPendingLeaveApprovals(...args),
@@ -81,6 +84,7 @@ describe("MyLeavePage — leave request payload", () => {
     getPendingLeaveApprovals.mockResolvedValue(null);
     createMyLeaveRequest.mockResolvedValue({ id: "leave-1" });
   });
+  searchMyLeaveReplacementCandidates.mockResolvedValue([]);
 
   const fillDate = async (
     user: ReturnType<typeof userEvent.setup>,
@@ -281,5 +285,108 @@ describe("MyLeavePage — leave request payload", () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("tách kỳ phép");
+  });
+
+  it("shows the official paid/unpaid allocation returned by HRM", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [],
+      requests: [
+        {
+          id: "leave-1",
+          employeeId: "emp-1",
+          leaveType: "ANNUAL",
+          startDate: iso(THU),
+          endDate: iso(THU),
+          totalDays: 1,
+          annualPaidDays: 0.5,
+          unpaidDays: 0.5,
+          status: "SUBMITTED",
+        },
+      ],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("0,5 P")).toBeTruthy();
+    expect(screen.getByText("0,5 KL")).toBeTruthy();
+  });
+
+  it("labels the P/KL split as an estimate before the server derives workdays", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "LIVE",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: 1,
+          usedDays: 0.5,
+          pendingDays: 0,
+          remainingDays: 0.5,
+          source: "RECONCILED_LEAVE_LEDGER",
+          balanceStatus: "RECONCILED",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText(/Ước tính nguồn/)).toBeTruthy();
+    expect(screen.getByText("0,5 P")).toBeTruthy();
+    expect(screen.getByText("0,5 KL")).toBeTruthy();
+  });
+
+  it("searches within the department and submits the selected handover employee", async () => {
+    const user = userEvent.setup();
+    searchMyLeaveReplacementCandidates.mockResolvedValueOnce([
+      {
+        id: "emp-2",
+        employeeCode: "HC0002",
+        fullName: "Trần An",
+        employeeAssignments: [
+          { department: { id: "dept-1", name: "Phòng Nhân sự" } },
+        ],
+      },
+    ]);
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+
+    await user.type(screen.getByLabelText("Người nhận bàn giao"), "Trần");
+    await waitFor(() =>
+      expect(searchMyLeaveReplacementCandidates).toHaveBeenCalledWith(
+        "Trần",
+        10,
+      ),
+    );
+    await user.click(await screen.findByText("Trần An"));
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(THU));
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(createMyLeaveRequest).toHaveBeenCalled());
+    expect(createMyLeaveRequest.mock.calls[0][0]).toMatchObject({
+      replacementEmployeeId: "emp-2",
+    });
+  });
+
+  it("explains an invalid replacement returned by HRM", async () => {
+    const user = userEvent.setup();
+    createMyLeaveRequest.mockRejectedValueOnce({
+      response: { data: { message: "LEAVE_REPLACEMENT_EMPLOYEE_INVALID" } },
+    });
+    render(<MyLeavePage />);
+    await screen.findByText("Gửi đơn");
+    await fillDate(user, "Từ ngày", vn(THU));
+    await fillDate(user, "Đến ngày", vn(THU));
+
+    await user.click(screen.getByText("Gửi đơn"));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain("cùng phòng ban");
   });
 });
