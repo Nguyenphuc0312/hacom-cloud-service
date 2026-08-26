@@ -118,7 +118,7 @@ const formatDays = (value: number | null | undefined) =>
   value === null || value === undefined ? "-" : value.toLocaleString("vi-VN");
 
 const balanceSourceLabel = (source: LeaveBalance["source"]) => {
-  if (source === "RECONCILED_LEDGER") return "Quỹ phép đã đối chiếu";
+  if (source === "RECONCILED_LEAVE_LEDGER") return "Quỹ phép đã đối chiếu";
   if (source === "TIMESHEET_P_SYMBOL") return "Từ ký hiệu P";
   if (source === "TIMESHEET_OM_SYMBOL") return "Từ ký hiệu OM";
   if (source === "TIMESHEET_KL_SYMBOL") return "Từ ký hiệu KL";

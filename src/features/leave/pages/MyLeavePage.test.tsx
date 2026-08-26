@@ -113,6 +113,7 @@ describe("MyLeavePage — leave request payload", () => {
       startDate: iso(THU),
       endDate: iso(MON),
     });
+    await waitFor(() => expect(getMyLeave).toHaveBeenCalledTimes(2));
   });
 
   it("labels the day count as an estimate, not the deducted total", async () => {
@@ -162,7 +163,7 @@ describe("MyLeavePage — leave request payload", () => {
           usedDays: 2,
           pendingDays: 0.5,
           remainingDays: 9.5,
-          source: "RECONCILED_LEDGER",
+          source: "RECONCILED_LEAVE_LEDGER",
           balanceStatus: "RECONCILED",
         },
       ],
@@ -174,6 +175,36 @@ describe("MyLeavePage — leave request payload", () => {
     expect(await screen.findByText("Số dư đã đối chiếu trên HRM")).toBeTruthy();
     expect(screen.getByText("Quỹ phép đã đối chiếu")).toBeTruthy();
     expect(screen.queryByText("Số dư đang được HR đối chiếu")).toBeNull();
+  });
+
+  it("labels an unreconciled annual balance as trial data from the P timesheet", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "TRIAL_PENDING_CSV_RECONCILIATION",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: null,
+          usedDays: 2,
+          pendingDays: 0.5,
+          remainingDays: null,
+          source: "TIMESHEET_P_SYMBOL",
+          balanceStatus: "PENDING_HR_CSV_RECONCILIATION",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(
+      await screen.findByText("Số dư đang được HR đối chiếu"),
+    ).toBeTruthy();
+    expect(screen.getByText("Từ ký hiệu P")).toBeTruthy();
+    expect(screen.getByText("Đối chiếu")).toBeTruthy();
+    expect(screen.queryByText("Số dư đã đối chiếu trên HRM")).toBeNull();
   });
 
   it("sends the half-day sessions so the server can derive a half day", async () => {

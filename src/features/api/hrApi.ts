@@ -354,6 +354,7 @@ export interface LeaveBalance {
   pendingDays: number;
   remainingDays: number | null;
   source:
+    | "RECONCILED_LEAVE_LEDGER"
     | "TIMESHEET_P_SYMBOL"
     | "TIMESHEET_OM_SYMBOL"
     | "TIMESHEET_KL_SYMBOL"
