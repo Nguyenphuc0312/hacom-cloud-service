@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AuthenticatedRouteFallback } from "../../layouts/AuthenticatedRouteFallback";
 import { ChatWorkspaceSkeleton } from "./Skeleton";
@@ -9,6 +10,10 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+}));
+
+vi.mock("../../shared/layout", () => ({
+  PersistentNavigationRail: () => <aside className="hc-side-rail" />,
 }));
 
 describe("loading states", () => {
@@ -45,5 +50,26 @@ describe("loading states", () => {
       container.querySelector("[aria-busy='true']"),
     ).not.toBeInTheDocument();
     expect(container.querySelector(".app-loading-progress")).toBeInTheDocument();
+  });
+
+  it("keeps the full chat shell stable while authentication loads", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/chat/conversation-id"]}>
+        <AuthenticatedRouteFallback
+          pathname="/chat/conversation-id"
+          includeNavigationRail
+          label="Đang kiểm tra phiên đăng nhập"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("status")).toHaveAccessibleName(
+      "Đang kiểm tra phiên đăng nhập",
+    );
+    expect(container.querySelectorAll(".hc-side-rail")).toHaveLength(1);
+    expect(container.querySelector("[aria-busy='true']")).toBeInTheDocument();
+    expect(
+      container.querySelector(".app-loading-progress"),
+    ).not.toBeInTheDocument();
   });
 });

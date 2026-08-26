@@ -10,6 +10,10 @@
     <title>Hacom Holdings</title>
     <script>
       (function () {
+        var r = document.documentElement;
+        r.dataset.bootRoute = /(^|\/)chat(?:\/|$)/.test(window.location.pathname)
+          ? "chat"
+          : "default";
         try {
           var s = JSON.parse(localStorage.getItem("ui-storage") || "{}");
           var st = (s && s.state) || {};
@@ -18,7 +22,6 @@
           var resolved = theme === "system"
             ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
             : theme;
-          var r = document.documentElement;
           r.dataset.themePreference = theme;
           r.dataset.theme = resolved;
           r.dataset.brand = brand;
@@ -78,6 +81,129 @@
           animation: none;
         }
       }
+      #app-boot-chat {
+        --boot-canvas: #f1f4f7;
+        --boot-surface: #fff;
+        --boot-border: #dde3ea;
+        --boot-skeleton: #e6e9ed;
+        position: fixed;
+        inset: 0;
+        display: none;
+        overflow: hidden;
+        background: var(--boot-canvas);
+      }
+      [data-theme="dark"] #app-boot-chat {
+        --boot-canvas: #0e0f10;
+        --boot-surface: #181a1c;
+        --boot-border: #292c2f;
+        --boot-skeleton: #24272a;
+      }
+      [data-boot-route="chat"] #app-boot-loader { display: none; }
+      [data-boot-route="chat"] #app-boot-chat { display: flex; }
+      #app-boot-chat,
+      #app-boot-chat * {
+        box-sizing: border-box;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
+      #app-boot-chat .boot-rail {
+        display: flex;
+        width: 56px;
+        min-width: 56px;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 6px;
+        border-right: 1px solid #b71c1c !important;
+        background: linear-gradient(180deg, #d32f2f, #c41e3a);
+      }
+      .boot-rail-logo {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 4px;
+        padding: 6px;
+        border-radius: 14px;
+        background: #fff;
+        object-fit: contain;
+      }
+      .boot-rail-item {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: rgb(255 255 255 / 14%);
+      }
+      .boot-rail-item:first-of-type { background: rgb(255 255 255 / 24%); }
+      .boot-rail-spacer { flex: 1; }
+      .boot-workspace {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        grid-template-columns: clamp(320px, 22vw, 380px) minmax(0, 1fr);
+      }
+      #app-boot-chat .boot-sidebar {
+        overflow: hidden;
+        border-right: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      #app-boot-chat .boot-sidebar-head {
+        height: 134px;
+        padding: 18px 16px;
+        border-bottom: 1px solid var(--boot-border) !important;
+      }
+      .boot-filters {
+        display: flex;
+        gap: 10px;
+        padding: 16px;
+      }
+      .boot-row {
+        display: flex;
+        height: 68px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+      }
+      .boot-row-copy { min-width: 0; flex: 1; }
+      .boot-main { display: flex; min-width: 0; flex-direction: column; }
+      #app-boot-chat .boot-header {
+        display: flex;
+        height: 60px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      .boot-header-copy { flex: 1; }
+      .boot-messages { flex: 1; padding: 20px 12%; }
+      .boot-message { display: flex; align-items: flex-start; gap: 10px; margin: 28px 0; }
+      .boot-message.me { justify-content: flex-start; flex-direction: row-reverse; }
+      .boot-bubble {
+        width: 46%;
+        min-height: 58px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: var(--boot-surface);
+      }
+      .boot-message.me .boot-bubble { width: 38%; background: #dfe9f6; }
+      [data-theme="dark"] .boot-message.me .boot-bubble { background: #172638; }
+      #app-boot-chat .boot-composer {
+        display: flex;
+        height: 76px;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      .boot-sk { border-radius: 7px; background: var(--boot-skeleton); }
+      .boot-circle { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 50%; }
+      .boot-line { height: 12px; }
+      .boot-line + .boot-line { margin-top: 9px; }
+      @media (max-width: 767px) {
+        .boot-workspace { grid-template-columns: minmax(0, 1fr); }
+        .boot-main { display: none; }
+      }
     </style>
   </head>
   <body>
@@ -90,6 +216,57 @@
         <div aria-hidden="true">
           <img src="%BASE_URL%logo.png" width="56" height="56" alt="" />
           <span></span>
+        </div>
+      </div>
+      <div
+        id="app-boot-chat"
+        role="status"
+        aria-label="Đang tải cuộc trò chuyện"
+      >
+        <div class="boot-rail" aria-hidden="true">
+          <img class="boot-rail-logo" src="%BASE_URL%logo-dung.png" alt="" />
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-spacer"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+        </div>
+        <div class="boot-workspace" aria-hidden="true">
+          <aside class="boot-sidebar">
+            <div class="boot-sidebar-head">
+              <div class="boot-sk boot-line" style="width: 132px"></div>
+              <div class="boot-sk" style="height: 40px; margin-top: 18px"></div>
+            </div>
+            <div class="boot-filters">
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+            </div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 62%"></div><div class="boot-sk boot-line" style="width: 82%"></div></div></div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 70%"></div><div class="boot-sk boot-line" style="width: 76%"></div></div></div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 58%"></div><div class="boot-sk boot-line" style="width: 84%"></div></div></div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 66%"></div><div class="boot-sk boot-line" style="width: 72%"></div></div></div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 61%"></div><div class="boot-sk boot-line" style="width: 80%"></div></div></div>
+            <div class="boot-row"><div class="boot-sk boot-circle"></div><div class="boot-row-copy"><div class="boot-sk boot-line" style="width: 72%"></div><div class="boot-sk boot-line" style="width: 68%"></div></div></div>
+          </aside>
+          <main class="boot-main">
+            <div class="boot-header">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-header-copy"><div class="boot-sk boot-line" style="width: 180px"></div><div class="boot-sk boot-line" style="width: 112px"></div></div>
+              <div class="boot-sk boot-circle"></div><div class="boot-sk boot-circle"></div><div class="boot-sk boot-circle"></div>
+            </div>
+            <div class="boot-messages">
+              <div class="boot-message"><div class="boot-sk boot-circle"></div><div class="boot-bubble"><div class="boot-sk boot-line" style="width: 88%"></div><div class="boot-sk boot-line" style="width: 30%"></div></div></div>
+              <div class="boot-message me"><div class="boot-bubble"><div class="boot-sk boot-line" style="width: 90%"></div><div class="boot-sk boot-line" style="width: 24%"></div></div></div>
+              <div class="boot-message"><div class="boot-sk boot-circle"></div><div class="boot-bubble" style="width: 56%"><div class="boot-sk boot-line" style="width: 96%"></div><div class="boot-sk boot-line" style="width: 72%"></div></div></div>
+              <div class="boot-message me"><div class="boot-bubble" style="width: 44%"><div class="boot-sk boot-line" style="width: 90%"></div><div class="boot-sk boot-line" style="width: 36%"></div></div></div>
+            </div>
+            <div class="boot-composer"><div class="boot-sk boot-circle"></div><div class="boot-sk" style="height: 44px; flex: 1"></div><div class="boot-sk boot-circle"></div></div>
+          </main>
         </div>
       </div>
     </div>
