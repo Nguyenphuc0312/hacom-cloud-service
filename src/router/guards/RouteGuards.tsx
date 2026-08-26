@@ -13,6 +13,7 @@ import {
   isBlockedAuthStatus,
   isPendingHrLinkStatus,
 } from "../../features/auth/model/authState";
+import { AuthenticatedRouteFallback } from "../../layouts/AuthenticatedRouteFallback";
 
 interface GuardProps {
   children: React.ReactNode;
@@ -40,7 +41,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
-    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+    return (
+      <AuthenticatedRouteFallback
+        pathname={location.pathname}
+        includeNavigationRail
+        label={t("common:loading.checkingAuth")}
+      />
+    );
   }
 
   if (authStatus === "activation_required" && activationContext) {

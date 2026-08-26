@@ -4,6 +4,10 @@ const mocks = vi.hoisted(() => ({
   authGet: vi.fn(),
   refreshAccessToken: vi.fn(),
   runClientLogoutCleanup: vi.fn(),
+  runCurrentTabIdentityMismatchCleanup: vi.fn(),
+  validateBoundAuthSessionIdentity: vi.fn(),
+  bindAuthSessionIdentity: vi.fn(),
+  getAccessToken: vi.fn(),
 }));
 
 vi.mock("../lib/axios", () => ({
@@ -14,7 +18,7 @@ vi.mock("../lib/axios", () => ({
 }));
 
 vi.mock("../services/tokenService", () => ({
-  getAccessToken: () => null,
+  getAccessToken: mocks.getAccessToken,
   getRefreshToken: () => "refresh-token",
   isAuthSessionActive: () => false,
   isRefreshTokenCookieMode: () => false,
@@ -32,13 +36,17 @@ vi.mock("../services/authService", () => ({
   redirectToLogin: vi.fn(),
   requestServerLogout: vi.fn(),
   runClientLogoutCleanup: mocks.runClientLogoutCleanup,
+  runCurrentTabIdentityMismatchCleanup:
+    mocks.runCurrentTabIdentityMismatchCleanup,
 }));
 
 vi.mock("../services/authIdentityGuard", () => ({
+  bindAuthSessionIdentity: mocks.bindAuthSessionIdentity,
   compareIdentity: vi.fn(() => ({ mismatch: false })),
   reportAuthIdentityMismatch: vi.fn(),
   resetAuthIdentityGuard: vi.fn(),
   setAuthIdentityMismatchHandler: vi.fn(),
+  validateBoundAuthSessionIdentity: mocks.validateBoundAuthSessionIdentity,
 }));
 
 vi.mock("../services/api", () => ({
@@ -67,6 +75,9 @@ describe("authStore reload bootstrap authority", () => {
     localStorage.clear();
     mocks.refreshAccessToken.mockResolvedValue("fresh-access-token");
     mocks.authGet.mockRejectedValue(new Error("temporary auth outage"));
+    mocks.validateBoundAuthSessionIdentity.mockReturnValue("match");
+    mocks.bindAuthSessionIdentity.mockReturnValue(true);
+    mocks.getAccessToken.mockReturnValue(null);
   });
 
   it("never authenticates a persisted user when canonical /me is temporarily unavailable", async () => {
@@ -110,5 +121,82 @@ describe("authStore reload bootstrap authority", () => {
       isInitialized: true,
     });
     expect(mocks.runClientLogoutCleanup).not.toHaveBeenCalled();
+  });
+
+  it("rejects a refreshed Admin principal when it differs from the account that established the browser session", async () => {
+    mocks.authGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "system-super-admin",
+          username: "system",
+          role: "super_admin",
+        },
+      },
+    });
+    mocks.validateBoundAuthSessionIdentity.mockReturnValue("mismatch");
+
+    const { useAuthStore } = await import("./authStore");
+    await useAuthStore.getState().initialize();
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user: null,
+      authStatus: "anonymous",
+      isAuthenticated: false,
+      isInitialized: true,
+    });
+    expect(mocks.runCurrentTabIdentityMismatchCleanup).toHaveBeenCalledWith(
+      "bootstrap_refresh_identity_mismatch",
+    );
+  });
+
+  it("still restores the canonical user when the refreshed principal matches", async () => {
+    mocks.authGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "employee-a", username: "HC000001" },
+      },
+    });
+
+    const { useAuthStore } = await import("./authStore");
+    await useAuthStore.getState().initialize();
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user: { id: "employee-a", username: "HC000001" },
+      authStatus: "authenticated",
+      isAuthenticated: true,
+      isInitialized: true,
+    });
+    expect(mocks.runClientLogoutCleanup).not.toHaveBeenCalled();
+    expect(mocks.runCurrentTabIdentityMismatchCleanup).not.toHaveBeenCalled();
+  });
+
+  it("binds the canonical principal after a required password change", async () => {
+    mocks.getAccessToken.mockReturnValue("password-change-access-token");
+    mocks.authGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "employee-a", username: "HC000001" },
+      },
+    });
+
+    const { useAuthStore } = await import("./authStore");
+    useAuthStore.setState({
+      authStatus: "password_change_required",
+      passwordChangeContinuation: "continuation",
+      isAuthenticated: false,
+    });
+
+    await useAuthStore.getState().refreshUser();
+
+    expect(mocks.bindAuthSessionIdentity).toHaveBeenCalledWith(
+      "password-change-access-token",
+      expect.objectContaining({ id: "employee-a" }),
+    );
+    expect(useAuthStore.getState()).toMatchObject({
+      authStatus: "authenticated",
+      isAuthenticated: true,
+      user: { id: "employee-a" },
+    });
   });
 });

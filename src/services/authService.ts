@@ -6,6 +6,7 @@ import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
 import { softNavigate } from "../lib/softNavigator";
 import {
+  clearCurrentTabTokens,
   clearTokens,
   getAccessToken,
   getCsrfToken,
@@ -72,6 +73,13 @@ export const runClientLogoutCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
   clearTokens();
+  usePresenceStore.getState().clearAll();
+};
+
+export const runCurrentTabIdentityMismatchCleanup = (reason: string): void => {
+  cancelPendingRequests(`logout:${reason}`);
+  disconnectSocket();
+  clearCurrentTabTokens();
   usePresenceStore.getState().clearAll();
 };
 

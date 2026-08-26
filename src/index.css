@@ -1207,7 +1207,7 @@ a:focus-visible {
     border-radius: inherit;
     background: hsl(var(--color-primary));
     transform-origin: left;
-    animation: loading-progress 900ms var(--motion-ease-spring) both;
+    animation: loading-progress 900ms var(--motion-ease-enter) both;
   }
 
   .skeleton {
@@ -1222,14 +1222,9 @@ a:focus-visible {
       );
   }
 
-  .skeleton-stage {
-    animation: skeleton-enter 160ms var(--motion-ease-enter) both;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .app-loading-mark,
-    .app-loading-progress__bar,
-    .skeleton-stage {
+    .app-loading-progress__bar {
       animation: none;
     }
 
