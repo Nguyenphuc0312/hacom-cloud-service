@@ -281,6 +281,7 @@ export const SettingsSkeleton: React.FC<{ className?: string }> = ({
 }) => (
   <section
     className={clsx("app-page-shell h-full", className)}
+    data-loading-shell
     data-skeleton-variant="settings"
     aria-busy="true"
   >
@@ -607,6 +608,7 @@ export const AppRouteSkeleton: React.FC<{
   return (
     <section
       className={clsx("app-page-shell h-full", className)}
+      data-loading-shell
       data-skeleton-variant={variant}
       aria-busy="true"
     >
@@ -655,6 +657,7 @@ export const AuthPageSkeleton: React.FC<{
     return (
       <div
         className={clsx("auth-shell", className)}
+        data-loading-shell
         data-skeleton-variant="auth-card"
         aria-busy="true"
       >
@@ -673,6 +676,7 @@ export const AuthPageSkeleton: React.FC<{
         "flex h-[var(--app-dvh)] w-full overflow-hidden bg-surface-overlay",
         className,
       )}
+      data-loading-shell
       data-skeleton-variant="auth-split"
       aria-busy="true"
     >
@@ -718,6 +722,7 @@ export const ChatWorkspaceSkeleton: React.FC<{ className?: string }> = ({
       "grid h-full min-h-0 w-full grid-cols-[var(--hc-sidebar-width)_minmax(0,1fr)] overflow-hidden bg-background max-md:grid-cols-1",
       className,
     )}
+    data-loading-shell
     aria-busy="true"
   >
     <div className="min-h-0 border-r border-border bg-surface">
