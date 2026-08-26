@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from "react";
 import {
   AppRouteSkeleton,
+  AuthFormSkeleton,
   AuthPageSkeleton,
   ChatWorkspaceSkeleton,
   SettingsSkeleton,
@@ -87,7 +88,11 @@ export const AuthenticatedRouteFallback: FC<
   AuthenticatedRouteFallbackProps
 > = ({ pathname, includeNavigationRail = false, label }) => {
   if (splitAuthRoutes.some((route) => matchesRoute(pathname, route))) {
-    return <AuthPageSkeleton variant="split" />;
+    return includeNavigationRail ? (
+      <AuthPageSkeleton variant="split" />
+    ) : (
+      <AuthFormSkeleton />
+    );
   }
 
   if (cardAuthRoutes.some((route) => matchesRoute(pathname, route))) {

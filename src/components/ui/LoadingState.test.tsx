@@ -102,6 +102,17 @@ describe("loading states", () => {
     expect(container.querySelector(".hc-side-rail")).not.toBeInTheDocument();
   });
 
+  it("uses only the form skeleton inside the mounted split auth layout", () => {
+    const { container } = render(
+      <AuthenticatedRouteFallback pathname="/login" />,
+    );
+
+    expect(container.querySelector(".skeleton-stage")).toBeInTheDocument();
+    expect(
+      container.querySelector("[data-skeleton-variant='auth-split']"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the full chat shell stable while authentication loads", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/chat/conversation-id"]}>
