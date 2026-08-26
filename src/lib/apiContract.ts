@@ -148,13 +148,16 @@ const mergeRetryAfterDetails = (
 const fromFailurePayload = (
   payload: unknown,
   retryAfterSeconds?: number,
+  responseStatus?: number,
 ): ApiContractError | null => {
   if (!isRecord(payload) || payload.success !== false) {
     return null;
   }
 
   const statusCode =
-    typeof payload.statusCode === "number" ? payload.statusCode : 500;
+    typeof payload.statusCode === "number"
+      ? payload.statusCode
+      : responseStatus ?? 500;
   const message =
     typeof payload.message === "string"
       ? payload.message
@@ -224,6 +227,7 @@ export const extractApiError = (error: unknown): ApiContractError => {
     const fromPayload = fromFailurePayload(
       axiosError.response?.data,
       retryAfterSeconds,
+      axiosError.response?.status,
     );
     if (fromPayload) {
       return fromPayload;

@@ -1,4 +1,8 @@
 import axios from "axios";
+import {
+  PUBLIC_CHAT_CONTRACT_HEADER,
+  PUBLIC_CHAT_CONTRACT_VERSION,
+} from "@hacom/chat-shared-types/runtime";
 import { AUTH_CONFIG } from "../config";
 import { buildAuthEndpoint } from "../lib/authPath";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
@@ -128,7 +132,7 @@ const performRefresh = async (trigger: AuthRefreshTrigger): Promise<string> => {
       withCredentials: cookieMode,
       headers: {
         "Content-Type": "application/json",
-        "X-Api-Contract": "2",
+        [PUBLIC_CHAT_CONTRACT_HEADER]: PUBLIC_CHAT_CONTRACT_VERSION,
         ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       },
     },
