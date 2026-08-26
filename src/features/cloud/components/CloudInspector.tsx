@@ -88,7 +88,7 @@ export const CloudInspector: React.FC<CloudInspectorProps> = ({
         <div className="cloud-inspector__identity">
           <CloudItemIcon type={item.type} className="!h-12 !w-12" />
           <div className="min-w-0">
-            <h3 className="break-words text-sm font-semibold text-text-primary">
+            <h3 className="truncate text-sm font-semibold text-text-primary" title={title}>
               {title}
             </h3>
             <p className="mt-1 text-xs text-text-muted">

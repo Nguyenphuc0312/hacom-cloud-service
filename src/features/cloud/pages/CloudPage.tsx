@@ -56,6 +56,7 @@ import {
   formatCloudTime,
   getCloudItemPreview,
   getCloudItemTitle,
+  isTrashItemExpired,
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
 import { ROUTE_PATHS } from "../../../router/paths";
@@ -219,6 +220,7 @@ export default function CloudPage() {
   // The dedicated trash conversation view is intentionally disabled. Trash
   // content is managed from the Cloud info/gallery surfaces instead.
   const [viewMode] = useState<CloudViewMode>("active");
+  const [trashNow, setTrashNow] = useState(() => Date.now());
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
   const timelineScrollTopRef = useRef<number | null>(null);
@@ -247,12 +249,19 @@ export default function CloudPage() {
   // matching Hacom Chat's local panel behavior. Do not refetch the Cloud
   // bundle for every keystroke (that caused the red Cloud error banner).
   const workspace = useCloudWorkspace(cloudUserId);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setTrashNow(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   // My Documents uses the same pin contract as ordinary Hacom Chat
   // conversations.  Keeping this hook here makes pin state, optimistic
   // updates and the pinned-message panel behave identically in both views.
   const {
     pinnedMessages,
     togglePin,
+    removePin,
     isLoading: isPinnedLoading,
     error: pinnedError,
   } = usePinnedMessages(CLOUD_CONVERSATION_ID, { localFallback: true });
@@ -484,8 +493,9 @@ export default function CloudPage() {
 
   const visibleTrashItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    if (!query) return cloudTrashItems;
-    return cloudTrashItems.filter((item) => {
+    const liveTrashItems = cloudTrashItems.filter((item) => !isTrashItemExpired(item, trashNow));
+    if (!query) return liveTrashItems;
+    return liveTrashItems.filter((item) => {
       const title = getCloudItemTitle(item, {
         text: t("item.untitledText"),
         link: t("item.untitledLink"),
@@ -495,7 +505,7 @@ export default function CloudPage() {
         .toLocaleLowerCase()
         .includes(query);
     });
-  }, [cloudTrashItems, search, t]);
+  }, [cloudTrashItems, search, t, trashNow]);
 
   const trashMessages = useMemo(() => {
     const pinnedIds = new Set(pinnedMessages.map((message) => message.id));
@@ -994,22 +1004,43 @@ export default function CloudPage() {
   const handleTrash = useCallback(
     async (itemId: string) => {
       await workspace.trashItem(itemId);
+      // Deleting a pinned Cloud item must remove the corresponding pin too.
+      // Do this after the Cloud state transition succeeds so a failed delete
+      // never loses a valid pin.
+      await removePin(itemId);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("message:deleted", {
+            detail: { conversationId: CLOUD_CONVERSATION_ID, messageId: itemId },
+          }),
+        );
+      }
     },
-    [t, workspace],
+    [removePin, workspace],
   );
 
   const handleRestore = useCallback(
     async (itemId: string) => {
       await workspace.restoreItem(itemId);
     },
-    [t, workspace],
+    [workspace],
   );
 
   const handlePermanentDelete = useCallback(
     async (itemId: string) => {
       await workspace.permanentlyDeleteItem(itemId);
+      // Permanent delete is also a destructive pin action. Keep the pin bar,
+      // pin counter and pin panel in sync with the deleted item.
+      await removePin(itemId);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("message:deleted", {
+            detail: { conversationId: CLOUD_CONVERSATION_ID, messageId: itemId },
+          }),
+        );
+      }
     },
-    [t, workspace],
+    [removePin, workspace],
   );
 
   const selectedMessages = useMemo(

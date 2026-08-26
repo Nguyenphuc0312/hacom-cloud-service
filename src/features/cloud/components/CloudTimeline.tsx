@@ -154,9 +154,10 @@ export const CloudTimeline: React.FC<CloudTimelineProps> = ({
                       ) : (
                         <span
                           className={clsx(
-                            "text-sm text-text-primary",
-                            isText ? "font-normal" : "truncate font-semibold",
+                            "min-w-0 truncate text-sm text-text-primary",
+                            isText ? "font-normal" : "font-semibold",
                           )}
+                          title={isText ? preview || title : title}
                         >
                           {isText ? preview || title : title}
                         </span>

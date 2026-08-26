@@ -127,8 +127,8 @@ export const CloudConversationInfoPanel: React.FC<
       className="flex h-full min-h-0 flex-col bg-[hsl(var(--chat-panel-bg))]"
       aria-label={labels.title}
     >
-      <header className="app-page-header sticky top-0 z-10 flex min-h-[var(--app-header-height)] shrink-0 items-center justify-between border-b border-border/70 px-4 py-2.5">
-        <h2 className="text-title-sm text-text-primary">{labels.title}</h2>
+      <header className="app-page-header flex min-h-[var(--app-header-height)] shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5">
+        <h2 className="min-w-0 truncate text-title-sm text-text-primary">{labels.title}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -139,43 +139,44 @@ export const CloudConversationInfoPanel: React.FC<
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-6" style={{ scrollbarGutter: "stable" }}>
-        <section className="flex flex-col items-center bg-surface px-5 pb-5 pt-6 text-center">
-          <CloudConversationAvatar size="lg" />
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-[hsl(var(--chat-panel-bg))]" style={{ scrollbarGutter: "stable" }}>
+        <section className="bg-surface px-5 pb-5 pt-6 text-center">
+          <CloudConversationAvatar size="xl" />
           <h3 className="mt-4 text-base font-bold text-text-primary">{labels.workspace}</h3>
-          <p className="mt-1 max-w-[18rem] text-xs leading-[1.125rem] text-text-muted">{labels.description}</p>
+          <p className="mx-auto mt-1 max-w-[18rem] text-[15px] leading-6 text-text-muted">{labels.description}</p>
         </section>
 
-        <section className="bg-surface px-4 pb-5">
+        <section className="bg-surface px-5 pb-5">
           <div className="flex justify-center">
             <button
               type="button"
               onClick={() => togglePinnedConversation(CLOUD_CONVERSATION_ID)}
-              className="group flex w-20 flex-col items-center gap-1.5 rounded-2xl bg-surface-overlay px-1 py-3.5 transition-colors hover:bg-surface-hover"
+              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 text-center transition-colors disabled:opacity-60"
               aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
             >
-              <span className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-surface-active" : "bg-primary/10 group-hover:bg-primary/15"}`}>
+              <span className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-[#e8ebf0]" : "bg-[#eef1f5] group-hover:bg-[#e4e8ef]"}`}>
                 <Pin className={isPinned ? "h-5 w-5 text-text-secondary" : "h-5 w-5 text-primary"} strokeWidth={1.5} aria-hidden />
               </span>
-              <span className="text-center text-[11px] font-medium leading-tight text-text-secondary">
+              <span className="min-h-[32px] max-w-[88px] text-center text-[13px] font-medium leading-4 text-text-secondary">
                 {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
               </span>
             </button>
           </div>
         </section>
 
-        <div className="space-y-3 px-4 pr-5">
-        {showStorage ? <section className="rounded-xl border border-border/70 bg-surface-hover/35 p-4">
+        <div>
+        <div className="h-2.5 bg-[#eef0f4]" />
+        {showStorage ? <section className="bg-surface px-5 py-5">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-text-primary">{labels.storage}</h3>
-            <span className="text-xs text-text-muted">
+            <h3 className="text-[16px] font-semibold text-text-primary">{labels.storage}</h3>
+            <span className="text-[13px] text-text-muted">
               {limitBytes > 0 ? `${((Number(quota?.usedBytes ?? 0) / limitBytes) * 100).toFixed(Number(quota?.usedBytes ?? 0) > 0 && Number(quota?.usedBytes ?? 0) / limitBytes < 0.1 ? 1 : 0)}%` : "0%"}
             </span>
           </div>
-          <p className="mt-2 text-base font-semibold text-text-primary">
-            {formatBytes(quota?.usedBytes ?? 0)} <span className="text-sm font-normal text-text-muted">đã dùng</span>
+          <p className="mt-2 text-lg font-semibold text-text-primary">
+            {formatBytes(quota?.usedBytes ?? 0)} <span className="text-[15px] font-normal text-text-muted">đã dùng</span>
           </p>
-          <p className="text-xs text-text-muted">trên tổng dung lượng {formatBytes(limitBytes)}</p>
+          <p className="text-[13px] text-text-muted">trên tổng dung lượng {formatBytes(limitBytes)}</p>
           <div className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-full bg-surface-hover" aria-label={labels.storage}>
             {categories.map((category) => (
               <span key={category.key} style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }} aria-hidden />
@@ -183,24 +184,24 @@ export const CloudConversationInfoPanel: React.FC<
             <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
             <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[15px] text-text-muted">
             {categories.filter((category) => category.showLegend).map((category) => (
               <span key={category.key} className="flex items-center gap-1.5">
-                <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
+                <i className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
                 {category.label}
               </span>
             ))}
             <span className="flex items-center gap-1.5">
-              <i className="h-2.5 w-2.5 rounded-full bg-[#F97316]" />
+              <i className="h-3 w-3 rounded-full bg-[#F97316]" />
               {labels.trash}
             </span>
           </div>
-          <p className="mt-2 text-xs text-text-muted">Còn trống {formatBytes(quota?.availableBytes ?? 0)}</p>
+          <p className="mt-2 text-[15px] text-text-muted">Còn trống {formatBytes(quota?.availableBytes ?? 0)}</p>
           {onManageCloud ? (
             <button
               type="button"
               onClick={onManageCloud}
-              className="mt-4 flex h-10 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-sm font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="mt-4 flex h-12 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-[15px] font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
@@ -209,6 +210,8 @@ export const CloudConversationInfoPanel: React.FC<
           ) : null}
         </section> : null}
 
+        <div className="h-2.5 bg-[#eef0f4]" />
+        <section className="bg-surface">
         <CloudResourcesPreview
           items={items}
           trashItems={trashItems}
@@ -221,6 +224,7 @@ export const CloudConversationInfoPanel: React.FC<
            userId={userId}
            senderName={senderName}
         />
+        </section>
         </div>
       </div>
     </aside>

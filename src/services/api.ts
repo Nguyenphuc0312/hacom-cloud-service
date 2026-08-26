@@ -1322,6 +1322,14 @@ export const messageApi = {
     await apiClient.delete(`/messages/${messageId}`, {
       data: options?.mode ? { mode: options.mode } : undefined,
     });
+    // Let mounted pin surfaces remove a deleted message immediately. The
+    // service does not need a conversation id because message ids are global;
+    // the pin hook accepts an id-only event for shared-resource deletions.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("message:deleted", { detail: { messageId } }),
+      );
+    }
   },
 
   getMessageEditHistory: async (messageId: string) => {

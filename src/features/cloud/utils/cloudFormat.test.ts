@@ -6,6 +6,7 @@ import {
   getTrashExpiry,
   getCloudItemPreview,
   getCloudItemTitle,
+  isTrashItemExpired,
   isSafeExternalUrl,
   normalizeCloudItemType,
 } from "./cloudFormat";
@@ -65,6 +66,25 @@ describe("cloudFormat", () => {
     expect(getTrashExpiry("2026-07-31T05:30:00Z", "2026-07-30T08:00:00Z")).toBe("2026-07-31T05:30:00Z");
     expect(getTrashExpiry(undefined, "2026-07-30T08:00:00Z")).toBe("2026-07-31T08:00:00.000Z");
     expect(getTrashExpiry(undefined, "invalid")).toBeUndefined();
+  });
+
+  it("removes Trash items at the retention boundary", () => {
+    const now = new Date("2026-07-31T08:00:00Z").getTime();
+    expect(
+      isTrashItemExpired(
+        { purgeAfter: "2026-07-31T08:00:00Z", deletedAt: "2026-07-30T08:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isTrashItemExpired(
+        { purgeAfter: "2026-07-31T08:00:01Z", deletedAt: "2026-07-30T08:00:00Z" },
+        now,
+      ),
+    ).toBe(false);
+    // An optimistic item without lifecycle timestamps is retained until the API
+    // returns its authoritative purge deadline.
+    expect(isTrashItemExpired({}, now)).toBe(false);
   });
 
   it("keeps CSV resources as files when an old projection says image", () => {

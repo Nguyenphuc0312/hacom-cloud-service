@@ -81,7 +81,7 @@ import { useResponsive } from "../responsive/responsive";
 import { resolvePublicResourceUrl } from "../config";
 import { getCachedUserProfile } from "../services/userProfileCache";
 import { DraggableProfileModal } from "../components/info/DraggableProfileModal";
-import { fileApi } from "../services/api";
+import { fileApi, messageApi } from "../services/api";
 import { fetchThumbnailUrlsShared } from "../hooks/useBatchThumbnailUrl";
 import { CloudConversationEntry } from "../features/cloud/components/CloudConversationEntry";
 import { ROUTE_PATHS } from "../router/paths";
@@ -827,6 +827,43 @@ export const ChatPage: React.FC = () => {
         mode: pendingDeleteMessage.mode,
         context: pendingDeleteMessage.isAdminDeletion ? "ADMIN_DELETE" : undefined,
       }).unwrap();
+
+      // Keep every mounted pin surface in sync with the delete confirmation.
+      // The pin hook removes the row optimistically; the next fetch then
+      // reconciles with the server as usual.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("message:deleted", {
+            detail: {
+              conversationId: selectedConversationId,
+              messageId: pendingDeleteMessage.messageId,
+            },
+          }),
+        );
+      }
+
+      // `/messages/:id/pin` is a toggle endpoint. Check the authoritative pin
+      // list before toggling so a server-side delete cascade cannot repin the
+      // message accidentally. This runs after the delete and never blocks the
+      // successful chat action if the pin service is temporarily unavailable.
+      void (async () => {
+        try {
+          const pinnedResponse = await messageApi.getPinnedMessages(
+            selectedConversationId,
+          );
+          const isStillPinned =
+            pinnedResponse.success &&
+            (pinnedResponse.data.messages ?? []).some(
+              (message) => message.id === pendingDeleteMessage.messageId,
+            );
+          if (isStillPinned) {
+            await messageApi.unpinMessage(pendingDeleteMessage.messageId);
+          }
+        } catch {
+          // The optimistic event above already removed the stale pin locally.
+        }
+      })();
+
       toast.success(
         pendingDeleteMessage.mode === "FOR_EVERYONE"
           ? pendingDeleteMessage.isAdminDeletion

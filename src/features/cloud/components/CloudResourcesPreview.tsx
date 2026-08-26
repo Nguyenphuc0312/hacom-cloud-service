@@ -25,7 +25,7 @@ import FileTypeIcon from "../../../components/message/FileTypeIcon";
 import { getFileIconType } from "../../../utils/formatFileSize";
 import type { CloudItem } from "../types";
 import { CloudItemIcon } from "./CloudItemIcon";
-import { formatBytes, formatCloudDateTime, getCloudItemTitle, getTrashCountdown, getTrashExpiry, normalizeCloudItemType } from "../utils/cloudFormat";
+import { formatBytes, formatCloudDateTime, getCloudItemTitle, getTrashCountdown, getTrashExpiry, getTrashSortTime, isTrashItemExpired, normalizeCloudItemType } from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 import { downloadResourceWithName, getHacomDesktopBridge } from "../../../utils/downloadFile";
 import { formatRelativeDate } from "../../../utils/formatTime";
@@ -76,8 +76,11 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
     [accessById, items],
   );
   const resolvedTrashItems = useMemo(
-    () => trashItems.map((item) => ({ ...normalizeCloudItemType(item), accessUrl: accessById[item.id]?.url ?? item.accessUrl })),
-    [accessById, trashItems],
+    () => trashItems
+      .filter((item) => !isTrashItemExpired(item, trashNow))
+      .map((item) => ({ ...normalizeCloudItemType(item), accessUrl: accessById[item.id]?.url ?? item.accessUrl }))
+      .sort((a, b) => getTrashSortTime(b) - getTrashSortTime(a)),
+    [accessById, trashItems, trashNow],
   );
   const media = useMemo(() => resolvedItems.filter((item) => item.type === "image" || item.type === "video"), [resolvedItems]);
   const files = useMemo(() => resolvedItems.filter((item) => item.type === "file"), [resolvedItems]);
@@ -162,10 +165,13 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
               {media.slice(0, 6).map((item) => (
-                <button key={item.id} type="button" disabled={!item.accessUrl} onClick={() => item.type === "video" ? setVideo(item) : openActiveImage(item)} className="group relative aspect-square overflow-hidden rounded-lg bg-surface-overlay disabled:cursor-default" aria-label={itemTitle(item)}>
-                  {item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover transition-transform group-hover:scale-105" loading="lazy" /> : <video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /> : <ImageIcon className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 text-text-muted" />}
-                  {item.type === "video" ? <span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-text-primary shadow-sm"><Play className="h-5 w-5" fill="currentColor" /></span></span> : null}
-                </button>
+                <div key={item.id} className="group relative aspect-square">
+                  <button type="button" disabled={!item.accessUrl} onClick={() => item.type === "video" ? setVideo(item) : openActiveImage(item)} className="group relative h-full w-full overflow-hidden rounded-lg bg-surface-overlay transition-shadow hover:ring-2 hover:ring-primary/50 disabled:cursor-default" aria-label={itemTitle(item)}>
+                    {item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover transition-transform group-hover:scale-105" loading="lazy" /> : <video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /> : <ImageIcon className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 text-text-muted" />}
+                    {item.type === "video" ? <span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-text-primary shadow-sm"><Play className="h-5 w-5" fill="currentColor" /></span></span> : null}
+                  </button>
+                  <ResourceActions compact placement="top" align="left" item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
+                </div>
               ))}
             </div>
             <ViewAllButton onClick={() => setGalleryTab("media")} />
@@ -187,25 +193,20 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
           </button>
           {trashExpanded ? <div id="cloud-resource-section-trash">
             {resolvedTrashItems.length ? <>
-              <div className="flex items-center justify-between py-2 text-xs text-text-muted">
+              <div className="flex items-center justify-between py-2 text-sm text-text-muted">
                 <span>{resolvedTrashItems.length} mục</span>
               </div>
               {resolvedTrashItems.slice(0, 3).map((item) => {
                 const countdown = getTrashCountdown(getTrashExpiry(item.purgeAfter, item.deletedAt), trashNow);
-                const remaining = countdown.expired
-                  ? "Đã hết hạn khôi phục"
-                  : countdown.hours > 0
-                    ? `Còn khoảng ${countdown.hours} giờ`
-                    : `Còn khoảng ${countdown.minutes} phút`;
+                const remaining = countdown.hours > 0
+                  ? `Còn khoảng ${countdown.hours} giờ`
+                  : `Còn khoảng ${countdown.minutes} phút`;
                 return <div key={item.id} className="group relative flex items-center gap-3 rounded-lg bg-surface-overlay px-3 py-2">
-                <button type="button" onClick={() => void openTrashGallery(galleryTabForItem(item))} className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left hover:bg-surface-hover" aria-label={`Mở ${itemTitle(item)} trong kho lưu trữ`}>
+                <button type="button" onClick={() => void openTrashGallery(galleryTabForItem(item))} className="flex min-w-0 flex-1 items-center gap-3 rounded-md pr-3 text-left hover:bg-surface-hover" aria-label={`Mở ${itemTitle(item)} trong kho lưu trữ`}>
                   <CloudResourceThumbnail item={item} />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-primary">{itemTitle(item)}</span><span className="flex items-center gap-1 text-xs text-text-muted"><span>{formatBytes(item.sizeBytes)}</span><span aria-hidden="true">·</span><Clock className="h-3.5 w-3.5" aria-hidden="true" /><span>{remaining}</span></span></span>
+                  <span className="min-w-0 flex-1 pr-2"><span className="block truncate text-[14px] font-semibold leading-5 text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span><span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] leading-5 text-text-muted"><span className="shrink-0">{formatBytes(item.sizeBytes)}</span><span className="shrink-0" aria-hidden="true">·</span><span className="flex shrink-0 items-center gap-1"><Clock className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{remaining}</span></span></span></span>
                 </button>
-                <div className="pointer-events-none absolute right-2 flex items-center gap-1 rounded-full bg-surface px-1 py-1 opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                  <button type="button" disabled={countdown.expired} onClick={() => void onRestoreTrashItem?.(item.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Khôi phục ${itemTitle(item)}`} title={remaining}><RotateCcw className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => { if (onPermanentDeleteItem) void onPermanentDeleteItem(item.id); else void onDeleteItem?.(item); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-600 hover:bg-red-50" aria-label={`Xóa vĩnh viễn ${itemTitle(item)}`} title="Xóa vĩnh viễn"><Trash2 className="h-4 w-4" /></button>
-                </div>
+                <ResourceActions compact placement="top" isTrash trashNow={trashNow} item={item} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
               </div>;
               })}
               {resolvedTrashItems.length > 0 ? <button type="button" disabled={isLoadingTrashGallery} onClick={() => void openTrashGallery()} className="mt-3 w-full rounded-md bg-surface-overlay py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60">{isLoadingTrashGallery ? "Đang tải…" : "Xem tất cả"}</button> : null}
@@ -263,8 +264,29 @@ const CloudResourceThumbnail: React.FC<{ item: CloudItem }> = ({ item }) => {
   return <CloudItemIcon type={item.type} className="h-10 w-10 shrink-0" />;
 };
 
-const linkLabel = (item: CloudItem, url: string): string =>
-  item.title?.trim() || url || itemTitle(item);
+const linkLabel = (item: CloudItem, url: string): string => {
+  const title = item.title?.trim();
+  if (!title) return url || itemTitle(item);
+
+  // Cloud may receive a generated preview title containing only the host
+  // (for example "localhost" or "facebook.com"). In that case keep the
+  // complete URL in the first line so paths/query strings are not lost.
+  try {
+    const parsed = new URL(url);
+    const normalizedTitle = title
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/\/+$/, "")
+      .toLowerCase();
+    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+    const hostWithPort = parsed.host.replace(/^www\./i, "").toLowerCase();
+    if (normalizedTitle === host || normalizedTitle === hostWithPort) return url;
+  } catch {
+    // Keep a custom title for malformed/non-http URLs.
+  }
+
+  return title;
+};
 
 /** Documents are opened/downloaded through the row itself. Their overflow
  * menu intentionally starts at "Chia sẻ" (unlike audio/video resources). */
@@ -290,10 +312,17 @@ const shareResource = async (item: CloudItem): Promise<void> => {
   }
 };
 
+// All resource rows share one menu surface.  Dispatching a small window event
+// lets independently rendered rows close one another before a new menu opens;
+// this also covers rows rendered in different sections (active and trash).
+const RESOURCE_MENU_OPEN_EVENT = "hacom-cloud-resource-menu-open";
+type ResourceMenuOpenDetail = { itemId: string };
+
 interface ResourceActionProps {
   item: CloudItem;
   compact?: boolean;
   placement?: "center" | "top";
+  align?: "left" | "right";
   isTrash?: boolean;
   trashNow?: number;
   onRestoreItem?: (itemId: string) => void | Promise<void>;
@@ -303,14 +332,43 @@ interface ResourceActionProps {
   onShowInFolder?: (item: CloudItem) => void;
 }
 
-const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false, placement = "center", isTrash = false, trashNow = Date.now(), onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false, placement = "center", align = "right", isTrash = false, trashNow = Date.now(), onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [folderActionPending, setFolderActionPending] = useState(false);
   const url = resourceUrl(item);
   const documentFile = isDocumentFile(item);
-  const trashExpired = isTrash && getTrashCountdown(getTrashExpiry(item.purgeAfter, item.deletedAt), trashNow).expired;
+  const trashExpired = isTrash && isTrashItemExpired(item, trashNow);
+  // Trash actions are rendered at the top-right of every resource row. Keep
+  // their overflow menu below the two action buttons (restore/permanent
+  // delete are shown from that menu), matching the Hacom Chat interaction.
+  const actionPlacement = isTrash ? "top" : placement;
+
+  useEffect(() => {
+    const closeOtherMenu = (event: Event) => {
+      const detail = (event as CustomEvent<ResourceMenuOpenDetail>).detail;
+      if (detail?.itemId !== item.id) {
+        setMenuOpen(false);
+        setMenuPosition(null);
+      }
+    };
+    window.addEventListener(RESOURCE_MENU_OPEN_EVENT, closeOtherMenu);
+    return () => window.removeEventListener(RESOURCE_MENU_OPEN_EVENT, closeOtherMenu);
+  }, [item.id]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && (actionBarRef.current?.contains(target) || menuRef.current?.contains(target))) return;
+      setMenuOpen(false);
+      setMenuPosition(null);
+    };
+    document.addEventListener("click", closeOnOutsideClick);
+    return () => document.removeEventListener("click", closeOnOutsideClick);
+  }, [menuOpen]);
 
   const openResource = () => {
     if (url && typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
@@ -350,17 +408,28 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
     const rect = actionBarRef.current?.getBoundingClientRect();
     if (!rect || typeof window === "undefined") return;
     const menuWidth = 256;
-    const menuHeight = 300;
+    // The trash menu only contains restore/permanent-delete actions. Keeping
+    // its measured height small prevents the fixed portal from being clamped
+    // to the top of the viewport when the action is opened near the bottom.
+    const menuHeight = isTrash ? 160 : 300;
+    const gap = 8;
     const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
-    const preferredTop = placement === "top" ? rect.bottom + 8 : rect.top - menuHeight - 8;
-    const top = Math.max(8, Math.min(window.innerHeight - menuHeight - 8, preferredTop));
+    const maxTop = Math.max(8, window.innerHeight - menuHeight - gap);
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - menuHeight - gap;
+    const canFitBelow = belowTop <= maxTop;
+    const canFitAbove = aboveTop >= gap;
+    const top = actionPlacement === "top"
+      ? canFitBelow ? belowTop : canFitAbove ? aboveTop : maxTop
+      : canFitAbove ? aboveTop : canFitBelow ? belowTop : gap;
+    window.dispatchEvent(new CustomEvent<ResourceMenuOpenDetail>(RESOURCE_MENU_OPEN_EVENT, { detail: { itemId: item.id } }));
     setMenuPosition({ top, left });
     setMenuOpen(true);
   };
 
   return (
     <>
-    <div ref={actionBarRef} className={`pointer-events-none absolute right-2 z-40 flex items-center gap-1 rounded-lg border border-border/70 bg-surface px-1.5 py-1 shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 ${menuOpen ? "pointer-events-auto opacity-100" : ""} ${placement === "top" ? "top-2" : "top-1/2 -translate-y-1/2"}`}>
+    <div ref={actionBarRef} className={`pointer-events-none absolute ${align === "left" ? "left-2" : "right-2"} z-40 flex items-center gap-1 rounded-lg border border-border/70 bg-surface px-1.5 py-1 shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 ${menuOpen ? "pointer-events-auto opacity-100" : ""} ${actionPlacement === "top" ? "top-2" : "top-1/2 -translate-y-1/2"}`}>
       {!compact && item.type !== "link" ? (
         <button type="button" disabled={folderActionPending} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void openFolder(); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60" aria-label={`Mở thư mục chứa ${itemTitle(item)}`} title={folderActionPending ? "Đang tải…" : "Mở thư mục"}>
           <FolderOpenIcon className="h-4 w-4" />
@@ -374,7 +443,7 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
       </button>
     </div>
     {menuOpen && menuPosition && typeof document !== "undefined" ? createPortal(
-        <div className="fixed z-[10000] max-h-[calc(100dvh-1rem)] min-w-[16rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-border bg-surface p-2 text-sm shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={(event) => event.stopPropagation()} role="menu">
+        <div ref={menuRef} className="fixed z-[10000] max-h-[calc(100dvh-1rem)] min-w-[16rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-border bg-surface p-2 text-sm shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={(event) => event.stopPropagation()} role="menu">
           {isTrash ? <>
             <button type="button" role="menuitem" disabled={trashExpired} className="block w-full rounded-lg px-3 py-2.5 text-left text-primary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { setMenuOpen(false); if (!trashExpired) void onRestoreItem?.(item.id); }}>Khôi phục</button>
             <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setMenuOpen(false); if (onPermanentDeleteItem) void onPermanentDeleteItem(item.id); else void onDeleteItem?.(item); }}>Xóa vĩnh viễn</button>
@@ -401,40 +470,34 @@ type ResourceRowProps = Omit<ResourceActionProps, "item"> & {
   onToggleSelect?: () => void;
 };
 
-const CloudFileRow: React.FC<ResourceRowProps> = ({ item, senderName, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
+const CloudFileRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const name = itemTitle(item);
   const date = formatRelativeDate(new Date(item.createdAt));
-  const owner = senderName?.trim() || "Bạn";
   const content = (
     <>
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px]">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center">
         <FileTypeIcon
           type={getFileIconType(item.contentType, name)}
           fileName={name}
-          className="h-11 w-11"
+          className="h-10 w-10"
         />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold leading-5 text-text-primary" title={name}>{name}</span>
-        <span className="flex min-w-0 items-center gap-1 truncate text-xs leading-5 text-text-muted">
-          <span className="shrink-0">{formatBytes(item.sizeBytes)}</span>
-          <Clock className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-          <span aria-hidden="true">·</span>
-          <span className="truncate">{owner}</span>
-        </span>
+        <span className="block truncate text-[14px] font-semibold leading-5 text-text-primary" title={name}>{name}</span>
+        <span className="mt-0.5 block truncate text-[12px] leading-5 text-text-muted">{formatBytes(item.sizeBytes)}</span>
       </span>
-      <span className="ml-auto max-w-[6.5rem] shrink-0 truncate text-right text-xs text-text-muted">{date}</span>
+      <span className="ml-2 max-w-[6rem] shrink-0 truncate text-right text-[12px] text-text-muted transition-opacity group-hover:opacity-0">{date}</span>
     </>
   );
 
   return (
     <div className="group relative rounded-lg hover:bg-surface-hover">
       {item.accessUrl ? (
-        <a href={item.accessUrl} download={name} className="flex min-h-[64px] items-center gap-3 rounded-lg p-2 pr-28">
+        <a href={item.accessUrl} download={name} className="flex min-h-[64px] w-full items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-surface-hover">
           {content}
         </a>
       ) : (
-        <div className="flex min-h-[64px] items-center gap-3 rounded-lg p-2 pr-28">{content}</div>
+        <div className="flex min-h-[64px] w-full items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-surface-hover">{content}</div>
       )}
       <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
     </div>
@@ -450,25 +513,12 @@ const CloudLinkRow: React.FC<ResourceRowProps & { senderName?: string }> = ({ it
     <div className="group relative rounded-lg hover:bg-surface-hover">
       <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg px-1 py-2">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-overlay text-text-primary"><Link2 className="h-5 w-5" /></span>
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-primary" title={url}>{url}</span><span className="sr-only">{host}</span><span className="block truncate text-xs text-text-muted">{senderName ?? "Bạn"} · {formatCloudDateTime(item.createdAt, "vi-VN")}</span></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-sm text-primary" title={url}>{url}</span><span className="sr-only">{host}</span><span className="block truncate text-sm text-text-muted">{senderName ?? "Bạn"} · {formatCloudDateTime(item.createdAt, "vi-VN")}</span></span>
       </a>
       <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
     </div>
   );
 
-};
-
-const CloudTextRow: React.FC<ResourceRowProps> = ({ item, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
-  const text = item.content?.trim() || itemTitle(item);
-  return (
-    <div className="group relative rounded-lg hover:bg-surface-hover">
-      <div className="flex items-center gap-2 rounded-lg p-2 pr-28">
-        <CloudItemIcon type="text" className="h-9 w-9 shrink-0" />
-        <span className="min-w-0 flex-1"><span className="block break-words text-xs font-medium text-text-primary">{text}</span><span className="text-[11px] text-text-muted">Văn bản · Bạn</span></span>
-      </div>
-      <ResourceActions item={item} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />
-    </div>
-  );
 };
 
 type GalleryTab = "media" | "files" | "links" | "text";
@@ -481,7 +531,6 @@ const formatSentDate = (createdAt: string): string => {
 
 const trashRemainingLabel = (item: CloudItem, now: number): string => {
   const countdown = getTrashCountdown(getTrashExpiry(item.purgeAfter, item.deletedAt), now);
-  if (countdown.expired) return "Đã hết hạn khôi phục";
   if (countdown.hours > 0) return `Còn khoảng ${countdown.hours} giờ`;
   return `Còn khoảng ${countdown.minutes} phút`;
 };
@@ -529,16 +578,20 @@ const ResourceGallery: React.FC<{
     return allItems.filter((item) => type.includes(item.type));
   }, [allItems, tab]);
   const filteredItems = useMemo(() => {
-    if (isTrash) return tabItems;
+    if (isTrash) return tabItems.filter((item) => !isTrashItemExpired(item, trashNow));
     const from = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
     const to = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : Number.POSITIVE_INFINITY;
     return tabItems.filter((item) => {
       const timestamp = Date.parse(item.createdAt);
       return Number.isFinite(timestamp) && timestamp >= from && timestamp <= to;
     });
-  }, [fromDate, isTrash, tabItems, toDate]);
+  }, [fromDate, isTrash, tabItems, toDate, trashNow]);
   const groups = useMemo(() => {
-    const sortedItems = [...filteredItems].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    const sortedItems = [...filteredItems].sort((a, b) => {
+      const aTime = isTrash ? getTrashSortTime(a) : Date.parse(a.createdAt);
+      const bTime = isTrash ? getTrashSortTime(b) : Date.parse(b.createdAt);
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    });
     if (isTrash) return sortedItems.length ? [["trash", sortedItems] as [string, CloudItem[]]] : [];
     const grouped = new Map<string, CloudItem[]>();
     sortedItems.forEach((item) => {
@@ -777,10 +830,21 @@ const SelectionCircle: React.FC<{ selected: boolean; className?: string }> = ({ 
 
 const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) => item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} /> : <><video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /><span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white"><Play className="h-5 w-5" fill="currentColor" /></span></span></> : <ImageIcon className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-text-muted" />;
 
+const TrashResourceMeta: React.FC<{ item: CloudItem; trashNow: number }> = ({ item, trashNow }) => (
+  <span className="cloud-resource-trash-meta" aria-label={`${formatBytes(item.sizeBytes)}, ${trashRemainingLabel(item, trashNow)}`}>
+    <span>{formatBytes(item.sizeBytes)}</span>
+    <span aria-hidden="true">·</span>
+    <span className="cloud-resource-trash-meta__remaining">
+      <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>{trashRemainingLabel(item, trashNow)}</span>
+    </span>
+  </span>
+);
+
 const GalleryFile: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), selectionMode = false, selected = false, onToggleSelect, isTrash = false, onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
   <div className="group relative rounded-lg bg-surface-overlay">
     {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${itemTitle(item)}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
-    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{itemTitle(item)}</span><span className="flex items-center gap-1 text-xs text-text-muted"><span>{formatBytes(item.sizeBytes)}</span>{isTrash ? <><span aria-hidden="true">·</span><Clock className="h-3.5 w-3.5" aria-hidden="true" /><span>{trashRemainingLabel(item, trashNow)}</span></> : null}</span></span></a> : <div onClick={selectionMode ? onToggleSelect : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="truncate text-sm text-text-primary">{itemTitle(item)}</span></div>}
+    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="flex items-center gap-1 text-sm text-text-muted"><span>{formatBytes(item.sizeBytes)}</span></span>}</span></a> : <div onClick={selectionMode ? onToggleSelect : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></div>}
     {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
   </div>
 );
@@ -792,7 +856,7 @@ const GalleryLink: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), 
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ }
   return <div className="group relative rounded-lg bg-surface-overlay">
     {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${label}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
-    <a href={url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-xs text-text-muted" title={host}>{host}</span>{isTrash ? <span className="flex items-center gap-1 text-xs text-text-muted"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{trashRemainingLabel(item, trashNow)}</span> : null}</span></a>
+    <a href={url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-sm text-text-muted" title={host}>{host}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></a>
     {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
   </div>;
 };
@@ -804,7 +868,7 @@ const GalleryText: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), 
       {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${text}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
       <div className={`flex min-h-[62px] items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}>
         <CloudItemIcon type="text" className="h-9 w-9 shrink-0" />
-        <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium text-text-primary">{text}</span><span className="flex items-center gap-1 text-xs text-text-muted"><span>Văn bản · {formatBytes(item.sizeBytes)}</span>{isTrash ? <><span aria-hidden="true">·</span><Clock className="h-3.5 w-3.5" aria-hidden="true" /><span>{trashRemainingLabel(item, trashNow)}</span></> : null}</span></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={text}>{text}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="cloud-resource-text-meta flex min-w-0 items-center gap-2 text-sm text-text-muted"><span className="shrink-0 whitespace-nowrap">Văn bản · {formatBytes(item.sizeBytes)}</span></span>}</span>
       </div>
       {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
     </div>

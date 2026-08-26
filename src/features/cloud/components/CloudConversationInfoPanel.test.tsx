@@ -68,6 +68,15 @@ const quota: CloudQuota = {
 };
 
 describe("CloudConversationInfoPanel", () => {
+  it("keeps the File row compact without rendering the sender name", () => {
+    const { unmount } = render(<CloudResourcesPreview items={[item]} senderName="Nguyễn Trường Thịnh" />);
+
+    expect(screen.getByText("report.pdf")).not.toBeNull();
+    expect(screen.getByText("2 MB")).not.toBeNull();
+    expect(screen.queryByText("Nguyễn Trường Thịnh", { exact: true })).toBeNull();
+    unmount();
+  });
+
   it("separates resources into Hacom Chat conversation sections", () => {
     const onClose = vi.fn();
     const { container } = render(

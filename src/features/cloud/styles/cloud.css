@@ -805,36 +805,100 @@ button.cloud-delete-choice--danger:hover {
 }
 
 .cloud-trash-message__body h3 {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: hsl(var(--color-text-primary));
   font-size: var(--font-size-sm, 0.875rem);
   font-weight: 650;
 }
 
 .cloud-trash-message__body p {
-  display: -webkit-box;
+  display: block;
+  min-width: 0;
   margin-top: 3px;
   overflow: hidden;
+  text-overflow: ellipsis;
   color: hsl(var(--color-text-secondary));
   font-size: var(--font-size-xs, 0.75rem);
   line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
 }
 
 .cloud-trash-message__meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 16px;
   margin-top: 8px;
   color: hsl(var(--color-text-muted));
   font-size: 0.625rem;
 }
 
-.cloud-trash-message__meta span {
+.cloud-trash-message__meta > span {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+}
+
+.cloud-trash-message__meta > span:first-child {
+  flex: 0 0 auto;
+}
+
+.cloud-trash-message__meta > span:last-child {
+  flex: 0 0 auto;
+}
+
+.cloud-trash-message__meta-time {
+  flex: 0 0 auto;
+}
+
+.cloud-trash-message__meta-time > span {
+  white-space: nowrap;
+}
+
+.cloud-resource-trash-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  margin-top: 3px;
+  color: hsl(var(--color-text-muted));
+  font-size: 0.875rem;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.cloud-resource-trash-meta > span:first-child,
+.cloud-resource-trash-meta > span:nth-child(2) {
+  flex: 0 0 auto;
+}
+
+.cloud-resource-trash-meta__remaining {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.cloud-resource-trash-meta__remaining > span {
+  white-space: nowrap;
+}
+
+.cloud-resource-text-meta {
+  min-width: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.cloud-resource-text-meta__remaining {
+  white-space: nowrap;
 }
 
 .cloud-trash-message__time {

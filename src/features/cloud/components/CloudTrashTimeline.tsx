@@ -15,6 +15,8 @@ import {
   getCloudItemTitle,
   getTrashCountdown,
   getTrashExpiry,
+  getTrashSortTime,
+  isTrashItemExpired,
 } from "../utils/cloudFormat";
 import { CloudItemIcon } from "./CloudItemIcon";
 
@@ -40,7 +42,7 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
   onLoadMore,
 }) => {
   const { t } = useTranslation("cloud");
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,27 +62,30 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
     );
   }
 
+  const liveItems = items
+    .filter((item) => !isTrashItemExpired(item, now))
+    .sort((a, b) => getTrashSortTime(b) - getTrashSortTime(a));
+
   return (
     <div className="cloud-trash-timeline">
       <ConversationLane className="space-y-3 py-5">
-        {items.length === 0 ? (
+        {liveItems.length === 0 ? (
           <div className="cloud-trash-empty">
             <Trash2 className="h-7 w-7" aria-hidden />
             <h2>{t("trash.emptyTitle")}</h2>
             <p>{t("trash.emptyDescription")}</p>
           </div>
         ) : (
-          items.map((item) => {
+          liveItems.map((item) => {
             const title = getCloudItemTitle(item, {
               text: t("item.untitledText"),
               link: t("item.untitledLink"),
               file: t("item.untitledFile"),
             });
             const preview = getCloudItemPreview(item);
+            const showPreview = Boolean(preview && preview.trim() !== title.trim());
             const countdown = getTrashCountdown(getTrashExpiry(item.purgeAfter, item.deletedAt), now);
-            const remaining = countdown.expired
-              ? t("trash.expired")
-              : countdown.hours > 0
+            const remaining = countdown.hours > 0
                 ? t("trash.hoursRemaining", {
                     count: countdown.hours,
                   })
@@ -94,13 +99,14 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                   <div className="cloud-trash-message__body">
                     <CloudItemIcon type={item.type} />
                     <div className="min-w-0 flex-1">
-                      <h3>{title}</h3>
-                      {preview ? <p>{preview}</p> : null}
+                      <h3 title={title}>{title}</h3>
+                      {showPreview ? <p title={preview}>{preview}</p> : null}
                       <div className="cloud-trash-message__meta">
                         <span>{formatBytes(item.sizeBytes)}</span>
-                        <span>
+                        <span aria-hidden="true">·</span>
+                        <span className="cloud-trash-message__meta-time">
                           <Clock3 className="h-3.5 w-3.5" aria-hidden />
-                          {remaining}
+                          <span>{remaining}</span>
                         </span>
                       </div>
                     </div>
@@ -115,7 +121,7 @@ export const CloudTrashTimeline: React.FC<CloudTrashTimelineProps> = ({
                     className="cloud-trash-message__restore"
                     aria-label={t("trash.restore")}
                     title={t("trash.restore")}
-                    disabled={isMutating || countdown.expired}
+                    disabled={isMutating}
                     onClick={() => {
                       void onRestore(item.id).catch(() => undefined);
                     }}

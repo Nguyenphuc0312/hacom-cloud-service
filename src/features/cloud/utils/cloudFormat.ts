@@ -125,3 +125,24 @@ export const getTrashCountdown = (
     minutes: remainingMinutes % 60 || 60,
   };
 };
+
+/** True when a trashed item has reached its permanent-purge deadline. */
+export const isTrashItemExpired = (
+  item: Pick<CloudItem, "purgeAfter" | "deletedAt">,
+  now = Date.now(),
+): boolean => {
+  const expiry = getTrashExpiry(item.purgeAfter, item.deletedAt);
+  // Older optimistic/local projections may not have lifecycle timestamps yet.
+  // Do not discard those entries until the server supplies a real deadline.
+  return expiry ? getTrashCountdown(expiry, now).expired : false;
+};
+
+/** Sort trash entries by the most recent deletion, falling back to creation. */
+export const getTrashSortTime = (
+  item: Pick<CloudItem, "deletedAt" | "createdAt">,
+): number => {
+  const deletedAt = item.deletedAt ? Date.parse(item.deletedAt) : Number.NaN;
+  if (Number.isFinite(deletedAt)) return deletedAt;
+  const createdAt = Date.parse(item.createdAt);
+  return Number.isFinite(createdAt) ? createdAt : 0;
+};
