@@ -102,6 +102,8 @@ export interface User {
   backgroundFileId?: string | null;
   status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
+  roles?: string[];
+  permissions?: string[];
   isVerified?: boolean;
   createdAt?: string;
   accountState?: string;

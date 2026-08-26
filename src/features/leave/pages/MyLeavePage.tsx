@@ -37,6 +37,8 @@ import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { DateFieldVN } from "../../../components/ui/DateFieldVN";
 import { isoToVn, vnToIso } from "../../../components/ui/dateFieldVNUtils";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
+import { isSuperAdmin } from "../../auth/utils/isSuperAdmin";
+import { useAuthStore } from "../../../stores/authStore";
 
 type LoadState =
   | { status: "idle" | "loading"; data: MyLeaveResponse | null; error: null }
@@ -373,6 +375,8 @@ const ApprovalRow: React.FC<{
 export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
   tabBar,
 }) => {
+  const currentUser = useAuthStore((auth) => auth.user);
+  const canReviewOnChat = isSuperAdmin(currentUser);
   const [year, setYear] = React.useState(now.getFullYear());
   const [state, setState] = React.useState<LoadState>({
     status: "idle",
@@ -455,6 +459,10 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     Boolean(notice?.lateSubmission) && dateIssues.length === 0;
 
   const loadApprovals = React.useCallback(async (page = 1) => {
+    if (!canReviewOnChat) {
+      setApprovals(null);
+      return null;
+    }
     try {
       const pending = await hrApi.getPendingLeaveApprovals({
         page,
@@ -466,7 +474,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
       setApprovals(null);
       return null;
     }
-  }, []);
+  }, [canReviewOnChat]);
 
   const loadLeave = React.useCallback(
     async (refreshApprovals = true) => {
@@ -609,6 +617,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     request: LeaveRequest,
     action: "approve" | "reject",
   ) {
+    if (!canReviewOnChat) return;
     setBusyId(request.id);
     try {
       if (action === "approve") {
@@ -1048,7 +1057,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </div>
           </section>
 
-          {approvals !== null ? (
+          {canReviewOnChat && approvals !== null ? (
             <section className="rounded-lg border border-[#d7dce3] bg-white p-4">
               <h2 className="text-sm font-semibold text-[#0f172a]">
                 Duyệt nhanh
